@@ -2,11 +2,11 @@ import { redirect } from "react-router";
 import { db } from "./db";
 import { commitSession, getSession } from "./sessions";
 import type { User } from "@prisma/client";
-
-const isDev = process.env.NODE_ENV === "development";
-const location = isDev ? "http://localhost:3000" : "https://www.easybits.app";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
+
+const isDev = process.env.NODE_ENV === "development";
+const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
