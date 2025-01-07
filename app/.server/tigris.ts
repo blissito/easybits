@@ -55,7 +55,7 @@ export const getPutFileUrl = async (options?: {
     timeout = 3600,
   } = options || {};
   await setCors({
-    AllowedOrigins: ["http://localhost:3000"],
+    AllowedOrigins: [cors_origin],
     MaxAgeSeconds: timeout,
   });
   return await getSignedUrl(
