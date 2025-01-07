@@ -146,18 +146,15 @@ export const validateUserToken = (token: string) => {
 
 // KEYS stuff
 export const createUserKeys = async (user: Partial<User>) => {
-  const secretKey = jwt.sign(
-    { email: user.email },
-    process.env.JWT_SECRET as string
-  );
+  // const secretKey = jwt.sign(
+  //   { email: user.email },
+  //   process.env.JWT_SECRET as string
+  // );
   const publicKey = randomUUID();
   return await db.user.update({
     where: { email: user.email },
     data: {
-      keys: {
-        public: publicKey,
-        secret: secretKey,
-      },
+      publicKey,
     },
   });
 };
