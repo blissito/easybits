@@ -105,7 +105,7 @@ const createUserSession = async (
   const session = await getSession(cookie);
   await db.user.upsert({
     where: { email: userData.email },
-    create: userData,
+    create: { ...userData, publicKey: randomUUID() },
     update: userData,
   });
   session.set("email", userData.email);
