@@ -5,7 +5,7 @@ import { useRef, type ChangeEvent } from "react";
 import { useUpload } from "~/hooks/useUpload";
 import { db } from "~/.server/db";
 import { FaRegCheckCircle, FaSpinner } from "react-icons/fa";
-import { useSubmit } from "react-router";
+import { useLocation, useSubmit } from "react-router";
 import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
 
@@ -91,7 +91,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               className="p-3 bg-gray-900 grid grid-cols-4 text-xs"
               key={asset.id}
             >
-              <span className="col-span-2">{asset.storageKey}</span>
+              <CopyButton
+                className="col-span-2"
+                text={`https://www.easybits.cloud/embed/video/${asset.storageKey}`}
+              >
+                <span>{asset.storageKey}</span>
+              </CopyButton>
               <p className="flex gap-1 items-center">
                 {asset.status}
 

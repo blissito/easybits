@@ -12,4 +12,5 @@ export default [
     route("uploads", "routes/api/v1/direct-uploads.ts"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
   ]),
+  route("/embed/video/:storageKey", "routes/embed/video.tsx"),
 ] satisfies RouteConfig;
