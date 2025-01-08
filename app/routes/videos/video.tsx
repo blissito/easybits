@@ -9,11 +9,8 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
     src: await getReadURL(storageKey),
   };
 };
+
 export default function Route({ loaderData }: Route.ComponentProps) {
   const { src } = loaderData;
-  return (
-    <article className="h-screen">
-      <video src={src} className="w-full h-full" controls />
-    </article>
-  );
+  return <video src={src} className="w-full h-screen" controls />;
 }
