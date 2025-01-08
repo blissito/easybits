@@ -107,7 +107,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </p>
               <CopyButton
                 className="col-span-2"
-                text={`https://www.easybits.cloud/embed/video/${asset.storageKey}`}
+                text={`https://www.easybits.cloud/videos/${asset.storageKey}`}
               >
                 <span>{asset.contentType}</span>
               </CopyButton>
