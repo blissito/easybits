@@ -11,7 +11,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 
 const PREFIX = "API_EXPERIMENT/";
-const isDev = process.env.NODE_ENV === "development";
+
 
 const S3 = new S3Client({
   region: process.env.AWS_REGION,
