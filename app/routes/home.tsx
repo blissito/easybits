@@ -1,11 +1,15 @@
-import { createUserKeys, getUserOrRedirect } from "~/.server/getters";
+import {
+  createUserKeys,
+  getUserOrNull,
+  getUserOrRedirect,
+} from "~/.server/getters";
 import type { Route } from "./+types/home";
 import { CopyButton } from "~/components/common/CopyButton";
 import { useRef, type ChangeEvent } from "react";
 import { useUpload } from "~/hooks/useUpload";
 import { db } from "~/.server/db";
 import { FaRegCheckCircle, FaSpinner } from "react-icons/fa";
-import { useLocation, useSubmit } from "react-router";
+import { useSubmit } from "react-router";
 import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
 
@@ -18,8 +22,8 @@ export function meta() {
 
 // @todo this will be moved to dash maybe
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  let user = await getUserOrRedirect(request);
-  if (!user.publicKey) {
+  let user = await getUserOrNull(request);
+  if (user && !user?.publicKey) {
     user = await createUserKeys(user);
   }
   // load assets
