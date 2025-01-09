@@ -1,8 +1,4 @@
-import {
-  createUserKeys,
-  getUserOrNull,
-  getUserOrRedirect,
-} from "~/.server/getters";
+import { createUserKeys, getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/home";
 import { CopyButton } from "~/components/common/CopyButton";
 import { useRef, type ChangeEvent } from "react";
@@ -22,8 +18,8 @@ export function meta() {
 
 // @todo this will be moved to dash maybe
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  let user = await getUserOrNull(request);
-  if (user && !user?.publicKey) {
+  let user = await getUserOrRedirect(request);
+  if (!user.publicKey) {
     user = await createUserKeys(user);
   }
   // load assets
