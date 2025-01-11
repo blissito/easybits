@@ -8,6 +8,7 @@ import { FaRegCheckCircle, FaSpinner } from "react-icons/fa";
 import { useSubmit } from "react-router";
 import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
+import { useMultipartUpload } from "~/hooks/useMultipartUpload";
 
 export function meta() {
   return [
@@ -43,9 +44,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     fileInput.current?.click();
   };
 
+  const {
+    handleMultipartUpload,
+    percentage,
+    isFetching: isMultipartFetching,
+  } = useMultipartUpload("fdaa8bf7-20d0-48be-bd94-245f0b488e8c");
   const handleInputFileChange = async (
     event: ChangeEvent<HTMLInputElement>
   ) => {
+    const file = event.currentTarget.files?.[0];
+    if (file && file.size > 10000000) {
+      // 10MB
+      handleMultipartUpload(file);
+      return;
+    }
     await putFile(event.currentTarget.files?.[0] as File);
     submit(null);
   };
@@ -62,6 +74,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <section>
         <nav className="w-full bg-indigo-500 flex items-center justify-between px-4 py-2">
           <h2>Todos tus assets</h2>
+          <p>Subido: {(percentage * 100).toFixed(2)}%</p>
           <button
             disabled={isFetching}
             onClick={handleAssetSelection}
@@ -70,7 +83,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               "disabled:pointer-events-none disabled:bg-gray-500"
             )}
           >
-            {isFetching ? (
+            {isMultipartFetching || isFetching ? (
               <p className="animate-spin">
                 <FaSpinner />
               </p>
@@ -88,10 +101,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <>
           {assets.map((asset) => (
             <div
-              className="p-3 bg-gray-900 grid grid-cols-4 text-xs"
+              className="p-3 bg-gray-900 grid grid-cols-8 text-xs"
               key={asset.id}
             >
-              <span>{asset.storageKey}</span>
+              <span className="col-span-4">{asset.storageKey}</span>
               <p className="flex gap-1 items-center">
                 {asset.status}
 
@@ -111,6 +124,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               >
                 <span>{asset.contentType}</span>
               </CopyButton>
+              <p className="">{asset.size} bytes</p>
             </div>
           ))}
         </>

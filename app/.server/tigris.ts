@@ -6,6 +6,9 @@ import {
   DeleteObjectCommand,
   HeadObjectCommand,
   CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  CopyObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
@@ -18,7 +21,7 @@ const S3 = new S3Client({
   endpoint: process.env.AWS_ENDPOINT_URL_S3,
 });
 
-const setCors = async (options: {
+const setCors = async (options?: {
   MaxAgeSeconds?: number;
   AllowedOrigins?: string[];
 }) => {
@@ -28,10 +31,11 @@ const setCors = async (options: {
     CORSConfiguration: {
       CORSRules: [
         {
-          AllowedHeaders: ["*"],
-          AllowedMethods: ["PUT", "DELETE", "GET"],
-          AllowedOrigins,
           MaxAgeSeconds,
+          AllowedOrigins,
+          AllowedHeaders: ["*"],
+          ExposeHeaders: ["ETag"], // important for multipart
+          AllowedMethods: ["PUT", "DELETE", "GET"],
         },
       ],
     },
@@ -63,11 +67,91 @@ export const getPutFileUrl = async (options?: {
     new PutObjectCommand({
       Bucket: process.env.BUCKET_NAME,
       Key: PREFIX + storageKey,
-      //   UploadId: UploadId || undefined,
-      //   PartNumber: PartNumber || undefined,
     }),
     { expiresIn: timeout }
   );
+};
+
+// PRESIGNED_FOR_MULTIPART
+const getPutPartUrl = async (options: {
+  storageKey: string;
+  UploadId: string;
+  partNumber: number;
+}) => {
+  const { storageKey, UploadId, partNumber } = options || {};
+  await setCors();
+  return await getSignedUrl(
+    S3,
+    new UploadPartCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: PREFIX + storageKey,
+      PartNumber: partNumber,
+      UploadId,
+    }),
+    {
+      expiresIn: 3600, // @todo shorter
+    }
+  );
+};
+
+// FOR MULTIPART
+export const copyObjectToSetContentType = (
+  fileName: string,
+  contentType: string
+) => {
+  return S3.send(
+    new CopyObjectCommand({
+      CopySource: process.env.BUCKET_NAME + "/" + PREFIX + fileName,
+      Bucket: process.env.BUCKET_NAME,
+      Key: PREFIX + fileName, // @todo not working with same name
+      ACL: "public-read",
+      ContentType: contentType,
+    })
+  );
+};
+
+export const completeMultipart = ({
+  ETags,
+  uploadId,
+  fileName,
+}: {
+  fileName: string;
+  ETags: string[];
+  uploadId: string;
+}) => {
+  return S3.send(
+    new CompleteMultipartUploadCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: PREFIX + fileName,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: ETags.map((ETag, i) => ({
+          ETag,
+          PartNumber: i + 1,
+        })),
+      },
+    })
+  );
+};
+
+export const getMultipart = async (options: {
+  fileName: string;
+  numberOfParts: number;
+}) => {
+  const { numberOfParts, fileName } = options || {};
+
+  const { UploadId } = await S3.send(
+    new CreateMultipartUploadCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: PREFIX + fileName,
+    })
+  );
+  if (!UploadId) throw new Error("Error on multipart upload creation");
+
+  const urlPromises = Array.from({ length: numberOfParts }).map((_, i) =>
+    getPutPartUrl({ storageKey: fileName, partNumber: i + 1, UploadId })
+  );
+  return { uploadId: UploadId, urls: await Promise.all(urlPromises) };
 };
 
 // FOR THE NEW API
