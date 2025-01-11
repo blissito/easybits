@@ -1,6 +1,5 @@
 import {
   completeMultipart,
-  copyObjectToSetContentType,
   getDirectUpload,
   getMultipart,
 } from "~/.server/tigris";
