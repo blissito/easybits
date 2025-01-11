@@ -134,24 +134,37 @@ export const completeMultipart = ({
   );
 };
 
+export type GetMultipartResponse = {
+  uploadId: string;
+  urls: string[];
+  key: string;
+};
 export const getMultipart = async (options: {
-  fileName: string;
+  key?: string;
   numberOfParts: number;
 }) => {
-  const { numberOfParts, fileName } = options || {};
+  let { numberOfParts, key } = options || {};
+
+  if (!key) {
+    key = randomUUID();
+  }
 
   const { UploadId } = await S3.send(
     new CreateMultipartUploadCommand({
       Bucket: process.env.BUCKET_NAME,
-      Key: PREFIX + fileName,
+      Key: PREFIX + key,
     })
   );
   if (!UploadId) throw new Error("Error on multipart upload creation");
 
   const urlPromises = Array.from({ length: numberOfParts }).map((_, i) =>
-    getPutPartUrl({ storageKey: fileName, partNumber: i + 1, UploadId })
+    getPutPartUrl({ storageKey: key, partNumber: i + 1, UploadId })
   );
-  return { uploadId: UploadId, urls: await Promise.all(urlPromises) };
+  return {
+    uploadId: UploadId,
+    urls: await Promise.all(urlPromises),
+    key,
+  };
 };
 
 // FOR THE NEW API

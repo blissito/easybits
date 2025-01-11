@@ -12,6 +12,8 @@ export default [
     route("uploads", "routes/api/v1/direct-uploads.ts"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
   ]),
+  // experiment multipar
+  route("api/upload", "routes/api/v1/upload.ts"),
   // public link @todo revisit
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // embed
