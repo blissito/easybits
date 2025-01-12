@@ -95,7 +95,13 @@ const createMultipartUpload = async (
       "content-type": "application/json",
     },
   };
-  return await fetch(handleUploadUrl, options).then((res) => res.json());
+  let response;
+  try {
+    response = await fetch(handleUploadUrl, options).then((res) => res.json());
+  } catch (error: unknown) {
+    throw new Error(error);
+  }
+  return response;
 };
 
 const completeMultipart = async (args: {

@@ -140,8 +140,8 @@ export type CreateMultipartResponse = {
   key: string;
 };
 export const createMultipart = async (options: {
-  key?: string;
   numberOfParts: number;
+  key?: string;
 }) => {
   let { numberOfParts, key } = options || {};
 

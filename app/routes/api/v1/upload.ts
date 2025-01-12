@@ -37,5 +37,5 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  return new Response(null);
+  return new Response('{message:"null"}');
 }

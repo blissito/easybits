@@ -63,23 +63,28 @@ const UploadingItem = ({
   onUploadComplete?: () => void;
   file: File;
 }) => {
-  const [progress, setProgress] = useState(4);
+  const [progress, setProgress] = useState(0);
   const submit = useSubmit();
   const abortController = new AbortController();
   const previewURL = "/favicon.ico";
 
   const handleUpload = async () => {
     if (!file.size) return;
-
-    const blob = await upload(file.name, file, {
-      signal: abortController,
-      multipart: true,
-      access: "public-read",
-      handleUploadUrl: "/api/upload",
-      onUploadProgress: (progressEvent) => {
-        setProgress(progressEvent.percentage);
-      },
-    });
+    let blob;
+    try {
+      blob = await upload(file.name, file, {
+        signal: abortController,
+        multipart: true,
+        access: "public-read",
+        handleUploadUrl: "/api/upload",
+        onUploadProgress: (progressEvent) => {
+          setProgress(progressEvent.percentage);
+        },
+      });
+    } catch (error: unknown) {
+      toast.error("La subida falló, por favor vuelve a intentar.");
+      throw new Error(error);
+    }
     busy.current = false;
     toast(
       () => (
@@ -115,7 +120,7 @@ const UploadingItem = ({
       <div className="flex-grow">
         <h3 className="truncate max-w-[200px]">{file.name}</h3>
         <p className="text-xs text-gray-500">
-          {progress > 10
+          {progress > 0
             ? `${(progress > 99 ? 100 : progress).toFixed(0)}%`
             : "subiendo..."}
         </p>
