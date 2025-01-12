@@ -4,8 +4,8 @@ import { CopyButton } from "~/components/common/CopyButton";
 import { useRef, useState, type ChangeEvent } from "react";
 import { useUpload } from "~/hooks/useUpload";
 import { db } from "~/.server/db";
-import { FaRegCheckCircle, FaSpinner } from "react-icons/fa";
-import { useSubmit } from "react-router";
+import { FaRegCheckCircle, FaSpinner, FaTrash } from "react-icons/fa";
+import { useFetcher, useSubmit } from "react-router";
 import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
 import { useMultipartUpload } from "~/hooks/useMultipartUpload";
@@ -34,6 +34,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 };
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const fetcher = useFetcher();
   const { user, assets } = loaderData;
   const fileInput = useRef<HTMLInputElement>(null);
   const submit = useSubmit();
@@ -78,6 +79,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     setFiles((fls) => fls.filter((f) => f.name !== fileName));
   };
 
+  const handleDelete = async (storageKey: string) => {
+    if (!storageKey || !confirm("Esta acción no es reversible")) return;
+
+    fetcher.submit(null, {
+      method: "DELETE",
+      action: `/api/v1/uploads/${storageKey}/delete`,
+    });
+  };
+
   return (
     <>
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
@@ -119,9 +129,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <>
             {assets.map((asset) => (
               <div
-                className="p-3 bg-gray-900 grid grid-cols-12 text-xs items-center gap-x-2"
+                className={cn(
+                  "p-3 bg-gray-900 grid grid-cols-12 text-xs items-center gap-x-2",
+                  "relative",
+                  "group"
+                )}
                 key={asset.id}
               >
+                <button
+                  onClick={() => handleDelete(asset.storageKey)}
+                  className="active:scale-90 invisible group-hover:visible absolute top-[30%] right-4"
+                >
+                  <FaTrash />
+                </button>
+
                 <span className="col-span-2 truncate">{asset.storageKey}</span>
 
                 <span className="col-span-4">

@@ -95,13 +95,13 @@ const UploadingItem = ({
             </a>
           </p>
         ),
-        { duration: 4000 }
+        { duration: 1000 }
       );
     } catch (error: unknown) {
       toast.error("La subida falló, por favor vuelve a intentar.");
       console.error(error);
     }
-    busy.current = false;
+    // busy.current = false; EXPERIMENT
     setTimeout(onUploadComplete, 3000);
     submit({});
   };

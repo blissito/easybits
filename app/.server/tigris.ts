@@ -3,12 +3,12 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   PutBucketCorsCommand,
-  DeleteObjectCommand,
   HeadObjectCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
@@ -277,13 +277,24 @@ export const getPutVideoExperiment = async () => {
   );
 };
 
+// server only
+export const deleteObject = async (key: string) => {
+  const input = {
+    Bucket: process.env.BUCKET_NAME,
+    Key: PREFIX + key,
+  };
+  const command = new DeleteObjectCommand(input);
+  return await S3.send(command);
+};
+
+// presign delete url
 export const getRemoveFileUrl = async (key: string) => {
   await setCors();
   return await getSignedUrl(
     S3,
     new DeleteObjectCommand({
       Bucket: process.env.BUCKET_NAME,
-      Key: "animaciones/" + key, // @TODO: update when prod beta
+      Key: PREFIX + key, // @TODO: update when prod beta
     }),
     { expiresIn: 3600 }
   );
