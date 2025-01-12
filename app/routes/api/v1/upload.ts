@@ -1,4 +1,8 @@
-import { createMultipart, completeMultipart } from "~/.server/tigris";
+import {
+  createMultipart,
+  completeMultipart,
+  getPutPartUrl,
+} from "~/.server/tigris";
 import type { Route } from "./+types/upload";
 import { createAsset } from "~/.server/assets";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -25,6 +29,16 @@ export async function action({ request }: Route.ActionArgs) {
     return new Response(JSON.stringify(completedData), {
       headers: { "content-type": "application/json" },
     });
+  }
+
+  if (body.intent === "get_put_part_url") {
+    return new Response(
+      await getPutPartUrl({
+        storageKey: body.key,
+        UploadId: body.uploadId,
+        partNumber: body.partNumber,
+      })
+    );
   }
 
   if (body.intent === "create_multipart_upload") {

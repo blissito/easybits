@@ -83,6 +83,7 @@ const UploadingItem = ({
       });
     } catch (error: unknown) {
       toast.error("La subida falló, por favor vuelve a intentar.");
+      onUploadComplete?.();
       throw new Error(error);
     }
     busy.current = false;

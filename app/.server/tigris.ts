@@ -73,7 +73,7 @@ export const getPutFileUrl = async (options?: {
 };
 
 // PRESIGNED_FOR_MULTIPART
-const getPutPartUrl = async (options: {
+export const getPutPartUrl = async (options: {
   storageKey: string;
   UploadId: string;
   partNumber: number;
@@ -136,7 +136,6 @@ export const completeMultipart = ({
 
 export type CreateMultipartResponse = {
   uploadId: string;
-  urls: string[];
   key: string;
 };
 export const createMultipart = async (options: {
@@ -157,12 +156,13 @@ export const createMultipart = async (options: {
   );
   if (!UploadId) throw new Error("Error on multipart upload creation");
 
-  const urlPromises = Array.from({ length: numberOfParts }).map((_, i) =>
-    getPutPartUrl({ storageKey: key, partNumber: i + 1, UploadId })
-  );
+  // @todo try lazy url generation
+  // const urlPromises = Array.from({ length: numberOfParts }).map((_, i) =>
+  //   getPutPartUrl({ storageKey: key, partNumber: i + 1, UploadId })
+  // );
   return {
     uploadId: UploadId,
-    urls: await Promise.all(urlPromises),
+    // urls: await Promise.all(urlPromises),
     key,
   };
 };

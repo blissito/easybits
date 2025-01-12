@@ -56,10 +56,17 @@ export async function upload(
   }
   // 1 create multipar
   const numberOfParts = Math.ceil(file.size / partSize);
-  const { uploadId, key, urls }: CreateMultipartResponse =
+  const { uploadId, key }: CreateMultipartResponse =
     await createMultipartUpload(handleUploadUrl, numberOfParts, access);
   // 2 upload one by one
-  const etags = await uploadAllParts(file, urls, onUploadProgress); // @todo retrys
+  const etags = await uploadAllParts({
+    file,
+    cb: onUploadProgress,
+    handleUploadUrl,
+    key,
+    numberOfParts,
+    uploadId,
+  }); // @todo retrys
   // 3 complete
   const completedData = await completeMultipart({
     fileMetadata,
@@ -126,25 +133,60 @@ const completeMultipart = async (args: {
   }).then((r) => r.json());
 };
 
-const uploadAllParts = async (
-  file: File,
-  urls: string[],
-  cb?: (event: { total: number; loaded: number; percentage: number }) => void
-) => {
+const uploadAllParts = async (options: {
+  file: File;
+  numberOfParts: number;
+  uploadId: string;
+  key: string;
+  cb?: (event: { total: number; loaded: number; percentage: number }) => void;
+  handleUploadUrl: string;
+}) => {
+  const { file, numberOfParts, uploadId, key, cb, handleUploadUrl } = options;
   let loaded = 0;
-  const uploadPromises = urls.map(async (url: string, i: number) => {
-    const start = i * partSize;
-    const end = Math.min(start + partSize, file.size);
-    const blob = file.slice(start, end); // directly from disk, no mainthread 🤩
-    const response = await fetch(url, {
-      method: "PUT",
-      body: blob,
-    });
-    loaded += partSize;
-    const percentage = (loaded / file.size) * 100;
-    cb?.({ total: file.size, loaded, percentage }); // on progress
-    const str = response.headers.get("ETag");
-    return String(str).replaceAll('"', "");
-  });
+  const uploadPromises = Array.from({ length: numberOfParts }).map(
+    async (_, i: number) => {
+      const url = await getPutPartUrl({
+        partNumber: i + 1,
+        uploadId,
+        key,
+        handleUploadUrl,
+      });
+      const start = i * partSize;
+      const end = Math.min(start + partSize, file.size);
+      const blob = file.slice(start, end); // directly from disk, no mainthread 🤩
+      const response = await fetch(url, {
+        method: "PUT",
+        body: blob,
+      });
+      loaded += partSize;
+      const percentage = (loaded / file.size) * 100;
+      cb?.({ total: file.size, loaded, percentage }); // on progress
+      const str = response.headers.get("ETag");
+      return String(str).replaceAll('"', "");
+    }
+  );
   return (await Promise.all(uploadPromises)) as string[]; // [etag,etag]
+};
+
+const getPutPartUrl = async ({
+  partNumber,
+  uploadId,
+  handleUploadUrl,
+  key,
+}: {
+  handleUploadUrl: string;
+  partNumber: number;
+  uploadId: string;
+  key: string;
+}) => {
+  const response = await fetch(handleUploadUrl, {
+    method: "POST",
+    body: JSON.stringify({
+      partNumber,
+      uploadId,
+      key,
+      intent: "get_put_part_url",
+    }),
+  });
+  return await response.text();
 };
