@@ -113,16 +113,16 @@ export const copyObjectToSetContentType = (
 export const completeMultipart = ({
   ETags,
   uploadId,
-  fileName,
+  key,
 }: {
-  fileName: string;
+  key: string;
   ETags: string[];
   uploadId: string;
 }) => {
   return S3.send(
     new CompleteMultipartUploadCommand({
       Bucket: process.env.BUCKET_NAME,
-      Key: PREFIX + fileName,
+      Key: PREFIX + key,
       UploadId: uploadId,
       MultipartUpload: {
         Parts: ETags.map((ETag, i) => ({
@@ -134,12 +134,12 @@ export const completeMultipart = ({
   );
 };
 
-export type GetMultipartResponse = {
+export type CreateMultipartResponse = {
   uploadId: string;
   urls: string[];
   key: string;
 };
-export const getMultipart = async (options: {
+export const createMultipart = async (options: {
   key?: string;
   numberOfParts: number;
 }) => {

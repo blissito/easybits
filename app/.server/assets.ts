@@ -9,9 +9,11 @@ export type AssetCreationPayload = {
   cors_origin?: string;
   contentType?: string;
   size: number;
+  fileMetadata: any;
 };
 export const createAsset = async (data: AssetCreationPayload) => {
   const {
+    fileMetadata,
     contentType,
     userId,
     storageKey,
@@ -24,7 +26,7 @@ export const createAsset = async (data: AssetCreationPayload) => {
     data: {
       userId,
       storageKey,
-      metadata: { cors_origin, status, asset_settings },
+      metadata: { cors_origin, status, asset_settings, ...fileMetadata },
       status,
       contentType,
       size,

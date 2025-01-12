@@ -74,9 +74,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     setFiles((fls) => fls.concat(Array.from(event.currentTarget?.files || [])));
   };
 
+  const onUploadComplete = (fileName: string) => {
+    setFiles((fls) => fls.filter((f) => f.name !== fileName));
+  };
+
   return (
     <>
-      <FileUploadProgress files={files} />
+      <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
       <article className="py-20 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
         <section>
           <h2>Public key</h2>
@@ -109,35 +113,44 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               type="file"
               hidden
               ref={fileInput}
+              multiple
             />
           </nav>
           <>
             {assets.map((asset) => (
               <div
-                className="p-3 bg-gray-900 grid grid-cols-8 text-xs"
+                className="p-3 bg-gray-900 grid grid-cols-12 text-xs items-center gap-x-2"
                 key={asset.id}
               >
-                <span className="col-span-4">{asset.storageKey}</span>
-                <p className="flex gap-1 items-center">
-                  {asset.status}
+                <span className="col-span-2 truncate">{asset.storageKey}</span>
 
+                <span className="col-span-4">
+                  {asset.metadata?.originalName}
+                </span>
+
+                <p className="flex gap-1 items-center col-span-2">
+                  {asset.status}
                   {asset.status === "uploaded" ? (
-                    <span className="text-green-300">
+                    <span className="text-green-300 ">
                       <FaRegCheckCircle />
                     </span>
                   ) : (
-                    <span className="text-yellow-300">
+                    <span className="text-yellow-300 ">
                       <LuFileWarning />
                     </span>
                   )}
                 </p>
+
                 <CopyButton
                   className="col-span-2"
                   text={`https://www.easybits.cloud/videos/${asset.storageKey}`}
                 >
                   <span>{asset.contentType}</span>
                 </CopyButton>
-                <p className="">{asset.size} bytes</p>
+
+                <p className="col-span-2">
+                  {(Number(asset.size) / (1000 * 1000)).toFixed(2)} MiB
+                </p>
               </div>
             ))}
           </>

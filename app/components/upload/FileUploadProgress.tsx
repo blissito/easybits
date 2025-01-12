@@ -4,8 +4,11 @@ import { cn } from "~/utils/cn";
 import { TbCloudUpload } from "react-icons/tb";
 import { upload } from "~/.client/multipart/uploader";
 import toast, { Toaster } from "react-hot-toast";
+import { BsCloudCheckFill } from "react-icons/bs";
+import { useSubmit } from "react-router";
 
 export const FileUploadProgress = ({
+  onUploadComplete,
   files = [
     {
       name: "blissmo.mp4",
@@ -14,6 +17,7 @@ export const FileUploadProgress = ({
     } as File,
   ],
 }: {
+  onUploadComplete?: (arg0: string) => void;
   files: File[];
 }) => {
   // experiment
@@ -38,7 +42,11 @@ export const FileUploadProgress = ({
             )}
           >
             {files.map((file, i) => (
-              <UploadingItem key={i} file={file} />
+              <UploadingItem
+                onUploadComplete={() => onUploadComplete?.(file.name)}
+                key={i}
+                file={file}
+              />
             ))}
           </article>,
           portalNode
@@ -48,9 +56,15 @@ export const FileUploadProgress = ({
   );
 };
 
-const UploadingItem = ({ file }: { file: File }) => {
+const UploadingItem = ({
+  file,
+  onUploadComplete,
+}: {
+  onUploadComplete?: () => void;
+  file: File;
+}) => {
   const [progress, setProgress] = useState(4);
-
+  const submit = useSubmit();
   const abortController = new AbortController();
   const previewURL = "/favicon.ico";
 
@@ -58,6 +72,7 @@ const UploadingItem = ({ file }: { file: File }) => {
     if (!file.size) return;
 
     const blob = await upload(file.name, file, {
+      signal: abortController,
       multipart: true,
       access: "public-read",
       handleUploadUrl: "/api/upload",
@@ -65,13 +80,11 @@ const UploadingItem = ({ file }: { file: File }) => {
         setProgress(progressEvent.percentage);
       },
     });
-
-    console.log("BLOB", blob);
-
+    busy.current = false;
     toast(
       () => (
         <p>
-          Tu archivo se ha subido y esta disponíble publicamente en:{" "}
+          Tu archivo se ha subido y ya esta disponíble
           <a
             className="font-medium text-gray-900 underline"
             href={blob.url}
@@ -82,12 +95,18 @@ const UploadingItem = ({ file }: { file: File }) => {
           </a>
         </p>
       ),
-      { duration: Number.POSITIVE_INFINITY }
+      { duration: 4000 }
     );
+    onUploadComplete?.();
+    submit({});
   };
 
+  // @todo we can do better
+  const busy = useRef<boolean>(false);
   useEffect(() => {
-    file.size && handleUpload();
+    if (busy.current) return;
+    busy.current = true;
+    handleUpload();
   }, [file]);
 
   return (
@@ -95,11 +114,19 @@ const UploadingItem = ({ file }: { file: File }) => {
       <img src={previewURL} alt="preview" />
       <div className="flex-grow">
         <h3 className="truncate max-w-[200px]">{file.name}</h3>
-        <p className="text-xs text-gray-500">subiendo...</p>
+        <p className="text-xs text-gray-500">
+          {progress > 10
+            ? `${(progress > 99 ? 100 : progress).toFixed(0)}%`
+            : "subiendo..."}
+        </p>
         <ProgressBar progress={progress} />
       </div>
-      <span className="animate-pulse">
-        <TbCloudUpload />
+      <span
+        className={cn("animate-pulse", {
+          "text-green-500": progress > 99,
+        })}
+      >
+        {progress > 99 ? <BsCloudCheckFill /> : <TbCloudUpload />}
       </span>
     </section>
   );
@@ -109,9 +136,11 @@ const ProgressBar = ({ progress = 4 }: { progress: number }) => {
   return (
     <div className="relative bg-zinc-300 w-full h-2 rounded-full">
       <div
-        className="inset-0 bg-blue-500 absolute rounded-full"
+        className={cn("inset-0 bg-blue-500 absolute rounded-full", {
+          "bg-green-500": progress > 99,
+        })}
         style={{
-          width: `${progress}%`,
+          width: `${progress > 99 ? 100 : progress}%`,
         }}
       ></div>
     </div>
