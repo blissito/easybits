@@ -1,9 +1,10 @@
 import type { CreateMultipartResponse } from "~/.server/tigris";
+import retry from "async-retry";
 
 const MB = 1024 * 1024;
 const partSize = 8 * MB;
 
-type UploadCompletedData = {
+export type UploadCompletedData = {
   uploadId: string;
   key: string;
   fileMetadata: {
@@ -119,18 +120,60 @@ const completeMultipart = async (args: {
   handleUploadUrl: string;
 }) => {
   const { key, etags, uploadId, fileMetadata, handleUploadUrl } = args;
-  return await fetch(handleUploadUrl, {
-    method: "POST",
-    body: JSON.stringify({
-      key,
-      etags,
-      uploadId,
-      size: fileMetadata.size,
-      contentType: fileMetadata.type,
-      fileMetadata,
-      intent: "complete_multipart_upload",
-    }),
-  }).then((r) => r.json());
+  return await retry(async () => {
+    const res = await fetch(handleUploadUrl, {
+      method: "POST",
+      body: JSON.stringify({
+        intent: "complete_multipart_upload",
+        contentType: fileMetadata.type,
+        size: fileMetadata.size,
+        fileMetadata,
+        uploadId,
+        etags,
+        key,
+      }),
+    });
+    return await res.json();
+    // @todo catch auth errors
+  }); // default retrys (10)
+};
+
+const uploadOnePartAndRetry = async ({
+  attempts = 5,
+  url,
+  blob,
+}: {
+  url: string;
+  blob: Blob;
+  attempts?: number;
+}) => {
+  let retryCount = 0;
+  return await retry(
+    async (bail) => {
+      const response = await fetch(url, {
+        method: "PUT",
+        body: blob,
+      });
+      // @todo abort and content-type?
+      if (403 === response.status) {
+        bail(new Error("Unauthorized"));
+        return;
+      } else if (response.ok) {
+        return response;
+      } else {
+        throw new Error("Unknown error");
+      }
+    },
+    {
+      retries: attempts,
+      onRetry: (error) => {
+        retryCount = retryCount + 1;
+        if (error instanceof Error) {
+          console.log(`retrying #${retryCount} Put request of ${url}`);
+        }
+      },
+    }
+  );
 };
 
 const uploadAllParts = async (options: {
@@ -154,15 +197,12 @@ const uploadAllParts = async (options: {
       const start = i * partSize;
       const end = Math.min(start + partSize, file.size);
       const blob = file.slice(start, end); // directly from disk, no mainthread 🤩
-      const response = await fetch(url, {
-        method: "PUT",
-        body: blob,
-      });
-      loaded += partSize;
+      const response = await uploadOnePartAndRetry({ url, blob }); // trhow error after 5 retrys
+      loaded += blob.size; // exact sum
       const percentage = (loaded / file.size) * 100;
       cb?.({ total: file.size, loaded, percentage }); // on progress
       const str = response.headers.get("ETag");
-      return String(str).replaceAll('"', "");
+      return String(str).replaceAll('"', ""); // cleaun up
     }
   );
   return (await Promise.all(uploadPromises)) as string[]; // [etag,etag]
@@ -179,14 +219,19 @@ const getPutPartUrl = async ({
   uploadId: string;
   key: string;
 }) => {
-  const response = await fetch(handleUploadUrl, {
-    method: "POST",
-    body: JSON.stringify({
-      partNumber,
-      uploadId,
-      key,
-      intent: "get_put_part_url",
-    }),
-  });
-  return await response.text();
+  return retry(
+    async () => {
+      const response = await fetch(handleUploadUrl, {
+        method: "POST",
+        body: JSON.stringify({
+          partNumber,
+          uploadId,
+          key,
+          intent: "get_put_part_url",
+        }),
+      });
+      return await response.text();
+    },
+    { retries: 5 }
+  );
 };

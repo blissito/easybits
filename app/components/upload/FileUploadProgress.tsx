@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "~/utils/cn";
 import { TbCloudUpload } from "react-icons/tb";
-import { upload } from "~/.client/multipart/uploader";
+import { upload, type UploadCompletedData } from "~/.client/multipart/uploader";
 import toast, { Toaster } from "react-hot-toast";
 import { BsCloudCheckFill } from "react-icons/bs";
 import { useSubmit } from "react-router";
@@ -70,7 +70,7 @@ const UploadingItem = ({
 
   const handleUpload = async () => {
     if (!file.size) return;
-    let blob;
+    let blob: UploadCompletedData;
     try {
       blob = await upload(file.name, file, {
         signal: abortController,
@@ -81,29 +81,28 @@ const UploadingItem = ({
           setProgress(progressEvent.percentage);
         },
       });
+      toast(
+        () => (
+          <p>
+            Tu archivo ya se ha subido y está disponíble.
+            <a
+              className="font-medium text-gray-900 underline"
+              href={blob.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {blob.url}
+            </a>
+          </p>
+        ),
+        { duration: 4000 }
+      );
     } catch (error: unknown) {
       toast.error("La subida falló, por favor vuelve a intentar.");
-      onUploadComplete?.();
-      throw new Error(error);
+      console.error(error);
     }
     busy.current = false;
-    toast(
-      () => (
-        <p>
-          Tu archivo se ha subido y ya esta disponíble
-          <a
-            className="font-medium text-gray-900 underline"
-            href={blob.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {blob.url}
-          </a>
-        </p>
-      ),
-      { duration: 4000 }
-    );
-    onUploadComplete?.();
+    setTimeout(onUploadComplete, 3000);
     submit({});
   };
 
@@ -121,9 +120,7 @@ const UploadingItem = ({
       <div className="flex-grow">
         <h3 className="truncate max-w-[200px]">{file.name}</h3>
         <p className="text-xs text-gray-500">
-          {progress > 0
-            ? `${(progress > 99 ? 100 : progress).toFixed(0)}%`
-            : "subiendo..."}
+          {progress > 0 ? `${progress.toFixed(0)}%` : "preparando subida..."}
         </p>
         <ProgressBar progress={progress} />
       </div>
@@ -146,7 +143,7 @@ const ProgressBar = ({ progress = 4 }: { progress: number }) => {
           "bg-green-500": progress > 99,
         })}
         style={{
-          width: `${progress > 99 ? 100 : progress}%`,
+          width: `${progress}%`,
         }}
       ></div>
     </div>
