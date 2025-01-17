@@ -1,10 +1,10 @@
-import { deleteObject } from "~/.server/tigris";
+import { deleteObject } from "react-hook-multipart";
 import type { Route } from "./+types/delete";
-import { throwStatus } from "./direct-uploads";
 import { db } from "~/.server/db";
+import { data } from "react-router";
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
-  if (request.method !== "DELETE") throwStatus({ status: 403 });
+  if (request.method !== "DELETE") throw data({ status: 403 });
   /**
    * 1. delete file
    * 2. then delete record

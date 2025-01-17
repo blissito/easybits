@@ -1,16 +1,12 @@
-import { getReadURL } from "~/.server/tigris";
+import { getReadURL } from "react-hook-multipart";
 import type { Route } from "./+types/video";
+import { data } from "react-router";
 
-export const loader = async ({ params }: Route.LoaderArgs) => {
-  const { storageKey } = params;
-  if (!storageKey) throw new Response(null, { status: 404 });
-
-  return {
-    src: await getReadURL(storageKey),
-  };
-};
+export const loader = async ({ params }: Route.LoaderArgs) =>
+  params.storageKey
+    ? ((await getReadURL(params.storageKey)) as string)
+    : data("", { status: 404 });
 
 export default function Route({ loaderData }: Route.ComponentProps) {
-  const { src } = loaderData;
-  return <video src={src} className="w-full h-screen" controls />;
+  return <video src={loaderData} className="w-full h-screen" controls />;
 }

@@ -8,6 +8,6 @@ export const { getSession, commitSession, destroySession } =
       maxAge: 3600 * 24 * 7 * 4,
       path: "/",
       sameSite: "lax",
-      secrets: ["easyBitsByFixterorg"],
+      secrets: [process.env.JWT_SECRET || "easyBitsByFixterorg"],
     },
   });

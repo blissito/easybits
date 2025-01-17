@@ -6,55 +6,8 @@ import { upload, type UploadCompletedData } from "~/.client/multipart/uploader";
 import toast, { Toaster } from "react-hot-toast";
 import { BsCloudCheckFill } from "react-icons/bs";
 import { useSubmit } from "react-router";
-
-export const FileUploadProgress = ({
-  onUploadComplete,
-  files = [
-    {
-      name: "blissmo.mp4",
-      size: 9 * 1024 * 1024,
-      type: "video/quicktime",
-    } as File,
-  ],
-}: {
-  onUploadComplete?: (arg0: string) => void;
-  files: File[];
-}) => {
-  // experiment
-  if (!files) return null;
-
-  //   const portalRef = useRef<HTMLElement>(null);
-  const [portalNode, setPortalNode] = useState<HTMLElement>();
-  useEffect(() => {
-    if (document.body) {
-      setPortalNode(document.body);
-    }
-  }, []);
-  //   const previewURL = URL.createObjectURL(file);
-  return (
-    <>
-      {portalNode &&
-        createPortal(
-          <article
-            className={cn(
-              "fixed bottom-4 right-4 w-[320px] bg-zinc-100 text-black items-center",
-              "px-4 rounded-xl"
-            )}
-          >
-            {files.map((file, i) => (
-              <UploadingItem
-                onUploadComplete={() => onUploadComplete?.(file.name)}
-                key={i}
-                file={file}
-              />
-            ))}
-          </article>,
-          portalNode
-        )}
-      <Toaster />
-    </>
-  );
-};
+// import { useUploadMultipart } from "~/borrame/useMultipartUpload";
+import { useUploadMultipart } from "react-hook-multipart/react";
 
 const UploadingItem = ({
   file,
@@ -68,7 +21,28 @@ const UploadingItem = ({
   const abortController = new AbortController();
   const previewURL = "/favicon.ico";
 
-  const handleUpload = async () => {
+  const { upload } = useUploadMultipart({
+    onUploadProgress({ percentage }) {
+      setProgress(percentage);
+    },
+  });
+  const handleUpload = () => {
+    upload(file.name, file).then(({ key }) => {
+      console.log("Object Uploaded:", key);
+      submit({});
+      setTimeout(onUploadComplete, 2000);
+    });
+
+    // SINGLE PUT URL:
+    // const putURL = await fetch("/get-put-url", { method: "POST" }).then((res) =>
+    //   res.text()
+    // );
+    // console.log("La url: ", putURL);
+    // const upload = await fetch(putURL, { method: "PUT", body: file });
+    // console.log("Uploaded?", upload);
+  };
+  /** DEPRECATED */
+  const __handleUpload = async () => {
     if (!file.size) return;
     let blob: UploadCompletedData;
     try {
@@ -147,5 +121,54 @@ const ProgressBar = ({ progress = 4 }: { progress: number }) => {
         }}
       ></div>
     </div>
+  );
+};
+
+export const FileUploadProgress = ({
+  onUploadComplete,
+  files = [
+    {
+      name: "blissmo.mp4",
+      size: 9 * 1024 * 1024,
+      type: "video/quicktime",
+    } as File,
+  ],
+}: {
+  onUploadComplete?: (arg0: string) => void;
+  files: File[];
+}) => {
+  // experiment
+  if (!files) return null;
+
+  //   const portalRef = useRef<HTMLElement>(null);
+  const [portalNode, setPortalNode] = useState<HTMLElement>();
+  useEffect(() => {
+    if (document.body) {
+      setPortalNode(document.body);
+    }
+  }, []);
+  //   const previewURL = URL.createObjectURL(file);
+  return (
+    <>
+      {portalNode &&
+        createPortal(
+          <article
+            className={cn(
+              "fixed bottom-4 right-4 w-[320px] bg-zinc-100 text-black items-center",
+              "px-4 rounded-xl"
+            )}
+          >
+            {files.map((file, i) => (
+              <UploadingItem
+                onUploadComplete={() => onUploadComplete?.(file.name)}
+                key={i}
+                file={file}
+              />
+            ))}
+          </article>,
+          portalNode
+        )}
+      <Toaster />
+    </>
   );
 };
