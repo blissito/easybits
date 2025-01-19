@@ -37,9 +37,9 @@ export default function LoginComponent({
         className={
           "w-full h-screen bg-cover bg-center flex justify-center items-center"
         }
-        style={{ backgroundImage: `url(${backgroundGrid})` }}
+        style={{ backgroundImage: `url(/app/assets/images/bg-grid.svg)` }}
       >
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center justify-center">
           <img src={logoPurple} className="w-[95px]" />
           <AnimatePresence mode="wait">
             {loginType === "social" && (
@@ -71,7 +71,7 @@ export default function LoginComponent({
                     Iniciar con Email
                   </Button>
                 </div>
-                <p>
+                <p className="text-center">
                   {SELECTED_STRINGS.actionQuestion}
                   <span
                     className="text-[#9870ED]"
