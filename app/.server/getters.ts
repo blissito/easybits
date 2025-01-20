@@ -4,11 +4,7 @@ import { commitSession, getSession } from "./sessions";
 import type { User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
-
-const isDev = process.env.NODE_ENV === "development";
-export const location = isDev
-  ? "http://localhost:3000"
-  : "https://www.easybits.cloud";
+import { config } from "./config";
 
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
