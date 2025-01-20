@@ -36,6 +36,7 @@ model User {
   phoneNumber    String?
   roles          String[]
   metadata       Json?
+  stripe         Json?
   // dates
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

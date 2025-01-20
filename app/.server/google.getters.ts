@@ -19,7 +19,7 @@ const validateGoogleAccessToken = async (
   const url = new URL("https://oauth2.googleapis.com/token");
   url.searchParams.set("code", code);
   url.searchParams.set("grant_type", "authorization_code");
-  url.searchParams.set("redirect_uri", location + "/login?auth=gmail");
+  url.searchParams.set("redirect_uri", location + "/login?auth=google");
   url.searchParams.set(
     "scope",
     "https://www.googleapis.com/auth/userinfo.email"
@@ -59,7 +59,7 @@ const getGoogleExtraData = (access_token: string): Promise<GoogleExtraData> => {
 export const getGoogleURL = () => {
   const url = new URL("https://accounts.google.com/o/oauth2/auth");
   url.searchParams.set("client_id", process.env.GOOGLE_CLIENT_ID as string);
-  url.searchParams.set("redirect_uri", location + "/login?auth=gmail");
+  url.searchParams.set("redirect_uri", location + "/login?auth=google");
   url.searchParams.set("response_type", "code");
   url.searchParams.set(
     "scope",
@@ -70,8 +70,12 @@ export const getGoogleURL = () => {
 
 // export to use in loader
 export const createGoogleSession = async (code: string, request: Request) => {
-  const { error, access_token } = await validateGoogleAccessToken(code);
-  if (error) throw new Error("wrong google code");
+  const { error, access_token, refresh_token } =
+    await validateGoogleAccessToken(code);
+  if (error) {
+    console.error("::CODE_ERROR::", error);
+    throw new Error("wrong google code");
+  }
   if (!access_token) throw new Error("No access_token found in response");
   const userData = await getGoogleExtraData(access_token);
   if (!userData.email) throw new Error("Wrong google user data");

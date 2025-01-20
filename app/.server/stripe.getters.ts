@@ -32,14 +32,42 @@ export const validateStripeAccessToken = async (code: string) => {
     .catch((e) => console.error(e));
 };
 
-const getStripeExtraData = (access_token: string) => {
+export type StripeType = {
+  email?: string;
+  id: string;
+  stripeId?: string;
+  country: string;
+  default_currency: string;
+  dashboard: {
+    display_name: string;
+    timezone: string;
+  };
+  settings: {
+    branding: {
+      icon: string;
+      logo: string;
+      primary_color: string;
+      secondary_color: string;
+    };
+  };
+};
+const getStripeExtraData = async (access_token: string) => {
   const url = new URL(`https://api.stripe.com/v1/account`);
   const options: RequestInit = {
     headers: { Authorization: `Bearer ${access_token}` },
   };
-  return fetch(url.toString(), options)
-    .then((r) => r.json())
-    .catch((e) => console.error(e));
+  const data: StripeType = await fetch(url.toString(), options).then((r) =>
+    r.json()
+  );
+  return {
+    email: data.email,
+    id: data.id,
+    stripeId: data.id,
+    country: data.country,
+    default_currency: data.default_currency,
+    settings: { branding: data.settings.branding },
+    dashboard: data.dashboard,
+  } satisfies StripeType;
 };
 
 export const createStripeSession = async (code: string, request: Request) => {
@@ -48,9 +76,14 @@ export const createStripeSession = async (code: string, request: Request) => {
   );
   if (error_description) throw new Error(error_description);
   if (!access_token) throw new Error("No access_token found in response");
-  const userData = await getStripeExtraData(access_token);
-
-  if (!userData.email) throw new Error("Wrong stripe user data");
-  // we need to format the user from stripe to our schema
-  await createUserSession({ email: userData.email, id: undefined }, request);
+  const stripeData = await getStripeExtraData(access_token);
+  console.log("USED_STRIPE_DATA", stripeData);
+  if (!stripeData.email) {
+    // show signup screen
+  } else {
+    await createUserSession(
+      { email: stripeData.email, stripe: stripeData },
+      request
+    );
+  }
 };

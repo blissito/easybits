@@ -9,11 +9,12 @@ import { Button } from "../common/Button";
 import { useState } from "react";
 import { Input } from "../common/Input";
 import { motion, AnimatePresence } from "motion/react";
-import { Form } from "react-router";
+import { useFetcher } from "react-router";
 
 interface LoginProps {}
 
 export default function LoginComponent({}: LoginProps) {
+  const fetcher = useFetcher();
   const [loginType, setLoginType] = useState<"social" | "email">("social");
   const [isLogin, setIsLogin] = useState<boolean>(false);
 
@@ -37,6 +38,8 @@ export default function LoginComponent({}: LoginProps) {
     setOffset({ x: 0, y: 0 });
   };
 
+  const isLoading = fetcher.state !== "idle";
+
   return (
     <>
       <AuthNav />
@@ -47,7 +50,7 @@ export default function LoginComponent({}: LoginProps) {
         style={{ backgroundImage: "url('/app/assets/images/bg-grid.svg')" }}
       >
         <div className="flex flex-col items-center justify-center">
-          {/* hover animation can improve */}
+          {/* hover animation can improve... just like everything in this F** world*/}
           <motion.div
             whileHover={{ scale: 1.5 }}
             onMouseMove={handleMouseMove}
@@ -64,7 +67,7 @@ export default function LoginComponent({}: LoginProps) {
               }}
             />
           </motion.div>
-          <Form method="post">
+          <fetcher.Form method="post">
             <AnimatePresence mode="wait">
               {loginType === "social" && (
                 <motion.div
@@ -79,10 +82,11 @@ export default function LoginComponent({}: LoginProps) {
                   </p>
                   <div className="flex flex-col gap-8 mb-8">
                     <Button
+                      isLoading={isLoading}
                       bgColor="bg-[#A6EB9A]"
                       type="submit"
-                      name="loginType"
-                      value="gmail"
+                      name="auth"
+                      value="google"
                     >
                       <FcGoogle />
                       Iniciar con Gmail
@@ -90,7 +94,7 @@ export default function LoginComponent({}: LoginProps) {
                     <Button
                       bgColor="bg-[#6772E5]"
                       type="submit"
-                      name="loginType"
+                      name="auth"
                       value="stripe"
                     >
                       <BsStripe fill="white" />
@@ -165,7 +169,7 @@ export default function LoginComponent({}: LoginProps) {
                 </motion.div>
               )}
             </AnimatePresence>
-          </Form>
+          </fetcher.Form>
         </div>
       </main>
     </>

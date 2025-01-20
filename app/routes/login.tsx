@@ -1,25 +1,19 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/login";
-import { getUserOrNull } from "~/.server/getters";
 import LoginComponent from "~/components/login/login-component";
 import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  // check if user
-  const user = await getUserOrNull(request);
-  // TODO: uncomment so it takes you to / if already logued in. Comment to keep testing
-  // if (user) redirect("/");
-
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const loginType = url.searchParams.get("auth");
+  const auth = url.searchParams.get("auth");
 
   if (code) {
-    switch (loginType) {
+    switch (auth) {
       case "stripe":
         await createStripeSession(code, request);
-      case "gmail":
+      case "google":
         await createGoogleSession(code, request);
       case "email-pass":
         return { message: "Login with email/pass" };
@@ -28,20 +22,19 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     }
   }
 
-  return {};
+  return new Response(null);
 };
 
 export const action = async ({ request }: Route.ClientActionArgs) => {
   const formData = await request.formData();
-  const loginType = formData.get("loginType");
-
-  switch (loginType) {
+  const auth = formData.get("auth");
+  switch (auth) {
     case "stripe":
       return redirect(getStripeURL());
-    case "gmail":
+    case "google":
       return redirect(getGoogleURL());
     case "email-pass":
-      // auth handler
+      // @todo auth handler
       return { message: "Login with email/pass" };
     default:
       return { error: "Error" };

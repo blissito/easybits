@@ -2,14 +2,17 @@ import { useState, type ReactNode } from "react";
 import { FaCopy } from "react-icons/fa";
 import { useTimeout } from "~/hooks/useTimeout";
 import { cn } from "~/utils/cn";
+import Spinner from "./Spinner";
 
 interface ButtonProps {
   bgColor?: string;
   children?: ReactNode;
   onClick?: () => void;
+  isLoading?: boolean;
 }
 
 export const Button = ({
+  isLoading,
   bgColor,
   children,
   onClick,
@@ -24,7 +27,7 @@ export const Button = ({
       onClick={onClick}
       {...props}
     >
-      {children}
+      {isLoading ? <Spinner /> : children}
     </button>
   );
 };
