@@ -1,10 +1,7 @@
-import { redirect } from "react-router";
-import { db } from "./db";
-import { commitSession, getSession } from "./sessions";
-import type { User } from "@prisma/client";
-import jwt from "jsonwebtoken";
-import { randomUUID } from "crypto";
-import { createUserSession, location } from "./getters";
+import { createUserSession } from "./getters";
+import { config } from "./config";
+
+const location = config.baseUrl;
 
 // google login
 type ValidCodeResponse = {

@@ -4,7 +4,6 @@ import { commitSession, getSession } from "./sessions";
 import type { User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
-import { config } from "./config";
 
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));

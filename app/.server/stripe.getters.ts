@@ -1,4 +1,7 @@
-import { createUserSession, location } from "./getters";
+import { config } from "./config";
+import { createUserSession } from "./getters";
+
+const location = config.baseUrl;
 
 // stripe login
 export const getStripeURL = () => {
