@@ -22,7 +22,7 @@ const validateGoogleAccessToken = async (
   const url = new URL("https://oauth2.googleapis.com/token");
   url.searchParams.set("code", code);
   url.searchParams.set("grant_type", "authorization_code");
-  url.searchParams.set("redirect_uri", location + "/login");
+  url.searchParams.set("redirect_uri", location + "/login?auth=gmail");
   url.searchParams.set(
     "scope",
     "https://www.googleapis.com/auth/userinfo.email"
@@ -62,7 +62,7 @@ const getGoogleExtraData = (access_token: string): Promise<GoogleExtraData> => {
 export const getGoogleURL = () => {
   const url = new URL("https://accounts.google.com/o/oauth2/auth");
   url.searchParams.set("client_id", process.env.GOOGLE_CLIENT_ID as string);
-  url.searchParams.set("redirect_uri", location + "/login");
+  url.searchParams.set("redirect_uri", location + "/login?auth=gmail");
   url.searchParams.set("response_type", "code");
   url.searchParams.set(
     "scope",

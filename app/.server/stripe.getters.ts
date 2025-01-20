@@ -1,11 +1,10 @@
 import { createUserSession, location } from "./getters";
 
 // stripe login
-
 export const getStripeURL = () => {
   const url = new URL("https://connect.stripe.com/oauth/authorize");
   url.searchParams.set("client_id", process.env.STRIPE_CLIENT_ID as string);
-  url.searchParams.set("redirect_uri", location + "/login");
+  url.searchParams.set("redirect_uri", location + "/login?auth=stripe");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "read_write");
   return url.toString();
@@ -15,7 +14,7 @@ export const validateStripeAccessToken = async (code: string) => {
   const url = new URL("https://connect.stripe.com/oauth/token");
   url.searchParams.set("code", code);
   url.searchParams.set("grant_type", "authorization_code");
-  url.searchParams.set("redirect_uri", location + "/login");
+  url.searchParams.set("redirect_uri", location + "/login?auth=stripe");
   url.searchParams.set("scope", "read_write");
   url.searchParams.set("client_secret", process.env.STRIPE_SECRET_KEY);
 

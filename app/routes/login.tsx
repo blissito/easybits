@@ -13,11 +13,21 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  //TODO:  we need to check where did login came from
+  const loginType = url.searchParams.get("auth");
+
   if (code) {
-    // await createGoogleSession(code, request);
-    await createStripeSession(code, request);
+    switch (loginType) {
+      case "stripe":
+        await createStripeSession(code, request);
+      case "gmail":
+        await createGoogleSession(code, request);
+      case "email-pass":
+        return { message: "Login with email/pass" };
+      default:
+        return { error: "Error" };
+    }
   }
+
   return {};
 };
 
@@ -31,6 +41,7 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
     case "gmail":
       return redirect(getGoogleURL());
     case "email-pass":
+      // auth handler
       return { message: "Login with email/pass" };
     default:
       return { error: "Error" };
