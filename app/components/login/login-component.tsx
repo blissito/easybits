@@ -11,9 +11,7 @@ import { Input } from "../common/Input";
 import { motion, AnimatePresence } from "motion/react";
 import { useFetcher } from "react-router";
 
-interface LoginProps {}
-
-export default function LoginComponent({}: LoginProps) {
+export default function LoginComponent() {
   const fetcher = useFetcher();
   const [loginType, setLoginType] = useState<"social" | "email">("social");
   const [isLogin, setIsLogin] = useState<boolean>(false);
@@ -38,7 +36,10 @@ export default function LoginComponent({}: LoginProps) {
     setOffset({ x: 0, y: 0 });
   };
 
-  const isLoading = fetcher.state !== "idle";
+  const isGoogleLoading =
+    fetcher.state !== "idle" && fetcher.formData?.get("auth") === "google";
+  const isStripeLoading =
+    fetcher.state !== "idle" && fetcher.formData?.get("auth") === "stripe";
 
   return (
     <>
@@ -82,7 +83,7 @@ export default function LoginComponent({}: LoginProps) {
                   </p>
                   <div className="flex flex-col gap-8 mb-8">
                     <Button
-                      isLoading={isLoading}
+                      isLoading={isGoogleLoading}
                       bgColor="bg-[#A6EB9A]"
                       type="submit"
                       name="auth"
@@ -92,6 +93,7 @@ export default function LoginComponent({}: LoginProps) {
                       Iniciar con Gmail
                     </Button>
                     <Button
+                      isLoading={isStripeLoading}
                       bgColor="bg-[#6772E5]"
                       type="submit"
                       name="auth"

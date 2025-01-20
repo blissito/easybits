@@ -41,15 +41,6 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
   }
 };
 
-export default function Login({
-  loaderData,
-  actionData,
-}: Route.ComponentProps) {
-  console.log({ loaderData, actionData });
-
-  return (
-    <>
-      <LoginComponent />
-    </>
-  );
+export default function Login() {
+  return <LoginComponent />;
 }
