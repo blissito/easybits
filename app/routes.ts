@@ -8,7 +8,6 @@ import {
 export default [
   index("routes/home.tsx"),
   route("/login", "routes/login.tsx"),
-  route("/auth", "routes/auth.tsx"),
   ...prefix("api/v1", [
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
     route("uploads/:storageKey/delete", "routes/api/v1/delete.ts"),
