@@ -52,7 +52,7 @@ export default function LoginComponent({}: LoginProps) {
             whileHover={{ scale: 1.5 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            className="hover:p-10 transition-all"
+            className="hover:p-10"
           >
             <motion.img
               src={logoPurple}
