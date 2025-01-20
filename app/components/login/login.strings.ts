@@ -4,11 +4,11 @@ export const STRINGS = {
     formTitle: "Completa tu información",
     actionQuestion: "¿No tienes cuenta? ",
     action: "Crea una",
-    formAction: "Iniciar Sesión con otra red social.",
+    formAction: "Iniciar Sesión con otra red social",
     formSubmit: "Iniciar sesión",
   },
   signup: {
-    title: "¡Vamos a empezar! \u000A Crea una cuenta.",
+    title: "¡Vamos a empezar! \u000A Crea una cuenta",
     formTitle: "Completa tu información",
     actionQuestion: "¿Ya tienes cuenta? ",
     action: "Inicia sesión",

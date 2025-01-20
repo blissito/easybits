@@ -9,14 +9,20 @@ interface ButtonProps {
   onClick?: () => void;
 }
 
-export const Button = ({ bgColor, children, onClick }: ButtonProps) => {
+export const Button = ({
+  bgColor,
+  children,
+  onClick,
+  ...props
+}: ButtonProps) => {
   return (
     <button
       className={cn(
-        "rounded-xl flex gap-2 items-center justify-center p-4 text-black text-lg w-full md:w-96 hover:shadow-xl",
+        "rounded-xl flex gap-2 items-center justify-center p-4 text-black text-lg w-full md:w-96 hover:shadow-xl cursor-pointer",
         bgColor || "bg-white"
       )}
       onClick={onClick}
+      {...props}
     >
       {children}
     </button>
