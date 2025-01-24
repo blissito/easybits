@@ -10,6 +10,7 @@ import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
 import { useMultipartUpload } from "~/hooks/useMultipartUpload";
 import { FileUploadProgress } from "~/components/upload/FileUploadProgress";
+import { AuthNav } from "~/components/login/auth-nav";
 
 const MB = 1024 * 1024;
 
@@ -35,7 +36,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
-  const { user, assets } = loaderData;
+  const { user = {}, assets = [] } = loaderData || {};
   const fileInput = useRef<HTMLInputElement>(null);
   const submit = useSubmit();
   const [files, setFiles] = useState<File[]>([]);
@@ -90,8 +91,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
+      <AuthNav user={user} />
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
-      <article className="py-20 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
+      <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
         <section>
           <h2>Public key</h2>
           <div className="flex gap-2">
