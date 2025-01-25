@@ -98,7 +98,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <section>
             <h2>Public key</h2>
             <div className="flex gap-2">
-              <pre>{user.publicKey}</pre>
+              <input
+                disabled
+                className={cn(
+                  "border p-3 rounded-2xl w-[320px]",
+                  "cursor-pointer pointer-events-none"
+                )}
+                type="text"
+                value={user.publicKey}
+              />
               <CopyButton text={user.publicKey as string} />
             </div>
           </section>

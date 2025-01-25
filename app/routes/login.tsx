@@ -11,6 +11,7 @@ import {
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
+  console.log("URL :", url);
   const code = url.searchParams.get("code");
   const auth = url.searchParams.get("auth");
 
