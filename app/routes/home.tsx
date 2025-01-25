@@ -24,7 +24,7 @@ export function meta() {
 // @todo this will be moved to dash maybe
 export const loader = async ({ request }: Route.LoaderArgs) => {
   let user = await getUserOrRedirect(request);
-  if (!user.publicKey) {
+  if (!user.publicKey || !user.host) {
     user = await createUserKeys(user);
   }
   // load assets

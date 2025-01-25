@@ -72,15 +72,14 @@ export const validateUserToken = (token: string) => {
 
 // KEYS stuff
 export const createUserKeys = async (user: Partial<User>) => {
-  // const secretKey = jwt.sign(
-  //   { email: user.email },
-  //   process.env.JWT_SECRET as string
-  // );
   const publicKey = randomUUID();
+  const host = user.email?.split("@")[0] as string;
+  await createHost(host);
   return await db.user.update({
     where: { email: user.email },
     data: {
       publicKey,
+      host,
     },
   });
 };
