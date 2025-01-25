@@ -21,15 +21,15 @@ export default function DomainsRoute() {
               name="A"
               label="Registro A"
               disabled
-              value="66.241.125.189"
-              copy="66.241.125.189"
+              value="77.231.175.139"
+              copy="77.231.175.139"
             />
             <Input
               name="AAAA"
               label="Registro AAAA"
               disabled
-              value="2a09:8280:1::55:1e4e:0"
-              copy="2a09:8280:1::55:1e4e:0"
+              value="2c07:8860:1::44:1e4e:0"
+              copy="2c07:8860:1::44:1e4e:0"
             />
           </div>
           <Input
@@ -37,12 +37,14 @@ export default function DomainsRoute() {
             label="Registro CNAME"
             disabled
             value="_acme-challenge.www"
+            copy="_acme-challenge.www"
           />
           <Input
             name="value"
             label="Valor del registro"
             disabled
             value="assets.hectorbliss.com.x5oq83.fixterdns.net."
+            copy="assets.hectorbliss.com.x5oq83.fixterdns.net."
           />
         </Form>
       </article>

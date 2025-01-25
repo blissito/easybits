@@ -4,6 +4,7 @@ import { commitSession, getSession } from "./sessions";
 import type { User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
+import { createHost } from "~/lib/fly_certs/certs_getters";
 
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
@@ -35,12 +36,15 @@ export const createUserSession = async (
 ) => {
   const cookie = request.headers.get("Cookie");
   const session = await getSession(cookie);
+  const host = userData.email.split("@")[0];
   await db.user.upsert({
     where: { email: userData.email },
-    create: { ...userData, publicKey: randomUUID() },
+    create: { ...userData, publicKey: randomUUID(), host },
     update: userData,
   });
   session.set("email", userData.email);
+  // create certificate
+  await createHost(`${host}.easybits.cloud`);
   throw redirect("/", {
     // @todo: redirect to dash
     headers: {

@@ -3,6 +3,11 @@ import type { Route } from "./+types/login";
 import LoginComponent from "~/components/login/login-component";
 import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
+import {
+  createHost,
+  getFlyAppData,
+  listHosts,
+} from "~/lib/fly_certs/certs_getters";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -41,6 +46,6 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
   }
 };
 
-export default function Login() {
+export default function Login({ loaderData }: Route.ComponentProps) {
   return <LoginComponent />;
 }

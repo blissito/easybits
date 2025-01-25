@@ -31,6 +31,7 @@ model User {
   // defaults
   displayName    String?
   email          String   @unique
+  host           String   @unique
   verified_email Boolean  @default(false)
   picture        String?
   phoneNumber    String?

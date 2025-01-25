@@ -94,13 +94,34 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <AuthNav user={user} />
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
       <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
-        <section>
-          <h2>Public key</h2>
-          <div className="flex gap-2">
-            <pre>{user.publicKey}</pre>
-            <CopyButton text={user.publicKey as string} />
-          </div>
-        </section>
+        <nav className="flex justify-between">
+          <section>
+            <h2>Public key</h2>
+            <div className="flex gap-2">
+              <pre>{user.publicKey}</pre>
+              <CopyButton text={user.publicKey as string} />
+            </div>
+          </section>
+          <section className="grid">
+            <h2>Dominio gratis</h2>
+            <a
+              className="p-4"
+              rel="noreferrer"
+              target="_blank"
+              href={`https://${user.host}.easybits.cloud`}
+            >
+              <input
+                disabled
+                className={cn(
+                  "border p-3 rounded-2xl w-[320px]",
+                  "cursor-pointer pointer-events-none"
+                )}
+                type="text"
+                value={`https://${user.host}.easybits.cloud`}
+              />
+            </a>
+          </section>
+        </nav>
         <section>
           <nav className="w-full bg-indigo-500 flex items-center justify-between px-4 py-2">
             <h2>Todos tus assets</h2>

@@ -9,7 +9,7 @@ import { Link } from "react-router";
 
 export const AuthNav = ({ user }: { user?: User }) => {
   return (
-    <nav className="bg-black h-[80px] text-white flex justify-between px-36 items-center border-b-2 border-[#757D8C] fixed inset-0">
+    <nav className="bg-black h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-[#757D8C] fixed inset-0">
       <div className="flex gap-3">
         <img src={Logo} alt="easybits" className="w-[53px]" />
         <img src={TextLogo} alt="easybits-text" className="w-[103px]" />

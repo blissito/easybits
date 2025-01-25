@@ -9,7 +9,11 @@ interface ButtonProps {
   onClick?: () => void;
   error?: string;
   label?: string;
-  copy?: boolean;
+  placeholder?: string;
+  name?: string;
+  disabled?: boolean;
+  copy?: string;
+  value?: string;
 }
 
 export const Input = ({ label, error, copy, ...props }: ButtonProps) => {
@@ -21,7 +25,7 @@ export const Input = ({ label, error, copy, ...props }: ButtonProps) => {
           className={cn(
             "rounded-xl p-4 text-lg min-w-full md:w-96 mb-6 border",
             {
-              "pr-24": copy,
+              "pr-24": !!copy,
             }
           )}
           {...props}
@@ -35,13 +39,13 @@ export const Input = ({ label, error, copy, ...props }: ButtonProps) => {
 
 /** Needs a relative parent */
 const CopyMagnetButton = ({ text }: { text: string }) => {
-  const [timeout, set] = useState<ReturnType<typeof setTimeout> | null>();
+  const [timeout, set] = useState<ReturnType<typeof setTimeout> | null>(null);
   return (
     <button
-      disabled={timeout}
+      disabled={!!timeout}
       onClick={() => {
         timeout && clearTimeout(timeout);
-        navigator.clipboard.writeText(text);
+        navigator.clipboard.writeText(text); // 🪄✨🤩
         set(setTimeout(() => set(null), 2000));
       }}
       className="absolute right-px top-px bg-gray-700 p-auto w-24 h-[60px] rounded-r-xl grid place-content-center text-xl"
