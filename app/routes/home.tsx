@@ -17,6 +17,7 @@ import { cn } from "~/utils/cn";
 import { useMultipartUpload } from "~/hooks/useMultipartUpload";
 import { FileUploadProgress } from "~/components/upload/FileUploadProgress";
 import { AuthNav } from "~/components/login/auth-nav";
+import ProfileLayout from "~/components/common/ProfileLayout";
 import { FaLockOpen } from "react-icons/fa6";
 import { FaLock } from "react-icons/fa";
 import { FaRegEye } from "react-icons/fa";
@@ -103,8 +104,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [showKey, setShowKey] = useState(false);
 
   return (
-    <>
-      <AuthNav user={user} />
+    <ProfileLayout>
+      {/* <AuthNav user={user} /> */}
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
       <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
         <nav className="flex justify-between">
@@ -237,6 +238,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </>
         </section>
       </article>
-    </>
+    </ProfileLayout>
   );
 }

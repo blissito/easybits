@@ -1,4 +1,3 @@
-import backgroundGrid from "~/assets/images/bg-grid.svg";
 import logoPurple from "~/assets/icons/eyes-logo-purple.svg";
 import { AuthNav } from "./auth-nav";
 import { STRINGS } from "./login.strings";
