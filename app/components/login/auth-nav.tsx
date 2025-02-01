@@ -2,8 +2,8 @@ import { useState, type ReactNode } from "react";
 import { FaCopy } from "react-icons/fa";
 import { useTimeout } from "~/hooks/useTimeout";
 import { cn } from "~/utils/cn";
-import TextLogo from "~/assets/icons/easy-bits-logo.svg";
-import Logo from "~/assets/icons/eyes-logo.svg";
+import TextLogo from "~/assets/icons/easybits-logo-text.svg";
+import Logo from "~/assets/icons/easybits-logo.svg";
 import type { User } from "@prisma/client";
 import { Link } from "react-router";
 
