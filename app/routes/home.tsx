@@ -4,7 +4,13 @@ import { CopyButton } from "~/components/common/CopyButton";
 import { useRef, useState, type ChangeEvent } from "react";
 import { useUpload } from "~/hooks/useUpload";
 import { db } from "~/.server/db";
-import { FaRegCheckCircle, FaSpinner, FaTrash } from "react-icons/fa";
+import {
+  FaEye,
+  FaEyeSlash,
+  FaRegCheckCircle,
+  FaSpinner,
+  FaTrash,
+} from "react-icons/fa";
 import { useFetcher, useSubmit } from "react-router";
 import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
@@ -12,6 +18,11 @@ import { useMultipartUpload } from "~/hooks/useMultipartUpload";
 import { FileUploadProgress } from "~/components/upload/FileUploadProgress";
 import { AuthNav } from "~/components/login/auth-nav";
 import ProfileLayout from "~/components/common/ProfileLayout";
+import { FaLockOpen } from "react-icons/fa6";
+import { FaLock } from "react-icons/fa";
+import { FaRegEye } from "react-icons/fa";
+import { RiEye2Line } from "react-icons/ri";
+import { RiEyeCloseLine } from "react-icons/ri";
 
 const MB = 1024 * 1024;
 
@@ -90,6 +101,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     });
   };
 
+  const [showKey, setShowKey] = useState(false);
+
   return (
     <ProfileLayout>
       {/* <AuthNav user={user} /> */}
@@ -97,7 +110,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
         <nav className="flex justify-between">
           <section>
-            <h2>Public key</h2>
+            <h2>Secret key</h2>
             <div className="flex gap-2">
               <input
                 disabled
@@ -105,9 +118,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   "border p-3 rounded-2xl w-[320px]",
                   "cursor-pointer pointer-events-none"
                 )}
-                type="text"
+                type={showKey ? "text" : "password"}
                 value={user.publicKey}
               />
+              <button onClick={() => setShowKey((k) => !k)}>
+                {showKey ? <FaEye /> : <FaEyeSlash />}
+              </button>
               <CopyButton text={user.publicKey as string} />
             </div>
           </section>
@@ -177,8 +193,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
                 <span className="col-span-2 truncate">{asset.storageKey}</span>
 
-                <span className="col-span-4">
+                <span className="col-span-3 truncate">
                   {asset.metadata?.originalName}
+                </span>
+
+                <span className="col-span-1">
+                  {asset.isPublic ? (
+                    <span>
+                      <FaLockOpen />
+                    </span>
+                  ) : (
+                    <span>
+                      <RiEyeCloseLine />
+                    </span>
+                  )}
                 </span>
 
                 <p className="flex gap-1 items-center col-span-2">
@@ -196,7 +224,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
                 <CopyButton
                   className="col-span-2"
-                  text={`https://www.easybits.cloud/videos/${asset.storageKey}`}
+                  text={`https://easybits.fly.storage.tigris.dev/${asset.storageKey}`}
+                  // text={`https://www.easybits.cloud/videos/${asset.storageKey}`}
                 >
                   <span>{asset.contentType}</span>
                 </CopyButton>
