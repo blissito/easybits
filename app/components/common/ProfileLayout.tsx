@@ -19,8 +19,7 @@ const MenuItem = ({ path, icon, title, isOpen }) => {
     <Link to={path}>
       <li
         className={clsx(
-          "w-full flex items-center gap-4 px-6 transition-all h-[32px] overflow-hidden",
-          isOpen ? "justify-start" : "justify-center"
+          "w-full flex items-center gap-4 px-6 transition-all h-[32px] overflow-hidden justify-start"
         )}
       >
         <img className="w-[32px]" src={icon} />
@@ -77,8 +76,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
         <div className="w-full">
           <div
             className={clsx(
-              "px-4 flex items-center mb-10 gap-4 h-[47px]",
-              isOpen ? "justify-start" : "justify-center"
+              "px-4 flex items-center mb-10 gap-4 h-[47px] justify-start"
             )}
           >
             <img src={Logo} alt="easybits" className="w-[47px] h-[47px]" />
