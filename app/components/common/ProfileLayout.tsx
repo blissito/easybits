@@ -17,11 +17,7 @@ import { AnimatePresence, motion } from "motion/react";
 const MenuItem = ({ path, icon, title, isOpen }) => {
   return (
     <Link to={path}>
-      <li
-        className={clsx(
-          "w-full flex items-center gap-4 px-6 transition-all h-[32px] overflow-hidden justify-start"
-        )}
-      >
+      <li className="w-full flex items-center gap-4 px-6 transition-all h-[32px] overflow-hidden justify-start">
         <img className="w-[32px]" src={icon} />
         {title && (
           <AnimatePresence initial={false}>
@@ -64,9 +60,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
   return (
     <main className="flex">
       <motion.div
-        className={clsx(
-          "bg-black h-screen text-white flex flex-col justify-between items-center transition-all py-8"
-        )}
+        className="bg-black h-screen text-white flex flex-col justify-between items-center transition-all py-8"
         initial={{ width: 88 }}
         whileHover={{ width: 240 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -74,11 +68,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
         onMouseLeave={() => setIsOpen(false)}
       >
         <div className="w-full">
-          <div
-            className={clsx(
-              "px-4 flex items-center mb-10 gap-4 h-[47px] justify-start"
-            )}
-          >
+          <div className="px-4 flex items-center mb-10 gap-4 h-[47px] justify-start">
             <img src={Logo} alt="easybits" className="w-[47px] h-[47px]" />
             <AnimatePresence initial={false}>
               {isOpen ? (
@@ -93,10 +83,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
                   <img
                     src={TextLogo}
                     alt="easybits-text"
-                    className={clsx(
-                      "w-[103px] h-[39px]",
-                      isOpen ? "block" : "hidden"
-                    )}
+                    className="w-[103px] h-[39px]"
                   />
                 </motion.p>
               ) : null}
