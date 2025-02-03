@@ -108,7 +108,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       {/* <AuthNav user={user} /> */}
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
       <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
-        <nav className="flex justify-between">
+        <nav className="grid gap-4">
           <section>
             <h2>Secret key</h2>
             <div className="flex gap-2">
@@ -154,7 +154,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               disabled={isFetching}
               onClick={handleAssetSelection}
               className={cn(
-                "bg-indigo-800 p-3 rounded-2xl",
+                "bg-indigo-800 p-3 rounded-2xl text-gray-100",
                 "disabled:pointer-events-none disabled:bg-gray-500"
               )}
             >
@@ -180,7 +180,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 className={cn(
                   "p-3 bg-gray-900 grid grid-cols-12 text-xs items-center gap-x-2",
                   "relative",
-                  "group"
+                  "group",
+                  "text-white"
                 )}
                 key={asset.id}
               >
