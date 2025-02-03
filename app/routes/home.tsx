@@ -223,7 +223,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
                 <CopyButton
                   className="col-span-2"
-                  text={`https://easybits.fly.storage.tigris.dev/${asset.storageKey}`}
+                  text={`https://easybits-dev.fly.storage.tigris.dev/${asset.storageKey}`}
                   // text={`https://www.easybits.cloud/videos/${asset.storageKey}`}
                 >
                   <span>{asset.contentType}</span>
