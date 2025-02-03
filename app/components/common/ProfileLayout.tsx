@@ -69,7 +69,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
         onMouseLeave={() => setIsOpen(false)}
       >
         <div className="w-full">
-          <div className="px-5 mb-10">
+          <div className="px-5 mb-4">
             <MenuItem
               path={"/"}
               icon={Logo}
@@ -84,19 +84,19 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
               isOpen={isOpen}
             />
           </div>
-          <ul className="flex flex-col gap-6 px-7">
+          <ul className="flex flex-col gap-6 px-7 py-6">
             {navItems.map((item) => (
               <MenuItem {...item} isOpen={isOpen} />
             ))}
-            <div className="border-t border-[#757D8C] w-full" />
+          </ul>
+          <div className="border-t border-[#757D8C] w-full" />
+          <ul className="flex flex-col gap-6 px-7 py-6">
             {sectionItems.map((item) => (
               <MenuItem {...item} isOpen={isOpen} />
             ))}
           </ul>
         </div>
-
         <ul className="flex flex-col gap-6 w-full px-7">
-          <div className="border-t border-[#757D8C] w-full" />
           {bottomItems.map((item) => (
             <MenuItem {...item} isOpen={isOpen} />
           ))}
