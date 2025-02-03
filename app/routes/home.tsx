@@ -22,6 +22,7 @@ import { FaLock } from "react-icons/fa";
 import { FaRegEye } from "react-icons/fa";
 import { RiEye2Line } from "react-icons/ri";
 import { RiEyeCloseLine } from "react-icons/ri";
+import ProfileLayout from "~/components/ProfileLayout/ProfileLayout";
 
 const MB = 1024 * 1024;
 
@@ -103,8 +104,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [showKey, setShowKey] = useState(false);
 
   return (
-    <>
-      <AuthNav user={user} />
+    <ProfileLayout user={user}>
+      {/* <AuthNav user={user} /> */}
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
       <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
         <nav className="flex justify-between">
@@ -237,6 +238,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </>
         </section>
       </article>
-    </>
+    </ProfileLayout>
   );
 }
