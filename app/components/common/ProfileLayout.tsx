@@ -14,11 +14,11 @@ import UserIcon from "~/assets/icons/profile.svg";
 import LogoutIcon from "~/assets/icons/log-out.svg";
 import { AnimatePresence, motion } from "motion/react";
 
-const MenuItem = ({ path, icon, title, isOpen }) => {
+const MenuItem = ({ path, icon, iconSize, title, isOpen }) => {
   return (
     <Link to={path}>
-      <li className="w-full flex items-center gap-4 px-6 transition-all h-[32px] overflow-hidden justify-start">
-        <img className="w-[32px]" src={icon} />
+      <li className={clsx("w-full flex items-center gap-4 h-[32px]")}>
+        <img className={clsx(`w-[${iconSize || 32}px]`)} src={icon} />
         {title && (
           <AnimatePresence initial={false}>
             {isOpen ? (
@@ -27,6 +27,7 @@ const MenuItem = ({ path, icon, title, isOpen }) => {
                 animate={{
                   opacity: 1,
                   scale: 1,
+                  transition: { delay: 0.3, duration: 0.5 },
                 }}
                 exit={{ opacity: 0, scale: 0 }}
               >
@@ -68,28 +69,22 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
         onMouseLeave={() => setIsOpen(false)}
       >
         <div className="w-full">
-          <div className="px-4 flex items-center mb-10 gap-4 h-[47px] justify-start">
-            <img src={Logo} alt="easybits" className="w-[47px] h-[47px]" />
-            <AnimatePresence initial={false}>
-              {isOpen ? (
-                <motion.p
-                  initial={{ opacity: 0, scale: 0 }}
-                  animate={{
-                    opacity: 1,
-                    scale: 1,
-                  }}
-                  exit={{ opacity: 0, scale: 0 }}
-                >
-                  <img
-                    src={TextLogo}
-                    alt="easybits-text"
-                    className="w-[103px] h-[39px]"
-                  />
-                </motion.p>
-              ) : null}
-            </AnimatePresence>
+          <div className="px-5 mb-10">
+            <MenuItem
+              path={"/"}
+              icon={Logo}
+              iconSize={52}
+              title={
+                <img
+                  src={TextLogo}
+                  alt="easybits-text"
+                  className="w-[103px] h-[39px]"
+                />
+              }
+              isOpen={isOpen}
+            />
           </div>
-          <ul className="flex flex-col gap-6">
+          <ul className="flex flex-col gap-6 px-7">
             {navItems.map((item) => (
               <MenuItem {...item} isOpen={isOpen} />
             ))}
@@ -100,7 +95,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
           </ul>
         </div>
 
-        <ul className="flex flex-col gap-6 w-full">
+        <ul className="flex flex-col gap-6 w-full px-7">
           <div className="border-t border-[#757D8C] w-full" />
           {bottomItems.map((item) => (
             <MenuItem {...item} isOpen={isOpen} />
