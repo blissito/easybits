@@ -9,6 +9,9 @@ export default {
           500: "#9870ED",
         },
       },
+      backgroundImage: {
+        patternDark: "url('/pattern-dark.svg')",
+      },
       fontFamily: {
         sans: [
           '"Inter"',
