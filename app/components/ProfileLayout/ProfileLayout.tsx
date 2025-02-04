@@ -99,7 +99,7 @@ export default function ProfileLayout({
         <nav className="px-8 py-6 flex justify-end fixed w-full">
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-lg font-semibold">
+              <p className="text-lg font-semibold capitalize">
                 {user.displayName || user.email.split("@")[0]}
               </p>
               <p className="text-[#8391A1]">{user.email}</p>
@@ -112,7 +112,8 @@ export default function ProfileLayout({
         <motion.div
           initial={{ marginLeft: 88 }}
           animate={{ marginLeft: isOpen ? 240 : 88 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
+          transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
+          className="p-10 w-full"
         >
           {children}
         </motion.div>
