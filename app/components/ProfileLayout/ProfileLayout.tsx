@@ -112,7 +112,8 @@ export default function ProfileLayout({
         <motion.div
           initial={{ marginLeft: 88 }}
           animate={{ marginLeft: isOpen ? 240 : 88 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
+          transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
+          className="p-10 w-full"
         >
           {children}
         </motion.div>
