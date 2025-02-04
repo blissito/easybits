@@ -4,7 +4,7 @@ import { handler, type Complete } from "react-hook-multipart";
 import { getUserOrRedirect } from "~/.server/getters";
 
 export const action = async ({ request }: Route.ActionArgs) => {
-  const HOST = process.env.S3_PUBLIC_ENDPOINT || "easybits-dev";
+  const HOST = process.env.S3_PUBLIC_ENDPOINT;
   const user = await getUserOrRedirect(request);
   return await handler(
     request,
