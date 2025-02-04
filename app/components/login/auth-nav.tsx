@@ -9,7 +9,7 @@ import { Link } from "react-router";
 
 export const AuthNav = ({ user }: { user?: User }) => {
   return (
-    <nav className="bg-black h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-[#757D8C] fixed inset-0">
+    <nav className="bg-black h-[80px] z-20 text-white flex justify-between lg:px-36 px-10 items-center border-b-[1px] border-white fixed inset-0">
       <div className="flex gap-3">
         <img src={Logo} alt="easybits" className="w-[53px]" />
         <img src={TextLogo} alt="easybits-text" className="w-[103px]" />
@@ -26,7 +26,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
 
         {!user && (
           <div className="flex h-full items-center">
-            <li className="px-8 border-l border-[#757D8C] h-full flex items-center">
+            <li className="px-8 border-l border-white/20 h-full flex items-center">
               Iniciar Sesión
             </li>
             <li className="px-8 h-full bg-[#9870ED] text-black flex items-center">

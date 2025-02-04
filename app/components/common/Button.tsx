@@ -24,7 +24,7 @@ export const Button = ({
       <div className="absolute inset-0 bg-black rounded-lg transition-transform duration-300 scale-100 group-hover:translate-x-2 group-hover:translate-y-2 opacity-0 group-hover:opacity-100" />
       <button
         className={cn(
-          "rounded-xl flex gap-2 items-center justify-center p-4 text-black text-lg w-full md:w-96 border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1",
+          "rounded-xl flex gap-2 z-10 items-center justify-center p-4 text-black text-lg w-full md:w-96 border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1",
           bgColor || "bg-white "
         )}
         onClick={onClick}

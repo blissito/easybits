@@ -11,6 +11,7 @@ export default {
         greenGrass: "#A6EB9A",
         lavander: "#6772E5",
         grayLight: "#F9F9F9",
+        iron: "#323232",
         sky: "#B2DAD8",
         linen: "#F3D7B8",
         rose: "#F4B7EC",
