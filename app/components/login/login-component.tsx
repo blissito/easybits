@@ -76,11 +76,12 @@ export default function LoginComponent() {
                   exit={{ opacity: 0 }}
                   transition={transition}
                 >
-                  <p className="text-center text-3xl whitespace-pre-line mb-10">
+                  <p className="text-center text-3xl whitespace-pre-line mb-10 text-white">
                     {SELECTED_STRINGS.title}
                   </p>
                   <div className="flex flex-col gap-8 mb-8">
                     <Button
+                      size="large"
                       isLoading={isGoogleLoading}
                       bgColor="bg-[#A6EB9A]"
                       type="submit"
@@ -91,6 +92,7 @@ export default function LoginComponent() {
                       Iniciar con Gmail
                     </Button>
                     <Button
+                      size="large"
                       isLoading={isStripeLoading}
                       bgColor="bg-[#6772E5]"
                       type="submit"
@@ -101,6 +103,7 @@ export default function LoginComponent() {
                       Iniciar con Stripe
                     </Button>
                     <Button
+                      size="large"
                       type="button"
                       onClick={() => {
                         setLoginType("email");
@@ -110,7 +113,7 @@ export default function LoginComponent() {
                       Iniciar con Email
                     </Button>
                   </div>
-                  <p className="text-center">
+                  <p className="text-center text-white">
                     {SELECTED_STRINGS.actionQuestion}
                     <span
                       className="text-[#9870ED] cursor-pointer"
@@ -129,12 +132,10 @@ export default function LoginComponent() {
                   exit={{ opacity: 0 }}
                   transition={transition}
                 >
-                  <p className="text-center text-3xl whitespace-pre-line mb-10">
+                  <p className="text-center text-3xl whitespace-pre-line mb-10 text-white">
                     {SELECTED_STRINGS.formTitle}
                   </p>
                   <div className="flex flex-col mb-8">
-                    {/* inputs */}
-
                     <Input
                       label="Email"
                       type="email"
@@ -148,6 +149,7 @@ export default function LoginComponent() {
                       placeholder="Al menos 8 caracteres"
                     />
                     <Button
+                      size="large"
                       bgColor="bg-[#9870ED]"
                       type="submit"
                       name="loginType"
@@ -156,7 +158,7 @@ export default function LoginComponent() {
                       {SELECTED_STRINGS.formSubmit}
                     </Button>
                   </div>
-                  <p className="text-center">
+                  <p className="text-center text-white">
                     <span
                       className="text-[#9870ED] cursor-pointer "
                       onClick={() => {
