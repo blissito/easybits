@@ -1,7 +1,3 @@
-import { useState, type ReactNode } from "react";
-import { FaCopy } from "react-icons/fa";
-import { useTimeout } from "~/hooks/useTimeout";
-import { cn } from "~/utils/cn";
 import TextLogo from "~/assets/icons/easybits-logo-text.svg";
 import Logo from "~/assets/icons/easybits-logo.svg";
 import type { User } from "@prisma/client";
@@ -15,23 +11,29 @@ export const AuthNav = ({ user }: { user?: User }) => {
         <img src={TextLogo} alt="easybits-text" className="w-[103px]" />
       </div>
 
-      <ul className="flex h-full items-center gap-9 content-center">
+      <div className="flex h-full items-center gap-9 content-center">
         {!user && (
           <>
-            <li>Features</li>
-            <li>Planes</li>
-            <li>Blog</li>
+            <Link to="/">Features</Link>
+            <Link to="/">Planes</Link>
+            <Link to="/">Blog</Link>
           </>
         )}
 
         {!user && (
           <div className="flex h-full items-center">
-            <li className="px-8 border-l border-[#757D8C] h-full flex items-center">
+            <Link
+              to="/login"
+              className="px-8 border-l border-[#757D8C] h-full flex items-center"
+            >
               Iniciar Sesión
-            </li>
-            <li className="px-8 h-full bg-[#9870ED] text-black flex items-center">
+            </Link>
+            <Link
+              to="/login"
+              className="px-8 h-full bg-[#9870ED] text-black flex items-center"
+            >
               Empezar
-            </li>
+            </Link>
           </div>
         )}
         {user && (
@@ -44,7 +46,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
             </Link>
           </div>
         )}
-      </ul>
+      </div>
     </nav>
   );
 };

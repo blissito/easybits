@@ -18,7 +18,7 @@ interface ButtonProps {
 
 export const Input = ({ label, error, copy, ...props }: ButtonProps) => {
   return (
-    <label className="grid gap-2">
+    <label className="grid gap-2 text-white">
       <span>{label}</span>
       <div className="relative">
         <input
