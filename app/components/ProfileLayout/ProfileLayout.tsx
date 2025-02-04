@@ -100,7 +100,7 @@ export default function ProfileLayout({
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-lg font-semibold">
-                {user.displayName || user.email.split("@")[0]}
+                {user.displayName || user.email?.split("@")[0]}
               </p>
               <p className="text-[#8391A1]">{user.email}</p>
             </div>

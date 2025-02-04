@@ -16,11 +16,7 @@ import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
 import { useMultipartUpload } from "~/hooks/useMultipartUpload";
 import { FileUploadProgress } from "~/components/upload/FileUploadProgress";
-import { AuthNav } from "~/components/login/auth-nav";
 import { FaLockOpen } from "react-icons/fa6";
-import { FaLock } from "react-icons/fa";
-import { FaRegEye } from "react-icons/fa";
-import { RiEye2Line } from "react-icons/ri";
 import { RiEyeCloseLine } from "react-icons/ri";
 import ProfileLayout from "~/components/ProfileLayout/ProfileLayout";
 
@@ -105,7 +101,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <ProfileLayout user={user}>
-      {/* <AuthNav user={user} /> */}
       <FileUploadProgress files={files} onUploadComplete={onUploadComplete} />
       <article className="py-24 flex-col flex  gap-6 min-h-screen mx-6 max-w-4xl">
         <nav className="grid gap-4">
@@ -198,10 +193,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   {asset.metadata?.originalName}
                 </span>
 
-                <span className="col-span-1">
+                <span className="col-span-2 ">
                   {asset.isPublic ? (
-                    <span>
+                    <span className="w-max">
                       <FaLockOpen />
+                      <span>public-read</span>
                     </span>
                   ) : (
                     <span>
@@ -209,19 +205,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     </span>
                   )}
                 </span>
-
-                <p className="flex gap-1 items-center col-span-2">
-                  {asset.status}
-                  {asset.status === "uploaded" ? (
-                    <span className="text-green-300 ">
-                      <FaRegCheckCircle />
-                    </span>
-                  ) : (
-                    <span className="text-yellow-300 ">
-                      <LuFileWarning />
-                    </span>
-                  )}
-                </p>
 
                 <CopyButton
                   className="col-span-2"
