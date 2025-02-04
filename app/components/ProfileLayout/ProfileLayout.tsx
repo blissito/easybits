@@ -1,11 +1,13 @@
 import clsx from "clsx";
 import { useState, type ReactNode } from "react";
 import Logo from "~/assets/icons/easybits-logo.svg";
-import { Link } from "react-router";
+import { NavLink, Outlet } from "react-router";
 import TextLogo from "~/assets/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
 import { ITEMS } from "./ProfileLayout.constants";
-import type { Route } from "../../+types/root";
+import { cn } from "~/utils/cn";
+import { getUserOrRedirect } from "~/.server/getters";
+import type { Route } from "./+types/ProfileLayout";
 
 interface MenuItemProps {
   path: string;
@@ -16,14 +18,25 @@ interface MenuItemProps {
 }
 
 const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
+  const [isActive, setIsActive] = useState(false);
   return (
-    <Link to={path}>
+    <NavLink
+      className={({ isActive }) => {
+        setIsActive(isActive);
+        return undefined;
+      }}
+      to={path}
+    >
       <li className={clsx("w-full flex items-center gap-4 h-[32px]")}>
+        {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? */}
         <img className={clsx(`w-[${iconSize || 32}px]`)} src={icon} />
         {title && (
           <AnimatePresence initial={false}>
             {isOpen ? (
               <motion.p
+                className={cn({
+                  "text-brand-500": isActive,
+                })}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{
                   opacity: 1,
@@ -38,28 +51,27 @@ const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
           </AnimatePresence>
         )}
       </li>
-    </Link>
+    </NavLink>
   );
 };
 
-export default function ProfileLayout({
-  children,
-  user,
-}: {
-  children: ReactNode;
-  user: any;
-}) {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+export const loader = async ({ request }: Route.LoaderArgs) => ({
+  user: await getUserOrRedirect(request),
+});
+
+export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
+  const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
     <main className="flex relative">
       <motion.div
         className="bg-black h-screen fixed text-white flex flex-col justify-between items-center transition-all py-8"
-        initial={{ width: 88 }}
+        initial={{ width: isOpen ? 240 : 88 }}
         whileHover={{ width: 240 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
         onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
+        onMouseLeave={() => setIsOpen(true)} // @todo fixed for now
       >
         <div className="w-full">
           <div className="px-5 mb-4">
@@ -95,12 +107,12 @@ export default function ProfileLayout({
           ))}
         </ul>
       </motion.div>
-      <div className="w-full">
-        <nav className="px-8 py-6 flex justify-end fixed w-full">
+      <div className="w-full ">
+        <nav className="px-8 py-6 flex justify-end fixed w-full z-10">
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-lg font-semibold capitalize">
-                {user.displayName || user.email.split("@")[0]}
+              <p className="text-lg font-semibold">
+                {user.displayName || user.email?.split("@")[0]}
               </p>
               <p className="text-[#8391A1]">{user.email}</p>
             </div>
@@ -110,12 +122,12 @@ export default function ProfileLayout({
           </div>
         </nav>
         <motion.div
-          initial={{ marginLeft: 88 }}
+          initial={{ marginLeft: 240 }}
           animate={{ marginLeft: isOpen ? 240 : 88 }}
           transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
-          className="p-10 w-full"
+          className=""
         >
-          {children}
+          <Outlet />
         </motion.div>
       </div>
     </main>

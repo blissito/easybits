@@ -33,7 +33,7 @@ const UploadingItem = ({
       setTimeout(onUploadComplete, 2000);
     });
 
-    // SINGLE PUT URL:
+    // SINGLE PUT URL: KEEP!
     // const putURL = await fetch("/get-put-url", { method: "POST" }).then((res) =>
     //   res.text()
     // );

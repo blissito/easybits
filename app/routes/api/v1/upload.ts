@@ -2,9 +2,9 @@ import { createAsset } from "~/.server/assets";
 import type { Route } from "./+types/upload";
 import { handler, type Complete } from "react-hook-multipart";
 import { getUserOrRedirect } from "~/.server/getters";
-// import { handler } from "~/borrame/experiment";
 
 export const action = async ({ request }: Route.ActionArgs) => {
+  const HOST = process.env.S3_PUBLIC_ENDPOINT;
   const user = await getUserOrRedirect(request);
   return await handler(
     request,
@@ -17,6 +17,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         },
         size: complete.size,
         storageKey: complete.key,
+        publicLink: `${HOST}/${complete.key}`,
         userId: user.id,
         contentType: complete.contentType,
         status: "uploaded",

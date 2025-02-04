@@ -5,6 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
+        "brand-gray": "#6A6966",
         brand: {
           500: "#9870ED",
         },

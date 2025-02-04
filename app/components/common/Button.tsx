@@ -9,7 +9,7 @@ interface ButtonProps {
   children?: ReactNode;
   onClick?: () => void;
   isLoading?: boolean;
-  variant?: string;
+  size: string;
 }
 
 export const Button = ({
@@ -17,7 +17,7 @@ export const Button = ({
   bgColor,
   children,
   onClick,
-  variant,
+  size = "default",
   ...props
 }: ButtonProps) => {
   return (
@@ -26,12 +26,10 @@ export const Button = ({
       <div className="absolute inset-0 bg-black rounded-lg transition-transform duration-300 scale-100 group-hover:translate-x-2 group-hover:translate-y-2 opacity-0 group-hover:opacity-100" />
       <button
         className={cn(
-          "rounded-xl flex gap-2 z-10 items-center justify-center p-4 text-black text-lg w-full md:w-96 border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1",
-          bgColor || "bg-white ",
-          {
-            "!w-fit px-4 min-w-36 h-12 rounded-lg bg-brand-500":
-              variant === "small",
-          }
+          "rounded-xl flex gap-2 items-center justify-center p-4 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1",
+          bgColor || "bg-white",
+          size === "large" && "md:w-[420px] h-[54px]",
+          size === "default" && "w-[183px] h-[65px]"
         )}
         onClick={onClick}
         {...props}

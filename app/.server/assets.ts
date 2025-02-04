@@ -10,6 +10,7 @@ export type AssetCreationPayload = {
   contentType?: string;
   size: number;
   fileMetadata: any;
+  publicLink?: string;
 };
 export const createAsset = async (data: AssetCreationPayload) => {
   const {
@@ -21,9 +22,11 @@ export const createAsset = async (data: AssetCreationPayload) => {
     status = "uploaded",
     asset_settings = { playback: "public-read" },
     size,
+    publicLink,
   } = data;
   return await db.asset.create({
     data: {
+      publicLink,
       userId,
       storageKey,
       metadata: { cors_origin, status, asset_settings, ...fileMetadata },

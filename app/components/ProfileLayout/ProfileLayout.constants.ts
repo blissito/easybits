@@ -12,7 +12,7 @@ export const ITEMS = {
   navItems: [
     { icon: RocketIcon, path: "/", title: "!Empieza ya!" },
     { icon: StatsIcon, path: "/", title: "Estadísticas" },
-    { icon: AssetsIcon, path: "/", title: "Assets" },
+    { icon: AssetsIcon, path: "/dash/assets", title: "Assets" },
     { icon: StoreIcon, path: "/", title: "Mi tienda" },
     { icon: MoneyIcon, path: "/", title: "Ventas" },
     { icon: UsersIcon, path: "/", title: "Clientes" },
