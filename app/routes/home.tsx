@@ -5,9 +5,9 @@ export default function Home() {
     <article className="grid place-content-center min-h-screen">
       <Link
         className="p-4 border rounded-lg bg-brand-500 hover:underline"
-        to="/dash"
+        to="/dash/assets"
       >
-        Ir al dash
+        Ir a tus assets
       </Link>
     </article>
   );

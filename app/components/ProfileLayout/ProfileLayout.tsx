@@ -1,11 +1,11 @@
 import clsx from "clsx";
 import { useState, type ReactNode } from "react";
 import Logo from "~/assets/icons/easybits-logo.svg";
-import { Link } from "react-router";
+import { NavLink } from "react-router";
 import TextLogo from "~/assets/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
 import { ITEMS } from "./ProfileLayout.constants";
-import type { Route } from "../../+types/root";
+import { cn } from "~/utils/cn";
 
 interface MenuItemProps {
   path: string;
@@ -16,14 +16,25 @@ interface MenuItemProps {
 }
 
 const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
+  const [isActive, setIsActive] = useState(false);
   return (
-    <Link to={path}>
+    <NavLink
+      className={({ isActive }) => {
+        setIsActive(isActive);
+        return undefined;
+      }}
+      to={path}
+    >
       <li className={clsx("w-full flex items-center gap-4 h-[32px]")}>
+        {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? */}
         <img className={clsx(`w-[${iconSize || 32}px]`)} src={icon} />
         {title && (
           <AnimatePresence initial={false}>
             {isOpen ? (
               <motion.p
+                className={cn({
+                  "text-brand-500": isActive,
+                })}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{
                   opacity: 1,
@@ -38,7 +49,7 @@ const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
           </AnimatePresence>
         )}
       </li>
-    </Link>
+    </NavLink>
   );
 };
 
@@ -49,17 +60,17 @@ export default function ProfileLayout({
   children: ReactNode;
   user: any;
 }) {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
     <main className="flex relative">
       <motion.div
         className="bg-black h-screen fixed text-white flex flex-col justify-between items-center transition-all py-8"
-        initial={{ width: 88 }}
+        initial={{ width: isOpen ? 240 : 88 }}
         whileHover={{ width: 240 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
         onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
+        onMouseLeave={() => setIsOpen(true)} // @todo fixed for now
       >
         <div className="w-full">
           <div className="px-5 mb-4">
