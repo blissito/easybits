@@ -45,9 +45,8 @@ export default function LoginComponent() {
       <AuthNav />
       <main
         className={
-          "w-full h-screen bg-cover bg-center flex justify-center items-center"
+          "w-full h-screen bg-contain bg-center bg-patternDark flex justify-center items-center"
         }
-        style={{ backgroundImage: "url('/app/assets/images/bg-grid.svg')" }}
       >
         <div className="flex flex-col items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}

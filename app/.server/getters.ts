@@ -45,7 +45,7 @@ export const createUserSession = async (
   session.set("email", userData.email);
   // create certificate
   await createHost(`${host}.easybits.cloud`);
-  throw redirect("/", {
+  throw redirect("/dash", {
     // @todo: redirect to dash
     headers: {
       "set-cookie": await commitSession(session),
