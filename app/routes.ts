@@ -1,6 +1,7 @@
 import {
   type RouteConfig,
   index,
+  layout,
   prefix,
   route,
 } from "@react-router/dev/routes";
@@ -16,7 +17,11 @@ export default [
   // multipar upload
   route("api/upload", "routes/api/v1/upload.ts"),
   // groups
-  ...prefix("dash", [route("assets", "routes/assets.tsx")]),
+  ...prefix("dash", [
+    layout("components/ProfileLayout/ProfileLayout.tsx", [
+      route("assets", "routes/assets.tsx"),
+    ]),
+  ]),
   ...prefix("api/v1", [
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
     route("uploads/:storageKey/delete", "routes/api/v1/delete.ts"),

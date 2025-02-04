@@ -1,11 +1,13 @@
 import clsx from "clsx";
 import { useState, type ReactNode } from "react";
 import Logo from "~/assets/icons/easybits-logo.svg";
-import { NavLink } from "react-router";
+import { NavLink, Outlet } from "react-router";
 import TextLogo from "~/assets/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
 import { ITEMS } from "./ProfileLayout.constants";
 import { cn } from "~/utils/cn";
+import { getUserOrRedirect } from "~/.server/getters";
+import type { Route } from "./+types/ProfileLayout";
 
 interface MenuItemProps {
   path: string;
@@ -53,13 +55,12 @@ const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
   );
 };
 
-export default function ProfileLayout({
-  children,
-  user,
-}: {
-  children: ReactNode;
-  user: any;
-}) {
+export const loader = async ({ request }: Route.LoaderArgs) => ({
+  user: await getUserOrRedirect(request),
+});
+
+export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
   const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
@@ -106,8 +107,8 @@ export default function ProfileLayout({
           ))}
         </ul>
       </motion.div>
-      <div className="w-full">
-        <nav className="px-8 py-6 flex justify-end fixed w-full">
+      <div className="w-full ">
+        <nav className="px-8 py-6 flex justify-end fixed w-full z-10">
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-lg font-semibold">
@@ -121,12 +122,12 @@ export default function ProfileLayout({
           </div>
         </nav>
         <motion.div
-          initial={{ marginLeft: 88 }}
+          initial={{ marginLeft: 240 }}
           animate={{ marginLeft: isOpen ? 240 : 88 }}
           transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
-          className="p-10 w-full"
+          className=""
         >
-          {children}
+          <Outlet />
         </motion.div>
       </div>
     </main>
