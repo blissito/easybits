@@ -101,7 +101,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
                 <FaXmark />
               </div>
             </nav>
-            <ul className="bg-black h-full mt-[80px] p-4 flex-col">
+            <ul className="bg-black h-[calc(100%-80px)] mt-[80px] p-4 flex-col">
               {navItems.map(({ title, path }) => (
                 <Link to={path}>
                   <li className="h-[80px] text-white">{title}</li>
