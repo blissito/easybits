@@ -1,5 +1,6 @@
 <svg width="1440" height="1024" viewBox="0 0 1440 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="1440" height="1024" fill="black"/>
+<g opacity="0.5">
 <path d="M0 387H1440" stroke="white"/>
 <path d="M0 432H1440" stroke="white"/>
 <path d="M0 478H1440" stroke="white"/>
@@ -54,6 +55,7 @@
 <path d="M1303 1024V0" stroke="white"/>
 <path d="M1348 1024V0" stroke="white"/>
 <path d="M1392 1024V0" stroke="white"/>
+</g>
 <rect width="1440" height="1024" fill="url(#paint1_radial_409_96)"/>
 <defs>
 <linearGradient id="paint0_linear_409_96" x1="0" y1="1022.5" x2="1440" y2="1022.5" gradientUnits="userSpaceOnUse">
