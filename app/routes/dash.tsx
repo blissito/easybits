@@ -5,20 +5,20 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { useUpload } from "~/hooks/useUpload";
 import { db } from "~/.server/db";
 import {
+  FaCheck,
+  FaCopy,
   FaEye,
   FaEyeSlash,
-  FaRegCheckCircle,
   FaSpinner,
   FaTrash,
 } from "react-icons/fa";
 import { useFetcher, useSubmit } from "react-router";
 import { LuFileWarning } from "react-icons/lu";
 import { cn } from "~/utils/cn";
-import { useMultipartUpload } from "~/hooks/useMultipartUpload";
 import { FileUploadProgress } from "~/components/upload/FileUploadProgress";
 import { FaLockOpen } from "react-icons/fa6";
-import { RiEyeCloseLine } from "react-icons/ri";
 import ProfileLayout from "~/components/ProfileLayout/ProfileLayout";
+import type { Asset } from "@prisma/client";
 
 const MB = 1024 * 1024;
 
@@ -38,6 +38,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // load assets
   const assets = await db.asset.findMany({
     where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
   });
   return { user, assets };
 };
@@ -48,6 +49,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const submit = useSubmit();
   const [files, setFiles] = useState<File[]>([]);
+  const [copied, setCopied] = useState<string | undefined>();
 
   // files api
   const { putFile, isFetching } = useUpload(
@@ -56,25 +58,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   const handleAssetSelection = () => {
     fileInput.current?.click();
-  };
-
-  const {
-    handleMultipartUpload,
-    percentage,
-    isFetching: isMultipartFetching,
-  } = useMultipartUpload("fdaa8bf7-20d0-48be-bd94-245f0b488e8c");
-
-  const handleInputFileChange = async (
-    event: ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.currentTarget.files?.[0];
-    // 10MiB min
-    if (file && file.size > 10 * MB) {
-      handleMultipartUpload(file);
-      return;
-    }
-    await putFile(event.currentTarget.files?.[0] as File);
-    submit(null);
   };
 
   const __experiment__handleFileInputChange = (
@@ -143,23 +126,34 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </section>
         </nav>
         <section>
-          <nav className="w-full bg-indigo-500 flex items-center justify-between px-4 py-2">
+          <nav className="w-full bg-indigo-500 flex items-cente gap-2 px-4 py-2">
             <h2>Todos tus assets</h2>
             <button
               disabled={isFetching}
               onClick={handleAssetSelection}
               className={cn(
+                "ml-auto",
                 "bg-indigo-800 p-3 rounded-2xl text-gray-100",
                 "disabled:pointer-events-none disabled:bg-gray-500"
               )}
             >
-              {isMultipartFetching || isFetching ? (
+              {isFetching ? (
                 <p className="animate-spin">
                   <FaSpinner />
                 </p>
               ) : (
                 "Nuevo Asset"
               )}
+            </button>
+            <button
+              disabled
+              className={cn(
+                "bg-indigo-800 p-3 rounded-2xl text-gray-300",
+                "disabled:bg-gray-400",
+                "hover:cursor-not-allowed"
+              )}
+            >
+              Nuevo asset privado
             </button>
             <input
               onChange={__experiment__handleFileInputChange}
@@ -170,7 +164,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             />
           </nav>
           <>
-            {assets.map((asset) => (
+            {assets.map((asset: Asset) => (
               <div
                 className={cn(
                   "p-3 bg-gray-900 grid grid-cols-12 text-xs items-center gap-x-2",
@@ -193,24 +187,36 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   {asset.metadata?.originalName}
                 </span>
 
-                <span className="col-span-1">
-                  {asset.isPublic ? (
-                    <span>
-                      <FaLockOpen />
-                    </span>
-                  ) : (
-                    <span>
-                      <RiEyeCloseLine />
-                    </span>
-                  )}
-                </span>
+                <div className="col-span-1 flex items-center gap-2">
+                  {/* <FaRegCheckCircle /> */}
+                  <button
+                    popoverTarget="copy_text"
+                    onClick={() => {
+                      setCopied(asset.storageKey);
+                      setTimeout(() => setCopied(undefined), 1500);
+                      navigator.clipboard.writeText(
+                        asset.publicLink ||
+                          `https://${"easybits-dev"}.fly.storage.tigris.dev/${
+                            asset.storageKey
+                          }`
+                      );
+                    }}
+                  >
+                    {copied === asset.storageKey ? <FaCheck /> : <FaCopy />}
+                  </button>
+                  <span popover="auto" id="copy_text">
+                    public link copied
+                  </span>
+                </div>
 
                 <p className="flex gap-1 items-center col-span-2">
                   {asset.isPublic ? (
-                    <span className="text-green-300 w-max">
-                      <FaRegCheckCircle />
-                      <span>public</span>
-                    </span>
+                    <div className="text-green-300 flex gap-2 items-center">
+                      <span>público</span>
+                      <span>
+                        <FaLockOpen />
+                      </span>
+                    </div>
                   ) : (
                     <span className="text-yellow-300 ">
                       <LuFileWarning />
