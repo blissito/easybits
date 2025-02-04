@@ -24,7 +24,7 @@ const MB = 1024 * 1024;
 
 export function meta() {
   return [
-    { title: "easyBits API" },
+    { title: "easyBits Dashboard" },
     { name: "description", content: "All your files as easy bits" },
   ];
 }
@@ -45,16 +45,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
+  const isFetching = fetcher.state !== "idle";
   const { user = {}, assets = [] } = loaderData || {};
   const fileInput = useRef<HTMLInputElement>(null);
-  const submit = useSubmit();
   const [files, setFiles] = useState<File[]>([]);
   const [copied, setCopied] = useState<string | undefined>();
-
-  // files api
-  const { putFile, isFetching } = useUpload(
-    "fdaa8bf7-20d0-48be-bd94-245f0b488e8c"
-  ); // @todo call only when needed
 
   const handleAssetSelection = () => {
     fileInput.current?.click();
