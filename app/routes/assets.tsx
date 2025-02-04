@@ -2,7 +2,6 @@ import { createUserKeys, getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/home";
 import { CopyButton } from "~/components/common/CopyButton";
 import { useRef, useState, type ChangeEvent } from "react";
-import { useUpload } from "~/hooks/useUpload";
 import { db } from "~/.server/db";
 import {
   FaCheck,
