@@ -1,10 +1,10 @@
 export const STRINGS = {
   login: {
-    title: "¡Vamos a empezar! \u000A Inicia Sesión.",
+    title: "¡Vamos a empezar! \u000A Inicia Sesión",
     formTitle: "Completa tu información",
     actionQuestion: "¿No tienes cuenta? ",
     action: "Crea una",
-    formAction: "Iniciar Sesión con otra red social",
+    formAction: "Iniciar Sesión con otra red social.",
     formSubmit: "Iniciar sesión",
   },
   signup: {

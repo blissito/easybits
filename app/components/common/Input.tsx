@@ -18,12 +18,12 @@ interface ButtonProps {
 
 export const Input = ({ label, error, copy, ...props }: ButtonProps) => {
   return (
-    <label className="grid gap-2">
+    <label className="grid gap-2 text-white">
       <span>{label}</span>
       <div className="relative">
         <input
           className={cn(
-            "rounded-xl p-4 text-lg min-w-full md:w-96 mb-6 border",
+            "rounded-xl p-4 text-lg min-w-full md:w-96 mb-6 border h-[54px] bg-white text-black",
             {
               "pr-24": !!copy,
             }
