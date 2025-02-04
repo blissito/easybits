@@ -82,6 +82,7 @@ export default function LoginComponent() {
                   </p>
                   <div className="flex flex-col gap-8 mb-8">
                     <Button
+                      size="large"
                       isLoading={isGoogleLoading}
                       bgColor="bg-[#A6EB9A]"
                       type="submit"
@@ -92,6 +93,7 @@ export default function LoginComponent() {
                       Iniciar con Gmail
                     </Button>
                     <Button
+                      size="large"
                       isLoading={isStripeLoading}
                       bgColor="bg-[#6772E5]"
                       type="submit"
@@ -102,6 +104,7 @@ export default function LoginComponent() {
                       Iniciar con Stripe
                     </Button>
                     <Button
+                      size="large"
                       type="button"
                       onClick={() => {
                         setLoginType("email");
@@ -149,6 +152,7 @@ export default function LoginComponent() {
                       placeholder="Al menos 8 caracteres"
                     />
                     <Button
+                      size="large"
                       bgColor="bg-[#9870ED]"
                       type="submit"
                       name="loginType"
