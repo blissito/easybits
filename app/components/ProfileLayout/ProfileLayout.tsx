@@ -15,9 +15,17 @@ interface MenuItemProps {
   iconSize?: number;
   title: string | ReactNode;
   isOpen: boolean;
+  isLogo?: boolean;
 }
 
-const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
+const MenuItem = ({
+  path,
+  icon,
+  iconSize,
+  title,
+  isOpen,
+  isLogo,
+}: MenuItemProps) => {
   const [isActive, setIsActive] = useState(false);
   return (
     <NavLink
@@ -27,7 +35,20 @@ const MenuItem = ({ path, icon, iconSize, title, isOpen }: MenuItemProps) => {
       }}
       to={path}
     >
-      <li className={clsx("w-full flex items-center gap-4 h-[32px]")}>
+      <li
+        className={clsx("w-full flex items-center gap-4 h-[32px] relative", {
+          "px-7": !isLogo,
+        })}
+      >
+        {isActive && (
+          <motion.div
+            layoutId="active-border"
+            className="absolute -right-1 top-0 w-full h-full border-r-4 border-brand-500 rounded-sm"
+            initial={{ opacity: 0, scaleX: 0 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            transition={{ type: "spring", stiffness: 100 }}
+          />
+        )}
         {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? */}
         <img className={clsx(`w-[${iconSize || 32}px]`)} src={icon} />
         {title && (
@@ -61,52 +82,55 @@ export const loader = async ({ request }: Route.LoaderArgs) => ({
 
 export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
-  const [isOpen, setIsOpen] = useState<boolean>(true);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
   return (
     <main className="flex relative">
-      <motion.div
-        className="bg-black h-screen fixed text-white flex flex-col justify-between items-center transition-all py-8"
-        initial={{ width: isOpen ? 240 : 88 }}
-        whileHover={{ width: 240 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(true)} // @todo fixed for now
-      >
-        <div className="w-full">
-          <div className="px-5 mb-4">
-            <MenuItem
-              path={"/"}
-              icon={Logo}
-              iconSize={52}
-              title={
-                <img
-                  src={TextLogo}
-                  alt="easybits-text"
-                  className="w-[103px] h-[39px]"
-                />
-              }
-              isOpen={isOpen}
-            />
+      <div className="pr-1">
+        <motion.div
+          className="bg-black h-screen fixed text-white flex flex-col justify-between items-center transition-all py-8"
+          initial={{ width: isOpen ? 240 : 88 }}
+          whileHover={{ width: 240 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(true)} // @todo fixed for now
+        >
+          <div className="w-full">
+            <div className="px-5 mb-4">
+              <MenuItem
+                path={"/"}
+                icon={Logo}
+                iconSize={52}
+                title={
+                  <img
+                    src={TextLogo}
+                    alt="easybits-text"
+                    className="w-[103px] h-[39px]"
+                  />
+                }
+                isOpen={isOpen}
+                isLogo
+              />
+            </div>
+            <ul className="flex flex-col gap-6 py-6">
+              {ITEMS.navItems.map((item, key) => (
+                <MenuItem key={key} {...item} isOpen={isOpen} />
+              ))}
+            </ul>
+            <div className="border-t border-[#757D8C] w-full" />
+            <ul className="flex flex-col gap-6 py-6">
+              {ITEMS.sectionItems.map((item, key) => (
+                <MenuItem key={key} {...item} isOpen={isOpen} />
+              ))}
+            </ul>
           </div>
-          <ul className="flex flex-col gap-6 px-7 py-6">
-            {ITEMS.navItems.map((item, key) => (
+          <ul className="flex flex-col gap-6 w-full">
+            {ITEMS.bottomItems.map((item, key) => (
               <MenuItem key={key} {...item} isOpen={isOpen} />
             ))}
           </ul>
-          <div className="border-t border-[#757D8C] w-full" />
-          <ul className="flex flex-col gap-6 px-7 py-6">
-            {ITEMS.sectionItems.map((item, key) => (
-              <MenuItem key={key} {...item} isOpen={isOpen} />
-            ))}
-          </ul>
-        </div>
-        <ul className="flex flex-col gap-6 w-full px-7">
-          {ITEMS.bottomItems.map((item, key) => (
-            <MenuItem key={key} {...item} isOpen={isOpen} />
-          ))}
-        </ul>
-      </motion.div>
+        </motion.div>
+      </div>
       <div className="w-full ">
         <nav className="px-8 py-6 flex justify-end fixed w-full z-10">
           <div className="flex items-center gap-4">

@@ -19,7 +19,13 @@ export default [
   // groups
   ...prefix("dash", [
     layout("components/ProfileLayout/ProfileLayout.tsx", [
+      route("start", "routes/start.tsx"),
+      route("stats", "routes/stats.tsx"),
       route("assets", "routes/assets.tsx"),
+      route("store", "routes/store.tsx"),
+      route("sales", "routes/sales.tsx"),
+      route("clients", "routes/clients.tsx"),
+      route("purchases", "routes/purchases.tsx"),
     ]),
   ]),
   ...prefix("api/v1", [
