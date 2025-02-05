@@ -10,6 +10,9 @@ datasource db {
 model Asset {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   storageKey  String   @unique
+  title       String?
+  slug        String?
+  type        String?
   publicLink  String?
   // blob data
   contentType String?

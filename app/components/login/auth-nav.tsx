@@ -26,8 +26,8 @@ export const AuthNav = ({ user }: { user?: User }) => {
   ];
 
   return (
-    <header className="relative">
-      <nav className="bg-black h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-[#757D8C] fixed inset-0">
+    <header className="relative z-50">
+      <nav className="bg-black h-16 md:h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-[#757D8C] fixed inset-0">
         <Link to="/">
           <div className="flex gap-3">
             <img src={Logo} alt="easybits" className="w-[53px]" />

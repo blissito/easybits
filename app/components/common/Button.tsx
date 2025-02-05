@@ -28,6 +28,7 @@ export const Button = ({
         className={cn(
           "rounded-xl flex gap-2 items-center justify-center p-4 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1",
           bgColor || "bg-white",
+
           size === "large" && "md:w-[420px] h-[54px]",
           size === "default" && "w-[183px] h-[65px]"
         )}
