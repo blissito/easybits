@@ -50,18 +50,22 @@ const MenuItem = ({
           />
         )}
         {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? (ya lo hackieeeee)*/}
-        <div
-          className={clsx(`w-[${iconSize || 32}px]`, {
-            "bg-brand-500": isActive,
-            "bg-white": !isActive,
-          })}
-          style={{
-            WebkitMaskImage: `url('${icon}')`,
-            maskImage: `url('${icon}')`,
-            width: "32px",
-            height: "32px",
-          }}
-        />
+        {isLogo ? (
+          <img src={icon} className={clsx(`w-[${iconSize || 32}px]`)} />
+        ) : (
+          <div
+            className={clsx(`w-[${iconSize || 32}px]`, {
+              "bg-brand-500": isActive,
+              "bg-white": !isActive,
+            })}
+            style={{
+              WebkitMaskImage: `url('${icon}')`,
+              maskImage: `url('${icon}')`,
+              width: `${iconSize || 32}px`,
+              height: `${iconSize || 32}px`,
+            }}
+          />
+        )}
         {title && (
           <AnimatePresence initial={false}>
             {isOpen ? (
