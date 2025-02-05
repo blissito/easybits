@@ -289,7 +289,7 @@ const Hero = () => {
           </BrutalElement>
         </div>
         <img
-          className="w-[65%] md:w-full mx-auto"
+          className="w-[65%] md:w-full mx-auto -mt-12"
           alt="platform features"
           src="/hero-img.png"
         />
