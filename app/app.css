@@ -20,12 +20,3 @@ body {
   backdrop-filter: brightness(1) blur(10px);
   transition: all 0.5s;
 }
-.grid-overlay-closed {
-  background-color: transparent;
-  background-image: radial-gradient(transparent 1px, #000 1px);
-  background-size: 4px 4px;
-  backdrop-filter: brightness(0) blur(0px);
-  pointer-events: none;
-  opacity: 0;
-  transition: all 0.5s;
-}

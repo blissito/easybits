@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "~/utils/cn";
 
 type Item = {
@@ -10,8 +10,30 @@ type Item = {
 
 export const BasicGallery = ({ items }: { items: Item[] }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const timeout = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const change = () => {
+    timeout.current && clearTimeout(timeout.current);
+    setCurrentIndex((i) => (i + 1) % 3);
+    timeout.current = setTimeout(change, 3000);
+  };
+
+  const pause = () => timeout.current && clearTimeout(timeout.current);
+  const resume = () => {
+    timeout.current && clearTimeout(timeout.current);
+    timeout.current = setTimeout(change, 3000);
+  };
+
+  useEffect(() => {
+    change();
+  }, []);
+
   return (
-    <section className="bg-munsell min-h-[70vh] relative border-b-[1px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0">
+    <section
+      onMouseEnter={pause}
+      onMouseLeave={resume}
+      className="bg-munsell min-h-[70vh] relative border-b-[1px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0"
+    >
       <img className="absolute left-72 top-12" src="/star.png" alt="star" />
       <img
         className="absolute right-8 md:right-20 bottom-6 md:bottom-12"
@@ -39,16 +61,27 @@ const CommentItem = ({
   item: Item;
 }) => {
   return (
-    <section className="flex items-center justify-between min-h-[70vh] relative flex-wrap-reverse md:flex-nowrap ">
-      <div className="w-full md:w-[50%]">
-        <p className="text-xl text-center md:text-left md:text-2xl lg:text-3xl xl:text-4xl font-bold">
-          {item.text}
-        </p>
-        <h4 className="text-base text-center md:text-left lg:text-xl font-semibold mt-8">
-          {item.name}
-        </h4>
-        <section className="-bottom-10 md:bottom-20 absolute flex justify-center  w-full md:w-fit gap-2">
-          <AnimatePresence>
+    <AnimatePresence mode="popLayout">
+      <section className="flex items-center justify-between min-h-[70vh] relative flex-wrap-reverse md:flex-nowrap ">
+        <div className="w-full md:w-[50%]">
+          <motion.p
+            key={item.text}
+            initial={{ filter: "blur(4px)", x: -10 }}
+            exit={{ filter: "blur(4px)", x: 10 }}
+            animate={{ filter: "blur(0px)", x: 0 }}
+            className="text-xl text-center md:text-left md:text-2xl lg:text-3xl xl:text-4xl font-bold"
+          >
+            {item.text}
+          </motion.p>
+          <motion.h4
+            key={item.name}
+            initial={{ filter: "blur(4px)", y: 10 }}
+            animate={{ filter: "blur(0px)", y: 0 }}
+            className="text-base text-center md:text-left lg:text-xl font-semibold mt-8"
+          >
+            {item.name}
+          </motion.h4>
+          <section className="-bottom-10 md:bottom-20 absolute flex justify-center  w-full md:w-fit gap-2">
             <DotButton
               currentIndex={currentIndex}
               index={0}
@@ -64,15 +97,19 @@ const CommentItem = ({
               index={2}
               onClick={() => onClick?.(2)}
             />
-          </AnimatePresence>
-        </section>
-      </div>
-      <img
-        className="w-[80%] mx-auto md:w-[40%] lg:w-auto mb-6 md:mb-0"
-        src={item.src}
-        alt="user"
-      />
-    </section>
+          </section>
+        </div>
+        <motion.img
+          initial={{ x: 30, opacity: 0, filter: "blur(4px)" }}
+          animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+          exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
+          key={item.src}
+          className="w-[80%] mx-auto md:w-[40%] lg:w-auto mb-6 md:mb-0"
+          src={item.src}
+          alt="user"
+        />
+      </section>
+    </AnimatePresence>
   );
 };
 
@@ -94,11 +131,14 @@ const DotButton = ({
       {...props}
     >
       {currentIndex === index && (
-        <motion.span
-          layout
-          id="high"
-          key="highlighter"
-          className="absolute inset-0 bg-white rounded-full"
+        <motion.div
+          layoutId="highlighter"
+          transition={{ type: "spring", stiffness: 100, damping: 12 }}
+          className={cn(
+            "absolute inset-0 bg-white rounded-full border border-black z-10",
+            "inset-0",
+            "bottom-px right-px"
+          )}
         />
       )}
     </button>
