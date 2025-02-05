@@ -9,7 +9,12 @@ export const AssetFormModal = ({
   onClose?: () => void;
 }) => {
   return (
-    <Modal isOpen={isOpen} title="¡Empecemos!" onClose={onClose}>
+    <Modal
+      isOpen={isOpen}
+      title="¡Empecemos!"
+      onClose={onClose}
+      className="px-12"
+    >
       <AssetForm onClose={onClose} />
     </Modal>
   );

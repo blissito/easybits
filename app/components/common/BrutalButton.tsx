@@ -29,10 +29,10 @@ export const BrutalButton = ({
     >
       <span
         className={cn(
-          "min-w-[180px] min-h-12",
+          "min-w-[142px] min-h-12",
           "grid place-content-center",
           "block", // así podemos usar translate
-          "hover:-translate-x-1 hover:-translate-y-1 p-4 text-lg font-semibold",
+          "hover:-translate-x-1 hover:-translate-y-1 text-lg font-semibold",
           "rounded-2xl border-2 border-black bg-brand-500",
           "transition-all",
           className,

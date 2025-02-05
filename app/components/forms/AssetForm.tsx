@@ -2,6 +2,8 @@ import type { Asset } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { useForm, type FieldValues, type SubmitHandler } from "react-hook-form";
 import { BrutalButton } from "../common/BrutalButton";
+import { Input } from "./Input";
+import { RadioGroup, RadioInput } from "./RadioInput";
 
 export const AssetForm = ({
   onClose,
@@ -34,10 +36,12 @@ export const AssetForm = ({
   return (
     <fetcher.Form
       onSubmit={handleSubmit(submit)}
-      className="flex flex-col  h-[70%]"
+      className="flex flex-col h-max pb-12"
     >
-      <h2>Asset form</h2>
-      <nav className="flex justify-end gap-12 mt-auto">
+      <Input label="Ponle nombre a tu asset" placeholder="Curso de cocina" />
+      <h3 className="mb-4 font-medium">¿Qué tipo de asset es?</h3>
+      <RadioGroup />
+      <nav className="flex justify-end mt-12 gap-8">
         <BrutalButton className="bg-white" onClick={onClose} type="button">
           Cancelar
         </BrutalButton>

@@ -8,7 +8,9 @@ export const Modal = ({
   isOpen,
   title,
   onClose,
+  className,
 }: {
+  className?: string;
   onClose?: () => void;
   isOpen?: boolean;
   children?: ReactNode;
@@ -56,7 +58,8 @@ export const Modal = ({
           }}
           className={cn(
             "border-2 border-black",
-            "bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative"
+            "bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative",
+            className
           )}
         >
           <nav className="flex">
