@@ -142,7 +142,7 @@ const CommentItem = ({}) => {
         </div>
       </div>
       <img
-        className="w-[80%] mx-auto md:w-[40%] lg:w-auto"
+        className="w-[80%] mx-auto md:w-[40%] lg:w-auto mb-6 md:mb-0"
         src="/client.png"
         alt="user"
       />
@@ -291,7 +291,7 @@ const Hero = () => {
         <img
           className="w-[65%] md:w-full mx-auto"
           alt="platform features"
-          src="/hero-img.svg"
+          src="/hero-img.png"
         />
       </div>
     </section>
