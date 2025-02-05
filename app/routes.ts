@@ -7,7 +7,7 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
-  index("routes/home.tsx"),
+  index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
   // public link @todo revisit private only? tokens?
