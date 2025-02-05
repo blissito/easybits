@@ -49,8 +49,19 @@ const MenuItem = ({
             transition={{ type: "spring", stiffness: 100 }}
           />
         )}
-        {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? */}
-        <img className={clsx(`w-[${iconSize || 32}px]`)} src={icon} />
+        {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? (ya lo hackieeeee)*/}
+        <div
+          className={clsx(`w-[${iconSize || 32}px]`, {
+            "bg-brand-500": isActive,
+            "bg-white": !isActive,
+          })}
+          style={{
+            WebkitMaskImage: `url('${icon}')`,
+            maskImage: `url('${icon}')`,
+            width: "32px",
+            height: "32px",
+          }}
+        />
         {title && (
           <AnimatePresence initial={false}>
             {isOpen ? (
