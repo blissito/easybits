@@ -8,7 +8,13 @@ type Item = {
   src: string;
 };
 
-export const BasicGallery = ({ items }: { items: Item[] }) => {
+export const BasicGallery = ({
+  items,
+  className,
+}: {
+  className?: string;
+  items: Item[];
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const timeout = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -32,7 +38,10 @@ export const BasicGallery = ({ items }: { items: Item[] }) => {
     <section
       onMouseEnter={pause}
       onMouseLeave={resume}
-      className="bg-munsell min-h-[70vh] relative border-b-[1px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0"
+      className={cn(
+        "bg-brand-500 min-h-[70vh] relative border-b-[1px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0",
+        className
+      )}
     >
       <img className="absolute left-72 top-12" src="/star.png" alt="star" />
       <img

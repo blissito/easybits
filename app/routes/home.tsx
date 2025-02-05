@@ -28,6 +28,7 @@ export default function Home() {
       <SecondBento />
       <ThirdBento />
       <BasicGallery
+        className="bg-munsell"
         items={[
           {
             src: "/client.png",
