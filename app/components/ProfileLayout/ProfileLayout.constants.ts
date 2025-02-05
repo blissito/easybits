@@ -10,18 +10,18 @@ import LogoutIcon from "~/assets/icons/log-out.svg";
 
 export const ITEMS = {
   navItems: [
-    { icon: RocketIcon, path: "/dash/start", title: "!Empieza ya!" },
-    { icon: StatsIcon, path: "/dash/stats", title: "Estadísticas" },
+    { icon: RocketIcon, path: "/dash/", title: "!Empieza ya!", end: true },
+    { icon: StatsIcon, path: "/dash/estadisticas", title: "Estadísticas" },
     { icon: AssetsIcon, path: "/dash/assets", title: "Assets" },
-    { icon: StoreIcon, path: "/dash/store", title: "Mi tienda" },
-    { icon: MoneyIcon, path: "/dash/sales", title: "Ventas" },
-    { icon: UsersIcon, path: "/dash/clients", title: "Clientes" },
+    { icon: StoreIcon, path: "/dash/tienda", title: "Mi tienda" },
+    { icon: MoneyIcon, path: "/dash/ventas", title: "Ventas" },
+    { icon: UsersIcon, path: "/dash/clientes", title: "Clientes" },
   ],
 
   sectionItems: [{ icon: BagIcon, path: "/dash/purchases", title: "Compras" }],
 
   bottomItems: [
     { icon: UserIcon, path: "/", title: "Perfil" },
-    { icon: LogoutIcon, path: "/", title: "Cerrar Sesión" },
+    { icon: LogoutIcon, path: "/login?signout=1", title: "Cerrar Sesión" },
   ],
 };

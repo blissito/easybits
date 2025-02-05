@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { FaCopy } from "react-icons/fa";
+import { FaCheck, FaRegCopy } from "react-icons/fa";
 import { useTimeout } from "~/hooks/useTimeout";
 import { cn } from "~/utils/cn";
+import { CopyIcon } from "../illustrations/CopyIcon";
 
 export const CopyButton = ({
   className,
@@ -26,7 +27,7 @@ export const CopyButton = ({
       onClick={handleCopyToClipboard(text)}
       className={cn("w-max", className)}
     >
-      <span>{copied ? "✅" : children || <FaCopy />}</span>
+      <span>{copied ? <FaCheck /> : children || <CopyIcon />}</span>
     </button>
   );
 };

@@ -10,37 +10,36 @@ export const AssetForm = ({
   onClose,
   asset = { title: "", type: "" },
 }: {
-  asset?: Asset;
+  product?: Asset;
   onClose?: (values: Asset) => void;
 }) => {
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
 
   const submit = async (values: SubmitHandler<FieldValues>) => {
-    console.log("VALUES::", values);
-    // await fetcher.submit(
-    //   { intent: "new_asset", data: JSON.stringify(values) },
-    //   {
-    //     method: "post",
-    //     action: "api/assets",
-    //   }
-    // );
+    await fetcher.submit(
+      { intent: "new_asset", data: JSON.stringify(values) },
+      {
+        method: "post",
+        action: "/api/v1/assets",
+      }
+    );
     onClose?.(values);
   };
 
   const {
     handleSubmit,
     register,
-    formState: { isValid, errors },
+    formState: { isValid },
     setValue,
   } = useForm({
     defaultValues: {
-      title: asset.title,
+      name: asset.name,
       type: asset.type,
     },
   });
   const registerVirtualFields = () => {
-    register("title", { value: "", required: true });
+    register("name", { value: "", required: true });
     register("type", { value: "", required: true });
   };
 
@@ -48,7 +47,7 @@ export const AssetForm = ({
     registerVirtualFields();
   }, []);
 
-  const handleChange = (name: "title" | "type", value: string) => {
+  const handleChange = (name: "name" | "type", value: string) => {
     console.log("Change", name, value);
     setValue(name, value, { shouldValidate: true, shouldDirty: true });
   };
@@ -61,7 +60,7 @@ export const AssetForm = ({
       <Input
         pattern=".{3,}"
         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-          handleChange("title", e.currentTarget.value)
+          handleChange("name", e.currentTarget.value)
         }
         label="Ponle nombre a tu asset"
         placeholder="Curso de cocina"

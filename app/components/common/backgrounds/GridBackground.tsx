@@ -9,7 +9,7 @@ import { useEffect } from "react";
 export const GridBackground = () => {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const background = useMotionTemplate`radial-gradient(circle at ${x}% ${y}%, transparent, rgba(255,255,255,0.9) 33%)`;
+  const background = useMotionTemplate`radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.6), rgba(255,255,255,0.9) 33%)`;
 
   const handleMouseMove = (event: MouseEvent) => {
     const { pageX, pageY } = event;

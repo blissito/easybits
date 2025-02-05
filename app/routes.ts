@@ -19,17 +19,18 @@ export default [
   // groups
   ...prefix("dash", [
     layout("components/ProfileLayout/ProfileLayout.tsx", [
-      route("start", "routes/start.tsx"),
-      route("stats", "routes/stats.tsx"),
-      route("assets", "routes/assets.tsx"),
-      route("store", "routes/store.tsx"),
-      route("sales", "routes/sales.tsx"),
-      route("clients", "routes/clients.tsx"),
-      route("purchases", "routes/purchases.tsx"),
+      index("routes/start.tsx"),
+      route("estadisticas", "routes/stats.tsx"),
+      route("assets", "routes/assets/assets.tsx"),
+      route("tienda", "routes/store.tsx"),
+      route("ventas", "routes/sales.tsx"),
+      route("clientes", "routes/clients.tsx"),
+      route("compras", "routes/purchases.tsx"),
     ]),
   ]),
   ...prefix("api/v1", [
+    route("assets", "routes/api/v1/assets.tsx"),
+
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
-    route("uploads/:storageKey/delete", "routes/api/v1/delete.ts"),
   ]),
 ] satisfies RouteConfig;

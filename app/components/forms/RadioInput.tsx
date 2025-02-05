@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LittleBrutalImage } from "../illustrations/LittleBrutalImage";
 import { cn } from "~/utils/cn";
 
@@ -21,7 +21,7 @@ export const RadioGroup = ({
         description="Ilustraciones, pdfs, videos, imágenes, etc."
         name="type"
         value="download"
-        label="Descargables"
+        label="Descargable"
       />
       <RadioInput
         isSelected={selected === "course"}
@@ -29,7 +29,7 @@ export const RadioGroup = ({
         description="Cursos pre-grabados en formato xxx"
         name="type"
         value="course"
-        label="Cursos"
+        label="Curso"
       />
       <RadioInput
         isSelected={selected === "e-book"}
@@ -37,7 +37,7 @@ export const RadioGroup = ({
         description="En formato pdf, ePUB o Mobi"
         name="type"
         value="e-book"
-        label="E-books"
+        label="E-book"
       />
     </section>
   );
@@ -83,7 +83,7 @@ export const RadioInput = ({
           name={name}
           value={value}
           onChange={(e) => onChange?.(e.currentTarget.value)}
-          // hidden
+          hidden
         />
       </div>
     </label>

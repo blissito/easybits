@@ -16,6 +16,7 @@ interface MenuItemProps {
   title: string | ReactNode;
   isOpen: boolean;
   isLogo?: boolean;
+  end?: boolean;
 }
 
 const MenuItem = ({
@@ -25,10 +26,12 @@ const MenuItem = ({
   title,
   isOpen,
   isLogo,
+  end,
 }: MenuItemProps) => {
   const [isActive, setIsActive] = useState(false);
   return (
     <NavLink
+      end={end}
       className={({ isActive }) => {
         setIsActive(isActive);
         return undefined;

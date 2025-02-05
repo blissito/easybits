@@ -3,17 +3,22 @@ import type { Route } from "./+types/login";
 import LoginComponent from "~/components/login/login-component";
 import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
-import {
-  createHost,
-  getFlyAppData,
-  listHosts,
-} from "~/lib/fly_certs/certs_getters";
+import { destroySession, getSession } from "~/.server/sessions";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
-  console.log("URL :", url);
   const code = url.searchParams.get("code");
   const auth = url.searchParams.get("auth");
+  const signout = url.searchParams.has("signout");
+
+  if (signout) {
+    const session = await getSession(request.headers.get("Cookie"));
+    throw redirect("/", {
+      headers: {
+        "Set-Cookie": await destroySession(session),
+      },
+    });
+  }
 
   if (code) {
     switch (auth) {
