@@ -8,7 +8,7 @@ export default function Assets() {
   const handleFile = () => {}; // @todo
   return (
     <>
-      <article className="py-20 px-10 min-h-screen w-full relative box-border inline-block">
+      <article className="min-h-screen overflow-hidden py-20 px-10 w-full relative box-border inline-block">
         <GridBackground />
         <h1 className="text-3xl relative z-20">Mis assets digitales</h1>
         <Empty onClick={() => inputRef.current?.click()} />
