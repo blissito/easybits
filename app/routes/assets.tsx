@@ -20,7 +20,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Assets({ loaderData }: Route.ComponentProps) {
   const { assets } = loaderData;
-  const [showModal, setShowModal] = useState(true);
+  const [showModal, setShowModal] = useState(false);
   return (
     <>
       <article className="min-h-screen overflow-hidden py-20 px-10 w-full relative box-border inline-block">

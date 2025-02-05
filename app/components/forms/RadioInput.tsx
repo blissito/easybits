@@ -1,9 +1,18 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { LittleBrutalImage } from "../illustrations/LittleBrutalImage";
 import { cn } from "~/utils/cn";
 
-export const RadioGroup = () => {
+export const RadioGroup = ({
+  onChange,
+}: {
+  onChange?: (arg0: string) => void;
+}) => {
   const [selected, setSelected] = useState("");
+
+  useEffect(() => {
+    onChange?.(selected);
+  }, [selected]);
+
   return (
     <section className="flex gap-4 justify-evenly">
       <RadioInput

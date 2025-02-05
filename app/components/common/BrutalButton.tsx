@@ -32,13 +32,16 @@ export const BrutalButton = ({
           "min-w-[142px] min-h-12",
           "grid place-content-center",
           "block", // así podemos usar translate
-          "hover:-translate-x-1 hover:-translate-y-1 text-lg font-semibold",
+          "text-lg font-semibold",
           "rounded-2xl border-2 border-black bg-brand-500",
           "transition-all",
           className,
           {
-            "bg-brand-500/70": isDisabled || isLoading,
-            "active:translate-x-0 active:translate-y-0 ":
+            "bg-gray-300 text-gray-400 cursor-not-allowed border-gray-400":
+              isDisabled || isLoading,
+            "active:translate-x-0 active:translate-y-0":
+              !isDisabled && !isLoading,
+            "hover:-translate-x-1 hover:-translate-y-1":
               !isDisabled && !isLoading,
           }
         )}

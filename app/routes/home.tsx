@@ -3,8 +3,9 @@ import { BrutalElement } from "~/components/common/BrutalElement";
 import { Button } from "~/components/common/Button";
 import { Footer } from "~/components/common/Footer";
 import { Tag } from "~/components/common/Tag";
+import { BasicGallery } from "~/components/galleries/BasicGallery";
 import { AuthNav } from "~/components/login/auth-nav";
-import { cn } from "~/lib/utils";
+import { cn } from "~/utils/cn";
 
 export default function Home() {
   return (
@@ -26,7 +27,25 @@ export default function Home() {
       <FirstBento />
       <SecondBento />
       <ThirdBento />
-      <Comments />
+      <BasicGallery
+        items={[
+          {
+            src: "/client.png",
+            text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
+            name: "pelusina",
+          },
+          {
+            src: "/hero-img.png",
+            text: " consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere Lorem ipsum dolor sit amet inventore illo sunt consequuntur exercitationem,",
+            name: "pelusino",
+          },
+          {
+            src: "/star.png",
+            text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem.",
+            name: "pelusine",
+          },
+        ]}
+      />
       <Assets />
       <Invite />
       <Footer />
@@ -102,51 +121,6 @@ const Card = ({
         </div>
       </div>
     </div>
-  );
-};
-
-const Comments = () => {
-  return (
-    <section className="bg-munsell min-h-[70vh] relative border-b-[1px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0">
-      <img className="absolute left-72 top-12" src="/star.png" alt="star" />
-      <img
-        className="absolute right-8 md:right-20 bottom-6 md:bottom-12"
-        src="/circle.svg"
-        alt="circle"
-      />
-      <div className="max-w-7xl mx-auto items-center">
-        <CommentItem />
-      </div>
-    </section>
-  );
-};
-
-const CommentItem = ({}) => {
-  return (
-    <section className="flex items-center justify-between min-h-[70vh] relative flex-wrap-reverse md:flex-nowrap ">
-      <div className="w-full md:w-[50%]">
-        <p className="text-xl text-center md:text-left md:text-2xl lg:text-3xl xl:text-4xl font-bold">
-          Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum
-          pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere
-          inventore illo sunt consequuntur exercitationem, libero corrupti sequi
-          voluptas provident rem.
-        </p>
-        <h4 className="text-base text-center md:text-left lg:text-xl font-semibold mt-8">
-          {" "}
-          Lorem ipsum dolor sit amet consectetur
-        </h4>
-        <div className="-bottom-10 md:bottom-20 absolute flex justify-center  w-full md:w-fit gap-2">
-          <div className="w-6 h-6 rounded-full bg-white border-[1px] border-b-[2px] border-r-[2px] border-black"></div>
-          <div className="w-6 h-6 rounded-full bg-black border-[1px] border-b-[2px] border-r-[2px] border-black"></div>
-          <div className="w-6 h-6 rounded-full bg-black border-[1px] border-b-[2px] border-r-[2px] border-black"></div>
-        </div>
-      </div>
-      <img
-        className="w-[80%] mx-auto md:w-[40%] lg:w-auto mb-6 md:mb-0"
-        src="/client.png"
-        alt="user"
-      />
-    </section>
   );
 };
 
