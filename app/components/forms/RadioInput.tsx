@@ -83,7 +83,7 @@ export const RadioInput = ({
           name={name}
           value={value}
           onChange={(e) => onChange?.(e.currentTarget.value)}
-          hidden
+          // hidden
         />
       </div>
     </label>

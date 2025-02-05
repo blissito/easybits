@@ -23,7 +23,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
   const [showModal, setShowModal] = useState(false);
   return (
     <>
-      <article className="min-h-screen overflow-hidden py-20 px-10 w-full relative box-border inline-block">
+      <article className="min-h-[95vh] overflow-hidden py-20 px-10 w-full relative box-border inline-block">
         <GridBackground />
         <h1 className="text-3xl relative z-20">Mis assets digitales</h1>
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}

@@ -3,7 +3,7 @@ import { useFetcher } from "react-router";
 import { useForm, type FieldValues, type SubmitHandler } from "react-hook-form";
 import { BrutalButton } from "../common/BrutalButton";
 import { Input } from "./Input";
-import { RadioGroup, RadioInput } from "./RadioInput";
+import { RadioGroup } from "./RadioInput";
 import { useEffect, type ChangeEvent } from "react";
 
 export const AssetForm = ({
@@ -67,7 +67,9 @@ export const AssetForm = ({
         placeholder="Curso de cocina"
       />
       <h3 className="mb-4 font-medium">¿Qué tipo de asset es?</h3>
+
       <RadioGroup onChange={(value: string) => handleChange("type", value)} />
+
       <nav className="flex justify-end mt-12 gap-8">
         <BrutalButton className="bg-white" onClick={onClose} type="button">
           Cancelar
