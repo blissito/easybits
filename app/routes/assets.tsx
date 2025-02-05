@@ -3,15 +3,30 @@ import { GridBackground } from "~/components/common/backgrounds/GridBackground";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { AssetFormModal } from "~/components/forms/AssetFormModal";
 import { MagicWand } from "~/components/illustrations/MagicWand";
+import type { Route } from "./+types/assets";
+import { db } from "~/.server/db";
+import { getUserOrRedirect } from "~/.server/getters";
 
-export default function Assets() {
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const user = await getUserOrRedirect(request);
+
+  const assets = await db.asset.findMany({
+    where: {
+      userId: user.id,
+    },
+  });
+  return { assets: [] };
+};
+
+export default function Assets({ loaderData }: Route.ComponentProps) {
+  const { assets } = loaderData;
   const [showModal, setShowModal] = useState(true);
   return (
     <>
       <article className="min-h-screen overflow-hidden py-20 px-10 w-full relative box-border inline-block">
         <GridBackground />
         <h1 className="text-3xl relative z-20">Mis assets digitales</h1>
-        <Empty onClick={() => setShowModal(true)} />
+        {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
       </article>
       <AssetFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
     </>

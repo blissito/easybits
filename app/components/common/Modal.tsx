@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { FaX } from "react-icons/fa6";
 import { motion } from "motion/react";
+import { cn } from "~/utils/cn";
 
 export const Modal = ({
   children,
@@ -35,16 +36,28 @@ export const Modal = ({
 
   return isOpen ? (
     <>
-      <motion.aside
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="fixed inset-0 bg-black/40 backdrop-blur z-20"
-      />
-      <article className="fixed min-w-[320px] inset-0 z-20 grid place-content-center">
+      <article
+        onClick={onClose}
+        className={cn(
+          "transition-all backdrop-blur",
+          "fixed min-w-[320px] inset-0 z-20 grid place-content-center bg-black/40",
+          "overflow-y-scroll" //@todo revisit
+        )}
+      >
         <motion.section
-          initial={{ y: 10, opacity: 0, filter: "blur(4px)" }}
-          animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
-          className="bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative"
+          onClick={(e) => e.stopPropagation()}
+          initial={{
+            y: 10,
+            filter: "blur(4px)",
+          }}
+          animate={{
+            y: 0,
+            filter: "blur(0px)",
+          }}
+          className={cn(
+            "border-2 border-black",
+            "bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative"
+          )}
         >
           <nav className="flex">
             <h2 className="text-4xl font-semibold my-10 ml-auto mr-auto">
@@ -52,7 +65,7 @@ export const Modal = ({
             </h2>
             <button
               onClick={onClose}
-              className="mr-8 hover:scale-110 transition-all"
+              className="mr-8 hover:scale-110 transition-all text-2xl"
             >
               <FaX />
             </button>
