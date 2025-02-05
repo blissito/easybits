@@ -10,15 +10,15 @@ import LogoutIcon from "~/assets/icons/log-out.svg";
 
 export const ITEMS = {
   navItems: [
-    { icon: RocketIcon, path: "/", title: "!Empieza ya!" },
-    { icon: StatsIcon, path: "/", title: "Estadísticas" },
+    { icon: RocketIcon, path: "/dash/start", title: "!Empieza ya!" },
+    { icon: StatsIcon, path: "/dash/stats", title: "Estadísticas" },
     { icon: AssetsIcon, path: "/dash/assets", title: "Assets" },
-    { icon: StoreIcon, path: "/", title: "Mi tienda" },
-    { icon: MoneyIcon, path: "/", title: "Ventas" },
-    { icon: UsersIcon, path: "/", title: "Clientes" },
+    { icon: StoreIcon, path: "/dash/store", title: "Mi tienda" },
+    { icon: MoneyIcon, path: "/dash/sales", title: "Ventas" },
+    { icon: UsersIcon, path: "/dash/clients", title: "Clientes" },
   ],
 
-  sectionItems: [{ icon: BagIcon, path: "/", title: "Compras" }],
+  sectionItems: [{ icon: BagIcon, path: "/dash/purchases", title: "Compras" }],
 
   bottomItems: [
     { icon: UserIcon, path: "/", title: "Perfil" },

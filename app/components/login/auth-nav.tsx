@@ -47,8 +47,10 @@ export const AuthNav = ({ user }: { user?: User }) => {
         <div className="h-full items-center gap-9 content-center hidden md:flex">
           {!user && (
             <>
-              {navItems.map(({ title, path }) => (
-                <Link to={path}>{title}</Link>
+              {navItems.map(({ title, path }, key) => (
+                <Link key={key} to={path}>
+                  {title}
+                </Link>
               ))}
             </>
           )}
@@ -102,8 +104,8 @@ export const AuthNav = ({ user }: { user?: User }) => {
               </div>
             </nav>
             <ul className="bg-black h-[calc(100%-80px)] mt-[80px] p-4 flex-col">
-              {navItems.map(({ title, path }) => (
-                <Link to={path}>
+              {navItems.map(({ title, path }, key) => (
+                <Link to={path} key={key}>
                   <li className="h-[80px] text-white">{title}</li>
                 </Link>
               ))}
