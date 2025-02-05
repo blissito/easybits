@@ -92,14 +92,14 @@ const AnimatedBanner = ({
         transform: `rotate(${rotate}deg) translateY(-40%)`,
       }}
       className={cn(
-        "h-20 absolute left-[-10%] top-[45%] flex w-[150vw]",
+        "h-16 md:h-20 absolute left-[-10%] top-[45%] flex w-[150vw]",
         bgClass
       )}
     >
       <motion.div
         ref={ref}
         style={{ x }}
-        className=" text-black font-normal font-cabin flex items-center h-full  lg:text-4xl text-3xl gap-10 whitespace-nowrap font-sans translate-x-[-100%]"
+        className=" text-black font-normal font-cabin flex items-center h-full  lg:text-4xl text-2xl md:text-3xl gap-10 whitespace-nowrap font-sans translate-x-[-100%]"
       >
         {children}
       </motion.div>
