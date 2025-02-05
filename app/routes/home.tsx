@@ -242,12 +242,12 @@ const Quote = () => {
 
 const Hero = () => {
   return (
-    <section className="h-fit pt-24  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-center items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-6 lg:gap-28">
+    <section className="h-fit pt-24 pb-6 md:pb-0  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-center items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-6 lg:gap-28">
       <div className="w-full md:w-[50%]">
         <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-[80px] leading-tight font-bold">
           Vende tus assets digitales en línea{" "}
         </h1>
-        <p className="text-iron text-xl lg:text-2xl xl:text-3xl font-extralight mb-12 mt-6">
+        <p className="text-iron text-xl lg:text-2xl xl:text-3xl font-extralight mb-10 md:mb-12 mt-2 md:mt-6">
           Crea una cuenta y consigue tu primer venta, vender tu trabajo digital
           es fácil en EasyBits.
         </p>
@@ -283,13 +283,13 @@ const Hero = () => {
           <BrutalElement className="w-32 md:w-48  ">
             <img
               className="  w-full "
-              src="/hero/example3.svg"
+              src="/hero/example3.png"
               alt="share screen"
             />{" "}
           </BrutalElement>
         </div>
         <img
-          className="w-[80%] md:w-full mx-auto"
+          className="w-[65%] md:w-full mx-auto"
           alt="platform features"
           src="/hero-img.svg"
         />
