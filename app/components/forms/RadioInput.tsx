@@ -54,31 +54,29 @@ export const RadioInput = ({
   return (
     <label
       className={cn(
-        "group bg-white border p-4 w-[160px] border-black rounded-2xl cursor-pointer relative",
-        {
-          "bg-brand-500": isSelected,
-        }
+        "group bg-black w-[160px] cursor-pointer relative block rounded-2xl"
       )}
     >
       <div
         className={cn(
-          "absolute inset-0 bg-black z-[-10] rounded-2xl group-hover:translate-y-2 group-hover:translate-x-2 transition-all",
+          "border border-black rounded-2xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
           {
-            "translate-y-2 translate-x-2": isSelected,
+            "-translate-y-2 -translate-x-2 bg-brand-500": isSelected,
           }
         )}
-      />
-      <LittleBrutalImage />
-      <h4>{label}</h4>
-      <p className="text-xs">{description}</p>
-      <input
-        ref={ref}
-        type="radio"
-        name={name}
-        value={value}
-        onChange={(e) => onChange?.(e.currentTarget.value)}
-        hidden
-      />
+      >
+        <LittleBrutalImage />
+        <h4>{label}</h4>
+        <p className="text-xs">{description}</p>
+        <input
+          ref={ref}
+          type="radio"
+          name={name}
+          value={value}
+          onChange={(e) => onChange?.(e.currentTarget.value)}
+          hidden
+        />
+      </div>
     </label>
   );
 };
