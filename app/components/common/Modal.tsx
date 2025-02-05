@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { FaX } from "react-icons/fa6";
+import { motion } from "motion/react";
 
 export const Modal = ({
   children,
@@ -34,9 +35,17 @@ export const Modal = ({
 
   return isOpen ? (
     <>
-      <aside className="fixed inset-0 bg-black/40 backdrop-blur z-20" />
+      <motion.aside
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="fixed inset-0 bg-black/40 backdrop-blur z-20"
+      />
       <article className="fixed min-w-[320px] inset-0 z-20 grid place-content-center">
-        <section className="bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative">
+        <motion.section
+          initial={{ y: 10, opacity: 0, filter: "blur(4px)" }}
+          animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
+          className="bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative"
+        >
           <nav className="flex">
             <h2 className="text-4xl font-semibold my-10 ml-auto mr-auto">
               {title}
@@ -49,7 +58,7 @@ export const Modal = ({
             </button>
           </nav>
           {children}
-        </section>
+        </motion.section>
       </article>
     </>
   ) : null;
