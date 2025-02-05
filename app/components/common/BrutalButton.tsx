@@ -22,18 +22,18 @@ export const BrutalButton = ({
   return (
     <button
       disabled={isDisabled || isLoading}
-      className={cn("group rounded-md bg-black", containerClassName, {
+      className={cn("group rounded-2xl bg-black", containerClassName, {
         "bg-black/70": isDisabled || isLoading,
       })}
       {...props}
     >
       <span
         className={cn(
-          "min-w-[180px] min-h-14",
+          "min-w-[180px] min-h-12",
           "grid place-content-center",
           "block", // así podemos usar translate
-          "-translate-x-2 -translate-y-2  p-4 text-2xl hover:-translate-y-3",
-          "rounded-md border-2 border-black bg-yellow-500",
+          "hover:-translate-x-1 hover:-translate-y-1 p-4 text-lg font-semibold",
+          "rounded-2xl border-2 border-black bg-brand-500",
           "transition-all",
           className,
           {

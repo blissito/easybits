@@ -38,20 +38,10 @@ export const AssetForm = ({
     >
       <h2>Asset form</h2>
       <nav className="flex justify-end gap-12 mt-auto">
-        <BrutalButton
-          onClick={onClose}
-          type="button"
-          containerClassName="rounded-3xl"
-          className="bg-white rounded-3xl px-12 py-3 -translate-x-1 -translate-y-1 hover:-translate-y-1"
-        >
+        <BrutalButton className="bg-white" onClick={onClose} type="button">
           Cancelar
         </BrutalButton>
-        <BrutalButton
-          isLoading={isLoading}
-          type="button"
-          containerClassName="rounded-3xl"
-          className="bg-brand-500 rounded-3xl px-12 py-3 -translate-x-1 -translate-y-1 hover:-translate-y-1"
-        >
+        <BrutalButton isLoading={isLoading} type="button">
           Continuar
         </BrutalButton>
       </nav>
