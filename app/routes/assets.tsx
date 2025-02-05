@@ -1,24 +1,19 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { GridBackground } from "~/components/common/backgrounds/GridBackground";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { AssetFormModal } from "~/components/forms/AssetFormModal";
 import { MagicWand } from "~/components/illustrations/MagicWand";
 
 export default function Assets() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const handleFile = () => {}; // @todo
+  const [showModal, setShowModal] = useState(true);
   return (
     <>
       <article className="min-h-screen overflow-hidden py-20 px-10 w-full relative box-border inline-block">
         <GridBackground />
         <h1 className="text-3xl relative z-20">Mis assets digitales</h1>
-        <Empty onClick={() => inputRef.current?.click()} />
-        <input
-          ref={inputRef}
-          type="file"
-          className="hidden"
-          onChange={handleFile}
-        />
+        <Empty onClick={() => setShowModal(true)} />
       </article>
+      <AssetFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
     </>
   );
 }
