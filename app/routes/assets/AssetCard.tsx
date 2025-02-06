@@ -5,11 +5,11 @@ import { cn } from "~/utils/cn";
 export const AssetCard = ({ asset }: { asset: Asset }) => {
   const origin = "http://localhost:3000"; // @todo get from server?
   return (
-    <main className="group bg-black inline-block rounded-2xl">
+    <main className="group bg-black inline-block rounded-xl">
       <div
         className={cn(
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
-          "group w-[326px] bg-white rounded-2xl border border-black overflow-hidden flex flex-col transition-all"
+          "group w-[326px] bg-white rounded-xl border border-black overflow-hidden flex flex-col transition-all"
         )}
       >
         <img

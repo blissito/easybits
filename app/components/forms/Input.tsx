@@ -14,7 +14,7 @@ export const Input = ({
       <div className="mb-2 font-medium">{label}</div>
       <input
         {...props}
-        className="border rounded-2xl border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+        className="border rounded-xl border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
       />
       <p className="text-xs text-red-500 h-4">{error}</p>
     </label>

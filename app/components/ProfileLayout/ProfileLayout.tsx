@@ -47,8 +47,8 @@ const MenuItem = ({
           <motion.div
             layoutId="active-border"
             className="absolute -right-1 top-0 w-full h-full border-r-4 border-brand-500 rounded-sm"
-            initial={{ opacity: 0, scaleX: 0 }}
-            animate={{ opacity: 1, scaleX: 1 }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
             transition={{ type: "spring", stiffness: 100 }}
           />
         )}
