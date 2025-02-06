@@ -18,7 +18,7 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // groups
   ...prefix("dash", [
-    layout("components/ProfileLayout/ProfileLayout.tsx", [
+    layout("components/DashLayout/DashLayout.tsx", [
       index("routes/start.tsx"),
       route("estadisticas", "routes/stats.tsx"),
       route("assets", "routes/assets/assets.tsx"),

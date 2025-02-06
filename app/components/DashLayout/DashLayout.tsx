@@ -4,10 +4,10 @@ import Logo from "~/assets/icons/easybits-logo.svg";
 import { NavLink, Outlet } from "react-router";
 import TextLogo from "~/assets/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
-import { ITEMS } from "./ProfileLayout.constants";
+import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
-import type { Route } from "./+types/ProfileLayout";
+import type { Route } from "../DashLayout/+types/DashLayout";
 
 interface MenuItemProps {
   path: string;
@@ -98,7 +98,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => ({
   user: await getUserOrRedirect(request),
 });
 
-export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
+export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   const [isOpen, setIsOpen] = useState<boolean>(false);
 

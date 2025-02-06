@@ -18,7 +18,7 @@ export const ITEMS = {
     { icon: UsersIcon, path: "/dash/clientes", title: "Clientes" },
   ],
 
-  sectionItems: [{ icon: BagIcon, path: "/dash/purchases", title: "Compras" }],
+  sectionItems: [{ icon: BagIcon, path: "/dash/compras", title: "Compras" }],
 
   bottomItems: [
     { icon: UserIcon, path: "/", title: "Perfil" },
