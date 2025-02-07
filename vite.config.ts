@@ -12,5 +12,4 @@ export default defineConfig({
     },
   },
   plugins: [reactRouter(), tsconfigPaths()],
-  assetsInclude: ["**/*.svg"], // Ensures SVGs are properly bundled
 });
