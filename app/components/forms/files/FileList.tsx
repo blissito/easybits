@@ -1,7 +1,6 @@
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
-
 import { cn } from "~/utils/cn";
 
 export const FileList = ({

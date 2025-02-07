@@ -3,6 +3,7 @@ import { SelectInput } from "../SelectInput";
 import { useRef, useState, type ChangeEvent } from "react";
 import { FilesDropper } from "./FilesDropper";
 import { FileList } from "./FileList";
+import { motion } from "motion/react";
 
 const getFileArray = (event: any) => {
   let iterable = [];
@@ -19,7 +20,11 @@ const getFileArray = (event: any) => {
 };
 
 // @todo size limits
-export const FilesForm = () => {
+export const FilesForm = ({
+  onClose,
+}: {
+  onClose?: (arg0: File[], arg1: "public-read" | "private") => void;
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [privacy, setPrivacy] = useState("public-read");
   const [files, setFiles] = useState<File[]>([]);
@@ -62,45 +67,56 @@ export const FilesForm = () => {
   };
 
   return (
-    <article className="h-full flex flex-col">
-      <SelectInput
-        value={privacy}
-        onChange={(value) => setPrivacy(value)}
-        label="privacidad del archivo"
-        options={[
-          { label: "Privado", value: "private" },
-          { label: "Público", value: "public-read" },
-        ]}
-        error={
-          <p className="text-brand-500">
-            La privacidad de los archivos es permanente
-          </p>
-        }
-      />
-      {files.length < 1 && (
-        <FilesDropper onDrop={handleDrop} onClick={handleUploadClick} />
-      )}
-      {files.length > 0 && (
-        <FileList
-          onOpenFileSelector={openFileSelector}
-          onRemove={handleRemove}
-          files={files}
-        />
-      )}
-      <BrutalButton
-        isDisabled={isDisabled}
-        containerClassName="mt-auto ml-auto mb-12"
+    <>
+      <motion.article
+        layoutId="FilesFormModal"
+        className="h-full flex flex-col"
       >
-        + Subir {files.length} archivo
-        {files.length > 1 ? "s" : null} {`(${getTotalSize()})`}
-      </BrutalButton>
-      <input
-        onChange={handleFileInputChange}
-        multiple
-        type="file"
-        hidden
-        ref={fileInputRef}
-      />
-    </article>
+        <SelectInput
+          value={privacy}
+          onChange={(value) => setPrivacy(value)}
+          label="privacidad del archivo"
+          options={[
+            { label: "Privado", value: "private" },
+            { label: "Público", value: "public-read" },
+          ]}
+          error={
+            <p className="text-brand-500">
+              La privacidad de los archivos es permanente
+            </p>
+          }
+        />
+        {files.length < 1 && (
+          <FilesDropper onDrop={handleDrop} onClick={handleUploadClick} />
+        )}
+        {files.length > 0 && (
+          <FileList
+            onOpenFileSelector={openFileSelector}
+            onRemove={handleRemove}
+            files={files}
+          />
+        )}
+        <BrutalButton
+          onClick={() => onClose?.(files, privacy)}
+          isDisabled={isDisabled}
+          containerClassName="mt-auto ml-auto mb-12"
+        >
+          + Subir {files.length > 0 ? files.length : null} archivo
+          {files.length > 1 ? (
+            <>
+              {" "}
+              {files.length > 1 ? "s" : null} {`(${getTotalSize()})`}
+            </>
+          ) : null}
+        </BrutalButton>
+        <input
+          onChange={handleFileInputChange}
+          multiple
+          type="file"
+          hidden
+          ref={fileInputRef}
+        />
+      </motion.article>
+    </>
   );
 };

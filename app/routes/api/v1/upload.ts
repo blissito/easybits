@@ -1,32 +1,28 @@
-import { createAsset } from "~/.server/assets";
 import type { Route } from "./+types/upload";
 import { handler, type Complete } from "react-hook-multipart";
 import { getUserOrRedirect } from "~/.server/getters";
+import { createFile } from "~/.server/files";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const HOST = process.env.S3_PUBLIC_ENDPOINT;
   const user = await getUserOrRedirect(request);
+  // @todo hide this inside the library
   return await handler(
     request,
     async (complete: Complete) => {
       // create on DB
-      createAsset({
-        fileMetadata: {
-          ...complete.metadata,
-          originalName: complete.metadata.name,
-        },
+      await createFile({
+        metadata: complete.metadata,
         size: complete.size,
         storageKey: complete.key,
-        publicLink: `${HOST}/${complete.key}`,
-        userId: user.id,
+        url: `${HOST}/${complete.key}`,
+        ownerId: user.id,
         contentType: complete.contentType,
-        status: "uploaded",
+        access: complete.access,
+        name: complete.metadata.name,
       });
       return new Response(JSON.stringify(complete));
     },
-    {
-      ACL: "public-read",
-      // ACL: "private",
-    }
+    { directory: `${user.email}/` }
   );
 };
