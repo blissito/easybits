@@ -64,6 +64,7 @@ const MenuItem = ({
             style={{
               WebkitMaskImage: `url('${icon}')`,
               maskImage: `url('${icon}')`,
+              WebkitClipPath: `url('${icon}')`,
               width: `${iconSize || 32}px`,
               height: `${iconSize || 32}px`,
             }}
