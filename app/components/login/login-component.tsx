@@ -1,4 +1,4 @@
-import logoPurple from "~/assets/icons/eyes-logo-purple.svg";
+import logoPurple from "/icons/eyes-logo-purple.svg";
 import { AuthNav } from "./auth-nav";
 import { STRINGS } from "./login.strings";
 import { FcGoogle } from "react-icons/fc";

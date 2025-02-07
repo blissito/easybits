@@ -1,8 +1,8 @@
-import NewAccount from "~/assets/icons/new-account.svg";
-import ItemsList from "~/assets/icons/list.svg";
-import ShoppingShare from "~/assets/icons/shopping-share.svg";
-import AddWallet from "~/assets/icons/add-wallet.svg";
-import Website from "~/assets/icons/website.svg";
+import NewAccount from "/icons/new-account.svg";
+import ItemsList from "/icons/items-list.svg";
+import ShoppingShare from "/icons/shopping-share.svg";
+import AddWallet from "/icons/add-wallet.svg";
+import Website from "/icons/website.svg";
 
 export const STRINGS = {
   title: "¡Ya casi está lista tu página!",

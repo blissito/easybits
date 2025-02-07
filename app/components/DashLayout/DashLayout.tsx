@@ -1,8 +1,8 @@
 import clsx from "clsx";
 import { useState, type ReactNode } from "react";
-import Logo from "~/assets/icons/easybits-logo.svg";
+import Logo from "/icons/easybits-logo.svg";
 import { NavLink, Outlet } from "react-router";
-import TextLogo from "~/assets/icons/easybits-logo-text.svg";
+import TextLogo from "/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";

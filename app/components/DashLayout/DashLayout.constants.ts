@@ -1,12 +1,12 @@
-import RocketIcon from "~/assets/icons/rocket.svg?url";
-import StatsIcon from "~/assets/icons/stonks.svg?url";
-import AssetsIcon from "~/assets/icons/magic-box.svg?url";
-import StoreIcon from "~/assets/icons/laptop-and-mobile.svg?url";
-import MoneyIcon from "~/assets/icons/money.svg?url";
-import BagIcon from "~/assets/icons/purchase.svg?url";
-import UsersIcon from "~/assets/icons/users.svg?url";
-import UserIcon from "~/assets/icons/profile.svg?url";
-import LogoutIcon from "~/assets/icons/log-out.svg?url";
+import RocketIcon from "/icons/rocket.svg?url";
+import StatsIcon from "/icons/stonks.svg?url";
+import AssetsIcon from "/icons/magic-box.svg?url";
+import StoreIcon from "/icons/laptop-and-mobile.svg?url";
+import MoneyIcon from "/icons/money.svg?url";
+import BagIcon from "/icons/purchase.svg?url";
+import UsersIcon from "/icons/users.svg?url";
+import UserIcon from "/icons/profile.svg?url";
+import LogoutIcon from "/icons/log-out.svg?url";
 
 export const ITEMS = {
   navItems: [

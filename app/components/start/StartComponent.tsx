@@ -1,7 +1,7 @@
 import { BrutalButton } from "../common/BrutalButton";
 import { STRINGS } from "./StartComponent.constants";
-import StepCheck from "~/assets/icons/step-check.svg";
-import Escribenos from "~/assets/icons/escribenos.png";
+import StepCheck from "/icons/step-check.svg";
+import Escribenos from "/icons/escribenos.png";
 import StepProgress from "../common/StepProgress";
 
 export default function StartComponent() {
