@@ -1,13 +1,13 @@
 import clsx from "clsx";
 import { useState, type ReactNode } from "react";
-import Logo from "~/assets/icons/easybits-logo.svg";
+import Logo from "/icons/easybits-logo.svg";
 import { NavLink, Outlet } from "react-router";
-import TextLogo from "~/assets/icons/easybits-logo-text.svg";
+import TextLogo from "/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
-import { ITEMS } from "./ProfileLayout.constants";
+import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
-import type { Route } from "./+types/ProfileLayout";
+import type { Route } from "../DashLayout/+types/DashLayout";
 
 interface MenuItemProps {
   path: string;
@@ -47,8 +47,8 @@ const MenuItem = ({
           <motion.div
             layoutId="active-border"
             className="absolute -right-1 top-0 w-full h-full border-r-4 border-brand-500 rounded-sm"
-            initial={{ opacity: 0, scaleX: 0 }}
-            animate={{ opacity: 1, scaleX: 1 }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
             transition={{ type: "spring", stiffness: 100 }}
           />
         )}
@@ -64,6 +64,7 @@ const MenuItem = ({
             style={{
               WebkitMaskImage: `url('${icon}')`,
               maskImage: `url('${icon}')`,
+              WebkitClipPath: `url('${icon}')`,
               width: `${iconSize || 32}px`,
               height: `${iconSize || 32}px`,
             }}
@@ -98,7 +99,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => ({
   user: await getUserOrRedirect(request),
 });
 
-export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
+export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -135,7 +136,7 @@ export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
                 <MenuItem key={key} {...item} isOpen={isOpen} />
               ))}
             </ul>
-            <div className="border-t border-[#757D8C] w-full" />
+            <div className="border-t border-grayLight w-full" />
             <ul className="flex flex-col gap-6 py-6">
               {ITEMS.sectionItems.map((item, key) => (
                 <MenuItem key={key} {...item} isOpen={isOpen} />
@@ -156,7 +157,7 @@ export default function ProfileLayout({ loaderData }: Route.ComponentProps) {
               <p className="text-lg font-semibold">
                 {user.displayName || user.email?.split("@")[0]}
               </p>
-              <p className="text-[#8391A1]">{user.email}</p>
+              <p className="text-brand-gray">{user.email}</p>
             </div>
             <div className="w-[50px] h-[50px] rounded-full border-2 border-black overflow-hidden">
               <img className="object-contain" src={user.picture || Logo} />

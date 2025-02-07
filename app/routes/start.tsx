@@ -1,12 +1,15 @@
 import { GridBackground } from "~/components/common/backgrounds/GridBackground";
+import StartComponent from "~/components/start/StartComponent";
 
 export default function Start() {
   return (
     <>
-      <article className="py-20 px-10 min-h-screen w-full relative box-border inline-block">
+      <section className="py-20 px-10 w-full relative h-screen">
         <GridBackground />
-        <h1 className="text-3xl relative z-20">Start</h1>
-      </article>
+        <div className="flex justify-center items-center relative z-10 w-full h-full">
+          <StartComponent />
+        </div>
+      </section>
     </>
   );
 }
