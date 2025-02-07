@@ -2,17 +2,22 @@ import { BrutalButton } from "../common/BrutalButton";
 import { STRINGS } from "./StartComponent.constants";
 import StepCheck from "~/assets/icons/step-check.svg";
 import Escribenos from "~/assets/icons/escribenos.png";
+import StepProgress from "../common/StepProgress";
 
 export default function StartComponent() {
+  const steps = STRINGS.steps.length;
+  const completed = STRINGS.steps.filter((item) => item.isCompleted).length;
   return (
-    <div>
+    <div className="mt-28">
       <div className="w-[756px] rounded-xl border border-black bg-white mb-8">
-        <div className="p-8">
+        <div className="p-8 flex justify-between items-center">
           <div>
             <p className="font-semibold text-2xl">{STRINGS.title}</p>
             <p className="text-brand-gray text-md">{STRINGS.subtitle}</p>
           </div>
-          <div>{/* status */}</div>
+          <div className="w-1/4">
+            <StepProgress steps={steps} completed={completed} />
+          </div>
         </div>
         <div className="border-b border-black" />
         <div className="p-8">
