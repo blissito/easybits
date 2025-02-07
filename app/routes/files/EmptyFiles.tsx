@@ -3,7 +3,7 @@ import { Empty } from "../assets/Empty";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { AiOutlineCode } from "react-icons/ai";
 
-export const EmptyFiles = () => {
+export const EmptyFiles = ({ onClick }: { onClick?: () => void }) => {
   return (
     <Empty
       illustration={<Files />}
@@ -26,7 +26,7 @@ export const EmptyFiles = () => {
             </span>
             <span> Usar API</span>
           </BrutalButton>
-          <BrutalButton>+ Subir archivos</BrutalButton>
+          <BrutalButton onClick={onClick}>+ Subir archivos</BrutalButton>
         </nav>
       }
     />
