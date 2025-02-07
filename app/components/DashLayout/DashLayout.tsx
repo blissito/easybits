@@ -20,7 +20,7 @@ interface MenuItemProps {
 }
 
 const MenuItem = ({
-  path,
+  path = "",
   icon,
   iconSize,
   title,

@@ -1,13 +1,13 @@
-import RocketIcon from "~/assets/icons/rocket.svg";
-import StatsIcon from "~/assets/icons/stonks.svg";
-import AssetsIcon from "~/assets/icons/magic-box.svg";
-import StoreIcon from "~/assets/icons/laptop-and-mobile.svg";
-import MoneyIcon from "~/assets/icons/money.svg";
-import BagIcon from "~/assets/icons/purchase.svg";
-import UsersIcon from "~/assets/icons/users.svg";
-import UserIcon from "~/assets/icons/profile.svg";
-import LogoutIcon from "~/assets/icons/log-out.svg";
-import FilesIcon from "~/assets/icons/storage.svg";
+import RocketIcon from "/icons/rocket.svg?url";
+import StatsIcon from "/icons/stonks.svg?url";
+import AssetsIcon from "/icons/magic-box.svg?url";
+import StoreIcon from "/icons/laptop-and-mobile.svg?url";
+import MoneyIcon from "/icons/money.svg?url";
+import BagIcon from "/icons/purchase.svg?url";
+import UsersIcon from "/icons/users.svg?url";
+import UserIcon from "/icons/profile.svg?url";
+import LogoutIcon from "/icons/log-out.svg?url";
+import FilesIcon from "/icons/storage.svg";
 
 export const ITEMS = {
   navItems: [
@@ -21,7 +21,7 @@ export const ITEMS = {
 
   sectionItems: [
     { icon: FilesIcon, path: "/dash/archivos", title: "Archivos" },
-    { icon: BagIcon, path: "/dash/purchases", title: "Compras" },
+    { icon: BagIcon, path: "/dash/compras", title: "Compras" },
   ],
 
   bottomItems: [
