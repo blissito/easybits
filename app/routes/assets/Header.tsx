@@ -21,7 +21,7 @@ export const Header = () => {
 
 const HeaderIconButton = ({ children }: { children: ReactNode }) => {
   return (
-    <button className="bg-black h-max rounded-md group">
+    <button className="bg-black h-max rounded-lg group">
       <span
         className={cn(
           "group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all block"

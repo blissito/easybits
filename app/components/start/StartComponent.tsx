@@ -7,6 +7,10 @@ import StepProgress from "../common/StepProgress";
 export default function StartComponent() {
   const steps = STRINGS.steps.length;
   const completed = STRINGS.steps.filter((item) => item.isCompleted).length;
+  /*   TODO: check its progress somehow
+   *    change icons
+   */
+
   return (
     <div className="mt-28">
       <div className="w-[756px] rounded-xl border border-black bg-white mb-8">
@@ -20,11 +24,12 @@ export default function StartComponent() {
           </div>
         </div>
         <div className="border-b border-black" />
+        {/* steps */}
         <div className="p-8">
           {STRINGS.steps.map(({ title, subtitle, image, cta, isCompleted }) => (
             <div className="flex justify-between items-center mb-9">
               <div className="flex justify-start gap-4">
-                <div className="w-[64px] h-[51px] bg-grayLight flex items-center justify-center">
+                <div className="w-[64px] h-[51px] bg-grayLight flex items-center justify-center rounded-md">
                   <img src={image} />
                 </div>
                 <div>
