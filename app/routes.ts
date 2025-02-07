@@ -7,16 +7,15 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
+  // public info
   index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
-  // public link @todo revisit private only? tokens?
+  // public video link @todo revisit private only? tokens?
   route("/videos/:storageKey", "routes/videos/public.tsx"),
-  // embed
+  // embed share
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
-  // multipar upload
-  route("api/upload", "routes/api/v1/upload.ts"),
-  // groups
+  // user dash
   ...prefix("dash", [
     layout("components/ProfileLayout/ProfileLayout.tsx", [
       index("routes/start.tsx"),
@@ -26,11 +25,14 @@ export default [
       route("ventas", "routes/sales.tsx"),
       route("clientes", "routes/clients.tsx"),
       route("compras", "routes/purchases.tsx"),
+      route("archivos", "routes/files.tsx"),
     ]),
   ]),
+  // multipar upload
+  route("api/upload", "routes/api/v1/upload.ts"),
+  // v1
   ...prefix("api/v1", [
     route("assets", "routes/api/v1/assets.tsx"),
-
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
   ]),
 ] satisfies RouteConfig;
