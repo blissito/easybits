@@ -27,7 +27,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
 
   return (
     <header className="relative z-50">
-      <nav className="bg-black h-16 md:h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-[#757D8C] fixed inset-0">
+      <nav className="bg-black h-16 md:h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-grayLight fixed inset-0">
         <Link to="/">
           <div className="flex gap-3">
             <img src={Logo} alt="easybits" className="w-[53px]" />
@@ -59,13 +59,13 @@ export const AuthNav = ({ user }: { user?: User }) => {
             <div className="flex h-full items-center">
               <Link
                 to="/login"
-                className="px-8 border-l border-[#757D8C] h-full flex items-center"
+                className="px-8 border-l border-grayLight h-full flex items-center"
               >
                 Iniciar Sesión
               </Link>
               <Link
                 to="/login"
-                className="px-8 h-full bg-[#9870ED] text-black flex items-center"
+                className="px-8 h-full bg-brand-500 text-black flex items-center"
               >
                 Empezar
               </Link>
@@ -75,7 +75,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
             <div className="flex h-full items-center">
               <Link
                 to="/dominio-personalizado"
-                className="px-8 border-l border-[#757D8C] h-full flex items-center"
+                className="px-8 border-l border-grayLight h-full flex items-center"
               >
                 Configura tu marca
               </Link>
@@ -94,7 +94,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
               duration: 0.3,
             }}
           >
-            <nav className="bg-black h-[80px] text-white flex justify-between px-10 items-center border-b-2 border-[#757D8C] fixed inset-0">
+            <nav className="bg-black h-[80px] text-white flex justify-between px-10 items-center border-b-2 border-grayLight fixed inset-0">
               <img src={Logo} alt="easybits" className="w-[53px]" />
               <div
                 className="cursor-pointer"

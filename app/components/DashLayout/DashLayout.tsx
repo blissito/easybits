@@ -135,7 +135,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
                 <MenuItem key={key} {...item} isOpen={isOpen} />
               ))}
             </ul>
-            <div className="border-t border-[#757D8C] w-full" />
+            <div className="border-t border-grayLight w-full" />
             <ul className="flex flex-col gap-6 py-6">
               {ITEMS.sectionItems.map((item, key) => (
                 <MenuItem key={key} {...item} isOpen={isOpen} />
@@ -156,7 +156,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
               <p className="text-lg font-semibold">
                 {user.displayName || user.email?.split("@")[0]}
               </p>
-              <p className="text-[#8391A1]">{user.email}</p>
+              <p className="text-brand-gray">{user.email}</p>
             </div>
             <div className="w-[50px] h-[50px] rounded-full border-2 border-black overflow-hidden">
               <img className="object-contain" src={user.picture || Logo} />
