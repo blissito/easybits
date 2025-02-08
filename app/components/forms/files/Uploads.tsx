@@ -61,24 +61,24 @@ export const ActiveUploads = ({
 const Upload = ({
   access = "public-read",
   task,
-  onProgress,
 }: {
   access?: "public-read" | "private";
-  onProgress?: (arg0: number) => void;
   task: Task;
 }) => {
   const mounted = useRef(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [progress, setProgress] = useState(1);
+
+  const handleLocalProgress = ({ percentage }) => {
+    setProgress(percentage);
+  };
 
   const { upload: put } = useUploadMultipart({
     access, // public or private
-    onUploadProgress({ percentage }: { percentage: number }) {
-      onProgress?.(percentage);
-    },
   });
 
   const putFile = async () => {
-    await put(task.id, task.file);
+    await put(task.id, task.file, handleLocalProgress);
   };
 
   useEffect(() => {
@@ -99,7 +99,7 @@ const Upload = ({
         >
           {isHovered ? (
             <IoMdCloseCircle />
-          ) : task.progress > 99 ? (
+          ) : progress > 99 ? (
             <span className="text-green-700">
               <FaRegCheckCircle />
             </span>
@@ -110,11 +110,11 @@ const Upload = ({
       </nav>
       <div className="h-4 bg-black rounded-full border-2 border-black relative mt-1">
         <div
-          style={{ maxWidth: `${task.progress}%` }}
+          style={{ maxWidth: `${progress}%` }}
           className={cn(
             "bg-brand-500 absolute inset-0 rounded-full transition-all",
             {
-              "bg-green-600": task.progress > 99,
+              "bg-green-600": progress > 99,
             }
           )}
         />

@@ -6,6 +6,8 @@ export default {
     extend: {
       colors: {
         "brand-gray": "#6A6966",
+        "brand-aqua": "#BAD9D8",
+        "brand-yellow": "#ECD66E",
         brand: {
           500: "#9870ED",
         },

@@ -37,8 +37,9 @@ export const SelectInput = ({
         <option value="" disabled>
           Selecciona una opción
         </option>
-        {options.map((option) => (
+        {options.map((option, i) => (
           <option
+            key={i}
             // selected={defaultSelected === option.value}
             value={option.value}
           >

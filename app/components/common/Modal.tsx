@@ -28,7 +28,7 @@ export const Modal = ({
 
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = mode === "naked" ? "inherit" : "hidden";
+      document.body.style.overflow = "hidden";
       addEventListener("keydown", keyDownHandler);
     } else {
       document.body.style.overflow = "inherit";
@@ -39,6 +39,12 @@ export const Modal = ({
       removeEventListener("keydown", keyDownHandler);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && mode === "naked") {
+      document.body.style.overflow = "inherit";
+    }
+  }, [mode]);
 
   return (
     <>
@@ -98,7 +104,7 @@ export const Modal = ({
                 )}
                 <h2
                   className={cn(
-                    "text-4xl font-semibold my-10 ml-auto mr-auto text-center",
+                    "text-4xl font-semibold my-10 ml-auto mr-auto",
                     {
                       "my-3": mode === "naked",
                     }

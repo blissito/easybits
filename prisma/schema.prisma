@@ -68,4 +68,7 @@ model File {
   owner       User     @relation(fields: [ownerId], references: [id])
   assetIds    String[] @db.ObjectId
   // ^ relations
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  // ^ auto-dates
 }

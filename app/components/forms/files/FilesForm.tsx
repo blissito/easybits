@@ -99,7 +99,7 @@ export const FilesForm = ({
         <BrutalButton
           onClick={() => onClose?.(files, privacy)}
           isDisabled={isDisabled}
-          containerClassName="mt-auto ml-auto mb-12"
+          containerClassName="mt-auto ml-auto my-12"
         >
           + Subir {files.length > 0 ? files.length : null} archivo
           {files.length > 1 ? (
