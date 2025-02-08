@@ -51,7 +51,7 @@ export const FilesTable = ({
         </section>
 
         <AnimatePresence>
-          {files.map((file) => (
+          {files.map((file, i) => (
             <motion.section
               layout
               initial={{ x: 10, opacity: 0 }}
@@ -60,8 +60,11 @@ export const FilesTable = ({
               key={file.id}
               className={cn(
                 "pl-4",
-                "hover:bg-gray-100 hover:rounded-xl",
-                "grid grid-cols-12 py-3 border-b"
+                "hover:bg-gray-100 ",
+                "grid grid-cols-12 py-3 border-b",
+                {
+                  "rounded-xl": files.length - 1 === i,
+                }
               )}
             >
               <span className="">
