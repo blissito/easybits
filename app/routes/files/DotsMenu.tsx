@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { BsThreeDotsVertical } from "react-icons/bs";
-import { useClickOutside } from "~/hooks/useOutsideclick";
+import { useClickOutside } from "~/hooks/useOutsideClick";
 import { cn } from "~/utils/cn";
 
 export const DotsMenu = ({ children }: { children?: ReactNode }) => {
