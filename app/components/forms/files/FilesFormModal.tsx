@@ -38,31 +38,29 @@ export const FilesFormModal = ({
   };
   return (
     <>
-      <Modal
-        containerClassName="z-30"
-        isOpen={isOpen}
-        title={"Sube tus archivos"}
-        onClose={handleClose}
-      >
-        <AnimatePresence>
+      <AnimatePresence>
+        <Modal
+          containerClassName="z-30"
+          isOpen={isOpen}
+          title={"Sube tus archivos"}
+          onClose={handleClose}
+        >
           <FilesForm onClose={handleUploadStart} />
-        </AnimatePresence>
-      </Modal>
+        </Modal>
 
-      <Modal
-        isOpen={files.length > 0}
-        title={<span className="text-xl">Subiendo...</span>}
-        mode={"naked"}
-        noCloseButton
-      >
-        <AnimatePresence>
+        <Modal
+          isOpen={files.length > 0}
+          title={<span className="text-xl">Subiendo...</span>}
+          mode={"naked"}
+          noCloseButton
+        >
           <ActiveUploads
             onFileComplete={handleFileComplete}
             access={access}
             files={files}
           />
-        </AnimatePresence>
-      </Modal>
+        </Modal>
+      </AnimatePresence>
     </>
   );
 };

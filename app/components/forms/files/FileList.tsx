@@ -16,7 +16,7 @@ export const FileList = ({
     <>
       <section
         style={{ scrollbarWidth: files.length < 3 ? "none" : "inherit" }}
-        className="overflow-hidden overflow-y-scroll grid gap-3 max-h-[130px]"
+        className="overflow-hidden overflow-y-scroll grid gap-3 max-h-[240px]"
       >
         <AnimatePresence mode="popLayout">
           {files.map((file, i) => (
@@ -96,7 +96,7 @@ const FileItem = ({
       animate={{ x: 0, opacity: 1 }}
       transition={{ delay: 0.08 * index }}
       className={cn(
-        "flex justify-between items-center",
+        "flex items-center gap-2",
         "rounded-xl",
         "border-2 border-dashed border-brand-gray px-2 py-3"
       )}
@@ -108,8 +108,10 @@ const FileItem = ({
           alt="preview"
         />
       )}
-      <span ref={ref}>{file.name}</span>
-      <BrutalButtonClose onClick={onRemove} />
+      <span className="truncate max-w-md" ref={ref}>
+        {file.name}
+      </span>
+      <BrutalButtonClose onClick={onRemove} className="ml-auto" />
     </motion.div>
   );
 };
