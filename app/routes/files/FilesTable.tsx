@@ -63,7 +63,7 @@ export const FilesTable = ({
                 "hover:bg-gray-100 ",
                 "grid grid-cols-12 py-3 border-b",
                 {
-                  "rounded-xl": files.length - 1 === i,
+                  "rounded-b-xl": files.length - 1 === i,
                 }
               )}
             >
