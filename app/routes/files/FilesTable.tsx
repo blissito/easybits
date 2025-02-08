@@ -1,5 +1,13 @@
 import type { File } from "@prisma/client";
-import { FaBook, FaFile, FaImage, FaVideo } from "react-icons/fa";
+import {
+  FaCat,
+  FaChair,
+  FaDog,
+  FaHammer,
+  FaHamsa,
+  FaRegImage,
+  FaVideo,
+} from "react-icons/fa";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { DotsMenu } from "./DotsMenu";
 import { useFetcher } from "react-router";
@@ -7,6 +15,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 import { Copy } from "~/components/common/Copy";
 import { IconRenderer } from "./IconRenderer";
+import { FaBook, FaBookAtlas } from "react-icons/fa6";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -98,15 +107,17 @@ export const FilesTable = ({
               <span className="text-brand-gray">---</span>
               <span className="flex items-center">
                 <IconRenderer
+                  fileName={file.name}
                   type={file.contentType}
                   icons={{
                     video: <FaVideo />,
-                    image: <FaImage />,
-                    pdf: <FaFile />,
+                    image: <FaRegImage />,
                     epub: <FaBook />,
-                    zip: <FaFile />,
-                    audio: <FaFile />,
-                    other: <FaFile />,
+
+                    pdf: <FaDog />,
+                    zip: <FaCat />,
+                    audio: <FaHammer />,
+                    other: <FaChair />,
                   }}
                 />
               </span>

@@ -119,8 +119,7 @@ export const ShareTokensModal = ({
       </section>
       <section>
         <p className="text-xs text-brand-500">
-          Esta es una única ocasión en la que verás este token, guárdalo bien.
-          🗝️
+          Esta es la única ocasión en la que verás este token, guárdalo bien. 🗝️
         </p>
       </section>
       <nav className="mt-10 mb-6 flex gap-6">

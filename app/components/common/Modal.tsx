@@ -117,9 +117,6 @@ export const Modal = ({
                   {title}
                 </h2>
                 {children}
-                {mode === "naked" && (
-                  <p className="text-xs text-brand-gray pt-3">Subiendo...</p>
-                )}
               </motion.section>
             </article>
           </>
