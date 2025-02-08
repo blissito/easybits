@@ -5,6 +5,7 @@ import { CopyButton } from "~/components/common/CopyButton";
 import { DotsMenu } from "./DotsMenu";
 import { useFetcher } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
+import { cn } from "~/utils/cn";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -35,7 +36,7 @@ export const FilesTable = ({
       <BrutalButton onClick={onClick} containerClassName="block ml-auto mb-8">
         + Subir archivo
       </BrutalButton>
-      <article layout className="border-2 rounded-xl border-black text-xs">
+      <article className="bg-white border-2 rounded-xl border-black text-xs">
         <section className="grid grid-cols-12 pl-12 py-2 border-b border-black">
           <span className=""></span>
           <span className="">Nombre</span>
@@ -57,7 +58,10 @@ export const FilesTable = ({
               exit={{ x: -10, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               key={file.id}
-              className="grid grid-cols-12 pl-12 py-3 border-b"
+              className={cn(
+                "hover:bg-gray-100",
+                "grid grid-cols-12 pl-12 py-3 border-b"
+              )}
             >
               <span className="">
                 <input
