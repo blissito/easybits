@@ -20,7 +20,7 @@ export const Modal = ({
   onClose?: () => void;
   isOpen?: boolean;
   children?: ReactNode;
-  title?: string;
+  title?: ReactNode;
 }) => {
   const keyDownHandler = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -94,8 +94,9 @@ export const Modal = ({
                 className={cn(
                   "bg-white",
                   "border-2 border-black",
-                  "px-4 rounded-3xl min-h-[500px] w-[600px] relative flex flex-col",
-                  "max-w-[600px]",
+                  "px-12 rounded-3xl min-h-[500px] w-[600px] relative",
+                  "flex flex-col",
+                  "max-w-[600px] lg:min-w-[600px]",
                   {
                     "min-h-[0px] pb-4 max-w-[300px]": mode === "naked",
                   },
@@ -109,12 +110,9 @@ export const Modal = ({
                   />
                 )}
                 <h2
-                  className={cn(
-                    "text-4xl font-semibold my-10 ml-auto mr-auto",
-                    {
-                      "my-3": mode === "naked",
-                    }
-                  )}
+                  className={cn("text-4xl font-semibold mb-4 mt-12", {
+                    "my-3": mode === "naked",
+                  })}
                 >
                   {title}
                 </h2>

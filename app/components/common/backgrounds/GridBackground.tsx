@@ -9,7 +9,7 @@ import { useEffect } from "react";
 export const GridBackground = () => {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const background = useMotionTemplate`radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.6), rgba(255,255,255,0.9) 33%)`;
+  const background = useMotionTemplate`radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.7), rgba(255,255,255,0.95) 33%)`;
 
   const handleMouseMove = (event: MouseEvent) => {
     const { pageX, pageY } = event;
@@ -27,14 +27,14 @@ export const GridBackground = () => {
       <img
         src="/dash/grid.svg"
         alt="grid"
-        className="absolute inset-0 object-cover min-h-screen pointer-events-none"
+        className="absolute inset-0 object-cover pointer-events-none h-full w-full"
       />
       <motion.section
         className="absolute inset-0 bg-white z-0"
         style={{
           background,
         }}
-      ></motion.section>
+      />
     </>
   );
 };

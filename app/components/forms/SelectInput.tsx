@@ -7,19 +7,21 @@ export type Option = {
 };
 export const SelectInput = ({
   label,
-  options,
+  options = [],
   onChange,
   value,
   error,
+  className,
 }: {
+  className?: string;
   error?: ReactNode;
   value?: string;
   onChange?: (arg0: string) => void;
   label?: string;
-  options: Option[];
+  options?: Option[];
 }) => {
   return (
-    <label>
+    <label className="">
       <span className="mb-2 block">{label}</span>
       <select
         value={value}
@@ -27,15 +29,17 @@ export const SelectInput = ({
         tabIndex={0}
         defaultValue=""
         className={cn(
+          "w-max",
+          "text-black",
           "border-2 border-black",
-          "min-w-full md:w-96",
           "rounded-xl p-4 text-lg",
-          "bg-white text-black",
-          "focus:outline-none focus:border-brand-500"
+          "bg-white",
+          "focus:outline-none focus:border-brand-500",
+          className
         )}
       >
         <option value="" disabled>
-          Selecciona una opción
+          Días
         </option>
         {options.map((option, i) => (
           <option
@@ -47,7 +51,7 @@ export const SelectInput = ({
           </option>
         ))}
       </select>
-      <div className="h-4 mb-6"> {error && error}</div>
+      <div className="h-4"> {error && error}</div>
     </label>
   );
 };

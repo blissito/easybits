@@ -18,7 +18,7 @@ export const FileList = ({
         style={{ scrollbarWidth: files.length < 3 ? "none" : "inherit" }}
         className="overflow-hidden overflow-y-scroll grid gap-3 max-h-[240px]"
       >
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="wait">
           {files.map((file, i) => (
             <FileItem
               index={i}

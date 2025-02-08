@@ -12,7 +12,9 @@ const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 export const FilesTable = ({
   files,
   onClick,
+  onTokenClick,
 }: {
+  onTokenClick?: (arg0: File) => void;
   onClick?: () => void;
   files: File[];
 }) => {
@@ -102,7 +104,7 @@ export const FilesTable = ({
               </span>
               <span>
                 {file.access === "private" ? (
-                  <button>
+                  <button onClick={() => onTokenClick(file)}>
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />
                   </button>
                 ) : (
