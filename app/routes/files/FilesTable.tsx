@@ -60,7 +60,7 @@ export const FilesTable = ({
               key={file.id}
               className={cn(
                 "pl-4",
-                "hover:bg-gray-100",
+                "hover:bg-gray-100 rounded-xl",
                 "grid grid-cols-12 py-3 border-b"
               )}
             >
