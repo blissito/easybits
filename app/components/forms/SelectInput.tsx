@@ -29,7 +29,7 @@ export const SelectInput = ({
         className={cn(
           "border-2 border-black",
           "min-w-full md:w-96",
-          "rounded-xl p-4 text-lg h-[54px]",
+          "rounded-xl p-4 text-lg",
           "bg-white text-black",
           "focus:outline-none focus:border-brand-500"
         )}

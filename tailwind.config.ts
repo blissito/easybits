@@ -8,6 +8,7 @@ export default {
         "brand-gray": "#6A6966",
         "brand-aqua": "#BAD9D8",
         "brand-yellow": "#ECD66E",
+        "brand-red": "#AA4958",
         brand: {
           500: "#9870ED",
         },
@@ -40,5 +41,5 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [require("@tailwindcss/forms")],
 } satisfies Config;

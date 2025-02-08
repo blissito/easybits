@@ -6,15 +6,17 @@ import { BrutalButtonClose } from "./BrutalButtonClose";
 export const Modal = ({
   noCloseButton,
   children,
-  mode,
+  mode = "overlay",
   isOpen,
   title,
   onClose,
   className,
+  containerClassName,
 }: {
   noCloseButton?: boolean;
-  mode: "overlay" | "naked";
+  mode?: "overlay" | "naked";
   className?: string;
+  containerClassName?: string;
   onClose?: () => void;
   isOpen?: boolean;
   children?: ReactNode;
@@ -52,16 +54,20 @@ export const Modal = ({
         {isOpen ? (
           <>
             <article
-              onClick={onClose}
               className={cn(
                 "z-20",
                 "inset-0 grid place-content-center",
                 "fixed",
-                { "place-content-end p-3": mode === "naked" }
+                {
+                  "place-content-end p-3": mode === "naked",
+                  "pointer-events-none": mode === "naked",
+                },
+                containerClassName
               )}
             >
               {mode === "overlay" && (
                 <motion.article
+                  onClick={onClose}
                   className="grid-overlay absolute inset-0"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}

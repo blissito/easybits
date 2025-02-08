@@ -11,6 +11,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
 
   const files = await db.file.findMany({
+    orderBy: { createdAt: "desc" },
     where: {
       ownerId: user.id,
     },

@@ -33,6 +33,7 @@ export default [
   // v1
   ...prefix("api/v1", [
     route("assets", "routes/api/v1/assets.tsx"),
+    route("files", "routes/api/v1/files.tsx"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
   ]),
 ] satisfies RouteConfig;

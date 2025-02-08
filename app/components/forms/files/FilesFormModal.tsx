@@ -22,37 +22,47 @@ export const FilesFormModal = ({
     fs: File[],
     privacy: "public-read" | "private"
   ) => {
-    setFiles(fs);
+    console.log("?? ora", fs);
+    setFiles(fs); // @todo need to concat
     setAccess(privacy);
     setMode("naked");
+    onClose?.();
   };
 
   const handleClose = () => {
     setFiles([]);
     onClose?.();
   };
-
-  // @todo why not upload while uploading? XD
-  const isUploading = files.length > 0;
-
+  const handleFileComplete = (fileName: string) => {
+    setFiles((fls) => fls.filter((fl) => fl.name !== fileName));
+  };
   return (
-    <Modal
-      isOpen={isOpen}
-      title={
-        isUploading ? (
-          <span className="text-xl">Subiendo...</span>
-        ) : (
-          "Sube tus archivos"
-        )
-      }
-      onClose={mode === "naked" ? undefined : handleClose}
-      mode={mode}
-      noCloseButton={mode === "naked"}
-    >
-      <AnimatePresence>
-        {files.length < 1 && <FilesForm onClose={handleUploadStart} />}
-        {files.length > 0 && <ActiveUploads access={access} files={files} />}
-      </AnimatePresence>
-    </Modal>
+    <>
+      <Modal
+        containerClassName="z-30"
+        isOpen={isOpen}
+        title={"Sube tus archivos"}
+        onClose={handleClose}
+      >
+        <AnimatePresence>
+          <FilesForm onClose={handleUploadStart} />
+        </AnimatePresence>
+      </Modal>
+
+      <Modal
+        isOpen={files.length > 0}
+        title={<span className="text-xl">Subiendo...</span>}
+        mode={"naked"}
+        noCloseButton
+      >
+        <AnimatePresence>
+          <ActiveUploads
+            onFileComplete={handleFileComplete}
+            access={access}
+            files={files}
+          />
+        </AnimatePresence>
+      </Modal>
+    </>
   );
 };

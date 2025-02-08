@@ -5,6 +5,7 @@ import { FaCloudArrowUp } from "react-icons/fa6";
 import { FaRegCheckCircle } from "react-icons/fa";
 import { IoMdCloseCircle } from "react-icons/io";
 import { cn } from "~/utils/cn";
+import { useSubmit } from "react-router";
 
 export type Task = {
   id: string;
@@ -16,9 +17,11 @@ export type Task = {
 export const ActiveUploads = ({
   files,
   access,
+  onFileComplete,
 }: {
   access?: "public-read" | "private";
   files: File[];
+  onFileComplete?: (arg0: string) => void;
 }) => {
   const [tasks, setTasks] = useState({});
   const length = Object.keys(tasks).length;
@@ -37,22 +40,18 @@ export const ActiveUploads = ({
     setTasks(ts);
   }, [files]);
 
-  const updateProgress = (id: string, progress: number) => {
+  const removeDone = (id: string) => {
     const updated: Record<string, Task> = { ...tasks };
-    updated[id] = { ...updated[id], progress };
+    delete updated[id];
     setTasks(updated);
+    onFileComplete?.(id);
   };
 
   if (length < 1) return null;
   return (
     <motion.section layoutId="FilesFormModal">
       {iterable.map((task, i) => (
-        <Upload
-          key={i}
-          access={access}
-          task={task}
-          onProgress={(progress) => updateProgress(task.id, progress)}
-        />
+        <Upload key={i} access={access} task={task} onClose={removeDone} />
       ))}
     </motion.section>
   );
@@ -61,10 +60,13 @@ export const ActiveUploads = ({
 const Upload = ({
   access = "public-read",
   task,
+  onClose,
 }: {
+  onClose?: (arg0: string) => void;
   access?: "public-read" | "private";
   task: Task;
 }) => {
+  const submit = useSubmit();
   const mounted = useRef(false);
   const [isHovered, setIsHovered] = useState(false);
   const [progress, setProgress] = useState(1);
@@ -79,6 +81,8 @@ const Upload = ({
 
   const putFile = async () => {
     await put(task.id, task.file, handleLocalProgress);
+    submit(null); // refresh list
+    setTimeout(() => onClose?.(task.id), 3000);
   };
 
   useEffect(() => {
