@@ -1,11 +1,12 @@
 import type { File } from "@prisma/client";
-import { FaVideo } from "react-icons/fa";
+import { FaBook, FaFile, FaImage, FaVideo } from "react-icons/fa";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { DotsMenu } from "./DotsMenu";
 import { useFetcher } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 import { Copy } from "~/components/common/Copy";
+import { IconRenderer } from "./IconRenderer";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -19,6 +20,13 @@ export const FilesTable = ({
   files: File[];
 }) => {
   const fetcher = useFetcher();
+
+  const handleDownload = (file: File) => {
+    const a = document.createElement("a");
+    a.href = file.url;
+    a.download = file.url;
+    a.click();
+  };
 
   const handleDelete = (file: File) => {
     if (!confirm(`Eliminar: ${file.name} \n Esta acción no es reversible`))
@@ -89,7 +97,16 @@ export const FilesTable = ({
               {/* <span className="text-brand-gray">Directa</span> */}
               <span className="text-brand-gray">---</span>
               <span className="border border-black w-6 h-6 grid place-content-center rounded-full">
-                <FaVideo />
+                <IconRenderer
+                  type={file.contentType}
+                  icons={{
+                    video: <FaVideo />,
+                    image: <FaImage />,
+                    pdf: <FaFile />,
+                    epub: <FaBook />,
+                    other: <FaFile />,
+                  }}
+                />
               </span>
               <span className="col-span-2">
                 {file.access === "private" ? (
@@ -105,19 +122,26 @@ export const FilesTable = ({
               <span className="relative">
                 {file.access === "private" ? (
                   <button
-                    className="p-1 rounded-lg border active:scale-95 hover:shadow active:shadow-inner"
+                    className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
                     onClick={() => onTokenClick(file)}
                   >
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />
                   </button>
                 ) : (
-                  <Copy className="inset-0" text={file.url} />
+                  <Copy mode="ghost" className="inset-0" text={file.url} />
                 )}
               </span>
               <DotsMenu>
-                <button className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full">
-                  Descargar
-                </button>
+                {file.access !== "private" && (
+                  <button
+                    onClick={() => {
+                      handleDownload(file);
+                    }}
+                    className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
+                  >
+                    Descargar
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(file)}
                   className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"

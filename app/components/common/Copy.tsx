@@ -14,7 +14,9 @@ import { cn } from "~/utils/cn";
 export const Copy = ({
   text,
   className,
+  mode,
 }: {
+  mode?: "ghost";
   className?: string;
   text: string;
 }) => {
@@ -39,6 +41,7 @@ export const Copy = ({
         "transition-all",
         "p-1 rounded-lg border absolute right-2 top-6 bg-white",
         "active:scale-95 active:shadow-inner",
+        { "border-none": mode === "ghost" },
         className
       )}
     >
