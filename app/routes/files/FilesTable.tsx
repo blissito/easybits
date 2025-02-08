@@ -104,6 +104,8 @@ export const FilesTable = ({
                     image: <FaImage />,
                     pdf: <FaFile />,
                     epub: <FaBook />,
+                    zip: <FaFile />,
+                    audio: <FaFile />,
                     other: <FaFile />,
                   }}
                 />
