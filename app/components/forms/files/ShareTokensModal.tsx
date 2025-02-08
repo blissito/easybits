@@ -3,24 +3,26 @@ import { Modal } from "~/components/common/Modal";
 import { Input } from "../Input";
 import { SelectInput } from "../SelectInput";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useDateCalculations } from "~/hooks/useDateCalculations";
 import { useFetcher } from "react-router";
 
 export const ShareTokensModal = ({
   onClose,
   tokenFor,
+  onChange,
 }: {
+  onChange?: () => void;
   tokenFor?: File | null;
   onClose?: () => void;
 }) => {
   const { getDisplayTime, getDisplayDate } = useDateCalculations();
-  const [date, setDate] = useState(
-    new Date(new Date().setDate(new Date().getDate() + 1))
-  );
-  const [number, setNumber] = useState(1);
-  const [type, setType] = useState("h");
-  const [expInSecs, setExpInSecs] = useState(86400); // 1h
+  const [date, setDate] = useState(new Date());
+  //   const [url, setURL] = useState('');
+  const [url, setUrl] = useState("-- Genera un token primero --");
+  const [number, setNumber] = useState(15);
+  const [type, setType] = useState("m");
+  const [expInSecs, setExpInSecs] = useState(900); // 1h
 
   useEffect(() => {
     const d = new Date();
@@ -36,10 +38,10 @@ export const ShareTokensModal = ({
   }, [number, type]);
 
   const fetcher = useFetcher();
-  const onGenerate = () => {
+  const onGenerate = async () => {
     if (!tokenFor) return;
 
-    fetcher.submit(
+    await fetcher.submit(
       {
         intent: "generate_token",
         fileId: tokenFor.id,
@@ -48,11 +50,30 @@ export const ShareTokensModal = ({
       { method: "post", action: "/api/v1/tokens" }
     );
   };
+  const isFetching = fetcher.state !== "idle";
 
-  const url = fetcher.data?.url || "-- Genera un token primero --";
+  const handleClose = () => {
+    setUrl("-- Genera un token primero --");
+    setDate(new Date());
+    onClose?.();
+  };
+
+  useEffect(() => {
+    if (fetcher.data?.url) {
+      setUrl(fetcher.data?.url);
+    }
+  }, [fetcher]);
 
   return (
-    <Modal onClose={onClose} isOpen={!!tokenFor} title="Crea tokens de acceso">
+    <Modal
+      onClose={handleClose}
+      isOpen={!!tokenFor}
+      title="Crea tokens de acceso"
+    >
+      <p className="mb-2 truncate">
+        Para:{" "}
+        <strong className="text-lg font-semibold">{tokenFor?.name}</strong>
+      </p>
       <p>
         Como tu archivo es privado, necesitas un token para consumirlo.
         Recuerda, el máximo es{" "}
@@ -73,7 +94,7 @@ export const ShareTokensModal = ({
               }}
             />
             <SelectInput
-              placeholder="Horas"
+              defaultValue="m"
               onChange={(value) => setType(value)}
               className="w-40"
               options={[
@@ -88,7 +109,7 @@ export const ShareTokensModal = ({
               ]}
             />
           </div>
-          <Input readOnly value={url} copyText={url} />
+          <Input readOnly className="select-none" value={url} copyText={url} />
         </div>
         <div className="bg-black w-full rounded-2xl mb-4 flex flex-col gap-3 text-center py-8">
           <p className="text-gray-400">Token válido hasta:</p>
@@ -98,15 +119,19 @@ export const ShareTokensModal = ({
       </section>
       <section>
         <p className="text-xs text-brand-500">
-          Esta es una única ocación en la que verás este token, guárdalo bien.
+          Esta es una única ocasión en la que verás este token, guárdalo bien.
           🗝️
         </p>
       </section>
       <nav className="mt-10 mb-6 flex gap-6">
-        <BrutalButton onClick={onClose} mode="ghost">
+        <BrutalButton onClick={handleClose} mode="ghost">
           Cancelar
         </BrutalButton>
-        <BrutalButton onClick={onGenerate} containerClassName="w-full">
+        <BrutalButton
+          isLoading={isFetching}
+          onClick={onGenerate}
+          containerClassName="w-full"
+        >
           Generar nuevo token
         </BrutalButton>
       </nav>

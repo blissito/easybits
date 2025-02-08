@@ -47,7 +47,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           )}
         </section>
       </article>
-      {/* <FilesFormModal isOpen={showModal} onClose={() => setShowModal(false)} /> */}
+      <FilesFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
       <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
     </>
   );

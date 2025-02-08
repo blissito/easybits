@@ -1,11 +1,11 @@
 import type { File } from "@prisma/client";
 import { FaVideo } from "react-icons/fa";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { CopyButton } from "~/components/common/CopyButton";
 import { DotsMenu } from "./DotsMenu";
 import { useFetcher } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
+import { Copy } from "~/components/common/Copy";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -102,13 +102,16 @@ export const FilesTable = ({
                   </span>
                 )}
               </span>
-              <span>
+              <span className="relative">
                 {file.access === "private" ? (
-                  <button onClick={() => onTokenClick(file)}>
+                  <button
+                    className="p-1 rounded-lg border active:scale-95 hover:shadow active:shadow-inner"
+                    onClick={() => onTokenClick(file)}
+                  >
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />
                   </button>
                 ) : (
-                  <CopyButton className="text-xs" text={file.url} />
+                  <Copy className="inset-0" text={file.url} />
                 )}
               </span>
               <DotsMenu>

@@ -13,6 +13,7 @@ export const SelectInput = ({
   error,
   className,
   placeholder,
+  defaultValue,
 }: {
   className?: string;
   error?: ReactNode;
@@ -29,7 +30,7 @@ export const SelectInput = ({
         value={value}
         onChange={(event) => onChange?.(event.currentTarget.value)}
         tabIndex={0}
-        defaultValue=""
+        defaultValue={defaultValue}
         className={cn(
           "w-max",
           "text-black",
@@ -53,7 +54,7 @@ export const SelectInput = ({
           </option>
         ))}
       </select>
-      <div className="h-4"> {error && error}</div>
+      <div className="min-h-4"> {error && error}</div>
     </label>
   );
 };

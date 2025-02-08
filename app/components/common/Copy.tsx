@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FaCheck, FaRegCopy } from "react-icons/fa";
+import { FaCheck } from "react-icons/fa";
+import { CopyIcon } from "../illustrations/CopyIcon";
 import { useTimeout } from "~/hooks/useTimeout";
 import { cn } from "~/utils/cn";
 /**
@@ -33,13 +34,21 @@ export const Copy = ({
     <button
       onClick={trigger}
       className={cn(
+        "w-max h-max",
+        "hover:shadow",
         "transition-all",
-        "p-2 rounded-lg border absolute right-2 top-6 bg-white shadow",
-        "active:scale-95 active:shadow-sm",
+        "p-1 rounded-lg border absolute right-2 top-6 bg-white",
+        "active:scale-95 active:shadow-inner",
         className
       )}
     >
-      {isActive ? <FaCheck /> : <FaRegCopy />}
+      {isActive ? (
+        <span className="text-xl">
+          <FaCheck />
+        </span>
+      ) : (
+        <CopyIcon />
+      )}
     </button>
   );
 };

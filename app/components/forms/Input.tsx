@@ -7,6 +7,7 @@ export const Input = ({
   error,
   type = "text",
   copyText,
+  className,
   ...props
 }: {
   onChange?: () => void;
@@ -14,6 +15,7 @@ export const Input = ({
   type?: "number" | "text";
   error?: string;
   label?: ReactNode;
+  className?: string;
   [x: string]: unknown;
 }) => {
   return (
@@ -27,7 +29,8 @@ export const Input = ({
           "h-16 w-full",
           {
             "w-28": type === "number",
-          }
+          },
+          className
         )}
       />
       <div className="text-xs text-red-500 h-4">{error}</div>

@@ -96,6 +96,9 @@ const Upload = ({
     <div className="border-b-2 border-dashed py-3 border-black">
       <nav className="flex items-center justify-between">
         <p className="font-medium truncate pr-1">{task.file.name}</p>
+        <span className="text-xs px-1 text-brand-gray">
+          {progress.toFixed(0)}%
+        </span>
         <button
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
