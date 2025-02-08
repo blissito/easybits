@@ -96,7 +96,7 @@ export const FilesTable = ({
               </span>
               {/* <span className="text-brand-gray">Directa</span> */}
               <span className="text-brand-gray">---</span>
-              <span className="border border-black w-6 h-6 grid place-content-center rounded-full">
+              <span className="flex items-center">
                 <IconRenderer
                   type={file.contentType}
                   icons={{
@@ -108,7 +108,7 @@ export const FilesTable = ({
                   }}
                 />
               </span>
-              <span className="col-span-2">
+              <span className="col-span-2 flex items-center">
                 {file.access === "private" ? (
                   <span className="bg-brand-aqua rounded-full py-px px-1 border border-black">
                     Privado
