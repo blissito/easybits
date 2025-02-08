@@ -74,6 +74,12 @@ export const AuthNav = ({ user }: { user?: User }) => {
           {user && (
             <div className="flex h-full items-center">
               <Link
+                to="/dash"
+                className="px-8 border-l border-grayLight h-full flex items-center"
+              >
+                Panel de control
+              </Link>
+              <Link
                 to="/dominio-personalizado"
                 className="px-8 border-l border-grayLight h-full flex items-center"
               >

@@ -5,7 +5,7 @@ import {
   useSpring,
   useTransform,
   useVelocity,
-} from "framer-motion";
+} from "motion/react";
 import { useRef } from "react";
 import { useScrollDirection } from "./useScrollDirection";
 

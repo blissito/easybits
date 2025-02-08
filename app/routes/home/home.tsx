@@ -8,11 +8,18 @@ import { Bento } from "./Bento";
 import { ItemList } from "./ItemList";
 import { Invite } from "./Invite";
 import { Assets } from "./Assets";
+import type { Route } from "./+types/home";
 
-export default function Home() {
+export const clientLoader = async () => {
+  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+  return { user };
+};
+
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
   return (
     <section className="overflow-hidden w-full">
-      <AuthNav />
+      <AuthNav user={user} />
       <Hero />
       <Banners>
         <>

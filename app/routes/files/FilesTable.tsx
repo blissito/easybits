@@ -37,15 +37,15 @@ export const FilesTable = ({
         + Subir archivo
       </BrutalButton>
       <article className="bg-white border-2 rounded-xl border-black text-xs">
-        <section className="grid grid-cols-12 pl-12 py-2 border-b border-black">
+        <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
           <span className=""></span>
-          <span className="">Nombre</span>
+          <span className="col-span-3">Nombre</span>
           <span className="">Tamaño</span>
-          <span className="col-span-2">Fecha de creación</span>
-          <span className="">Fuente</span>
-          <span className="col-span-2">Asset relacionado</span>
+          <span>Fecha</span>
+          {/* <span className="">Fuente</span> */}
+          <span>Asset</span>
           <span className="">Tipo</span>
-          <span className="">Privacidad</span>
+          <span className="col-span-2">Privacidad</span>
           <span className="">Link</span>
           <span className=""></span>
         </section>
@@ -59,6 +59,7 @@ export const FilesTable = ({
               animate={{ x: 0, opacity: 1 }}
               key={file.id}
               className={cn(
+                "pl-4",
                 "hover:bg-gray-100",
                 "grid grid-cols-12 py-3 border-b"
               )}
@@ -69,21 +70,23 @@ export const FilesTable = ({
                   className="text-brand-500 focus:outline-brand-500"
                 />
               </span>
-              <span className="truncate font-semibold">{file.name}</span>
+              <span className="truncate font-semibold col-span-3">
+                {file.name}
+              </span>
               <span className="text-brand-gray">{toMB(file.size)}</span>
-              <span className="col-span-2 text-brand-gray">
+              <span className=" text-brand-gray">
                 {new Date(file.createdAt).toLocaleDateString("es-MX", {
                   year: "numeric",
                   month: "short",
                   day: "numeric",
                 })}
               </span>
-              <span className="text-brand-gray">Directa</span>
-              <span className="col-span-2 text-brand-gray">---</span>
+              {/* <span className="text-brand-gray">Directa</span> */}
+              <span className="text-brand-gray">---</span>
               <span className="border border-black w-6 h-6 grid place-content-center rounded-full">
                 <FaVideo />
               </span>
-              <span className="">
+              <span className="col-span-2">
                 {file.access === "private" ? (
                   <span className="bg-brand-aqua rounded-full py-px px-1 border border-black">
                     Privado
@@ -100,7 +103,7 @@ export const FilesTable = ({
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />
                   </button>
                 ) : (
-                  <CopyButton className="text-xs" />
+                  <CopyButton className="text-xs" text={file.url} />
                 )}
               </span>
               <DotsMenu>

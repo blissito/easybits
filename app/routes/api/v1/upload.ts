@@ -23,6 +23,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       });
       return new Response(JSON.stringify(complete));
     },
-    { directory: `${user.email}/` }
+    { directory: `${user.id}/` }
   );
 };
