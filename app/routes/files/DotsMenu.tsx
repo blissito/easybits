@@ -8,6 +8,7 @@ export const DotsMenu = ({ children }: { children?: ReactNode }) => {
   const ref = useClickOutside({
     isActive: isOpen,
     onOutsideClick: () => setIsOpen(false),
+    includeEscape: true,
   });
   return (
     <section className="relative" ref={ref}>
