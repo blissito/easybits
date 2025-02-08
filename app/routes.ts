@@ -32,6 +32,7 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // v1
   ...prefix("api/v1", [
+    route("tokens", "routes/api/v1/tokens.tsx"),
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
     route("files", "routes/api/v1/files.tsx"),

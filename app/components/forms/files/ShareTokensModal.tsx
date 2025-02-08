@@ -5,6 +5,7 @@ import { SelectInput } from "../SelectInput";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useDateCalculations } from "~/hooks/useDateCalculations";
+import { useFetcher } from "react-router";
 
 export const ShareTokensModal = ({
   onClose,
@@ -15,20 +16,14 @@ export const ShareTokensModal = ({
 }) => {
   const { getDisplayTime, getDisplayDate } = useDateCalculations();
   const [date, setDate] = useState(
-    new Date().setDate(new Date().getDate() + 1)
+    new Date(new Date().setDate(new Date().getDate() + 1))
   );
   const [number, setNumber] = useState(1);
-  const [type, setType] = useState("d");
-  const [exp, setExp] = useState("1d");
-  const [expInSecs, setExpInSecs] = useState(86400);
+  const [type, setType] = useState("h");
+  const [expInSecs, setExpInSecs] = useState(86400); // 1h
 
   useEffect(() => {
-    setExp(`${number}${type}`);
     const d = new Date();
-    if (type === "d") {
-      d.setDate(d.getDate() + number);
-      setDate(d);
-    }
     if (type === "h") {
       d.setHours(d.getHours() + number);
       setDate(d);
@@ -37,20 +32,31 @@ export const ShareTokensModal = ({
       d.setMinutes(d.getMinutes() + number);
       setDate(d);
     }
-    setExpInSecs(d.getTime() / 1000);
-    console.log("SECS?", Math.floor(d.getTime() / 1000));
+    setExpInSecs((d.getTime() - Date.now()) / 1000); // gold... and gragile...
   }, [number, type]);
 
-  console.log("ExpiresIn::", exp);
+  const fetcher = useFetcher();
+  const onGenerate = () => {
+    if (!tokenFor) return;
+
+    fetcher.submit(
+      {
+        intent: "generate_token",
+        fileId: tokenFor.id,
+        expInSecs,
+      },
+      { method: "post", action: "/api/v1/tokens" }
+    );
+  };
+
+  const url = fetcher.data?.url || "-- Genera un token primero --";
 
   return (
     <Modal onClose={onClose} isOpen={!!tokenFor} title="Crea tokens de acceso">
       <p>
         Como tu archivo es privado, necesitas un token para consumirlo.
-        Recuerda, que{" "}
-        <strong className="text-brand-500">
-          cada token nuevo invalida el anterior.
-        </strong>
+        Recuerda, el máximo es{" "}
+        <strong className="text-brand-500">168 horas</strong> (7 días).
       </p>
 
       <section className="flex gap-7 mt-8">
@@ -59,6 +65,7 @@ export const ShareTokensModal = ({
           <div className="flex gap-4 items-center">
             <Input
               min="1"
+              max="168"
               type="number"
               defaultValue={number}
               onChange={(event: ChangeEvent<HTMLInputElement>) => {
@@ -66,13 +73,10 @@ export const ShareTokensModal = ({
               }}
             />
             <SelectInput
+              placeholder="Horas"
               onChange={(value) => setType(value)}
               className="w-40"
               options={[
-                {
-                  label: "Días",
-                  value: "d",
-                },
                 {
                   label: "Horas",
                   value: "h",
@@ -84,10 +88,7 @@ export const ShareTokensModal = ({
               ]}
             />
           </div>
-          <Input
-            placeholder={tokenFor?.url}
-            copyText={`${tokenFor?.url}?token="perro"`}
-          />
+          <Input readOnly value={url} copyText={url} />
         </div>
         <div className="bg-black w-full rounded-2xl mb-4 flex flex-col gap-3 text-center py-8">
           <p className="text-gray-400">Token válido hasta:</p>
@@ -95,11 +96,17 @@ export const ShareTokensModal = ({
           <h4 className="text-white text-lg">{getDisplayTime(date)}</h4>
         </div>
       </section>
-      <nav className="mt-10 flex gap-6">
+      <section>
+        <p className="text-xs text-brand-500">
+          Esta es una única ocación en la que verás este token, guárdalo bien.
+          🗝️
+        </p>
+      </section>
+      <nav className="mt-10 mb-6 flex gap-6">
         <BrutalButton onClick={onClose} mode="ghost">
           Cancelar
         </BrutalButton>
-        <BrutalButton containerClassName="w-full">
+        <BrutalButton onClick={onGenerate} containerClassName="w-full">
           Generar nuevo token
         </BrutalButton>
       </nav>

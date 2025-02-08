@@ -12,6 +12,7 @@ export const SelectInput = ({
   value,
   error,
   className,
+  placeholder,
 }: {
   className?: string;
   error?: ReactNode;
@@ -19,6 +20,7 @@ export const SelectInput = ({
   onChange?: (arg0: string) => void;
   label?: string;
   options?: Option[];
+  placeholder?: string;
 }) => {
   return (
     <label className="">
@@ -39,7 +41,7 @@ export const SelectInput = ({
         )}
       >
         <option value="" disabled>
-          Días
+          {placeholder}
         </option>
         {options.map((option, i) => (
           <option
