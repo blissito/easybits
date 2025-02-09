@@ -17,6 +17,7 @@ export const Footer = () => {
           <motion.button
             initial={{ borderRadius: "0px" }}
             whileHover={{ borderRadius: "199px" }}
+            whileTap={{ borderRadius: "199px" }}
             transition={{ type: "tween" }}
             className="bg-brand-500 w-full h-full   text-3xl md:text-5xl lg:text-[80px] font-medium "
           >
@@ -29,6 +30,7 @@ export const Footer = () => {
           <motion.div
             initial={{ borderRadius: "0px" }}
             whileHover={{ borderRadius: "199px" }}
+            whileTap={{ borderRadius: "199px" }}
             transition={{ type: "tween" }}
             className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full  text-2xl font-light "
           >
@@ -42,6 +44,7 @@ export const Footer = () => {
           </motion.div>
           <motion.div
             initial={{ borderRadius: "0px" }}
+            whileTap={{ borderRadius: "199px" }}
             whileHover={{ borderRadius: "199px" }}
             transition={{ type: "tween" }}
             className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full text-2xl font-light "
