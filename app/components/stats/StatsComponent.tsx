@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { STRINGS } from "./StatsComponent.constants";
-import { useMemo } from "react";
+import { HiOutlineInformationCircle } from "react-icons/hi";
 import LineChart from "../charts/LineChart";
 
 export default function StatsComponent() {
@@ -51,8 +51,10 @@ export default function StatsComponent() {
               )}
             >
               <div className="p-6 pb-10">
-                <p className="text-xs text-start">{title}</p>
-                <p>{amount}</p>
+                <p className="text-xs text-start mb-2 flex gap-1">
+                  {title} <HiOutlineInformationCircle />
+                </p>
+                <p className="text-3xl">{amount}</p>
               </div>
             </div>
           </div>
