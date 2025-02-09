@@ -16,6 +16,8 @@ import { cn } from "~/utils/cn";
 import { Copy } from "~/components/common/Copy";
 import { IconRenderer } from "./IconRenderer";
 import { FaBook, FaBookAtlas } from "react-icons/fa6";
+import { useState } from "react";
+import { ConfirmModal } from "./ConfirmModal";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -29,6 +31,7 @@ export const FilesTable = ({
   files: File[];
 }) => {
   const fetcher = useFetcher();
+  const [fileToDelete, setFileToDelete] = useState<File | null>(null);
 
   const handleDownload = (file: File) => {
     const a = document.createElement("a");
@@ -37,21 +40,36 @@ export const FilesTable = ({
     a.click();
   };
 
-  const handleDelete = (file: File) => {
-    if (!confirm(`Eliminar: ${file.name} \n Esta acción no es reversible`))
-      return;
+  const openConfirm = (f: File) => {
+    console.log("OPEN?", f);
+    setFileToDelete(f);
+  };
+
+  const closeConfirm = () => {
+    setFileToDelete(null);
+  };
+
+  const handleDelete = () => {
+    if (!fileToDelete) return;
 
     fetcher.submit(
       {
         intent: "delete_file",
-        id: file.id,
-        storageKey: file.storageKey,
+        id: fileToDelete.id,
+        storageKey: fileToDelete.storageKey,
       },
       { method: "post", action: "/api/v1/files" }
     );
   };
+
   return (
     <>
+      <ConfirmModal
+        fileName={fileToDelete?.name as string}
+        isOpen={Boolean(fileToDelete)}
+        onClose={closeConfirm}
+        onConfirm={handleDelete}
+      />
       <BrutalButton onClick={onClick} containerClassName="block ml-auto mb-8">
         + Subir archivo
       </BrutalButton>
@@ -156,7 +174,7 @@ export const FilesTable = ({
                   </button>
                 )}
                 <button
-                  onClick={() => handleDelete(file)}
+                  onClick={() => openConfirm(file)}
                   className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
                 >
                   Eliminar

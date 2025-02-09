@@ -124,7 +124,7 @@ export const ShareTokensModal = ({
       </section>
       <nav className="mt-10 mb-6 flex gap-6">
         <BrutalButton onClick={handleClose} mode="ghost">
-          Cancelar
+          Cerrar
         </BrutalButton>
         <BrutalButton
           isLoading={isFetching}
