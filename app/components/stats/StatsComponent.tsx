@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { STRINGS } from "./StatsComponent.constants";
 import { HiOutlineInformationCircle } from "react-icons/hi";
 import LineChart from "../charts/LineChart";
+import Logo from "/icons/easybits-logo.svg";
 
 export default function StatsComponent() {
   const data = {
@@ -26,13 +27,40 @@ export default function StatsComponent() {
       },
     ],
   };
-
+  const mostSoldProducts = [
+    {
+      imageUrl: Logo,
+      title: "Salsas Mexas",
+      soldTimes: 2,
+      unitPrice: 250,
+    },
+    {
+      imageUrl: Logo,
+      title: "Recetario JapoMexa",
+      soldTimes: 1,
+      unitPrice: 350,
+    },
+    {
+      imageUrl: Logo,
+      title: "Comida oaxaqueña secrets",
+      soldTimes: 8,
+      unitPrice: 150,
+    },
+    {
+      imageUrl: Logo,
+      title: "Moles y otros misterios",
+      soldTimes: 99,
+      unitPrice: 100,
+    },
+  ];
   //:TODO get these insights and format them
   return (
     <div className="mt-7">
-      <div className="w-1/2">
+      <div className="w-2/3">
         <p className="text-4xl font-semibold">{STRINGS.title}</p>
-        <p className="text-brand-gray text-md">{STRINGS.subtitle}</p>
+        <p className="text-brand-gray text-md whitespace-pre-line">
+          {STRINGS.subtitle}
+        </p>
       </div>
       <div className="flex justify-end">
         {/* improve thissss */}
@@ -46,7 +74,7 @@ export default function StatsComponent() {
             <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-1 group-hover:translate-y-1 opacity-0 group-hover:opacity-100" />
             <div
               className={clsx(
-                `rounded-xl z-10 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white`,
+                `rounded-xl z-10 text-black text-lg w-full border-black border cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white`,
                 `bg-${bgColor}`
               )}
             >
@@ -68,7 +96,19 @@ export default function StatsComponent() {
           </div>
         </div>
         <div className="col-span-4 rounded-xl border border-black p-6 bg-white">
-          ranking WIP
+          <p className="mb-10">Productos mas vendidos</p>
+          {mostSoldProducts.map(({ imageUrl, title, soldTimes, unitPrice }) => (
+            <div className="flex justify-between gap-4 items-start py-4 border-b border-lightGray">
+              <img className="w-[48px] h-[48px] rounded-xl" src={imageUrl} />
+              <div className="w-full">
+                <p className="text-sm text-start">{title}</p>
+                <p className="text-xs text-brand-gray">{soldTimes} ventas</p>
+              </div>
+              <p className="text-sm text-brand-gray">
+                ${soldTimes * unitPrice}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

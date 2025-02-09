@@ -5,9 +5,9 @@ import AddWallet from "/icons/add-wallet.svg";
 import Website from "/icons/website.svg";
 
 export const STRINGS = {
-  title: "Bienvenide XD, {username}",
+  title: "Bienvenid@, ",
   subtitle:
-    "Lorem ipsum dolor sit amet consectetur. Faucibus leo leo leo lectus etiam consequat sit adipiscing justo. Sed orci ipsum facilisis euismod pellentesque interdum egest",
+    "Lorem ipsum dolor sit amet consectetur. Faucibus leo leo leo lectus etiam consequat \nsit adipiscing justo. Sed orci ipsum facilisis euismod pellentesque interdum egest",
   stats: [
     {
       amount: "$79,000.00",
