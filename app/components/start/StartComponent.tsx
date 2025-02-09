@@ -26,26 +26,28 @@ export default function StartComponent() {
         <div className="border-b border-black" />
         {/* steps */}
         <div className="p-8">
-          {STRINGS.steps.map(({ title, subtitle, image, cta, isCompleted }) => (
-            <div className="flex justify-between items-center mb-9">
-              <div className="flex justify-start gap-4">
-                <div className="w-[64px] h-[51px] bg-grayLight flex items-center justify-center rounded-md">
-                  <img src={image} />
+          {STRINGS.steps.map(
+            ({ title, subtitle, image, cta, isCompleted }, key) => (
+              <div className="flex justify-between items-center mb-9" key={key}>
+                <div className="flex justify-start gap-4">
+                  <div className="w-[64px] h-[51px] bg-grayLight flex items-center justify-center rounded-md">
+                    <img src={image} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-md">{title}</p>
+                    <p className="text-brand-gray text-sm">{subtitle}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-md">{title}</p>
-                  <p className="text-brand-gray text-sm">{subtitle}</p>
+                <div className="flex justify-center w-1/4">
+                  {isCompleted ? (
+                    <img src={StepCheck} className="w-[48px] h-[48px]" />
+                  ) : (
+                    <BrutalButton>{cta}</BrutalButton>
+                  )}
                 </div>
               </div>
-              <div className="flex justify-center w-1/4">
-                {isCompleted ? (
-                  <img src={StepCheck} className="w-[48px] h-[48px]" />
-                ) : (
-                  <BrutalButton>{cta}</BrutalButton>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
       </div>
       <div className="w-[756px] rounded-xl border border-black bg-white p-8 flex items-center justify-between">
