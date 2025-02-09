@@ -4,8 +4,8 @@ export const Quote = () => {
       <div className="max-w-7xl mx-auto -mt-20 flex flex-col items-center px-4 md:px-[5%] xl:px-0">
         <img src="/logo-purple.svg" className="mx-auto" alt="logo" />
         <h2 className="text-3xl md:text-4xl xl:text-6xl font-bold text-center leading-tight">
-          Únete a EasyBits y da de alta tu primer asset, personaliza los colores
-          de tu sitio y comparte.
+          Vender tu trabajo digital es fácil en EasyBits. Da de alta tu primer
+          asset, personaliza tu sitio y comparte.
         </h2>
         <button className="text-xl mx-auto  mt-12 group ">
           Empieza ya{" "}

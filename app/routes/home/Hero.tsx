@@ -1,3 +1,4 @@
+import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrutalElement } from "~/components/common/BrutalElement";
 import { Button } from "~/components/common/Button";
 
@@ -9,15 +10,17 @@ export const Hero = () => {
           Vende tus assets digitales en línea{" "}
         </h1>
         <p className="text-iron text-xl lg:text-2xl xl:text-3xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
-          Crea una cuenta y consigue tu primer venta, vender tu trabajo digital
-          es fácil en EasyBits.
+          Únete a EasyBits y consigue tu primer venta.
         </p>
-        <Button bgColor="bg-brand-500" size="large">
-          ¡Empezar!
-        </Button>
+        <BrutalButton>Crear mi primer Asset</BrutalButton>
       </div>
       <div className="w-full md:w-[40%] relative">
         <img className="absolute" alt="star" src="/hero/star.svg" />
+        <img
+          className="absolute -left-[800px] w-16"
+          alt="star"
+          src="/hero/waves.svg"
+        />
         <img
           className="absolute -left-[600px] bottom-0"
           alt="star"

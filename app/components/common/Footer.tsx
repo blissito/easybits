@@ -1,8 +1,12 @@
 import { FaFacebook, FaYoutube } from "react-icons/fa";
 import { RiTwitterXFill } from "react-icons/ri";
 import { AiFillInstagram } from "react-icons/ai";
+import { useRef, useState } from "react";
+import { motion } from "motion/react";
 
 export const Footer = () => {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [hover, setHover] = useState(false);
   return (
     <section className="bg-black">
       <div className="border-b-[1px] border-b-white/20 h-10 md:h-20">
@@ -10,14 +14,24 @@ export const Footer = () => {
       </div>
       <div className="border-b-[1px] border-b-white/20 h-20 md:h-40 ">
         <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto">
-          <button className="bg-brand-500 w-full h-full rounded-none transition-all text-3xl md:text-5xl lg:text-[80px] font-medium hover:rounded-full">
+          <motion.button
+            initial={{ borderRadius: "0px" }}
+            whileHover={{ borderRadius: "199px" }}
+            transition={{ type: "tween" }}
+            className="bg-brand-500 w-full h-full   text-3xl md:text-5xl lg:text-[80px] font-medium "
+          >
             Empezar gratis
-          </button>
+          </motion.button>
         </div>
       </div>
       <div className="border-b-[1px] border-b-white/20 h-20 md:h-40 ">
         <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto flex">
-          <button className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full rounded-none transition-all text-2xl font-light hover:rounded-full">
+          <motion.div
+            initial={{ borderRadius: "0px" }}
+            whileHover={{ borderRadius: "199px" }}
+            transition={{ type: "tween" }}
+            className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full  text-2xl font-light "
+          >
             <img src="/demo.svg" className="w-12 md:w-16" alt="demo" />
             <div className="text-left flex flex-col gap-0">
               <p className="mb-0 text-lg md:text-2xl">Agendar demo</p>
@@ -25,8 +39,13 @@ export const Footer = () => {
                 Ver disponibilidad
               </span>
             </div>
-          </button>
-          <button className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full rounded-none transition-all text-2xl font-light hover:rounded-full">
+          </motion.div>
+          <motion.div
+            initial={{ borderRadius: "0px" }}
+            whileHover={{ borderRadius: "199px" }}
+            transition={{ type: "tween" }}
+            className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full text-2xl font-light "
+          >
             <img src="/plans.svg" className="w-12 md:w-16" alt="planes" />
             <div className="text-left flex flex-col gap-0">
               <p className="mb-0 text-lg md:text-2xl">Conocer planes</p>
@@ -34,7 +53,7 @@ export const Footer = () => {
                 Ver disponibilidad
               </span>
             </div>
-          </button>
+          </motion.div>
         </div>
       </div>
       <div className="border-b-[1px] border-b-white/20 h-10 md:h-20">
