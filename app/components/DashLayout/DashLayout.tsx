@@ -20,7 +20,7 @@ interface MenuItemProps {
 }
 
 const MenuItem = ({
-  path,
+  path = "",
   icon,
   iconSize,
   title,
@@ -98,7 +98,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => ({
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
     <main className="flex relative">

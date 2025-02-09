@@ -7,6 +7,7 @@ import BagIcon from "/icons/purchase.svg?url";
 import UsersIcon from "/icons/users.svg?url";
 import UserIcon from "/icons/profile.svg?url";
 import LogoutIcon from "/icons/log-out.svg?url";
+import FilesIcon from "/icons/storage.svg";
 
 export const ITEMS = {
   navItems: [
@@ -18,7 +19,10 @@ export const ITEMS = {
     { icon: UsersIcon, path: "/dash/clientes", title: "Clientes" },
   ],
 
-  sectionItems: [{ icon: BagIcon, path: "/dash/compras", title: "Compras" }],
+  sectionItems: [
+    { icon: FilesIcon, path: "/dash/archivos", title: "Archivos" },
+    { icon: BagIcon, path: "/dash/compras", title: "Compras" },
+  ],
 
   bottomItems: [
     { icon: UserIcon, path: "/", title: "Perfil" },

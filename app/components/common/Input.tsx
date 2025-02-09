@@ -3,7 +3,7 @@ import { FaCheck, FaRegCopy } from "react-icons/fa";
 import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
 
-interface ButtonProps {
+interface InputProps {
   bgColor?: string;
   children?: ReactNode;
   onClick?: () => void;
@@ -14,9 +14,10 @@ interface ButtonProps {
   disabled?: boolean;
   copy?: string;
   value?: string;
+  [x: string]: unknown;
 }
 
-export const Input = ({ label, error, copy, ...props }: ButtonProps) => {
+export const Input = ({ label, error, copy, ...props }: InputProps) => {
   return (
     <label className="grid gap-2 text-white">
       <span>{label}</span>

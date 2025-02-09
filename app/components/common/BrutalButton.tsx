@@ -8,10 +8,13 @@ interface BrutalButtonProps {
   containerClassName?: string;
   isDisabled?: boolean;
   isLoading?: boolean;
+  // icon?: ReactNode;
+  mode?: "ghost" | "brand";
   [x: string]: unknown;
 }
 
 export const BrutalButton = ({
+  mode = "brand",
   children,
   className,
   containerClassName,
@@ -29,7 +32,7 @@ export const BrutalButton = ({
     >
       <span
         className={cn(
-          "min-w-[142px] min-h-12",
+          "min-w-[142px] min-h-12 px-4",
           "grid place-content-center",
           "block", // así podemos usar translate
           "text-lg font-semibold",
@@ -37,6 +40,7 @@ export const BrutalButton = ({
           "transition-all",
           className,
           {
+            "bg-white": mode === "ghost",
             "bg-gray-300 text-gray-400 cursor-not-allowed border-gray-400":
               isDisabled || isLoading,
             "active:translate-x-0 active:translate-y-0":

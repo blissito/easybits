@@ -8,8 +8,12 @@ export const useTimeout = (milisecs: number = 1000) => {
   const placeTimeout = (cb: () => void) => {
     timeout.current = setTimeout(cb, milisecs);
   };
+  const cancelTimeout = () => {
+    timeout.current && clearTimeout(timeout.current);
+  };
   return {
     timeout,
     placeTimeout,
+    cancelTimeout,
   };
 };

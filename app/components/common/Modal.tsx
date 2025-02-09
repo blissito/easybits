@@ -1,20 +1,28 @@
 import { useEffect, type ReactNode } from "react";
-import { FaX } from "react-icons/fa6";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
+import { BrutalButtonClose } from "./BrutalButtonClose";
 
 export const Modal = ({
+  noCloseButton,
   children,
+  mode = "overlay",
   isOpen,
   title,
   onClose,
   className,
+  containerClassName,
+  footer,
 }: {
+  footer?: ReactNode;
+  noCloseButton?: boolean;
+  mode?: "overlay" | "naked";
   className?: string;
+  containerClassName?: string;
   onClose?: () => void;
   isOpen?: boolean;
   children?: ReactNode;
-  title?: string;
+  title?: ReactNode;
 }) => {
   const keyDownHandler = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -36,24 +44,38 @@ export const Modal = ({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && mode === "naked") {
+      document.body.style.overflow = "inherit";
+    }
+  }, [mode]);
+
   return (
     <>
       <AnimatePresence mode="popLayout">
         {isOpen ? (
           <>
             <article
-              onClick={onClose}
               className={cn(
                 "z-20",
-                "fixed min-w-[320px] inset-0 grid place-content-center"
+                "inset-0 grid place-content-center",
+                "fixed",
+                {
+                  "place-content-end p-3": mode === "naked",
+                  "pointer-events-none": mode === "naked",
+                },
+                containerClassName
               )}
             >
-              <motion.article
-                className="grid-overlay absolute inset-0"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              />
+              {mode === "overlay" && (
+                <motion.article
+                  onClick={onClose}
+                  className="grid-overlay absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                />
+              )}
               <motion.section
                 onClick={(e) => e.stopPropagation()}
                 exit={{
@@ -72,23 +94,36 @@ export const Modal = ({
                   opacity: 1,
                 }}
                 className={cn(
+                  "bg-white",
                   "border-2 border-black",
-                  "bg-white px-4 rounded-3xl min-h-[500px] w-[600px] relative",
+                  "px-12 rounded-3xl min-h-[500px] w-[600px] relative",
+                  "flex flex-col",
+                  "max-w-[600px] lg:min-w-[600px]",
+                  {
+                    "min-h-[0px] pb-4 max-w-[300px]": mode === "naked",
+                  },
                   className
                 )}
               >
-                <nav className="flex">
-                  <h2 className="text-4xl font-semibold my-10 ml-auto mr-auto">
-                    {title}
-                  </h2>
-                  <button
+                {!noCloseButton && (
+                  <BrutalButtonClose
+                    className="absolute top-6 right-6"
                     onClick={onClose}
-                    className="mr-8 hover:scale-110 transition-all text-2xl"
-                  >
-                    <FaX />
-                  </button>
-                </nav>
+                  />
+                )}
+                <h2
+                  className={cn("text-4xl font-semibold mb-4 mt-12", {
+                    "my-3": mode === "naked",
+                  })}
+                >
+                  {title}
+                </h2>
                 {children}
+                {footer && (
+                  <section className="mt-auto mb-12 flex gap-6 justify-end">
+                    {footer}
+                  </section>
+                )}
               </motion.section>
             </article>
           </>

@@ -5,7 +5,7 @@ import {
   useMotionTemplate,
   useTransform,
   easeIn,
-} from "framer-motion";
+} from "motion/react";
 import { Children, useEffect, useRef, useState, type ReactNode } from "react";
 import { PiRobotDuotone } from "react-icons/pi";
 import { useMarquee } from "~/hooks/useMarquee";
