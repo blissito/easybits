@@ -1,22 +1,32 @@
 import clsx from "clsx";
 import { STRINGS } from "./StatsComponent.constants";
 import { useMemo } from "react";
-import LineChart from "../common/LineChart";
+import LineChart from "../charts/LineChart";
 
 export default function StatsComponent() {
   const data = {
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
+    // last 12 months from now
+    labels: Array.from({ length: 12 }, (_, i) =>
+      new Date(
+        new Date().setMonth(new Date().getMonth() - 11 + i)
+      ).toLocaleString("en-US", { month: "short" })
+    ),
     datasets: [
       {
         label: null,
-        data: [1000, 2000, 5000, 2000, 5500, 3500, 8000], // Sample data
+        data: [
+          1000, 2000, 5000, 2000, 5500, 3500, 8000, 8500, 3000, 5500, 3500,
+          8000, 8500,
+        ], // Sample data
         borderColor: "#9870ED", // Line color
+        borderWidth: 1,
         pointBorderColor: "#9870ED", // Point border color
         pointBackgroundColor: "#9870ED", // Point border color
         tension: 0.1, // Smooth curve
       },
     ],
   };
+
   //:TODO get these insights and format them
   return (
     <div className="mt-7">
@@ -33,7 +43,7 @@ export default function StatsComponent() {
       <div className="grid grid-cols-12 gap-6 w-full mt-6">
         {STRINGS.stats.map(({ bgColor, title, amount }) => (
           <div className="relative group col-span-3">
-            <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-2 group-hover:translate-y-2 opacity-0 group-hover:opacity-100" />
+            <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-1 group-hover:translate-y-1 opacity-0 group-hover:opacity-100" />
             <div
               className={clsx(
                 `rounded-xl z-10 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white`,
@@ -52,7 +62,7 @@ export default function StatsComponent() {
         <div className="col-span-8 rounded-xl border border-black p-6 bg-white">
           <p className="mb-10">Ventas</p>
           <div className="w-full h-[440px]">
-            <LineChart chartOptions={{}} data={data} />
+            <LineChart data={data} />
           </div>
         </div>
         <div className="col-span-4 rounded-xl border border-black p-6 bg-white">

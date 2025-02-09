@@ -7,7 +7,9 @@ import {
   PointElement,
   Tooltip,
   Legend,
+  Ticks,
 } from "chart.js";
+import { color } from "motion/react";
 
 // Register required Chart.js components
 ChartJS.register(
@@ -19,7 +21,7 @@ ChartJS.register(
   Legend
 );
 
-const LineChart = ({ data, chartOptions }) => {
+const LineChart = ({ data }) => {
   // Chart Options
   const options = {
     responsive: true,
@@ -35,12 +37,21 @@ const LineChart = ({ data, chartOptions }) => {
     scales: {
       x: {
         grid: { display: false }, // Hide grid lines on X-axis
+        border: {
+          display: true,
+          color: "black",
+        },
       },
       y: {
+        grid: {
+          lineWidth: 2,
+        },
         beginAtZero: true,
+        ticks: {
+          callback: (val) => `$${val}`,
+        },
       },
     },
-    ...chartOptions,
   };
 
   return (
