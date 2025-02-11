@@ -51,7 +51,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
                 <Link
                   key={key}
                   to={path}
-                  className="w-28 hover:text-black  hover:bg-white h-full grig place-content-center text-center transition-all "
+                  className="w-28 hover:text-black border-b border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
                 >
                   {title}
                 </Link>
@@ -63,7 +63,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
             <div className="flex h-full items-center">
               <Link
                 to="/login"
-                className="px-8 border-l border-white/30 h-full flex items-center"
+                className="px-8 border-l border-white/30 h-full flex items-center  hover:text-black border-b hover:border-black  hover:bg-white"
               >
                 Iniciar Sesión
               </Link>
