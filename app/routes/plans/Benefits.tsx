@@ -30,22 +30,22 @@ export const Benefits = () => {
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
         <BenefitCard
-          image="/hero/rocket.svg"
+          image="/hero/easy.svg"
           title="Fácil de usar"
           description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
         />
         <BenefitCard
-          image="/hero/rocket.svg"
+          image="/hero/support.svg"
           title="Fácil de usar"
           description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
         />
         <BenefitCard
-          image="/hero/rocket.svg"
+          image="/hero/custom.svg"
           title="Fácil de usar"
           description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
         />
         <BenefitCard
-          image="/hero/rocket.svg"
+          image="/hero/cancel.svg"
           title="Fácil de usar"
           description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
         />

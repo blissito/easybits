@@ -26,8 +26,8 @@ export const AuthNav = ({ user }: { user?: User }) => {
   ];
 
   return (
-    <header className="relative z-50">
-      <nav className="bg-black h-16 md:h-[80px] text-white flex justify-between lg:px-36 px-10 items-center border-b-2 border-grayLight fixed inset-0">
+    <header className=" z-50 bg-black h-12 md:h-[80px] px-4 md:px-[5%] xl:px-0  border-b-[1px] border-white/30 fixed inset-0">
+      <nav className=" max-w-7xl mx-auto h-12 md:h-[80px] text-white flex justify-between items-center ">
         <Link to="/">
           <div className="flex gap-3">
             <img src={Logo} alt="easybits" className="w-[53px]" />
@@ -44,30 +44,39 @@ export const AuthNav = ({ user }: { user?: User }) => {
         >
           <FaBurger />
         </div>
-        <div className="h-full items-center gap-9 content-center hidden md:flex">
+        <div className="h-full items-center content-center hidden md:flex">
           {!user && (
-            <>
+            <div className=" flex justify-center items-center h-full">
               {navItems.map(({ title, path }, key) => (
-                <Link key={key} to={path}>
+                <Link
+                  key={key}
+                  to={path}
+                  className="w-28 hover:text-black  hover:bg-white h-full grig place-content-center text-center transition-all "
+                >
                   {title}
                 </Link>
               ))}
-            </>
+            </div>
           )}
 
           {!user && (
             <div className="flex h-full items-center">
               <Link
                 to="/login"
-                className="px-8 border-l border-grayLight h-full flex items-center"
+                className="px-8 border-l border-white/30 h-full flex items-center"
               >
                 Iniciar Sesión
               </Link>
-              <Link
-                to="/login"
-                className="px-8 h-full bg-brand-500 text-black flex items-center"
-              >
-                Empezar
+              <Link to="/login" className="h-full border-x border-white/30">
+                <motion.button
+                  initial={{ borderRadius: "0px" }}
+                  whileHover={{ borderRadius: "199px" }}
+                  whileTap={{ borderRadius: "199px" }}
+                  transition={{ type: "tween" }}
+                  className="bg-brand-500 w-40 h-full font-medium text-black "
+                >
+                  Empezar
+                </motion.button>
               </Link>
             </div>
           )}

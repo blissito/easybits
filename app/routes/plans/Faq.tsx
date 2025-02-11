@@ -8,7 +8,7 @@ export const Faq = () => {
       <h2 className="text-3xl md:text-5xl font-bold text-center ">
         Preguntas frecuentes
       </h2>
-      <p className="text-iron text-2xl mt-6 text-center">
+      <p className="text-iron text-xl md:text-2xl  mt-6 text-center">
         Si no encuentras la respuesta que buscas,{" "}
         <a className="underline text-brand-500 font-light">escríbenos</a> .
       </p>
