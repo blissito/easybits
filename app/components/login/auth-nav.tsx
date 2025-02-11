@@ -51,7 +51,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
                 <Link
                   key={key}
                   to={path}
-                  className="w-28 hover:text-black border-b border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
+                  className="w-28 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
                 >
                   {title}
                 </Link>
