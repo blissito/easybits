@@ -9,6 +9,7 @@ export default {
         "brand-aqua": "#BAD9D8",
         "brand-yellow": "#ECD66E",
         "brand-red": "#AA4958",
+        "brand-grass": "#96B894",
         brand: {
           500: "#9870ED",
         },

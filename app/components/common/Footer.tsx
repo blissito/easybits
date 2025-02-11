@@ -28,11 +28,11 @@ export const Footer = () => {
       <div className="border-b-[1px] border-b-white/20 h-20 md:h-40 ">
         <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto flex">
           <motion.div
-            initial={{ borderRadius: "0px" }}
-            whileHover={{ borderRadius: "199px" }}
-            whileTap={{ borderRadius: "199px" }}
+            initial={{ borderRadius: "0px", borderColor: "#333333" }}
+            whileHover={{ borderRadius: "199px", borderColor: "white" }}
+            whileTap={{ borderRadius: "199px", borderColor: "white" }}
             transition={{ type: "tween" }}
-            className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full  text-2xl font-light "
+            className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px]  h-full  text-2xl font-light "
           >
             <img src="/demo.svg" className="w-12 md:w-16" alt="demo" />
             <div className="text-left flex flex-col gap-0">
@@ -43,9 +43,9 @@ export const Footer = () => {
             </div>
           </motion.div>
           <motion.div
-            initial={{ borderRadius: "0px" }}
-            whileTap={{ borderRadius: "199px" }}
-            whileHover={{ borderRadius: "199px" }}
+            initial={{ borderRadius: "0px", borderColor: "#333333" }}
+            whileHover={{ borderRadius: "199px", borderColor: "white" }}
+            whileTap={{ borderRadius: "199px", borderColor: "white" }}
             transition={{ type: "tween" }}
             className="flex gap-4 items-center justify-center bg-transparent text-white w-[50%] border-[1px] border-white/20 h-full text-2xl font-light "
           >
