@@ -21,15 +21,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <section className="overflow-hidden w-full">
       <AuthNav user={user} />
       <Hero />
-      <Banners>
+      <Banners rotation={2}>
         <>
-          Pruébalo gratis por 30 días <Robot /> Pruébalo gratis por 30 días{" "}
-          <Robot /> Pruébalo gratis por 30 días <Robot /> Pruébalo gratis por 30
-          días <Robot />
-          Pruébalo gratis por 30 días <Robot /> Pruébalo gratis por 30 días{" "}
-          <Robot /> Pruébalo gratis por 30 días <Robot />
-          Pruébalo gratis por 30 días <Robot /> Pruébalo gratis por 30 días{" "}
-          <Robot /> Pruébalo gratis por 30 días
+          Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
+          Almacena tus archivos <Robot /> Crea una cuenta gratis <Robot /> Vende
+          tu primer asset <Robot /> Almacena tus archivos <Robot /> Crea una
+          cuenta gratis <Robot /> Vende tu primer asset <Robot /> Almacena tus
+          archivos <Robot /> Crea una cuenta gratis <Robot /> Vende tu primer
+          asset <Robot /> Almacena tus archivos <Robot />
         </>
       </Banners>
       <Quote />
@@ -62,7 +61,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           pagos internacionales seguros y rápidos.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y recibe tus pagos directamente en tu cuenta bancaria cada 48 hrs.
+          Además, recibe tus pagos directamente en tu cuenta bancaria cada 48
+          hrs.
         </p>
       </Bento>
       <BasicGallery
@@ -74,12 +74,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             name: "pelusina",
           },
           {
-            src: "/hero-img.png",
+            src: "/client.png",
             text: " consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere Lorem ipsum dolor sit amet inventore illo sunt consequuntur exercitationem,",
             name: "pelusino",
           },
           {
-            src: "/star.png",
+            src: "/client.png",
             text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem.",
             name: "pelusine",
           },

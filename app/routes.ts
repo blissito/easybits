@@ -11,6 +11,8 @@ export default [
   index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
+  route("/planes", "routes/planes.tsx"),
+  route("/blog", "routes/blog.tsx"),
   // public video link @todo revisit private only? tokens?
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // embed share
