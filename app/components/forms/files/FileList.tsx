@@ -1,4 +1,4 @@
-import { AnimatePresence, LayoutGroup, motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
 import { cn } from "~/utils/cn";
@@ -14,7 +14,8 @@ export const FileList = ({
 }) => {
   return (
     <>
-      <section
+      <motion.section
+        drag
         style={{ scrollbarWidth: files.length < 3 ? "none" : "inherit" }}
         className="overflow-hidden overflow-y-scroll grid gap-3 max-h-[240px]"
       >
@@ -28,7 +29,7 @@ export const FileList = ({
             />
           ))}
         </AnimatePresence>
-      </section>
+      </motion.section>
       <AddMoreButton
         className="mt-3"
         index={files.length + 1}

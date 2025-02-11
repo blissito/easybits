@@ -12,7 +12,9 @@ export const Modal = ({
   onClose,
   className,
   containerClassName,
+  footer,
 }: {
+  footer?: ReactNode;
   noCloseButton?: boolean;
   mode?: "overlay" | "naked";
   className?: string;
@@ -117,8 +119,10 @@ export const Modal = ({
                   {title}
                 </h2>
                 {children}
-                {mode === "naked" && (
-                  <p className="text-xs text-brand-gray pt-3">Subiendo...</p>
+                {footer && (
+                  <section className="mt-auto mb-12 flex gap-6 justify-end">
+                    {footer}
+                  </section>
                 )}
               </motion.section>
             </article>

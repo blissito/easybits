@@ -1,7 +1,7 @@
 import clsx from "clsx";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Logo from "/icons/easybits-logo.svg";
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useLocation } from "react-router";
 import TextLogo from "/icons/easybits-logo-text.svg";
 import { AnimatePresence, motion } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
@@ -29,15 +29,14 @@ const MenuItem = ({
   end,
 }: MenuItemProps) => {
   const [isActive, setIsActive] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setIsActive(location.pathname === path);
+  }, [location.pathname, path]);
+
   return (
-    <NavLink
-      end={end}
-      className={({ isActive }) => {
-        setIsActive(isActive);
-        return undefined;
-      }}
-      to={path}
-    >
+    <NavLink end={end} to={path}>
       <li
         className={clsx("w-full flex items-center gap-4 h-[32px] relative", {
           "px-7": !isLogo,
@@ -52,7 +51,6 @@ const MenuItem = ({
             transition={{ type: "spring", stiffness: 100 }}
           />
         )}
-        {/* @todo cómo le damos color? cambiamos imagen? o mejor svg con fill? (ya lo hackieeeee)*/}
         {isLogo ? (
           <img src={icon} className={clsx(`w-[${iconSize || 32}px]`)} />
         ) : (
@@ -64,7 +62,6 @@ const MenuItem = ({
             style={{
               WebkitMaskImage: `url('${icon}')`,
               maskImage: `url('${icon}')`,
-              WebkitClipPath: `url('${icon}')`,
               width: `${iconSize || 32}px`,
               height: `${iconSize || 32}px`,
             }}
