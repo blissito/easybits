@@ -36,7 +36,15 @@ export const BlogContent = () => {
             <Chip category="Clientes" />
             <Chip category="EasyBits" />{" "}
           </div>
-          <div className="bg-black w-full lg:w-96 h-12 lg:h-full"></div>
+          <div className="bg-white w-full lg:w-96 h-12 lg:h-full flex">
+            <input
+              className="w-full h-full border-l-transparent md:border-l-black border-y-[0px]"
+              placeholder="¿Qué quieres saber hoy?"
+            />
+            <button className="w-12 lg:w-[72px] border-none h-full bg-black grid place-content-center">
+              <img alt="lupa" src="/search.svg" />
+            </button>
+          </div>
         </div>
       </div>
       <div className="border-x-[1px] border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
@@ -122,7 +130,7 @@ const Chip = ({ category }: { category: string }) => {
 };
 const Header = () => {
   return (
-    <section className="pt-32 md:pt-[200px] mb-6  lg:mb-20 text-center relative">
+    <section className="pt-32 md:pt-[200px] mb-0  lg:mb-20 text-center relative">
       <img
         className="absolute left-80 md:left-20 lg:left-80 top-28 md:top-32"
         alt="star"
@@ -141,9 +149,8 @@ const Header = () => {
       <div className="max-w-5xl mx-auto  px-4 md:px-[5%] xl:px-0">
         <h2 className="text-4xl lg:text-6xl font-bold">Blog</h2>
         <p className="text-iron text-xl lg:text-2xl mt-6">
-          Somos un equipo de ingenieros y diseñadores apasionados por el
-          software y el trabajo que creamos juntos. Echa un vistazo a todo lo
-          que te queremos compartir.
+          Echa un vistazo a todo lo que nuestro equipo de ingenieros y
+          diseñadores quere compartirte.
         </p>
       </div>
     </section>

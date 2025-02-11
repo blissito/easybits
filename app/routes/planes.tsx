@@ -32,7 +32,7 @@ export default function Planes() {
         ]}
       />
       <Benefits />
-      <Banners bgClass="bg-munsell" rotation={0}>
+      <Banners rotation={0}>
         <>
           Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
           Almacena tus archivos <Robot /> Crea una cuenta gratis <Robot /> Vende
