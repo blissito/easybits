@@ -76,13 +76,14 @@ export const FilesTable = ({
       <article className="bg-white border-2 rounded-xl border-black text-xs">
         <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
           <span className=""></span>
-          <span className="col-span-3">Nombre</span>
+          <span className="col-span-2">Nombre</span>
           <span className="">Tamaño</span>
           <span>Fecha</span>
           {/* <span className="">Fuente</span> */}
           <span>Asset</span>
           <span className="">Tipo</span>
           <span className="col-span-2">Privacidad</span>
+          <span className="col-span-1">HLS</span>
           <span className="">Link</span>
           <span className=""></span>
         </section>
@@ -110,7 +111,7 @@ export const FilesTable = ({
                   className="text-brand-500 focus:outline-brand-500"
                 />
               </span>
-              <span className="truncate font-semibold col-span-3">
+              <span className="truncate font-semibold col-span-2">
                 {file.name}
               </span>
               <span className="text-brand-gray">{toMB(file.size)}</span>
@@ -139,7 +140,7 @@ export const FilesTable = ({
                   }}
                 />
               </span>
-              <span className="col-span-2 flex items-center">
+              <span className="col-span-1 flex items-center">
                 {file.access === "private" ? (
                   <span className="bg-brand-aqua rounded-full py-px px-1 border border-black">
                     Privado
@@ -148,6 +149,24 @@ export const FilesTable = ({
                   <span className="bg-brand-yellow rounded-full py-px px-1 border border-black">
                     Público
                   </span>
+                )}
+              </span>
+              <span className="col-span-2 flex flex-wrap gap-px items-start">
+                {file.contentType.includes("video") && (
+                  <>
+                    <span className="py-px px-2 bg-pink-300 rounded-full border border-black">
+                      360p
+                    </span>
+                    <span className="py-px px-2 bg-zinc-300 rounded-full border border-black">
+                      480p
+                    </span>
+                    <span className="py-px px-2 bg-orange-300 rounded-full border border-black">
+                      720p
+                    </span>
+                    <span className="py-px px-2 bg-blue-300 rounded-full border border-black">
+                      1080p
+                    </span>
+                  </>
                 )}
               </span>
               <span className="relative">
