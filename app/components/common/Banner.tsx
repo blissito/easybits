@@ -11,7 +11,15 @@ import { PiRobotDuotone } from "react-icons/pi";
 import { useMarquee } from "~/hooks/useMarquee";
 import { cn } from "~/utils/cn";
 
-export function Banners({ children }: { children?: ReactNode }) {
+export function Banners({
+  children,
+  rotation,
+  bgClass,
+}: {
+  children?: ReactNode;
+  rotation?: number;
+  bgClass?: string;
+}) {
   const firstChildren = Children.toArray(children)[0];
   const [currentHover, setCurrentHover] = useState(1);
   const x = useMotionValue(0);
@@ -39,9 +47,10 @@ export function Banners({ children }: { children?: ReactNode }) {
       >
         <section>
           <AnimatedBanner
+            bgClass={bgClass}
             onHoverStart={() => setCurrentHover(1)}
             isHovered={currentHover === 1}
-            rotate={2}
+            rotate={rotation}
           >
             {firstChildren}
           </AnimatedBanner>

@@ -21,7 +21,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <section className="overflow-hidden w-full">
       <AuthNav user={user} />
       <Hero />
-      <Banners>
+      <Banners rotation={2}>
         <>
           Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
           Almacena tus archivos <Robot /> Crea una cuenta gratis <Robot /> Vende
