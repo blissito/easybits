@@ -1,15 +1,11 @@
-import { Banners, Robot } from "~/components/common/Banner";
-import { BasicGallery } from "~/components/galleries/BasicGallery";
 import { AuthNav } from "~/components/login/auth-nav";
-import { Pricing } from "./plans/Pricing";
-import { Benefits } from "./plans/Benefits";
-import { Faq } from "./plans/Faq";
 import { Footer } from "~/components/common/Footer";
 import { cn } from "~/utils/cn";
 import {
   MdKeyboardDoubleArrowLeft,
   MdKeyboardDoubleArrowRight,
 } from "react-icons/md";
+import { Link } from "react-router";
 
 export default function Blog() {
   return (
@@ -79,40 +75,42 @@ export const BlogContent = () => {
 
 const BlogCard = ({ className }: { className?: string }) => {
   return (
-    <section
-      className={cn(
-        "border-t-[1px] border-black p-4 md:p-6 flex-wrap md:flex-nowrap flex gap-8",
-        className
-      )}
-    >
-      <img
-        src="https://images.pexels.com/photos/317356/pexels-photo-317356.jpeg?auto=compress&cs=tinysrgb&w=1200"
-        className="w-full md:w-[240px]  object-cover rounded-xl]"
-      />
-      <div className="">
-        <span className="text-brand-gray text-sm">Febrero 2025</span>
-        <h3 className="text-xl font-bold mb-1">
-          Reducing friction with video through Vercel
-        </h3>
-        <p className="text-iron">
-          Lorem ipsum dolor sit amet consectetur. Vitae risus eget faucibus
-          etiam leo augue. Vulputate sed pellentesque at donec. Tincidunt in
-          justo eget porttitor ornare orci venenatis duis amet. Mi est accumsan
-          porta cras justo ut nunc id. Dictum id habitant.
-        </p>
-        <div className="flex text-sm md:text-base mt-2 gap-2 items-center text-brand-gray">
-          <img
-            src="https://images.pexels.com/photos/317356/pexels-photo-317356.jpeg?auto=compress&cs=tinysrgb&w=1200"
-            className="w-8 h-8 rounded-full border-[1px] border-black border-b-2"
-          />
-          <p>Pelusilla Lopez</p>
-          <hr className="bg-brand-gray/50 w-[1px] h-3" />
-          <p>2 min de lectura</p>
-          <hr className="bg-brand-gray/50 w-[1px] h-3" />
-          <p>Ingeniería</p>
+    <Link to="/blogpost">
+      <section
+        className={cn(
+          "border-t-[1px] border-black p-4 md:p-6 flex-wrap md:flex-nowrap hover:bg-grayLight flex gap-8 group transition-all cursor-pointer",
+          className
+        )}
+      >
+        <img
+          src="https://images.pexels.com/photos/317356/pexels-photo-317356.jpeg?auto=compress&cs=tinysrgb&w=1200"
+          className="w-full md:w-[240px]  object-cover rounded-xl]"
+        />
+        <div className="">
+          <span className="text-brand-gray text-sm">Febrero 2025</span>
+          <h3 className="text-xl font-bold mb-1 group-hover:underline ">
+            Reducing friction with video through Vercel
+          </h3>
+          <p className="text-iron">
+            Lorem ipsum dolor sit amet consectetur. Vitae risus eget faucibus
+            etiam leo augue. Vulputate sed pellentesque at donec. Tincidunt in
+            justo eget porttitor ornare orci venenatis duis amet. Mi est
+            accumsan porta cras justo ut nunc id. Dictum id habitant.
+          </p>
+          <div className="flex text-sm md:text-base mt-2 gap-2 items-center text-brand-gray">
+            <img
+              src="https://images.pexels.com/photos/317356/pexels-photo-317356.jpeg?auto=compress&cs=tinysrgb&w=1200"
+              className="w-8 h-8 rounded-full border-[1px] border-black border-b-2"
+            />
+            <p>Pelusilla Lopez</p>
+            <hr className="bg-brand-gray/50 w-[1px] h-3" />
+            <p>2 min de lectura</p>
+            <hr className="bg-brand-gray/50 w-[1px] h-3" />
+            <p>Ingeniería</p>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>{" "}
+    </Link>
   );
 };
 

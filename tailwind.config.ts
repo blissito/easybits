@@ -28,6 +28,7 @@ export default {
       },
       backgroundImage: {
         patternDark: "url('/pattern-dark.svg')",
+        coverSuscription: "url('/hero/cover-yellow.svg')",
       },
       fontFamily: {
         sans: [

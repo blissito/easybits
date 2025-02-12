@@ -10,8 +10,8 @@ const BenefitCard = ({
   description: string;
 }) => {
   return (
-    <BrutalElement>
-      <div className="flex w-full gap-4 col-span-1 rounded-xl border-[2px] bg-white border-black p-4 md:p-6 items-center ">
+    <BrutalElement className="border-2">
+      <div className="flex w-full gap-4 col-span-1   bg-white p-4 md:p-6 items-center ">
         <img className="w-16 h-16" alt="bullet" src={image} />
         <div className="text-left">
           <h3 className="text-lg font-semibold">{title}</h3>
