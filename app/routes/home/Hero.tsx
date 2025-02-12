@@ -34,7 +34,7 @@ export const Hero = () => {
         <div className="absolute -left-10 bottom-40">
           <BrutalElement className="w-32 md:w-48 ">
             <img
-              className="  w-full border border-black "
+              className="  w-full  "
               src="/hero/example2.png"
               alt="avatar"
             />{" "}
