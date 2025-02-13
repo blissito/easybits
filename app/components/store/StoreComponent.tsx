@@ -1,6 +1,9 @@
 import { HeaderIconButton } from "../common/HeaderIconButton";
-import { ListIcon } from "~/components/illustrations/ListIcon";
-import { LupaIcon } from "~/components/illustrations/LupaIcon";
+import GlobeIcon from "/icons/globe.svg";
+import EditIcon from "/icons/edit.svg";
+import OpenIcon from "/icons/open.svg";
+import ShareIcon from "/icons/share.svg";
+
 import {
   FaFacebookF,
   FaLinkedinIn,
@@ -22,16 +25,24 @@ export default function StoreComponent({ assets }) {
         <p className="text-4xl font-semibold">Mi tienda</p>
         <div className="flex gap-3">
           <HeaderIconButton>
-            <LupaIcon />
+            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+              <img className="w-full" src={GlobeIcon} />
+            </div>
           </HeaderIconButton>
           <HeaderIconButton>
-            <ListIcon />
+            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+              <img className="w-full" src={EditIcon} />
+            </div>
           </HeaderIconButton>
           <HeaderIconButton>
-            <LupaIcon />
+            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+              <img className="w-full" src={ShareIcon} />
+            </div>
           </HeaderIconButton>
           <HeaderIconButton>
-            <ListIcon />
+            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+              <img className="w-full" src={OpenIcon} />
+            </div>
           </HeaderIconButton>
         </div>
       </div>
