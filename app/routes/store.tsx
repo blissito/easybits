@@ -1,12 +1,24 @@
-import { GridBackground } from "~/components/common/backgrounds/GridBackground";
+import StoreComponent from "~/components/store/StoreComponent";
+import type { Route } from "../+types/root";
+import { db } from "~/.server/db";
+import { getUserOrRedirect } from "~/.server/getters";
 
-export default function Store() {
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const user = await getUserOrRedirect(request);
+  // get store details
+  const assets = await db.asset.findMany({
+    // where: {
+    //   userId: user.id,
+    // },
+  });
+  return { assets, user };
+};
+
+export default function Store({ loaderData }) {
+  const { assets, user } = loaderData;
   return (
-    <>
-      <article className="py-20 px-10 min-h-screen w-full relative box-border inline-block">
-        <GridBackground />
-        <h1 className="text-3xl relative z-20">Store</h1>
-      </article>
-    </>
+    <div className="relative z-10">
+      <StoreComponent assets={assets} />
+    </div>
   );
 }

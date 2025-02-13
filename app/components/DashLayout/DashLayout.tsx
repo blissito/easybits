@@ -8,6 +8,7 @@ import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "../DashLayout/+types/DashLayout";
+import { GridBackground } from "../common/backgrounds/GridBackground";
 
 interface MenuItemProps {
   path: string;
@@ -167,7 +168,10 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
           transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
           className=""
         >
-          <Outlet />
+          <section className="py-20 px-10 w-full relative h-screen">
+            <GridBackground />
+            <Outlet />
+          </section>
         </motion.div>
       </div>
     </main>
