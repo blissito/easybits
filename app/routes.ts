@@ -35,6 +35,7 @@ export default [
   // v1
   ...prefix("api/v1", [
     route("tokens", "routes/api/v1/tokens.tsx"),
+    route("conversion_webhook", "routes/api/v1/conversion_webhook.tsx"),
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
     route("files", "routes/api/v1/files.tsx"),

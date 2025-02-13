@@ -2,11 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "~/utils/cn";
 import { TbCloudUpload } from "react-icons/tb";
-import { upload, type UploadCompletedData } from "~/.client/multipart/uploader";
 import toast, { Toaster } from "react-hot-toast";
 import { BsCloudCheckFill } from "react-icons/bs";
 import { useSubmit } from "react-router";
-// import { useUploadMultipart } from "~/borrame/useMultipartUpload";
 import { useUploadMultipart } from "react-hook-multipart/react";
 
 const UploadingItem = ({
@@ -18,7 +16,7 @@ const UploadingItem = ({
 }) => {
   const [progress, setProgress] = useState(0);
   const submit = useSubmit();
-  const abortController = new AbortController();
+  const abortController = new AbortController(); // @todo
   const previewURL = "/favicon.ico";
 
   const { upload } = useUploadMultipart({
@@ -26,61 +24,16 @@ const UploadingItem = ({
       setProgress(percentage);
     },
   });
+
   const handleUpload = () => {
     upload(file.name, file).then(({ key }) => {
       console.log("Object Uploaded:", key);
       submit({});
       setTimeout(onUploadComplete, 2000);
     });
-
-    // SINGLE PUT URL: KEEP!
-    // const putURL = await fetch("/get-put-url", { method: "POST" }).then((res) =>
-    //   res.text()
-    // );
-    // console.log("La url: ", putURL);
-    // const upload = await fetch(putURL, { method: "PUT", body: file });
-    // console.log("Uploaded?", upload);
-  };
-  /** DEPRECATED */
-  const __handleUpload = async () => {
-    if (!file.size) return;
-    let blob: UploadCompletedData;
-    try {
-      blob = await upload(file.name, file, {
-        signal: abortController,
-        multipart: true,
-        access: "public-read",
-        handleUploadUrl: "/api/upload",
-        onUploadProgress: (progressEvent) => {
-          setProgress(progressEvent.percentage);
-        },
-      });
-      toast(
-        () => (
-          <p>
-            Tu archivo ya se ha subido y está disponíble.
-            <a
-              className="font-medium text-gray-900 underline"
-              href={blob.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {blob.url}
-            </a>
-          </p>
-        ),
-        { duration: 1000 }
-      );
-    } catch (error: unknown) {
-      toast.error("La subida falló, por favor vuelve a intentar.");
-      console.error(error);
-    }
-    // busy.current = false; EXPERIMENT
-    setTimeout(onUploadComplete, 3000);
-    submit({});
   };
 
-  // @todo we can do better
+  // @todo revisit
   const busy = useRef<boolean>(false);
   useEffect(() => {
     if (busy.current) return;

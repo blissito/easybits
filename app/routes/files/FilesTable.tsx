@@ -4,7 +4,6 @@ import {
   FaChair,
   FaDog,
   FaHammer,
-  FaHamsa,
   FaRegImage,
   FaVideo,
 } from "react-icons/fa";
@@ -15,7 +14,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 import { Copy } from "~/components/common/Copy";
 import { IconRenderer } from "./IconRenderer";
-import { FaBook, FaBookAtlas } from "react-icons/fa6";
+import { FaBook } from "react-icons/fa6";
 import { useState } from "react";
 import { ConfirmModal } from "./ConfirmModal";
 
