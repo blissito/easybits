@@ -11,8 +11,11 @@ import {
 import { FaXTwitter } from "react-icons/fa6";
 import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
+import { useState } from "react";
+import clsx from "clsx";
 
 export default function StoreComponent({ assets }) {
+  const [currentFilter, setCurrentFilter] = useState();
   return (
     <div className="mt-5">
       <div className="flex justify-between mb-12">
@@ -73,9 +76,17 @@ export default function StoreComponent({ assets }) {
         </div>
       </div>
       <div className="flex justify-center gap-3 mb-6">
-        {["Todos", "Nuevos", "Assets", "Libros"].map(() => (
-          <button className="bg-black text-white rounded-full p-3 w-[80px]">
-            lol
+        {["Todos", "Nuevos", "Assets", "Libros"].map((f) => (
+          <button
+            className={clsx(
+              "rounded-full p-3 border border-black cursor-pointer",
+              {
+                "bg-black text-white": f === currentFilter,
+              }
+            )}
+            onClick={() => setCurrentFilter(f)}
+          >
+            {f}
           </button>
         ))}
       </div>
