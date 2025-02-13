@@ -1,12 +1,13 @@
 import type { File } from "@prisma/client";
 import { db } from "~/.server/db";
+import type { Route } from "./+types/conversion_webhook";
 
 const CONVERTION_TOKEN = process.env.CONVERTION_TOKEN;
 
-export const action = async ({ request }: Route) => {
+export const action = async ({ request }: Route.ActionArgs) => {
   const json = await request.json();
   if (json.token !== CONVERTION_TOKEN || request.method !== "POST")
-    throw new Response("Forbidden", { status: 403 });
+    throw new Response("__Forbidden__", { status: 403 });
 
   const storageKey = json.storageKey;
   const sizeName = json.sizeName;
@@ -32,5 +33,7 @@ export const action = async ({ request }: Route) => {
 
   console.log("WEBHOOK_CALLED", data);
 
-  return new Response(null, { status: 200 });
+  return new Response(null, { status: 201 });
 };
+
+export const loader = () => null;
