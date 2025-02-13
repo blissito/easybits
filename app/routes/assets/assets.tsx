@@ -25,7 +25,6 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <article className="min-h-[95vh] overflow-hidden py-20 px-10 w-full relative box-border inline-block">
-        <GridBackground />
         <Header />
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
         <AssetList assets={assets} />

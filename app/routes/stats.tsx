@@ -60,17 +60,12 @@ export default function Stats({ loaderData }) {
   };
 
   return (
-    <>
-      <section className="py-20 px-10 w-full relative h-screen">
-        <GridBackground />
-        <div className="relative z-10 w-full h-full">
-          <StatsComponent
-            user={user}
-            mostSoldProducts={mostSoldProducts}
-            salesData={salesData}
-          />
-        </div>
-      </section>
-    </>
+    <div className="relative z-10 w-full h-full">
+      <StatsComponent
+        user={user}
+        mostSoldProducts={mostSoldProducts}
+        salesData={salesData}
+      />
+    </div>
   );
 }
