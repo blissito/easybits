@@ -9,6 +9,7 @@ export default {
         "brand-aqua": "#BAD9D8",
         "brand-yellow": "#ECD66E",
         "brand-red": "#AA4958",
+        "brand-grass": "#96B894",
         "brand-pink": "#FFAFA3",
         brand: {
           500: "#9870ED",
@@ -27,6 +28,7 @@ export default {
       },
       backgroundImage: {
         patternDark: "url('/pattern-dark.svg')",
+        coverSuscription: "url('/hero/cover-yellow.svg')",
       },
       fontFamily: {
         sans: [
