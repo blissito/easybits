@@ -8,6 +8,7 @@ import { db } from "~/.server/db";
 import { FilesTable } from "./files/FilesTable";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
+import { FileDetailModal } from "~/components/forms/files/FileDetailModal";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -24,6 +25,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { files } = loaderData;
   const [showModal, setShowModal] = useState(false);
+  const [detailFile, setDetailFile] = useState<null | File>(null);
   const open = () => setShowModal(true);
   // tokens
   const [tokenFor, setTokenFor] = useState<File | null>(null);
@@ -43,12 +45,20 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               onTokenClick={openTokensModal}
               onClick={open}
               files={files}
+              onDetail={(file: File) => {
+                setDetailFile(file);
+              }}
             />
           )}
         </section>
       </article>
       <FilesFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
       <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
+      <FileDetailModal
+        onClose={() => setDetailFile(null)}
+        isOpen={!!detailFile}
+        file={detailFile}
+      />
     </>
   );
 }

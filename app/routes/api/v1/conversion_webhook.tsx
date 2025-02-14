@@ -25,13 +25,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
   let data: Partial<File> = { storageKey };
 
   if (eventName === "onEnd") {
-    const masterPlaylistURL = formData.get("masterPlaylistURL") as string;
     const masterPlaylistContent = formData.get(
       "masterPlaylistContent"
     ) as string;
+    // const masterPlaylistURL = formData.get("masterPlaylistURL") as string;
+    record.masterPlaylistContent && record.masterPlaylistContent.length > 0
+      ? (data["masterPlaylistContent"] =
+          record.masterPlaylistContent + masterPlaylistContent)
+      : (data["masterPlaylistContent"] = "#EXTM3U\n" + masterPlaylistContent); // just first time?
+    // #EXTM3U\n
+
     data["versions"] = [...new Set([...record.versions, sizeName])];
-    data["masterPlaylistURL"] = masterPlaylistURL; // @todo
-    data["masterPlaylistContent"] = masterPlaylistContent;
+    data[
+      "masterPlaylistURL"
+    ] = `http://easybits.cloud/api/v1/${record.id}/main.m3u8`; // @todo
   }
 
   if (eventName === "onError") {
@@ -40,12 +47,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   await db.file.update({
     where: { id: record.id },
-    data: {
-      ...data,
-      masterPlaylistContent:
-        (record.masterPlaylistContent || "") +
-        (data.masterPlaylistContent || ""),
-    },
+    data,
   });
 
   console.log("WEBHOOK_CALLED", data);

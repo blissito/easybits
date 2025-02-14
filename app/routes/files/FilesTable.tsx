@@ -18,6 +18,7 @@ import { FaBook } from "react-icons/fa6";
 import { useState } from "react";
 import { ConfirmModal } from "./ConfirmModal";
 import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
+import toast, { Toaster } from "react-hot-toast";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -25,7 +26,9 @@ export const FilesTable = ({
   files,
   onClick,
   onTokenClick,
+  onDetail,
 }: {
+  onDetail?: (arg0: File) => void;
   onTokenClick?: (arg0: File) => void;
   onClick?: () => void;
   files: File[];
@@ -63,6 +66,10 @@ export const FilesTable = ({
 
   const { startVersionFor, versionList } = useStartVersioningFlyMachine();
   const handleHLS = async (file: File) => {
+    toast.success("Procesando versiones para: " + file.slug, {
+      position: "bottom-center",
+      duration: 15000,
+    });
     const missingVersions = versionList.filter(
       (v) => !file.versions.includes(v)
     );
@@ -70,10 +77,16 @@ export const FilesTable = ({
       startVersionFor(mv, file.storageKey)
     );
     await Promise.all(promises);
+    toast("Esto tomará algún tiempo, puedes olvidarte, yo me encargo. 🤖", {
+      position: "bottom-center",
+      icon: "⏲️",
+      duration: 20000,
+    });
   };
 
   return (
     <>
+      <Toaster />
       <ConfirmModal
         fileName={fileToDelete?.name as string}
         isOpen={Boolean(fileToDelete)}
@@ -121,9 +134,14 @@ export const FilesTable = ({
                   className="text-brand-500 focus:outline-brand-500"
                 />
               </span>
-              <span className="truncate font-semibold col-span-2">
+              <button
+                onClick={() => {
+                  onDetail?.(file);
+                }}
+                className="truncate font-semibold col-span-2 text-left"
+              >
                 {file.name}
-              </span>
+              </button>
               <span className="text-brand-gray">{toMB(file.size)}</span>
               <span className=" text-brand-gray">
                 {new Date(file.createdAt).toLocaleDateString("es-MX", {
