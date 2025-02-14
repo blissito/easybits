@@ -17,6 +17,7 @@ import { IconRenderer } from "./IconRenderer";
 import { FaBook } from "react-icons/fa6";
 import { useState } from "react";
 import { ConfirmModal } from "./ConfirmModal";
+import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -60,22 +61,15 @@ export const FilesTable = ({
     );
   };
 
+  const { startVersionFor, versionList } = useStartVersioningFlyMachine();
   const handleHLS = async (file: File) => {
-    const r = await fetch("https://video-converter-hono.fly.dev/start", {
-      method: "post",
-      headers: {
-        "content-type": "application/json",
-        "user-agent": "blissmo/10.11",
-        authorization: "Bearer PerroTOken",
-      },
-      body: JSON.stringify({
-        storageKey: file.storageKey,
-        Bucket: "easybits-dev",
-        sizeName: "360p",
-        webhook: "https://easybits.cloud/api/v1/conversion_webhook",
-      }),
-    });
-    console.log("RESPONSE: ", r.ok, r.statusText);
+    const missingVersions = versionList.filter(
+      (v) => !file.versions.includes(v)
+    );
+    const promises = missingVersions.map((mv) =>
+      startVersionFor(mv, file.storageKey)
+    );
+    await Promise.all(promises);
   };
 
   return (
@@ -204,16 +198,17 @@ export const FilesTable = ({
                     Descargar
                   </button>
                 )}
-                {file.contentType.includes("video") && (
-                  <button
-                    onClick={() => {
-                      handleHLS(file);
-                    }}
-                    className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
-                  >
-                    Generar HLS
-                  </button>
-                )}
+                {file.contentType.includes("video") &&
+                  file.versions.length < 4 && (
+                    <button
+                      onClick={() => {
+                        handleHLS(file);
+                      }}
+                      className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
+                    >
+                      Generar HLS
+                    </button>
+                  )}
                 <button
                   onClick={() => openConfirm(file)}
                   className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"

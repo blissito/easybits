@@ -30,7 +30,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       "masterPlaylistContent"
     ) as string;
     data["versions"] = [...new Set([...record.versions, sizeName])];
-    data["masterPlaylistURL"] = masterPlaylistURL;
+    data["masterPlaylistURL"] = masterPlaylistURL; // @todo
     data["masterPlaylistContent"] = masterPlaylistContent;
   }
 
@@ -40,7 +40,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   await db.file.update({
     where: { id: record.id },
-    data,
+    data: {
+      ...data,
+      masterPlaylistContent:
+        (record.masterPlaylistContent || "") +
+        (data.masterPlaylistContent || ""),
+    },
   });
 
   console.log("WEBHOOK_CALLED", data);
