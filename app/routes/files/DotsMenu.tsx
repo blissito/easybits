@@ -22,6 +22,7 @@ export const DotsMenu = ({ children }: { children?: ReactNode }) => {
       </button>
       {isOpen && (
         <nav
+          onClick={() => setIsOpen(false)}
           className={cn(
             "bg-white",
             "absolute right-[50%] top-[120%] z-10 border-2 border-black rounded-lg"

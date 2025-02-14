@@ -40,7 +40,6 @@ export const FilesTable = ({
   };
 
   const openConfirm = (f: File) => {
-    console.log("OPEN?", f);
     setFileToDelete(f);
   };
 
@@ -59,6 +58,24 @@ export const FilesTable = ({
       },
       { method: "post", action: "/api/v1/files" }
     );
+  };
+
+  const handleHLS = async (file: File) => {
+    const r = await fetch("https://video-converter-hono.fly.dev/start", {
+      method: "post",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "blissmo/10.11",
+        authorization: "Bearer PerroTOken",
+      },
+      body: JSON.stringify({
+        storageKey: file.storageKey,
+        Bucket: "easybits-dev",
+        sizeName: "360p",
+        webhook: "https://easybits.cloud/api/v1/conversion_webhook",
+      }),
+    });
+    console.log("RESPONSE: ", r.ok, r.statusText);
   };
 
   return (
@@ -151,28 +168,24 @@ export const FilesTable = ({
                 )}
               </span>
               <span className="col-span-2 flex flex-wrap gap-px items-start">
-                {file.contentType.includes("video") && (
-                  <>
-                    <span className="py-px px-2 bg-pink-300 rounded-full border border-black">
-                      360p
-                    </span>
-                    <span className="py-px px-2 bg-zinc-300 rounded-full border border-black">
-                      480p
-                    </span>
-                    <span className="py-px px-2 bg-orange-300 rounded-full border border-black">
-                      720p
-                    </span>
-                    <span className="py-px px-2 bg-blue-300 rounded-full border border-black">
-                      1080p
-                    </span>
-                  </>
-                )}
+                {file.contentType.includes("video") &&
+                  file.masterPlaylistContent && (
+                    <>
+                      <HLSVersions versions={file.versions} />
+                      {/* <video
+                        className="aspect-video min-w-[600px]"
+                        controls
+                        // @todo save the real master file
+                        src={`/api/v1/${file.id}/main.m3u8`}
+                      /> */}
+                    </>
+                  )}
               </span>
               <span className="relative">
                 {file.access === "private" ? (
                   <button
                     className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
-                    onClick={() => onTokenClick(file)}
+                    onClick={() => onTokenClick?.(file)}
                   >
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />
                   </button>
@@ -191,6 +204,16 @@ export const FilesTable = ({
                     Descargar
                   </button>
                 )}
+                {file.contentType.includes("video") && (
+                  <button
+                    onClick={() => {
+                      handleHLS(file);
+                    }}
+                    className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
+                  >
+                    Generar HLS
+                  </button>
+                )}
                 <button
                   onClick={() => openConfirm(file)}
                   className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
@@ -202,6 +225,33 @@ export const FilesTable = ({
           ))}
         </AnimatePresence>
       </article>
+    </>
+  );
+};
+
+export const HLSVersions = ({ versions }: { versions: string[] }) => {
+  return (
+    <>
+      {versions.includes("360p") && (
+        <span className="py-px px-2 bg-pink-300 rounded-full border border-black">
+          360p
+        </span>
+      )}
+      {versions.includes("480p") && (
+        <span className="py-px px-2 bg-zinc-300 rounded-full border border-black">
+          480p
+        </span>
+      )}
+      {versions.includes("720p") && (
+        <span className="py-px px-2 bg-orange-300 rounded-full border border-black">
+          720p
+        </span>
+      )}
+      {versions.includes("1080p") && (
+        <span className="py-px px-2 bg-blue-300 rounded-full border border-black">
+          1080p
+        </span>
+      )}
     </>
   );
 };

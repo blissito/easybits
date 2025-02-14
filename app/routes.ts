@@ -35,6 +35,7 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // v1
   ...prefix("api/v1", [
+    route(":fileId/main.m3u8", "routes/api/v1/mainm3u8.tsx"),
     route("tokens", "routes/api/v1/tokens.tsx"),
     route("conversion_webhook", "routes/api/v1/conversion_webhook.tsx"),
     route("user", "routes/api/v1/user.tsx"),
