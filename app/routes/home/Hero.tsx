@@ -1,6 +1,5 @@
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrutalElement } from "~/components/common/BrutalElement";
-import { Button } from "~/components/common/Button";
 
 export const Hero = () => {
   return (
@@ -33,11 +32,7 @@ export const Hero = () => {
         />
         <div className="absolute -left-10 bottom-40">
           <BrutalElement className="w-32 md:w-48 ">
-            <img
-              className="  w-full  "
-              src="/hero/example2.png"
-              alt="avatar"
-            />{" "}
+            <img className="  w-full  " src="/hero/example2.png" alt="avatar" />{" "}
           </BrutalElement>
         </div>
         <div className="absolute right-6 md:-right-10 -top-8">

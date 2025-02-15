@@ -39,7 +39,7 @@ export const BasicGallery = ({
       onMouseEnter={pause}
       onMouseLeave={resume}
       className={cn(
-        "bg-brand-500 min-h-[70vh] relative border-b-[1px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0",
+        "bg-brand-500 min-h-[70vh] relative border-b-[2px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0",
         className
       )}
     >

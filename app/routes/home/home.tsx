@@ -32,7 +32,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </>
       </Banners>
       <Quote />
-      <Bento title="Vende lo que quieras" position="right">
+      <Bento
+        title="Vende lo que quieras"
+        position="right"
+        image="https://i.imgur.com/l4TrWcY.png"
+      >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           Desde cursos en video y libros hasta ilustraciones, fotografías,
           plantillas o lo que sea. ¡Sí, lo que sea!{" "}
@@ -46,7 +50,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           Y más... mucho más.
         </p>
       </Bento>
-      <Bento title="Vende a quien quieras donde quieras">
+      <Bento
+        title="Vende a quien quieras donde quieras"
+        image="https://i.imgur.com/lNETVWf.png"
+      >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           ¿Ya tienes clientes o un sequito de seguidores? Comparte tu tienda y
           permite que tu comunidad, seguidores o clientes compren fácilmente.
@@ -55,7 +62,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           Y además, llega a más personas siendo parte de la comunidad EasyBits.
         </p>
       </Bento>
-      <Bento position="right" title="Recibe tus pagos fácilmente">
+      <Bento
+        position="right"
+        title="Recibe tus pagos fácilmente"
+        image="https://i.imgur.com/1zd9FDp.png"
+      >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           Acepta distintas formas de pago que se adecúen a tu audiencia, incluso
           pagos internacionales seguros y rápidos.
@@ -63,6 +74,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
           Además, recibe tus pagos directamente en tu cuenta bancaria cada 48
           hrs.
+        </p>
+      </Bento>
+      <Bento
+        title="Y además ¡Almacena tus archivos! "
+        image="https://i.imgur.com/WVjIeva.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
+          Usa EasyBits para almacenar todo tipo de archivos y compartirlos con
+          tus amigos o clientes, o incluso, consumirlos desde tu propio sitio
+          web.
+        </p>
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          Y para hacerlo aún más fácil, usa nuestra API para agregar o eliminar
+          archivos desde tu plataforma.
         </p>
       </Bento>
       <BasicGallery
