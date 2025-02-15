@@ -6,7 +6,7 @@ export const Assets = () => {
       <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 md:mb-20">
         Imagina todo lo que puedes vender en Easybits
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-6 md:gap-y-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-6 md:gap-y-12">
         <Card
           img="/hero/book.svg"
           title="Libros"
