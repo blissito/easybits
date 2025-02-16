@@ -12,7 +12,7 @@ export default function Planes() {
       <AuthNav />
       <Pricing />
       <BasicGallery
-        className="bg-brand-grass border-[1px] border-black"
+        className="bg-brand-grass border-[2px] border-black"
         items={[
           {
             src: "/client.png",

@@ -2,7 +2,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const SuscriptionBox = () => {
   return (
-    <section className="max-w-3xl h-fit md:h-64 border-black border rounded-xl bg-coverSuscription bg-cover mx-auto p-4 md:p-8 flex relative">
+    <section className="max-w-3xl h-fit md:h-64 border-black border-[2px] rounded-xl bg-coverSuscription bg-cover mx-auto p-4 md:p-8 flex relative">
       <div className="w-full md:w-[80%]">
         <h3 className="text-2xl md:text-3xl font-bold">
           Suscríbete a nuestro newsletter

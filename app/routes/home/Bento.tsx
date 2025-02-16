@@ -24,7 +24,7 @@ export const Bento = ({
     >
       <section className="w-full md:w-[50%]  h-[384px] md:h-[480px] lg:h-[680px] ">
         <img
-          className="w-full h-full object-cover border-x-[2px] border-black"
+          className="w-full h-full object-cover border-x-[0px] border-b-[2px] md:border-b-[0px] md:border-x-[2px] border-black"
           src={image}
           alt="purchaising example"
         />
