@@ -9,12 +9,13 @@ export const Invite = () => {
             <img className="mx-3 w-20" src="/hero/logo-glasses.svg" />{" "}
           </span>
           <span> Empieza a </span> <span> vender tu</span>
+          <span> trabajo en </span> <span> EasyBits</span>{" "}
+          <span>completamente</span> <span> gratis.</span>{" "}
+          <span> Ahorra más de </span>
+          <span className="inline-block bg-black text-white rounded-xl px-1 md:px-3 mx-1 md:mx-3">
+            $100 USD
+          </span>{" "}
           <span>
-            {" "}
-            trabajo en EasyBits completamente gratis. Ahorra más de{" "}
-            <span className="inline-block bg-black text-white rounded-xl px-1 md:px-3 mx-1 md:mx-3">
-              $100 USD
-            </span>
             mensuales en infraestructura y hazlo todo fácil desde EasyBits.
           </span>
         </h1>
