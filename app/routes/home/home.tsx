@@ -35,7 +35,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <Bento
         title="Vende lo que quieras"
         position="right"
-        image="https://i.imgur.com/l4TrWcY.png"
+        image="https://i.imgur.com/JjN1Q0l.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           Desde cursos en video y libros hasta ilustraciones, fotografías,
@@ -52,7 +52,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </Bento>
       <Bento
         title="Vende a quien quieras donde quieras"
-        image="https://i.imgur.com/lNETVWf.png"
+        image="https://i.imgur.com/R8qvNsB.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           ¿Ya tienes clientes o un sequito de seguidores? Comparte tu tienda y
@@ -65,7 +65,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <Bento
         position="right"
         title="Recibe tus pagos fácilmente"
-        image="https://i.imgur.com/1zd9FDp.png"
+        image="https://i.imgur.com/lEOVfUp.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           Acepta distintas formas de pago que se adecúen a tu audiencia, incluso
@@ -78,7 +78,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </Bento>
       <Bento
         title="Y además ¡Almacena tus archivos! "
-        image="https://i.imgur.com/WVjIeva.png"
+        image="https://i.imgur.com/hn9dN49.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
           Usa EasyBits para almacenar todo tipo de archivos y compartirlos con
