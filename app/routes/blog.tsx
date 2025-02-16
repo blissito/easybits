@@ -21,10 +21,10 @@ export default function Blog() {
 export const BlogContent = () => {
   return (
     <section className="">
-      <div className="border-x-[1px] border-black  h-12 max-w-7xl mx-4 md:mx-[5%] xl:mx-auto "></div>
-      <div className="border-y-[1px] border-black w-full h-fit lg:h-[72px] px-4 md:px-[5%] xl:px-0 ">
-        <div className="border-x-[1px]  border-black w-full  h-full max-w-7xl flex-wrap lg:flex-nowrap  mx-auto flex justify-between gap-0 lg:gap-4 items-center pl-0 lg:pl-4">
-          <div className="flex h-12 md:h-full items-center w-full lg:w-fit overflow-y-scroll border-b-[1px] border-black lg:border-none">
+      <div className="border-x-[2px] border-black  h-12 max-w-7xl mx-4 md:mx-[5%] xl:mx-auto "></div>
+      <div className="border-y-[2px] border-black w-full h-fit lg:h-[72px] px-4 md:px-[5%] xl:px-0 ">
+        <div className="border-x-[2px]  border-black w-full  h-full max-w-7xl flex-wrap lg:flex-nowrap  mx-auto flex justify-between gap-0 lg:gap-4 items-center pl-0 lg:pl-4">
+          <div className="flex h-12 md:h-full items-center w-full lg:w-fit overflow-x-scroll md:overflow-hidden border-b-[2px] border-black lg:border-none">
             <Chip category="Todos" />
             <Chip category="Noticias" />
             <Chip category="Educación" />
@@ -34,7 +34,7 @@ export const BlogContent = () => {
           </div>
           <div className="bg-white w-full lg:w-96 h-12 lg:h-full flex">
             <input
-              className="w-full h-full border-l-transparent md:border-l-black border-y-[0px]"
+              className="w-full h-full md:border-[2px] border-none md:border-l-black border-r-[0px] border-y-[0px]"
               placeholder="¿Qué quieres saber hoy?"
             />
             <button className="w-12 lg:w-[72px] border-none h-full bg-black grid place-content-center">
@@ -43,7 +43,7 @@ export const BlogContent = () => {
           </div>
         </div>
       </div>
-      <div className="border-x-[1px] border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
+      <div className="border-x-[2px] border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
         <BlogCard />
         <BlogCard />
         <BlogCard />
@@ -53,21 +53,21 @@ export const BlogContent = () => {
         <BlogCard />
         <BlogCard />
       </div>
-      <div className="border-y-[1px] border-black w-full h-10 px-4 md:px-[5%] xl:px-0">
-        <div className="border-x-[1px] border-black  h-full max-w-7xl mx-auto flex justify-end  items-center pl-4">
-          <div className="px-3 border-l-[1px] h-full grid place-content-center border-black">
+      <div className="border-y-[2px] border-black w-full h-10 px-4 md:px-[5%] xl:px-0">
+        <div className="border-x-[2px] border-black  h-full max-w-7xl mx-auto flex justify-end  items-center pl-4">
+          <div className="px-3 border-l-[2px] h-full grid place-content-center border-black">
             <p>1 de 20 </p>
           </div>
           <div className="w-10 hover:bg-black/80 cursor-pointer bg-black text-2xl text-white h-full grid place-content-center">
             <MdKeyboardDoubleArrowLeft />
           </div>
-          <div className="w-10 hover:bg-black/80 cursor-pointer bg-black text-2xl text-white h-full grid place-content-center border-l-[1px] border-white/20">
+          <div className="w-10 hover:bg-black/80 cursor-pointer bg-black text-2xl text-white h-full grid place-content-center border-l-[2px] border-white/20">
             <MdKeyboardDoubleArrowRight />
           </div>
         </div>
       </div>
       <div className=" w-full h-12 lg:h-20 px-4 md:px-[5%] xl:px-0">
-        <div className="border-x-[1px] border-black   h-full max-w-7xl mx-auto flex justify-between gap-4 items-center pl-4"></div>
+        <div className="border-x-[2px] border-black   h-full max-w-7xl mx-auto flex justify-between gap-4 items-center pl-4"></div>
       </div>
     </section>
   );
@@ -78,7 +78,7 @@ const BlogCard = ({ className }: { className?: string }) => {
     <Link to="/blogpost">
       <section
         className={cn(
-          "border-t-[1px] border-black p-4 md:p-6 flex-wrap md:flex-nowrap hover:bg-grayLight flex gap-8 group transition-all cursor-pointer",
+          "border-t-[2px] border-black p-4 md:p-6 flex-wrap md:flex-nowrap hover:bg-grayLight flex gap-8 group transition-all cursor-pointer",
           className
         )}
       >
@@ -100,7 +100,7 @@ const BlogCard = ({ className }: { className?: string }) => {
           <div className="flex text-sm md:text-base mt-2 gap-2 items-center text-brand-gray">
             <img
               src="https://images.pexels.com/photos/317356/pexels-photo-317356.jpeg?auto=compress&cs=tinysrgb&w=1200"
-              className="w-8 h-8 rounded-full border-[1px] border-black border-b-2"
+              className="w-8 h-8 rounded-full border-[2px] border-black border-b-2"
             />
             <p>Pelusilla Lopez</p>
             <hr className="bg-brand-gray/50 w-[1px] h-3" />

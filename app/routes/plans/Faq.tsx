@@ -12,7 +12,15 @@ export const Faq = () => {
         Si no encuentras la respuesta que buscas,{" "}
         <a className="underline text-brand-500 font-light">escríbenos</a> .
       </p>
-      <div className="mt-16 flex flex-col gap-6">
+      <div className="mt-16 flex flex-col border-[2px] border-black rounded-xl overflow-hidden">
+        <Question
+          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+        />
+        <Question
+          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+        />
         <Question
           question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
@@ -52,7 +60,7 @@ export const Question = ({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-black   border-[1px] rounded-2xl overflow-hidden">
+    <div className="border-black   border-b-[2px] overflow-hidden">
       <button
         className="w-full px-6 py-6 text-lg md:text-xl font-medium text-left flex justify-between items-center"
         onClick={() => {
