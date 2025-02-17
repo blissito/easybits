@@ -8,7 +8,7 @@ export type GetBasicMetaTagsPros = {
 export default function getBasicMetaTags({
   title,
   description = "Vende tus assets digitales en línea con EasyBits", // description should be at least 100 chars
-  image = "https://i.imgur.com/sOBvLIn.png",
+  image = "https://i.imgur.com/dnVOAkI.png",
   twitterCard = "summary",
 }: GetBasicMetaTagsPros) {
   if (!title) {
