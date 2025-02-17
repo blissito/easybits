@@ -14,35 +14,35 @@ export const Faq = () => {
       </p>
       <div className="mt-16 flex flex-col border-[2px] border-black rounded-xl overflow-hidden">
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Qué es un asset digital?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Cómo funciona EasyBits?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Cómo creo una cuenta?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Cómo se agrega un asset?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Cómo puedo empezar a vender mis assets?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Qué pasa si uso todo el almacenamiento incluido en el plan?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Puedo quedarme en el Plan Free para siempre?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
         <Question
-          question="¿Cúal es la diferencia entre el Plan FREE y PRO?"
+          question="¿Qué formas de pago aceptan?"
           answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
         />
       </div>

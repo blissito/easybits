@@ -69,9 +69,13 @@ export const Assets = () => {
           className="bg-[#FADB6F]"
           tags={["Poemas", "Cuentos cortos", "Comics"]}
         />
-        {/* <Card title="Modelado 3d" description="Súmate al mercado " className="bg-[#FADB6F]" />
-        <Card title="Trailers y Películas" className="bg-[#FADB6F]" />
-        <Card title="Guías" className="bg-[#FADB6F]" /> */}
+        {/* <Card
+          title="Hojas de cálculo"
+          description="Súmate al mercado "
+          className="bg-[#D2A350]"
+        />
+        <Card title="Plantillas de presentaciones" className="bg-brand-grass" />
+        <Card title="Modelado 3d" className="bg-[#E1866C]" /> */}
       </div>
     </section>
   );
