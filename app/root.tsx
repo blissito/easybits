@@ -9,6 +9,8 @@ import {
 
 import type { Route } from "./+types/root";
 import stylesheet from "./app.css?url";
+import useGoogleTM from "./utils/useGoogleTM";
+import useHotjar from "./utils/useHotjar";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -25,6 +27,8 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  useGoogleTM();
+  useHotjar();
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

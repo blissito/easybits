@@ -42,7 +42,7 @@ export default function getBasicMetaTags({
     },
     {
       property: "og:url",
-      content: "formy.app",
+      content: "www.easybits.cloud",
     },
     {
       name: "twitter:card",
