@@ -9,11 +9,18 @@ import { ItemList } from "./ItemList";
 import { Invite } from "./Invite";
 import { Assets } from "./Assets";
 import type { Route } from "./+types/home";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
 
 export const clientLoader = async () => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
   return { user };
 };
+
+export const meta = () =>
+  getBasicMetaTags({
+    title: "EasyBits",
+    description: "Vende tus assets digitales en línea con EasyBits",
+  });
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
@@ -59,7 +66,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           permite que tu comunidad, seguidores o clientes compren fácilmente.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y además, llega a más personas siendo parte de la comunidad EasyBits.
+          Y eso no es todo, llega a más personas siendo parte de la comunidad
+          EasyBits.
         </p>
       </Bento>
       <Bento
@@ -72,8 +80,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           pagos internacionales seguros y rápidos.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Además, recibe tus pagos directamente en tu cuenta bancaria cada 48
-          hrs.
+          Sin letras chiquitas ni comisiones abusivas, recibe tus pagos
+          directamente en tu cuenta bancaria cada 48 hrs.
         </p>
       </Bento>
       <Bento
