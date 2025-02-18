@@ -1,8 +1,14 @@
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { cn } from "~/utils/cn";
 
-export const SuscriptionBox = () => {
+export const SuscriptionBox = ({ className }: { className?: string }) => {
   return (
-    <section className="max-w-3xl h-fit md:h-64 border-black border-[2px] rounded-xl bg-coverSuscription bg-cover mx-auto p-4 md:p-8 flex relative">
+    <section
+      className={cn(
+        "max-w-3xl h-fit md:h-64 border-black border-[2px] rounded-xl bg-coverSuscription bg-cover mx-auto p-4 md:p-8 flex relative",
+        className
+      )}
+    >
       <div className="w-full md:w-[80%]">
         <h3 className="text-2xl md:text-3xl font-bold">
           Suscríbete a nuestro newsletter

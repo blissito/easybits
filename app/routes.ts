@@ -12,6 +12,7 @@ export default [
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
   route("/planes", "routes/planes.tsx"),
+  route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/blog", "routes/blog.tsx"),
   route("/blogPost", "routes/blogPost.tsx"),
   // public video link @todo revisit private only? tokens?
