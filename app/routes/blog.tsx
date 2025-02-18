@@ -146,7 +146,7 @@ const Header = () => {
       />
       <div className="max-w-5xl mx-auto  px-4 md:px-[5%] xl:px-0">
         <h2 className="text-4xl lg:text-6xl font-bold">Blog</h2>
-        <p className="text-iron text-xl lg:text-2xl mt-6">
+        <p className="text-iron text-xl lg:text-2xl mt-4 md:mt-6">
           Echa un vistazo a todo lo que nuestro equipo de ingenieros y
           diseñadores quere compartirte.
         </p>
