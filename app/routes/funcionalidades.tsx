@@ -3,12 +3,20 @@ import { Footer } from "~/components/common/Footer";
 import type { ReactNode } from "react";
 import { IoClose } from "react-icons/io5";
 import { SuscriptionBox } from "./blog/SuscriptionBox";
-import { TbPigMoney, TbShoppingBag } from "react-icons/tb";
+import { TbPigMoney, TbShoppingBag, TbWorldWww } from "react-icons/tb";
 import { Banners, Robot } from "~/components/common/Banner";
 import { PiPaintBrushBroad } from "react-icons/pi";
-import { BiCommentDetail, BiHappy } from "react-icons/bi";
+import { BiCommentDetail, BiHappy, BiSupport } from "react-icons/bi";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { FaUsers } from "react-icons/fa";
+import {
+  MdOutlineStorage,
+  MdStorefront,
+  MdVideogameAsset,
+} from "react-icons/md";
+import { CgWebsite } from "react-icons/cg";
+import { RiDiscountPercentLine } from "react-icons/ri";
+import { AiOutlineApi } from "react-icons/ai";
 
 export default function Blog() {
   return (
@@ -52,75 +60,63 @@ const FeaturesList = () => {
       <div className="col-span-1 lg:col-span-5">
         <div className="border-x-[2px] border-black h-6 sticky top-0"></div>
         <Card
+          icon={<MdVideogameAsset />}
           title="Venta de assets digitales de todo tipo"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description=" ¿Eres un creativo o profesional que tiene algo que compartir? No importa si eres diseñador, arquitecto, escritor o artista. Vende cualquier tipo de assets digitales, desde libros electrónicos, videos, audio y música, o cualquier otro archivo como PSD o AI. "
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<PiPaintBrushBroad />}
           title="Personalización de landing pages"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, correos o whats app. "
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<CgWebsite />}
           title="Tu propio website de ventas"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="Añade tu logotipo, foto de portada, cambia los colores y tipografías, seleciiona el tema dark o light y agrega tus redes sociales. Con un par de clics ten listo tu website completamente optimizado para para dispositivos móviles."
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
-          title="Creación de descuentos"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          icon={<RiDiscountPercentLine />}
+          title="Administración de descuentos"
+          description="Crea descuentos para ocasiones especiales, para todos tus productos o para productos específicos y administralos de forma fácil y sencilla desde tu dashboard. Utiliza los descuentos para interactuar con tus clientes y aumentar tus ventas."
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<TbWorldWww />}
           title="Configuración de dominio"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="Además del subdominio gratuito que EasyBits te ofrece, puedes agregar tu propio dominio para fortalecer tu marca."
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<MdOutlineStorage />}
           title="Almacenamiento de archivos"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, definirlos como públicos o privados, consumirlos desde otra plataforma  e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
         />{" "}
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<AiOutlineApi />}
+          title="API para archivos"
+          description="Conecta EasyBits a tu proyecto de desarrollo y usa la API para agregar, editar o eliminar archivos de forma fácil, además de administrar la privacidad de cada uno (públicos o privados). EasyBits será tu mejor hosting de archivos."
+        />{" "}
+        <div className="border-x-[2px] border-black h-6"></div>
+        <Card
+          icon={<BiSupport />}
           title="Soporte en español"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="¿Dudas o preguntas? Nuestro equipo estará listo para ayudarte a través de nuestras redes sociales o contacto directo."
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<FaUsers />}
           title="Acceso completo a la información de tus clientes"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="¿Quieres descarga los mails de tus cleintes para enviar un mail o crear una campaña de ADS? Descargalos cuando quieras. ¡tus clientes! ¡tu información!"
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
+          icon={<MdStorefront />}
           title="Acceso a la comunidad EasyBits para aumentar tus ventas"
-          description="  Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt ut
-      perspiciatis, sapiente fugiat dignissimos ullam voluptatibus nostrum
-      molestiae, sint debitis reprehenderit commodi illum corporis temporibus
-      eligendi! Excepturi quam culpa dignissimos."
+          description="Aumenta tus ventas siendo parte de la comunidad EasyBits en donde miles de usuarios exploran y compran assets digitales. La comunidad es un escaparte más para tus assets sin ningún costo o comisión adicional."
         />
         <div className="border-x-[2px] border-black h-6"></div>
       </div>
@@ -131,13 +127,18 @@ const FeaturesList = () => {
 const Card = ({
   title,
   description,
+  icon,
 }: {
   title: string;
   description: string;
+  icon: ReactNode;
 }) => {
   return (
     <div className="border-[2px] border-black p-6 md:p-10">
-      <h3 className="text-3xl font-bold">{title}</h3>
+      <div className="flex gap-3 items-center">
+        <span className="text-4xl">{icon}</span>
+        <h3 className="text-3xl font-bold">{title}</h3>
+      </div>
       <p className="mt-12">{description}</p>
     </div>
   );
