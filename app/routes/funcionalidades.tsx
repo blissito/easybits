@@ -147,38 +147,38 @@ const FeaturesHeader = () => {
   return (
     <section className="pt-32 md:pt-[200px] mb-20  md:mb-40 text-center relative px-4 md:px-[5%] xl:px-0">
       <img
-        className="absolute left-10 md:left-80 top-28 md:top-32"
+        className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
         alt="star"
         src="/hero/star.svg"
       />
       <img
-        className="absolute right-40 -bottom-20"
+        className="absolute w-8 md:w-auto right-40 -bottom-20"
         alt="star"
         src="/hero/star.svg"
       />
       <img
-        className="absolute right-20 top-16 md:top-40 md:right-80 w-16"
-        alt="star"
+        className="absolute right-20 top-16 md:top-40 md:right-80 w-10 md:w-16"
+        alt="waves"
         src="/hero/waves.svg"
       />
       <img
         className="absolute w-8 left-[480px] top-80"
-        alt="star"
+        alt="asterisk"
         src="/hero/asterisk.svg"
       />
       <img
         className="absolute w-12 right-12 top-96"
-        alt="star"
+        alt="diamonds"
         src="/hero/diamonds.svg"
       />
       <img
         className="absolute w-32 -left-16 bottom-0"
-        alt="star"
+        alt="espiral"
         src="/hero/espiral.svg"
       />
       <img
         className="absolute w-10 left-72 -bottom-52 hidden md:block"
-        alt="star"
+        alt="circles"
         src="/hero/circles.svg"
       />
 
