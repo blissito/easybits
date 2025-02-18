@@ -13,7 +13,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
   const navItems = [
     {
       title: "Features",
-      path: "/features",
+      path: "/funcionalidades",
     },
     {
       title: "Planes",
