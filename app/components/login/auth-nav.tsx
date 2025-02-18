@@ -102,7 +102,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
                 transition={{ type: "tween" }}
                 className="bg-brand-500 w-40 h-full font-medium text-black "
               >
-                Dashboard
+                Ir al Dashboard
               </motion.button>
             </div>
           )}
@@ -116,23 +116,49 @@ export const AuthNav = ({ user }: { user?: User }) => {
         }}
         className="bg-black pb-8 inset-0 w-full h-fit absolute border-b-[1px] border-b-white/20"
       >
-        <div className="text-center mt-16 px-6 ">
-          <ul className="bg-black p-4 flex-col">
+        <div className="text-center mt-16 px-6 flex flex-col ">
+          <ul className="bg-black flex flex-col">
             {navItems.map(({ title, path }, key) => (
               <Link to={path} key={key}>
-                <li className="h-fit py-6  text-xl text-white">{title}</li>
+                <li className="h-16 gird place-content-center  text-xl text-white">
+                  {title}
+                </li>
               </Link>
             ))}
-            <Link to="/" key="comunidad">
-              <li className="h-fit py-6 text-white text-xl">Comunidad</li>
-            </Link>
-            <Link to="/login" key="account">
-              <li className="h-fit py-6 text-white text-xl">Iniciar sesión</li>
-            </Link>
-          </ul>
-          <BrutalButton className="mx-auto" link="/contacto">
-            Empezar
-          </BrutalButton>
+          </ul>{" "}
+          <Link to="/" key="comunidad">
+            <p className="h-16 gird place-content-center text-white text-xl">
+              Comunidad
+            </p>
+          </Link>
+          {!user && (
+            <>
+              <Link to="/login" key="account">
+                <p className="h-16 gird place-content-center text-white text-xl w-full ">
+                  Iniciar sesión
+                </p>
+              </Link>
+              <Link to="/login">
+                <BrutalButton className="mx-auto" link="/contacto">
+                  Empezar
+                </BrutalButton>{" "}
+              </Link>
+            </>
+          )}
+          {user && (
+            <>
+              <Link to="/assets" key="account">
+                <p className="h-16 gird place-content-center text-white mb-6 text-xl ">
+                  Agregar nuevo asset
+                </p>
+              </Link>
+              <Link to="/dash">
+                <BrutalButton className="mx-auto" link="/contacto">
+                  Ir al Dashboard
+                </BrutalButton>{" "}
+              </Link>
+            </>
+          )}
         </div>
       </motion.div>
     </header>
