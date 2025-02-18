@@ -5,11 +5,18 @@ import { Pricing } from "./plans/Pricing";
 import { Benefits } from "./plans/Benefits";
 import { Faq } from "./plans/Faq";
 import { Footer } from "~/components/common/Footer";
+import type { Route } from "./+types/planes";
 
-export default function Planes() {
+export const clientLoader = async () => {
+  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+  return { user };
+};
+
+export default function Planes({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
   return (
     <section className="overflow-hidden">
-      <AuthNav />
+      <AuthNav user={user} />
       <Pricing />
       <BasicGallery
         className="bg-brand-grass border-[2px] border-black"

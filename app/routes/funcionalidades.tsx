@@ -17,11 +17,18 @@ import {
 import { CgWebsite } from "react-icons/cg";
 import { RiDiscountPercentLine } from "react-icons/ri";
 import { AiOutlineApi } from "react-icons/ai";
+import type { Route } from "./+types/funcionalidades";
 
-export default function Blog() {
+export const clientLoader = async () => {
+  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+  return { user };
+};
+
+export default function Blog({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
   return (
     <section>
-      <AuthNav />
+      <AuthNav user={user} />
       <div className="overflow-hidden">
         <FeaturesHeader />
         <Banners rotation={0}>

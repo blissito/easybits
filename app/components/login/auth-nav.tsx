@@ -10,7 +10,6 @@ import { BrutalButton } from "../common/BrutalButton";
 
 export const AuthNav = ({ user }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { width } = useWindowSize();
   const navItems = [
     {
       title: "Features",
@@ -55,19 +54,17 @@ export const AuthNav = ({ user }: { user?: User }) => {
           </div>
         </Link>
         <div className="h-full items-center content-center hidden md:flex">
-          {!user && (
-            <div className=" flex justify-center items-center h-full">
-              {navItems.map(({ title, path }, key) => (
-                <Link
-                  key={key}
-                  to={path}
-                  className="w-28 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
-                >
-                  {title}
-                </Link>
-              ))}
-            </div>
-          )}
+          <div className=" flex justify-center items-center h-full">
+            {navItems.map(({ title, path }, key) => (
+              <Link
+                key={key}
+                to={path}
+                className="w-28 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
+              >
+                {title}
+              </Link>
+            ))}
+          </div>
 
           {!user && (
             <div className="flex h-full items-center">
@@ -94,16 +91,19 @@ export const AuthNav = ({ user }: { user?: User }) => {
             <div className="flex h-full items-center">
               <Link
                 to="/dash"
-                className="px-8 border-l border-grayLight h-full flex items-center"
+                className="px-8 border-x border-white/30 h-full flex items-center  hover:text-black border-b hover:border-black  hover:bg-white"
               >
-                Panel de control
+                Agregar asset
               </Link>
-              <Link
-                to="/dominio-personalizado"
-                className="px-8 border-l border-grayLight h-full flex items-center"
+              <motion.button
+                initial={{ borderRadius: "0px" }}
+                whileHover={{ borderRadius: "199px" }}
+                whileTap={{ borderRadius: "199px" }}
+                transition={{ type: "tween" }}
+                className="bg-brand-500 w-40 h-full font-medium text-black "
               >
-                Configura tu marca
-              </Link>
+                Dashboard
+              </motion.button>
             </div>
           )}
         </div>
@@ -114,20 +114,20 @@ export const AuthNav = ({ user }: { user?: User }) => {
         style={{
           y: "-100%",
         }}
-        className="bg-black pb-6 inset-0 w-full h-fit absolute border-b-[1px] border-b-white/20"
+        className="bg-black pb-8 inset-0 w-full h-fit absolute border-b-[1px] border-b-white/20"
       >
-        <div className="text-center mt-20 px-6 ">
+        <div className="text-center mt-16 px-6 ">
           <ul className="bg-black p-4 flex-col">
             {navItems.map(({ title, path }, key) => (
               <Link to={path} key={key}>
-                <li className="h-[80px] text-xl text-white">{title}</li>
+                <li className="h-fit py-6  text-xl text-white">{title}</li>
               </Link>
             ))}
             <Link to="/" key="comunidad">
-              <li className="h-[80px] text-white text-xl">Comunidad</li>
+              <li className="h-fit py-6 text-white text-xl">Comunidad</li>
             </Link>
             <Link to="/login" key="account">
-              <li className="h-[80px] text-white text-xl">Iniciar sesión</li>
+              <li className="h-fit py-6 text-white text-xl">Iniciar sesión</li>
             </Link>
           </ul>
           <BrutalButton className="mx-auto" link="/contacto">
