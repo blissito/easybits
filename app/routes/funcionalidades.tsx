@@ -183,7 +183,7 @@ const FeaturesHeader = () => {
       />
 
       <h2 className="text-4xl lg:text-6xl font-bold">Funcionalidades</h2>
-      <p className="text-iron text-xl md:text-2xl mt-6">
+      <p className="text-iron text-xl md:text-2xl mt-4 md:mt-6">
         Comienza a vender tus productos en minutos
       </p>
       <article className="flex flex-wrap lg:flex-nowrap justify-center mt-12 md:mt-20 gap-12 lg:gap-0">

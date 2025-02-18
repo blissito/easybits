@@ -20,7 +20,7 @@ export const Pricing = () => {
       />
 
       <h2 className="text-4xl lg:text-6xl font-bold">Elige tu plan</h2>
-      <p className="text-iron text-xl md:text-2xl mt-6">
+      <p className="text-iron text-xl md:text-2xl mt-4 md:mt-6">
         Explora entre más de 10,000 assets digitales
       </p>
       <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 md:mt-20 flex flex-wrap gap-12 justify-center">
