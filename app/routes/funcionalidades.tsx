@@ -62,7 +62,19 @@ const FeaturesList = () => {
         <Card
           icon={<MdVideogameAsset />}
           title="Venta de assets digitales de todo tipo"
-          description=" ¿Eres un creativo o profesional que tiene algo que compartir? No importa si eres diseñador, arquitecto, escritor o artista. Vende cualquier tipo de assets digitales, desde libros electrónicos, videos, audio y música, o cualquier otro archivo como PSD o AI. "
+          description={
+            <p>
+              {" "}
+              ¿Eres un creativo o profesional que tiene algo que compartir? No
+              importa si eres diseñador, arquitecto, escritor o artista. Vende
+              cualquier tipo de assets digitales, desde{" "}
+              <span className="text-brand-500  font-bold">
+                {" "}
+                libros electrónicos, videos, audio y música, o cualquier otro
+                archivo como PSD o AI.
+              </span>
+            </p>
+          }
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
@@ -74,31 +86,71 @@ const FeaturesList = () => {
         <Card
           icon={<CgWebsite />}
           title="Tu propio website de ventas"
-          description="Añade tu logotipo, foto de portada, cambia los colores y tipografías, seleciiona el tema dark o light y agrega tus redes sociales. Con un par de clics ten listo tu website completamente optimizado para para dispositivos móviles."
+          description={
+            <p>
+              <span className="text-brand-500  font-bold">
+                Añade tu logotipo, foto de portada, cambia los colores y
+                tipografías,
+              </span>{" "}
+              selecciona el tema dark o light y agrega tus redes sociales. Con
+              un par de clics ten listo tu website completamente optimizado para
+              para dispositivos móviles.
+            </p>
+          }
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
           icon={<RiDiscountPercentLine />}
           title="Administración de descuentos"
-          description="Crea descuentos para ocasiones especiales, para todos tus productos o para productos específicos y administralos de forma fácil y sencilla desde tu dashboard. Utiliza los descuentos para interactuar con tus clientes y aumentar tus ventas."
+          description={
+            <p>
+              Crea{" "}
+              <span className="text-brand-500  font-bold">
+                descuentos para ocasiones especiales, para todos tus productos o
+                para productos específicos{" "}
+              </span>{" "}
+              y administralos de forma fácil y sencilla desde tu dashboard.
+              Utiliza los descuentos para interactuar con tus clientes y
+              aumentar tus ventas.
+            </p>
+          }
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
           icon={<TbWorldWww />}
           title="Configuración de dominio"
-          description="Además del subdominio gratuito que EasyBits te ofrece, puedes agregar tu propio dominio para fortalecer tu marca."
+          description={
+            <p>
+              Además del subdominio gratuito que EasyBits te ofrece, puedes
+              <span className="text-brand-500  font-bold">
+                agregar tu propio dominio
+              </span>{" "}
+              para fortalecer tu marca.
+            </p>
+          }
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
           icon={<MdOutlineStorage />}
           title="Almacenamiento de archivos"
-          description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, definirlos como públicos o privados, consumirlos desde otra plataforma  e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
+          description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
         />{" "}
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
           icon={<AiOutlineApi />}
           title="API para archivos"
-          description="Conecta EasyBits a tu proyecto de desarrollo y usa la API para agregar, editar o eliminar archivos de forma fácil, además de administrar la privacidad de cada uno (públicos o privados). EasyBits será tu mejor hosting de archivos."
+          description={
+            <p>
+              Conecta EasyBits a tu proyecto de desarrollo y{" "}
+              <span className="text-brand-500  font-bold">
+                {" "}
+                usa la API para agregar, editar o eliminar archivos de forma
+                fácil
+              </span>
+              , además de administrar la privacidad de cada uno (públicos o
+              privados). EasyBits será tu mejor hosting de archivos.
+            </p>
+          }
         />{" "}
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
@@ -110,13 +162,31 @@ const FeaturesList = () => {
         <Card
           icon={<FaUsers />}
           title="Acceso completo a la información de tus clientes"
-          description="¿Quieres descarga los mails de tus cleintes para enviar un mail o crear una campaña de ADS? Descargalos cuando quieras. ¡tus clientes! ¡tu información!"
+          description={
+            <p>
+              ¿Quieres descarga los mails de tus cleintes para enviar un mail o
+              crear una campaña de ADS? Descargalos cuando quieras.{" "}
+              <span className="text-brand-500  font-bold">
+                {" "}
+                ¡Tus clientes! ¡Tu información!
+              </span>
+            </p>
+          }
         />
         <div className="border-x-[2px] border-black h-6"></div>
         <Card
           icon={<MdStorefront />}
           title="Acceso a la comunidad EasyBits para aumentar tus ventas"
-          description="Aumenta tus ventas siendo parte de la comunidad EasyBits en donde miles de usuarios exploran y compran assets digitales. La comunidad es un escaparte más para tus assets sin ningún costo o comisión adicional."
+          description={
+            <p>
+              Aumenta tus ventas siendo parte de la comunidad EasyBits en donde
+              miles de usuarios exploran y compran assets digitales.{" "}
+              <span className="text-brand-500  font-bold">
+                La comunidad es un escaparte más para tus assets sin ningún
+                costo o comisión adicional.
+              </span>
+            </p>
+          }
         />
         <div className="border-x-[2px] border-black h-6"></div>
       </div>
@@ -130,7 +200,7 @@ const Card = ({
   icon,
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
   icon: ReactNode;
 }) => {
   return (
