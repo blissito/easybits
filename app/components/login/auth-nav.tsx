@@ -2,10 +2,11 @@ import TextLogo from "/icons/easybits-logo-text.svg";
 import Logo from "/icons/easybits-logo.svg";
 import type { User } from "@prisma/client";
 import { Link } from "react-router";
-import { useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { useWindowSize } from "~/hooks/useWindowSize";
 import { FaBurger, FaXmark } from "react-icons/fa6";
+import { BrutalButton } from "../common/BrutalButton";
 
 export const AuthNav = ({ user }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,25 +26,34 @@ export const AuthNav = ({ user }: { user?: User }) => {
     },
   ];
 
+  const toggleMenu = () => {
+    if (isOpen) {
+      setIsOpen(false);
+      animate("#drawer", { y: "-100%" }, { duration: 0.5, type: "tween" });
+    } else {
+      setIsOpen(true);
+      animate("#drawer", { y: "0%" }, { duration: 0.5, type: "tween" });
+    }
+  };
+
+  const [scope, animate] = useAnimate();
+
   return (
-    <header className=" z-50 bg-black h-12 md:h-[80px] px-4 md:px-[5%] xl:px-0  border-b-[1px] border-white/30 fixed inset-0">
-      <nav className=" max-w-7xl mx-auto h-12 md:h-[80px] text-white flex justify-between items-center ">
+    <header
+      ref={scope}
+      className=" z-50 bg-black h-14 md:h-[80px] px-4 md:px-[5%] xl:px-0  border-b-[1px] border-white/30 fixed inset-0"
+    >
+      <nav className=" max-w-7xl z-[70] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center ">
         <Link to="/">
           <div className="flex gap-3">
-            <img src={Logo} alt="easybits" className="w-[53px]" />
+            <img src={Logo} alt="easybits" className="w-12" />
             <img
               src={TextLogo}
               alt="easybits-text"
-              className="w-[103px] hidden md:block"
+              className="w-28 hidden md:block"
             />
           </div>
         </Link>
-        <div
-          className="md:hidden cursor-pointer"
-          onClick={() => setIsOpen((p) => !p)}
-        >
-          <FaBurger />
-        </div>
         <div className="h-full items-center content-center hidden md:flex">
           {!user && (
             <div className=" flex justify-center items-center h-full">
@@ -97,37 +107,63 @@ export const AuthNav = ({ user }: { user?: User }) => {
             </div>
           )}
         </div>
+        <Burger onClick={toggleMenu} isOpen={isOpen} />
       </nav>
-      <AnimatePresence initial={false}>
-        {isOpen ? (
-          <motion.div
-            className="w-full bg-white h-screen absolute z-10"
-            initial={{ opacity: 0, x: width }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: width }}
-            transition={{
-              duration: 0.3,
-            }}
-          >
-            <nav className="bg-black h-[80px] text-white flex justify-between px-10 items-center border-b-2 border-grayLight fixed inset-0">
-              <img src={Logo} alt="easybits" className="w-[53px]" />
-              <div
-                className="cursor-pointer"
-                onClick={() => setIsOpen((p) => !p)}
-              >
-                <FaXmark />
-              </div>
-            </nav>
-            <ul className="bg-black h-[calc(100%-80px)] mt-[80px] p-4 flex-col">
-              {navItems.map(({ title, path }, key) => (
-                <Link to={path} key={key}>
-                  <li className="h-[80px] text-white">{title}</li>
-                </Link>
-              ))}
-            </ul>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <motion.div
+        id="drawer"
+        style={{
+          y: "-100%",
+        }}
+        className="bg-black pb-6 inset-0 w-full h-fit absolute border-b-[1px] border-b-white/20"
+      >
+        <div className="text-center mt-20 px-6 ">
+          <ul className="bg-black p-4 flex-col">
+            {navItems.map(({ title, path }, key) => (
+              <Link to={path} key={key}>
+                <li className="h-[80px] text-xl text-white">{title}</li>
+              </Link>
+            ))}
+            <Link to="/" key="comunidad">
+              <li className="h-[80px] text-white text-xl">Comunidad</li>
+            </Link>
+            <Link to="/login" key="account">
+              <li className="h-[80px] text-white text-xl">Iniciar sesión</li>
+            </Link>
+          </ul>
+          <BrutalButton className="mx-auto" link="/contacto">
+            Empezar
+          </BrutalButton>
+        </div>
+      </motion.div>
     </header>
+  );
+};
+
+const Burger = ({
+  isOpen,
+  onClick,
+}: {
+  isOpen: boolean;
+  onClick: () => void;
+}) => {
+  const [scope, animate] = useAnimate();
+  useEffect(() => {
+    if (isOpen) {
+      animate("#top", { rotateZ: -135, y: 6, backgroundColor: "white" });
+      animate("#bottom", { rotateZ: 135, y: -5, backgroundColor: "white" });
+    } else {
+      animate("#top", { rotateZ: 0, y: 0, backgroundColor: "white" });
+      animate("#bottom", { rotateZ: 0, y: 0, backgroundColor: "white" });
+    }
+  }, [isOpen]);
+  return (
+    <button
+      onClick={onClick}
+      ref={scope}
+      className="flex md:hidden flex-col gap-2 relative "
+    >
+      <div id="top" className=" w-8 h-[3px]  rounded-full"></div>
+      <div id="bottom" className="w-8 h-[3px]  rounded-full"></div>
+    </button>
   );
 };

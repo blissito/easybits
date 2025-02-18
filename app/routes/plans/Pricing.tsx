@@ -58,7 +58,7 @@ export const Pricing = () => {
           price={299}
           perks={[
             "Todo lo del plan Creative",
-            "200 GB de almacenamiento",
+            "200 GB extra de almacenamiento",
             "API para subida/visualización de archivos ",
             "Iframes PRO de video y audio para la visualización del contenido en tu web",
             "Optimización del contenido",
