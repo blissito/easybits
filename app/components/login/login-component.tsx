@@ -41,13 +41,9 @@ export default function LoginComponent() {
     fetcher.state !== "idle" && fetcher.formData?.get("auth") === "stripe";
 
   return (
-    <>
+    <section className="w-screen h-fit min-h-screen bg-contain bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
-      <main
-        className={
-          "w-screen h-fit min-h-screen px-10 overflow-y-hidden border border-black  bg-contain bg-center bg-patternDark flex justify-center  items-center"
-        }
-      >
+      <main>
         <div className="flex flex-col w-full items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
           <motion.div
@@ -176,6 +172,6 @@ export default function LoginComponent() {
           </fetcher.Form>
         </div>
       </main>
-    </>
+    </section>
   );
 }
