@@ -9,11 +9,11 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
       <div
         className={cn(
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
-          "group w-[326px] bg-white rounded-xl border border-black overflow-hidden flex flex-col transition-all"
+          "group w-[300px] grow bg-white rounded-xl border border-black overflow-hidden flex flex-col transition-all"
         )}
       >
         <img
-          className="max-w-[326px] h-[252px] object-cover"
+          className="w-[300px] grow h-[252px] object-cover"
           src={asset.image || "/hero/hero-img.png"}
           alt="cover"
         />

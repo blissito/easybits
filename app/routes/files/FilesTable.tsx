@@ -217,7 +217,7 @@ export const FilesTable = ({
                   </button>
                 )}
                 {file.contentType.includes("video") &&
-                  file.versions.length < 4 && (
+                  file.versions?.length < 4 && (
                     <button
                       onClick={() => {
                         handleHLS(file);
