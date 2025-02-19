@@ -32,10 +32,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const openTokensModal = (file: File) => setTokenFor(file);
   return (
     <>
-      <article className="min-h-[calc(100vh-1px)] overflow-hidden py-20 px-10 relative">
-        <GridBackground />
-        <section className="z-10 relative">
-          <h1 className="text-4xl font-semibold">Almacenamiento de archivos</h1>
+      <article className="min-h-[calc(100vh-1px)] overflow-hidden relative">
+        <section>
+          <h2 className="text-4xl font-semibold">Almacenamiento de archivos</h2>
           {files.length < 1 && (
             <EmptyFiles onClick={() => setShowModal(true)} />
           )}

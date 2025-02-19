@@ -11,7 +11,7 @@ import FilesIcon from "/icons/storage.svg";
 
 export const ITEMS = {
   navItems: [
-    { icon: RocketIcon, path: "/dash/", title: "!Empieza ya!", end: true },
+    { icon: RocketIcon, path: "/dash/", title: "¡Empieza ya!", end: true },
     { icon: StatsIcon, path: "/dash/estadisticas", title: "Estadísticas" },
     { icon: AssetsIcon, path: "/dash/assets", title: "Assets" },
     { icon: StoreIcon, path: "/dash/tienda", title: "Mi tienda" },
