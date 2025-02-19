@@ -45,7 +45,7 @@ export default function LoginComponent() {
       <AuthNav />
       <main
         className={
-          "w-screen h-[90vh] overflow-hidden border border-black  bg-contain bg-center bg-patternDark flex justify-center  items-center"
+          "w-screen h-fit min-h-screen px-10 overflow-y-hidden border border-black  bg-contain bg-center bg-patternDark flex justify-center  items-center"
         }
       >
         <div className="flex flex-col w-full items-center justify-center">
