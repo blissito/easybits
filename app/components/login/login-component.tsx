@@ -41,7 +41,7 @@ export default function LoginComponent() {
     fetcher.state !== "idle" && fetcher.formData?.get("auth") === "stripe";
 
   return (
-    <section className="w-screen h-fit min-h-screen bg-contain bg-center bg-patternDark flex justify-center  items-center">
+    <section className="w-screen border-[1px] border-black h-screen bg-contain bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
       <main>
         <div className="flex flex-col w-full items-center justify-center">
