@@ -86,22 +86,24 @@ export const AuthNav = ({ user }: { user?: User }) => {
             </div>
           )}
           {user && (
-            <div className="flex h-full items-center">
+            <div className="flex h-full items-center border-r-[1px] border-white/30">
               <Link
-                to="/dash"
+                to="/asset"
                 className="px-8 border-x border-white/30 h-full flex items-center  hover:text-black border-b hover:border-black  hover:bg-white"
               >
                 Agregar asset
               </Link>
-              <motion.button
-                initial={{ borderRadius: "0px" }}
-                whileHover={{ borderRadius: "199px" }}
-                whileTap={{ borderRadius: "199px" }}
-                transition={{ type: "tween" }}
-                className="bg-brand-500 w-40 h-full font-medium text-black "
-              >
-                Ir al Dashboard
-              </motion.button>
+              <Link to="/dash">
+                <motion.button
+                  initial={{ borderRadius: "0px" }}
+                  whileHover={{ borderRadius: "199px" }}
+                  whileTap={{ borderRadius: "199px" }}
+                  transition={{ type: "tween" }}
+                  className="bg-brand-500 w-40 h-20 font-medium text-black  "
+                >
+                  Ir al Dashboard
+                </motion.button>
+              </Link>
             </div>
           )}
         </div>
