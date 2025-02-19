@@ -134,7 +134,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
                 <MenuItem key={key} {...item} isOpen={isOpen} />
               ))}
             </ul>
-            <div className="border-t border-grayLight w-full" />
+            <div className="border-t border-white/15 w-full" />
             <ul className="flex flex-col gap-6 py-6">
               {ITEMS.sectionItems.map((item, key) => (
                 <MenuItem key={key} {...item} isOpen={isOpen} />
