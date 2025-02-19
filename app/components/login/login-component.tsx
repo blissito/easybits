@@ -45,10 +45,10 @@ export default function LoginComponent() {
       <AuthNav />
       <main
         className={
-          "w-full h-screen bg-contain bg-center bg-patternDark flex justify-center items-center"
+          "w-screen h-screen overflow-hidden  bg-contain bg-center bg-patternDark flex justify-center border-none items-center"
         }
       >
-        <div className="flex flex-col items-center justify-center">
+        <div className="flex flex-col w-full items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
           <motion.div
             whileHover={{ scale: 1.5 }}
@@ -66,6 +66,7 @@ export default function LoginComponent() {
               }}
             />
           </motion.div>
+
           <fetcher.Form method="post">
             <AnimatePresence mode="wait">
               {loginType === "social" && (
@@ -75,11 +76,12 @@ export default function LoginComponent() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={transition}
+                  className="w-screen  px-4 md:px-[5%] xl:px-0 mx-auto flex flex-col items-center"
                 >
-                  <p className="text-center text-3xl whitespace-pre-line mb-10 text-white">
+                  <p className="text-center  text-3xl whitespace-pre-line mb-10 text-white">
                     {SELECTED_STRINGS.title}
                   </p>
-                  <div className="flex flex-col gap-8 mb-8">
+                  <div className="flex min-w-full flex-col md:items-center justify-center gap-8 mb-8 mx-auto">
                     <Button
                       size="large"
                       isLoading={isGoogleLoading}
@@ -150,7 +152,7 @@ export default function LoginComponent() {
                     />
                     <Button
                       size="large"
-                      bgColor="bg-[#9870ED]"
+                      bgColor="bg-brand-500"
                       type="submit"
                       name="loginType"
                       value="email-pass"
@@ -160,7 +162,7 @@ export default function LoginComponent() {
                   </div>
                   <p className="text-center text-white">
                     <span
-                      className="text-[#9870ED] cursor-pointer "
+                      className="text-brand-500 underline cursor-pointer "
                       onClick={() => {
                         setLoginType("social");
                       }}

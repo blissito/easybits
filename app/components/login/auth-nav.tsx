@@ -3,9 +3,7 @@ import Logo from "/icons/easybits-logo.svg";
 import type { User } from "@prisma/client";
 import { Link } from "react-router";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useAnimate } from "motion/react";
-import { useWindowSize } from "~/hooks/useWindowSize";
-import { FaBurger, FaXmark } from "react-icons/fa6";
+import { motion, useAnimate } from "motion/react";
 import { BrutalButton } from "../common/BrutalButton";
 
 export const AuthNav = ({ user }: { user?: User }) => {
@@ -120,21 +118,21 @@ export const AuthNav = ({ user }: { user?: User }) => {
           <ul className="bg-black flex flex-col">
             {navItems.map(({ title, path }, key) => (
               <Link to={path} key={key}>
-                <li className="h-16 gird place-content-center  text-xl text-white">
+                <li className="h-16 grid place-content-center  text-xl text-white">
                   {title}
                 </li>
               </Link>
             ))}
           </ul>{" "}
           <Link to="/" key="comunidad">
-            <p className="h-16 gird place-content-center text-white text-xl">
+            <p className="h-16 grid place-content-center text-white text-xl">
               Comunidad
             </p>
           </Link>
           {!user && (
             <>
               <Link to="/login" key="account">
-                <p className="h-16 gird place-content-center text-white text-xl w-full ">
+                <p className="h-16 grid place-content-center text-white text-xl w-full mb-4 ">
                   Iniciar sesión
                 </p>
               </Link>
@@ -148,7 +146,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
           {user && (
             <>
               <Link to="/assets" key="account">
-                <p className="h-16 gird place-content-center text-white mb-6 text-xl ">
+                <p className="h-16 gird place-content-center text-white mb-4 text-xl ">
                   Agregar nuevo asset
                 </p>
               </Link>
