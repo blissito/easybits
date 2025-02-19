@@ -88,7 +88,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
           {user && (
             <div className="flex h-full items-center border-r-[1px] border-white/30">
               <Link
-                to="/asset"
+                to="/dash/assets"
                 className="px-8 border-x border-white/30 h-full flex items-center  hover:text-black border-b hover:border-black  hover:bg-white"
               >
                 Agregar asset
@@ -147,7 +147,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
           )}
           {user && (
             <>
-              <Link to="/assets" key="account">
+              <Link to="/dash/assets" key="account">
                 <p className="h-16 gird place-content-center text-white mb-4 text-xl ">
                   Agregar nuevo asset
                 </p>
