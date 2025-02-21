@@ -12,8 +12,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const storageKey = formData.get("storageKey") as string;
   const eventName = formData.get("eventName") as string;
   const token = formData.get("token") as string;
-  console.log("STORAGE_KEY", storageKey);
-  console.log("token", token, CONVERTION_TOKEN, token !== CONVERTION_TOKEN);
   if (!storageKey || token !== CONVERTION_TOKEN)
     throw new Response("missing props", { status: 401 });
 
@@ -48,7 +46,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     data,
   });
 
-  console.log("WEBHOOK_CALLED", data);
+  console.info("::WEBHOOK_CALLED::", data);
 
   return new Response(null, { status: 201 });
 };
