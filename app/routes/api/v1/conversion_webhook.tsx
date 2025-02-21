@@ -1,6 +1,8 @@
 import type { File } from "@prisma/client";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/conversion_webhook";
+// @ts-ignore
+import { deleteObject } from "react-hook-multipart";
 
 const CONVERTION_TOKEN = process.env.CONVERTION_TOKEN;
 
@@ -21,6 +23,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
     data["status"] = "DELETED";
     data["versions"] = [];
     // @todo decide if delete here (soon!)
+    const deleted = await deleteObject(storageKey); // revisit
+    console.info("::OBJECT_DELETED::", deleted);
+    await db.file.delete({
+      where: {
+        storageKey,
+      },
+    });
   }
 
   if (eventName === "onStart") {
