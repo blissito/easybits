@@ -50,11 +50,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const text = await response.text();
     console.info("::CONVERTER_RESPONSE::", text, response.status);
     if (response.status === 404) {
-      await db.file.update({
+      const storageKey = url.searchParams.get("storageKey")!;
+      await deleteObject(storageKey);
+      await db.file.delete({
         where: {
-          storageKey: url.searchParams.get("storageKey")!,
+          storageKey,
         },
-        data: { versions: [], status: "DELETED" },
       });
     }
     return new Response(text);

@@ -67,19 +67,13 @@ export const FilesTable = ({
   };
 
   const { requestHLS } = useStartVersioningFlyMachine();
-  const [forceWorkingSpinner, setForceWorkingSpinner] = useState(false);
+  const [forceWorkingSpinner, setForceWorkingSpinner] = useState("");
   const handleHLS = async (file: File) => {
-    setForceWorkingSpinner(true);
+    setForceWorkingSpinner(file.id);
     toast.success("Procesando todas las versiones para: " + file.name, {
       position: "bottom-center",
       duration: 15000,
     });
-    // const missingVersions = versionList.filter(
-    //   (v) => !file.versions.includes(v)
-    // );
-    // const promises = missingVersions.map((mv) =>
-    //   startVersionFor(mv, file.storageKey)
-    // );
 
     const machineInfo = await requestHLS(file.storageKey);
     console.log("INFO::", machineInfo);
@@ -191,9 +185,8 @@ export const FilesTable = ({
                   file.versions?.length > 0 && (
                     <HLSVersions versions={file.versions} />
                   )}
-                {(file.status === "WORKING" || forceWorkingSpinner) && (
-                  <Spinner />
-                )}
+                {(file.status === "WORKING" ||
+                  forceWorkingSpinner === file.id) && <Spinner />}
               </span>
               <span className="relative">
                 {file.access === "private" ? (
