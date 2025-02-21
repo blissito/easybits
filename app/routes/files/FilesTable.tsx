@@ -54,6 +54,7 @@ export const FilesTable = ({
 
   const handleDelete = () => {
     if (!fileToDelete) return;
+    setForceWorkingSpinner(fileToDelete.id);
 
     fetcher.submit(
       {
