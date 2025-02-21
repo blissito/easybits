@@ -30,17 +30,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "delete_file") {
     const url = new URL(request.url);
     const serviceURL = new URL(`https://video-converter-hono.fly.dev`);
-    // we are assuming storageKey is part of the url already 🤷🏻
+    const storageKey = url.searchParams.get("storageKey")!;
+    serviceURL.pathname = "/delete_all";
     serviceURL.searchParams.set(
-      "storageKey",
-      url.searchParams.get("storageKey")!
-    );
-    url.searchParams.set(
       "webhook",
       "https://easybits.cloud/api/v1/conversion_webhook"
     );
-    serviceURL.pathname = "/delete_all";
-    console.log("STRING____::::", serviceURL.toString());
+    serviceURL.searchParams.set("storageKey", storageKey);
     const response = await fetch(serviceURL.toString(), {
       method: "delete",
       headers: {
