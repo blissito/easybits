@@ -5,7 +5,7 @@ export const Tag = ({
   className,
   variant,
 }: {
-  label: string;
+  label?: string;
   className?: string;
   variant?: string;
 }) => {
