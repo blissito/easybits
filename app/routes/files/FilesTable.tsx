@@ -19,6 +19,7 @@ import { useState } from "react";
 import { ConfirmModal } from "./ConfirmModal";
 import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
 import toast, { Toaster } from "react-hot-toast";
+import Spinner from "~/components/common/Spinner";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -57,26 +58,32 @@ export const FilesTable = ({
     fetcher.submit(
       {
         intent: "delete_file",
-        id: fileToDelete.id,
-        storageKey: fileToDelete.storageKey,
       },
-      { method: "post", action: "/api/v1/files" }
+      {
+        method: "post",
+        action: `/api/v1/files?storageKey=${fileToDelete.storageKey}`,
+      }
     );
   };
 
-  const { startVersionFor, versionList } = useStartVersioningFlyMachine();
+  const { requestHLS } = useStartVersioningFlyMachine();
+  const [forceWorkingSpinner, setForceWorkingSpinner] = useState(false);
   const handleHLS = async (file: File) => {
-    toast.success("Procesando versiones para: " + file.slug, {
+    setForceWorkingSpinner(true);
+    toast.success("Procesando todas las versiones para: " + file.name, {
       position: "bottom-center",
       duration: 15000,
     });
-    const missingVersions = versionList.filter(
-      (v) => !file.versions.includes(v)
-    );
-    const promises = missingVersions.map((mv) =>
-      startVersionFor(mv, file.storageKey)
-    );
-    await Promise.all(promises);
+    // const missingVersions = versionList.filter(
+    //   (v) => !file.versions.includes(v)
+    // );
+    // const promises = missingVersions.map((mv) =>
+    //   startVersionFor(mv, file.storageKey)
+    // );
+
+    const machineInfo = await requestHLS(file.storageKey);
+    console.log("INFO::", machineInfo);
+
     toast("Esto tomará algún tiempo, puedes olvidarte, yo me encargo. 🤖", {
       position: "bottom-center",
       icon: "⏲️",
@@ -181,17 +188,12 @@ export const FilesTable = ({
               </span>
               <span className="col-span-2 flex flex-wrap gap-px items-start">
                 {file.contentType.includes("video") &&
-                  file.masterPlaylistContent && (
-                    <>
-                      <HLSVersions versions={file.versions} />
-                      {/* <video
-                        className="aspect-video min-w-[600px]"
-                        controls
-                        // @todo save the real master file
-                        src={`/api/v1/${file.id}/main.m3u8`}
-                      /> */}
-                    </>
+                  file.versions?.length > 0 && (
+                    <HLSVersions versions={file.versions} />
                   )}
+                {(file.status === "WORKING" || forceWorkingSpinner) && (
+                  <Spinner />
+                )}
               </span>
               <span className="relative">
                 {file.access === "private" ? (
@@ -217,7 +219,8 @@ export const FilesTable = ({
                   </button>
                 )}
                 {file.contentType.includes("video") &&
-                  file.versions?.length < 4 && (
+                  file.versions?.length < 4 &&
+                  file.status !== "WORKING" && (
                     <button
                       onClick={() => {
                         handleHLS(file);
@@ -227,12 +230,24 @@ export const FilesTable = ({
                       Generar HLS
                     </button>
                   )}
-                <button
-                  onClick={() => openConfirm(file)}
-                  className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
-                >
-                  Eliminar
-                </button>
+                {file.status === "DONE" && file.masterPlaylistURL && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(file.masterPlaylistURL!);
+                    }}
+                    className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
+                  >
+                    copiar HLS playlist
+                  </button>
+                )}
+                {file.status !== "WORKING" && (
+                  <button
+                    onClick={() => openConfirm(file)}
+                    className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
+                  >
+                    Eliminar
+                  </button>
+                )}
               </DotsMenu>
             </motion.section>
           ))}

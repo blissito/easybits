@@ -44,6 +44,7 @@ export const FilesFormModal = ({
           isOpen={isOpen}
           title={"Sube tus archivos"}
           onClose={handleClose}
+          block={false}
         >
           <FilesForm onClose={handleUploadStart} />
         </Modal>

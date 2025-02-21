@@ -51,28 +51,37 @@ model User {
   updatedAt      DateTime @updatedAt
 }
 
+enum FileStatus {
+  PENDING
+  WORKING
+  DONE
+  ERROR
+  DELETED
+}
+
 model File {
-  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
-  storageKey            String   @unique
-  slug                  String   @unique
+  id                    String     @id @default(auto()) @map("_id") @db.ObjectId
+  storageKey            String     @unique
+  slug                  String     @unique
   name                  String
   size                  Float
   contentType           String
   metadata              Json?
   // ^ meta
+  status                FileStatus @default(PENDING)
   masterPlaylistContent String?
   masterPlaylistURL     String?
   versions              String[]
   // ^ hls
   url                   String
-  access                String   @default("public-read")
+  access                String     @default("public-read")
   // ^ share
-  ownerId               String   @db.ObjectId
+  ownerId               String     @db.ObjectId
   // ^ ownership
-  owner                 User     @relation(fields: [ownerId], references: [id])
-  assetIds              String[] @db.ObjectId
+  owner                 User       @relation(fields: [ownerId], references: [id])
+  assetIds              String[]   @db.ObjectId
   // ^ relations
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
   // ^ auto-dates
 }

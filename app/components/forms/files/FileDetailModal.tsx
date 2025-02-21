@@ -10,7 +10,7 @@ export const FileDetailModal = ({
   onClose?: () => void;
   file: File;
 }) => {
-  console.log("FILE: ", file);
+  // console.log("FILE: ", file);
   return (
     <Modal
       containerClassName="z-30"

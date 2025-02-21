@@ -5,9 +5,6 @@ import type { Route } from "./+types/conversion_webhook";
 const CONVERTION_TOKEN = process.env.CONVERTION_TOKEN;
 
 export const action = async ({ request }: Route.ActionArgs) => {
-  //   if (request.method !== "POST")
-  //     throw new Response("__Forbidden__", { status: 403 });
-
   const formData = await request.formData();
   const storageKey = formData.get("storageKey") as string;
   const eventName = formData.get("eventName") as string;
@@ -19,6 +16,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (!record) throw new Response("Record Not Found", { status: 404 });
 
   let data: Partial<File> = { storageKey };
+
+  if (eventName === "onDelete") {
+    data["status"] = "DELETED";
+    data["versions"] = [];
+    // @todo decide if delete here (soon!)
+  }
+
+  if (eventName === "onStart") {
+    data["status"] = "WORKING";
+  }
 
   if (eventName === "onEnd") {
     const masterPlaylistContent = formData.get(
@@ -32,6 +39,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // #EXTM3U\n
 
     data["versions"] = ["360p", "480p", "720p", "1080p"];
+    data["status"] = "DONE";
     data[
       "masterPlaylistURL"
     ] = `https://fly.storage.tigris.dev/video-converter-hono/chunks/${storageKey}/main.m3u8`; // @todo
@@ -39,6 +47,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (eventName === "onError") {
     data["versions"] = [];
+    data["status"] = "ERROR";
   }
 
   await db.file.update({

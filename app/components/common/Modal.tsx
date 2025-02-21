@@ -13,7 +13,9 @@ export const Modal = ({
   className,
   containerClassName,
   footer,
+  block = true,
 }: {
+  block?: boolean;
   footer?: ReactNode;
   noCloseButton?: boolean;
   mode?: "overlay" | "naked";
@@ -31,7 +33,7 @@ export const Modal = ({
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && block) {
       document.body.style.overflow = "hidden";
       addEventListener("keydown", keyDownHandler);
     } else {

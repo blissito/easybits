@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { GridBackground } from "~/components/common/backgrounds/GridBackground";
 import type { Route } from "./+types/files";
 import { EmptyFiles } from "./files/EmptyFiles";
 import { FilesFormModal } from "~/components/forms/files/FilesFormModal";

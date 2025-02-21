@@ -4,6 +4,7 @@ import slugify from "slugify";
 import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
+// @ts-ignore
 import { deleteObject } from "react-hook-multipart";
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -27,12 +28,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "update_asset") {
   }
   if (intent === "delete_file") {
-    const storageKey = formData.get("storageKey") as string;
-    const id = formData.get("id") as string;
-    await deleteObject(storageKey); // @todo confirm
-    await db.file.delete({ where: { id, storageKey, ownerId: user.id } });
-    console.info("::FILE_DELETED:: ", storageKey);
-    return null;
+    const url = new URL(request.url);
+    // we are assuming storageKey is part of the url already 🤷🏻
+    url.searchParams.set(
+      "webhook",
+      "https://easybits.cloud/api/v1/conversion_webhook"
+    );
+    url.host = "https://video-converter-hono.fly.dev";
+    url.pathname = "/delete_all";
+    await fetch(url.toString());
+    // @todo delete actual file in webhook?
   }
 
   return null;
