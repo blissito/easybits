@@ -31,6 +31,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         storageKey,
       },
     });
+    return new Response(null, { status: 204 });
   }
 
   if (eventName === "onStart") {
