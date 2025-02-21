@@ -9,10 +9,11 @@ import { ItemList } from "./ItemList";
 import { Invite } from "./Invite";
 import { Assets } from "./Assets";
 import type { Route } from "./+types/home";
+import type { User } from "@prisma/client";
 
-export const clientLoader = async () => {
+export const clientLoader = async ({}: Route.ClientLoaderArgs) => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
-  return { user };
+  return { user: user as User };
 };
 
 export default function Home({ loaderData }: Route.ComponentProps) {

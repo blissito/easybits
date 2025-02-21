@@ -10,13 +10,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   const formData = await request.formData();
   const storageKey = formData.get("storageKey") as string;
-  const sizeName = formData.get("sizeName") as string;
   const eventName = formData.get("eventName") as string;
   const token = formData.get("token") as string;
   console.log("STORAGE_KEY", storageKey);
-  console.log("size", sizeName);
   console.log("token", token, CONVERTION_TOKEN, token !== CONVERTION_TOKEN);
-  if (!storageKey || !sizeName || token !== CONVERTION_TOKEN)
+  if (!storageKey || token !== CONVERTION_TOKEN)
     throw new Response("missing props", { status: 401 });
 
   const record = await db.file.findFirst({ where: { storageKey } });
@@ -35,14 +33,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
       : (data["masterPlaylistContent"] = "#EXTM3U\n" + masterPlaylistContent); // just first time?
     // #EXTM3U\n
 
-    data["versions"] = [...new Set([...record.versions, sizeName])];
+    data["versions"] = ["360p", "480p", "720p", "1080p"];
     data[
       "masterPlaylistURL"
-    ] = `http://easybits.cloud/api/v1/${record.id}/main.m3u8`; // @todo
+    ] = `https://fly.storage.tigris.dev/video-converter-hono/chunks/${storageKey}/main.m3u8`; // @todo
   }
 
   if (eventName === "onError") {
-    data["versions"] = record.versions.filter((v) => v !== sizeName);
+    data["versions"] = [];
   }
 
   await db.file.update({
