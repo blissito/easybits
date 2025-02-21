@@ -20,6 +20,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   let data: Partial<File> = { storageKey };
 
   if (eventName === "onDelete") {
+    console.info("DELETE_CALLED_ON_WEBHOOK", storageKey);
     data["status"] = "DELETED";
     data["versions"] = [];
     // @todo decide if delete here (soon!)
