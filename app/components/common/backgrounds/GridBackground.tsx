@@ -27,7 +27,7 @@ export const GridBackground = () => {
       <img
         src="/dash/grid.svg"
         alt="grid"
-        className="absolute inset-0 object-cover pointer-events-none h-full w-full"
+        className="absolute inset-0   pointer-events-none h-full w-full"
       />
       <motion.section
         className="absolute inset-0 bg-white z-0"

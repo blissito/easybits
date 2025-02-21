@@ -17,7 +17,7 @@ export const Card = ({
   return (
     <div className="relative group inline-block col-span-1">
       {/* Shadow button */}
-      <div className="absolute w-full lg:w-96 inset-0 h-64 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-2 group-hover:translate-y-2 opacity-0 group-hover:opacity-100" />
+      <div className="absolute w-full lg:w-96 inset-0 h-64 bg-black rounded-xl transition-all duration-300 scale-100 group-hover:translate-x-2 group-hover:translate-y-2 opacity-0 group-hover:opacity-100" />
       <div
         className={cn(
           "rounded-xl  bg-white  h-64 z-10  p-4 text-black text-lg w-full lg:w-96 border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1",

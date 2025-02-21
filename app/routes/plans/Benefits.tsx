@@ -32,22 +32,22 @@ export const Benefits = () => {
         <BenefitCard
           image="/hero/easy.svg"
           title="Fácil de usar"
-          description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
+          description="Para vender tus assets en EasyBits no necesitas ser un pro de la tecnología, agregar y vender tus productos es fácil y no te tomará más de 5 minutos. Y si tienes preguntas, siempre estaremos para ayduarte."
         />
         <BenefitCard
           image="/hero/support.svg"
-          title="Fácil de usar"
-          description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
+          title="Servicio de soporte"
+          description="Nuestro equipo estará detrás de cada uno de nuestros medio de contacto prespondiento tus preguntas, ayudandote e incluso tomando notas de lo que te gustaría agregar a EasyBits. "
         />
         <BenefitCard
           image="/hero/custom.svg"
-          title="Fácil de usar"
-          description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
+          title="Personalización"
+          description="En EasyBits puedes personalizar cada landing page de tus assets, agregar tus colores, mostrar solo la información que tu quieres, e incluso agregar tu propio dominio."
         />
         <BenefitCard
           image="/hero/cancel.svg"
-          title="Fácil de usar"
-          description="Lorem ipsum dolor sit amet consectetur. Feugiat in nisl pulvin Nunc pretium pretium vitae aliquet aliquam imperdiet odio egestas. Quam viverra amet tortor."
+          title="Cancelación "
+          description="Nada de plazos forzosos. Puedes cancelar en el momento que tu quieres, sin letras chiquitas y sin trabas, tú tienes control sobre tu suscripción."
         />
       </div>
     </section>

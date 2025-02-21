@@ -105,7 +105,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
     <main className="flex relative">
       <div className="pr-1">
         <motion.div
-          className="bg-black h-screen fixed text-white flex flex-col justify-between items-center transition-all py-8"
+          className="bg-black h-screen fixed z-40 text-white flex flex-col justify-between items-center transition-all py-8"
           initial={{ width: isOpen ? 240 : 88 }}
           whileHover={{ width: 240 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -134,7 +134,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
                 <MenuItem key={key} {...item} isOpen={isOpen} />
               ))}
             </ul>
-            <div className="border-t border-grayLight w-full" />
+            <div className="border-t border-white/15 w-full" />
             <ul className="flex flex-col gap-6 py-6">
               {ITEMS.sectionItems.map((item, key) => (
                 <MenuItem key={key} {...item} isOpen={isOpen} />
@@ -149,7 +149,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
         </motion.div>
       </div>
       <div className="w-full ">
-        <nav className="px-8 py-6 flex justify-end fixed w-full z-10">
+        {/* <nav className="pr-10 py-6  flex justify-end fixed w-full z-30 ">
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-lg font-semibold">
@@ -161,14 +161,14 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
               <img className="object-contain" src={user.picture || Logo} />
             </div>
           </div>
-        </nav>
+        </nav> */}
         <motion.div
           initial={{ marginLeft: 240 }}
           animate={{ marginLeft: isOpen ? 240 : 88 }}
           transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
           className=""
         >
-          <section className="py-20 px-10 w-full relative h-screen">
+          <section className="pt-10 box-border pb-10 px-10 w-full relative min-h-screen">
             <GridBackground />
             <Outlet />
           </section>
