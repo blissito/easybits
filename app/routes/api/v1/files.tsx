@@ -40,7 +40,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const response = await fetch(serviceURL.toString(), {
       method: "delete",
       headers: {
-        Authorization: "Bearer PerroTOken",
+        Authorization: "Bearer PerroTOken", // @todo from service dashboard
       },
     });
     const text = await response.text();
