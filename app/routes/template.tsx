@@ -20,7 +20,7 @@ export default function Template() {
     <main>
       <section className="border-b-[2px] border-black bg-[#CE95F9]">
         <div className="border-b-[2px] border-black h-16">
-          <div className="max-w-7xl mx-auto border-x-[2px] h-16 border-black px-4 flex justify-between ">
+          <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
             <div className="flex gap-2 items-center h-full">
               <Avatar /> <h3 className="underline">Lucía López</h3>
             </div>
@@ -34,7 +34,7 @@ export default function Template() {
             </div>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto border-x-[2px] border-black px-4 flex justify-between h-fit py-6 md:py-9 relative ">
+        <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] border-black px-4 flex justify-between h-fit py-6 md:py-9 relative ">
           <img
             className="absolute right-96 bottom-0"
             src="/icons/waves.svg"
@@ -99,16 +99,19 @@ export default function Template() {
                 >
                   {/* {tags.map((tag, index) => ( */}
                   <Tag
+                    className="h-6 md:h-8"
                     variant="outline"
                     label="4k"
                     //    key={index} label={tag}
                   />
                   <Tag
+                    className="h-6 md:h-8"
                     variant="outline"
                     label="4k"
                     //    key={index} label={tag}
                   />
                   <Tag
+                    className="h-6 md:h-8"
                     variant="outline"
                     label="4k"
                     //    key={index} label={tag}
