@@ -11,6 +11,7 @@ export default [
   index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
+  route("/template", "routes/template.tsx"),
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/blog", "routes/blog.tsx"),
