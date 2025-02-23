@@ -55,12 +55,14 @@ export const Modal = ({
       {isOpen ? (
         <article
           className={cn(
-            "z-20",
-            "inset-0 grid place-content-center",
+            "z-10",
+            "grid place-content-center",
             "fixed",
+
             {
+              "inset-0": mode !== "naked",
               "place-content-end p-3": mode === "naked",
-              "pointer-events-none": mode === "naked",
+              "bottom-0 right-0": mode === "naked",
             },
             containerClassName
           )}

@@ -105,7 +105,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
     <main className="flex relative">
       <div className="pr-1">
         <motion.div
-          className="bg-black h-screen fixed z-40 text-white flex flex-col justify-between items-center transition-all py-8"
+          className="bg-black h-screen fixed z-10 text-white flex flex-col justify-between items-center transition-all py-8"
           initial={{ width: isOpen ? 240 : 88 }}
           whileHover={{ width: 240 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}

@@ -3,6 +3,7 @@ import { FilesForm } from "./FilesForm";
 import { AnimatePresence } from "motion/react";
 import { ActiveUploads } from "./Uploads";
 import { useUploadManager } from "~/hooks/useUploadManager";
+import { useNavigate, useSubmit } from "react-router";
 
 export const FilesFormModal = ({
   isOpen,
@@ -11,10 +12,22 @@ export const FilesFormModal = ({
   isOpen: boolean;
   onClose?: () => void;
 }) => {
-  const { tasks, addFiles } = useUploadManager();
+  const submit = useSubmit();
+  const { tasks, addFiles, clearTask } = useUploadManager({
+    onTaskEnd(_) {
+      setTimeout(() => {
+        submit({});
+      }, 1000);
+    },
+  });
   const handleUploadStart = (fs: File[], access: "public-read" | "private") => {
     addFiles(fs, { access });
     onClose?.();
+  };
+  const handleClearAllTasks = () => {
+    tasks.forEach((task) => {
+      clearTask(task.id);
+    });
   };
   // when use animate presence, also place a key in children
   return (
@@ -36,7 +49,8 @@ export const FilesFormModal = ({
         isOpen={tasks.length > 0}
         title={<span className="text-xl">Subiendo...</span>}
         mode="naked"
-        noCloseButton
+        noCloseButton={!tasks.every((t) => t.status === "Done")}
+        onClose={handleClearAllTasks}
       >
         <ActiveUploads tasks={tasks} />
       </Modal>
