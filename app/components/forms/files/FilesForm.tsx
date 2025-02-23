@@ -1,6 +1,6 @@
 import { BrutalButton } from "../../common/BrutalButton";
 import { SelectInput } from "../SelectInput";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type Ref } from "react";
 import { FilesDropper } from "./FilesDropper";
 import { FileList } from "./FileList";
 import { motion } from "motion/react";
@@ -22,7 +22,9 @@ const getFileArray = (event: any) => {
 // @todo size limits
 export const FilesForm = ({
   onClose,
-}: {
+}: // fileInputRef,
+{
+  // fileInputRef?: Ref<HTMLInputElement>;
   onClose?: (arg0: File[], arg1: "public-read" | "private") => void;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
