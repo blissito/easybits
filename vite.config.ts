@@ -12,11 +12,11 @@ export default defineConfig({
     },
   },
   plugins: [reactRouter(), tsconfigPaths()],
-  build: {
-    rollupOptions: {
-      // make sure to externalize deps that shouldn't be bundled
-      // into your library
-      external: ["react-hook-multipart"],
-    },
-  },
+  // build: {
+  //   rollupOptions: {
+  //     // make sure to externalize deps that shouldn't be bundled
+  //     // into your library
+  //     external: ["react-hook-multipart"],
+  //   },
+  // },
 });
