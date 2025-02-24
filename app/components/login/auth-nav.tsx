@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { useEffect, useState } from "react";
 import { motion, useAnimate } from "motion/react";
 import { BrutalButton } from "../common/BrutalButton";
+import { FlipLetters } from "../animated/FlipLetters";
 
 export const AuthNav = ({ user }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -38,17 +39,18 @@ export const AuthNav = ({ user }: { user?: User }) => {
   return (
     <header
       ref={scope}
-      className=" z-50 bg-black h-14 md:h-[80px] px-4 md:px-[5%] xl:px-0  border-b-[1px] border-white/30 fixed inset-0"
+      className="bg-black h-14 md:h-20 md:px-0border-b-[1px] border-white/30 fixed inset-0"
     >
-      <nav className=" max-w-7xl z-[70] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center ">
+      <nav className=" max-w-7xl z-[70] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center pl-4">
         <Link to="/">
-          <div className="flex gap-3">
+          <div className="flex gap-3 mx-2">
             <img src={Logo} alt="easybits" className="w-12" />
-            <img
+            {/* <img
               src={TextLogo}
               alt="easybits-text"
               className="w-28 hidden md:block"
-            />
+            /> */}
+            <FlipLetters word="EasyBits" />
           </div>
         </Link>
         <div className="h-full items-center content-center hidden md:flex">
