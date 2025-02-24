@@ -31,7 +31,7 @@ export default {
         coverSuscription: "url('/hero/cover-yellow.svg')",
       },
       fontFamily: {
-        jersey: ["Jersey 10"],
+        jersey: ["Jersey 10"], // not working, you can remove
         sans: [
           '"Inter"',
           "ui-sans-serif",
