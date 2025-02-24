@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { motion, useAnimate } from "motion/react";
 import { BrutalButton } from "../common/BrutalButton";
 import { FlipLetters } from "../animated/FlipLetters";
+import { cn } from "~/utils/cn";
 
 export const AuthNav = ({ user }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,7 +40,10 @@ export const AuthNav = ({ user }: { user?: User }) => {
   return (
     <header
       ref={scope}
-      className="bg-black h-14 md:h-20 md:px-0border-b-[1px] border-white/30 fixed inset-0"
+      className={cn(
+        "z-10",
+        "bg-black h-14 md:h-20 md:px-0border-b-[1px] border-white/30 fixed inset-0"
+      )}
     >
       <nav className=" max-w-7xl z-[70] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center pl-4">
         <Link to="/">
