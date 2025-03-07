@@ -1,9 +1,10 @@
-import { newProductSchema } from "~/utils/zod.schemas";
+import { newAssetSchema } from "~/utils/zod.schemas";
 import { db } from "~/.server/db";
 import slugify from "slugify";
 import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
+import type { Asset } from "@prisma/client";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -13,13 +14,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "new_asset") {
     const data = JSON.parse(formData.get("data") as string);
-    newProductSchema.parse(data);
+    const parsed = newAssetSchema.parse({
+      ...data,
+      userId: user.id,
+      slug: slugify(data.title + "_" + nanoid(4)),
+    });
     return await db.asset.create({
-      data: {
-        ...data,
-        userId: user.id,
-        slug: slugify(data.title + "_" + nanoid(6)),
-      },
+      data: parsed as Asset,
     });
   }
 

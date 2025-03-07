@@ -27,10 +27,10 @@ export const GridBackground = () => {
       <img
         src="/dash/grid.svg"
         alt="grid"
-        className="absolute inset-0   pointer-events-none h-full w-full"
+        className="fixed inset-0 pointer-events-none object-fill"
       />
       <motion.section
-        className="absolute inset-0 bg-white z-0"
+        className="fixed inset-0 bg-white"
         style={{
           background,
         }}

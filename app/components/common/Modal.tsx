@@ -55,7 +55,7 @@ export const Modal = ({
       {isOpen ? (
         <article
           className={cn(
-            "z-10",
+            "z-20", // try to not go further than 30
             "grid place-content-center",
             "fixed",
 

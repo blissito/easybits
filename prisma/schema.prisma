@@ -7,27 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AssetType {
+  DOWNLOADABLE
+  VOD_COURSE
+  WEBINAR
+  EBOOK
+}
+
+type AssetExtraSettingsSettings {
+  stock       Int
+  sold        Int
+  showReviews Boolean
+}
+
+type AssetTemplateSettings {
+  ctaText      String
+  templateName String
+  domain       String?
+}
+
 model Asset {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  storageKey  String   @unique
-  title       String?
-  slug        String?
-  type        String?
-  publicLink  String?
-  // blob data
-  contentType String?
-  size        Int?
-  status      String?  @default("waiting")
-  isPublic    Boolean  @default(true)
+  id         String                      @id @default(auto()) @map("_id") @db.ObjectId
+  slug       String                      @unique
+  title      String
+  type       AssetType                   @default(DOWNLOADABLE)
+  price      Float                       @default(0)
+  gallery    String[]
+  fileIds    String[]                    @db.ObjectId
+  template   AssetTemplateSettings?
+  published  Boolean                     @default(false)
+  publicLink String?
+  extra      AssetExtraSettingsSettings?
   // ownership and metadata
-  userId      String?  @db.ObjectId
-  user        User?    @relation(fields: [userId], references: [id])
-  fileIds     String[] @db.ObjectId
-  productId   String?  @db.ObjectId
-  metadata    Json?
+  userId     String                      @db.ObjectId
+  user       User                        @relation(fields: [userId], references: [id])
   // dates
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
 }
 
 model User {

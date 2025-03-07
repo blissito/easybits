@@ -16,27 +16,27 @@ export const RadioGroup = ({
   return (
     <section className="flex gap-4 justify-evenly">
       <RadioInput
-        isSelected={selected === "download"}
+        isSelected={selected === "DOWNLOADABLE"}
         onChange={(value) => setSelected(value)}
         description="Ilustraciones, pdfs, videos, imágenes, etc."
         name="type"
-        value="download"
+        value="DOWNLOADABLE"
         label="Descargable"
       />
       <RadioInput
-        isSelected={selected === "course"}
+        isSelected={selected === "WEBINAR"}
         onChange={(value) => setSelected(value)}
-        description="Cursos pre-grabados en formato xxx"
+        description="Cursos pre-grabados o en vivo"
         name="type"
-        value="course"
-        label="Curso"
+        value="WEBINAR"
+        label="Curso o Webinar"
       />
       <RadioInput
-        isSelected={selected === "e-book"}
+        isSelected={selected === "EBOOK"}
         onChange={(value) => setSelected(value)}
         description="En formato pdf, ePUB o Mobi"
         name="type"
-        value="e-book"
+        value="EBOOK"
         label="E-book"
       />
     </section>
@@ -83,7 +83,7 @@ export const RadioInput = ({
           name={name}
           value={value}
           onChange={(e) => onChange?.(e.currentTarget.value)}
-          hidden
+          className="hidden"
         />
       </div>
     </label>

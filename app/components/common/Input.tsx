@@ -24,7 +24,7 @@ export const Input = ({ label, error, copy, ...props }: InputProps) => {
       <div className="relative">
         <input
           className={cn(
-            "rounded-xl p-4 text-lg min-w-full md:w-96 mb-6 border h-[54px] bg-white text-black",
+            "rounded-xl p-4 text-lg min-w-full md:w-96 mb-2 border h-[54px] bg-white text-black",
             {
               "pr-24": !!copy,
             }
@@ -33,7 +33,7 @@ export const Input = ({ label, error, copy, ...props }: InputProps) => {
         />
         {copy && <CopyMagnetButton text={copy} />}
       </div>
-      <p>{error}</p>
+      {error && <p>{error}</p>}
     </label>
   );
 };

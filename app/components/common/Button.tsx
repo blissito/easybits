@@ -9,7 +9,7 @@ interface ButtonProps {
   children?: ReactNode;
   onClick?: () => void;
   isLoading?: boolean;
-  size: string;
+  size?: string;
 }
 
 export const Button = ({

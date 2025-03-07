@@ -25,7 +25,10 @@ export default [
     layout("components/DashLayout/DashLayout.tsx", [
       index("routes/start.tsx"),
       route("estadisticas", "routes/stats.tsx"),
-      route("assets", "routes/assets/assets.tsx"),
+      ...prefix("assets", [
+        index("routes/assets/assets.tsx"),
+        route(":assetId/edit", "routes/assets/EditAsset.tsx"),
+      ]),
       route("tienda", "routes/store.tsx"),
       route("ventas", "routes/sales.tsx"),
       route("clientes", "routes/clients.tsx"),

@@ -5,26 +5,27 @@ import { BrutalButton } from "../common/BrutalButton";
 import { Input } from "./Input";
 import { RadioGroup } from "./RadioInput";
 import { useEffect, type ChangeEvent } from "react";
+import { type NewAssetSchema } from "~/utils/zod.schemas";
 
 export const AssetForm = ({
   onClose,
-  asset = { title: "", type: "" },
+  asset = { title: "" },
 }: {
-  product?: Asset;
-  onClose?: (values: Asset) => void;
+  asset?: NewAssetSchema;
+  onClose?: () => void;
 }) => {
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
 
-  const submit = async (values: SubmitHandler<FieldValues>) => {
-    await fetcher.submit(
+  const submit = (values: SubmitHandler<FieldValues>) => {
+    fetcher.submit(
       { intent: "new_asset", data: JSON.stringify(values) },
       {
         method: "post",
         action: "/api/v1/assets",
       }
     );
-    onClose?.(values);
+    onClose?.();
   };
 
   const {
@@ -33,13 +34,10 @@ export const AssetForm = ({
     formState: { isValid },
     setValue,
   } = useForm({
-    defaultValues: {
-      name: asset.name,
-      type: asset.type,
-    },
+    defaultValues: asset,
   });
   const registerVirtualFields = () => {
-    register("name", { value: "", required: true });
+    register("title", { value: "", required: true });
     register("type", { value: "", required: true });
   };
 
@@ -47,23 +45,24 @@ export const AssetForm = ({
     registerVirtualFields();
   }, []);
 
-  const handleChange = (name: "name" | "type", value: string) => {
-    console.log("Change", name, value);
+  const handleChange = (name: "title" | "type", value: string) => {
     setValue(name, value, { shouldValidate: true, shouldDirty: true });
   };
 
   return (
     <fetcher.Form
+      // @ts-ignore
       onSubmit={handleSubmit(submit)}
       className="flex flex-col h-max pb-12"
     >
       <Input
         pattern=".{3,}"
+        // @ts-ignore
         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-          handleChange("name", e.currentTarget.value)
+          handleChange("title", e.currentTarget.value)
         }
         label="Ponle nombre a tu asset"
-        placeholder="Curso de cocina"
+        placeholder="Curso de macramé"
       />
       <h3 className="mb-4 font-medium">¿Qué tipo de asset es?</h3>
 

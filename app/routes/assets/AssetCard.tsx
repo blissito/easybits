@@ -1,11 +1,15 @@
 import type { Asset } from "@prisma/client";
+import { Link } from "react-router";
 import { CopyButton } from "~/components/common/CopyButton";
 import { cn } from "~/utils/cn";
 
 export const AssetCard = ({ asset }: { asset: Asset }) => {
   const origin = "http://localhost:3000"; // @todo get from server?
   return (
-    <main className="group bg-black inline-block rounded-xl">
+    <Link
+      to={`${asset.id}/edit`}
+      className="group bg-black inline-block rounded-xl"
+    >
       <div
         className={cn(
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
@@ -28,6 +32,6 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
           />
         </nav>
       </div>
-    </main>
+    </Link>
   );
 };

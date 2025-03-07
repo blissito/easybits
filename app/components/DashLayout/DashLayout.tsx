@@ -98,12 +98,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => ({
 });
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
+  // const { user } = loaderData;
   const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
     <main className="flex relative">
-      <div className="pr-1">
+      <div>
         <motion.div
           className="bg-black h-screen fixed z-10 text-white flex flex-col justify-between items-center transition-all py-8"
           initial={{ width: isOpen ? 240 : 88 }}
@@ -149,26 +149,13 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
         </motion.div>
       </div>
       <div className="w-full ">
-        {/* <nav className="pr-10 py-6  flex justify-end fixed w-full z-30 ">
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-lg font-semibold">
-                {user.displayName || user.email?.split("@")[0]}
-              </p>
-              <p className="text-brand-gray">{user.email}</p>
-            </div>
-            <div className="w-[50px] h-[50px] rounded-full border-2 border-black overflow-hidden">
-              <img className="object-contain" src={user.picture || Logo} />
-            </div>
-          </div>
-        </nav> */}
         <motion.div
           initial={{ marginLeft: 240 }}
           animate={{ marginLeft: isOpen ? 240 : 88 }}
           transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
           className=""
         >
-          <section className="pt-10 box-border pb-10 px-10 w-full relative min-h-screen">
+          <section className="box-border w-full min-h-screen">
             <GridBackground />
             <Outlet />
           </section>
