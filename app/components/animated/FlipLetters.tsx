@@ -36,7 +36,7 @@ const DominoesBox = ({
 
   useEffect(() => {
     if (isHovered) {
-      animate("span", { rotateX: reversed ? 0 : 90, y: "-50%" }, transition);
+      animate("span", { rotateX: reversed ? 0 : 90, y: "-40%" }, transition);
     } else {
       animate("span", { rotateX: reversed ? 90 : 0, y: 0 }, transition);
     }
@@ -44,7 +44,7 @@ const DominoesBox = ({
 
   useEffect(() => {
     const anim = async () => {
-      await animate("span", { y: -10, rotateX: reversed ? 90 : 0 });
+      await animate("span", { y: -10, rotateX: reversed ? 90 : 0 }); // hack esperar y transformar en invisible
       animate("span", { y: 0, opacity: 1 }, transition);
     };
     anim();
@@ -53,7 +53,7 @@ const DominoesBox = ({
   return (
     <div
       ref={scope}
-      className={cn("text-gray-100 flex absolute top-6 left-0", {
+      className={cn("text-gray-100 flex absolute top-6", {
         "text-white top-[50%]": reversed,
       })}
     >

@@ -7,6 +7,7 @@ import { AssetList } from "./AssetList";
 import { Header } from "./Header";
 import { Empty } from "./Empty";
 import type { Route } from "./+types/assets";
+import { CamStreamer } from "~/components/experimental/CamStreamer";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -26,6 +27,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
     <>
       <article className="min-h-[95vh]  w-full relative box-border inline-block">
         <Header />
+        <CamStreamer />
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
         <AssetList assets={assets} />
       </article>
