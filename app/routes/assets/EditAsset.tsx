@@ -2,10 +2,25 @@ import { FaBoxOpen, FaShare } from "react-icons/fa";
 import { EditAssetForm } from "./EditAssetForm";
 import { FaCopy } from "react-icons/fa6";
 import { cn } from "~/utils/cn";
+import { getUserOrRedirect } from "~/.server/getters";
+import type { Route } from "./+types/EditAsset";
+import { db } from "~/.server/db";
 
 const PADDING_LAYOUT = `pl-10`;
 
-export default function EditAsset() {
+export const loader = async ({ params, request }: Route.LoaderArgs) => {
+  const user = await getUserOrRedirect(request);
+  const asset = await db.asset.findUnique({
+    where: {
+      id: params.assetId,
+      userId: user.id,
+    },
+  });
+  return { host: user.host!, asset };
+};
+
+export default function EditAsset({ loaderData }: Route.ComponentProps) {
+  const { host, asset } = loaderData;
   return (
     <article
       className={cn(
@@ -16,7 +31,7 @@ export default function EditAsset() {
         Template UI
       </h1>
       <main className={cn("flex gap-12 justify-evenly", PADDING_LAYOUT)}>
-        <EditAssetForm />
+        <EditAssetForm host={host} asset={asset} />
         <aside className="h-screen bg-black p-8 text-white sticky top-0 w-[320px]">
           <nav className="flex items-center mb-8 gap-4">
             <h3 className="text-2xl mr-auto">Vista previa</h3>

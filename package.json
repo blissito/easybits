@@ -11,6 +11,7 @@
     "deploy": "fly deploy"
   },
   "dependencies": {
+    "@mdxeditor/editor": "^3.25.1",
     "@prisma/client": "^6.1.0",
     "@react-router/node": "^7.1.1",
     "@react-router/serve": "^7.1.1",

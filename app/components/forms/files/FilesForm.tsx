@@ -69,57 +69,52 @@ export const FilesForm = ({
   };
 
   return (
-    <>
-      <motion.article
-        layoutId="FilesFormModal"
-        className="h-full flex flex-col"
+    <motion.article layoutId="FilesFormModal" className="h-full flex flex-col">
+      <SelectInput
+        className="w-full"
+        value={privacy}
+        onChange={(value) => setPrivacy(value)}
+        label="privacidad del archivo"
+        options={[
+          { label: "Privado", value: "private" },
+          { label: "Público", value: "public-read" },
+        ]}
+        error={
+          <p className="text-brand-500 mb-2">
+            La privacidad de los archivos es permanente
+          </p>
+        }
+      />
+      {files.length < 1 && (
+        <FilesDropper onDrop={handleDrop} onClick={handleUploadClick} />
+      )}
+      {files.length > 0 && (
+        <FileList
+          onOpenFileSelector={openFileSelector}
+          onRemove={handleRemove}
+          files={files}
+        />
+      )}
+      <BrutalButton
+        onClick={() => onClose?.(files, privacy)}
+        isDisabled={isDisabled}
+        containerClassName="mt-auto ml-auto mt-12"
       >
-        <SelectInput
-          className="w-full"
-          value={privacy}
-          onChange={(value) => setPrivacy(value)}
-          label="privacidad del archivo"
-          options={[
-            { label: "Privado", value: "private" },
-            { label: "Público", value: "public-read" },
-          ]}
-          error={
-            <p className="text-brand-500 mb-2">
-              La privacidad de los archivos es permanente
-            </p>
-          }
-        />
-        {files.length < 1 && (
-          <FilesDropper onDrop={handleDrop} onClick={handleUploadClick} />
-        )}
-        {files.length > 0 && (
-          <FileList
-            onOpenFileSelector={openFileSelector}
-            onRemove={handleRemove}
-            files={files}
-          />
-        )}
-        <BrutalButton
-          onClick={() => onClose?.(files, privacy)}
-          isDisabled={isDisabled}
-          containerClassName="mt-auto ml-auto my-12"
-        >
-          + Subir {files.length > 0 ? files.length : null} archivo
-          {files.length > 1 ? (
-            <>
-              {" "}
-              {files.length > 1 ? "s" : null} {`(${getTotalSize()})`}
-            </>
-          ) : null}
-        </BrutalButton>
-        <input
-          onChange={handleFileInputChange}
-          multiple
-          type="file"
-          hidden
-          ref={fileInputRef}
-        />
-      </motion.article>
-    </>
+        + Subir {files.length > 0 ? files.length : null} archivo
+        {files.length > 1 ? (
+          <>
+            {" "}
+            {files.length > 1 ? "s" : null} {`(${getTotalSize()})`}
+          </>
+        ) : null}
+      </BrutalButton>
+      <input
+        onChange={handleFileInputChange}
+        multiple
+        type="file"
+        hidden
+        ref={fileInputRef}
+      />
+    </motion.article>
   );
 };

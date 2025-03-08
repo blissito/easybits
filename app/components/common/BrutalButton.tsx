@@ -10,6 +10,7 @@ interface BrutalButtonProps {
   isLoading?: boolean;
   // icon?: ReactNode;
   mode?: "ghost" | "brand";
+  type?: "button" | "submit";
   [x: string]: unknown;
 }
 
@@ -20,6 +21,7 @@ export const BrutalButton = ({
   containerClassName,
   isLoading,
   isDisabled,
+  type = "button",
   ...props
 }: BrutalButtonProps) => {
   return (
@@ -28,11 +30,12 @@ export const BrutalButton = ({
       className={cn("group rounded-xl bg-black", containerClassName, {
         "bg-black/70": isDisabled || isLoading,
       })}
+      type={type}
       {...props}
     >
       <span
         className={cn(
-          "min-w-32 min-h-12 px-4",
+          "min-w-32 min-h-14 px-4",
           "grid place-content-center",
           "block", // así podemos usar translate
           "text-lg font-semibold",

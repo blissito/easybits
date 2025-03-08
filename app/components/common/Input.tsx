@@ -14,20 +14,31 @@ interface InputProps {
   disabled?: boolean;
   copy?: string;
   value?: string;
+  className?: string;
+  inputClassName?: string;
   [x: string]: unknown;
 }
 
-export const Input = ({ label, error, copy, ...props }: InputProps) => {
+export const Input = ({
+  className,
+  label,
+  error,
+  copy,
+  inputClassName,
+  ...props
+}: InputProps) => {
   return (
-    <label className="grid gap-2 text-white">
+    <label className={cn("grid gap-2 text-white", className)}>
       <span>{label}</span>
       <div className="relative">
         <input
           className={cn(
-            "rounded-xl p-4 text-lg min-w-full md:w-96 mb-2 border h-[54px] bg-white text-black",
+            "rounded-xl p-4 text-lg min-w-full mb-2 border h-[54px] bg-white text-black",
+            "focus:border-brand-500",
             {
               "pr-24": !!copy,
-            }
+            },
+            inputClassName
           )}
           {...props}
         />
