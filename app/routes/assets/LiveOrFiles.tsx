@@ -9,9 +9,13 @@ export const LiveOrFiles = () => {
   return (
     <section className="mt-8 mb-3">
       <h2 className="text-2xl">¿Tu curso es en vivo o pre-grabado?</h2>
-      <nav className="flex gap-4 items-center mb-2">
+      <nav className="flex gap-4 items-center mb-2 ">
         <p className="py-3">Pre-grabado</p>
-        <Switch onChange={setIsLive} defaultChecked={isLive} />
+        <Switch
+          onChange={setIsLive}
+          defaultChecked={isLive}
+          holderClassName="bg-brand-yellow"
+        />
         <p className="py-3">En vivo</p>
       </nav>
       <AnimatePresence mode="wait">

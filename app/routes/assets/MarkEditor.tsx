@@ -9,6 +9,8 @@ import {
 } from "@mdxeditor/editor";
 import "@mdxeditor/editor/style.css";
 
+// @todo what about a custom one?
+
 export const MarkEditor = () => {
   return (
     <section className="mt-8 mb-3">

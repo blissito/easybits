@@ -19,7 +19,7 @@ export const EditAssetForm = ({
 }) => {
   return (
     <LayoutGroup>
-      <Form className="flex-1 w-0 bg-white">
+      <Form className="flex-1 w-0 bg-white min-w-[320px]">
         <MarkEditor />
         <GalleryUploader />
         <HR />

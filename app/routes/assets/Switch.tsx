@@ -6,12 +6,14 @@ export const Switch = ({
   onChange,
   defaultChecked = true,
   label,
+  holderClassName,
   className,
 }: {
   className?: string;
   defaultChecked?: boolean;
   onChange?: (arg0: boolean) => void;
   label?: string;
+  holderClassName?: string;
 }) => {
   const [checked, setChecked] = useState(defaultChecked);
   const handleChange = () => {
@@ -21,13 +23,14 @@ export const Switch = ({
   };
   return (
     <button
-      className={cn("text-left flex gap-4", className)}
+      className={cn("text-left flex gap-4 h-6", className)}
       type="button"
       onClick={handleChange}
     >
       <div
         className={cn(
           "p-[3px] w-11 border-black rounded-full border flex items-center bg-gray-200",
+          holderClassName,
           {
             "justify-end bg-brand-500": checked,
           }
