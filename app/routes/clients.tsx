@@ -14,16 +14,38 @@ import {
 import "@livekit/components-styles";
 
 import { Track } from "livekit-client";
+import type { Route } from "./+types/clients";
 
-// const serverUrl = 'wss://webrtcblissmo-ughbu8uu.livekit.cloud';
-const serverUrl = "wss://webrtcblissmo-ughbu8uu.livekit.cloud";
-// const serverUrl = "https://cloud-api.livekit.io/api/sandbox/connection-details";
-const token =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDE0NDA2MDYsImlzcyI6IkFQSUtRNUFldDVxcUNrUCIsIm5iZiI6MTc0MTQzOTcwNiwic3ViIjoid2lyZWxlc3Mtb3Bjb2RlIiwidmlkZW8iOnsiY2FuVXBkYXRlT3duTWV0YWRhdGEiOnRydWUsInJvb20iOiJzYngtMXdsbWpoLThaVjRlRGRnSHZ0TXhuNUNSQUJMeTMiLCJyb29tSm9pbiI6dHJ1ZSwicm9vbUxpc3QiOnRydWV9fQ.UsF5hcE17qd7rEoUcBp9qdG7Qxf-uvEE1nl9b9QMfjI";
+export const loader = async () => {
+  const response = await fetch(
+    "https://cloud-api.livekit.io/api/sandbox/connection-details",
+    {
+      method: "post",
+      headers: {
+        "X-Sandbox-ID": "cyber-firewall-1wlmjh",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        roomName: "perro_blissmo_prueba",
+      }),
+    }
+  );
+  if (!response.ok) {
+    throw new Response("¡Sucedió algo terrible! 😭", { status: 500 });
+  }
+  const data = await response.json();
+  return data as {
+    serverUrl: string;
+    roomName: string;
+    participantName: string;
+    participantToken: string;
+  };
+};
 
 const LAYOUT_PADDING = "pl-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
-export default function Clients() {
+export default function Clients({ loaderData }: Route.ComponentProps) {
+  const { serverUrl, participantToken, participantName, roomName } = loaderData;
   return (
     <>
       <article
@@ -33,11 +55,12 @@ export default function Clients() {
         )}
       >
         <Header title="Clientes" />
+        <p>NOMBRE DEL ROOM: {roomName}</p>
         <section>
           <LiveKitRoom
             video={true}
             audio={true}
-            token={token}
+            token={participantToken}
             serverUrl={serverUrl}
             // Use the default LiveKit theme for nice styles.
             data-lk-theme="default"

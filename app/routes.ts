@@ -48,4 +48,5 @@ export default [
     route("files", "routes/api/v1/files.tsx"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
   ]),
+  route("experiment", "components/experimental/multiple_livekit_test.tsx"),
 ] satisfies RouteConfig;

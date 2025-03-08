@@ -1,4 +1,4 @@
-import { newProductSchema } from "~/utils/zod.schemas";
+import { newAssetSchema as newProductSchema } from "~/utils/zod.schemas";
 import { db } from "~/.server/db";
 import slugify from "slugify";
 import { nanoid } from "nanoid";
