@@ -3,7 +3,7 @@ import { AssetFormModal } from "~/components/forms/AssetFormModal";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
 import { AssetList } from "./AssetList";
-import { Header } from "./Header";
+import { Header } from "../../components/layout/Header";
 import { Empty } from "./Empty";
 import type { Route } from "./+types/assets";
 import { cn } from "~/utils/cn";
@@ -32,7 +32,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
           PADDING_LAYOUT
         )}
       >
-        <Header />
+        <Header title="Mis Assets digitales" />
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
         <AssetList assets={assets} />
       </article>
