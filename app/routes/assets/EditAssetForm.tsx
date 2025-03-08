@@ -5,7 +5,7 @@ import { LiveOrFiles } from "./LiveOrFiles";
 import { Plantilla } from "./Plantilla";
 import { GalleryUploader } from "./GalleryUploader";
 import { ExtrasConfig } from "./ExtrasConfig";
-import { MarkEditor } from "./MarkEditor";
+import { MarkEditor } from "../../.client/MarkEditor";
 import { PriceInput } from "./PriceInput";
 import type { Asset } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";

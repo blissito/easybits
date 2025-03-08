@@ -11,7 +11,6 @@
     "deploy": "fly deploy"
   },
   "dependencies": {
-    "@mdxeditor/editor": "^3.25.1",
     "@prisma/client": "^6.1.0",
     "@react-router/node": "^7.1.1",
     "@react-router/serve": "^7.1.1",
@@ -19,6 +18,7 @@
     "chart.js": "^4.4.7",
     "clsx": "^2.1.1",
     "cross-env": "^7.0.3",
+    "easymde": "^2.20.0",
     "graphql-request": "^7.1.2",
     "isbot": "^5.1.17",
     "js-confetti": "^0.12.0",
@@ -34,6 +34,7 @@
     "react-hot-toast": "^2.5.1",
     "react-icons": "^5.4.0",
     "react-router": "^7.1.1",
+    "react-simplemde-editor": "^5.2.0",
     "slugify": "^1.6.6",
     "stripe": "^17.4.0",
     "tailwind-merge": "^2.6.0",
