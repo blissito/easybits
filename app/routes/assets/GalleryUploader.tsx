@@ -38,67 +38,70 @@ export const GalleryUploader = () => {
   };
 
   return (
-    <section
-      style={{
-        scrollbarWidth: "none",
-      }}
-      className="overflow-x-scroll"
-      onMouseEnter={() => setIsHovered("hover")}
-      onMouseLeave={() => setIsHovered(null)}
-    >
+    <article className="">
       <h2 className="mt-8 mb-2">Galería y miniatura principal</h2>
-      {files.length < 1 && (
-        <motion.button
-          layoutId="upload_button"
-          onClick={() => fileInputRef.current?.click()}
-          onDragEnter={handleDragEnter}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          type="button"
-          className={cn(
-            "w-full",
-            "flex gap-3 border-dashed border-2 rounded-2xl py-11 justify-center items-center border-brand-gray",
-            {
-              "border-black": isHovered === "hover",
-              "border-brand-500": isHovered === "dropping",
-            }
-          )}
-        >
-          <span
-            className={cn("text-4xl text-brand-gray", {
-              "text-black": isHovered === "hover",
-              "text-brand-500": isHovered === "dropping",
-            })}
+
+      <section
+        style={{
+          scrollbarWidth: "none",
+        }}
+        className="overflow-auto"
+        onMouseEnter={() => setIsHovered("hover")}
+        onMouseLeave={() => setIsHovered(null)}
+      >
+        {files.length < 1 && (
+          <motion.button
+            layoutId="upload_button"
+            onClick={() => fileInputRef.current?.click()}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            type="button"
+            className={cn(
+              "w-full",
+              "flex gap-3 border-dashed border-2 rounded-2xl py-11 justify-center items-center border-brand-gray",
+              {
+                "border-black": isHovered === "hover",
+                "border-brand-500": isHovered === "dropping",
+              }
+            )}
           >
-            <LuImageUp />
-          </span>
-          <p
-            className={cn("max-w-sm text-brand-gray", {
-              "text-black": isHovered === "hover",
-              "text-brand-500": isHovered === "dropping",
-            })}
-          >
-            Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o
-            sube hasta 50 archivos con un peso máximo de 1 TB en total.
-          </p>
-        </motion.button>
-      )}
-      {files.length > 0 && (
-        <RowGalleryEditor
-          onClick={() => fileInputRef.current?.click()}
-          setFiles={setFiles}
-          files={files}
+            <span
+              className={cn("text-4xl text-brand-gray", {
+                "text-black": isHovered === "hover",
+                "text-brand-500": isHovered === "dropping",
+              })}
+            >
+              <LuImageUp />
+            </span>
+            <p
+              className={cn("max-w-md text-brand-gray", {
+                "text-black": isHovered === "hover",
+                "text-brand-500": isHovered === "dropping",
+              })}
+            >
+              Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o
+              sube hasta 50 archivos con un peso máximo de 1 TB en total.
+            </p>
+          </motion.button>
+        )}
+        {files.length > 0 && (
+          <RowGalleryEditor
+            onClick={() => fileInputRef.current?.click()}
+            setFiles={setFiles}
+            files={files}
+          />
+        )}
+        <input
+          multiple
+          accept="image/*"
+          onChange={handleInputFileChange}
+          ref={fileInputRef}
+          className="hidden"
+          type="file"
         />
-      )}
-      <input
-        multiple
-        accept="image/*"
-        onChange={handleInputFileChange}
-        ref={fileInputRef}
-        className="hidden"
-        type="file"
-      />
-    </section>
+      </section>
+    </article>
   );
 };
 
@@ -130,7 +133,7 @@ const RowGalleryEditor = ({
                 exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
                 animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
                 key={file.name + file.size}
-                className="aspect-square max-w-[144px] min-w-[144px] relative group border rounded-2xl"
+                className="aspect-square max-w-[144px] min-w-[144px] relative group border rounded-2xl my-2"
               >
                 <button
                   type="button"

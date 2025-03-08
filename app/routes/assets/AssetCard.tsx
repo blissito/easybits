@@ -18,7 +18,7 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
       >
         <img
           className="w-[300px] grow h-[252px] object-cover"
-          src={asset.image || "/hero/hero-img.png"}
+          src={asset.image || "/public/hero/code.svg"}
           alt="cover"
         />
         <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3">
