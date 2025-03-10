@@ -49,7 +49,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
         <Link to="/">
           <div className="flex gap-3 mx-2">
             <img src={Logo} alt="easybits" className="w-12" />
-            <FlipLetters word="easyBits" />
+            <FlipLetters word="EasyBits" />
           </div>
         </Link>
         <div className="h-full items-center content-center hidden md:flex">

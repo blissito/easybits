@@ -8,7 +8,7 @@ import { Empty } from "./Empty";
 import type { Route } from "./+types/assets";
 import { cn } from "~/utils/cn";
 
-const PADDING_LAYOUT = `pl-10`;
+const PADDING_LAYOUT = `pl-8`;
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -26,12 +26,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
   const [showModal, setShowModal] = useState(false);
   return (
     <>
-      <article
-        className={cn(
-          "min-h-[95vh]  w-full relative box-border inline-block",
-          PADDING_LAYOUT
-        )}
-      >
+      <article className={cn("flex-1", PADDING_LAYOUT)}>
         <Header title="Mis Assets digitales" />
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
         <AssetList assets={assets} />

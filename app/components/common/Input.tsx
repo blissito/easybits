@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FaCheck, FaRegCopy } from "react-icons/fa";
 import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
@@ -16,27 +16,39 @@ interface InputProps {
   value?: string;
   className?: string;
   inputClassName?: string;
+  isError?: boolean;
+  defaultValue?: string;
   [x: string]: unknown;
 }
 
 export const Input = ({
   className,
+  defaultValue,
   label,
   error,
   copy,
   inputClassName,
+  isError,
   ...props
 }: InputProps) => {
+  // const ref = useRef<HTMLInputElement>(null);
+
+  // useEffect(() => {
+  //   ref.current?.focus();
+  // }, [isError]);
+
   return (
     <label className={cn("grid gap-2 text-white", className)}>
       <span>{label}</span>
       <div className="relative">
         <input
+          defaultValue={defaultValue}
           className={cn(
             "rounded-xl p-4 text-lg min-w-full mb-2 border h-[54px] bg-white text-black",
             "focus:border-brand-500",
             {
               "pr-24": !!copy,
+              "ring-2 ring-red-500 transition-all border-none": isError,
             },
             inputClassName
           )}

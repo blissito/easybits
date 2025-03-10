@@ -15,10 +15,91 @@ interface MenuItemProps {
   icon: string;
   iconSize?: number;
   title: string | ReactNode;
-  isOpen: boolean;
+  isOpen?: boolean;
   isLogo?: boolean;
   end?: boolean;
 }
+
+export const loader = async ({ request }: Route.LoaderArgs) => ({
+  user: await getUserOrRedirect(request),
+});
+
+export default function DashLayout({ loaderData }: Route.ComponentProps) {
+  // const { user } = loaderData;
+  const [isOpen, setIsOpen] = useState<boolean>(true);
+
+  return (
+    <main className="flex relative z-10">
+      <SideBar />
+      <GridBackground />
+      <Outlet />
+    </main>
+  );
+}
+
+const SideBar = () => {
+  return (
+    <div>
+      <motion.div
+        className="bg-black sticky top-0 z-10 h-screen text-white flex flex-col justify-between items-center transition-all py-8"
+        // initial={{ width: isOpen ? 240 : 88 }}
+        whileHover={{ width: 240 }}
+        // transition={{ duration: 0.3, ease: "easeInOut" }}
+        // onMouseEnter={() => setIsOpen(true)}
+        // onMouseLeave={() => setIsOpen(true)} // @todo fixed for now
+      >
+        <div className="w-full">
+          <div className="px-5 mb-4">
+            <MenuItem
+              path={"/"}
+              icon={Logo}
+              iconSize={52}
+              title={
+                <img
+                  src={TextLogo}
+                  alt="easybits-text"
+                  className="w-[103px] h-[39px]"
+                />
+              }
+              // isOpen={isOpen}
+              isLogo
+            />
+          </div>
+          <ul className="flex flex-col gap-6 py-6">
+            {ITEMS.navItems.map((item, key) => (
+              <MenuItem
+                key={key}
+                {...item}
+
+                // isOpen={isOpen}
+              />
+            ))}
+          </ul>
+          <div className="border-t border-white/15 w-full" />
+          <ul className="flex flex-col gap-6 py-6">
+            {ITEMS.sectionItems.map((item, key) => (
+              <MenuItem
+                key={key}
+                {...item}
+
+                // isOpen={isOpen}
+              />
+            ))}
+          </ul>
+        </div>
+        <ul className="flex flex-col gap-6 w-full">
+          {ITEMS.bottomItems.map((item, key) => (
+            <MenuItem
+              key={key}
+              {...item}
+              //  isOpen={isOpen}
+            />
+          ))}
+        </ul>
+      </motion.div>
+    </div>
+  );
+};
 
 const MenuItem = ({
   path = "",
@@ -92,75 +173,3 @@ const MenuItem = ({
     </NavLink>
   );
 };
-
-export const loader = async ({ request }: Route.LoaderArgs) => ({
-  user: await getUserOrRedirect(request),
-});
-
-export default function DashLayout({ loaderData }: Route.ComponentProps) {
-  // const { user } = loaderData;
-  const [isOpen, setIsOpen] = useState<boolean>(true);
-
-  return (
-    <main className="flex relative">
-      <div>
-        <motion.div
-          className="bg-black h-screen fixed z-10 text-white flex flex-col justify-between items-center transition-all py-8"
-          initial={{ width: isOpen ? 240 : 88 }}
-          whileHover={{ width: 240 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          onMouseEnter={() => setIsOpen(true)}
-          onMouseLeave={() => setIsOpen(true)} // @todo fixed for now
-        >
-          <div className="w-full">
-            <div className="px-5 mb-4">
-              <MenuItem
-                path={"/"}
-                icon={Logo}
-                iconSize={52}
-                title={
-                  <img
-                    src={TextLogo}
-                    alt="easybits-text"
-                    className="w-[103px] h-[39px]"
-                  />
-                }
-                isOpen={isOpen}
-                isLogo
-              />
-            </div>
-            <ul className="flex flex-col gap-6 py-6">
-              {ITEMS.navItems.map((item, key) => (
-                <MenuItem key={key} {...item} isOpen={isOpen} />
-              ))}
-            </ul>
-            <div className="border-t border-white/15 w-full" />
-            <ul className="flex flex-col gap-6 py-6">
-              {ITEMS.sectionItems.map((item, key) => (
-                <MenuItem key={key} {...item} isOpen={isOpen} />
-              ))}
-            </ul>
-          </div>
-          <ul className="flex flex-col gap-6 w-full">
-            {ITEMS.bottomItems.map((item, key) => (
-              <MenuItem key={key} {...item} isOpen={isOpen} />
-            ))}
-          </ul>
-        </motion.div>
-      </div>
-      <div className="w-full ">
-        <motion.div
-          initial={{ marginLeft: 240 }}
-          animate={{ marginLeft: isOpen ? 240 : 88 }}
-          transition={{ delay: 0.3, duration: 0.3, ease: "easeInOut" }}
-          className=""
-        >
-          <section className="box-border w-full min-h-screen">
-            <GridBackground />
-            <Outlet />
-          </section>
-        </motion.div>
-      </div>
-    </main>
-  );
-}

@@ -1,5 +1,6 @@
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
+import Logo from "/icons/easybits-logo.svg";
 // live kit
 import {
   ControlBar,
@@ -12,7 +13,6 @@ import {
 import "@livekit/components-styles";
 import { Track } from "livekit-client";
 //
-import { useRef, useState } from "react";
 import { FlipLetters } from "../animated/FlipLetters";
 import { BrutalButton } from "../common/BrutalButton";
 import { Form, Link, redirect } from "react-router";
@@ -20,6 +20,7 @@ import { Input } from "../common/Input";
 import { getCallToken } from "~/.server/livekit/utils";
 import type { Route } from "./+types/multiple_livekit_test";
 import { nanoid } from "nanoid";
+import toast, { Toaster } from "react-hot-toast";
 
 const serverUrl = "wss://webrtcblissmo-ughbu8uu.livekit.cloud";
 
@@ -61,8 +62,15 @@ const LAYOUT_PADDING = "pl-10"; // to not set padding at layout level (so brendi
 
 export default function Clients({ loaderData }: Route.ComponentProps) {
   const { token, roomId, intent } = loaderData || {};
+  const copyLink = () => {
+    navigator.clipboard.writeText(
+      `https://www.easybits.cloud/experiment?roomId=${roomId}`
+    );
+    toast("Link copiado al portapapeles");
+  };
   return (
     <>
+      <Toaster />
       <article
         className={cn(
           "min-h-screen relative"
@@ -75,6 +83,15 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
           className="justify-center mb-4"
           title="Bienvenid@ a la versión: BETA_0.0.1"
         />
+
+        {token && (
+          <BrutalButton
+            containerClassName="mx-auto block mb-2"
+            onClick={copyLink}
+          >
+            Copiar enlace
+          </BrutalButton>
+        )}
 
         {intent === "init" && (
           <Form
@@ -110,6 +127,7 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
               // Use the default LiveKit theme for nice styles.
               data-lk-theme="default"
               style={{ height: "100%" }}
+              onDisconnected={() => (location.href = "/experiment")}
             >
               {/* Your custom component with basic video conferencing functionality. */}
               <MyVideoConference />
@@ -152,7 +170,10 @@ const NavBar = () => {
   return (
     <nav className="bg-black h-20 px-20">
       <Link to="/experiment">
-        <FlipLetters word="easyBits" />
+        <div className="flex gap-3 mx-2">
+          <img src={Logo} alt="easybits" className="w-12" />
+          <FlipLetters word="EasyBits" />
+        </div>
       </Link>
     </nav>
   );

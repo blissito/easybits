@@ -5,6 +5,7 @@ import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
 import { db } from "~/.server/db";
+import { AssetPreview } from "./AssetPreview";
 
 const PADDING_LAYOUT = `pl-10`;
 
@@ -24,7 +25,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
   return (
     <article
       className={cn(
-        "relative z-10" // hack because of the animated background
+        "relative z-10 flex-1" // hack because of the animated background
       )}
     >
       <h1 className={cn("text-4xl py-4 border-b border-black", PADDING_LAYOUT)}>
@@ -32,25 +33,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
       </h1>
       <main className={cn("flex gap-12 justify-evenly", PADDING_LAYOUT)}>
         <EditAssetForm host={host} asset={asset} />
-        <aside className="h-screen bg-black p-8 text-white sticky top-0 w-[320px]">
-          <nav className="flex items-center mb-8 gap-4">
-            <h3 className="text-2xl mr-auto">Vista previa</h3>
-            <span className="text-xl">
-              <FaShare />
-            </span>
-            <span className="text-xl">
-              <FaCopy />
-            </span>
-            <span className="text-xl">
-              <FaBoxOpen />
-            </span>
-          </nav>
-          <img
-            className="rounded-2xl"
-            src="/public/hero/example1.png"
-            alt="template preview"
-          />
-        </aside>
+        <AssetPreview />
       </main>
     </article>
   );

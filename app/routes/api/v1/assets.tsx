@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
 import type { Asset } from "@prisma/client";
+import { assetSchema } from "~/routes/assets/EditAssetForm";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -25,6 +26,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "update_asset") {
+    // @validation, only owner can update?
+    const data = JSON.parse(formData.get("data") as string);
+    const parsed = assetSchema.parse({
+      ...data,
+      userId: user.id,
+    });
+    return await db.asset.update({
+      where: {
+        id: parsed.id,
+      },
+      data: { ...parsed, id: undefined }, // @todo remove id in parsing
+    });
   }
   if (intent === "delete_asset") {
   }

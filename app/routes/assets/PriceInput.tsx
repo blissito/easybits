@@ -1,14 +1,29 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { Input } from "~/components/common/Input";
 
-export const PriceInput = () => {
+export const PriceInput = ({
+  onCurrencyChange,
+  onInputChange,
+  error,
+  defaultPrice,
+  defaultCurrency = "mxn",
+}: {
+  defaultPrice?: string | number;
+  defaultCurrency?: string;
+  onCurrencyChange?: (arg0: string) => void;
+  onInputChange?: (arg0: string) => void;
+  error?: string;
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [earn, setEarn] = useState(0);
+
   const handlePriceChange = ({
     currentTarget: { value },
   }: ChangeEvent<HTMLInputElement>) => {
+    onInputChange?.(value);
     setEarn((Number(value) * 0.95).toFixed(2));
   };
+
   return (
     <section>
       <h2 className="text-2xl">Precio</h2>
@@ -21,9 +36,12 @@ export const PriceInput = () => {
           placeholder="$300.00"
           type="number"
           min={0}
+          isError={!!error}
+          defaultValue={defaultPrice}
         />
         <select
-          defaultValue={"mxn"}
+          onChange={(e) => onCurrencyChange(e.currentTarget.value)}
+          defaultValue={defaultCurrency}
           className="rounded-2xl h-[53px] bg-black text-white"
         >
           <option value="usd">USD</option>
@@ -33,6 +51,7 @@ export const PriceInput = () => {
       {Number(earn) > 0 && (
         <p className="text-xs text-brand-gray">¡Ganarás ${earn} por venta!</p>
       )}
+      {error && <p className="text-red-500 text-xs">{error}</p>}
     </section>
   );
 };

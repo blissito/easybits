@@ -10,7 +10,7 @@ export const FlipLetters = ({ word }: { word: string }) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ perspective: 1000, transformStyle: "preserve-3d" }}
-      className="text-3xl font-bold relative h-full w-[120px] font-jersey"
+      className="text-3xl font-bold relative h-20 w-[120px] font-jersey"
     >
       <DominoesBox isHovered={isHovered} letters={letters} />
       <DominoesBox reversed isHovered={isHovered} letters={letters} />
