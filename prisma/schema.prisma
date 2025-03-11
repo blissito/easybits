@@ -31,6 +31,7 @@ model Asset {
   slug        String                      @unique
   title       String
   description String?
+  eventDate   DateTime?
   type        AssetType                   @default(DOWNLOADABLE)
   price       Float                       @default(0)
   currency    String                      @default("mxn")

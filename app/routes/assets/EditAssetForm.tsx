@@ -17,6 +17,7 @@ export const assetSchema = z.object({
   slug: z.string().min(3),
   userId: z.string().min(3),
 
+  eventDate: z.coerce.date().optional().nullable(),
   description: z.string().optional(),
   price: z.coerce.number({
     required_error: "Debes colocar un precio para tu Asset",
@@ -30,16 +31,18 @@ export const assetSchema = z.object({
       templateName: z.string(),
       domain: z.string(),
     })
-    .optional(),
+    .optional()
+    .nullable(),
   published: z.boolean().default(false),
-  publicLink: z.string().optional(),
+  publicLink: z.string().optional().nullable(),
   extra: z
     .object({
       showReviews: z.boolean(),
       stock: z.string(),
       sold: z.string(),
     })
-    .optional(),
+    .optional()
+    .nullable(),
 });
 
 const assetClientSchema = assetSchema.omit({
@@ -55,7 +58,7 @@ export const EditAssetForm = ({
   asset: Asset;
   host: string;
 }) => {
-  const [form, setForm] = useState<Asset>({});
+  const [form, setForm] = useState<Asset>(asset);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const setState = (obj: { [x: string]: number | boolean | string }) => {
@@ -96,6 +99,10 @@ export const EditAssetForm = ({
   };
   const isLoading = fetcher.state !== "idle";
 
+  const handleEventChange = (eventDate: Date) => {
+    setState({ eventDate });
+  };
+
   return (
     <LayoutGroup>
       <Form
@@ -117,7 +124,10 @@ export const EditAssetForm = ({
           onCurrencyChange={handleChange("currency")}
         />
         <HR />
-        <LiveOrFiles />
+        <LiveOrFiles
+          onChangeEventDate={handleEventChange}
+          defaultEventDate={asset.eventDate}
+        />
         <HR />
         <Plantilla host={host} slug={asset.slug} />
         <HR />

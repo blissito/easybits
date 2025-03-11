@@ -1,11 +1,50 @@
 import { Input } from "~/components/common/Input";
 import { Switch } from "./Switch";
-import { useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FilesForm } from "~/components/forms/files/FilesForm";
 
-export const LiveOrFiles = () => {
+export const LiveOrFiles = ({
+  onChangeEventDate,
+  defaultEventDate = new Date(),
+}: {
+  onChangeEventDate?: (arg0: string) => void;
+  defaultEventDate?: Date;
+}) => {
   const [isLive, setIsLive] = useState(true);
+  const [eventDate, setEventDate] = useState<Date>(defaultEventDate);
+
+  const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const v = e.currentTarget.value;
+    const date = new Date(`${v}T00:00`);
+    date.setHours(eventDate.getHours());
+    date.setMinutes(eventDate.getMinutes());
+    setEventDate(date);
+  };
+
+  const handleTimeChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const v = e.currentTarget.value;
+    const time = v.split(":");
+    const current = new Date(eventDate);
+    current.setHours(Number(time[0]));
+    current.setMinutes(Number(time[1]));
+    setEventDate(current);
+  };
+
+  useEffect(() => {
+    onChangeEventDate?.(eventDate);
+  }, [eventDate]);
+
+  const defaultTime = eventDate
+    .toLocaleString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+    .split(" ")[0];
+
+  // revisit
+  const defaultDate = eventDate.toISOString().split("T")[0];
+
   return (
     <section className="mt-8 mb-3">
       <h2 className="text-2xl">¿Tu curso es en vivo o pre-grabado?</h2>
@@ -29,8 +68,18 @@ export const LiveOrFiles = () => {
             >
               <p>Selecciona la fecha y hora del evento</p>
               <div className="flex gap-4">
-                <Input type="date" className="w-full" />
-                <Input type="time" className="w-full" />
+                <Input
+                  onChange={handleDateChange}
+                  type="date"
+                  className="w-full"
+                  defaultValue={defaultDate}
+                />
+                <Input
+                  defaultValue={defaultTime}
+                  onChange={handleTimeChange}
+                  type="time"
+                  className="w-full"
+                />
               </div>
             </motion.div>
           </>
