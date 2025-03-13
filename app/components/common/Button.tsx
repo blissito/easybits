@@ -9,6 +9,7 @@ interface ButtonProps {
   mode?: "primary" | "default" | "large";
   type?: "button" | "submit";
   isDisabled?: boolean;
+  className?: string;
 }
 
 export const Button = ({
@@ -16,6 +17,7 @@ export const Button = ({
   children,
   onClick,
   isDisabled,
+  className,
   type = "button",
   mode = "default",
   ...props
@@ -33,9 +35,10 @@ export const Button = ({
           "px-8 py-3",
           mode === "large" && "md:w-[420px] h-[54px]",
           {
-            "px-8 py-3": mode === "default",
-            "bg-brand-500": mode === "primary",
-          }
+            "px-4 py-3": mode === "default",
+            "bg-brand-500 h-12 px-4": mode === "primary",
+          },
+          className
         )}
         onClick={onClick}
         {...props}

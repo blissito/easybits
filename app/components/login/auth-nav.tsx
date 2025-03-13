@@ -42,10 +42,10 @@ export const AuthNav = ({ user }: { user?: User }) => {
       ref={scope}
       className={cn(
         "z-10",
-        "bg-black h-14 md:h-20 md:px-0border-b-[1px] border-white/30 fixed inset-0"
+        "bg-black h-14 md:h-20 md:px-0 border-b-[1px] border-white/30 fixed inset-0"
       )}
     >
-      <nav className=" max-w-7xl z-[70] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center pl-4">
+      <nav className=" max-w-7xl z-[99] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center pl-4">
         <Link to="/">
           <div className="flex gap-3 mx-2">
             <img src={Logo} alt="easybits" className="w-12" />

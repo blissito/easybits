@@ -31,7 +31,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
   return (
     <main className="flex relative z-10">
       <SideBar />
-      <GridBackground />
+      {/* <GridBackground /> */}
       <Outlet />
     </main>
   );

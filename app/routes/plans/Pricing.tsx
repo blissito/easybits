@@ -112,7 +112,7 @@ export const PlanCard = ({
   );
 };
 
-const PerkItem = ({ perk }: { perk?: string }) => {
+export const PerkItem = ({ perk }: { perk?: string }) => {
   return (
     <div className="flex w-full gap-2 my-2">
       <img alt="bullet" src="/hero/bullet.svg" />
