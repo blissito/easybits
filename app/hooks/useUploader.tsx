@@ -11,7 +11,7 @@ export const useUploader = (config: {
 
   // get real objects?
   useEffect(() => {
-    const link = links.shift();
+    // const link = links.shift();
     // fetcher.submit({intent:'list_objects', })
   }, []);
 
