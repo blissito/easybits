@@ -25,7 +25,7 @@ export const ITEMS = {
   ],
 
   bottomItems: [
-    { icon: UserIcon, path: "/", title: "Perfil" },
+    { icon: UserIcon, path: "/dash/perfil", title: "Perfil" },
     { icon: LogoutIcon, path: "/login?signout=1", title: "Cerrar Sesión" },
   ],
 };

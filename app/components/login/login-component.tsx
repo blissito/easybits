@@ -44,7 +44,7 @@ export default function LoginComponent() {
     <section className="w-screen border-[1px] border-black h-screen bg-cover bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
       <main>
-        <div className="flex flex-col w-full items-center justify-center">
+        <div className="flex flex-col w-full max-w-md  items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
           <motion.div
             whileHover={{ scale: 1.5 }}
@@ -72,16 +72,16 @@ export default function LoginComponent() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={transition}
-                  className="w-screen  px-4 md:px-[5%] xl:px-0 mx-auto flex flex-col items-center"
+                  className="w-full px-4 md:px-[5%] xl:px-0 mx-auto flex flex-col items-center"
                 >
-                  <p className="text-center  text-3xl whitespace-pre-line mb-10 text-white">
+                  <p className="text-center font-bold text-3xl whitespace-pre-line mb-10 text-white">
                     {SELECTED_STRINGS.title}
                   </p>
                   <div className="flex min-w-full flex-col md:items-center justify-center gap-8 mb-8 mx-auto">
                     <Button
-                      size="large"
+                      mode="large"
                       isLoading={isGoogleLoading}
-                      bgColor="bg-[#A6EB9A]"
+                      className="bg-[#A6EB9A]"
                       type="submit"
                       name="auth"
                       value="google"
@@ -90,9 +90,9 @@ export default function LoginComponent() {
                       Iniciar con Gmail
                     </Button>
                     <Button
-                      size="large"
+                      mode="large"
                       isLoading={isStripeLoading}
-                      bgColor="bg-[#6772E5]"
+                      className="bg-[#6772E5]"
                       type="submit"
                       name="auth"
                       value="stripe"
@@ -101,7 +101,7 @@ export default function LoginComponent() {
                       Iniciar con Stripe
                     </Button>
                     <Button
-                      size="large"
+                      mode="large"
                       type="button"
                       onClick={() => {
                         setLoginType("email");
@@ -114,7 +114,7 @@ export default function LoginComponent() {
                   <p className="text-center text-white">
                     {SELECTED_STRINGS.actionQuestion}
                     <span
-                      className="text-[#9870ED] cursor-pointer"
+                      className="text-[#9870ED] cursor-pointer underline"
                       onClick={() => setIsLogin((prev) => !prev)}
                     >
                       {SELECTED_STRINGS.action}
@@ -130,15 +130,16 @@ export default function LoginComponent() {
                   exit={{ opacity: 0 }}
                   transition={transition}
                 >
-                  <p className="text-center text-3xl whitespace-pre-line mb-10 text-white">
+                  <p className="text-center max-w-md  text-3xl whitespace-pre-line font-bold mb-10 text-white">
                     {SELECTED_STRINGS.formTitle}
                   </p>
-                  <div className="flex flex-col mb-8">
+                  <div className="flex flex-col gap-4">
                     <Input
                       label="Email"
                       type="email"
                       name="email"
                       placeholder="tucorreo@gmail.com"
+                      inputClassName="w-full"
                     />
                     <Input
                       label="Contraseña"
@@ -147,8 +148,7 @@ export default function LoginComponent() {
                       placeholder="Al menos 8 caracteres"
                     />
                     <Button
-                      size="large"
-                      bgColor="bg-brand-500"
+                      className="bg-brand-500 mt-4"
                       type="submit"
                       name="loginType"
                       value="email-pass"
@@ -156,7 +156,7 @@ export default function LoginComponent() {
                       {SELECTED_STRINGS.formSubmit}
                     </Button>
                   </div>
-                  <p className="text-center text-white">
+                  <p className="text-center text-white mt-8">
                     <span
                       className="text-brand-500 underline cursor-pointer "
                       onClick={() => {
