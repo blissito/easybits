@@ -17,7 +17,7 @@ export const AssetPreview = () => {
       </nav>
       <img
         className="rounded-2xl"
-        src="/public/hero/example1.png"
+        src="/hero/example1.png"
         alt="template preview"
       />
     </aside>
