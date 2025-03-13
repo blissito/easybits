@@ -1,6 +1,4 @@
-import { FaBoxOpen, FaShare } from "react-icons/fa";
 import { EditAssetForm } from "./EditAssetForm";
-import { FaCopy } from "react-icons/fa6";
 import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
@@ -18,6 +16,13 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     },
   });
   return { host: user.host!, asset };
+};
+
+export const action = async ({ request }: Route.ActionArgs) => {
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  return null;
 };
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {

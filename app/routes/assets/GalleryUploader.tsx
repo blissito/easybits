@@ -1,13 +1,19 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { LuImageUp } from "react-icons/lu";
 import { IoClose } from "react-icons/io5";
 import { cn } from "~/utils/cn";
+import type { Asset } from "@prisma/client";
 
-export const GalleryUploader = () => {
+import { nanoid } from "nanoid";
+import { useFetcher } from "react-router";
+import { useUploader } from "~/hooks/useUploader";
+
+export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
+  // const [links, setLinks] = useState<string[]>([]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -36,6 +42,29 @@ export const GalleryUploader = () => {
     const fls = [...ev.currentTarget.files];
     setFiles((fs) => [...fs, ...fls]);
   };
+
+  const fetcher = useFetcher();
+  const { upload, links } = useUploader({
+    async onLinksUpdated(lks) {
+      fetcher.submit(
+        {
+          intent: "update_asset_gallery_links",
+          data: JSON.stringify({ gallery: lks, id: asset.id }),
+        },
+        { method: "post", action: "/api/v1/assets" }
+      );
+    },
+  });
+
+  useEffect(() => {
+    if (files.length < 1) return;
+
+    files.map((f) => {
+      upload(f, asset.id);
+    });
+  }, [files]);
+
+  console.log("Links", links);
 
   return (
     <article className="">
@@ -88,7 +117,6 @@ export const GalleryUploader = () => {
         {files.length > 0 && (
           <RowGalleryEditor
             onClick={() => fileInputRef.current?.click()}
-            setFiles={setFiles}
             files={files}
           />
         )}
@@ -106,50 +134,21 @@ export const GalleryUploader = () => {
 };
 
 const RowGalleryEditor = ({
-  setFiles,
   files = [],
   onClick,
+  onRemove,
 }: {
+  onRemove?: () => void;
   onClick: () => void;
-  setFiles: (arg0: File[]) => void;
   files: File[];
 }) => {
-  const handleRemove = (index: number) => () => {
-    const fls = [...files];
-    fls.splice(index, 1);
-    setFiles(fls);
-  };
-
   return (
     <div className={cn("flex gap-3")}>
       <LayoutGroup>
         <AnimatePresence>
-          {files.map((file, i) => {
-            const virtualSrc = URL.createObjectURL(file);
-            return (
-              <motion.figure
-                layout
-                initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
-                exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
-                animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
-                key={file.name + file.size}
-                className="aspect-square max-w-[144px] min-w-[144px] relative group border rounded-2xl my-2"
-              >
-                <button
-                  type="button"
-                  onClick={handleRemove(i)}
-                  className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2"
-                >
-                  <IoClose />
-                </button>
-                <img
-                  src={virtualSrc}
-                  alt="preview"
-                  className="rounded-2xl object-cover w-full h-full"
-                />
-              </motion.figure>
-            );
-          })}
+          {files.map((file, i) => (
+            <Image onRemove={onRemove} key={i} file={file} />
+          ))}
         </AnimatePresence>
 
         {files.length < 10 && (
@@ -166,5 +165,39 @@ const RowGalleryEditor = ({
         )}
       </LayoutGroup>
     </div>
+  );
+};
+
+const Image = ({
+  file,
+  onRemove,
+}: {
+  file: File;
+  onRemove?: () => void; // @todo remove file from s3
+}) => {
+  const virtualSrc = URL.createObjectURL(file);
+
+  return (
+    <motion.figure
+      layout
+      initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
+      exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
+      animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+      key={file.name + file.size}
+      className="aspect-square max-w-[144px] min-w-[144px] relative group border rounded-2xl my-2"
+    >
+      <button
+        type="button"
+        onClick={onRemove}
+        className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2"
+      >
+        <IoClose />
+      </button>
+      <img
+        src={virtualSrc}
+        alt="preview"
+        className="rounded-2xl object-cover w-full h-full"
+      />
+    </motion.figure>
   );
 };

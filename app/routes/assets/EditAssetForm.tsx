@@ -82,7 +82,6 @@ export const EditAssetForm = ({
     e.preventDefault();
 
     const { error, success } = assetClientSchema.safeParse(form);
-    console.log("ERR", error, "succesS:", success); // @todo remove
     formatErrors(error);
     if (!success) return;
 
@@ -114,7 +113,7 @@ export const EditAssetForm = ({
           onChange={handleChange("description")}
           name="description"
         />
-        <GalleryUploader />
+        <GalleryUploader asset={asset} host={host} />
         <HR />
         <PriceInput
           defaultPrice={asset.price}
