@@ -6,11 +6,16 @@ export const useUploader = (config: {
   onLinksUpdated?: (arg0: string[]) => void;
 }) => {
   const { onLinksUpdated, defaultLinks } = config || {};
-  //   const [files, setFiles] = useState<File[]>([]);
   const [links, setLinks] = useState<string[]>(defaultLinks || []);
   const fetcher = useFetcher();
 
-  // @todo remove
+  // get real objects?
+  useEffect(() => {
+    const link = links.shift();
+    // fetcher.submit({intent:'list_objects', })
+  }, []);
+
+  // @todo listObjects directly to generate links list
   const onRemove = (url: string, assetId: string) => {
     const filtered = [...links].filter((l) => l !== url);
     setLinks(filtered);

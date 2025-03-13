@@ -18,7 +18,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const link = formData.get("url") as string;
     const assetId = formData.get("assetId") as string;
     const url = new URL(link);
-    await deleteObject(url.pathname.substring(1), "easybits-public");
+    const key = url.pathname.substring(1);
+    console.log("::DELETING:: ", key);
+    await deleteObject(key, "easybits-public");
+    await deleteObject(key, "easybits-public");
+    await deleteObject(key, "easybits-public"); // 😅
     const asset = await db.asset.findUnique({
       where: {
         id: assetId,
@@ -35,7 +39,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);
-    const fileName = formData.get("fileName"); // + nanoid(3);
+    let fileName = formData.get("fileName") as string; // + nanoid(3);
+    const arr = fileName.split(".");
+    fileName = `${nanoid()}.${arr[arr.length - 1]}`; // better for urlsearchparams
     const assetId = formData.get("assetId"); // + nanoid(3);
     const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;
     const url = await getPutFileUrl(storageKey, 900, {

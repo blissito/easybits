@@ -71,9 +71,6 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
       <h2 className="mt-8 mb-2">Galería y miniatura principal</h2>
 
       <section
-        style={{
-          scrollbarWidth: "none",
-        }}
         className="overflow-auto"
         onMouseEnter={() => setIsHovered("hover")}
         onMouseLeave={() => setIsHovered(null)}
