@@ -6,13 +6,33 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
 import type { Asset } from "@prisma/client";
 import { assetSchema } from "~/routes/assets/EditAssetForm";
-import { getPutFileUrl } from "react-hook-multipart";
+import { getPutFileUrl, deleteObject } from "react-hook-multipart";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "remove_gallery_image_and_update_gallery") {
+    const link = formData.get("url") as string;
+    const assetId = formData.get("assetId") as string;
+    const url = new URL(link);
+    await deleteObject(url.pathname.substring(1), "easybits-public");
+    const asset = await db.asset.findUnique({
+      where: {
+        id: assetId,
+      },
+    });
+    if (!asset) throw new Response(null, { status: 404 });
+
+    const links = asset.gallery.filter((l) => l !== link);
+    console.log("About to update");
+    return await db.asset.update({
+      where: { id: asset.id },
+      data: { gallery: links },
+    });
+  }
 
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);

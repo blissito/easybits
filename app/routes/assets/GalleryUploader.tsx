@@ -4,8 +4,6 @@ import { LuImageUp } from "react-icons/lu";
 import { IoClose } from "react-icons/io5";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
-
-import { nanoid } from "nanoid";
 import { useFetcher } from "react-router";
 import { useUploader } from "~/hooks/useUploader";
 
@@ -40,11 +38,13 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
     if (!ev.currentTarget.files) return;
 
     const fls = [...ev.currentTarget.files];
-    setFiles((fs) => [...fs, ...fls]);
+    // setFiles((fs) => [...fs, ...fls]);
+    setFiles(fls);
   };
 
   const fetcher = useFetcher();
-  const { upload, links } = useUploader({
+  const { upload, links, onRemove } = useUploader({
+    defaultLinks: asset.gallery,
     async onLinksUpdated(lks) {
       fetcher.submit(
         {
@@ -59,12 +59,12 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
   useEffect(() => {
     if (files.length < 1) return;
 
-    files.map((f) => {
-      upload(f, asset.id);
-    });
+    const asyncUpload = async () => {
+      const promises = files.map((f) => upload(f, asset.id));
+      await Promise.all(promises);
+    };
+    asyncUpload();
   }, [files]);
-
-  console.log("Links", links);
 
   return (
     <article className="">
@@ -78,7 +78,7 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
         onMouseEnter={() => setIsHovered("hover")}
         onMouseLeave={() => setIsHovered(null)}
       >
-        {files.length < 1 && (
+        {links.length < 1 && (
           <motion.button
             layoutId="upload_button"
             onClick={() => fileInputRef.current?.click()}
@@ -114,10 +114,11 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
             </p>
           </motion.button>
         )}
-        {files.length > 0 && (
+        {links.length > 0 && (
           <RowGalleryEditor
             onClick={() => fileInputRef.current?.click()}
-            files={files}
+            links={links}
+            onRemove={(url) => onRemove(url, asset.id)}
           />
         )}
         <input
@@ -134,24 +135,24 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
 };
 
 const RowGalleryEditor = ({
-  files = [],
+  links = [],
   onClick,
   onRemove,
 }: {
-  onRemove?: () => void;
+  links?: string[];
+  onRemove?: (arg0: string) => void;
   onClick: () => void;
-  files: File[];
 }) => {
   return (
     <div className={cn("flex gap-3")}>
       <LayoutGroup>
         <AnimatePresence>
-          {files.map((file, i) => (
-            <Image onRemove={onRemove} key={i} file={file} />
+          {links.map((l) => (
+            <Image onRemove={() => onRemove?.(l)} key={l} src={l} />
           ))}
         </AnimatePresence>
 
-        {files.length < 10 && (
+        {links.length < 10 && (
           <motion.button
             onClick={onClick}
             layoutId="upload_button"
@@ -169,21 +170,19 @@ const RowGalleryEditor = ({
 };
 
 const Image = ({
-  file,
+  src,
   onRemove,
 }: {
-  file: File;
+  src: string;
   onRemove?: () => void; // @todo remove file from s3
 }) => {
-  const virtualSrc = URL.createObjectURL(file);
-
   return (
     <motion.figure
       layout
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
-      key={file.name + file.size}
+      key={src}
       className="aspect-square max-w-[144px] min-w-[144px] relative group border rounded-2xl my-2"
     >
       <button
@@ -194,7 +193,7 @@ const Image = ({
         <IoClose />
       </button>
       <img
-        src={virtualSrc}
+        src={src}
         alt="preview"
         className="rounded-2xl object-cover w-full h-full"
       />
