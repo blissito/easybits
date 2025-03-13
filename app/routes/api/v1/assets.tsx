@@ -27,7 +27,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (!asset) throw new Response(null, { status: 404 });
 
     const links = asset.gallery.filter((l) => l !== link);
-    console.log("About to update");
     return await db.asset.update({
       where: { id: asset.id },
       data: { gallery: links },
@@ -39,7 +38,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const fileName = formData.get("fileName"); // + nanoid(3);
     const assetId = formData.get("assetId"); // + nanoid(3);
     const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;
-    const ACL = formData.get("ACL") || "public-read";
     const url = await getPutFileUrl(storageKey, 900, {
       Bucket: "easybits-public", // all galleries are public
       ACL: "public-read", // not working
