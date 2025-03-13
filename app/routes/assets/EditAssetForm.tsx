@@ -4,7 +4,7 @@ import { LayoutGroup } from "motion/react";
 import { LiveOrFiles } from "./LiveOrFiles";
 import { Plantilla } from "./Plantilla";
 import { GalleryUploader } from "./GalleryUploader";
-import { ExtrasConfig } from "./ExtrasConfig";
+import { ExtraConfig } from "./ExtraConfig";
 import { MarkEditor } from "./MarkEditor";
 import { PriceInput } from "./PriceInput";
 import type { Asset } from "@prisma/client";
@@ -27,9 +27,10 @@ export const assetSchema = z.object({
   fileIds: z.array(z.string()).default([]),
   template: z
     .object({
-      ctaText: z.string(),
-      templateName: z.string(),
-      domain: z.string(),
+      ctaText: z.string().min(3),
+      templateName: z.string().default("default"),
+      host: z.string().min(3),
+      slug: z.string().min(3),
     })
     .optional()
     .nullable(),
@@ -37,9 +38,9 @@ export const assetSchema = z.object({
   publicLink: z.string().optional().nullable(),
   extra: z
     .object({
-      showReviews: z.boolean(),
-      stock: z.string(),
-      sold: z.string(),
+      stock: z.coerce.number(),
+      showSold: z.boolean().default(false),
+      showReviews: z.boolean().default(true),
     })
     .optional()
     .nullable(),
@@ -85,6 +86,9 @@ export const EditAssetForm = ({
     formatErrors(error);
     if (!success) return;
 
+    // console.log("Data", form);
+    // return;
+
     fetcher.submit(
       {
         data: JSON.stringify({ ...form, slug: asset.slug, id: asset.id }),
@@ -126,11 +130,18 @@ export const EditAssetForm = ({
         <LiveOrFiles
           onChangeEventDate={handleEventChange}
           defaultEventDate={asset.eventDate}
+          type={asset.type}
         />
         <HR />
-        <Plantilla host={host} slug={asset.slug} />
+        <Plantilla
+          onChange={handleChange("template")}
+          host={host}
+          slug={asset.slug}
+          template={asset.template}
+          error={errors.template}
+        />
         <HR />
-        <ExtrasConfig />
+        <ExtraConfig onChange={handleChange("extra")} extra={asset.extra} />
         <HR />
         <Footer isLoading={isLoading} />
       </Form>

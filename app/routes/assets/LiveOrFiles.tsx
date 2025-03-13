@@ -6,12 +6,14 @@ import { FilesForm } from "~/components/forms/files/FilesForm";
 
 export const LiveOrFiles = ({
   onChangeEventDate,
+  type,
   defaultEventDate = new Date(),
 }: {
+  type?: "WEBINAR";
   onChangeEventDate?: (arg0: string) => void;
   defaultEventDate?: Date;
 }) => {
-  const [isLive, setIsLive] = useState(true);
+  const [isLive, setIsLive] = useState(type === "WEBINAR");
   const [eventDate, setEventDate] = useState<Date>(defaultEventDate);
 
   const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +54,7 @@ export const LiveOrFiles = ({
         <p className="py-3">Pre-grabado</p>
         <Switch
           onChange={setIsLive}
-          defaultChecked={isLive}
+          defaultChecked={true}
           holderClassName="bg-brand-yellow"
         />
         <p className="py-3">En vivo</p>

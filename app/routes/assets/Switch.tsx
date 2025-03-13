@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
 
 export const Switch = ({
   onChange,
-  defaultChecked = true,
+  value,
+  defaultChecked,
   label,
   holderClassName,
   className,
 }: {
+  value?: boolean;
   className?: string;
   defaultChecked?: boolean;
   onChange?: (arg0: boolean) => void;
@@ -21,6 +23,13 @@ export const Switch = ({
     setChecked(c);
     onChange?.(c);
   };
+
+  useEffect(() => {
+    if (value !== undefined) {
+      setChecked(value || false);
+    }
+  }, [value]);
+
   return (
     <button
       className={cn("text-left flex gap-4 h-6", className)}

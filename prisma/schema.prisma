@@ -16,14 +16,15 @@ enum AssetType {
 
 type AssetExtraSettingsSettings {
   stock       Int
-  sold        Int
+  showSold    Boolean
   showReviews Boolean
 }
 
 type AssetTemplateSettings {
   ctaText      String
   templateName String
-  domain       String?
+  host         String?
+  slug         String?
 }
 
 model Asset {
