@@ -6,7 +6,7 @@ export const ChatMobile = () => {
   return (
     <section
       className={cn(
-        "bg-onix h-full lg:hidden w-full  rounded-2xl  overflow-y-scroll flex-col flex bg-red-600 ",
+        "bg-onix h-full lg:hidden w-full  rounded-2xl  overflow-y-scroll flex-col flex  ",
         "lg:hidden lg:rounded-l-none lg:rounded-r-2xl"
       )}
     >
