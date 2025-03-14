@@ -1,8 +1,5 @@
-import { GridBackground } from "~/components/common/backgrounds/GridBackground";
-import StartComponent from "~/components/start/StartComponent";
 import { PerkItem } from "./plans/Pricing";
 import { Button } from "~/components/common/Button";
-import { BrutalButton } from "~/components/common/BrutalButton";
 import { cn } from "~/utils/cn";
 
 export default function Profile() {
