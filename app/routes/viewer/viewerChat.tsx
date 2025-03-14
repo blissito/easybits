@@ -84,7 +84,7 @@ const ChatBox = () => {
         )}
         placeholder="Escribe un mensaje..."
       />{" "}
-      <IoSend className="text-white max-h-10 absolute right-8 text-xl top-[14px]" />
+      <IoSend className="text-white max-h-10 absolute right-6 md:right-8 text-xl top-[22px]" />
     </div>
   );
 };
