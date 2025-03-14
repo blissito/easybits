@@ -8,7 +8,7 @@ export default function Preview() {
   return (
     <section
       className={cn(
-        "bg-black min-h-screen flex flex-col items-start justify-center w-full ",
+        "bg-black h-screen flex flex-col items-start justify-center w-full ",
         "md:flex-row"
       )}
     >
@@ -23,7 +23,7 @@ export default function Preview() {
           <FaArrowLeftLong />
           Volver al Dashboard
         </span>{" "}
-        <div className="flex w-full">
+        <div className="flex w-full overflow-hidden min-h-[280px]  md:h-[400px] lg:h-[78vh]">
           <TransmisionBox />
           <Chat />
         </div>

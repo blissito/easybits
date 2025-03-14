@@ -26,3 +26,14 @@ body {
   backdrop-filter: brightness(1) blur(10px);
   transition: all 0.5s;
 }
+
+.chatHight {
+  height: 100%;
+  max-height: none;
+}
+
+@media (max-width: 1024px) {
+  .chatHight {
+    padding-bottom: 10px;
+  }
+}

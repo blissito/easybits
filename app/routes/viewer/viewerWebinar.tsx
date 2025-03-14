@@ -5,7 +5,7 @@ export const EventInfo = () => {
   return (
     <article
       className={cn(
-        "w-full flex justify-between pr-0 flex-col mb-4",
+        "w-full flex justify-between pr-0 flex-col mb-4 h-fit",
         "lg:pr-[300px] md:flex-row"
       )}
     >
