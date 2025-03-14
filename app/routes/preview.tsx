@@ -23,7 +23,7 @@ export default function Preview() {
           <FaArrowLeftLong />
           Volver al Dashboard
         </span>{" "}
-        <div className="flex w-full">
+        <div className="flex w-full overflow-hidden bg-purple-600 md:h-[400px] lg:h-[78vh]">
           <TransmisionBox />
           <Chat />
         </div>
