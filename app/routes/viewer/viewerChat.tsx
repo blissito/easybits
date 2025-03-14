@@ -6,7 +6,7 @@ export const ChatMobile = () => {
   return (
     <section
       className={cn(
-        "bg-onix h-full lg:hidden w-full grow rounded-2xl relative overflow-y-scroll",
+        "bg-onix h-full lg:hidden w-full  rounded-2xl  overflow-y-scroll flex-col flex bg-red-600 ",
         "lg:hidden lg:rounded-l-none lg:rounded-r-2xl"
       )}
     >
@@ -21,8 +21,8 @@ export const Chat = () => {
   return (
     <section
       className={cn(
-        "bg-onix hidden min-w-[300px] w-[300px] min-h-full rounded-r-2xl relative overflow-y-scroll",
-        "lg:block"
+        "bg-onix hidden min-w-[300px] w-[300px] min-h-full rounded-r-2xl  overflow-y-scroll  flex-col",
+        "lg:flex"
       )}
     >
       <ChatHeader />
@@ -36,8 +36,8 @@ const ChatHistorial = () => {
   return (
     <div
       className={cn(
-        "px-2 pt-1 pb-14 text-tale font-light box-border chatHight",
-        "md:px-4 md:pt-4"
+        "px-2 pt-1  text-tale font-light box-border ",
+        "md:px-4 md:pt-4 h-full overflow-y-scroll "
       )}
     >
       <Message text=" Lorem ipsum dolor sit amet con sec tetur adipisicing elit." />
@@ -76,7 +76,7 @@ const Message = ({ text }: { text: string }) => {
 
 const ChatBox = () => {
   return (
-    <div className="px-2 md:px-4 pb-4 absolute bottom-0 w-full flex bg-onix backdrop-blur ">
+    <div className="px-2 md:px-4 pb-4 h-fit pt-2  w-full flex bg-onix backdrop-blur ">
       <input
         className={cn(
           "w-full h-12 rounded-lg bg-onix border border-marengo",

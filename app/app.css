@@ -28,14 +28,12 @@ body {
 }
 
 .chatHight {
-  height: calc(100% - 48px);
-  overflow: hidden;
-  overflow-y: scroll;
+  height: 100%;
+  max-height: none;
 }
 
 @media (max-width: 1024px) {
   .chatHight {
-    height: fit-content;
-    max-height: 440px;
+    padding-bottom: 10px;
   }
 }
