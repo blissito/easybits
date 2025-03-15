@@ -35,7 +35,7 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
                   className
                 )}
               >
-                <div className="p-3 lg:p-6 ">
+                <div className="p-4 lg:p-6 ">
                   <p className="text-base text-start mb-2 gap-1 flex items-center">
                     {title} <HiOutlineInformationCircle />
                   </p>
@@ -48,14 +48,14 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
           ))}
         </div>
         <div className="w-full grid grid-cols-12 gap-6 py-6 md:py-10 h-full   ">
-          <div className="col-span-12 lg:col-span-8 rounded-xl border border-black p-6 bg-white h-full flex flex-col justify-between ">
+          <div className="col-span-12 lg:col-span-8 rounded-xl border border-black p-4 md:p-6 bg-white h-full flex flex-col justify-between ">
             <p className="mb-10">Ventas</p>
             <div className="w-full h-full  min-h-[200px]">
               <LineChart data={salesData} />
             </div>
           </div>
           <div
-            className="col-span-12 lg:col-span-4 rounded-xl border border-black p-6 bg-white order-first lg:order-2
+            className="col-span-12 lg:col-span-4 rounded-xl border border-black p-4 md:p-6 bg-white order-first lg:order-2
 "
           >
             <p className="mb-2 font-semibold text-lg">Productos mas vendidos</p>
