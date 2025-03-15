@@ -16,11 +16,11 @@ export const Header = ({
   return (
     <nav
       className={cn(
-        "flex justify-between h-12 relative z-20 mb-20 pt-4 pr-4",
+        "flex justify-between items-center relative mb-6 md:mb-10 ",
         className
       )}
     >
-      <h1 className="text-4xl font-bold">{title}</h1>
+      <h1 className="text-3xl md:text-4xl font-bold ">{title}</h1>
       <div className="flex gap-3">
         {!noButtons && (
           <>

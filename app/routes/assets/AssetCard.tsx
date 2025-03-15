@@ -8,16 +8,16 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
   return (
     <Link
       to={`${asset.id}/edit`}
-      className="group bg-black inline-block rounded-xl"
+      className="group  inline-block rounded-xl w-full md:w-[300px]"
     >
       <div
         className={cn(
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
-          "group w-[300px] grow bg-white rounded-xl border border-black overflow-hidden flex flex-col transition-all"
+          "group w-full grow bg-white rounded-xl border border-black overflow-hidden flex flex-col transition-all"
         )}
       >
         <img
-          className="w-[300px] grow h-[252px] object-cover"
+          className="w-full grow h-[252px] object-cover"
           src={asset.image || "/public/hero/code.svg"}
           alt="cover"
         />
