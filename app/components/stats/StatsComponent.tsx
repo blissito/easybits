@@ -10,7 +10,7 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
       <div className="max-w-7xl mx-auto flex flex-col h-full pt-6 md:pt-10 box-border  ">
         <div className="flex justify-between items-end">
           <div className="w-2/3">
-            <p className="text-4xl font-semibold">
+            <p className="text-3xl md:text-4xl font-semibold">
               {STRINGS.title}
               {user.displayName || user.email?.split("@")[0]}
             </p>
