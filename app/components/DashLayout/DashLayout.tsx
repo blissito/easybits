@@ -154,7 +154,7 @@ const MenuItem = ({
             {isOpen ? (
               <motion.p
                 className={cn({
-                  "text-brand-500": isActive,
+                  "text-brand-500 bg-red-800": isActive,
                 })}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{
