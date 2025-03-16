@@ -8,6 +8,7 @@ import { FilesTable } from "./files/FilesTable";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
 import { FileDetailModal } from "~/components/forms/files/FileDetailModal";
+import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -31,17 +32,26 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const openTokensModal = (file: File) => setTokenFor(file);
   return (
     <>
-      <article className="min-h-[calc(100vh-1px)] overflow-hidden relative">
-        <section>
-          <h2 className="text-4xl font-semibold">Almacenamiento de archivos</h2>
+      <article className="min-h-[calc(100vh-1px)] overflow-hidden relative w-full">
+        <section className=" max-w-7xl mx-auto w-full py-6 md:py-10 px-4 md:px-[5%] lg:px-0 ">
+          <div className="flex h-fit mb-8 md:mb-10 flex-wrap">
+            <h2 className="text-3xl md:text-4xl font-semibold">
+              Almacenamiento de archivos
+            </h2>{" "}
+            <BrutalButton
+              onClick={open}
+              containerClassName="block ml-0 mt-3 md:mt-0 md:ml-auto "
+            >
+              + Subir archivo
+            </BrutalButton>
+          </div>
           {files.length < 1 && (
             <EmptyFiles onClick={() => setShowModal(true)} />
           )}
-          <hr className="border-none py-3" />
+
           {files.length > 0 && (
             <FilesTable
               onTokenClick={openTokensModal}
-              onClick={open}
               files={files}
               onDetail={(file: File) => {
                 setDetailFile(file);
