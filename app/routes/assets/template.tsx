@@ -239,12 +239,14 @@ export const FooterTemplate = ({ asset }: { asset: Asset }) => {
 export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
   const title = asset.title || "+20 Praga pack";
   const authorName = asset.user.displayName || "Sin nombre";
+  const authorPic = asset.user.picture || "Sin nombre";
   return (
     <section className="border-b-[2px] border-black bg-[#CE95F9]">
       <div className="border-b-[2px] border-black h-16">
         <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
           <div className="flex gap-2 items-center h-full">
-            <Avatar /> <h3 className="underline">{authorName}</h3>
+            <Avatar src={authorPic} />{" "}
+            <h3 className="underline">{authorName}</h3>
           </div>
           <div className="flex items-center gap-3">
             <FaFacebookF className="text-black text-lg" />
