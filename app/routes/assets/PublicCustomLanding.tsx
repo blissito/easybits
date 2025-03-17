@@ -23,12 +23,12 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const hostExists = await db.user.findFirst({
     where: { host },
   });
-  console.log;
-  if (!hostExists) throw new Response("User not found", { status: 404 });
+  if (!hostExists && host !== "localhost")
+    throw new Response("User not found", { status: 404 });
 
   const asset = await db.asset.findUnique({
     where: {
-      userId: hostExists.id,
+      userId: hostExists?.id,
       slug: params.assetSlug,
     },
     include: {
