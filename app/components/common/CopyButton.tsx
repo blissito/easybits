@@ -16,7 +16,8 @@ export const CopyButton = ({
   const [copied, setCopied] = useState(false);
   const { placeTimeout } = useTimeout();
 
-  const handleCopyToClipboard = (text: string) => () => {
+  const handleCopyToClipboard = (text: string) => (ev: MouseEvent) => {
+    ev.stopPropagation();
     navigator.clipboard.writeText(text);
     setCopied(true);
     placeTimeout(() => setCopied(false));

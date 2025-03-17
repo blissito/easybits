@@ -66,6 +66,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "update_asset") {
     // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
+    if (data.template.slug) {
+      data.slug = data.template.slug; // testing
+    }
     const parsed = assetSchema.parse({
       ...data,
       userId: user.id,

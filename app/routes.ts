@@ -7,11 +7,12 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
+  // public assetLanding
+  route("p/:assetSlug", "routes/assets/PublicCustomLanding.tsx"),
   // public info
   index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
-  route("/template", "routes/template.tsx"),
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/blog", "routes/blog.tsx"),

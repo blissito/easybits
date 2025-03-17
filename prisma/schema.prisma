@@ -41,6 +41,7 @@ model Asset {
   template    AssetTemplateSettings?
   published   Boolean                     @default(false)
   publicLink  String?
+  stripePrice String?
   extra       AssetExtraSettingsSettings?
   // ownership and metadata
   userId      String                      @db.ObjectId

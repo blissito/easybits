@@ -1,4 +1,4 @@
-import { Form, useFetcher } from "react-router";
+import { Form, Link, useFetcher } from "react-router";
 import { Button } from "~/components/common/Button";
 import { LayoutGroup } from "motion/react";
 import { LiveOrFiles } from "./LiveOrFiles";
@@ -152,7 +152,9 @@ export const EditAssetForm = ({
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
     <nav className="mb-8 flex justify-end gap-4">
-      <Button isDisabled={isLoading}>Cancelar</Button>
+      <Link to="/dash/assets">
+        <Button isDisabled={isLoading}>Cancelar</Button>
+      </Link>
       <BrutalButton isLoading={isLoading} type="submit">
         Guardar y publicar
       </BrutalButton>

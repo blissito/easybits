@@ -7,18 +7,19 @@ import { ProductGallery } from "~/components/galleries/ProductGallery";
 import { Link } from "react-router";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import type { Asset } from "@prisma/client";
 
-export default function Template() {
-  return (
-    <main>
-      <HeaderTemplate />
-      <ContentTemplate />
-      <FooterTemplate />
-    </main>
-  );
-}
+// export default function Template() {
+//   return (
+//     <main>
+//       <HeaderTemplate />
+//       <ContentTemplate />
+//       <FooterTemplate />
+//     </main>
+//   );
+// }
 
-const ContentTemplate = () => {
+export const ContentTemplate = () => {
   return (
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
@@ -246,13 +247,15 @@ const FooterTemplate = () => {
   );
 };
 
-const HeaderTemplate = () => {
+export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
+  const title = asset.title || "+20 Praga pack";
+  const authorName = asset.user.displayName || "Sin nombre";
   return (
     <section className="border-b-[2px] border-black bg-[#CE95F9]">
       <div className="border-b-[2px] border-black h-16">
         <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
           <div className="flex gap-2 items-center h-full">
-            <Avatar /> <h3 className="underline">Lucía López</h3>
+            <Avatar /> <h3 className="underline">{authorName}</h3>
           </div>
           <div className="flex items-center gap-3">
             <FaFacebookF className="text-black text-lg" />
@@ -285,10 +288,7 @@ const HeaderTemplate = () => {
           src="/hero/star.svg"
           alt="star"
         />
-        <h2 className="text-3xl md:text-4xl xl:text-5xl font-bold">
-          {" "}
-          +20 Praga pack
-        </h2>
+        <h2 className="text-3xl md:text-4xl xl:text-5xl font-bold">{title}</h2>
       </div>
     </section>
   );
