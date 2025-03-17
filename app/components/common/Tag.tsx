@@ -17,6 +17,10 @@ export const Tag = ({
           "bg-white text-black border-[2px] border-black":
             variant === "outline",
         },
+        {
+          "bg-transparent border border-marengo text-marengo":
+            variant === "dark",
+        },
         className
       )}
     >

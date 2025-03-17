@@ -17,7 +17,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export default function Store({ loaderData }) {
   const { assets, user } = loaderData;
   return (
-    <div className="relative z-10">
+    <div className="relative w-full">
       <StoreComponent assets={assets} />
     </div>
   );

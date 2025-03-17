@@ -1,21 +1,8 @@
-import { GridBackground } from "~/components/common/backgrounds/GridBackground";
-import StartComponent from "~/components/start/StartComponent";
-import { PerkItem } from "./plans/Pricing";
 import { Button } from "~/components/common/Button";
-import { BrutalButton } from "~/components/common/BrutalButton";
+import { PerkItem } from "../plans/Pricing";
 import { cn } from "~/utils/cn";
 
-export default function Profile() {
-  return (
-    <article className=" min-h-screen w-full relative box-border inline-block p-10">
-      <h2 className="text-4xl font-semibold">Perfil</h2>
-      <ProfileCard />
-      <SuscriptionCard />
-    </article>
-  );
-}
-
-const SuscriptionCard = () => {
+export const SuscriptionCard = () => {
   return (
     <section
       className={cn(
@@ -58,7 +45,7 @@ const SuscriptionCard = () => {
   );
 };
 
-const ProfileCard = () => {
+export const ProfileCard = () => {
   return (
     <section className="border flex-wrap md:flex-nowrap bg-white max-w-2xl border-black rounded-2xl p-4 md:p-8 mt-8 flex items-center gap-3 md:gap-6">
       <img

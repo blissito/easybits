@@ -95,20 +95,18 @@ export const FilesTable = ({
         onClose={closeConfirm}
         onConfirm={handleDelete}
       />
-      <BrutalButton onClick={onClick} containerClassName="block ml-auto mb-8">
-        + Subir archivo
-      </BrutalButton>
+
       <article className="bg-white border-2 rounded-xl border-black text-xs">
         <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
           <span className=""></span>
           <span className="col-span-2">Nombre</span>
-          <span className="">Tamaño</span>
-          <span>Fecha</span>
+          <span className="hidden md:block">Tamaño</span>
+          <span className="col-span-2 md:col-span-1">Fecha</span>
           {/* <span className="">Fuente</span> */}
-          <span>Asset</span>
-          <span className="">Tipo</span>
-          <span className="col-span-2">Privacidad</span>
-          <span className="col-span-1">HLS</span>
+          <span className="hidden md:block">Asset</span>
+          <span>Tipo</span>
+          <span className="col-span-2 md:col-span-1 ">Privacidad</span>
+          <span className="col-span-2 ">HLS</span>
           <span className="">Link</span>
           <span className=""></span>
         </section>
@@ -124,7 +122,7 @@ export const FilesTable = ({
               className={cn(
                 "pl-4",
                 "hover:bg-gray-100 ",
-                "grid grid-cols-12 py-3 border-b",
+                "grid grid-cols-12 items-start py-3 border-b",
                 {
                   "rounded-b-xl": files.length - 1 === i,
                 }
@@ -140,12 +138,17 @@ export const FilesTable = ({
                 onClick={() => {
                   onDetail?.(file);
                 }}
-                className="truncate font-semibold col-span-2 text-left"
+                className="truncate font-semibold col-span-2 text-left flex flex-col"
               >
                 {file.name}
+                <span className="text-brand-gray block md:hidden">
+                  {toMB(file.size)}
+                </span>
               </button>
-              <span className="text-brand-gray">{toMB(file.size)}</span>
-              <span className=" text-brand-gray">
+              <span className="text-brand-gray hidden md:block">
+                {toMB(file.size)}
+              </span>
+              <span className=" text-brand-gray col-span-2 md:col-span-1">
                 {new Date(file.createdAt).toLocaleDateString("es-MX", {
                   year: "numeric",
                   month: "short",
@@ -153,8 +156,8 @@ export const FilesTable = ({
                 })}
               </span>
               {/* <span className="text-brand-gray">Directa</span> */}
-              <span className="text-brand-gray">---</span>
-              <span className="flex items-center">
+              <span className="text-brand-gray hidden md:block">---</span>
+              <span className=" items-center flex">
                 <IconRenderer
                   fileName={file.name}
                   type={file.contentType}
@@ -170,7 +173,7 @@ export const FilesTable = ({
                   }}
                 />
               </span>
-              <span className="col-span-1 flex items-center">
+              <span className="col-span-2 md:col-span-1 flex items-center">
                 {file.access === "private" ? (
                   <span className="bg-brand-aqua rounded-full py-px px-1 border border-black">
                     Privado
