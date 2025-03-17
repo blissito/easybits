@@ -23,6 +23,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
   return null;
 };
+
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const intent = url.searchParams.get("intent");

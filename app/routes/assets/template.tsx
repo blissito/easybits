@@ -11,16 +11,6 @@ import type { Asset } from "@prisma/client";
 import type { ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
 
-// export default function Template() {
-//   return (
-//     <main>
-//       <HeaderTemplate />
-//       <ContentTemplate />
-//       <FooterTemplate />
-//     </main>
-//   );
-// }
-
 export const ContentTemplate = ({ asset }: { asset: Asset }) => {
   const getTypeOfBrag = () => {
     switch (asset.type) {

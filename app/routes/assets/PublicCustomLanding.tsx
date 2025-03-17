@@ -2,21 +2,6 @@ import type { Route } from "./+types/PublicCustomLanding";
 import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
 
-// URL {
-//     href: 'http://fixtergeek.localhost:3000/p/taller_en_vivo',
-//     origin: 'http://fixtergeek.localhost:3000',
-//     protocol: 'http:',
-//     username: '',
-//     password: '',
-//     host: 'fixtergeek.localhost:3000',
-//     hostname: 'fixtergeek.localhost',
-//     port: '3000',
-//     pathname: '/p/taller_en_vivo',
-//     search: '',
-//     searchParams: URLSearchParams {},
-//     hash: ''
-//   }
-
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const host = url.hostname.split(".")[0]; // host
@@ -47,7 +32,22 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <HeaderTemplate asset={asset} />
       <ContentTemplate asset={asset} />
       <FooterTemplate asset={asset} />
-      {/* WIP here */}
+      {/* // @todo stripe? */}
     </article>
   );
 }
+
+// URL {
+//     href: 'http://fixtergeek.localhost:3000/p/taller_en_vivo',
+//     origin: 'http://fixtergeek.localhost:3000',
+//     protocol: 'http:',
+//     username: '',
+//     password: '',
+//     host: 'fixtergeek.localhost:3000',
+//     hostname: 'fixtergeek.localhost',
+//     port: '3000',
+//     pathname: '/p/taller_en_vivo',
+//     search: '',
+//     searchParams: URLSearchParams {},
+//     hash: ''
+//   }
