@@ -23,7 +23,7 @@ interface InputProps {
   className?: string;
   inputClassName?: string;
   isError?: boolean;
-  defaultValue?: string;
+  defaultValue?: string | null;
   onChange?: (ev: ChangeEvent<HTMLInputElement>) => void;
   [x: string]: unknown;
 }
