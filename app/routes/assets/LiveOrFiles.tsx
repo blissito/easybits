@@ -3,12 +3,17 @@ import { Switch } from "./Switch";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FilesForm } from "~/components/forms/files/FilesForm";
+import type { Asset } from "@prisma/client";
 
 export const LiveOrFiles = ({
   onChangeEventDate,
+  onChangeMetadata,
+  asset,
   type,
   defaultEventDate = new Date(),
 }: {
+  onChangeMetadata?: (arg0: unknown) => void;
+  asset: Asset;
   type?: "WEBINAR";
   onChangeEventDate?: (arg0: string) => void;
   defaultEventDate?: Date;
@@ -83,6 +88,18 @@ export const LiveOrFiles = ({
                   className="w-full"
                 />
               </div>
+              <p>Coloca el número de sesiones</p>
+              <Input
+                min="1"
+                type="number"
+                defaultValue={asset.metadata?.numberOfSessions || "1"}
+                onChange={(ev) =>
+                  onChangeMetadata?.({
+                    numberOfSessions: Number(ev.currentTarget.value),
+                  })
+                }
+                className="w-full"
+              />
             </motion.div>
           </>
         )}

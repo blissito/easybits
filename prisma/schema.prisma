@@ -33,6 +33,7 @@ model Asset {
   title       String
   description String?
   eventDate   DateTime?
+  metadata    Json? // used for type webinar, for example.
   type        AssetType                   @default(DOWNLOADABLE)
   price       Float                       @default(0)
   currency    String                      @default("mxn")

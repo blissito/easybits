@@ -8,6 +8,7 @@ import { Link } from "react-router";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Asset } from "@prisma/client";
+import Markdown from "~/components/common/MarkDown";
 
 // export default function Template() {
 //   return (
@@ -19,29 +20,26 @@ import type { Asset } from "@prisma/client";
 //   );
 // }
 
-export const ContentTemplate = () => {
+export const ContentTemplate = ({ asset }: { asset: Asset }) => {
+  const getTypeOfBrag = () => {
+    switch (asset.type) {
+      case "WEBINAR":
+        return "inscritos";
+      default:
+        return "descargas";
+    }
+  };
+
   return (
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
         <ProductGallery
           className="bg-black"
-          items={[
-            {
-              src: "https://images.pexels.com/photos/1181533/pexels-photo-1181533.jpeg?auto=compress&cs=tinysrgb&w=1200",
-              text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
-              name: "pelusina",
-            },
-            {
-              src: "https://images.pexels.com/photos/927451/pexels-photo-927451.jpeg?auto=compress&cs=tinysrgb&w=1200",
-              text: " consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere Lorem ipsum dolor sit amet inventore illo sunt consequuntur exercitationem,",
-              name: "pelusino",
-            },
-            {
-              src: "https://images.pexels.com/photos/1181352/pexels-photo-1181352.jpeg?auto=compress&cs=tinysrgb&w=1200",
-              text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem.",
-              name: "pelusine",
-            },
-          ]}
+          items={asset.gallery.map((src) => ({
+            src,
+            text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
+            name: "pelusina",
+          }))}
         />
         <div className="grid grid-cols-8 border-t-[2px] border-black">
           <div
@@ -61,19 +59,19 @@ export const ContentTemplate = () => {
                 <Tag
                   className="h-6 md:h-8"
                   variant="outline"
-                  label="4k"
+                  label="Taller"
                   //    key={index} label={tag}
                 />
                 <Tag
                   className="h-6 md:h-8"
                   variant="outline"
-                  label="4k"
+                  label="Webinar"
                   //    key={index} label={tag}
                 />
                 <Tag
                   className="h-6 md:h-8"
                   variant="outline"
-                  label="4k"
+                  label="Práctica"
                   //    key={index} label={tag}
                 />
                 {/* ))} */}
@@ -84,7 +82,7 @@ export const ContentTemplate = () => {
                   "md:border-x-[2px] md:h-full   md:col-span-2"
                 )}
               >
-                <p>22 descargas</p>
+                <p>22 {getTypeOfBrag()}</p>
                 <img src="/icons/download.svg" alt="download" />
               </div>
               <div
@@ -98,7 +96,7 @@ export const ContentTemplate = () => {
               </div>
             </div>
             <div className={cn("h-fit p-4", "md:p-6")}>
-              <DescriptionContainer />
+              <Markdown>{asset.description}</Markdown>
             </div>
           </div>
           <div
@@ -123,13 +121,9 @@ export const ContentTemplate = () => {
               Comprar
             </button>
             <div className="h-fit p-6 border-b-[2px] border-black content-center">
-              <p>
-                {" "}
-                Lorem, ipsum dolor sit amet consectetur adipisicing elit.
-                Quibusdam minima voluptates numquam placeat officia! Ex
-                consectetur earum obcaecati perspiciatis. Illo tenetur qui quia
-                ut aut temporibus! Perspiciatis excepturi commodi neque.
-              </p>
+              <Markdown>
+                {asset.user.displayName || "Autor sin nombre"}
+              </Markdown>
             </div>
             <div className="h-10 border-b-[2px] border-black content-center">
               <AttributeList textLeft="Formato" textRight="png, jpg" />
@@ -149,73 +143,6 @@ export const ContentTemplate = () => {
         </div>
       </div>
     </section>
-  );
-};
-
-const DescriptionContainer = () => {
-  return (
-    <>
-      <p>
-        {" "}
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Quos
-        temporibus tempora non commodi facere sapiente a provident ad, eius
-        voluptatum doloremque veritatis necessitatibus cum minima aliquam,
-        reiciendis placeat culpa aspernatur. Lorem ipsum, dolor sit amet
-        consectetur adipisicing elit. Quos temporibus tempora non commodi facere
-        sapiente a provident ad, eius voluptatum doloremque veritatis
-        necessitatibus cum minima aliquam, reiciendis placeat culpa aspernatur.
-      </p>
-      <p>
-        {" "}
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Quos
-        temporibus tempora non commodi facere sapiente a provident ad, eius
-        voluptatum doloremque veritatis necessitatibus cum minima aliquam,
-        reiciendis placeat culpa aspernatur. Lorem ipsum, dolor sit amet
-        consectetur adipisicing elit. Quos temporibus tempora non commodi facere
-        sapiente a provident ad, eius voluptatum doloremque veritatis
-        necessitatibus cum minima aliquam, reiciendis placeat culpa aspernatur.
-      </p>
-      <p>
-        {" "}
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Quos
-        temporibus tempora non commodi facere sapiente a provident ad, eius
-        voluptatum doloremque veritatis necessitatibus cum minima aliquam,
-        reiciendis placeat culpa aspernatur. Lorem ipsum, dolor sit amet
-        consectetur adipisicing elit. Quos temporibus tempora non commodi facere
-        sapiente a provident ad, eius voluptatum doloremque veritatis
-        necessitatibus cum minima aliquam, reiciendis placeat culpa aspernatur.
-      </p>
-      <p>
-        {" "}
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Quos
-        temporibus tempora non commodi facere sapiente a provident ad, eius
-        voluptatum doloremque veritatis necessitatibus cum minima aliquam,
-        reiciendis placeat culpa aspernatur. Lorem ipsum, dolor sit amet
-        consectetur adipisicing elit. Quos temporibus tempora non commodi facere
-        sapiente a provident ad, eius voluptatum doloremque veritatis
-        necessitatibus cum minima aliquam, reiciendis placeat culpa aspernatur.
-      </p>
-      <p>
-        {" "}
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Quos
-        temporibus tempora non commodi facere sapiente a provident ad, eius
-        voluptatum doloremque veritatis necessitatibus cum minima aliquam,
-        reiciendis placeat culpa aspernatur. Lorem ipsum, dolor sit amet
-        consectetur adipisicing elit. Quos temporibus tempora non commodi facere
-        sapiente a provident ad, eius voluptatum doloremque veritatis
-        necessitatibus cum minima aliquam, reiciendis placeat culpa aspernatur.
-      </p>
-      <p>
-        {" "}
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Quos
-        temporibus tempora non commodi facere sapiente a provident ad, eius
-        voluptatum doloremque veritatis necessitatibus cum minima aliquam,
-        reiciendis placeat culpa aspernatur. Lorem ipsum, dolor sit amet
-        consectetur adipisicing elit. Quos temporibus tempora non commodi facere
-        sapiente a provident ad, eius voluptatum doloremque veritatis
-        necessitatibus cum minima aliquam, reiciendis placeat culpa aspernatur.
-      </p>
-    </>
   );
 };
 

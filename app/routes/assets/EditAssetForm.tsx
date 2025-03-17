@@ -17,6 +17,12 @@ export const assetSchema = z.object({
   slug: z.string().min(3),
   userId: z.string().min(3),
 
+  metadata: z
+    .object({
+      numberOfSessions: z.coerce.number().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
   eventDate: z.coerce.date().optional().nullable(),
   description: z.string().optional(),
   price: z.coerce.number({
@@ -62,7 +68,14 @@ export const EditAssetForm = ({
   const [form, setForm] = useState<Asset>(asset);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const setState = (obj: { [x: string]: number | boolean | string }) => {
+  const setState = (obj: {
+    [x: string]:
+      | number
+      | boolean
+      | string
+      | Date
+      | Record<string, string | number | boolean | Date>;
+  }) => {
     setForm((f) => ({ ...f, ...obj }));
   };
 
@@ -106,6 +119,14 @@ export const EditAssetForm = ({
     setState({ eventDate });
   };
 
+  const handleMetadataChange = ({
+    numberOfSessions,
+  }: {
+    numberOfSessions: number;
+  }) => {
+    setState({ metadata: { numberOfSessions } });
+  };
+
   return (
     <LayoutGroup>
       <Form
@@ -131,6 +152,8 @@ export const EditAssetForm = ({
           onChangeEventDate={handleEventChange}
           defaultEventDate={asset.eventDate}
           type={asset.type}
+          asset={asset}
+          onChangeMetadata={handleMetadataChange}
         />
         <HR />
         <Plantilla
