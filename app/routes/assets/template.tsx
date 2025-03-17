@@ -9,6 +9,7 @@ import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Asset } from "@prisma/client";
 import Markdown from "~/components/common/MarkDown";
+import type { ReactNode } from "react";
 
 // export default function Template() {
 //   return (
@@ -125,24 +126,79 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
                 {asset.user.displayName || "Autor sin nombre"}
               </Markdown>
             </div>
-            <div className="h-10 border-b-[2px] border-black content-center">
-              <AttributeList textLeft="Formato" textRight="png, jpg" />
-            </div>
-            <div className="h-10 border-b-[2px] border-black content-center">
-              <AttributeList textLeft="Formato" textRight="png, jpg" />
-            </div>
-            <div
-              className={cn(
-                "h-10 border-b-0 border-black content-center",
-                "border-b-[2px]"
-              )}
-            >
-              <AttributeList textLeft="Formato" textRight="png, jpg" />
-            </div>
+            {asset.type === "WEBINAR" ? (
+              <WebinarDetails asset={asset} />
+            ) : (
+              <Formats />
+            )}
           </div>
         </div>
       </div>
     </section>
+  );
+};
+
+const WebinarDetails = ({ asset }: { asset: Asset }) => {
+  const formatDate = (date: Date | string) => {
+    return new Date(date).toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+    });
+  };
+  return (
+    <section>
+      <div className="h-10 border-b-[2px] border-black content-center">
+        <AttributeList
+          textLeft="No. de sesiones"
+          textRight={asset.metadata?.numberOfSessions}
+        />
+      </div>
+      <div className="h-10 border-b-[2px] border-black content-center">
+        <AttributeList
+          textLeft="Modalidad"
+          textRight={
+            <div className="flex gap-2 items-center">
+              {" "}
+              <div className="relative w-3 h-3">
+                <div className="bg-pink-500 rounded-full absolute inset-0 blur-sm animate-pulse" />
+                <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
+              </div>
+              En vivo
+            </div>
+          }
+        />
+      </div>
+      <div className="h-10 border-b-[2px] border-black content-center">
+        <AttributeList
+          textLeft="Fecha"
+          textRight={formatDate(asset.eventDate)}
+        />
+      </div>
+    </section>
+  );
+};
+
+const Formats = () => {
+  return (
+    <>
+      <div className="h-10 border-b-[2px] border-black content-center">
+        <AttributeList textLeft="Formato" textRight="png, jpg" />
+      </div>
+      <div className="h-10 border-b-[2px] border-black content-center">
+        <AttributeList textLeft="Formato" textRight="png, jpg" />
+      </div>
+      <div
+        className={cn(
+          "h-10 border-b-0 border-black content-center",
+          "border-b-[2px]"
+        )}
+      >
+        <AttributeList textLeft="Formato" textRight="png, jpg" />
+      </div>
+    </>
   );
 };
 
@@ -226,12 +282,12 @@ const AttributeList = ({
   textRight,
 }: {
   textLeft: string;
-  textRight: string;
+  textRight: ReactNode;
 }) => {
   return (
     <div className="py-2 h-6 flex justify-between items-center px-6">
       <p>{textLeft}</p>
-      <p>{textRight}</p>
+      <div>{textRight}</div>
     </div>
   );
 };
