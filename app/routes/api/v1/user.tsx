@@ -26,7 +26,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const intent = url.searchParams.get("intent");
-  const formData = await request.formData();
 
   if (intent === "self") {
     return await getUserOrNull(request);
