@@ -18,7 +18,7 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
         <Link to={`${asset.id}/edit`}>
           <img
             className="w-[300px] grow h-[252px] object-cover"
-            src={asset.image || "/public/hero/code.svg"}
+            src={asset.gallery?.[0] || "/public/hero/code.svg"}
             alt="cover"
           />
           <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3">
