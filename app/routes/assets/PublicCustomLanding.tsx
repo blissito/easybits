@@ -1,5 +1,5 @@
 import type { Route } from "./+types/PublicCustomLanding";
-import { ContentTemplate, HeaderTemplate } from "./template";
+import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
 
 // URL {
@@ -46,6 +46,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <article>
       <HeaderTemplate asset={asset} />
       <ContentTemplate asset={asset} />
+      <FooterTemplate />
+      {/* WIP here */}
     </article>
   );
 }

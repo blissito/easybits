@@ -202,7 +202,7 @@ const Formats = () => {
   );
 };
 
-const FooterTemplate = () => {
+export const FooterTemplate = () => {
   return (
     <>
       <section
