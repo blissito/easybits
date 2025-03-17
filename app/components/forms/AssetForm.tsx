@@ -64,6 +64,7 @@ export const AssetForm = ({
         label="Ponle nombre a tu asset"
         placeholder="Curso de macramé"
       />
+
       <h3 className="mb-4 font-medium">¿Qué tipo de asset es?</h3>
 
       <RadioGroup onChange={(value: string) => handleChange("type", value)} />

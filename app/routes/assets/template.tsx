@@ -31,6 +31,8 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
     }
   };
 
+  const getPriceString = () => `$${asset.price} ${asset.currency}`;
+
   return (
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
@@ -56,26 +58,17 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
                   "md:col-span-5 md:px-6 md:h-full md:border-transparent"
                 )}
               >
-                {/* {tags.map((tag, index) => ( */}
-                <Tag
-                  className="h-6 md:h-8"
-                  variant="outline"
-                  label="Taller"
-                  //    key={index} label={tag}
-                />
-                <Tag
-                  className="h-6 md:h-8"
-                  variant="outline"
-                  label="Webinar"
-                  //    key={index} label={tag}
-                />
-                <Tag
-                  className="h-6 md:h-8"
-                  variant="outline"
-                  label="Práctica"
-                  //    key={index} label={tag}
-                />
-                {/* ))} */}
+                {asset.tags
+                  .trim()
+                  .split(",")
+                  .map((tag, i) => (
+                    <Tag
+                      className="h-6 md:h-8"
+                      variant="outline"
+                      label={tag}
+                      key={i}
+                    />
+                  ))}
               </div>
               <div
                 className={cn(
@@ -83,18 +76,29 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
                   "md:border-x-[2px] md:h-full   md:col-span-2"
                 )}
               >
-                <p>22 {getTypeOfBrag()}</p>
+                {
+                  <p>
+                    {asset.extra?.showSold ? asset.extra?.sold : 0}{" "}
+                    {getTypeOfBrag()}
+                  </p>
+                }
+
                 <img src="/icons/download.svg" alt="download" />
               </div>
-              <div
-                className={cn(
-                  "col-span-4  px-6 flex items-center gap-2",
-                  "md:col-span-1"
-                )}
-              >
-                <p className="underline">4.8</p>
-                <img className="w-6" src="/icons/star.png" alt="star" />
-              </div>
+              {asset.extra?.showReviews && (
+                <div
+                  className={cn(
+                    "col-span-4  px-6 flex items-center gap-2",
+                    "md:col-span-1"
+                  )}
+                >
+                  <p className="underline">
+                    {/* @todo map reviews */}
+                    {asset.extra?.reviews || 4.7}
+                  </p>
+                  <img className="w-6" src="/icons/star.png" alt="star" />
+                </div>
+              )}
             </div>
             <div className={cn("h-fit p-4", "md:p-6")}>
               <Markdown>{asset.description}</Markdown>
@@ -112,7 +116,9 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
                 "md:grid"
               )}
             >
-              <h3 className="text-2xl font-bold text-white"> $199.00 mxn</h3>
+              <h3 className="text-2xl font-bold text-white">
+                {getPriceString()}
+              </h3>
             </div>
             <button
               className={cn(
@@ -122,9 +128,7 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
               Comprar
             </button>
             <div className="h-fit p-6 border-b-[2px] border-black content-center">
-              <Markdown>
-                {asset.user.displayName || "Autor sin nombre"}
-              </Markdown>
+              <Markdown>{asset.note}</Markdown>
             </div>
             {asset.type === "WEBINAR" ? (
               <WebinarDetails asset={asset} />
@@ -202,7 +206,9 @@ const Formats = () => {
   );
 };
 
-export const FooterTemplate = () => {
+export const FooterTemplate = ({ asset }: { asset: Asset }) => {
+  const getPriceString = () => `$${asset.price} ${asset.currency}`;
+
   return (
     <>
       <section
@@ -212,13 +218,13 @@ export const FooterTemplate = () => {
         )}
       >
         <img alt="isotipo easybits" src="/isotipo-eb.svg" />
-        <span>by</span>
+        <span>Powered by</span>
         <Link to="/" className="mt-1">
           <img alt="isotipo easybits " src="/logo-eb.svg" />{" "}
         </Link>
       </section>
       <div className="md:hidden border-t-[2px] border-x-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center px-4">
-        <p className="text-white font-bold">$199.00 mxn</p>
+        <p className="text-white font-bold">{getPriceString()}</p>
         <BrutalButton
           containerClassName="rounded-lg"
           className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium"

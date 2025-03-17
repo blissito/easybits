@@ -89,7 +89,7 @@ const ImageItem = ({
           animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
           exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
           key={item.src}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover object-bottom"
           src={item.src}
           alt="user"
         />

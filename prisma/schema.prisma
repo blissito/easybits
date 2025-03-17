@@ -28,9 +28,12 @@ type AssetTemplateSettings {
 }
 
 model Asset {
-  id          String                      @id @default(auto()) @map("_id") @db.ObjectId
-  slug        String                      @unique
-  title       String
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  slug  String @unique
+  title String
+
+  tags        String                      @default("")
+  note        String?
   description String?
   eventDate   DateTime?
   metadata    Json? // used for type webinar, for example.

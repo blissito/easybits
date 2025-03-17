@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { FaCheck, FaRegCopy } from "react-icons/fa";
 import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
@@ -18,6 +24,7 @@ interface InputProps {
   inputClassName?: string;
   isError?: boolean;
   defaultValue?: string;
+  onChange?: (ev: ChangeEvent<HTMLInputElement>) => void;
   [x: string]: unknown;
 }
 
@@ -29,6 +36,7 @@ export const Input = ({
   copy,
   inputClassName,
   isError,
+  onChange,
   ...props
 }: InputProps) => {
   // const ref = useRef<HTMLInputElement>(null);
@@ -38,10 +46,11 @@ export const Input = ({
   // }, [isError]);
 
   return (
-    <label className={cn("grid gap-2 text-white", className)}>
+    <label className={cn("grid gap-2 text-gray", className)}>
       <span>{label}</span>
       <div className="relative">
         <input
+          onChange={onChange}
           defaultValue={defaultValue}
           className={cn(
             "rounded-xl p-4 text-lg min-w-full mb-2 border h-[54px] bg-white text-black",

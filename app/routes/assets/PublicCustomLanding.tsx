@@ -46,7 +46,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <article>
       <HeaderTemplate asset={asset} />
       <ContentTemplate asset={asset} />
-      <FooterTemplate />
+      <FooterTemplate asset={asset} />
       {/* WIP here */}
     </article>
   );
