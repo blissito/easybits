@@ -8,8 +8,8 @@ import { Link } from "react-router";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Asset } from "@prisma/client";
-import Markdown from "~/components/common/MarkDown";
 import type { ReactNode } from "react";
+import Markdown from "~/components/common/Markdown";
 
 // export default function Template() {
 //   return (
