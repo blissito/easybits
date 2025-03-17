@@ -1,4 +1,4 @@
-import { Form, useFetcher } from "react-router";
+import { Form, Link, useFetcher } from "react-router";
 import { Button } from "~/components/common/Button";
 import { LayoutGroup } from "motion/react";
 import { LiveOrFiles } from "./LiveOrFiles";
@@ -11,12 +11,22 @@ import type { Asset } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
+import { Input } from "~/components/common/Input";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
   slug: z.string().min(3),
   userId: z.string().min(3),
+  title: z.string().min(3),
 
+  note: z.string().optional().nullable(),
+  tags: z.string().optional(),
+  metadata: z
+    .object({
+      numberOfSessions: z.coerce.number().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
   eventDate: z.coerce.date().optional().nullable(),
   description: z.string().optional(),
   price: z.coerce.number({
@@ -62,7 +72,14 @@ export const EditAssetForm = ({
   const [form, setForm] = useState<Asset>(asset);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const setState = (obj: { [x: string]: number | boolean | string }) => {
+  const setState = (obj: {
+    [x: string]:
+      | number
+      | boolean
+      | string
+      | Date
+      | Record<string, string | number | boolean | Date>;
+  }) => {
     setForm((f) => ({ ...f, ...obj }));
   };
 
@@ -106,12 +123,33 @@ export const EditAssetForm = ({
     setState({ eventDate });
   };
 
+  const handleMetadataChange = ({
+    numberOfSessions,
+  }: {
+    numberOfSessions: number;
+  }) => {
+    setState({ metadata: { numberOfSessions } });
+  };
+
   return (
     <LayoutGroup>
       <Form
         onSubmit={handleSubmit}
         className="flex-1 w-0 bg-white min-w-[320px]"
       >
+        <h2 className="text-2xl my-4">Detalles de tu Asset</h2>
+        <Input
+          defaultValue={asset.title}
+          onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
+          label="Título"
+          name="title"
+        />
+
+        <Input
+          onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
+          label="Tags"
+          placeholder="curso, programación"
+        />
         <MarkEditor
           defaultValue={asset.description}
           onChange={handleChange("description")}
@@ -126,11 +164,18 @@ export const EditAssetForm = ({
           onInputChange={handleChange("price")}
           onCurrencyChange={handleChange("currency")}
         />
+        <Input
+          onChange={(ev) => handleChange("note")(ev.currentTarget.value)}
+          label="Nota sobre el producto"
+          placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
+        />
         <HR />
         <LiveOrFiles
           onChangeEventDate={handleEventChange}
           defaultEventDate={asset.eventDate}
           type={asset.type}
+          asset={asset}
+          onChangeMetadata={handleMetadataChange}
         />
         <HR />
         <Plantilla
@@ -152,7 +197,9 @@ export const EditAssetForm = ({
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
     <nav className="mb-8 flex justify-end gap-4">
-      <Button isDisabled={isLoading}>Cancelar</Button>
+      <Link to="/dash/assets">
+        <Button isDisabled={isLoading}>Cancelar</Button>
+      </Link>
       <BrutalButton isLoading={isLoading} type="submit">
         Guardar y publicar
       </BrutalButton>

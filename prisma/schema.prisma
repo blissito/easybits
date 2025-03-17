@@ -28,11 +28,15 @@ type AssetTemplateSettings {
 }
 
 model Asset {
-  id          String                      @id @default(auto()) @map("_id") @db.ObjectId
-  slug        String                      @unique
-  title       String
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  slug  String @unique
+  title String
+
+  tags        String                      @default("")
+  note        String?
   description String?
   eventDate   DateTime?
+  metadata    Json? // used for type webinar, for example.
   type        AssetType                   @default(DOWNLOADABLE)
   price       Float                       @default(0)
   currency    String                      @default("mxn")
@@ -41,6 +45,7 @@ model Asset {
   template    AssetTemplateSettings?
   published   Boolean                     @default(false)
   publicLink  String?
+  stripePrice String?
   extra       AssetExtraSettingsSettings?
   // ownership and metadata
   userId      String                      @db.ObjectId

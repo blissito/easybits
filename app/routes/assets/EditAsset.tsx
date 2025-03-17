@@ -34,7 +34,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
       )}
     >
       <h1 className={cn("text-4xl py-4 border-b border-black", PADDING_LAYOUT)}>
-        Template UI
+        {asset.title}
       </h1>
       <main className={cn("flex gap-12 justify-evenly", PADDING_LAYOUT)}>
         <EditAssetForm host={host} asset={asset} />

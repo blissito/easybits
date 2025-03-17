@@ -35,7 +35,7 @@ export const BrutalButton = ({
     >
       <span
         className={cn(
-          "min-w-32 min-h-12  px-4",
+          "min-w-32 min-h-12 h-full px-4",
           "grid place-content-center",
           "block", // así podemos usar translate
           "text-lg font-semibold",

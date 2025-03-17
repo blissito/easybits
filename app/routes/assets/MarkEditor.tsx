@@ -15,8 +15,7 @@ export const MarkEditor = ({
   onChange?: (arg0: string) => void;
 }) => {
   return (
-    <section className="mt-8 mb-3">
-      <h2 className="text-2xl">Detalles de tu Asset</h2>
+    <section className="mb-3">
       <p className="pt-3">Descripción</p>
       <p className="text-xs pb-3">Puedes usar markdown</p>
       <textarea

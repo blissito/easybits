@@ -1,6 +1,15 @@
 import { Button } from "~/components/common/Button";
 import { PerkItem } from "../plans/Pricing";
 import { cn } from "~/utils/cn";
+import type { User } from "@prisma/client";
+import Edit from "/icons/edit2.svg";
+import { useEffect, useState, type FormEvent } from "react";
+import { Input } from "~/components/common/Input";
+import { Form, useFetcher } from "react-router";
+import { useEscape } from "~/hooks/useEscape";
+
+const DEFAULT_PIC =
+  "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
 
 export const SuscriptionCard = () => {
   return (
@@ -45,17 +54,65 @@ export const SuscriptionCard = () => {
   );
 };
 
-export const ProfileCard = () => {
+export const ProfileCard = ({ user }: { user: User }) => {
+  const [displayName, setDisplayName] = useState(user.displayName);
+  const [isEditing, setIsEditing] = useState(false);
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+  const fetcher = useFetcher();
+  const handleSubmit = (ev: FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+    setIsEditing(false);
+
+    fetcher.submit(
+      {
+        intent: "update_profile",
+        data: JSON.stringify({
+          displayName,
+        }),
+      },
+      {
+        method: "post",
+        action: "/api/v1/user",
+      }
+    );
+  };
+
+  useEscape(() => setIsEditing(false));
+
   return (
     <section className="border flex-wrap md:flex-nowrap bg-white max-w-2xl border-black rounded-2xl p-4 md:p-8 mt-8 flex items-center gap-3 md:gap-6">
       <img
         className="w-12 h-12 md:w-24 md:h-24 rounded-full"
-        src="https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200"
+        src={user.picture || DEFAULT_PIC}
+        onError={({ currentTarget }) => {
+          currentTarget.onerror = null;
+          currentTarget.src = DEFAULT_PIC;
+        }}
       />
       <div>
-        <h2 className="text-xl md:text-2xl font-semibold">Brenda Lozano</h2>
+        {isEditing ? (
+          <Form onSubmit={handleSubmit}>
+            <Input
+              autoFocus
+              defaultValue={user.displayName}
+              onChange={({ currentTarget }) =>
+                setDisplayName(currentTarget.value)
+              }
+            />
+          </Form>
+        ) : (
+          <div className="flex gap-1">
+            <h2 className="text-xl md:text-2xl font-semibold">{displayName}</h2>
+            <button onClick={handleEdit}>
+              <img src={Edit} alt="icon" />
+            </button>
+          </div>
+        )}
+
         <p className="md:text-base text-sm text-marengo font-light">
-          blendi_lozano_lonez@gmail.com
+          {user.email}
         </p>
       </div>
     </section>

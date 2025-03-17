@@ -37,3 +37,102 @@ body {
     padding-bottom: 10px;
   }
 }
+
+/* Markdown para el blog */
+.markdown p {
+  color: var(--brand-100);
+  font-size: 18px;
+  margin: 24px 0 0 0;
+  font-weight: normal;
+}
+
+.markdown a {
+  color: var(--brand-500);
+  text-decoration: underline;
+}
+
+.markdown code {
+  background-image: linear-gradient(#fff 0%, var(--brand-800) 0);
+  border-radius: 9px;
+  padding: 2px 4px;
+  color: white;
+}
+
+.markdown blockquote {
+  position: relative;
+  padding-left: 24px;
+  font-style: italic;
+}
+
+.markdown blockquote p {
+  color: var(--brand-500);
+}
+
+.markdown blockquote::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  background: white;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.markdown {
+  --brand-500: gray;
+}
+
+.markdown li {
+  font-size: 18px;
+  margin: 24px 0 0 0;
+  font-weight: bold;
+  margin-left: 20px;
+  font-family: "Avenir Book", "Avenir Regular", sans-serif;
+  list-style-type: decimal;
+}
+.markdown ul li::marker {
+  color: var(--brand-500);
+  list-style: circle;
+}
+
+.markdown p {
+  font-family: "Inter", serif;
+  /* color: rgba(255, 255, 255, 0.8); */
+}
+
+.markdown h2,
+.markdown h1,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6,
+.markdown strong {
+  font-family: "Inter", Figtree, "Avenir Book", "Avenir Regular", sans-serif;
+  font-weight: bold;
+}
+
+.markdown h1 {
+  font-size: 40px;
+  margin: 32px 0 24px 0;
+  line-height: 1.2;
+  margin-top: 48px;
+}
+
+.markdown h2 {
+  font-size: 32px;
+  margin: 32px 0 24px 0;
+  line-height: 1.2;
+  margin-top: 48px;
+}
+
+.markdown h3 {
+  font-size: 24px;
+  margin: 32px 0 24px 0;
+  line-height: 1.2;
+  margin-top: 48px;
+}
+
+.markdown img {
+  border-radius: 32px;
+  box-shadow: 4px 4px 3px gray;
+}
