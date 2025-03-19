@@ -7,7 +7,7 @@ import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachi
 import toast from "react-hot-toast";
 import { DotsMenu } from "../files/DotsMenu";
 
-export const ClientsTable = ({}: {}) => {
+export const SalesTable = ({}: {}) => {
   const fetcher = useFetcher();
 
   const { requestHLS } = useStartVersioningFlyMachine();
@@ -31,15 +31,14 @@ export const ClientsTable = ({}: {}) => {
 
   return (
     <>
-      <article className="bg-white border-[1px] rounded-xl border-black text-xs overflow-hidden">
+      <article className="bg-white border-[1px] rounded-xl border-black text-xs ">
         <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
-          <span className=""></span>
-          <span className=" col-span-2 md:col-span-1">Foto</span>
+          <span className=" col-span-2 md:col-span-1 hidden md:block"></span>
           <span className="col-span-5 md:col-span-2">Email</span>
           <span className="col-span-2 hidden md:block ">Nombre</span>
-          <span className="col-span-1">Compras</span>
-          <span className="col-span-2 hidden md:block">Fecha de registro</span>
-          <span className="col-span-2  hidden md:block">Última compra</span>
+          <span className="col-span-3 md:col-span-2">Asset</span>
+          <span className="col-span-2 hidden md:block">Fecha </span>
+          <span className="col-span-3 md:col-span-2 block">Precio</span>
           <span className="col-span-1"></span>
         </section>
 
@@ -53,18 +52,12 @@ export const ClientsTable = ({}: {}) => {
             className={cn(
               "pl-4",
               "hover:bg-gray-100 ",
-              "grid grid-cols-12 py-2 md:py-3 border-b  items-center"
+              "grid grid-cols-12 py-2 md:py-3 border-b items-center"
             )}
           >
-            <span className="">
-              <input
-                type="checkbox"
-                className="text-brand-500 focus:outline-brand-500"
-              />
-            </span>
-            <button className="truncate font-semibold col-span-2 md:col-span-1 text-left flex flex-col">
+            <button className="truncate font-semibold col-span-2 md:col-span-1 text-left  flex-col hidden md:flex">
               <img
-                className="h-10 w-10 rounded-full"
+                className="h-10 w-10 rounded-xl"
                 src="https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200"
                 alt="user"
               />
@@ -78,13 +71,15 @@ export const ClientsTable = ({}: {}) => {
               {" "}
               Fulanito Lopez
             </span>
-            <span className="text-brand-gray col-span-2 md:col-span-1 ">1</span>
-            <span className=" items-center  col-span-2 hidden md:flex">
+            <span className="text-black col-span-3 md:col-span-2 ">
+              Template UI
+            </span>
+            <span className=" items-center text-brand-gray col-span-2 hidden md:flex">
               {" "}
               10 nov 2024
             </span>
-            <span className=" items-center  col-span-2 hidden md:flex">
-              15 dic 2024
+            <span className=" items-center  col-span-3  md:col-span-2 flex">
+              $399.00 MXN
             </span>
 
             <DotsMenu>
