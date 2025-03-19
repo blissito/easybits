@@ -11,23 +11,27 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
     <main className="group bg-black rounded-2xl">
       <div
         className={cn(
+          "min-h-full",
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
-          "group max-w-[300px] grow bg-white rounded-xl border border-black overflow-hidden flex flex-col transition-all"
+          "group bg-white rounded-xl transition-all",
+          "flex flex-col",
+          "border border-black rounded-2xl",
+          "overflow-hidden"
         )}
       >
-        <Link to={`${asset.id}/edit`}>
+        <Link to={`${asset.id}/edit`} className="">
           <img
-            className="w-[300px] grow h-[252px] object-cover"
-            src={asset.gallery?.[0] || "/public/hero/code.svg"}
+            className="h-[180px] object-cover w-full flex-grow-0"
+            src={asset.gallery?.[0] || "/client.png"}
             alt="cover"
           />
-          <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3">
+          <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3 h-full">
             {asset.title || asset.slug || asset.template?.slug}
           </h3>
         </Link>
-        <nav className="flex justify-between relative">
+        <nav className="flex justify-between pr-4 mt-auto">
           <p className="text-brand-gray px-3 py-2">${asset.price || 0} mxn</p>
-          <CopyButton text={publicLink} className="absolute right-3 bottom-4" />
+          <CopyButton className="" text={publicLink} />
         </nav>
       </div>
     </main>

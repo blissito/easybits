@@ -283,9 +283,11 @@ const AttributeList = ({
   textRight: ReactNode;
 }) => {
   return (
-    <div className="py-2 h-6 flex justify-between items-center px-6">
-      <p>{textLeft}</p>
-      <div>{textRight}</div>
-    </div>
+    <section className="h-10 border-b-[2px] border-black content-center">
+      <div className="py-2 h-6 flex justify-between items-center px-6">
+        <p>{textLeft}</p>
+        <div>{textRight}</div>
+      </div>
+    </section>
   );
 };

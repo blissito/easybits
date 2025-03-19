@@ -2,8 +2,9 @@ import type { Asset } from "@prisma/client";
 import { useEffect, useState } from "react";
 
 export const usePublicLink = (asset: Asset) => {
-  const [link, setLink] = useState("");
+  if (!asset.template) return null;
 
+  const [link, setLink] = useState("");
   useEffect(() => {
     let h = `${location.host}`;
     const th = asset.template!.host as string;
@@ -12,6 +13,5 @@ export const usePublicLink = (asset: Asset) => {
     // // ussing asset slug instead of the template one
     setLink(`${location.protocol}//${h}/p/${asset.slug}`);
   }, []);
-
   return link;
 };

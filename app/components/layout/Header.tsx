@@ -8,7 +8,9 @@ export const Header = ({
   className,
   title,
   noButtons,
+  cta,
 }: {
+  cta?: ReactNode;
   noButtons?: boolean;
   title?: string;
   className?: string;
@@ -30,6 +32,7 @@ export const Header = ({
             <HeaderIconButton>
               <ListIcon />
             </HeaderIconButton>
+            {cta}
           </>
         )}
       </div>
