@@ -15,6 +15,8 @@ import "@livekit/components-styles";
 
 import { Track } from "livekit-client";
 import type { Route } from "./+types/clients";
+import { FilesTable } from "./files/FilesTable";
+import { ClientsTable } from "./clients/ClientsTable";
 
 export const loader = async () => {
   const response = await fetch(
@@ -42,7 +44,7 @@ export const loader = async () => {
   };
 };
 
-const LAYOUT_PADDING = "pl-10"; // to not set padding at layout level (so brendi's design can be acomplished)
+const LAYOUT_PADDING = "py-6 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export default function Clients({ loaderData }: Route.ComponentProps) {
   const { serverUrl, participantToken, participantName, roomName } = loaderData;
@@ -50,12 +52,20 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
     <>
       <article
         className={cn(
-          " min-h-screen w-full relative box-border inline-block",
+          " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:px-[5%] lg:px-0",
           LAYOUT_PADDING
         )}
       >
         <Header title="Clientes" />
-        <p>NOMBRE DEL ROOM: {roomName}</p>
+        <ClientsTable />
+      </article>
+    </>
+  );
+}
+
+{
+  // Streaming components
+  /* <p>NOMBRE DEL ROOM: {roomName}</p>
         <section>
           <LiveKitRoom
             video={true}
@@ -63,21 +73,30 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
             token={participantToken}
             serverUrl={serverUrl}
             // Use the default LiveKit theme for nice styles.
-            data-lk-theme="default"
+            data-lk-theme="deault"
             style={{ height: "100vh" }}
-          >
-            {/* Your custom component with basic video conferencing functionality. */}
-            <MyVideoConference />
-            {/* The RoomAudioRenderer takes care of room-wide audio for you. */}
-            <RoomAudioRenderer />
-            {/* Controls for the user to start/stop audio, video, and screen
-      share tracks and to leave the room. */}
-            <ControlBar />
+          > */
+}
+{
+  /* Your custom component with basic video conferencing functionality. */
+}
+{
+  /* <MyVideoConference /> */
+}
+{
+  /* The RoomAudioRenderer takes care of room-wide audio for you. */
+}
+{
+  /* <RoomAudioRenderer /> */
+}
+{
+  /* Controls for the user to start/stop audio, video, and screen
+      share tracks and to leave the room. */
+}
+{
+  /* <ControlBar />
           </LiveKitRoom>
-        </section>
-      </article>
-    </>
-  );
+        </section> */
 }
 
 function MyVideoConference() {
