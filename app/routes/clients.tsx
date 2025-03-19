@@ -1,53 +1,13 @@
 import { GridBackground } from "~/components/common/backgrounds/GridBackground";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
-// live kit
-import {
-  ControlBar,
-  GridLayout,
-  LiveKitRoom,
-  ParticipantTile,
-  RoomAudioRenderer,
-  useTracks,
-} from "@livekit/components-react";
-
-import "@livekit/components-styles";
 
 import { Track } from "livekit-client";
-import type { Route } from "./+types/clients";
-import { FilesTable } from "./files/FilesTable";
 import { ClientsTable } from "./clients/ClientsTable";
-
-export const loader = async () => {
-  const response = await fetch(
-    "https://cloud-api.livekit.io/api/sandbox/connection-details",
-    {
-      method: "post",
-      headers: {
-        "X-Sandbox-ID": "cyber-firewall-1wlmjh",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        roomName: "perro_blissmo_prueba",
-      }),
-    }
-  );
-  if (!response.ok) {
-    throw new Response("¡Sucedió algo terrible! 😭", { status: 500 });
-  }
-  const data = await response.json();
-  return data as {
-    serverUrl: string;
-    roomName: string;
-    participantName: string;
-    participantToken: string;
-  };
-};
 
 const LAYOUT_PADDING = "py-6 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
-export default function Clients({ loaderData }: Route.ComponentProps) {
-  const { serverUrl, participantToken, participantName, roomName } = loaderData;
+export default function Clients() {
   return (
     <>
       <article

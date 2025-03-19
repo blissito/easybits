@@ -28,6 +28,7 @@ export default {
         lime: "#C8F9AB",
         berry: "#E299A4",
         munsell: "#DAA23D",
+        sea: "#83D0E4",
       },
       backgroundImage: {
         patternDark: "url('/pattern-dark.svg')",

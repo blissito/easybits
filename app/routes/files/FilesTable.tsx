@@ -96,7 +96,7 @@ export const FilesTable = ({
         onConfirm={handleDelete}
       />
 
-      <article className="bg-white border-2 rounded-xl border-black text-xs">
+      <article className="bg-white border-[1px] rounded-xl border-black text-xs">
         <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
           <span className=""></span>
           <span className="col-span-2">Nombre</span>
