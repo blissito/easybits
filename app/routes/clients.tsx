@@ -58,7 +58,14 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
       >
         <Header title="Clientes" />
         <ClientsTable />
-        {/* <p>NOMBRE DEL ROOM: {roomName}</p>
+      </article>
+    </>
+  );
+}
+
+{
+  // Streaming components
+  /* <p>NOMBRE DEL ROOM: {roomName}</p>
         <section>
           <LiveKitRoom
             video={true}
@@ -66,21 +73,30 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
             token={participantToken}
             serverUrl={serverUrl}
             // Use the default LiveKit theme for nice styles.
-            data-lk-theme="default"
+            data-lk-theme="deault"
             style={{ height: "100vh" }}
-          > */}
-        {/* Your custom component with basic video conferencing functionality. */}
-        {/* <MyVideoConference /> */}
-        {/* The RoomAudioRenderer takes care of room-wide audio for you. */}
-        {/* <RoomAudioRenderer /> */}
-        {/* Controls for the user to start/stop audio, video, and screen
-      share tracks and to leave the room. */}
-        {/* <ControlBar />
+          > */
+}
+{
+  /* Your custom component with basic video conferencing functionality. */
+}
+{
+  /* <MyVideoConference /> */
+}
+{
+  /* The RoomAudioRenderer takes care of room-wide audio for you. */
+}
+{
+  /* <RoomAudioRenderer /> */
+}
+{
+  /* Controls for the user to start/stop audio, video, and screen
+      share tracks and to leave the room. */
+}
+{
+  /* <ControlBar />
           </LiveKitRoom>
-        </section> */}
-      </article>
-    </>
-  );
+        </section> */
 }
 
 function MyVideoConference() {

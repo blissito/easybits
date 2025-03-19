@@ -1,70 +1,14 @@
 import type { File } from "@prisma/client";
-import {
-  FaCat,
-  FaChair,
-  FaDog,
-  FaHammer,
-  FaRegImage,
-  FaVideo,
-} from "react-icons/fa";
-import { BrutalButton } from "~/components/common/BrutalButton";
 import { useFetcher } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
-import { Copy } from "~/components/common/Copy";
-import { FaBook } from "react-icons/fa6";
 import { useState } from "react";
 import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
-import toast, { Toaster } from "react-hot-toast";
-import Spinner from "~/components/common/Spinner";
+import toast from "react-hot-toast";
 import { DotsMenu } from "../files/DotsMenu";
-import { IconRenderer } from "../files/IconRenderer";
 
-const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
-
-export const ClientsTable = ({
-  files,
-  onClick,
-  onTokenClick,
-  onDetail,
-}: {
-  onDetail?: (arg0: File) => void;
-  onTokenClick?: (arg0: File) => void;
-  onClick?: () => void;
-  files?: File[];
-}) => {
+export const ClientsTable = ({}: {}) => {
   const fetcher = useFetcher();
-  const [fileToDelete, setFileToDelete] = useState<File | null>(null);
-
-  const handleDownload = (file: File) => {
-    const a = document.createElement("a");
-    a.href = file.url;
-    a.download = file.url;
-    a.click();
-  };
-
-  const openConfirm = (f: File) => {
-    setFileToDelete(f);
-  };
-
-  const closeConfirm = () => {
-    setFileToDelete(null);
-  };
-
-  const handleDelete = () => {
-    if (!fileToDelete) return;
-    setForceWorkingSpinner(fileToDelete.id);
-
-    fetcher.submit(
-      {
-        intent: "delete_file",
-      },
-      {
-        method: "post",
-        action: `/api/v1/files?storageKey=${fileToDelete.storageKey}`,
-      }
-    );
-  };
 
   const { requestHLS } = useStartVersioningFlyMachine();
   const [forceWorkingSpinner, setForceWorkingSpinner] = useState("");
