@@ -12,6 +12,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
+import { FilesPicker } from "./FilesPicker";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -170,13 +171,19 @@ export const EditAssetForm = ({
           placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
         />
         <HR />
-        <LiveOrFiles
-          onChangeEventDate={handleEventChange}
-          defaultEventDate={asset.eventDate}
-          type={asset.type}
-          asset={asset}
-          onChangeMetadata={handleMetadataChange}
-        />
+
+        {(asset.type === "VOD_COURSE" || asset.type === "WEBINAR") && (
+          <LiveOrFiles
+            onChangeEventDate={handleEventChange}
+            defaultEventDate={asset.eventDate}
+            type={asset.type}
+            asset={asset}
+            onChangeMetadata={handleMetadataChange}
+          />
+        )}
+
+        {asset.type === "DOWNLOADABLE" && <FilesPicker />}
+
         <HR />
         <Plantilla
           onChange={handleChange("template")}

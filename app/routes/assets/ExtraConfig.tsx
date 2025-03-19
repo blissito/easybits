@@ -14,7 +14,7 @@ export const ExtraConfig = ({
   onChange?: (arg0: Extra) => void;
   extra: Extra;
 }) => {
-  const [state, setState] = useState(extra);
+  const [state, setState] = useState(extra || {});
   const handleChange = (field: string) => (value: boolean | string) =>
     setState((st) => ({ ...st, [field]: value }));
 

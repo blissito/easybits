@@ -43,14 +43,14 @@ export const LiveOrFiles = ({
   }, [eventDate]);
 
   const defaultTime = eventDate
-    .toLocaleString("es-MX", {
+    ?.toLocaleString("es-MX", {
       hour: "2-digit",
       minute: "2-digit",
     })
     .split(" ")[0];
 
   // revisit
-  const defaultDate = eventDate.toISOString().split("T")[0];
+  const defaultDate = eventDate?.toISOString().split("T")[0];
 
   return (
     <section className="mt-8 mb-3">

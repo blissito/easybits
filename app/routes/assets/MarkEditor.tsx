@@ -21,7 +21,7 @@ export const MarkEditor = ({
       <textarea
         onChange={(e) => onChange?.(e.currentTarget.value) || rawChange?.(e)}
         name={name}
-        className="w-full h-[220px]"
+        className="w-full h-[220px] rounded-2xl focus:ring-brand-500"
         defaultValue={defaultValue}
       />
     </section>
