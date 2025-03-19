@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-
-const noop = () => {};
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 export const useDropFiles = <T extends HTMLElement>(config?: {
   type?: string;
@@ -9,6 +7,10 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
   const ref = useRef<T>(null);
+
+  const addFiles = (files: File[]) => {
+    setFiles((fs) => [...fs, ...files]);
+  };
 
   const handleDrop = (e: MouseEvent & any) => {
     e.preventDefault();
@@ -19,9 +21,9 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
       const fls = [...e.dataTransfer.files].filter((f) =>
         f.type.includes("image")
       );
-      setFiles(fls);
+      addFiles(fls);
     } else {
-      setFiles([...e.dataTransfer.files]);
+      addFiles([...e.dataTransfer.files]);
     }
   };
 
@@ -34,21 +36,43 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     setIsHovered("dropping");
   };
 
+  const handleClick = () => {
+    const input = Object.assign(document.createElement("input"), {
+      type: "file",
+      hidden: true,
+      multiple: true,
+    });
+    document.body.appendChild(input);
+    input.click();
+    input.onchange = (ev: ChangeEvent<HTMLInputElement>) => {
+      if (!ev.currentTarget?.files || ev.currentTarget.files.length < 1) {
+        return;
+      }
+      addFiles([...ev.currentTarget.files]);
+    };
+  };
+
+  const handleMouseEnter = () => {
+    setIsHovered("hover");
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(null);
+  };
+
   // listeners
   useEffect(() => {
-    ref.current!.addEventListener("mouseenter", () => {
-      setIsHovered("hover");
-    });
-    ref.current!.addEventListener("mouseleave", () => {
-      setIsHovered(null);
-    });
+    ref.current!.addEventListener("mouseenter", handleMouseEnter);
+    ref.current!.addEventListener("mouseleave", handleMouseLeave);
     ref.current!.addEventListener("dragenter", handleDragEnter);
     ref.current!.addEventListener("dragover", handleDragOver);
     ref.current!.addEventListener("drop", handleDrop);
+    ref.current!.addEventListener("click", handleClick);
 
     return () => {
-      ref.current!.removeEventListener("mouseenter", noop);
-      ref.current!.removeEventListener("mouseleave", noop);
+      ref.current!.removeEventListener("click", handleClick);
+      ref.current!.removeEventListener("mouseenter", handleMouseEnter);
+      ref.current!.removeEventListener("mouseleave", handleMouseLeave);
       ref.current!.removeEventListener("dragenter", handleDragEnter);
       ref.current!.removeEventListener("dragover", handleDragOver);
       ref.current!.removeEventListener("drop", handleDrop);
