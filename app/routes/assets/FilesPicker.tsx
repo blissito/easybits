@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { IoIosCloudUpload, IoMdCheckmark } from "react-icons/io";
+import {
+  IoIosCloudUpload,
+  IoMdCheckmark,
+  IoMdRemoveCircle,
+} from "react-icons/io";
 import { useDropFiles } from "~/hooks/useDropFiles";
 import { useUploadMultipart } from "react-hook-multipart/react";
 import { cn } from "~/utils/cn";
 import { MdOutlineCloudUpload } from "react-icons/md";
 import type { Asset, File as AssetFile } from "@prisma/client";
 import { FaCheckCircle } from "react-icons/fa";
+import { AnimatePresence, LayoutGroup } from "motion/react";
+import { motion } from "motion/react";
+import { useEndpoint } from "~/hooks/useEndpoint";
 
 export const FilesPicker = ({
   assetFiles = [],
@@ -14,7 +21,9 @@ export const FilesPicker = ({
   assetFiles?: AssetFile[];
   asset: Asset;
 }) => {
-  const { isHovered, ref, files } = useDropFiles<HTMLButtonElement>();
+  const { isHovered, ref, files, removeFile } =
+    useDropFiles<HTMLButtonElement>();
+
   const unoUOtro = files.length > 0 || assetFiles.length > 0;
   return (
     <article>
@@ -26,12 +35,17 @@ export const FilesPicker = ({
         </button>
       </nav>
       {unoUOtro && (
-        <Stacker defaultFiles={assetFiles} assetId={asset.id} files={files} />
+        <Stacker
+          removeFile={removeFile}
+          defaultFiles={assetFiles}
+          assetId={asset.id}
+          files={files}
+        />
       )}
       {
         <Dropper
           mode={unoUOtro ? "slim" : "default"}
-          ref={ref}
+          ref={ref as RefObject<HTMLButtonElement>}
           isHovered={isHovered}
         />
       }
@@ -39,11 +53,25 @@ export const FilesPicker = ({
   );
 };
 
-const Uploader = ({ file, assetId }: { file: File; assetId: string }) => {
+const Uploader = ({
+  onUpload,
+  file,
+  assetId,
+}: {
+  onUpload?: () => void;
+  file: File;
+  assetId: string;
+}) => {
   const [progress, setProgress] = useState(0);
+  //   const submit = useSubmit();
   const { upload } = useUploadMultipart({
     onUploadProgress({ percentage }: { percentage: number }) {
       setProgress(percentage);
+      if (percentage >= 100) {
+        // submit({});
+        // location.reload();
+        onUpload?.();
+      }
     },
   });
 
@@ -56,7 +84,23 @@ const Uploader = ({ file, assetId }: { file: File; assetId: string }) => {
     }
   }, []);
   return (
-    <main className="border-2 border-dashed border-brand-gray rounded-xl px-2 py-2">
+    <motion.main
+      layoutId={file.name}
+      key={file.name}
+      initial={{
+        opacity: 0,
+        y: 10,
+      }}
+      exit={{
+        opacity: 0,
+        y: 10,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+      }}
+      className="border-2 border-dashed border-brand-gray rounded-xl px-2 py-2"
+    >
       <div className="flex justify-between mb-1">
         <span className="text-xs truncate">{file.name}</span>
         <span
@@ -79,29 +123,65 @@ const Uploader = ({ file, assetId }: { file: File; assetId: string }) => {
           style={{ width: `${progress}%` }}
         />
       </div>
-    </main>
+    </motion.main>
   );
 };
 
 const FakeUploader = ({
   file,
   progress = 100,
+  index,
 }: {
   file: AssetFile;
-  progress: number;
+  progress?: number;
+  index: number;
 }) => {
+  const { remove } = useEndpoint("/api/v1/files");
+
+  const deleteAssrtFile = () => {
+    remove({
+      intent: "delete_file",
+      storageKey: file.storageKey,
+    });
+  };
+
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
-    <main className="border-2 border-dashed border-brand-gray rounded-xl px-2 py-2">
-      <div className="flex justify-between mb-1">
+    <motion.main
+      layoutId={file.name}
+      key={file.id}
+      transition={{ delay: index * 0.1 }}
+      initial={{
+        opacity: 0,
+        y: 10,
+      }}
+      exit={{
+        opacity: 0,
+        x: -10,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+      }}
+      className="border-2 border-dashed border-brand-gray rounded-xl px-2 py-2"
+    >
+      <div
+        onMouseLeave={() => setIsHovered(false)}
+        className="flex justify-between mb-1"
+      >
         <span className="text-xs truncate">{file.name}</span>
-        <span
+        <button
+          onClick={deleteAssrtFile}
+          onMouseEnter={() => setIsHovered(true)}
           className={cn("text-brand-500", {
             "text-brand-grass": progress >= 100,
             "animate-pulse": progress < 100,
+            "text-red-500": isHovered,
           })}
         >
-          {progress >= 100 ? <FaCheckCircle /> : <MdOutlineCloudUpload />}
-        </span>
+          {isHovered ? <IoMdRemoveCircle /> : <FaCheckCircle />}
+        </button>
       </div>
       <div className="h-2 bg-black rounded-full overflow-hidden">
         <div
@@ -114,7 +194,7 @@ const FakeUploader = ({
           style={{ width: `${progress}%` }}
         />
       </div>
-    </main>
+    </motion.main>
   );
 };
 
@@ -122,19 +202,40 @@ const Stacker = ({
   defaultFiles = [],
   files,
   assetId,
+  removeFile,
 }: {
+  removeFile?: (i: number) => void;
   defaultFiles: AssetFile[];
   assetId: string;
   files: File[];
 }) => {
   return (
     <section className="grid gap-2">
-      {files.map((file, i) => (
-        <Uploader assetId={assetId} key={i} file={file} />
-      ))}
-      {defaultFiles.map((assetFile, i) => (
-        <FakeUploader file={assetFile} key={i} />
-      ))}
+      <AnimatePresence>
+        {files
+          .filter((f, i) => {
+            // revisit
+            const v = !defaultFiles.find((d) => d.name === f.name);
+            if (!v) {
+              removeFile?.(i);
+            }
+            return v;
+          })
+          .map((file, i) => (
+            <Uploader
+              onUpload={() => {
+                //   removeFile?.(i);
+                // @todo fetch asset files
+              }}
+              assetId={assetId}
+              key={i}
+              file={file}
+            />
+          ))}
+        {defaultFiles.map((assetFile, i) => (
+          <FakeUploader index={i} file={assetFile} key={assetFile.id} />
+        ))}
+      </AnimatePresence>
     </section>
   );
 };

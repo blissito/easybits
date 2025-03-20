@@ -8,6 +8,12 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   const [files, setFiles] = useState<File[]>([]);
   const ref = useRef<T>(null);
 
+  const removeFile = (index: number) => {
+    const fs = [...files];
+    fs.splice(index, 1);
+    setFiles(fs);
+  };
+
   const addFiles = (files: File[]) => {
     setFiles((fs) => [...fs, ...files]);
   };
@@ -83,5 +89,5 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     };
   }, []);
 
-  return { isHovered, ref, files };
+  return { isHovered, ref, files, removeFile };
 };

@@ -16,6 +16,7 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     },
   });
   const files = await db.file.findMany({
+    orderBy: { createdAt: "desc" },
     where: {
       assetIds: {
         has: asset!.id,

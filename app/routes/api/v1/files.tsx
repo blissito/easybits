@@ -30,31 +30,36 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "delete_file") {
     const url = new URL(request.url);
     const serviceURL = new URL(`https://video-converter-hono.fly.dev`);
-    const storageKey = url.searchParams.get("storageKey")!;
+    // const storageKey = url.searchParams.get("storageKey")!;
     serviceURL.pathname = "/delete_all";
     serviceURL.searchParams.set(
       "webhook",
       "https://easybits.cloud/api/v1/conversion_webhook"
     );
-    serviceURL.searchParams.set("storageKey", storageKey);
-    const response = await fetch(serviceURL.toString(), {
-      method: "delete",
-      headers: {
-        Authorization: "Bearer PerroTOken", // @todo from service dashboard
-      },
-    });
-    const text = await response.text();
-    console.info("::CONVERTER_RESPONSE::", text, response.status);
-    if (response.status === 404) {
-      const storageKey = url.searchParams.get("storageKey")!;
-      await deleteObject(storageKey);
+    // serviceURL.searchParams.set("storageKey", storageKey);
+    // const response = await fetch(serviceURL.toString(), {
+    //   method: "delete",
+    //   headers: {
+    //     Authorization: "Bearer PerroTOken", // @todo from service dashboard
+    //   },
+    // });
+    // const text = await response.text();
+    // console.info("::CONVERTER_RESPONSE::", text, response.status);
+    // if (response.status === 404) {
+    const storageKey = (url.searchParams.get("storageKey") ||
+      formData.get("storageKey")) as string;
+    await deleteObject(storageKey); //Revisit
+    try {
       await db.file.delete({
         where: {
           storageKey,
         },
       });
+    } catch (e) {
+      console.error(e);
     }
-    return new Response(text);
+    return null;
+    // }
     // @todo delete actual file in webhook?
   }
 
