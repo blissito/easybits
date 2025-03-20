@@ -17,8 +17,8 @@ export default function Sales() {
         )}
       >
         <Header title="Ventas" />
-        {/* <EmptySales /> */}
-        <SalesTable />
+        <EmptySales />
+        {/* <SalesTable /> */}
       </article>
     </>
   );
