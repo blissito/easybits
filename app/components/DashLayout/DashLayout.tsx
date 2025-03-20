@@ -41,7 +41,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
 const SideBar = () => {
   return (
     <section>
-      <div className="absolute h-full right-4 bottom-0 z-50 block md:hidden">
+      <div className="fixed  right-4 bottom-0 z-50 block md:hidden h-screen">
         <FoldMenu />
       </div>
       <motion.div
