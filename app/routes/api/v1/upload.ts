@@ -12,6 +12,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     async (complete: Complete) => {
       // create on DB
       await createFile({
+        status: "DONE",
         metadata: complete.metadata,
         size: complete.size,
         storageKey: complete.key,
@@ -20,6 +21,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         contentType: complete.contentType,
         access: complete.access,
         name: complete.metadata.name,
+        assetIds: complete.data.assetId ? [complete.data.assetId] : undefined, // new
       });
       return new Response(JSON.stringify(complete));
     },

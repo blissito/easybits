@@ -62,20 +62,24 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
 
   // listeners
   useEffect(() => {
-    ref.current!.addEventListener("mouseenter", handleMouseEnter);
-    ref.current!.addEventListener("mouseleave", handleMouseLeave);
-    ref.current!.addEventListener("dragenter", handleDragEnter);
-    ref.current!.addEventListener("dragover", handleDragOver);
-    ref.current!.addEventListener("drop", handleDrop);
-    ref.current!.addEventListener("click", handleClick);
+    if (!ref.current) return;
+
+    ref.current.addEventListener("mouseenter", handleMouseEnter);
+    ref.current.addEventListener("mouseleave", handleMouseLeave);
+    ref.current.addEventListener("dragenter", handleDragEnter);
+    ref.current.addEventListener("dragover", handleDragOver);
+    ref.current.addEventListener("drop", handleDrop);
+    ref.current.addEventListener("click", handleClick);
 
     return () => {
-      ref.current!.removeEventListener("click", handleClick);
-      ref.current!.removeEventListener("mouseenter", handleMouseEnter);
-      ref.current!.removeEventListener("mouseleave", handleMouseLeave);
-      ref.current!.removeEventListener("dragenter", handleDragEnter);
-      ref.current!.removeEventListener("dragover", handleDragOver);
-      ref.current!.removeEventListener("drop", handleDrop);
+      if (!ref.current) return;
+
+      ref.current.removeEventListener("click", handleClick);
+      ref.current.removeEventListener("mouseenter", handleMouseEnter);
+      ref.current.removeEventListener("mouseleave", handleMouseLeave);
+      ref.current.removeEventListener("dragenter", handleDragEnter);
+      ref.current.removeEventListener("dragover", handleDragOver);
+      ref.current.removeEventListener("drop", handleDrop);
     };
   }, []);
 

@@ -7,7 +7,7 @@ import { GalleryUploader } from "./GalleryUploader";
 import { ExtraConfig } from "./ExtraConfig";
 import { MarkEditor } from "./MarkEditor";
 import { PriceInput } from "./PriceInput";
-import type { Asset } from "@prisma/client";
+import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
@@ -66,7 +66,9 @@ const assetClientSchema = assetSchema.omit({
 export const EditAssetForm = ({
   host,
   asset,
+  assetFiles,
 }: {
+  assetFiles?: File[];
   asset: Asset;
   host: string;
 }) => {
@@ -182,7 +184,9 @@ export const EditAssetForm = ({
           />
         )}
 
-        {asset.type === "DOWNLOADABLE" && <FilesPicker />}
+        {asset.type === "DOWNLOADABLE" && (
+          <FilesPicker assetFiles={assetFiles} asset={asset} />
+        )}
 
         <HR />
         <Plantilla

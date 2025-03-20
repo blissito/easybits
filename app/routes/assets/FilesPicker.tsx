@@ -1,22 +1,36 @@
-import type { RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { IoIosCloudUpload, IoMdCheckmark } from "react-icons/io";
 import { useDropFiles } from "~/hooks/useDropFiles";
+import { useUploadMultipart } from "react-hook-multipart/react";
 import { cn } from "~/utils/cn";
+import { MdOutlineCloudUpload } from "react-icons/md";
+import type { Asset, File as AssetFile } from "@prisma/client";
+import { FaCheckCircle } from "react-icons/fa";
 
-export const FilesPicker = () => {
+export const FilesPicker = ({
+  assetFiles = [],
+  asset,
+}: {
+  assetFiles?: AssetFile[];
+  asset: Asset;
+}) => {
   const { isHovered, ref, files } = useDropFiles<HTMLButtonElement>();
+  const unoUOtro = files.length > 0 || assetFiles.length > 0;
   return (
     <article>
-      <h2 className="text-2xl">Assets para enviar a los compradores</h2>
+      <h2 className="text-2xl">Archivos que se entregarán a los compradores</h2>
       <nav className="pt-3 pb-1 flex justify-between ">
         <p className="">Agrega los archivos del producto</p>
         <button disabled className="text-xs text-brand-500 hidden md:block">
           Selecciona el archivo
         </button>
       </nav>
-      {files.length > 0 && <Stacker files={files} />}
+      {unoUOtro && (
+        <Stacker defaultFiles={assetFiles} assetId={asset.id} files={files} />
+      )}
       {
         <Dropper
-          mode={files.length > 0 ? "slim" : "default"}
+          mode={unoUOtro ? "slim" : "default"}
           ref={ref}
           isHovered={isHovered}
         />
@@ -25,11 +39,101 @@ export const FilesPicker = () => {
   );
 };
 
-const Stacker = ({ files }: { files: File[] }) => {
+const Uploader = ({ file, assetId }: { file: File; assetId: string }) => {
+  const [progress, setProgress] = useState(0);
+  const { upload } = useUploadMultipart({
+    onUploadProgress({ percentage }: { percentage: number }) {
+      setProgress(percentage);
+    },
+  });
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      // @todo start upload
+      upload(file.name, file, undefined, { data: { assetId } });
+    }
+  }, []);
   return (
-    <section>
+    <main className="border-2 border-dashed border-brand-gray rounded-xl px-2 py-2">
+      <div className="flex justify-between mb-1">
+        <span className="text-xs truncate">{file.name}</span>
+        <span
+          className={cn("text-brand-500", {
+            "text-brand-grass": progress >= 100,
+            "animate-pulse": progress < 100,
+          })}
+        >
+          {progress >= 100 ? <FaCheckCircle /> : <MdOutlineCloudUpload />}
+        </span>
+      </div>
+      <div className="h-2 bg-black rounded-full overflow-hidden">
+        <div
+          className={cn(
+            "bg-brand-500 h-full rounded-full border border-black",
+            {
+              "bg-brand-grass": progress >= 100,
+            }
+          )}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </main>
+  );
+};
+
+const FakeUploader = ({
+  file,
+  progress = 100,
+}: {
+  file: AssetFile;
+  progress: number;
+}) => {
+  return (
+    <main className="border-2 border-dashed border-brand-gray rounded-xl px-2 py-2">
+      <div className="flex justify-between mb-1">
+        <span className="text-xs truncate">{file.name}</span>
+        <span
+          className={cn("text-brand-500", {
+            "text-brand-grass": progress >= 100,
+            "animate-pulse": progress < 100,
+          })}
+        >
+          {progress >= 100 ? <FaCheckCircle /> : <MdOutlineCloudUpload />}
+        </span>
+      </div>
+      <div className="h-2 bg-black rounded-full overflow-hidden">
+        <div
+          className={cn(
+            "bg-brand-500 h-full rounded-full border border-black",
+            {
+              "bg-brand-grass": progress >= 100,
+            }
+          )}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </main>
+  );
+};
+
+const Stacker = ({
+  defaultFiles = [],
+  files,
+  assetId,
+}: {
+  defaultFiles: AssetFile[];
+  assetId: string;
+  files: File[];
+}) => {
+  return (
+    <section className="grid gap-2">
       {files.map((file, i) => (
-        <h1 key={i}>{file.name}</h1>
+        <Uploader assetId={assetId} key={i} file={file} />
+      ))}
+      {defaultFiles.map((assetFile, i) => (
+        <FakeUploader file={assetFile} key={i} />
       ))}
     </section>
   );
@@ -51,7 +155,7 @@ const Dropper = ({
         "items-center",
         "flex gap-4",
         "w-full",
-        "border-2 border-dashed border-brand-gray rounded-2xl",
+        "border-2 border-dashed border-brand-gray rounded-xl",
         {
           "border-black": isHovered === "hover",
           "border-brand-500": isHovered === "dropping",

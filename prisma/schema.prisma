@@ -99,7 +99,7 @@ model File {
   versions              String[]
   // ^ hls
   url                   String
-  access                String     @default("public-read")
+  access                String     @default("private")
   // ^ share
   ownerId               String     @db.ObjectId
   // ^ ownership
