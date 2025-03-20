@@ -82,7 +82,7 @@ export const ProfileCard = ({ user }: { user: User }) => {
   useEscape(() => setIsEditing(false));
 
   return (
-    <section className="border flex-wrap md:flex-nowrap bg-white max-w-2xl border-black rounded-2xl p-4 md:p-8 mt-8 flex items-center gap-3 md:gap-6">
+    <section className="border flex-wrap md:flex-nowrap bg-white max-w-2xl border-black rounded-2xl p-4 md:p-8 mt-4 md:mt-8 flex items-center gap-3 md:gap-6">
       <img
         className="w-12 h-12 md:w-24 md:h-24 rounded-full"
         src={user.picture || DEFAULT_PIC}

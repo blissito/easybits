@@ -12,12 +12,12 @@ export default function StartComponent() {
    */
 
   return (
-    <div className="flex h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 py-6 px-4 md:px-[5%] lg:px-0">
+    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 py-6 px-4 md:px-[5%] lg:px-0">
       <div className="w-full ">
         <div className="w-full lg:w-[756px] mx-auto rounded-xl border border-black bg-white mb-8">
           <div className="p-6 md:p-8 flex justify-between items-center">
             <div>
-              <p className="font-semibold text-xl md:text-2xl">
+              <p className="font-semibold text-2xl md:text-2xl">
                 {STRINGS.title}
               </p>
               <p className="text-brand-gray text-base md:text-lg">
