@@ -27,7 +27,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => ({
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
   // const { user } = loaderData;
-  const [isOpen, setIsOpen] = useState<boolean>(true);
 
   return (
     <main className="flex relative z-10 min-h-screen">
@@ -39,69 +38,77 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
 }
 
 const SideBar = () => {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
     <section>
-      <div className="fixed  right-4 bottom-0 z-50 block md:hidden h-screen">
+      <div className="fixed  right-4 bottom-0 z-50 block md:hidden h-screen ">
         <FoldMenu />
       </div>
-      <motion.div
-        className="bg-black hidden md:flex sticky top-0 z-10 h-screen text-white  flex-col justify-between items-center transition-all py-8"
-        // initial={{ width: isOpen ? 240 : 88 }}
-        whileHover={{ width: 240 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        // onMouseEnter={() => setIsOpen(true)}
-        // onMouseLeave={() => setIsOpen(true)}
-        // @todo fixed for now
-      >
-        <div className="w-full">
-          <div className="px-5 mb-4">
-            <MenuItem
-              path={"/"}
-              icon={Logo}
-              iconSize={52}
-              title={
-                <img
-                  src={TextLogo}
-                  alt="easybits-text"
-                  className="w-[103px] h-[39px]"
+      <AnimatePresence>
+        <motion.div className="w-52 bg-black h-full"></motion.div>
+      </AnimatePresence>
+
+      {/* <AnimatePresence>
+        <motion.div
+          className="bg-black hidden md:flex sticky top-0 z-10 h-screen text-white  flex-col justify-between items-center transition-all py-8"
+          initial={{ width: isOpen ? 240 : 88 }}
+          whileHover={{ width: 240 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(false)}
+          // @todo fixed for now
+        >
+          <div className="w-full">
+            <div className="px-5 mb-4">
+              <MenuItem
+                path={"/"}
+                icon={Logo}
+                iconSize={52}
+                title={
+                  <img
+                    src={TextLogo}
+                    alt="easybits-text"
+                    className="w-[103px] h-[39px]"
+                  />
+                }
+                // isOpen={isOpen}
+                isLogo
+              />
+            </div>
+            <ul className="flex flex-col gap-6 py-6">
+              {ITEMS.navItems.map((item, key) => (
+                <MenuItem
+                  key={key}
+                  {...item}
+
+                  // isOpen={isOpen}
                 />
-              }
-              // isOpen={isOpen}
-              isLogo
-            />
+              ))}
+            </ul>
+            <div className="border-t border-white/15 w-full" />
+            <ul className="flex flex-col gap-6 py-6">
+              {ITEMS.sectionItems.map((item, key) => (
+                <MenuItem
+                  key={key}
+                  {...item}
+
+                  // isOpen={isOpen}
+                />
+              ))}
+            </ul>
           </div>
-          <ul className="flex flex-col gap-6 py-6">
-            {ITEMS.navItems.map((item, key) => (
+          <ul className="flex flex-col gap-6 w-full">
+            {ITEMS.bottomItems.map((item, key) => (
               <MenuItem
                 key={key}
                 {...item}
-
-                // isOpen={isOpen}
+                //  isOpen={isOpen}
               />
             ))}
           </ul>
-          <div className="border-t border-white/15 w-full" />
-          <ul className="flex flex-col gap-6 py-6">
-            {ITEMS.sectionItems.map((item, key) => (
-              <MenuItem
-                key={key}
-                {...item}
-
-                // isOpen={isOpen}
-              />
-            ))}
-          </ul>
-        </div>
-        <ul className="flex flex-col gap-6 w-full">
-          {ITEMS.bottomItems.map((item, key) => (
-            <MenuItem
-              key={key}
-              {...item}
-              //  isOpen={isOpen}
-            />
-          ))}
-        </ul>
-      </motion.div>
+        </motion.div>{" "}
+      </AnimatePresence> */}
     </section>
   );
 };
@@ -119,14 +126,17 @@ const FoldMenu = () => {
     }
   };
   return (
-    <div className="flex flex-col justify-end pb-4 items-end h-full gap-4 ">
+    <div className="flex flex-col justify-end pb-4 items-end h-full gap-4">
       <AnimatePresence>
         {isFold && (
           <>
             {ITEMS.navItems
               .concat(ITEMS.sectionItems)
               .concat(ITEMS.bottomItems)
-              .filter((item) => item.index !== 3)
+              .filter(
+                (item) =>
+                  item.index !== 3 && item.index !== 6 && item.index !== 4
+              )
               .map((item, key) => (
                 <FoldMenuItem key={key} {...item} />
               ))}{" "}
@@ -148,12 +158,12 @@ const FoldMenuItem = ({
   index = 1,
 }: MenuItemProps) => {
   return (
-    <NavLink end={end} to={path}>
+    <NavLink end={end} to={path} className="w-fit h-fit  flex items-center">
       <motion.button
-        initial={{ filter: "blur(4px)", y: 0, opacity: 0 }}
-        animate={{ filter: "blur(0px)", y: -10, opacity: 1 }}
-        exit={{ filter: "blur(4px)", y: 0, opacity: 0 }}
-        transition={{ delay: 0.08 * index }}
+        initial={{ filter: "blur(4px)", y: -10, opacity: 0 }}
+        animate={{ filter: "blur(0px)", y: 0, opacity: 1 }}
+        exit={{ filter: "blur(4px)", y: -10, opacity: 0 }}
+        transition={{ delay: 0.04 * index }}
         className="w-12 h-12 rounded-full bg-black grid place-content-center "
       >
         {icon}
@@ -230,22 +240,18 @@ const MenuItem = ({
         )}
         {title && (
           <AnimatePresence initial={false}>
-            {isOpen ? (
-              <motion.p
-                className={cn({
-                  "text-brand-500 bg-red-800": isActive,
-                })}
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{
-                  opacity: 1,
-                  scale: 1,
-                  transition: { delay: 0.3, duration: 0.3 },
-                }}
-                exit={{ opacity: 0, scale: 0 }}
-              >
-                {title}
-              </motion.p>
-            ) : null}
+            <motion.p
+              className="text-white"
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                transition: { delay: 0.3, duration: 0.3 },
+              }}
+              exit={{ opacity: 0, scale: 0 }}
+            >
+              {title}
+            </motion.p>
           </AnimatePresence>
         )}
       </li>
