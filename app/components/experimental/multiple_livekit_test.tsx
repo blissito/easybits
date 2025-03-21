@@ -5,6 +5,7 @@ import Logo from "/icons/easybits-logo.svg";
 import {
   ControlBar,
   GridLayout,
+  FocusLayout,
   LiveKitRoom,
   ParticipantTile,
   RoomAudioRenderer,
@@ -144,7 +145,7 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
   );
 }
 
-function MyVideoConference() {
+export function MyVideoConference() {
   // `useTracks` returns all camera and screen share tracks. If a user
   // joins without a published camera track, a placeholder track is returned.
   const tracks = useTracks(

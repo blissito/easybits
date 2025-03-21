@@ -52,4 +52,5 @@ export default [
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
+  route("webinar", "routes/webinar/webinar.tsx"),
 ] satisfies RouteConfig;
