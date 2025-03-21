@@ -37,6 +37,7 @@ export default [
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
+      route("estraip", "routes/stripe.tsx"),
     ]),
   ]),
   // multipar upload
@@ -56,5 +57,4 @@ export default [
     ]),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
-  route("estraip", "routes/stripe.tsx"),
 ] satisfies RouteConfig;

@@ -31,8 +31,8 @@ export default function Stripe() {
   const loaderData = useLoaderData();
   const actionData = useActionData();
   const isLoading = fetcher.state !== "idle";
-  const connectedAccountId =
-    loaderData?.user?.stripe?.id || actionData?.account?.id;
+  const connectedAccountId = "acct_1R56FqRNPuQQakDO";
+  // loaderData?.user?.stripe?.id || actionData?.account?.id;
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
     publishableKey: loaderData.publishableKey,
@@ -69,19 +69,6 @@ export default function Stripe() {
             )}
           </div>
         )}
-        <div className="info-callout">
-          <p>
-            This is a sample app for Connect onboarding using the Account
-            Onboarding embedded component.{" "}
-            <a
-              href="https://docs.stripe.com/connect/onboarding/quickstart?connect-onboarding-surface=embedded"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              View docs
-            </a>
-          </p>
-        </div>
       </div>
     </div>
   );
