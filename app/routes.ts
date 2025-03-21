@@ -50,6 +50,11 @@ export default [
     route("assets", "routes/api/v1/assets.tsx"),
     route("files", "routes/api/v1/files.tsx"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
+    ...prefix("stripe", [
+      route("account", "routes/api/v1/stripe/account.tsx"),
+      route("account_session", "routes/api/v1/stripe/account_session.tsx"),
+    ]),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
+  route("estraip", "routes/stripe.tsx"),
 ] satisfies RouteConfig;
