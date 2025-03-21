@@ -22,7 +22,7 @@ export const Header = ({
         className
       )}
     >
-      <h1 className="text-3xl md:text-4xl font-bold ">{title}</h1>
+      <h1 className="text-3xl md:text-4xl font-semibold ">{title}</h1>
       <div className="flex gap-3">
         {!noButtons && (
           <>
