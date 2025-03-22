@@ -74,7 +74,7 @@ export const SideBar = () => {
                   <img
                     src={TextLogo}
                     alt="easybits-text"
-                    className="w-[103px] h-[39px]"
+                    className="w-[104px] h-[40px]"
                   />
                 }
                 // isOpen={isOpen}
@@ -104,7 +104,7 @@ export const SideBar = () => {
           onMouseLeave={handleMouseLeave}
           onClick={handleClick}
           className={cn(
-            "w-52 bg-black pb-6 h-full absolute top-0 -left-52 pt-16  flex flex-col justify-between  "
+            "w-52 bg-black pt-16 pb-6 h-full absolute  top-0 -left-52 flex flex-col justify-between  "
           )}
         >
           <div className="w-full ">
@@ -114,7 +114,7 @@ export const SideBar = () => {
               ))}
             </ul>
             <div className="border-t border-white/15 w-full" />
-            <ul className="flex flex-col gap-6 py-6 pl-20">
+            <ul className="flex flex-col gap-6 py-6 pl-20 ">
               {ITEMS.sectionItems.map((item, key) => (
                 <MenuItemFold key={key} {...item} />
               ))}
@@ -260,7 +260,7 @@ const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
     <NavLink end={end} to={path}>
       <li className="w-full gap-4 h-[32px] group">
         <motion.p
-          className="text-white group-hover:text-brand-500 transition-all"
+          className="text-white group-hover:text-brand-500 pt-1 transition-all"
           initial={{ opacity: 0, scale: 0 }}
           animate={{
             opacity: 1,
