@@ -45,7 +45,7 @@ export const SuscriptionCard = () => {
           "md:flex-nowrap"
         )}
       >
-        <p className="text-marengo">Próxima fecha de pago 18 Agosto 2025</p>
+        <p className="text-iron">Próxima fecha de pago 18 Agosto 2025</p>
         <Button mode="primary" className="w-full">
           Administrar plan
         </Button>
@@ -82,7 +82,7 @@ export const ProfileCard = ({ user }: { user: User }) => {
   useEscape(() => setIsEditing(false));
 
   return (
-    <section className="border flex-wrap md:flex-nowrap bg-white max-w-2xl border-black rounded-2xl p-4 md:p-8 mt-8 flex items-center gap-3 md:gap-6">
+    <section className="border flex-wrap md:flex-nowrap bg-white max-w-2xl border-black rounded-2xl p-4 md:p-8 mt-4 md:mt-8 flex items-center gap-3 md:gap-6">
       <img
         className="w-12 h-12 md:w-24 md:h-24 rounded-full"
         src={user.picture || DEFAULT_PIC}
@@ -106,12 +106,11 @@ export const ProfileCard = ({ user }: { user: User }) => {
           <div className="flex gap-1">
             <h2 className="text-xl md:text-2xl font-semibold">{displayName}</h2>
             <button onClick={handleEdit}>
-              <img src={Edit} alt="icon" />
+              <img className="!text-iron" src={Edit} alt="icon" />
             </button>
           </div>
         )}
-
-        <p className="md:text-base text-sm text-marengo font-light">
+        <p className="md:text-base text-sm text-iron font-light">
           {user.email}
         </p>
       </div>

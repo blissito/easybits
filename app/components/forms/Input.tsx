@@ -25,8 +25,8 @@ export const Input = ({
         {...props}
         type={type}
         className={cn(
-          "border-2 rounded-xl border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all",
-          "h-16 w-full",
+          "border-1 rounded-xl border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all",
+          "h-12 w-full",
           {
             "w-28": type === "number",
           },

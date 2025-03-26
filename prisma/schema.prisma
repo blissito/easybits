@@ -27,6 +27,11 @@ type AssetTemplateSettings {
   slug         String?
 }
 
+type AssetWebinarMetadata {
+  numberOfSessions Int?
+  roomId           String?
+}
+
 model Asset {
   id    String @id @default(auto()) @map("_id") @db.ObjectId
   slug  String @unique
@@ -36,7 +41,8 @@ model Asset {
   note        String?
   description String?
   eventDate   DateTime?
-  metadata    Json? // used for type webinar, for example.
+  roomId      String? // provisional
+  metadata    AssetWebinarMetadata? // used for type webinar, for example.
   type        AssetType                   @default(DOWNLOADABLE)
   price       Float                       @default(0)
   currency    String                      @default("mxn")

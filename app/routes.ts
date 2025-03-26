@@ -57,4 +57,5 @@ export default [
     ]),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
+  route("webinar", "routes/webinar/webinar.tsx"),
 ] satisfies RouteConfig;

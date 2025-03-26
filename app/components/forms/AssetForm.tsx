@@ -53,7 +53,7 @@ export const AssetForm = ({
     <fetcher.Form
       // @ts-ignore
       onSubmit={handleSubmit(submit)}
-      className="flex flex-col h-max pb-12"
+      className="flex flex-col h-max "
     >
       <Input
         pattern=".{3,}"

@@ -1,17 +1,60 @@
-import { AccessToken } from "livekit-server-sdk";
-import { nanoid } from "nanoid";
+import {
+  AccessToken,
+  TrackSource,
+  Room,
+  RoomServiceClient,
+} from "livekit-server-sdk";
 
-export const getCallToken = async (roomId: string, nickname: string) => {
+// const serverUrl = "wss://webrtcblissmo-ughbu8uu.livekit.cloud";
+const host = "https://webrtcblissmo-ughbu8uu.livekit.cloud";
+
+// UNKNOWN: 0 CAMERA: 1 MICROPHONE: 2 SCREEN_SHARE: 3 SCREEN_SHARE_AUDIO: 4
+
+export const updateCanPublish = async (
+  roomId: string,
+  identity: string,
+  options?: { canPublishSources: number[] }
+) => {
+  const { canPublishSources = [1] } = options || {};
+  const roomService = new RoomServiceClient(
+    host,
+    process.env.LK_API_KEY,
+    process.env.LK_API_SECRET
+  );
+  //  await roomService.listParticipants(roomId);
+  await roomService.updateParticipant(roomId, identity, undefined, {
+    canPublish: true,
+    canSubscribe: true,
+    canPublishData: true,
+    canPublishSources,
+  });
+};
+
+export const getCallToken = async (
+  roomId: string,
+  username: string,
+  config?: {
+    canPublishSources?: number[];
+  }
+) => {
+  const { canPublishSources } = config || {};
   const at = new AccessToken(
     process.env.LK_API_KEY,
     process.env.LK_API_SECRET,
     {
-      identity: nickname,
+      identity: username,
       // Token to expire after 10 minutes
       ttl: "10m",
     }
   );
-  at.addGrant({ roomJoin: true, room: roomId });
+  // UNKNOWN: 0 CAMERA: 1 MICROPHONE: 2 SCREEN_SHARE: 3 SCREEN_SHARE_AUDIO: 4
+  at.addGrant({
+    canPublish: true,
+    canSubscribe: true,
+    canPublishSources,
+    roomJoin: true,
+    room: roomId,
+  });
 
   return await at.toJwt();
 };
