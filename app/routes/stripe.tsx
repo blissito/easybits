@@ -39,7 +39,7 @@ export default function Stripe() {
   });
 
   return (
-    <div className="container">
+    <div className="p-12">
       <div className="content">
         {!connectedAccountId && (
           <Form method="post">

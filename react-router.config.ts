@@ -5,7 +5,7 @@ export default {
   ssr: true,
   prerender: async () => {
     const assets = await db.asset.findMany({
-      where: { published: true },
+      // where: { published: true },
       select: { slug: true },
     });
     return ["/"].concat(assets.map((asset) => `/p/${asset.slug}`));
