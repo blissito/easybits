@@ -9,7 +9,7 @@ type Item = {
 };
 
 export const ProductGallery = ({
-  items,
+  items = [],
   className,
 }: {
   className?: string;
@@ -55,7 +55,7 @@ export const ProductGallery = ({
 };
 
 const ImageItem = ({
-  item,
+  item = {},
   onClick,
   currentIndex,
 }: {

@@ -15,18 +15,26 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
       userId: user.id,
     },
   });
-  return { host: user.host!, asset };
+  const files = await db.file.findMany({
+    orderBy: { createdAt: "desc" },
+    where: {
+      assetIds: {
+        has: asset!.id,
+      },
+    },
+  });
+  return { host: user.host!, asset, files };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
-  const intent = formData.get("intent");
-
+  // const intent = formData.get("intent");
   return null;
 };
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
-  const { host, asset } = loaderData;
+  const { host, asset, files } = loaderData;
+
   return (
     <article
       className={cn(
@@ -37,7 +45,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
         {asset.title}
       </h1>
       <main className={cn("flex gap-12 justify-evenly", PADDING_LAYOUT)}>
-        <EditAssetForm host={host} asset={asset} />
+        <EditAssetForm assetFiles={files} host={host} asset={asset} />
         <AssetPreview />
       </main>
     </article>

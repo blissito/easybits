@@ -1,4 +1,4 @@
-import { Form, Link, useFetcher } from "react-router";
+import { Form, Link, useFetcher, useSubmit } from "react-router";
 import { Button } from "~/components/common/Button";
 import { LayoutGroup } from "motion/react";
 import { LiveOrFiles } from "./LiveOrFiles";
@@ -7,11 +7,12 @@ import { GalleryUploader } from "./GalleryUploader";
 import { ExtraConfig } from "./ExtraConfig";
 import { MarkEditor } from "./MarkEditor";
 import { PriceInput } from "./PriceInput";
-import type { Asset } from "@prisma/client";
+import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
+import { FilesPicker } from "./FilesPicker";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -28,7 +29,7 @@ export const assetSchema = z.object({
     .optional()
     .nullable(),
   eventDate: z.coerce.date().optional().nullable(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   price: z.coerce.number({
     required_error: "Debes colocar un precio para tu Asset",
   }),
@@ -65,7 +66,9 @@ const assetClientSchema = assetSchema.omit({
 export const EditAssetForm = ({
   host,
   asset,
+  assetFiles,
 }: {
+  assetFiles?: File[];
   asset: Asset;
   host: string;
 }) => {
@@ -101,7 +104,11 @@ export const EditAssetForm = ({
 
     const { error, success } = assetClientSchema.safeParse(form);
     formatErrors(error);
-    if (!success) return;
+
+    if (!success) {
+      console.error(error);
+      return;
+    }
 
     // console.log("Data", form);
     // return;
@@ -154,6 +161,7 @@ export const EditAssetForm = ({
           defaultValue={asset.description}
           onChange={handleChange("description")}
           name="description"
+          error={errors.description}
         />
         <GalleryUploader asset={asset} host={host} />
         <HR />
@@ -170,13 +178,21 @@ export const EditAssetForm = ({
           placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
         />
         <HR />
-        <LiveOrFiles
-          onChangeEventDate={handleEventChange}
-          defaultEventDate={asset.eventDate}
-          type={asset.type}
-          asset={asset}
-          onChangeMetadata={handleMetadataChange}
-        />
+
+        {(asset.type === "VOD_COURSE" || asset.type === "WEBINAR") && (
+          <LiveOrFiles
+            onChangeEventDate={handleEventChange}
+            defaultEventDate={asset.eventDate}
+            type={asset.type}
+            asset={asset}
+            onChangeMetadata={handleMetadataChange}
+          />
+        )}
+
+        {asset.type === "DOWNLOADABLE" && (
+          <FilesPicker assetFiles={assetFiles} asset={asset} />
+        )}
+
         <HR />
         <Plantilla
           onChange={handleChange("template")}
