@@ -13,7 +13,6 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
   return (
     <main className="flex relative z-10 min-h-screen">
       <SideBar />
-
       <Outlet />
     </main>
   );
