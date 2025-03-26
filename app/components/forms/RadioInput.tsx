@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LittleBrutalImage } from "../illustrations/LittleBrutalImage";
 import { cn } from "~/utils/cn";
 
@@ -22,22 +22,25 @@ export const RadioGroup = ({
         name="type"
         value="DOWNLOADABLE"
         label="Descargable"
+        icon="/hero/art.svg"
       />
       <RadioInput
         isSelected={selected === "WEBINAR"}
         onChange={(value) => setSelected(value)}
-        description="Cursos pre-grabados o en vivo"
+        description="Webinars o conferencias en vivo"
         name="type"
         value="WEBINAR"
-        label="Curso o Webinar"
+        label="Webinar"
+        icon="/hero/micro.svg"
       />
       <RadioInput
         isSelected={selected === "EBOOK"}
         onChange={(value) => setSelected(value)}
-        description="En formato pdf, ePUB o Mobi"
+        description="Cursos pre-grabados o en vivo"
         name="type"
-        value="EBOOK"
-        label="E-book"
+        value="CURSO"
+        label="Curso"
+        icon="/hero/course.svg"
       />
     </section>
   );
@@ -50,6 +53,7 @@ export const RadioInput = ({
   label,
   description,
   onChange,
+  icon,
 }: {
   isSelected?: boolean;
   onChange?: (arg0: string) => void;
@@ -57,6 +61,7 @@ export const RadioInput = ({
   label?: string;
   value: string;
   name: string;
+  icon?: string;
 }) => {
   const ref = useRef(null);
 
@@ -74,7 +79,7 @@ export const RadioInput = ({
           }
         )}
       >
-        <LittleBrutalImage />
+        <img className="h-10 mb-1" src={icon} alt="descargable" />
         <h4>{label}</h4>
         <p className="text-xs">{description}</p>
         <input

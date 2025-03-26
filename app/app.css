@@ -20,8 +20,8 @@ body {
 }
 
 .grid-overlay {
-  background-color: transparent;
-  background-image: radial-gradient(transparent 1px, #000 1px);
+  background-color: rgba(0, 0, 0, 0.4);
+  /* background-image: radial-gradient(transparent 1px, #000 1px); */
   background-size: 4px 4px;
   backdrop-filter: brightness(1) blur(10px);
   transition: all 0.5s;

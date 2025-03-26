@@ -96,23 +96,23 @@ export const Modal = ({
             className={cn(
               "bg-white",
               "border-2 border-black",
-              "px-12 rounded-3xl min-h-[500px] w-[600px] relative",
+              "p-6 md:p-8 rounded-3xl min-h-[472px] w-[600px] relative",
               "flex flex-col",
-              "max-w-[600px] lg:min-w-[600px]",
+              "max-w-[600px] w-[84%] mx-auto md:w-full lg:min-w-[600px]",
               {
-                "min-h-[0px] pb-4 max-w-[300px]": mode === "naked",
+                "min-h-[0px] max-w-[300px]": mode === "naked",
               },
               className
             )}
           >
             {!noCloseButton && (
               <BrutalButtonClose
-                className="absolute top-6 right-6"
+                className="absolute top-8 right-8"
                 onClick={onClose}
               />
             )}
             <h2
-              className={cn("text-4xl font-semibold mb-4 mt-12", {
+              className={cn("text-3xl font-semibold mb-4 ", {
                 "my-3": mode === "naked",
               })}
             >
@@ -120,7 +120,7 @@ export const Modal = ({
             </h2>
             {children}
             {footer && (
-              <section className="mt-auto mb-12 flex gap-6 justify-end">
+              <section className="mt-auto flex gap-6 justify-end">
                 {footer}
               </section>
             )}
