@@ -144,33 +144,26 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
   };
   return (
     <section>
-      <div className="h-10 border-b-[2px] border-black content-center">
-        <AttributeList
-          textLeft="No. de sesiones"
-          textRight={asset.metadata?.numberOfSessions}
-        />
-      </div>
-      <div className="h-10 border-b-[2px] border-black content-center">
-        <AttributeList
-          textLeft="Modalidad"
-          textRight={
-            <div className="flex gap-2 items-center">
-              {" "}
-              <div className="relative w-3 h-3">
-                <div className="bg-pink-500 rounded-full absolute inset-0 blur-sm animate-pulse" />
-                <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
-              </div>
-              En vivo
+      <AttributeList
+        textLeft="No. de sesiones"
+        textRight={asset.metadata?.numberOfSessions}
+      />
+
+      <AttributeList
+        textLeft="Modalidad"
+        textRight={
+          <div className="flex gap-2 items-center">
+            {" "}
+            <div className="relative w-3 h-3">
+              <div className="bg-pink-500 rounded-full absolute inset-0 blur-sm animate-pulse" />
+              <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
             </div>
-          }
-        />
-      </div>
-      <div className="h-10 border-b-[2px] border-black content-center">
-        <AttributeList
-          textLeft="Fecha"
-          textRight={formatDate(asset.eventDate)}
-        />
-      </div>
+            En vivo
+          </div>
+        }
+      />
+
+      <AttributeList textLeft="Fecha" textRight={formatDate(asset.eventDate)} />
     </section>
   );
 };
