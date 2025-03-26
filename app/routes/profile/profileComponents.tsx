@@ -45,7 +45,7 @@ export const SuscriptionCard = () => {
           "md:flex-nowrap"
         )}
       >
-        <p className="text-marengo">Próxima fecha de pago 18 Agosto 2025</p>
+        <p className="text-iron">Próxima fecha de pago 18 Agosto 2025</p>
         <Button mode="primary" className="w-full">
           Administrar plan
         </Button>
@@ -106,12 +106,11 @@ export const ProfileCard = ({ user }: { user: User }) => {
           <div className="flex gap-1">
             <h2 className="text-xl md:text-2xl font-semibold">{displayName}</h2>
             <button onClick={handleEdit}>
-              <img src={Edit} alt="icon" />
+              <img className="!text-iron" src={Edit} alt="icon" />
             </button>
           </div>
         )}
-
-        <p className="md:text-base text-sm text-marengo font-light">
+        <p className="md:text-base text-sm text-iron font-light">
           {user.email}
         </p>
       </div>

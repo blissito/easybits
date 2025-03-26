@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router";
+import { Link, NavLink, useLocation } from "react-router";
 import { animate, AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
@@ -56,10 +56,10 @@ export const SideBar = () => {
 
   return (
     <section>
-      <div className="fixed  right-4 bottom-0 z-50 block md:hidden h-screen ">
+      <div className="fixed  right-4 bottom-0 z-30 block md:hidden h-screen ">
         <FoldMenu />
       </div>
-      <div className="sticky h-screen  z-50 hidden md:block ">
+      <div className="sticky h-screen  z-20 hidden md:block ">
         <div
           onMouseEnter={handleMouseEnter}
           className="w-20 bg-black pt-4 pb-6 h-screen box-border absolute top-0 z-10 flex flex-col justify-between "
@@ -104,7 +104,7 @@ export const SideBar = () => {
           onMouseLeave={handleMouseLeave}
           onClick={handleClick}
           className={cn(
-            "w-52 bg-black pt-16 pb-6 h-full absolute  top-0 -left-52 flex flex-col justify-between  "
+            "w-48 bg-black pt-16 pb-6 h-full absolute  top-0 -left-52 flex flex-col justify-between  "
           )}
         >
           <div className="w-full ">
@@ -163,9 +163,9 @@ const FoldMenuItem = ({ path = "", icon, end, index = 1 }: MenuItemProps) => {
   return (
     <NavLink end={end} to={path} className="w-fit h-fit  flex items-center">
       <motion.button
-        initial={{ filter: "blur(4px)", y: -10, opacity: 0 }}
+        initial={{ filter: "blur(4px)", y: 10, opacity: 0 }}
         animate={{ filter: "blur(0px)", y: 0, opacity: 1 }}
-        exit={{ filter: "blur(4px)", y: -10, opacity: 0 }}
+        exit={{ filter: "blur(4px)", y: 10, opacity: 0 }}
         transition={{ delay: 0.04 * index }}
         className="w-12 h-12 rounded-full bg-black grid place-content-center "
       >
@@ -231,7 +231,7 @@ const MenuItem = ({
             layoutId="active-border"
             className={cn(
               "absolute -right-1 top-0 w-full h-full border-r-4 border-brand-500 rounded-sm",
-              { "left-36 ": isOpen }
+              { "left-32 ": isOpen }
             )}
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
@@ -273,5 +273,15 @@ const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
         </motion.p>
       </li>
     </NavLink>
+  );
+};
+
+export const HeaderMobile = () => {
+  return (
+    <div className="w-full h-12 bg-black z-20 px-4 fixed flex items-center justify-center md:hidden">
+      <Link to="/">
+        <img alt="logo easybits" className="h-10" src={Logo} />
+      </Link>
+    </div>
   );
 };

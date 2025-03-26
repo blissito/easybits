@@ -4,8 +4,10 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
 import { SalesTable } from "./sales/SalesTable";
+import { Empty } from "./assets/Empty";
+import { IoCopy } from "react-icons/io5";
 
-const LAYOUT_PADDING = "py-6 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
+const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export default function Sales() {
   return (
@@ -18,28 +20,25 @@ export default function Sales() {
       >
         <Header title="Ventas" />
         <EmptySales />
-        {/* <SalesTable /> */}
+        {/* <SalesTable /> */}{" "}
       </article>
     </>
   );
 }
 
-const EmptySales = () => {
+const EmptyPayment = () => {
   return (
-    <section className="w-fit mx-auto max-w-[480px] text-center h-[calc(100%-200px)]  flex items-center ">
-      <div>
-        <img className="w-52 mx-auto" src="/sales-empty.webp" />
-        <h3 className="text-2xl font-semibold mt-8 mb-3">
-          {/* Administra tus ventas desde aquí */}
-          Conecta una pasarela de pagos
-        </h3>
-        <p className="whitespace-pre-line text-iron">
-          {/* Podrás ver la información de cada venta cada vez que un cliente compre
-          uno de tus assets. */}
+    <Empty
+      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
+      title="  Conecta una pasarela de pagos"
+      text={
+        <span>
           Conecta tu pasarela preferida, EasyBits colabora con Stripe & PayPal
           para ofrecerte pagos seguros.
-        </p>{" "}
-        <div className="flex gap-6 justify-center mt-10">
+        </span>
+      }
+      footer={
+        <div className="flex gap-6 justify-center">
           <BrutalButton className="bg-sea flex gap-2 items-center">
             Conectar PayPal <FaPaypal />
           </BrutalButton>
@@ -48,7 +47,29 @@ const EmptySales = () => {
             <BsStripe />
           </BrutalButton>
         </div>
-      </div>
-    </section>
+      }
+    />
+  );
+};
+
+export const EmptySales = () => {
+  return (
+    <Empty
+      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
+      title="Administra tus ventas desde aquí"
+      text={
+        <span>
+          Tus clientes/seguidores te están conociendo. <br />
+          ¡Sigue compartiendo tu tienda!
+        </span>
+      }
+      footer={
+        <div className="flex gap-6 justify-center">
+          <BrutalButton className=" flex gap-2 items-center">
+            Copiar link <IoCopy />
+          </BrutalButton>
+        </div>
+      }
+    />
   );
 };
