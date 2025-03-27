@@ -69,7 +69,7 @@ export const AssetForm = ({
 
       <RadioGroup onChange={(value: string) => handleChange("type", value)} />
 
-      <nav className="flex justify-end mt-12 gap-8">
+      <nav className="flex justify-end mt-12 gap-6 md:gap-8">
         <BrutalButton className="bg-white" onClick={onClose} type="button">
           Cancelar
         </BrutalButton>

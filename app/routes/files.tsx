@@ -33,9 +33,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <article className="min-h-[calc(100vh-1px)] overflow-hidden relative w-full">
-        <section className=" max-w-7xl mx-auto w-full pt-16 pb-6 md:py-10 px-4 md:px-[5%] lg:px-0 ">
+        <section className=" max-w-7xl mx-auto w-full pt-16 pb-6 md:py-10 px-4 md:pr-[5%] md:pl-[10%]  xl:px-0 ">
           <div className="flex h-fit mb-8 md:mb-10 flex-wrap">
-            <h2 className="text-3xl md:text-4xl font-semibold">
+            <h2 className="text-3xl md:text-4xl font-semibold ">
               Almacenamiento de archivos
             </h2>{" "}
             {files.length > 1 && (
