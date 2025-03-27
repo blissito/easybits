@@ -32,7 +32,11 @@ export default [
         route(":assetId/edit", "routes/assets/EditAsset.tsx"),
       ]),
       route("tienda", "routes/store.tsx"),
-      route("ventas", "routes/sales.tsx"),
+
+      ...prefix("ventas", [
+        index("routes/sales.tsx"),
+        route("stripe", "routes/stripe.tsx"),
+      ]),
       route("clientes", "routes/clients.tsx"),
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
@@ -50,6 +54,10 @@ export default [
     route("assets", "routes/api/v1/assets.tsx"),
     route("files", "routes/api/v1/files.tsx"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
+    ...prefix("stripe", [
+      route("account", "routes/api/v1/stripe/account.tsx"),
+      route("account_session", "routes/api/v1/stripe/account_session.tsx"),
+    ]),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
