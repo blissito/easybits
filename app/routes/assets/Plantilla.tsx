@@ -1,7 +1,6 @@
 import { Input } from "~/components/common/Input";
 import { motion } from "motion/react";
 import { useEffect, useState, type ChangeEvent } from "react";
-import { cn } from "~/utils/cn";
 
 export const Plantilla = ({
   onChange,
@@ -53,13 +52,13 @@ export const Plantilla = ({
         <Input
           value={state.slug}
           placeholder="super_curso"
-          inputClassName="pl-[240px]"
+          inputClassName="pl-[254px]"
           onChange={handleChange("slug")}
           isError={!!error}
         />
         <div className="pointer-events-none absolute bottom-0 top-0 grid place-items-center left-2">
           <p className="border border-brand-500 rounded-xl p-1">
-            https://{state.host}.easybits.cloud/
+            https://{state.host}.easybits.cloud/p/
           </p>
         </div>
       </div>
