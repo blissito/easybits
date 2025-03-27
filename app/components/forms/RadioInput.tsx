@@ -14,7 +14,7 @@ export const RadioGroup = ({
   }, [selected]);
 
   return (
-    <section className="flex gap-4 justify-evenly">
+    <section className="flex flex-wrap gap-4 justify-evenly">
       <RadioInput
         isSelected={selected === "DOWNLOADABLE"}
         onChange={(value) => setSelected(value)}
@@ -34,7 +34,7 @@ export const RadioGroup = ({
         icon="/hero/micro.svg"
       />
       <RadioInput
-        isSelected={selected === "EBOOK"}
+        isSelected={selected === "CURSO"}
         onChange={(value) => setSelected(value)}
         description="Cursos pre-grabados o en vivo"
         name="type"
@@ -68,7 +68,7 @@ export const RadioInput = ({
   return (
     <label
       className={cn(
-        "group bg-black w-[160px] cursor-pointer relative block rounded-xl"
+        "group bg-black w-[120px] grow md:w-[160px] cursor-pointer relative block rounded-xl"
       )}
     >
       <div

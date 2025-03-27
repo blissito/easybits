@@ -260,7 +260,12 @@ const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
     <NavLink end={end} to={path}>
       <li className="w-full gap-4 h-[32px] group">
         <motion.p
-          className="text-white group-hover:text-brand-500 pt-1 transition-all"
+          className={cn(
+            "text-white group-hover:text-brand-500 pt-1 transition-all",
+            {
+              "text-brand-500": isActive,
+            }
+          )}
           initial={{ opacity: 0, scale: 0 }}
           animate={{
             opacity: 1,
@@ -278,7 +283,7 @@ const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
 
 export const HeaderMobile = () => {
   return (
-    <div className="w-full h-12 bg-black z-20 px-4 fixed flex items-center justify-center md:hidden">
+    <div className="w-full h-12 bg-black z-30 px-4 fixed flex items-center justify-center md:hidden">
       <Link to="/">
         <img alt="logo easybits" className="h-10" src={Logo} />
       </Link>

@@ -16,7 +16,7 @@ export const Empty = ({
   onClick?: () => void;
 }) => {
   return (
-    <section className="z-20 relative grid  place-content-center place-items-center min-h-[80vh] ">
+    <section className="z-10 relative grid max-w-2xl mx-auto place-content-center place-items-center min-h-[70vh] md:min-h-[80vh] ">
       <div>{illustration ? illustration : <MagicWand />}</div>
       <h2 className="text-2xl font-bold mt-4 mb-3">
         {title ? title : "Agrega tu primer producto"}

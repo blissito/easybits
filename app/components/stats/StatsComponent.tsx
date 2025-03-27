@@ -6,7 +6,7 @@ import { cn } from "~/utils/cn";
 export default function StatsComponent({ user, salesData, mostSoldProducts }) {
   //:TODO get these insights and format them
   return (
-    <div className="min-h-screen lg:h-screen   px-4 md:px-[5%] lg:px-0">
+    <div className="min-h-screen lg:h-screen  px-4 md:pr-[5%] md:pl-[10%]   xl:px-0">
       <div className="max-w-7xl mx-auto flex flex-col h-full pt-16 pb-0 md:pt-10 box-border  ">
         <div className="flex justify-between items-end flex-wrap">
           <div className="w-full md:w-2/3">

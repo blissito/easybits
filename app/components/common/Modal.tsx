@@ -56,7 +56,7 @@ export const Modal = ({
         <article
           className={cn(
             "z-20", // try to not go further than 30
-            "grid place-content-center",
+            "grid place-content-center ",
             "fixed",
 
             {
@@ -70,7 +70,7 @@ export const Modal = ({
           {mode === "overlay" && (
             <motion.article
               onClick={onClose}
-              className="grid-overlay absolute inset-0"
+              className="grid-overlay absolute inset-0 "
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -96,9 +96,9 @@ export const Modal = ({
             className={cn(
               "bg-white",
               "border-2 border-black",
-              "p-6 md:p-8 rounded-3xl min-h-[472px] w-[600px] relative",
+              "p-6 md:p-8 rounded-3xl min-h-[472px] w-[360px]   relative",
               "flex flex-col",
-              "max-w-[600px] w-[84%] mx-auto md:w-full lg:min-w-[600px]",
+              "max-w-[600px]  mx-auto  md:w-[600px] lg:min-w-[600px]",
               {
                 "min-h-[0px] max-w-[300px]": mode === "naked",
               },
@@ -107,12 +107,12 @@ export const Modal = ({
           >
             {!noCloseButton && (
               <BrutalButtonClose
-                className="absolute top-8 right-8"
+                className="absolute top-6 md:top-8 right-6 md:right-8"
                 onClick={onClose}
               />
             )}
             <h2
-              className={cn("text-3xl font-semibold mb-4 ", {
+              className={cn("text-2xl md:text-3xl font-semibold mb-4 ", {
                 "my-3": mode === "naked",
               })}
             >
