@@ -3,7 +3,6 @@ import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
 } from "@stripe/connect-js";
-import { useFetcher } from "react-router";
 
 export const useStripeConnect = ({
   connectedAccountId,
@@ -16,16 +15,17 @@ export const useStripeConnect = ({
     StripeConnectInstance | undefined
   >();
 
-  //   const createSession = useFetcher();
+  //look for more customization and also move to single file so we can reuse in all instances
+  const STRIPE_UI_VARIABLES = {
+    colorPrimary: "#9870ED", //brand
+    fontFamily: "Avenir",
+  };
 
   useEffect(() => {
     if (connectedAccountId && publishableKey) {
       const fetchClientSecret = async () => {
         const response = await fetch("/api/v1/stripe/account_session", {
           method: "POST",
-          //   headers: {
-          //     // "Content-Type": "multipart/form-data",
-          //   },
           body: new URLSearchParams({ connectedAccountId }),
         });
 
@@ -40,21 +40,13 @@ export const useStripeConnect = ({
         }
       };
 
-      //   const fetchClientSecret = async () =>
-      //     createSession.submit(
-      //       { account: connectedAccountId },
-      //       { method: "post", action: "api/v1/stripe/account_session" }
-      //     );
-
       setStripeConnectInstance(
         loadConnectAndInitialize({
           publishableKey,
           fetchClientSecret,
           appearance: {
             overlays: "dialog",
-            variables: {
-              colorPrimary: "#635BFF",
-            },
+            variables: STRIPE_UI_VARIABLES,
           },
         })
       );

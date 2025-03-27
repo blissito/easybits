@@ -6,6 +6,7 @@ import { cn } from "~/utils/cn";
 import { SalesTable } from "./sales/SalesTable";
 import { Empty } from "./assets/Empty";
 import { IoCopy } from "react-icons/io5";
+import { Link } from "react-router";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -19,6 +20,7 @@ export default function Sales() {
         )}
       >
         <Header title="Ventas" />
+        <EmptyPayment />
         <EmptySales />
         {/* <SalesTable /> */}{" "}
       </article>
@@ -27,6 +29,8 @@ export default function Sales() {
 }
 
 const EmptyPayment = () => {
+  // check status here?
+  //redirecting to stripe page in the meantime
   return (
     <Empty
       illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
@@ -39,13 +43,16 @@ const EmptyPayment = () => {
       }
       footer={
         <div className="flex gap-6 justify-center">
-          <BrutalButton className="bg-sea flex gap-2 items-center">
+          <BrutalButton className="bg-sea flex gap-2 items-center" disabled>
             Conectar PayPal <FaPaypal />
           </BrutalButton>
-          <BrutalButton className="bg-[#6772E5] flex gap-2 items-center">
-            Conectar Stripe
-            <BsStripe />
-          </BrutalButton>
+
+          <Link to="/dash/ventas/stripe">
+            <BrutalButton className="bg-[#6772E5] flex gap-2 items-center">
+              Conectar Stripe
+              <BsStripe />
+            </BrutalButton>
+          </Link>
         </div>
       }
     />

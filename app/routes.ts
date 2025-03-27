@@ -32,12 +32,15 @@ export default [
         route(":assetId/edit", "routes/assets/EditAsset.tsx"),
       ]),
       route("tienda", "routes/store.tsx"),
-      route("ventas", "routes/sales.tsx"),
+
+      ...prefix("ventas", [
+        index("routes/sales.tsx"),
+        route("stripe", "routes/stripe.tsx"),
+      ]),
       route("clientes", "routes/clients.tsx"),
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
-      route("estraip", "routes/stripe.tsx"),
     ]),
   ]),
   // multipar upload
