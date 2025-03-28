@@ -153,6 +153,7 @@ export const EditAssetForm = ({
         />
 
         <Input
+          defaultValue={asset.tags}
           onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
           label="Tags"
           placeholder="curso, programación"
