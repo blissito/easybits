@@ -32,6 +32,18 @@ body {
   max-height: none;
 }
 
+.tooltip {
+  clip-path: polygon(
+    0% 0%,
+    100% 0%,
+    100% calc(100% - 10px),
+    calc(50% + 10px) calc(100% - 10px),
+    50% 100%,
+    calc(50% - 10px) calc(100% - 10px),
+    0% calc(100% - 10px)
+  );
+}
+
 @media (max-width: 1024px) {
   .chatHight {
     padding-bottom: 10px;

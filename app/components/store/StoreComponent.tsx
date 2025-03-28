@@ -25,28 +25,28 @@ export default function StoreComponent({ assets }) {
         <h2 className="text-3xl md:text-4xl font-semibold">Mi tienda</h2>
         <div className="flex gap-3">
           <HeaderIconButton>
-            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+            <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
               <img className="w-full" src={GlobeIcon} />
             </div>
           </HeaderIconButton>
           <HeaderIconButton>
-            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+            <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
               <img className="w-full" src={EditIcon} />
             </div>
           </HeaderIconButton>
           <HeaderIconButton>
-            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+            <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
               <img className="w-full" src={ShareIcon} />
             </div>
           </HeaderIconButton>
           <HeaderIconButton>
-            <div className="bg-white border border-black rounded-lg p-1 w-[48px] h-[48px]">
+            <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
               <img className="w-full" src={OpenIcon} />
             </div>
           </HeaderIconButton>
         </div>
       </div>
-      <div className="border border-black rounded-2xl overflow-hidden">
+      <div className="border-[2px] border-black rounded-2xl overflow-hidden">
         <div className="w-full h-[200px] relative ">
           <img
             className="object-cover w-full h-full"
