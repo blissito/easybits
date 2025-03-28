@@ -56,7 +56,7 @@ export const SideBar = () => {
 
   return (
     <section>
-      <div className="fixed  right-4 bottom-0 z-30 block md:hidden h-screen ">
+      <div className="fixed right-4 bottom-0 z-30 block md:hidden  ">
         <FoldMenu />
       </div>
       <div className="sticky h-screen  z-20 hidden md:block ">
@@ -135,7 +135,7 @@ const FoldMenu = () => {
   const [isFold, setIsFold] = useState(false);
   const onClick = () => setIsFold(!isFold);
   return (
-    <div className="flex flex-col justify-end pb-4 items-end h-full gap-4">
+    <div className="flex flex-col  justify-end pb-4 items-end h-fit gap-4">
       <AnimatePresence>
         {isFold && (
           <>
