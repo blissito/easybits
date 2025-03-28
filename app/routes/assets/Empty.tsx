@@ -17,7 +17,9 @@ export const Empty = ({
 }) => {
   return (
     <section className="z-10 relative grid max-w-2xl mx-auto place-content-center place-items-center min-h-[70vh] md:min-h-[80vh] ">
-      <div>{illustration ? illustration : <MagicWand />}</div>
+      <div className="w-48 mx-auto md:w-52 flex justify-center">
+        {illustration ? illustration : <MagicWand />}
+      </div>
       <h2 className="text-2xl font-bold mt-4 mb-3">
         {title ? title : "Agrega tu primer producto"}
       </h2>
