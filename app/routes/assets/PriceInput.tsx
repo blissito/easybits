@@ -27,10 +27,10 @@ export const PriceInput = ({
   return (
     <section>
       <h2 className="text-2xl">Precio</h2>
-      <p className="py-3">Establece el precio de tu Asset digital</p>
+      <p className="pt-2 pb-0">Establece el precio de tu Asset digital</p>
       <div className="flex items-center gap-4">
         <Input
-          className="flex-1"
+          className="flex-1 "
           onChange={handlePriceChange}
           ref={inputRef}
           placeholder="$300.00"
@@ -42,16 +42,18 @@ export const PriceInput = ({
         <select
           onChange={(e) => onCurrencyChange(e.currentTarget.value)}
           defaultValue={defaultCurrency}
-          className="rounded-2xl h-[53px] bg-black text-white"
+          className="rounded-2xl h-12 bg-black border-none text-white focus:ring-0"
         >
           <option value="usd">USD</option>
           <option value="mxn">MXN</option>
         </select>
       </div>
-      {Number(earn) > 0 && (
-        <p className="text-xs text-brand-gray">¡Ganarás ${earn} por venta!</p>
-      )}
-      {error && <p className="text-red-500 text-xs">{error}</p>}
+      <div className="h-5">
+        {Number(earn) > 0 && (
+          <p className="text-xs text-brand-gray">¡Ganarás ${earn} por venta!</p>
+        )}
+        {error && <p className="text-red-500 text-xs">{error}</p>}{" "}
+      </div>
     </section>
   );
 };

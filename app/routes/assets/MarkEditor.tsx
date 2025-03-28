@@ -24,9 +24,12 @@ export const MarkEditor = ({
       <textarea
         onChange={(e) => onChange?.(e.currentTarget.value) || rawChange?.(e)}
         name={name}
-        className={cn("w-full h-[220px] rounded-2xl focus:ring-brand-500", {
-          "ring ring-red-500 border-none": !!error,
-        })}
+        className={cn(
+          "w-full h-[220px] rounded-2xl border-black focus:border-brand-500 focus:outline-none focus:ring-brand-500",
+          {
+            "ring ring-red-500 border-none": !!error,
+          }
+        )}
         defaultValue={defaultValue || ""}
       />
       {error && <p className="text-red-500 text-xs">{error}</p>}
