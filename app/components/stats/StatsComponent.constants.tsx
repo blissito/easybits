@@ -11,27 +11,27 @@ export const STRINGS = {
   stats: [
     {
       amount: "$79,000.00",
-      title: "Ventas",
+      title: "Ventas del mes",
       className: "bg-sky",
-      tooltip: "info icon",
+      tooltip: "Ventas totales del mes",
     },
     {
       amount: "180",
       title: "Visitas",
       className: "bg-linen",
-      tooltip: "info icon",
+      tooltip: "Visitas totales de tus assets",
     },
     {
       amount: "10%",
       title: "Rate de conversión",
       className: "bg-rose",
-      tooltip: "info icon",
+      tooltip: "Porcentaje de visitas entre ventas",
     },
     {
       amount: "$4,750.00",
       title: "Ganancias",
       className: "bg-lime",
-      tooltip: "info icon",
+      tooltip: "Ingresos después de comisiones",
     },
   ],
 };
