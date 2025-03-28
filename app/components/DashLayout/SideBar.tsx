@@ -59,7 +59,7 @@ export const SideBar = () => {
       <div className="fixed right-4 bottom-0 z-30 block md:hidden  ">
         <FoldMenu />
       </div>
-      <div className="sticky h-screen  z-20 hidden md:block ">
+      <div className="fixed h-screen  z-20 hidden md:block ">
         <div
           onMouseEnter={handleMouseEnter}
           className="w-20 bg-black pt-4 pb-6 h-screen box-border absolute top-0 z-10 flex flex-col justify-between "

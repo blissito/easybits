@@ -38,7 +38,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
   return (
     <article
       className={cn(
-        "relative z-10 flex-1" // hack because of the animated background
+        "relative z-10 flex-1 pl-20" // hack because of the animated background
       )}
     >
       <h1 className={cn("text-4xl py-4 border-b border-black", PADDING_LAYOUT)}>
