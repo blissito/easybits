@@ -53,8 +53,8 @@ export const Input = ({
           onChange={onChange}
           defaultValue={defaultValue}
           className={cn(
-            "rounded-xl p-4 text-lg min-w-full mb-2 border h-[54px] bg-white text-black",
-            "focus:border-brand-500",
+            "rounded-xl p-4 text-lg placeholder:text-tale min-w-full mb-2 border border-black h-[48px] bg-white text-black",
+            "focus:border-brand-500 focus:outline-none focus:ring-brand-500",
             {
               "pr-24": !!copy,
               "ring-2 ring-red-500 transition-all border-none": isError,
