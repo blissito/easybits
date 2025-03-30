@@ -75,7 +75,7 @@ export const Footer = () => {
         <div className="h-full max-w-7xl gap-y-10 md:gap-y-0 border-x-[1px] border-x-white/20 mx-aut py-12 md:py-20 px-4 mx-auto grid grid-cols-12">
           <div className="col-span-12 md:col-span-6">
             <h2 className="flex flex-wrap items-center text-2xl md:text-3xl text-white">
-              <span> Suscríbete </span> <span> para recibir&nbsp;</span>
+              <span> Suscríbete&nbsp; </span> <span> para recibir&nbsp;</span>
               <span> tips para aumentar </span>{" "}
               <span> tus ventas y&nbsp; </span>{" "}
               <span> empezar a crear tus assets</span>
