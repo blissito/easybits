@@ -1,4 +1,4 @@
-import NewAccount from "/icons/new-account.svg";
+import NewAccount from "/icons/new-account.png";
 import ItemsList from "/icons/items-list.svg";
 import ShoppingShare from "/icons/shopping-share.svg";
 import AddWallet from "/icons/add-wallet.svg";
