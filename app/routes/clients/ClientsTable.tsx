@@ -31,8 +31,8 @@ export const ClientsTable = ({}: {}) => {
 
   return (
     <>
-      <article className="bg-white border-[1px] rounded-xl border-black text-xs overflow-hidden">
-        <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
+      <article className="bg-white border-[2px] rounded-xl border-black text-xs overflow-hidden">
+        <section className="grid grid-cols-12 pl-4 py-2 border-b-[2px] border-black">
           <span className=""></span>
           <span className=" col-span-2 md:col-span-1">Foto</span>
           <span className="col-span-5 md:col-span-2">Email</span>

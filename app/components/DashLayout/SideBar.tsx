@@ -56,10 +56,10 @@ export const SideBar = () => {
 
   return (
     <section>
-      <div className="fixed  right-4 bottom-0 z-30 block md:hidden h-screen ">
+      <div className="fixed right-4 bottom-0 z-30 block md:hidden  ">
         <FoldMenu />
       </div>
-      <div className="sticky h-screen  z-20 hidden md:block ">
+      <div className="fixed h-screen  z-20 hidden md:block ">
         <div
           onMouseEnter={handleMouseEnter}
           className="w-20 bg-black pt-4 pb-6 h-screen box-border absolute top-0 z-10 flex flex-col justify-between "
@@ -135,7 +135,7 @@ const FoldMenu = () => {
   const [isFold, setIsFold] = useState(false);
   const onClick = () => setIsFold(!isFold);
   return (
-    <div className="flex flex-col justify-end pb-4 items-end h-full gap-4">
+    <div className="flex flex-col  justify-end pb-4 items-end h-fit gap-4">
       <AnimatePresence>
         {isFold && (
           <>
@@ -260,7 +260,12 @@ const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
     <NavLink end={end} to={path}>
       <li className="w-full gap-4 h-[32px] group">
         <motion.p
-          className="text-white group-hover:text-brand-500 pt-1 transition-all"
+          className={cn(
+            "text-white group-hover:text-brand-500 pt-1 transition-all",
+            {
+              "text-brand-500": isActive,
+            }
+          )}
           initial={{ opacity: 0, scale: 0 }}
           animate={{
             opacity: 1,
@@ -278,7 +283,7 @@ const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
 
 export const HeaderMobile = () => {
   return (
-    <div className="w-full h-12 bg-black z-20 px-4 fixed flex items-center justify-center md:hidden">
+    <div className="w-full h-12 bg-black z-30 px-4 fixed flex items-center justify-center md:hidden">
       <Link to="/">
         <img alt="logo easybits" className="h-10" src={Logo} />
       </Link>

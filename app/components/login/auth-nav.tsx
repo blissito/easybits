@@ -8,7 +8,7 @@ import { BrutalButton } from "../common/BrutalButton";
 import { FlipLetters } from "../animated/FlipLetters";
 import { cn } from "~/utils/cn";
 
-export const AuthNav = ({ user }: { user?: User }) => {
+export const AuthNav = ({ user, noCTA }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
   const navItems = [
     {
@@ -64,8 +64,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
               </Link>
             ))}
           </div>
-
-          {!user && (
+          {!noCTA && !user && (
             <div className="flex h-full items-center">
               <Link
                 to="/login"
@@ -132,7 +131,7 @@ export const AuthNav = ({ user }: { user?: User }) => {
               Comunidad
             </p>
           </Link>
-          {!user && (
+          {!noCTA && !user && (
             <>
               <Link to="/login" key="account">
                 <p className="h-16 grid place-content-center text-white text-xl w-full mb-4 ">

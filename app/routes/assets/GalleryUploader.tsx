@@ -85,9 +85,9 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
             type="button"
             className={cn(
               "w-full",
-              "flex gap-3 border-dashed border-2 rounded-2xl py-11 justify-center items-center border-brand-gray",
+              "flex gap-3 border-dashed border-[1px] rounded-2xl py-11 justify-center items-center border-black",
               {
-                "border-black": isHovered === "hover",
+                "border-iron": isHovered === "hover",
                 "border-brand-500": isHovered === "dropping",
               }
             )}

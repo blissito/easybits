@@ -18,7 +18,7 @@ export default {
         lavander: "#6772E5",
         grayLight: "#F9F9F9",
         marengo: "#6A6966",
-        tale: "#B5B5B5",
+        tale: "#A19E9E",
         onix: "#181818",
         iron: "#323232",
         metal: "#8391A1",

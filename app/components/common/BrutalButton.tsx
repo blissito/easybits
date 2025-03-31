@@ -27,7 +27,7 @@ export const BrutalButton = ({
   return (
     <button
       disabled={isDisabled || isLoading}
-      className={cn("group rounded-xl bg-black", containerClassName, {
+      className={cn("group rounded-xl h-12 bg-black", containerClassName, {
         "bg-black/70": isDisabled || isLoading,
       })}
       type={type}
@@ -35,7 +35,7 @@ export const BrutalButton = ({
     >
       <span
         className={cn(
-          "min-w-32 min-h-12 h-full px-4",
+          "min-w-32 h-12 px-4",
           "grid place-content-center",
           "block", // así podemos usar translate
           "text-lg font-semibold",

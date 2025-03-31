@@ -39,15 +39,15 @@ export const Plantilla = ({
 
   return (
     <motion.section layout>
-      <h2 className="text-2xl">Personalización de la plantilla</h2>
-      <p className="py-3">Elije el texto para tu botón de compra</p>
+      <h2 className="text-2xl">Personaliza tu plantilla</h2>
+      <p className="pt-2 pb-0">Elije el texto para tu botón de compra</p>
       <Input
         onChange={handleChange("ctaText")}
         value={state.ctaText}
         placeholder="Compar ahora"
         isError={!!error}
       />
-      <p className="py-3">Personaliza el link de tu Asset</p>
+      <p className="pt-2 pb-0">Personaliza el link de tu Asset</p>
       <div className="relative">
         <Input
           value={state.slug}

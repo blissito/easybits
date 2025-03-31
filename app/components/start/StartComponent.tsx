@@ -1,8 +1,20 @@
 import { BrutalButton } from "../common/BrutalButton";
 import { STRINGS } from "./StartComponent.constants";
-import StepCheck from "/icons/step-check.svg";
+import StepCheck from "/icons/y-check.png";
 import Escribenos from "/icons/escribenos.svg";
 import StepProgress from "../common/StepProgress";
+
+import { Link } from "react-router";
+import { getUserOrNull } from "~/.server/getters";
+
+export const loader = ({ request }) => {
+  const user = getUserOrNull(request);
+
+  return {
+    user,
+    assets: [],
+  };
+};
 
 export default function StartComponent() {
   const steps = STRINGS.steps.length;
@@ -12,7 +24,7 @@ export default function StartComponent() {
    */
 
   return (
-    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-10 pb-6 px-4 md:px-[5%] lg:px-0">
+    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-16 pb-6 px-4 md:px-[5%] xl:px-0">
       <div className="w-full ">
         <div className="w-full lg:w-[756px] mx-auto rounded-xl border border-black bg-white mb-8">
           <div className="p-6 md:p-8 flex justify-between items-center">
@@ -30,32 +42,34 @@ export default function StartComponent() {
           </div>
           <div className="border-b border-black" />
 
-          <div className="p-4 md:p-8 flex flex-col gap-8">
+          <div className="p-4 md:p-8 flex flex-col gap-6 md:gap-8">
             {STRINGS.steps.map(
-              ({ title, subtitle, image, cta, isCompleted }, key) => (
-                <div className="flex justify-between items-center" key={key}>
-                  <div className="flex justify-start gap-4">
-                    <div className="min-w-12 md:w-[64px] h-12 bg-grayLight flex items-center justify-center rounded-[4px]">
-                      <img src={image} />
+              ({ title, subtitle, image, cta, isCompleted, path }, key) => (
+                <div
+                  className="flex justify-between items-center w-full gap-4"
+                  key={key}
+                >
+                  <div className="flex justify-start items-start gap-2 w-3/4">
+                    <div className="w-12 h-12 bg-grayLight flex items-center justify-center rounded-[4px]">
+                      <img src={image} className="w-[32px]" />
                     </div>
-                    <div>
+                    <div className="w-full">
                       <p className="font-semibold text-md">{title}</p>
                       <p className="text-brand-gray text-sm">{subtitle}</p>
                     </div>
                   </div>
-                  <div className="flex justify-end md:w-1/4 min-w-20 w-20">
+                  <div className="flex justify-center w-1/4">
                     {isCompleted ? (
-                      <img
-                        src={StepCheck}
-                        className="w-[48px] h-[48px] mr-4 md:mr-8"
-                      />
+                      <img src={StepCheck} className="w-[64px]" />
                     ) : (
-                      <BrutalButton
-                        containerClassName="rounded-lg"
-                        className="h-8 min-h-8 max-h-8 rounded-lg min-w-20 w-20 px-2 md:min-w-28 text-base border-[1px] font-medium"
-                      >
-                        {cta}
-                      </BrutalButton>
+                      <Link to={path}>
+                        <BrutalButton
+                          containerClassName="h-8 rounded-xl text-base font-medium"
+                          className="h-8 w-auto min-w-24 rounded-xl text-base font-medium"
+                        >
+                          {cta}
+                        </BrutalButton>
+                      </Link>
                     )}
                   </div>
                 </div>

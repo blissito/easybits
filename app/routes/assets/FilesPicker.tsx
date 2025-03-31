@@ -256,9 +256,9 @@ const Dropper = ({
         "items-center",
         "flex gap-4",
         "w-full",
-        "border-2 border-dashed border-brand-gray rounded-xl",
+        "border-[1px] border-dashed border-black rounded-xl",
         {
-          "border-black": isHovered === "hover",
+          "border-iron": isHovered === "hover",
           "border-brand-500": isHovered === "dropping",
           "h-[121px] justify-center p-4": mode === "default",
           "p-2 mt-2": mode === "slim",

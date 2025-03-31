@@ -215,7 +215,9 @@ const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
     <nav className="mb-8 flex justify-end gap-4">
       <Link to="/dash/assets">
-        <Button isDisabled={isLoading}>Cancelar</Button>
+        <BrutalButton mode="ghost" isLoading={isLoading}>
+          Cancelar
+        </BrutalButton>
       </Link>
       <BrutalButton isLoading={isLoading} type="submit">
         Guardar y publicar

@@ -75,7 +75,7 @@ export const Footer = () => {
         <div className="h-full max-w-7xl gap-y-10 md:gap-y-0 border-x-[1px] border-x-white/20 mx-aut py-12 md:py-20 px-4 mx-auto grid grid-cols-12">
           <div className="col-span-12 md:col-span-6">
             <h2 className="flex flex-wrap items-center text-2xl md:text-3xl text-white">
-              <span> Suscríbete </span> <span> para recibir&nbsp;</span>
+              <span> Suscríbete&nbsp; </span> <span> para recibir&nbsp;</span>
               <span> tips para aumentar </span>{" "}
               <span> tus ventas y&nbsp; </span>{" "}
               <span> empezar a crear tus assets</span>
@@ -90,22 +90,22 @@ export const Footer = () => {
           <div className="col-span-12 md:col-span-2">
             <h3 className="text-white mb-3">Sobre Easybits</h3>
             <Link to="/funcionalidades">
-              <p className="text-metal hover:text-white/40 transition-all">
+              <p className="text-marengo hover:text-brand-500 transition-all">
                 Features
               </p>
             </Link>
             <Link to="/planes">
-              <p className="text-metal hover:text-white/40 transition-all">
+              <p className="text-marengo hover:text-brand-500 transition-all">
                 Planes
               </p>
             </Link>
             <Link to="/blog">
-              <p className="text-metal hover:text-white/40 transition-all">
+              <p className="text-marengo hover:text-brand-500 transition-all">
                 Blog
               </p>
             </Link>
             <Link to="/planes">
-              <p className="text-metal hover:text-white/40 transition-all">
+              <p className="text-marengo hover:text-brand-500 transition-all">
                 Preguntas frecuentes
               </p>
             </Link>
@@ -119,22 +119,22 @@ export const Footer = () => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <FaFacebook className="text-metal hover:text-white/40 transition-all text-2xl md:text-lg" />{" "}
+                <FaFacebook className="text-marengo hover:text-brand-500 transition-all text-2xl md:text-xl" />{" "}
               </a>
               <a
                 href="https://www.youtube.com/@EasyBitsCloud"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <FaYoutube className="text-metal hover:text-white/40 transition-all text-2xl md:text-lg " />
+                <FaYoutube className="text-marengo hover:text-brand-500 transition-all text-2xl md:text-xl " />
               </a>
-              {/* <RiTwitterXFill className="text-metal hover:text-white/40 transition-all text-2xl md:text-lg" /> */}
+              {/* <RiTwitterXFill className="text-marengo hover:text-brand-500 transition-all text-2xl md:text-xl" /> */}
               <a
                 href="https://www.instagram.com/easybits.cloud/"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <AiFillInstagram className="text-metal hover:text-white/40 transition-all text-2xl md:text-lg" />{" "}
+                <AiFillInstagram className="text-marengo hover:text-brand-500 transition-all text-2xl md:text-xl" />{" "}
               </a>
             </div>
           </div>

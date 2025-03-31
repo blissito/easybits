@@ -2,11 +2,12 @@ import { STRINGS } from "./StatsComponent.constants";
 import { HiOutlineInformationCircle } from "react-icons/hi";
 import LineChart from "../charts/LineChart";
 import { cn } from "~/utils/cn";
+import { Tooltip } from "../common/Tooltip";
 
 export default function StatsComponent({ user, salesData, mostSoldProducts }) {
   //:TODO get these insights and format them
   return (
-    <div className="min-h-screen lg:h-screen   px-4 md:px-[5%] lg:px-0">
+    <div className="min-h-screen lg:h-screen  px-4 md:pr-[5%] md:pl-[10%]   xl:px-0">
       <div className="max-w-7xl mx-auto flex flex-col h-full pt-16 pb-0 md:pt-10 box-border  ">
         <div className="flex justify-between items-end flex-wrap">
           <div className="w-full md:w-2/3">
@@ -26,7 +27,7 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
           </div>
         </div>
         <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-6 w-full mt-6">
-          {STRINGS.stats.map(({ className, title, amount }) => (
+          {STRINGS.stats.map(({ className, title, amount, tooltip }) => (
             <div className="relative group col-span-3">
               <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-1 group-hover:translate-y-1 opacity-0 group-hover:opacity-100" />
               <div
@@ -36,9 +37,12 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
                 )}
               >
                 <div className="p-4 lg:p-6 ">
-                  <p className="text-base text-start mb-2 gap-1 flex items-center">
-                    {title} <HiOutlineInformationCircle />
-                  </p>
+                  <div className="text-base text-start mb-2 gap-1 flex items-center">
+                    <p>{title}</p>
+                    <div className="relative flex justify-center group ">
+                      <HiOutlineInformationCircle />
+                    </div>
+                  </div>
                   <p className="text-3xl lg:text-4xl font-bold mt-3">
                     {amount}
                   </p>
