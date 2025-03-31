@@ -39,8 +39,18 @@ export const createUserSession = async (
   const host = userData.email.split("@")[0];
   await db.user.upsert({
     where: { email: userData.email },
-    create: { ...userData, publicKey: randomUUID(), host },
-    update: userData,
+    create: {
+      email: userData.email,
+      verified_email: userData.verified_email,
+      picture: userData.picture,
+      publicKey: randomUUID(),
+      host,
+    },
+    update: {
+      email: userData.email,
+      verified_email: userData.verified_email,
+      picture: userData.picture,
+    },
   });
   session.set("email", userData.email);
   // create certificate
