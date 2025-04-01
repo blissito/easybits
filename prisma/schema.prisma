@@ -10,6 +10,7 @@ datasource db {
 enum AssetType {
   DOWNLOADABLE
   VOD_COURSE
+  EMAIL_COURSE
   WEBINAR
   EBOOK
 }

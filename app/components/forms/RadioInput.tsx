@@ -34,11 +34,11 @@ export const RadioGroup = ({
         icon="/hero/micro.svg"
       />
       <RadioInput
-        isSelected={selected === "CURSO"}
+        isSelected={selected === "VOD_COURSE"}
         onChange={(value) => setSelected(value)}
         description="Cursos pre-grabados o en vivo"
         name="type"
-        value="CURSO"
+        value="VOD_COURSE"
         label="Curso"
         icon="/hero/course.svg"
       />

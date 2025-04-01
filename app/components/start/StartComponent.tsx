@@ -5,16 +5,6 @@ import Escribenos from "/icons/escribenos.svg";
 import StepProgress from "../common/StepProgress";
 
 import { Link } from "react-router";
-import { getUserOrNull } from "~/.server/getters";
-
-export const loader = ({ request }) => {
-  const user = getUserOrNull(request);
-
-  return {
-    user,
-    assets: [],
-  };
-};
 
 export default function StartComponent() {
   const steps = STRINGS.steps.length;
