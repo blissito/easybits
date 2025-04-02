@@ -44,16 +44,17 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
 
   const fetcher = useFetcher();
   const { upload, links, onRemove } = useUploader({
+    assetId: asset.id,
     defaultLinks: asset.gallery,
-    async onLinksUpdated(lks) {
-      fetcher.submit(
-        {
-          intent: "update_asset_gallery_links",
-          data: JSON.stringify({ gallery: lks, id: asset.id }),
-        },
-        { method: "post", action: "/api/v1/assets" }
-      );
-    },
+    // async onLinksUpdated(lks) {
+    //   fetcher.submit(
+    //     {
+    //       intent: "update_asset_gallery_links",
+    //       data: JSON.stringify({ gallery: lks, id: asset.id }),
+    //     },
+    //     { method: "post", action: "/api/v1/assets" }
+    //   );
+    // },
   });
 
   useEffect(() => {

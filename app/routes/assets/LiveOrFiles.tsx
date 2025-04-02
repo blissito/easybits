@@ -1,9 +1,11 @@
 import { Input } from "~/components/common/Input";
-import { Switch } from "./Switch";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FilesForm } from "~/components/forms/files/FilesForm";
 import type { Asset } from "@prisma/client";
+import { BrutalButton } from "~/components/common/BrutalButton";
+import { useFetcher } from "react-router";
+import { NewsLetterMicroApp } from "~/components/forms/NewsLetterForm";
 
 export const LiveOrFiles = ({
   onChangeEventDate,
@@ -14,12 +16,12 @@ export const LiveOrFiles = ({
 }: {
   onChangeMetadata?: (arg0: unknown) => void;
   asset: Asset;
-  type?: "WEBINAR";
+  type?: "WEBINAR" | "EMAIL_COURSE" | "VOD_COURSE";
   onChangeEventDate?: (arg0: string) => void;
   defaultEventDate?: Date;
 }) => {
-  const [isLive, setIsLive] = useState(type === "WEBINAR");
   const [eventDate, setEventDate] = useState<Date>(defaultEventDate);
+  const fetcher = useFetcher();
 
   const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
     const v = e.currentTarget.value;
@@ -52,17 +54,47 @@ export const LiveOrFiles = ({
   // revisit
   const defaultDate = eventDate?.toISOString().split("T")[0];
 
+  const isEmailCourse = type === "EMAIL_COURSE";
+  const isLive = type === "WEBINAR";
+
+  const handleTypeUpdate = (type: string) => () => {
+    fetcher.submit(
+      {
+        intent: "update_asset",
+        data: JSON.stringify({
+          type,
+          id: asset.id,
+        }),
+      },
+      { method: "post", action: "/api/v1/assets" }
+    );
+  };
+
   return (
     <section className="mt-8 mb-3">
-      <h2 className="text-2xl">¿Tu curso es en vivo o pre-grabado?</h2>
-      <nav className="flex gap-4 items-center mb-2 ">
-        <p className="py-3">Pre-grabado</p>
-        <Switch
-          onChange={setIsLive}
-          defaultChecked={true}
-          holderClassName="bg-brand-yellow"
-        />
-        <p className="py-3">En vivo</p>
+      <h2 className="text-2xl mb-3">¿Tu curso es en vivo o pre-grabado?</h2>
+      <nav className="flex gap-4 items-center mb-4 ">
+        <BrutalButton
+          onClick={handleTypeUpdate("VOD_COURSE")}
+          mode={type === "VOD_COURSE" ? "brand" : "ghost"}
+          className="py-3"
+        >
+          Pre-grabado
+        </BrutalButton>
+        <BrutalButton
+          onClick={handleTypeUpdate("WEBINAR")}
+          mode={type === "WEBINAR" ? "brand" : "ghost"}
+          className="py-3"
+        >
+          En vivo
+        </BrutalButton>
+        <BrutalButton
+          onClick={handleTypeUpdate("EMAIL_COURSE")}
+          mode={type === "EMAIL_COURSE" ? "brand" : "ghost"}
+          className="py-3"
+        >
+          Por correo
+        </BrutalButton>
       </nav>
       <AnimatePresence mode="wait">
         {isLive && (
@@ -110,7 +142,13 @@ export const LiveOrFiles = ({
             exit={{ opacity: 0, filter: "blur(4px)" }}
             animate={{ opacity: 1, filter: "blur(0px)" }}
           >
-            <FilesForm />
+            {isEmailCourse ? (
+              <NewsLetterMicroApp asset={asset} />
+            ) : (
+              <FilesForm
+                mode={isEmailCourse ? "private_by_default" : undefined}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -180,7 +180,9 @@ export const EditAssetForm = ({
         />
         <HR />
 
-        {(asset.type === "VOD_COURSE" || asset.type === "WEBINAR") && (
+        {(asset.type === "EMAIL_COURSE" ||
+          asset.type === "VOD_COURSE" ||
+          asset.type === "WEBINAR") && (
           <LiveOrFiles
             onChangeEventDate={handleEventChange}
             defaultEventDate={asset.eventDate}
@@ -213,14 +215,14 @@ export const EditAssetForm = ({
 
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
-    <nav className="mb-8 flex justify-end gap-4">
+    <nav className="mb-8 flex justify-end gap-4 sticky bottom-12">
       <Link to="/dash/assets">
-        <BrutalButton mode="ghost" isLoading={isLoading}>
+        <BrutalButton mode="ghost" isDisabled={isLoading}>
           Cancelar
         </BrutalButton>
       </Link>
       <BrutalButton isLoading={isLoading} type="submit">
-        Guardar y publicar
+        Guardar
       </BrutalButton>
     </nav>
   );

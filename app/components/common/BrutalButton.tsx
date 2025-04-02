@@ -9,7 +9,7 @@ interface BrutalButtonProps {
   isDisabled?: boolean;
   isLoading?: boolean;
   // icon?: ReactNode;
-  mode?: "ghost" | "brand";
+  mode?: "ghost" | "brand" | "danger";
   type?: "button" | "submit";
   [x: string]: unknown;
 }
@@ -44,6 +44,7 @@ export const BrutalButton = ({
           className,
           {
             "bg-white": mode === "ghost",
+            "bg-red-400/90": mode === "danger",
             "bg-gray-300 text-gray-400 cursor-not-allowed border-gray-400":
               isDisabled || isLoading,
             "active:translate-x-0 active:translate-y-0":

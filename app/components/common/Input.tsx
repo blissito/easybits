@@ -10,6 +10,7 @@ import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
 
 interface InputProps {
+  type?: "textarea";
   bgColor?: string;
   children?: ReactNode;
   onClick?: () => void;
@@ -33,6 +34,7 @@ export const Input = ({
   defaultValue,
   label,
   error,
+  type,
   copy,
   inputClassName,
   isError,
@@ -45,11 +47,17 @@ export const Input = ({
   //   ref.current?.focus();
   // }, [isError]);
 
+  const ElementName = type === "textarea" ? "textarea" : "input";
+
   return (
-    <label className={cn("grid gap-2 text-gray", className)}>
+    <label
+      className={cn("flex flex-col gap-2 text-gray", className, {
+        "h-[50%]": type === "textarea",
+      })}
+    >
       <span>{label}</span>
-      <div className="relative">
-        <input
+      <div className="relative flex-1">
+        <ElementName
           onChange={onChange}
           defaultValue={defaultValue}
           className={cn(
@@ -58,6 +66,7 @@ export const Input = ({
             {
               "pr-24": !!copy,
               "ring-2 ring-red-500 transition-all border-none": isError,
+              "h-[600px]": type === "textarea",
             },
             inputClassName
           )}

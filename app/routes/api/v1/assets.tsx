@@ -5,14 +5,36 @@ import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
 import type { Asset } from "@prisma/client";
-import { assetSchema } from "~/routes/assets/EditAssetForm";
 import { getPutFileUrl, deleteObject } from "react-hook-multipart";
+import type { Action } from "~/components/forms/NewsLetterForm";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "update_asset_action") {
+    const action = JSON.parse(formData.get("action") as string);
+    const assetId = formData.get("assetId") as string;
+    const asset = await db.asset.findUnique({ where: { id: assetId } });
+    let actions = (asset?.actions || []) as Action[];
+    if (action.id) {
+      actions.splice(action.index, 1, action);
+    } else {
+      action.index = actions.length;
+      action.id = nanoid(3);
+      actions = [...new Set([...actions, action])];
+    }
+    return await db.asset.update({
+      where: {
+        id: assetId,
+      },
+      data: {
+        actions,
+      },
+    });
+  }
 
   if (intent === "remove_gallery_image_and_update_gallery") {
     const link = formData.get("url") as string;
@@ -66,18 +88,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "update_asset") {
     // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
-    if (data.template.slug) {
+    if (data.template?.slug) {
       data.slug = data.template.slug; // testing
     }
-    const parsed = assetSchema.parse({
-      ...data,
-      userId: user.id,
-    });
+    // @todo no validation?
     return await db.asset.update({
       where: {
-        id: parsed.id,
+        id: data.id,
       },
-      data: { ...parsed, id: undefined }, // @todo remove id in parsing
+      data: { ...data, id: undefined, userId: user.id }, // @todo remove id in parsing
     });
   }
 
@@ -92,6 +111,26 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "delete_asset") {
+  }
+
+  if (intent === "remove_asset_action") {
+    const actionIndex = Number(formData.get("actionIndex"));
+    const assetId = formData.get("assetId") as string;
+
+    const asset = await db.asset.findUnique({
+      where: {
+        id: assetId,
+      },
+    });
+
+    if (!asset) throw new Response("Asset not found", { status: 404 });
+
+    const actions = asset.actions as Action[];
+
+    actions.splice(actionIndex, 1);
+    // @todo delete file from S3
+
+    return await db.asset.update({ where: { id: assetId }, data: { actions } });
   }
 
   return null;

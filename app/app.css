@@ -64,7 +64,9 @@ body {
 }
 
 .markdown code {
-  background-image: linear-gradient(#fff 0%, var(--brand-800) 0);
+  /* background-image: linear-gradient(#fff 0%, var(--brand-800) 0);
+   */
+  background: var(--brand-500);
   border-radius: 9px;
   padding: 2px 4px;
   color: white;
@@ -91,7 +93,7 @@ body {
 }
 
 .markdown {
-  --brand-500: gray;
+  --brand-500: #9870ed;
 }
 
 .markdown li {

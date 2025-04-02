@@ -53,6 +53,7 @@ export default [
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
     route("files", "routes/api/v1/files.tsx"),
+    route("utils", "routes/api/v1/utils.tsx"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
     ...prefix("stripe", [
       route("account", "routes/api/v1/stripe/account.tsx"),

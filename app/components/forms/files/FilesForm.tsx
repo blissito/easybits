@@ -22,9 +22,9 @@ const getFileArray = (event: any) => {
 // @todo size limits
 export const FilesForm = ({
   onClose,
-}: // fileInputRef,
-{
-  // fileInputRef?: Ref<HTMLInputElement>;
+  mode,
+}: {
+  mode?: "private_by_default";
   onClose?: (arg0: File[], arg1: "public-read" | "private") => void;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,21 +70,23 @@ export const FilesForm = ({
 
   return (
     <motion.article layoutId="FilesFormModal" className="h-full flex flex-col">
-      <SelectInput
-        className="w-full"
-        value={privacy}
-        onChange={(value) => setPrivacy(value)}
-        label="privacidad del archivo"
-        options={[
-          { label: "Privado", value: "private" },
-          { label: "Público", value: "public-read" },
-        ]}
-        error={
-          <p className="text-brand-500 mb-2">
-            La privacidad de los archivos es permanente
-          </p>
-        }
-      />
+      {mode !== "private_by_default" && (
+        <SelectInput
+          className="w-full"
+          value={privacy}
+          onChange={(value) => setPrivacy(value)}
+          label="privacidad del archivo"
+          options={[
+            { label: "Privado", value: "private" },
+            { label: "Público", value: "public-read" },
+          ]}
+          error={
+            <p className="text-brand-500 mb-2">
+              La privacidad de los archivos es permanente
+            </p>
+          }
+        />
+      )}
       {files.length < 1 && (
         <FilesDropper onDrop={handleDrop} onClick={handleUploadClick} />
       )}

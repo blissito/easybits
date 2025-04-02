@@ -4,8 +4,9 @@ import { useFetcher } from "react-router";
 export const useUploader = (config: {
   defaultLinks?: string[];
   onLinksUpdated?: (arg0: string[]) => void;
+  assetId: string;
 }) => {
-  const { onLinksUpdated, defaultLinks } = config || {};
+  const { onLinksUpdated, defaultLinks, assetId } = config || {};
   const [links, setLinks] = useState<string[]>(defaultLinks || []);
   const fetcher = useFetcher();
 
@@ -44,24 +45,32 @@ export const useUploader = (config: {
     return await response.text();
   };
 
-  const putFile = (url: string, body: File) => {
-    return fetch(url, {
+  const putFile = (url: string, body: File) =>
+    fetch(url, {
       body,
       method: "put",
       headers: { "content-type": body.type },
     }).then((response) => response.ok);
-  };
 
   const upload = async (file: File, assetId: string) => {
-    // const vsrc = URL.createObjectURL(file);
-    // setLinks((lks) => [...lks, vsrc]); // <================== revisit
-
     const url = await getPublicPutUrl(file.name, assetId);
+    const uri = url.split("?")[0];
     const ok = await putFile(url, file);
     if (ok) {
-      setLinks((lks) => [...lks, url.split("?")[0]]);
+      setLinks((lks) => [...lks, uri]); // update
     }
-    return ok ? url.split("?")[0] : null;
+    // update db ==> revisit
+    fetcher.submit(
+      {
+        intent: "update_asset_gallery_links",
+        data: JSON.stringify({
+          gallery: [...new Set([...links, uri])],
+          id: assetId,
+        }),
+      },
+      { method: "post", action: "/api/v1/assets" }
+    );
+    return ok ? uri : null;
   };
 
   useEffect(() => {

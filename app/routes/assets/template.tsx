@@ -21,7 +21,6 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
     }
   };
 
-  const getPriceString = () => `$${asset.price} ${asset.currency}`;
   return (
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
@@ -93,41 +92,50 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
               <Markdown>{asset.description}</Markdown>
             </div>
           </div>
-          <div
-            className={cn(
-              "col-span-8 border-t-[2px] border-black",
-              "md:col-span-3 md:border-t-0"
-            )}
-          >
-            <div
-              className={cn(
-                "h-16 border-b-[2px] bg-black border-black  place-content-center hidden",
-                "md:grid"
-              )}
-            >
-              <h3 className="text-2xl font-bold text-white">
-                {getPriceString()}
-              </h3>
-            </div>
-            <button
-              className={cn(
-                "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center"
-              )}
-            >
-              Comprar
-            </button>
-            <div className="h-fit p-6 border-b-[2px] border-black content-center">
-              <Markdown>{asset.note}</Markdown>
-            </div>
-            {asset.type === "WEBINAR" ? (
-              <WebinarDetails asset={asset} />
-            ) : (
-              <Formats />
-            )}
-          </div>
+          <Info asset={asset} />
         </div>
       </div>
     </section>
+  );
+};
+
+const Info = ({ asset }: { asset: Asset }) => {
+  const getPriceString = () => `$${asset.price} ${asset.currency}`;
+  return (
+    <div
+      className={cn(
+        "col-span-8 border-t-[2px] border-black",
+        "md:col-span-3 md:border-t-0"
+      )}
+    >
+      <div
+        className={cn(
+          "h-16 border-b-[2px] bg-black border-black  place-content-center hidden",
+          "md:grid"
+        )}
+      >
+        <h3 className="text-2xl font-bold text-white">{getPriceString()}</h3>
+      </div>
+      <button
+        className={cn(
+          "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center"
+        )}
+      >
+        {asset.template?.ctaText
+          ? asset.template.ctaText
+          : asset.price <= 0
+          ? "Suscribirse gratis"
+          : "Comprar"}
+      </button>
+      <div className="h-fit p-6 border-b-[2px] border-black content-center">
+        <Markdown>{asset.note}</Markdown>
+      </div>
+      {asset.type === "WEBINAR" ? (
+        <WebinarDetails asset={asset} />
+      ) : (
+        <Formats />
+      )}
+    </div>
   );
 };
 
@@ -211,7 +219,11 @@ export const FooterTemplate = ({ asset }: { asset: Asset }) => {
           containerClassName="rounded-lg"
           className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium"
         >
-          Comprar
+          {asset.template?.ctaText
+            ? asset.template.ctaText
+            : asset.price <= 0
+            ? "Suscribirse gratis"
+            : "Comprar"}
         </BrutalButton>
       </div>
     </>

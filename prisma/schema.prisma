@@ -38,6 +38,7 @@ model Asset {
   slug  String @unique
   title String
 
+  actions     Json[]
   tags        String                      @default("")
   note        String?
   description String?
