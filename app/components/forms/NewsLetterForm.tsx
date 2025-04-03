@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { SelectInput } from "./SelectInput";
 import { FileInput } from "./FileInput";
+import toast from "react-hot-toast";
 
 export type Action = {
   assetId: string;
@@ -26,6 +27,7 @@ export type Action = {
   gap: "in 1 week";
   index?: number;
   id?: string;
+  markdown?: string;
 };
 
 export const NewsLetterMicroApp = ({
@@ -86,7 +88,7 @@ const TestEmailForm = ({
   action: Action;
 }) => {
   const fetcher = useFetcher();
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
@@ -97,6 +99,7 @@ const TestEmailForm = ({
       action: "/api/v1/utils",
     });
     onSubmit?.();
+    toast.success("Se ha enviado el correo de prueba");
   };
   return (
     <section className=" bg-blue-400/20 p-12 rounded-3xl border-2 border-blue-500 my-4">
@@ -108,6 +111,7 @@ const TestEmailForm = ({
           className="flex items-center gap-4"
           containerClassName="ml-auto w-max"
           mode="ghost"
+          isLoading={fetcher.state !== "idle"}
         >
           Envíar correo de prueba <FaRegPaperPlane />
         </BrutalButton>
@@ -142,6 +146,9 @@ const ActionBlock = ({
         type="button"
         className="bg-blue-400/10 rounded-md p-4 border border-blue-400 relative active:scale-95 transition-all"
       >
+        <p className="w-max bg-yellow-500/40 p-1 rounded absolute -bottom-3 -right-3">
+          {action.gap}
+        </p>
         <span className="absolute -right-2 bg-white top-[40%]">
           <FaChevronCircleRight />
         </span>

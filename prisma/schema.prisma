@@ -63,25 +63,33 @@ model Asset {
   updatedAt   DateTime                    @updatedAt
 }
 
+type NewsLetter {
+  name String?
+  id   String
+  next Int     @default(1) // 0 is done
+}
+
 model User {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
   // file ownership
   assets         Asset[]
   files          File[]
-  publicKey      String   @unique
+  publicKey      String       @unique
   // defaults
   displayName    String?
-  email          String   @unique
-  host           String?  @unique
-  verified_email Boolean  @default(false)
+  email          String       @unique
+  host           String?      @unique
+  verified_email Boolean      @default(false)
   picture        String?
   phoneNumber    String?
   roles          String[]
   metadata       Json?
   stripe         Json?
+  // subscriptions
+  newsletters    NewsLetter[]
   // dates
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 enum FileStatus {
