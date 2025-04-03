@@ -23,7 +23,6 @@ export const ProductGallery = ({
     setCurrentIndex((i) => (i + 1) % 3);
     timeout.current = setTimeout(change, 3000);
   };
-
   const pause = () => timeout.current && clearTimeout(timeout.current);
   const resume = () => {
     timeout.current && clearTimeout(timeout.current);
@@ -44,18 +43,22 @@ export const ProductGallery = ({
       )}
     >
       <div className="">
-        <ImageItem
-          item={items[currentIndex]}
-          onClick={(index) => setCurrentIndex(index)}
-          currentIndex={currentIndex}
-        />
+        {items.length < 2 ? (
+          <img className="object-cover h-full" src={items[0].src} />
+        ) : (
+          <ImageItem
+            item={items[currentIndex]}
+            onClick={(index) => setCurrentIndex(index)}
+            currentIndex={currentIndex}
+          />
+        )}
       </div>
     </section>
   );
 };
 
 const ImageItem = ({
-  item = {},
+  item = {} as Item,
   onClick,
   currentIndex,
 }: {

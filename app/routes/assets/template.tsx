@@ -12,15 +12,6 @@ import type { ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
 
 export const ContentTemplate = ({ asset }: { asset: Asset }) => {
-  const getTypeOfBrag = () => {
-    switch (asset.type) {
-      case "WEBINAR":
-        return "inscritos";
-      default:
-        return "descargas";
-    }
-  };
-
   return (
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
@@ -39,55 +30,7 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
               "md:border-r-[2px]"
             )}
           >
-            <div className="grid grid-cols-8 h-fit md:h-16  border-b-[2px] border-black">
-              <div
-                className={cn(
-                  "flex items-center col-span-8 px-4 gap-2 text-left h-10 border-b-[2px] border-black ",
-                  "md:col-span-5 md:px-6 md:h-full md:border-transparent"
-                )}
-              >
-                {asset.tags
-                  .trim()
-                  .split(",")
-                  .map((tag, i) => (
-                    <Tag
-                      className="h-6 md:h-8"
-                      variant="outline"
-                      label={tag}
-                      key={i}
-                    />
-                  ))}
-              </div>
-              <div
-                className={cn(
-                  " col-span-4 h-10 border-x-[0px] border-r-[2px]  border-black px-6 flex items-center gap-2",
-                  "md:border-x-[2px] md:h-full   md:col-span-2"
-                )}
-              >
-                {
-                  <p>
-                    {asset.extra?.showSold ? asset.extra?.sold : 0}{" "}
-                    {getTypeOfBrag()}
-                  </p>
-                }
-
-                <img src="/icons/download.svg" alt="download" />
-              </div>
-              {asset.extra?.showReviews && (
-                <div
-                  className={cn(
-                    "col-span-4  px-6 flex items-center gap-2",
-                    "md:col-span-1"
-                  )}
-                >
-                  <p className="underline">
-                    {/* @todo map reviews */}
-                    {asset.extra?.reviews || 4.7}
-                  </p>
-                  <img className="w-6" src="/icons/star.png" alt="star" />
-                </div>
-              )}
-            </div>
+            <Bragging asset={asset} />
             <div className={cn("h-fit p-4", "md:p-6")}>
               <Markdown>{asset.description}</Markdown>
             </div>
@@ -96,6 +39,63 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
         </div>
       </div>
     </section>
+  );
+};
+
+const Bragging = ({ asset = {} }: { asset: Asset }) => {
+  const getTypeOfBrag = () => {
+    switch (asset.type) {
+      case "WEBINAR":
+        return "inscritos";
+      default:
+        return "descargas";
+    }
+  };
+  return (
+    <main className="flex h-fit md:h-16 border-b-[2px] border-black">
+      <section
+        style={{
+          scrollbarWidth: "none",
+        }}
+        className={cn(
+          "overflow-scroll",
+          "flex items-center px-4 gap-2 text-left h-10 border-b-[2px] border-black ",
+          "md:col-span-5 md:px-6 md:h-full md:border-transparent"
+        )}
+      >
+        {asset.tags
+          .trim()
+          .split(",")
+          .map((tag, i) => (
+            <Tag className="h-6 md:h-8" variant="outline" label={tag} key={i} />
+          ))}
+      </section>
+      <section
+        className={cn(
+          "min-w-max",
+          "h-10 border-x-[0px] border-r-[2px]  border-black px-3 flex items-center gap-2",
+          "md:border-x-[2px] md:h-full   md:col-span-2"
+        )}
+      >
+        {
+          <p>
+            {asset.extra?.showSold ? asset.extra?.sold : 0} {getTypeOfBrag()}
+          </p>
+        }
+
+        <img src="/icons/download.svg" alt="download" />
+      </section>
+      {asset.extra?.showReviews && (
+        <section className={cn("min-w-max px-3 flex items-center gap-2")}>
+          <p className="underline">
+            {/* @todo map reviews */}
+            {asset.extra?.reviews || 4.7}
+          </p>
+          {/* @todo This should be a svg */}
+          <img className="w-6" src="/icons/star.png" alt="star" />
+        </section>
+      )}
+    </main>
   );
 };
 

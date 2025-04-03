@@ -35,6 +35,7 @@ export const BrutalButton = ({
     >
       <span
         className={cn(
+          "w-max",
           "min-w-32 h-12 px-4",
           "grid place-content-center",
           "block", // así podemos usar translate

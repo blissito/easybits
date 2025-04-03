@@ -45,7 +45,12 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
         {asset.title}
       </h1>
       <main className={cn("flex gap-12 justify-evenly", PADDING_LAYOUT)}>
-        <EditAssetForm assetFiles={files} host={host} asset={asset} />
+        <EditAssetForm
+          files={files}
+          assetFiles={files}
+          host={host}
+          asset={asset}
+        />
         <AssetPreview host={host} asset={asset} />
       </main>
     </article>

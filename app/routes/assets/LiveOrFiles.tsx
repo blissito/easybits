@@ -2,7 +2,7 @@ import { Input } from "~/components/common/Input";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FilesForm } from "~/components/forms/files/FilesForm";
-import type { Asset } from "@prisma/client";
+import type { Asset, File as AssetFile } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useFetcher } from "react-router";
 import { NewsLetterMicroApp } from "~/components/forms/NewsLetterForm";
@@ -12,10 +12,12 @@ export const LiveOrFiles = ({
   onChangeMetadata,
   asset,
   type,
+  files,
   defaultEventDate = new Date(),
 }: {
   onChangeMetadata?: (arg0: unknown) => void;
   asset: Asset;
+  files: AssetFile[];
   type?: "WEBINAR" | "EMAIL_COURSE" | "VOD_COURSE";
   onChangeEventDate?: (arg0: string) => void;
   defaultEventDate?: Date;
@@ -143,7 +145,7 @@ export const LiveOrFiles = ({
             animate={{ opacity: 1, filter: "blur(0px)" }}
           >
             {isEmailCourse ? (
-              <NewsLetterMicroApp asset={asset} />
+              <NewsLetterMicroApp files={files} asset={asset} />
             ) : (
               <FilesForm
                 mode={isEmailCourse ? "private_by_default" : undefined}

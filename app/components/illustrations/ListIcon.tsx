@@ -15,7 +15,7 @@ export const ListIcon = ({ fill = "none" }: { fill?: string }) => {
         height="46"
         rx="11"
         stroke="black"
-        stroke-width="2"
+        strokeWidth="2"
       />
       <g clipPath="url(#clip0_397_838)">
         <path

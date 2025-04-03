@@ -12,8 +12,9 @@ export const Tag = ({
   return (
     <div
       className={cn(
+        "min-w-max",
         "capitalize",
-        "h-8 rounded-full w-fit px-3 text-sm flex items-center text-white bg-black",
+        "h-8 rounded-full px-3 text-sm flex items-center text-white bg-black",
         {
           "bg-white text-black border-[2px] border-black":
             variant === "outline",

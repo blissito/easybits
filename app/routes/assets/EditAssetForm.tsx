@@ -1,5 +1,4 @@
-import { Form, Link, useFetcher, useSubmit } from "react-router";
-import { Button } from "~/components/common/Button";
+import { Form, Link, useFetcher } from "react-router";
 import { LayoutGroup } from "motion/react";
 import { LiveOrFiles } from "./LiveOrFiles";
 import { Plantilla } from "./Plantilla";
@@ -67,7 +66,9 @@ export const EditAssetForm = ({
   host,
   asset,
   assetFiles,
+  files,
 }: {
+  files?: File[];
   assetFiles?: File[];
   asset: Asset;
   host: string;
@@ -184,6 +185,7 @@ export const EditAssetForm = ({
           asset.type === "VOD_COURSE" ||
           asset.type === "WEBINAR") && (
           <LiveOrFiles
+            files={files}
             onChangeEventDate={handleEventChange}
             defaultEventDate={asset.eventDate}
             type={asset.type}

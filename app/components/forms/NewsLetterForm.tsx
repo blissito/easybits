@@ -1,4 +1,4 @@
-import type { Asset } from "@prisma/client";
+import type { Asset, File as AssetFile } from "@prisma/client";
 import {
   FaChevronCircleRight,
   FaPlusCircle,
@@ -23,12 +23,18 @@ export type Action = {
   assetId: string;
   name: string;
   intent: "send_email";
-
+  gap: "in 1 week";
   index?: number;
   id?: string;
 };
 
-export const NewsLetterMicroApp = ({ asset }: { asset: Asset }) => {
+export const NewsLetterMicroApp = ({
+  asset,
+  files,
+}: {
+  asset: Asset;
+  files: File[];
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const initial: Action = {
     intent: "send_email",
@@ -50,14 +56,20 @@ export const NewsLetterMicroApp = ({ asset }: { asset: Asset }) => {
   return (
     <>
       <Drawer onClose={onClose} isOpen={isOpen}>
-        <ActionForm assetId={asset.id} onSubmit={onClose} action={editing} />
+        <ActionForm
+          files={files}
+          assetId={asset.id}
+          onSubmit={onClose}
+          action={editing}
+        />
         <TestEmailForm action={editing || {}} />
       </Drawer>
-      <article className="grid grid-cols-3 place-items-stretch gap-3">
-        {asset.actions?.map((action) => (
+      <article className="grid lg:grid-cols-3 grid-cols-2 place-items-stretch gap-3">
+        {(asset.actions as Action[])?.map((action) => (
           <ActionBlock
-            onClick={handleBlockClick(action as Action)}
-            action={action as Action}
+            key={action.id}
+            onClick={handleBlockClick(action)}
+            action={action}
           />
         ))}
         <AddButton onClick={() => setIsOpen(true)} />
@@ -212,7 +224,9 @@ const ActionForm = ({
   action,
   onSubmit,
   assetId,
+  files,
 }: {
+  files: AssetFile[];
   assetId: string;
   onSubmit?: () => void;
   action: Action;
@@ -280,7 +294,35 @@ const ActionForm = ({
         type="textarea"
         className="mb-4"
       />
-      <FileInput assetId={assetId} />
+      <FileInput actionId={action.id} files={files} assetId={assetId} />
+      <SelectInput
+        placeholder="Ventana de envío"
+        name="gap"
+        defaultValue={action.gap}
+        label="Selecciona la ventana de envío para el siguiente"
+        options={[
+          {
+            value: "in 1 week",
+            label: "En 1 semana",
+          },
+          {
+            value: "in 1 day",
+            label: "En 1 día",
+          },
+          {
+            value: "in 1 month",
+            label: "En 1 mes",
+          },
+          {
+            value: "in 1 hour",
+            label: "En 1 hora",
+          },
+          {
+            value: "in 1 minute",
+            label: "En 1 minuto",
+          },
+        ]}
+      />
       <div className="flex justify-end gap-2">
         <BrutalButton
           mode="danger"
