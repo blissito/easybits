@@ -45,8 +45,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         position="right"
         image="https://i.imgur.com/JjN1Q0l.png"
       >
-        <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          Desde cursos en video y libros hasta ilustraciones, fotografías,
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Desde cursos en video y libros, hasta ilustraciones, fotografías,
           plantillas o lo que sea. ¡Sí, lo que sea!{" "}
         </p>
 
@@ -55,7 +55,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <ItemList title="Tu paquete de ilustraciones" />
         <ItemList title="Tu curso de inglés" />
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y más... mucho más.
+          Y todo lo que puedas imaginar.
         </p>
       </Bento>
       <Bento
@@ -63,7 +63,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         image="https://i.imgur.com/R8qvNsB.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          ¿Ya tienes clientes o un sequito de seguidores? Comparte tu tienda y
+          ¿Ya tienes clientes o un club de seguidores? Comparte tu website y
           permite que tu comunidad, seguidores o clientes compren fácilmente.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
@@ -77,8 +77,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         image="https://i.imgur.com/lEOVfUp.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          Acepta distintas formas de pago que se adecúen a tu audiencia, incluso
-          pagos internacionales seguros y rápidos.
+          Acepta las formas de pago que se adecúen a tu audiencia, incluso pagos
+          internacionales seguros y rápidos.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
           Sin letras chiquitas ni comisiones abusivas, recibe tus pagos
@@ -90,13 +90,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         image="https://i.imgur.com/hn9dN49.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          Usa EasyBits para almacenar todo tipo de archivos y compartirlos con
-          tus amigos o clientes, o incluso, consumirlos desde tu propio sitio
-          web.
+          Usa EasyBits para almacenar y optimizar todo tipo de archivos y
+          compartirlos con tus amigos o clientes.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y para hacerlo aún más fácil, usa nuestra API para agregar o eliminar
-          archivos desde tu plataforma.
+          ¿Necesitas storage para tu propia palataforma web? Usa nuestra API
+          para agregar o eliminar archivos desde tu plataforma de forma fácil.
         </p>
       </Bento>
       <BasicGallery
@@ -104,8 +103,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         items={[
           {
             src: "/client.png",
-            text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
-            name: "pelusina",
+            text: "Trabajé por mucho tiempo en un UI Kit pero tenía muchas dudas de cómo venderlo, cuando encontré EasyBits me di cuenta de que vender un asset puede ser fácil con la herramienta correcta.",
+            name: "Brenda Ortega",
           },
           {
             src: "/client.png",

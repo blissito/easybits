@@ -31,14 +31,14 @@ export const Assets = () => {
         <Card
           img="/hero/course.svg"
           title="Cursos"
-          description="Que tus cursos de idiomas, matemáticas, programación, cocina, pintura y más, se vean en todo el mundo."
+          description="Llegó el momento de que tus cursos de idiomas, matemáticas, programación, cocina, pintura y más, se vean en todo el mundo."
           className="bg-[#DCE2F0]"
           tags={["Inglés", "Diseño", "Artes"]}
         />
         <Card
           img="/hero/micro.svg"
           title="Conferencias y Webinars"
-          description="Que tus conferencias o webinars no sean pasajeras, comparte tu conocimiento con tus seguidores."
+          description="Que tus conferencias o webinars no sean pasajeras, conviértelos en un asset permanente compartiendo tu conocimiento con tus seguidores."
           className="bg-[#E0AC6E]"
           tags={["Masterclass", "Webinars"]}
         />
@@ -58,7 +58,7 @@ export const Assets = () => {
         <Card
           img="/hero/code.svg"
           title="Desarrollo de Software"
-          description="Vende projectos, componentes, templates o herramientas que ayuden a otros a crear software de forma más rápida."
+          description="Vende proyectos, componentes, templates o herramientas que ayuden a otros a crear software de forma más rápida."
           className="bg-[#B2DAD8]"
           tags={["Templates", "Componentes"]}
         />

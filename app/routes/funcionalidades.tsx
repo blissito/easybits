@@ -8,6 +8,8 @@ import { Banners, Robot } from "~/components/common/Banner";
 import { PiPaintBrushBroad } from "react-icons/pi";
 import { BiCommentDetail, BiHappy, BiSupport } from "react-icons/bi";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { SiGooglecontaineroptimizedos } from "react-icons/si";
+
 import { FaUsers } from "react-icons/fa";
 import {
   MdOutlineStorage,
@@ -18,18 +20,27 @@ import { CgWebsite } from "react-icons/cg";
 import { RiDiscountPercentLine } from "react-icons/ri";
 import { AiOutlineApi } from "react-icons/ai";
 import type { Route } from "./+types/funcionalidades";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
+import { cn } from "~/utils/cn";
+import { TextBlurEffect } from "~/components/TextBlurEffect";
 
 export const clientLoader = async () => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
   return { user };
 };
 
+export const meta = () =>
+  getBasicMetaTags({
+    title: "Monetiza tu trabajo creativo",
+    description: "Échale un ojo a todo lo que puedes hacer con EasyBits",
+  });
+
 export default function Blog({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   return (
     <section>
       <AuthNav user={user} />
-      <div className="overflow-hidden">
+      <div className="overflow-hidden ">
         <FeaturesHeader />
         <Banners rotation={0}>
           <>
@@ -42,7 +53,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
           </>
         </Banners>
       </div>
-      <FeaturesList />
+      <FeaturesScroll />
       <div className="px-4 md:px-[5%] xl:px-0">
         <SuscriptionBox className="w-full max-w-7xl my-20 md:my-40 " />{" "}
       </div>
@@ -51,151 +62,203 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
   );
 }
 
-const FeaturesList = () => {
+const FeaturesScroll = () => {
   return (
-    <section className="max-w-7xl mx-auto gap-12 md:gap-20 grid grid-cols-1 lg:grid-cols-9 mt-20 md:mt-32 px-4 md:px-[5%] xl:px-0 ">
-      <div className="relative lg:sticky top-0 lg:top-40 h-fit w-full col-span-1 lg:col-span-4">
-        <h2 className="text-4xl md:text-5xl xl:text-7xl font-bold leading-snug mb-6 md:mb-12 relative">
-          Prueba EasyBits. ¡No te vas a arrepentir!
+    <section className=" w-full bg-white ">
+      <div className="sticky top-0 w-full  h-screen flex justify-center items-center">
+        <img
+          className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
+          alt="star"
+          src="/hero/star.svg"
+        />
+        <img
+          className="absolute w-8 md:w-auto right-40 -bottom-20"
+          alt="star"
+          src="/hero/star.svg"
+        />
+        <img
+          className="absolute right-20 top-16 md:top-32 md:right-80 w-10 md:w-16"
+          alt="waves"
+          src="/hero/waves.svg"
+        />
+        <img
+          className="absolute w-8 left-[660px] bottom-10 hidden md:block"
+          alt="asterisk"
+          src="/hero/asterisk.svg"
+        />
+        <img
+          className="absolute w-12 right-12 top-96"
+          alt="diamonds"
+          src="/hero/diamonds.svg"
+        />
+        <img
+          className="absolute w-32 -left-16 bottom-0"
+          alt="espiral"
+          src="/hero/espiral.svg"
+        />
+        <div className="z-50 relative">
           <img
-            className="w-12 xl:w-16 absolute right-10 top-48 md:left-56 md:top-12 lg:right-24 lg:top-[94px] xl:left-80  xl:top-[150px]"
-            src="/hero/man.svg"
+            className="w-40 md:w-48 mx-auto mb-10"
+            src="/hero/logo-glasses.svg"
           />
-        </h2>
-        <BrutalButton>¡Empezar gratis!</BrutalButton>
+          <h2 className="text-5xl xl:text-9xl font-bold leading-snug mb-6 md:mb-12 text-center w-full text-black ">
+            ¿Qué puedes hacer
+            <br /> en EasyBits?
+          </h2>{" "}
+        </div>
       </div>
-      <div className="col-span-1 lg:col-span-5">
-        <div className="border-x-[2px] border-black h-6 sticky top-0"></div>
-        <Card
-          icon={<MdVideogameAsset />}
-          title="Venta de assets digitales de todo tipo"
-          description={
-            <p>
-              {" "}
-              ¿Eres un creativo o profesional que tiene algo que compartir? No
-              importa si eres diseñador, arquitecto, escritor o artista. Vende
-              cualquier tipo de assets digitales, desde{" "}
-              <span className="text-brand-500  font-bold">
+
+      <div className=" mx-auto px-[5%] md:px-[0%] lg:px-[5%] w-full pb-0 md:pb-40  overflow-hidden ">
+        <div className="w-full md:grid grid-cols-6 flex flex-col   ">
+          <Card
+            className="col-span-1 col-start-1  "
+            icon={<MdVideogameAsset />}
+            title="Vender assets digitales de todo tipo"
+            description={
+              <p>
                 {" "}
-                libros electrónicos, videos, audio y música, o cualquier otro
-                archivo como PSD o AI.
-              </span>
-            </p>
-          }
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<PiPaintBrushBroad />}
-          title="Personalización de landing pages"
-          description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, correos o whats app. "
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<CgWebsite />}
-          title="Tu propio website de ventas"
-          description={
-            <p>
-              <span className="text-brand-500  font-bold">
-                Añade tu logotipo, foto de portada, cambia los colores y
-                tipografías,
-              </span>{" "}
-              selecciona el tema dark o light y agrega tus redes sociales. Con
-              un par de clics ten listo tu website completamente optimizado para
-              para dispositivos móviles.
-            </p>
-          }
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<RiDiscountPercentLine />}
-          title="Administración de descuentos"
-          description={
-            <p>
-              Crea{" "}
-              <span className="text-brand-500  font-bold">
-                descuentos para ocasiones especiales, para todos tus productos o
-                para productos específicos{" "}
-              </span>{" "}
-              y administralos de forma fácil y sencilla desde tu dashboard.
-              Utiliza los descuentos para interactuar con tus clientes y
-              aumentar tus ventas.
-            </p>
-          }
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<TbWorldWww />}
-          title="Configuración de dominio"
-          description={
-            <p>
-              Además del subdominio gratuito que EasyBits te ofrece, puedes
-              <span className="text-brand-500  font-bold">
-                agregar tu propio dominio
-              </span>{" "}
-              para fortalecer tu marca.
-            </p>
-          }
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<MdOutlineStorage />}
-          title="Almacenamiento de archivos"
-          description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
-        />{" "}
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<AiOutlineApi />}
-          title="API para archivos"
-          description={
-            <p>
-              Conecta EasyBits a tu proyecto de desarrollo y{" "}
-              <span className="text-brand-500  font-bold">
-                {" "}
-                usa la API para agregar, editar o eliminar archivos de forma
-                fácil
-              </span>
-              , además de administrar la privacidad de cada uno (públicos o
-              privados). EasyBits será tu mejor hosting de archivos.
-            </p>
-          }
-        />{" "}
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<BiSupport />}
-          title="Soporte en español"
-          description="¿Dudas o preguntas? Nuestro equipo estará listo para ayudarte a través de nuestras redes sociales o contacto directo."
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<FaUsers />}
-          title="Acceso completo a la información de tus clientes"
-          description={
-            <p>
-              ¿Quieres descarga los mails de tus cleintes para enviar un mail o
-              crear una campaña de ADS? Descargalos cuando quieras.{" "}
-              <span className="text-brand-500  font-bold">
-                {" "}
-                ¡Tus clientes! ¡Tu información!
-              </span>
-            </p>
-          }
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
-        <Card
-          icon={<MdStorefront />}
-          title="Acceso a la comunidad EasyBits para aumentar tus ventas"
-          description={
-            <p>
-              Aumenta tus ventas siendo parte de la comunidad EasyBits en donde
-              miles de usuarios exploran y compran assets digitales.{" "}
-              <span className="text-brand-500  font-bold">
-                La comunidad es un escaparte más para tus assets sin ningún
-                costo o comisión adicional.
-              </span>
-            </p>
-          }
-        />
-        <div className="border-x-[2px] border-black h-6"></div>
+                ¿Eres un creativo o profesional que tiene algo que compartir? No
+                importa si eres diseñador, arquitecto, escritor o artista. Vende
+                cualquier tipo de assets digitales:{" "}
+                <span className="text-brand-500  font-bold">
+                  {" "}
+                  libros electrónicos, videos, audio y música, o cualquier otro
+                  archivo como PSD o AI.
+                </span>
+              </p>
+            }
+          />
+
+          <Card
+            className="col-start-1 md:col-start-5 md:mt-40 col-span-1  "
+            classIcon="bg-munsell"
+            icon={<PiPaintBrushBroad />}
+            title="Personalizar tus landing pages"
+            description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, correos o whats app. "
+          />
+
+          <Card
+            className="col-start-2 col-span-1  "
+            classIcon="bg-berry"
+            icon={<CgWebsite />}
+            title="Crear tu propio website de ventas"
+            description={
+              <p>
+                <span className="text-brand-500  font-bold">
+                  Añade tu logotipo, foto de portada, cambia los colores y
+                  personaliza la tipografía,
+                </span>{" "}
+                selecciona el tema dark o light y agrega tus redes sociales. Con
+                un par de clics ten listo tu website completamente optimizado
+                para todos los dispositivos.
+              </p>
+            }
+          />
+          <Card
+            className="col-start-4 md:mt-40 col-span-1 scale-100 md:scale-90  "
+            classIcon="bg-lime"
+            icon={<RiDiscountPercentLine />}
+            title="Administración de descuentos"
+            description={
+              <p>
+                Crea{" "}
+                <span className="text-brand-500  font-bold">
+                  descuentos para ocasiones especiales, para todos tus productos
+                  o para productos específicos{" "}
+                </span>{" "}
+                y adminístralos de forma fácil y rápida desde tu dashboard.
+                Utiliza los descuentos para interactuar con tus clientes y
+                aumentar tus ventas.
+              </p>
+            }
+          />
+          <Card
+            className="col-start-1 md:mt-10 col-span-1  "
+            classIcon="bg-rose"
+            icon={<TbWorldWww />}
+            title="Configurar tu dominio"
+            description={
+              <p>
+                Además del subdominio gratuito que EasyBits te ofrece, puedes
+                <span className="text-brand-500  font-bold">
+                  agregar tu propio dominio
+                </span>{" "}
+                para fortalecer tu marca.
+              </p>
+            }
+          />
+          <Card
+            className="col-start-3 md:mt-96 col-span-1  "
+            classIcon="bg-linen"
+            icon={<MdOutlineStorage />}
+            title="Almacenar archivos"
+            description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
+          />
+          <Card
+            className="col-start-5 mt-40 col-span-1 md:scale-110 "
+            icon={<AiOutlineApi />}
+            title="API para archivos"
+            description={
+              <p>
+                Conecta EasyBits a tu propia plataforma y{" "}
+                <span className="text-brand-500  font-bold">
+                  {" "}
+                  usa la API para agregar, editar o eliminar archivos de forma
+                  fácil
+                </span>
+                , y además, administra la privacidad de cada uno (públicos o
+                privados). EasyBits será tu mejor hosting de archivos.
+              </p>
+            }
+          />
+          <Card
+            className="col-start-2 md:mt-40 col-span-1 scale-100 md:scale-125 "
+            classIcon="bg-brand-grass"
+            icon={<BiSupport />}
+            title="Recibir soporte en español"
+            description="¿Dudas o preguntas? Nuestro equipo estará listo para ayudarte a través de nuestras redes sociales o contacto directo."
+          />
+
+          <Card
+            className="col-start-6 mt-0 col-span-1  "
+            classIcon="bg-lime"
+            icon={<FaUsers />}
+            title="Tener acceso completo a la información de tus clientes"
+            description={
+              <p>
+                ¿Quieres descarga los mails de tus clientes para enviar un mail
+                o crear una campaña de ADS? Descárgalos cuando quieras.{" "}
+                <span className="text-brand-500  font-bold">
+                  {" "}
+                  ¡Tus clientes! ¡Tu información!
+                </span>
+              </p>
+            }
+          />
+          <Card
+            className="col-start-1 md:mt-40 col-span-1  "
+            classIcon="bg-rose"
+            icon={<MdStorefront />}
+            title="Acceder a la comunidad EasyBits para aumentar tus ventas"
+            description={
+              <p>
+                Aumenta tus ventas siendo parte de la comunidad EasyBits en
+                donde miles de usuarios exploran y compran assets digitales.{" "}
+                <span className="text-brand-500  font-bold">
+                  La comunidad es un escaparte más para tus assets sin ningún
+                  costo o comisión adicional.
+                </span>
+              </p>
+            }
+          />
+          <Card
+            className="col-start-5 md:mt-80  col-span-1 md:scale-125 "
+            classIcon="bg-berry"
+            icon={<SiGooglecontaineroptimizedos />}
+            title="Optimizar tus archivos"
+            description="Todos el contenido el video es optimizado bajo el protocolo HLS (HTTP Live Streaming), el cuál permite adaptar la calidad del video a las condiciones de la red. "
+          />
+        </div>
       </div>
     </section>
   );
@@ -205,25 +268,37 @@ const Card = ({
   title,
   description,
   icon,
+  className,
+  classIcon,
 }: {
   title: string;
   description: ReactNode;
   icon: ReactNode;
+  className?: string;
+  classIcon?: string;
 }) => {
   return (
-    <div className="border-[2px] border-black p-6 md:p-10">
-      <div className="flex gap-3 items-center">
-        <span className="text-4xl">{icon}</span>
-        <h3 className="text-3xl font-bold">{title}</h3>
+    <div className={cn("z-0 w-full md:w-[340px] bg-transparent", className)}>
+      <div className="border-x-2 border-black w-full h-4"></div>
+      <div
+        className={cn("border-[2px] bg-white h-fit border-black p-6 md:p-10 ")}
+      >
+        <div className="flex gap-3 items-center flex-wrap">
+          <span className={cn("text-3xl bg-sky p-1 rounded", classIcon)}>
+            {icon}
+          </span>
+          <h3 className="text-2xl font-bold">{title}</h3>
+        </div>
+        <p className="mt-6">{description}</p>
       </div>
-      <p className="mt-12">{description}</p>
+      <div className="border-x-2 border-black w-full h-4"></div>
     </div>
   );
 };
 
 const FeaturesHeader = () => {
   return (
-    <section className="pt-32 md:pt-[200px] mb-20  md:mb-40 text-center relative px-4 md:px-[5%] xl:px-0">
+    <section className=" pt-32 md:pt-[200px] min-h-[74vh] mb-20 w-full  md:mb-40 text-center relative px-4 md:px-[5%] xl:px-0 ">
       <img
         className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
         alt="star"
@@ -235,12 +310,12 @@ const FeaturesHeader = () => {
         src="/hero/star.svg"
       />
       <img
-        className="absolute right-20 top-16 md:top-40 md:right-80 w-10 md:w-16"
+        className="absolute right-20 top-16 md:top-32 md:right-80 w-10 md:w-16"
         alt="waves"
         src="/hero/waves.svg"
       />
       <img
-        className="absolute w-8 left-[480px] top-80"
+        className="absolute w-8 left-[660px] bottom-10"
         alt="asterisk"
         src="/hero/asterisk.svg"
       />
@@ -259,76 +334,27 @@ const FeaturesHeader = () => {
         alt="circles"
         src="/hero/circles.svg"
       />
-
-      <h2 className="text-4xl lg:text-6xl font-bold">Funcionalidades</h2>
-      <p className="text-iron text-xl md:text-2xl mt-4 md:mt-6">
-        Comienza a vender tus productos en minutos
-      </p>
-      <article className="flex flex-wrap lg:flex-nowrap justify-center mt-12 md:mt-20 gap-12 lg:gap-0">
-        <div className="border-[2px] border-black w-[90%] lg:w-[420px] rounded-lg pb-3 -rotate-6 bg-white">
-          <div className="py-2 border-b-[2px] border-black mb-3 text-xl font-bold">
-            Otras plataformas
-          </div>
-          <ItemList
-            icon={<IoClose />}
-            label="Comisiones poco claras de hasta el 30% por venta"
-          />
-          <ItemList
-            icon={<IoClose />}
-            label="Pocas opciones de personalización"
-          />
-
-          <ItemList icon={<IoClose />} label="Plazos forzosos de suscripción" />
-          <ItemList
-            icon={<IoClose />}
-            label="Mensualidades a precios elevados"
-          />
-          <ItemList icon={<IoClose />} label="Formas de pago limitadas " />
-          <ItemList icon={<IoClose />} label="Soporte solo en inglés" />
-          <ItemList
-            icon={<IoClose />}
-            label="Sin acceso a la información de tus clientes "
-          />
+      <article className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap justify-between items-center mt-6 md:mt-20 gap-20">
+        <div className="md:text-left w-full md:w-[55%] text-center">
+          <TextBlurEffect>
+            <h2 className="text-4xl lg:text-6xl font-bold leading-tight">
+              EasyBits: La herramienta para creadores digitales
+            </h2>
+            <p className="text-xl lg:text-2xl mt-4">
+              Dedica más tiempo a crear y menos tiempo a administrar, crea tu
+              asset y nosotros nos encargamos del resto: cobros, correos,
+              entrega de archivos, seguridad y más.{" "}
+            </p>
+          </TextBlurEffect>
         </div>
-        <div className="border-[2px] border-black w-[90%] lg:w-[420px] rounded-lg pb-3 rotate-6 bg-white overflow-hidden">
-          <div className="py-2 border-b-[2px] border-black mb-3 text-xl font-bold bg-brand-500 ">
-            Con EsyBits
-          </div>
-          <ItemList
-            icon={<TbPigMoney />}
-            label="Sin comisiones extra, el 4% por venta y nada más"
-          />
-          <ItemList
-            icon={<PiPaintBrushBroad />}
-            label="Personalización en cada una de tus landing pages"
-          />
-          <ItemList
-            icon={<TbShoppingBag />}
-            label="Diferentes formas de pago adoc al mercado mexicano"
-          />
-          <ItemList
-            icon={<BiCommentDetail />}
-            label="Plan Free para que puedas vender tu primer asset"
-          />
-          <ItemList
-            icon={<BiHappy />}
-            label="Soporte en español para nuestros usuarios"
-          />
-          <ItemList
-            icon={<FaUsers />}
-            label="Acceso completo y detallado de tus ventas y clientes"
+        <div className="w-full md:w-[45%]">
+          <img
+            className="w-[80%] mx-auto md:w-full"
+            src="/features-easybits.webp"
+            alt="laptop con la pagina de easybits"
           />
         </div>
       </article>
     </section>
-  );
-};
-
-const ItemList = ({ icon, label }: { icon: ReactNode; label: string }) => {
-  return (
-    <div className="flex gap-2 items-start px-6 py-2 text-left">
-      <span className="text-xl">{icon}</span>
-      <p>{label}</p>
-    </div>
   );
 };

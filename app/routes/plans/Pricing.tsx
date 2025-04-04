@@ -1,4 +1,5 @@
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { TextBlurEffect } from "~/components/TextBlurEffect";
 
 export const Pricing = () => {
   return (
@@ -18,11 +19,12 @@ export const Pricing = () => {
         alt="star"
         src="/hero/asterisk.svg"
       />
-
-      <h2 className="text-4xl lg:text-6xl font-bold">Elige tu plan</h2>
-      <p className="text-iron text-xl md:text-2xl mt-4 md:mt-6">
-        Explora entre más de 10,000 assets digitales
-      </p>
+      <TextBlurEffect>
+        <h2 className="text-4xl lg:text-6xl font-bold">Elige tu plan</h2>
+        <p className="text-iron text-xl md:text-2xl mt-4 md:mt-6">
+          Planes flexibles para cada etapa de tu negocio creativo
+        </p>
+      </TextBlurEffect>
       <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 md:mt-20 flex flex-wrap gap-12 justify-center">
         <PlanCard
           badge="/hero/foco.svg"
@@ -54,7 +56,7 @@ export const Pricing = () => {
         </div>
         <PlanCard
           badge="/hero/coder.svg"
-          planName="Developer"
+          planName="Expert"
           price={299}
           perks={[
             "Todo lo del plan Creative",

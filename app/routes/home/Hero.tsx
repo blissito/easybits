@@ -1,5 +1,6 @@
 import { motion, useSpring } from "motion/react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { twMerge } from "tailwind-merge";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrutalElement } from "~/components/common/BrutalElement";
@@ -7,18 +8,22 @@ import { TextBlurEffect } from "~/components/TextBlurEffect";
 
 export const Hero = () => {
   return (
-    <section className=" h-fit pt-24 pb-6 md:pb-0  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-center items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-6 lg:gap-28">
+    <section className=" h-fit pt-24 pb-6 md:pb-0  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-6 lg:gap-10">
       <div className="w-full md:w-[50%]">
         <TextBlurEffect>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-[80px] leading-tight font-bold">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
             Vende tus assets digitales en línea{" "}
           </h1>
 
-          <p className="text-iron text-xl lg:text-2xl xl:text-3xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
-            Únete a EasyBits y consigue tu primer venta.
+          <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
+            Convierte esas ilustraciones, ese libro o esas conferencias en
+            assets digitales y consigue tu primera venta
           </p>
         </TextBlurEffect>
-        <BrutalButton>Crear mi primer Asset</BrutalButton>
+        <Link to="/login">
+          {" "}
+          <BrutalButton>Crear mi primer Asset</BrutalButton>
+        </Link>
       </div>
       <div className="w-full md:w-[40%] relative">
         <img className="absolute" alt="star" src="/hero/star.svg" />
