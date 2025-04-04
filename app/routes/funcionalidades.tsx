@@ -134,7 +134,7 @@ const FeaturesScroll = () => {
             classIcon="bg-munsell"
             icon={<PiPaintBrushBroad />}
             title="Personalizar tus landing pages"
-            description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, correos o whats app. "
+            description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, por correo o whats app. "
           />
 
           <Card
@@ -144,13 +144,13 @@ const FeaturesScroll = () => {
             title="Crear tu propio website de ventas"
             description={
               <p>
+                Con un par de clics ten listo tu website completamente
+                optimizado para todos los dispositivos.&nbsp;
                 <span className="text-brand-500  font-bold">
                   Añade tu logotipo, foto de portada, cambia los colores y
                   personaliza la tipografía,
                 </span>{" "}
-                selecciona el tema dark o light y agrega tus redes sociales. Con
-                un par de clics ten listo tu website completamente optimizado
-                para todos los dispositivos.
+                selecciona el tema dark o light y agrega tus redes sociales.
               </p>
             }
           />
@@ -180,10 +180,11 @@ const FeaturesScroll = () => {
             description={
               <p>
                 Además del subdominio gratuito que EasyBits te ofrece, puedes
+                &nbsp;
                 <span className="text-brand-500  font-bold">
                   agregar tu propio dominio
                 </span>{" "}
-                para fortalecer tu marca.
+                y fortalecer tu marca.
               </p>
             }
           />
@@ -226,7 +227,7 @@ const FeaturesScroll = () => {
             title="Tener acceso completo a la información de tus clientes"
             description={
               <p>
-                ¿Quieres descarga los mails de tus clientes para enviar un mail
+                ¿Quieres descargar los mails de tus clientes para enviar un mail
                 o crear una campaña de ADS? Descárgalos cuando quieras.{" "}
                 <span className="text-brand-500  font-bold">
                   {" "}

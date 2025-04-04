@@ -13,9 +13,10 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
         <h3 className="text-2xl md:text-3xl font-bold">
           Suscríbete a nuestro newsletter
         </h3>
-        <p className="text-base md:text-xl mt-2 md:mt-3">
-          Recibe un resumen mensual de las mejores publicaciones y
-          funcionalidades nuevas de EasyBits.
+        <p className="text-base md:text-xl mt-2 md:mt-3 max-w-4xl mx-auto">
+          Recibe un resumen mensual de las mejores consejos de marketing y
+          business para creadores, o de las nuevas funcionalidades nuevas de
+          EasyBits.
         </p>
         <div className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center">
           <input
