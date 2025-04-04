@@ -2,6 +2,8 @@ import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/user";
 import { db } from "~/.server/db";
 
+import { startNewsletter } from "~/.server/emails/startNewsLetter";
+
 // @todo use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
 
@@ -47,6 +49,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
         data: { newsletters },
       });
     }
+    // trigger the 0 send
+    await startNewsletter(user, assetId);
     return { success: true };
   }
 

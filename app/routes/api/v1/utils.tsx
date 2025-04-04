@@ -2,7 +2,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/utils";
 import { sendNewsLetter } from "~/.server/emails/sendNewsLetter";
 import { marked } from "marked";
-import sanitizeHtml from "sanitize-html"; // Not included in bundle
+import sanitizeHtml from "sanitize-html";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   await getUserOrRedirect(request);
