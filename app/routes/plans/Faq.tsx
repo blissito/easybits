@@ -22,11 +22,11 @@ export const Faq = () => {
         />
         <Question
           question="¿Cómo funciona EasyBits?"
-          answer="EasyBits es una plataforma donde cualquier creativo puede crear una cuenta de forma gratuita, dar de alta su primer asset y empezar a venderlo. Mientras tú compartes el link de tu tienda con tus seguidores y clientes, nosotros promocionamos tus assets en Comunidad EasyBits para que llegué a más y más usuarios que amen tu trabajo. "
+          answer="EasyBits es una plataforma donde cualquier creativo puede crear una cuenta de forma gratuita, crear su primer asset y empezar a venderlo. Mientras tú compartes el link de tu tienda con tus seguidores y clientes, nosotros promocionamos tus assets en Comunidad EasyBits para que llegué a más y más usuarios que amen tu trabajo. "
         />
         <Question
           question="¿Cómo creo una cuenta?"
-          answer="Da clic en el botón Empezar, y elige como quieres crear la cuenta, con alguna red social o solo con correo electrónico. Y eso es todo, inmediatamente después de crear tu cuenta ya puedes crear tu primer asset.  "
+          answer="Da clic en el botón «Empezar», y elige como quieres crear la cuenta, con alguna red social o solo con correo electrónico. Y eso es todo, inmediatamente después de crear tu cuenta ya puedes crear tu primer asset. "
         />
         <Question
           question="¿Hay comisiones extra por venta?"
@@ -46,7 +46,7 @@ export const Faq = () => {
         />
         <Question
           question="¿Qué formas de pago aceptan?"
-          answer="Para suscribirte al Plan Creative o Expert puedes usar cualquier tarjeta de débito o crédito, Link de Stripe o PayPal. Si requieres otra opción de pago, escríbenos, seguramente encontraremos otra forma de pago más adecuada. "
+          answer="Para suscribirte al Plan Creative o Expert puedes usar cualquier tarjeta de débito o crédito, Link de Stripe, ApplePay o GooglePay. Si requieres otra opción de pago, escríbenos, seguramente encontraremos una forma de pago adecuada para ti. "
         />
       </div>
     </section>
