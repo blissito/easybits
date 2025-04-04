@@ -9,13 +9,13 @@ export const Invite = () => {
             {" "}
             <img className="mx-3 w-20" src="/hero/logo-glasses.svg" />{" "}
           </span>
-          <span> Empieza a </span> <span> vender&nbsp;</span>{" "}
+          <span> Empieza a</span> &nbsp; <span> vender&nbsp;</span>{" "}
           <span>tu&nbsp;</span>
-          <span> trabajo en&nbsp;</span> <span> EasyBits &nbsp;</span>{" "}
+          <span> trabajo en&nbsp;</span> <span> EasyBits</span> &nbsp;
           <span>completamente&nbsp;</span> <span> gratis. &nbsp;</span>{" "}
           <span> Ahorra más de </span>
           <span className="inline-block bg-black text-white rounded-xl px-1 md:px-3 mx-1 md:mx-3">
-            $100 USD
+            $50 USD
           </span>{" "}
           <span>mensuales en&nbsp;</span> <span> infraestructura&nbsp;</span>
           <span> y hazlo&nbsp;</span>

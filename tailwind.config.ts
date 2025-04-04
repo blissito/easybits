@@ -47,6 +47,15 @@ export default {
           '"Noto Color Emoji"',
         ],
       },
+      animation: {
+        moving: "moving 1s linear infinite",
+      },
+      keyframes: {
+        moving: {
+          "0%, 100%": { transform: "translateX(0px)" },
+          "50%": { transform: "translateX(10px)" },
+        },
+      },
     },
   },
   plugins: [require("@tailwindcss/forms")],

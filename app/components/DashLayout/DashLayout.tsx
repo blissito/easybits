@@ -6,7 +6,7 @@ import { HeaderMobile, SideBar } from "./SideBar";
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const isAdmin = user.roles.find((r) => r === "Admin");
-  const isProd = process.env.NODE_ENV !== "development";
+  const isProd = process.env.NODE_ENV === "development";
   if (isProd && !isAdmin) {
     return redirect("/waitlist");
   }
