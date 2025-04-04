@@ -51,22 +51,28 @@ export const Input = ({
 
   return (
     <label
-      className={cn("flex flex-col gap-2 text-gray", className, {
-        "h-[50%]": type === "textarea",
-      })}
+      className={cn(
+        "border",
+        "w-full",
+        "flex flex-col gap-2 text-gray",
+        className,
+        {
+          // "h-[50%]": type === "textarea",
+          "h-[600px]": type === "textarea",
+        }
+      )}
     >
-      <span>{label}</span>
+      {label && <span>{label}</span>}
       <div className="relative flex-1">
         <ElementName
           onChange={onChange}
           defaultValue={defaultValue}
           className={cn(
-            "rounded-xl p-4 text-lg placeholder:text-tale min-w-full mb-2 border border-black h-[48px] bg-white text-black",
+            "rounded-xl p-4 text-lg h-full w-full placeholder:text-tale border border-black  bg-white text-black",
             "focus:border-brand-500 focus:outline-none focus:ring-brand-500",
             {
               "pr-24": !!copy,
               "ring-2 ring-red-500 transition-all border-none": isError,
-              "h-[600px]": type === "textarea",
             },
             inputClassName
           )}

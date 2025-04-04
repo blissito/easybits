@@ -64,13 +64,13 @@ model Asset {
 }
 
 type NewsLetter {
-  name String?
-  id   String
-  next Int     @default(1) // 0 is done
+  next    Int     @default(1) // 0 is done
+  assetId String?
 }
 
 model User {
   id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  confirmed      Boolean      @default(false)
   // file ownership
   assets         Asset[]
   files          File[]

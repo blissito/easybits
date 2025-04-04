@@ -4,12 +4,14 @@ import { RiTwitterXFill } from "react-icons/ri";
 import { Avatar } from "~/components/common/Avatar";
 import { Tag } from "~/components/common/Tag";
 import { ProductGallery } from "~/components/galleries/ProductGallery";
-import { Link } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Asset } from "@prisma/client";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
+import { Input } from "~/components/common/Input";
+import { EmojiConfetti } from "~/components/Confetti";
 
 export const ContentTemplate = ({ asset }: { asset: Asset }) => {
   return (
@@ -59,7 +61,7 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
         }}
         className={cn(
           "overflow-scroll",
-          "flex items-center px-4 gap-2 text-left h-10 border-b-[2px] border-black ",
+          "flex items-center px-4 gap-2 text-left h-10 border-r-2 border-black ",
           "md:col-span-5 md:px-6 md:h-full md:border-transparent"
         )}
       >
@@ -116,17 +118,7 @@ const Info = ({ asset }: { asset: Asset }) => {
       >
         <h3 className="text-2xl font-bold text-white">{getPriceString()}</h3>
       </div>
-      <button
-        className={cn(
-          "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center"
-        )}
-      >
-        {asset.template?.ctaText
-          ? asset.template.ctaText
-          : asset.price <= 0
-          ? "Suscribirse gratis"
-          : "Comprar"}
-      </button>
+      {asset.price <= 0 && <Subscription asset={asset} />}
       <div className="h-fit p-6 border-b-[2px] border-black content-center">
         <Markdown>{asset.note}</Markdown>
       </div>
@@ -136,6 +128,74 @@ const Info = ({ asset }: { asset: Asset }) => {
         <Formats />
       )}
     </div>
+  );
+};
+
+const Subscription = ({
+  asset,
+  actionId,
+}: {
+  actionId?: string;
+  asset: Asset;
+}) => {
+  const fetcher = useFetcher();
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+
+    formData.set("intent", "free_subscription");
+    formData.set("assetId", asset.id);
+    formData.set("actionId", actionId);
+
+    fetcher.submit(formData, {
+      method: "post",
+      action: "/api/v1/user",
+    });
+  };
+
+  const isLoading = fetcher.state !== "idle";
+
+  if (fetcher.data?.success) {
+    return (
+      <section className="flex flex-col justify-center items-center text-xl h-[100px] pt-12">
+        <h2>¡Gracias por suscribirte!</h2>
+        <br />
+        <p>Ahora revisa tu correo. 📬</p>
+        <EmojiConfetti />
+      </section>
+    );
+  }
+
+  return (
+    // hidden on mobile
+    <fetcher.Form onSubmit={handleSubmit} className="hidden md:block">
+      <Input
+        placeholder="Escribe tu nombre"
+        name="displayName"
+        inputClassName="border-0 border-b-2 rounded-none"
+      />
+      <Input
+        required
+        placeholder="Escribe tu email"
+        name="email"
+        className="min-h-full m-0"
+        inputClassName="border-0 border-b-2 rounded-none"
+      />
+      <button
+        disabled={isLoading}
+        type="submit"
+        className={cn(
+          "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center disabled:text-gray-500 disabled:bg-gray-400/40"
+        )}
+      >
+        {asset.template?.ctaText
+          ? asset.template.ctaText
+          : asset.price <= 0
+          ? "Suscribirse gratis"
+          : "Comprar"}
+      </button>
+    </fetcher.Form>
   );
 };
 

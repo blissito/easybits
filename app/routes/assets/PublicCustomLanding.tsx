@@ -32,6 +32,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <HeaderTemplate asset={asset} />
       <ContentTemplate asset={asset} />
       <FooterTemplate asset={asset} />
+
       {/* // @todo stripe? */}
     </article>
   );
