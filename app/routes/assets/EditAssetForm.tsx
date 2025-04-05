@@ -216,7 +216,7 @@ export const EditAssetForm = ({
 
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
-    <nav className="mb-8 flex justify-end gap-4 sticky bottom-12">
+    <nav className="mb-8 flex justify-end gap-4 sticky bottom-4 mr-16">
       <Link to="/dash/assets">
         <BrutalButton mode="ghost" isDisabled={isLoading}>
           Cancelar
