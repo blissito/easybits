@@ -5,21 +5,22 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
   return (
     <section
       className={cn(
-        "max-w-3xl h-fit md:h-64 border-black border-[2px] rounded-xl bg-coverSuscription bg-cover mx-auto p-4 md:p-8 flex relative",
+        "max-w-3xl h-fit md:h-72 border-black border-[2px] overflow-hidden md:rounded-t-full bg-coverSuscription   rounded-r-3xl rounded-t-3xl  md:rounded-r-full  bg-cover mx-auto p-6 md:p-8  justify-center relative",
         className
       )}
     >
-      <div className="w-full md:w-[80%]">
+      <div className="w-full  text-center relative">
         <h3 className="text-2xl md:text-3xl font-bold">
           Suscríbete a nuestro newsletter
         </h3>
-        <p className="text-base md:text-xl mt-2 md:mt-3">
-          Recibe un resumen mensual de las mejores publicaciones y
-          funcionalidades nuevas de EasyBits.
+        <p className="text-base md:text-xl mt-2 md:mt-3 max-w-4xl mx-auto">
+          Recibe un resumen mensual de las mejores consejos de marketing y
+          business para creadores, o de las nuevas funcionalidades nuevas de
+          EasyBits.
         </p>
-        <div className="bg-white flex justify-between rounded-2xl h-12 border-black border-[2px] mt-4 md:mt-8 w-full md:w-96 ">
+        <div className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center">
           <input
-            className="bg-transparent border-none rounded-xl w-full  "
+            className="bg-white  rounded-xl w-full border-2 border-black "
             placeholder="ejemplo@easybist.cloud"
           />{" "}
           <BrutalButton containerClassName=" -mt-[2px] ml-[1px]">
@@ -27,10 +28,6 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
           </BrutalButton>
         </div>
       </div>
-      <img
-        className="absolute w-24 md:w-auto right-0 md:right-10 -top-16 md:top-[40px] "
-        src="/hero/buzon.svg"
-      />
     </section>
   );
 };

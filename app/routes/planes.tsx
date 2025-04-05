@@ -6,11 +6,18 @@ import { Benefits } from "./plans/Benefits";
 import { Faq } from "./plans/Faq";
 import { Footer } from "~/components/common/Footer";
 import type { Route } from "./+types/planes";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
 
 export const clientLoader = async () => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
   return { user };
 };
+
+export const meta = () =>
+  getBasicMetaTags({
+    title: "Planes flexibles para cada etapa de tu negocio creativo",
+    description: "Elige tu plan y vende tu primer asset",
+  });
 
 export default function Planes({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;

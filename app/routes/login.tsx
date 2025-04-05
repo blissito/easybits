@@ -4,6 +4,7 @@ import LoginComponent from "~/components/login/login-component";
 import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
 import { destroySession, getSession } from "~/.server/sessions";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -51,6 +52,12 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
       return { error: "Error" };
   }
 };
+
+export const meta = () =>
+  getBasicMetaTags({
+    title: "Creación de cuenta | EasyBits",
+    description: "Elige tu plan y vende tu primer asset",
+  });
 
 export default function Login({ loaderData }: Route.ComponentProps) {
   return <LoginComponent />;

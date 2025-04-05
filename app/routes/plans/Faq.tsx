@@ -10,40 +10,43 @@ export const Faq = () => {
       </h2>
       <p className="text-iron text-xl md:text-2xl  mt-6 text-center">
         Si no encuentras la respuesta que buscas,{" "}
-        <a className="underline text-brand-500 font-light">escríbenos</a> .
+        <a href="" className="underline text-brand-500 font-light">
+          escríbenos
+        </a>{" "}
+        .
       </p>
       <div className="mt-16 flex flex-col border-[2px] border-black rounded-xl overflow-hidden">
         <Question
           question="¿Qué es un asset digital?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="En EasyBits un asset digital es un archivo que se transforma en un producto digital al tener una landing page de detalle, descripción, vista previa, reseñas, y que se vende de forma 100% digital. Este archivo puede ser un e-book sobre un tema que te apasiona, fotografías que has tomado en tus viajes, ilustraciones que realizas como hobby, conferencias profesionales, poemas que escribes en tu tiempo libre o profesionalmente, o cualquier tipo de contenido creativo digital."
         />
         <Question
           question="¿Cómo funciona EasyBits?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="EasyBits es una plataforma donde cualquier creativo puede crear una cuenta de forma gratuita, crear su primer asset y empezar a venderlo. Mientras tú compartes el link de tu tienda con tus seguidores y clientes, nosotros promocionamos tus assets en Comunidad EasyBits para que llegué a más y más usuarios que amen tu trabajo. "
         />
         <Question
           question="¿Cómo creo una cuenta?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="Da clic en el botón «Empezar», y elige como quieres crear la cuenta, con alguna red social o solo con correo electrónico. Y eso es todo, inmediatamente después de crear tu cuenta ya puedes crear tu primer asset. "
         />
         <Question
-          question="¿Cómo se agrega un asset?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          question="¿Hay comisiones extra por venta?"
+          answer="No, EasyBits no cobrá comisiones extra por venta, el precio de tu plan es lo único que pagarás a EasyBits. Pero para tener cobros en línea, debes considerar la comisión del 3.6% + 3 pesos por transacción de Stripe, el desglose de las comisiones las puedes ver directamente en tu dashbaord de Stripe."
         />
         <Question
           question="¿Cómo puedo empezar a vender mis assets?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="Despues de crear tu primer asset debes registrarte en Stripe por medio de nuestra plataforma para poder cobrar tus assets y recibir tu dinero. Recuerda que EasyBits usa Stripe para ofrecerte cobros internacionales seguros y rápidos. "
         />
         <Question
           question="¿Qué pasa si uso todo el almacenamiento incluido en el plan?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="Puedes agregar almacenamiento extra a tu plan por tan solo $ 1 USD por GB."
         />
         <Question
           question="¿Puedo quedarme en el Plan Free para siempre?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="Sí, el plan Free te permite tener 1 asset en venta, así que si no necesitas agregar más assets, puedes quedarte allí por siempre y para siempre."
         />
         <Question
           question="¿Qué formas de pago aceptan?"
-          answer="¡El Plan PRO desbloquea más funcionalidades de Formmy! Como más opciones de personalización, imagenes extra para el mensaje final, campos personalizados, notificaciones específicas, la opción de agregar colaboradores al proyecto, mensajes ilimitados y remosión de la marca de agua."
+          answer="Para suscribirte al Plan Creative o Expert puedes usar cualquier tarjeta de débito o crédito, Link de Stripe, ApplePay o GooglePay. Si requieres otra opción de pago, escríbenos, seguramente encontraremos una forma de pago adecuada para ti. "
         />
       </div>
     </section>

@@ -7,18 +7,18 @@ export type GetBasicMetaTagsPros = {
 
 export default function getBasicMetaTags({
   title,
-  description = "Vende tus assets digitales en línea con EasyBits", // description should be at least 100 chars
-  image = "https://i.imgur.com/dnVOAkI.png",
+  description = "Convierte esas ilustraciones, ese libro, ese cuento o esas conferencias en assets digitales", // description should be at least 100 chars
+  image = "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
   twitterCard = "summary",
 }: GetBasicMetaTagsPros) {
   if (!title) {
     return [
       {
-        title: "EasyBits",
+        title: "Vende tu primer asset digital en línea con EasyBits",
       },
       {
         name: "description",
-        content: "Vende tus assets digitales en línea con EasyBits",
+        content: "Vende tu primer asset digital en línea con EasyBits",
       },
     ];
   }
