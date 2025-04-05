@@ -140,78 +140,77 @@ export const EditAssetForm = ({
   };
 
   return (
-    <LayoutGroup>
-      <Form
-        onSubmit={handleSubmit}
-        className="flex-1 w-0 bg-white min-w-[320px]"
-      >
-        <h2 className="text-2xl my-4">Detalles de tu Asset</h2>
-        <Input
-          defaultValue={asset.title}
-          onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
-          label="Título"
-          name="title"
-        />
-
-        <Input
-          defaultValue={asset.tags}
-          onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
-          label="Tags"
-          placeholder="curso, programación"
-        />
-        <MarkEditor
-          defaultValue={asset.description}
-          onChange={handleChange("description")}
-          name="description"
-          error={errors.description}
-        />
-        <GalleryUploader asset={asset} host={host} />
-        <HR />
-        <PriceInput
-          defaultPrice={asset.price}
-          defaultCurrency={asset.currency}
-          error={errors.price}
-          onInputChange={handleChange("price")}
-          onCurrencyChange={handleChange("currency")}
-        />
-        <Input
-          onChange={(ev) => handleChange("note")(ev.currentTarget.value)}
-          label="Nota sobre el producto"
-          placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
-        />
-        <HR />
-
-        {(asset.type === "EMAIL_COURSE" ||
-          asset.type === "VOD_COURSE" ||
-          asset.type === "WEBINAR") && (
-          <LiveOrFiles
-            files={files}
-            onChangeEventDate={handleEventChange}
-            defaultEventDate={asset.eventDate}
-            type={asset.type}
-            asset={asset}
-            onChangeMetadata={handleMetadataChange}
+    <article className="w-full px-4">
+      <LayoutGroup>
+        <Form onSubmit={handleSubmit} className="bg-white w-full">
+          <h2 className="text-2xl my-4">Detalles de tu Asset</h2>
+          <Input
+            defaultValue={asset.title}
+            onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
+            label="Título"
+            name="title"
           />
-        )}
 
-        {asset.type === "DOWNLOADABLE" && (
-          <FilesPicker assetFiles={assetFiles} asset={asset} />
-        )}
+          <Input
+            defaultValue={asset.tags}
+            onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
+            label="Tags"
+            placeholder="curso, programación"
+          />
+          <MarkEditor
+            defaultValue={asset.description}
+            onChange={handleChange("description")}
+            name="description"
+            error={errors.description}
+          />
+          <GalleryUploader limit={3} asset={asset} host={host} />
+          <HR />
+          <PriceInput
+            defaultPrice={asset.price}
+            defaultCurrency={asset.currency}
+            error={errors.price}
+            onInputChange={handleChange("price")}
+            onCurrencyChange={handleChange("currency")}
+          />
+          <Input
+            onChange={(ev) => handleChange("note")(ev.currentTarget.value)}
+            label="Nota sobre el producto"
+            placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
+          />
+          <HR />
 
-        <HR />
-        <Plantilla
-          onChange={handleChange("template")}
-          host={host}
-          slug={asset.slug}
-          template={asset.template}
-          error={errors.template}
-        />
-        <HR />
-        <ExtraConfig onChange={handleChange("extra")} extra={asset.extra} />
-        <HR />
-        <Footer isLoading={isLoading} />
-      </Form>
-    </LayoutGroup>
+          {(asset.type === "EMAIL_COURSE" ||
+            asset.type === "VOD_COURSE" ||
+            asset.type === "WEBINAR") && (
+            <LiveOrFiles
+              files={files}
+              onChangeEventDate={handleEventChange}
+              defaultEventDate={asset.eventDate}
+              type={asset.type}
+              asset={asset}
+              onChangeMetadata={handleMetadataChange}
+            />
+          )}
+
+          {asset.type === "DOWNLOADABLE" && (
+            <FilesPicker assetFiles={assetFiles} asset={asset} />
+          )}
+
+          <HR />
+          <Plantilla
+            onChange={handleChange("template")}
+            host={host}
+            slug={asset.slug}
+            template={asset.template}
+            error={errors.template}
+          />
+          <HR />
+          <ExtraConfig onChange={handleChange("extra")} extra={asset.extra} />
+          <HR />
+          <Footer isLoading={isLoading} />
+        </Form>
+      </LayoutGroup>
+    </article>
   );
 };
 

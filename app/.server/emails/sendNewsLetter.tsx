@@ -22,7 +22,7 @@ export const sendNewsLetter = (options: {
   const { getTemplate, subject, data, email } = options;
   return sendgridTransport
     .sendMail({
-      from: "contacto@fixter.org",
+      from: "Fixtergeek.com",
       subject: subject || "👽 Confirmando que eres humano 🤖",
       bcc: [email],
       html: getTemplate(data),

@@ -2,7 +2,7 @@ import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/user";
 import { db } from "~/.server/db";
 
-import { startNewsletter } from "~/.server/emails/startNewsLetter";
+import { findNewsletter, scheduleNext } from "~/.server/emails/startNewsLetter";
 
 // @todo use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
@@ -17,7 +17,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const displayName = formData.get("displayName") as string;
     const assetId = formData.get("assetId") as string;
 
-    const newsletterData = {
+    const initialNewsletterData = {
       next: 1,
       assetId,
     };
@@ -32,25 +32,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
       user = await db.user.create({
         data: {
           displayName,
-          newsletters: [newsletterData],
+          newsletters: [initialNewsletterData],
           email,
         },
       });
     } else {
       let newsletters = [...user.newsletters];
-      const found = newsletters.find(
-        (n) => n.assetId === newsletterData.assetId
-      );
+      const found = findNewsletter(assetId, newsletters);
       if (!found) {
-        newsletters = [...new Set([...newsletters, newsletterData])];
+        newsletters = [...new Set([...newsletters, initialNewsletterData])];
       }
-      await db.user.update({
+      user = await db.user.update({
         where: { email },
         data: { newsletters },
       });
     }
-    // trigger the 0 send
-    await startNewsletter(user, assetId);
+    // schedule the next send or avoid (when 0)
+    await scheduleNext({ userId: user.id, assetId });
     return { success: true };
   }
 

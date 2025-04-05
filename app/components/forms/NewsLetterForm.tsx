@@ -42,6 +42,7 @@ export const NewsLetterMicroApp = ({
     intent: "send_email",
     name: "Nuevo envío " + asset.actions.length,
     assetId: asset.id,
+    gap: "in 1 week",
   };
   const [editing, setEditing] = useState<Action>(initial);
 
@@ -125,7 +126,7 @@ const AddButton = ({ onClick }: { onClick?: () => void }) => {
     <button
       onClick={onClick}
       type="button"
-      className="border border-gray-400 rounded-md grid place-content-center hover:scale-95 active:scale-90 transition-all h-[100px]"
+      className="border border-gray-400 rounded-md grid place-content-center hover:scale-95 active:scale-90 transition-all min-h-[82px]"
     >
       <FaPlusCircle />
     </button>

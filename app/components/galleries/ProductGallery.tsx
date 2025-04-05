@@ -44,7 +44,7 @@ export const ProductGallery = ({
     >
       <div className="">
         {items.length < 2 ? (
-          <img className="object-cover h-full" src={items[0].src} />
+          <img className="object-contain h-full" src={items[0].src} />
         ) : (
           <ImageItem
             item={items[currentIndex]}
@@ -92,7 +92,7 @@ const ImageItem = ({
           animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
           exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
           key={item.src}
-          className="w-full h-full object-cover object-bottom"
+          className="w-full h-full object-contain object-bottom"
           src={item.src}
           alt="user"
         />

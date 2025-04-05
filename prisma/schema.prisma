@@ -64,8 +64,8 @@ model Asset {
 }
 
 type NewsLetter {
-  next    Int     @default(1) // 0 is done
-  assetId String?
+  next    Int    @default(1) // 0 is done
+  assetId String
 }
 
 model User {
@@ -74,7 +74,7 @@ model User {
   // file ownership
   assets         Asset[]
   files          File[]
-  publicKey      String       @unique
+  publicKey      String?      @unique
   // defaults
   displayName    String?
   email          String       @unique

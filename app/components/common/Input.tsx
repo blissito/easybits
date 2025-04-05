@@ -51,16 +51,10 @@ export const Input = ({
 
   return (
     <label
-      className={cn(
-        "border",
-        "w-full",
-        "flex flex-col gap-2 text-gray",
-        className,
-        {
-          // "h-[50%]": type === "textarea",
-          "h-[600px]": type === "textarea",
-        }
-      )}
+      className={cn("w-full", "flex flex-col gap-2 text-gray", className, {
+        // "h-[50%]": type === "textarea",
+        "h-[600px]": type === "textarea",
+      })}
     >
       {label && <span>{label}</span>}
       <div className="relative flex-1">

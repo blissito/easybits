@@ -7,7 +7,14 @@ import type { Asset } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { useUploader } from "~/hooks/useUploader";
 
-export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
+export const GalleryUploader = ({
+  limit = Infinity,
+  asset,
+}: {
+  limit?: number;
+  host: string;
+  asset: Asset;
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -67,6 +74,10 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
     asyncUpload();
   }, [files]);
 
+  const canUpload = limit > links.length;
+
+  console.log("Can upload", canUpload, links.length, limit);
+
   return (
     <article className="">
       <h2 className="mt-8 mb-2">Galería y miniatura principal</h2>
@@ -76,8 +87,9 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
         onMouseEnter={() => setIsHovered("hover")}
         onMouseLeave={() => setIsHovered(null)}
       >
-        {links.length < 1 && (
+        {links.length < 1 && canUpload && (
           <motion.button
+            whileHover={{ scale: 1.2 }}
             layoutId="upload_button"
             onClick={() => fileInputRef.current?.click()}
             onDragEnter={handleDragEnter}
@@ -114,6 +126,7 @@ export const GalleryUploader = ({ asset }: { host: string; asset: Asset }) => {
         )}
         {links.length > 0 && (
           <RowGalleryEditor
+            canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
             links={links}
             onRemove={(url) => onRemove(url, asset.id)}
@@ -136,13 +149,15 @@ const RowGalleryEditor = ({
   links = [],
   onClick,
   onRemove,
+  canUpload,
 }: {
+  canUpload?: boolean;
   links?: string[];
   onRemove?: (arg0: string) => void;
   onClick: () => void;
 }) => {
   return (
-    <div className={cn("flex gap-3")}>
+    <div className={cn("flex items-center gap-3")}>
       <LayoutGroup>
         <AnimatePresence>
           {links.map((l) => (
@@ -150,12 +165,13 @@ const RowGalleryEditor = ({
           ))}
         </AnimatePresence>
 
-        {links.length < 10 && (
+        {links.length < 10 && canUpload && (
           <motion.button
+            whileHover={{ scale: 0.95 }}
             onClick={onClick}
             layoutId="upload_button"
             type="button"
-            className="grid place-items-center max-w-[144px] min-w-[144px] border-2 rounded-2xl border-dashed aspect-square"
+            className="grid place-items-center border-2 rounded-2xl border-dashed aspect-square h-[100px]"
           >
             <span className={cn("text-4xl text-brand-gray")}>
               <LuImageUp />

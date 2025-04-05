@@ -4,7 +4,7 @@ import { RiTwitterXFill } from "react-icons/ri";
 import { Avatar } from "~/components/common/Avatar";
 import { Tag } from "~/components/common/Tag";
 import { ProductGallery } from "~/components/galleries/ProductGallery";
-import { Link, useFetcher } from "react-router";
+import { Form, Link, useFetcher } from "react-router";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Asset } from "@prisma/client";
@@ -12,6 +12,7 @@ import type { FormEvent, ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
 import { Input } from "~/components/common/Input";
 import { EmojiConfetti } from "~/components/Confetti";
+import { useFetcherSubmit } from "~/hooks/useFetcherSubmit";
 
 export const ContentTemplate = ({ asset }: { asset: Asset }) => {
   return (
@@ -259,6 +260,11 @@ const Formats = () => {
 export const FooterTemplate = ({ asset }: { asset: Asset }) => {
   const getPriceString = () => `$${asset.price} ${asset.currency}`;
 
+  const { handleSubmit, isLoading, success, message } = useFetcherSubmit({
+    action: "/api/v1/user",
+    intent: "free_subscription",
+  });
+
   return (
     <>
       <section
@@ -273,19 +279,38 @@ export const FooterTemplate = ({ asset }: { asset: Asset }) => {
           <img alt="isotipo easybits " src="/logo-eb.svg" />{" "}
         </Link>
       </section>
-      <div className="md:hidden border-t-[2px] border-x-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center px-4">
-        <p className="text-white font-bold">{getPriceString()}</p>
-        <BrutalButton
-          containerClassName="rounded-lg"
-          className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium"
+      {success ? (
+        message
+      ) : (
+        <Form
+          onSubmit={handleSubmit}
+          className="md:hidden border-t-[2px] border-x-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center"
         >
-          {asset.template?.ctaText
-            ? asset.template.ctaText
-            : asset.price <= 0
-            ? "Suscribirse gratis"
-            : "Comprar"}
-        </BrutalButton>
-      </div>
+          <p className="text-white font-bold whitespace-pre px-4">
+            {getPriceString()}
+          </p>
+          <input type="hidden" name="assetId" value={asset.id} />
+          <Input
+            required
+            placeholder="Escribe tu email"
+            name="email"
+            className="min-h-full m-0"
+            inputClassName="border-0 border-b-2 rounded-none"
+          />
+          <BrutalButton
+            isLoading={isLoading}
+            type="submit"
+            containerClassName="rounded-lg"
+            className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium mx-4"
+          >
+            {asset.template?.ctaText
+              ? asset.template.ctaText
+              : asset.price <= 0
+              ? "Suscribirse gratis"
+              : "Comprar"}
+          </BrutalButton>
+        </Form>
+      )}
     </>
   );
 };

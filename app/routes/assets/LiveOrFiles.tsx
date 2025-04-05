@@ -75,7 +75,7 @@ export const LiveOrFiles = ({
   return (
     <section className="mt-8 mb-3">
       <h2 className="text-2xl mb-3">¿Tu curso es en vivo o pre-grabado?</h2>
-      <nav className="flex gap-4 items-center mb-4 ">
+      <nav className="flex flex-wrap gap-4 items-center mb-4 ">
         <BrutalButton
           onClick={handleTypeUpdate("VOD_COURSE")}
           mode={type === "VOD_COURSE" ? "brand" : "ghost"}

@@ -34,17 +34,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
   const { host, asset, files } = loaderData;
-
+  // return null;
   return (
-    <article
-      className={cn(
-        "relative z-10 flex-1 pl-20" // hack because of the animated background
-      )}
-    >
-      <h1 className={cn("text-4xl py-4 border-b border-black", PADDING_LAYOUT)}>
+    <article className="w-screen">
+      <h1
+        className={cn(
+          "text-4xl md:pt-4 pt-16 pb-4 border-b border-black md:pl-24",
+          PADDING_LAYOUT
+        )}
+      >
         {asset.title}
       </h1>
-      <main className={cn("flex gap-12 justify-evenly", PADDING_LAYOUT)}>
+      <main className={cn("flex md:pl-20")}>
         <EditAssetForm
           files={files}
           assetFiles={files}

@@ -20,10 +20,10 @@ export const AssetPreview = ({
     iframeRef.current.src = iframeRef.current.src;
   };
   return (
-    <aside className="h-screen bg-black p-8 text-white sticky top-0 w-[320px]">
+    <aside className="md:block hidden w-[40%] h-screen bg-black p-8 text-white sticky top-0">
       <Toaster />
-      <nav className="flex items-center mb-8 gap-4">
-        <h3 className="text-2xl mr-auto">Vista previa</h3>
+      <nav className="flex items-center my-8 gap-4">
+        <h3 className="w-max text-xl mr-auto">Vista previa</h3>
         <button onClick={reloadIframe} className="text-xl active:text-gray-500">
           <LuRefreshCcw />
         </button>
@@ -38,9 +38,9 @@ export const AssetPreview = ({
         >
           <FaCopy />
         </button>
-        <span className="text-xl">
+        {/* <span className="text-xl">
           <FaBoxOpen />
-        </span>
+        </span> */}
       </nav>
       {/* <img
         className="rounded-2xl"
@@ -56,7 +56,7 @@ export const AssetPreview = ({
             width: "100%",
             height: "100%",
             overflow: "hidden",
-            zoom: 0.5,
+            zoom: 0.3,
           }}
           scrolling="no"
           frameBorder="0"
