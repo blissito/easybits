@@ -5,6 +5,7 @@ import { HeaderMobile, SideBar } from "./SideBar";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  console.log("User", user);
   const isAdmin = user.roles.find((r) => r === "Admin");
   const isProd = process.env.NODE_ENV !== "development";
   if (isProd && !isAdmin) {
@@ -13,9 +14,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   return { user };
 };
 
-export default function DashLayout({ loaderData }: Route.ComponentProps) {
-  // const { user } = loaderData;
-
+export default function DashLayout({
+  loaderData: { user },
+}: Route.ComponentProps) {
   return (
     <main className="flex relative z-10 min-h-screen">
       <HeaderMobile />
