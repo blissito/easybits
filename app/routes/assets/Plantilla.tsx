@@ -1,6 +1,7 @@
 import { Input } from "~/components/common/Input";
 import { motion } from "motion/react";
 import { useEffect, useState, type ChangeEvent } from "react";
+import { CopyButton } from "~/components/common/CopyButton";
 
 export const Plantilla = ({
   onChange,
@@ -48,7 +49,7 @@ export const Plantilla = ({
         isError={!!error}
       />
       <p className="pt-2 pb-0">Personaliza el link de tu Asset</p>
-      <div className="relative">
+      <div className="relative flex">
         <Input
           value={state.slug}
           placeholder="super_curso"
@@ -61,6 +62,10 @@ export const Plantilla = ({
             https://{state.host}.easybits.cloud/p/
           </p>
         </div>
+        <CopyButton
+          text={`https://${state.host}.easybits.cloud/p/${state.slug}`}
+          className="absolute right-4 top-2 border rounded-md p-2 hover:shadow"
+        />
       </div>
       {error && (
         <p className="text-xs text-red-500">Personaliza tu plantilla</p>

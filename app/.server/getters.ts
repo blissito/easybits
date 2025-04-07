@@ -38,7 +38,7 @@ export const createUserSession = async (
   const session = await getSession(cookie);
   const host = userData.email.split("@")[0];
   await db.user.upsert({
-    where: { email: userData.email },
+    where: { email: userData.email.toLocaleLowerCase() },
     create: {
       email: userData.email,
       verified_email: userData.verified_email,

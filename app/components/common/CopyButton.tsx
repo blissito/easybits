@@ -25,6 +25,7 @@ export const CopyButton = ({
 
   return (
     <button
+      type="button"
       onClick={handleCopyToClipboard(text)}
       className={cn("w-max", className)}
     >

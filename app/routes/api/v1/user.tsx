@@ -33,7 +33,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         data: {
           displayName,
           newsletters: [initialNewsletterData],
-          email,
+          email: email.toLowerCase(),
         },
       });
     } else {

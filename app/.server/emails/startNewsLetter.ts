@@ -86,9 +86,22 @@ export const scheduleNext = async (options: {
   if (!nld) throw new Error("No newsletter data");
 
   if (nld.next === 0) {
-    console.error(new Error("Newsletter already sent"));
+    console.error("Newsletter already sent");
     // @todo send profile invite
     return;
+  }
+
+  if (nld.next === 1) {
+    const firstAction = asset.actions[0] as Action;
+    console.log("FIRST SEND 1", nld, firstAction.name);
+    // @revisit send 0?
+    await sendNewsLetter({
+      subject: firstAction.name, // @revisit name used as subject
+      email: user.email,
+      // @ts-ignore
+      getTemplate: () => sanitizeHtml(marked(firstAction.markdown)),
+    });
+    // nld.next = 0; // 🪄✨ ???
   }
 
   const agenda = getAgenda();
@@ -154,10 +167,12 @@ getAgenda().define("send_newsletter", async (job: Job) => {
   if (!newsletter || newsletter?.next === 0) {
     throw new Error("Found finished newsletter");
   }
-  console.info("RUNNING::SEND_NEWLETTER::", newsletter);
+  console.info("::SENDING_NEWLETTER::", newsletter);
   // find action
   const action = actions[newsletter.next];
   if (!action) throw new Error("No action found");
+
+  console.log("::ACTION::TAKEN::", action.name);
 
   // actual sending
   await sendNewsLetter({
