@@ -23,7 +23,7 @@ type Action = {
   markdown?: string;
 };
 
-type NewsLetter = {
+export type NewsLetter = {
   assetId: string;
   next: number;
 };
@@ -109,6 +109,7 @@ export const scheduleNext = async (options: {
   agenda.schedule((asset.actions[nld.next] as Action).gap, "send_newsletter", {
     userId: user.id,
     assetId: asset.id,
+    action: asset.actions[nld.next],
   });
   console.info("::Send Scheduled::" + (asset.actions[nld.next] as Action)?.gap);
 };
@@ -147,11 +148,14 @@ export const startNewsletter = async (assetId: string, user: User) => {
   });
 };
 
+// sendNewsLetter
 getAgenda().define("send_newsletter", async (job: Job) => {
   const {
     attrs: { data },
   } = job || {};
-  const { userId, assetId } = data;
+  const { userId, assetId, action } = data;
+  if (!action) throw new Error("No action found");
+
   const user = await db.user.findUnique({
     where: {
       id: userId,
@@ -160,22 +164,16 @@ getAgenda().define("send_newsletter", async (job: Job) => {
   const asset = await db.asset.findUnique({ where: { id: assetId } });
   if (!asset || !user) throw new Error("No asset or user found");
 
-  const actions = [...asset.actions] as Action[];
+  // const actions = [...asset.actions] as Action[];
 
   // if 0 stop
   const newsletter = findNewsletter(assetId, user.newsletters);
   if (!newsletter || newsletter?.next === 0) {
     throw new Error("Found finished newsletter");
   }
-  console.info("::SENDING_NEWLETTER::", newsletter);
-  // find action
-  const action = actions[newsletter.next];
-  if (!action) throw new Error("No action found");
-
-  console.log("::ACTION::TAKEN::", action.name);
 
   // actual sending
-  await sendNewsLetter({
+  const result = await sendNewsLetter({
     subject: action.name,
     email: user.email, // @todo bulk
     //@ts-ignore
@@ -183,6 +181,8 @@ getAgenda().define("send_newsletter", async (job: Job) => {
     // @todo el token?
     // @todo avoid if already current is grater
   });
+  console.log("Send result:", result);
+  // if(result.error) return; @todo
   //set n to newsletter state
   await updateNewsletterState(asset.id, user, asset);
   await scheduleNext({

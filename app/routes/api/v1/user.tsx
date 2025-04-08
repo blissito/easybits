@@ -42,9 +42,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
       if (!found) {
         newsletters = [...new Set([...newsletters, initialNewsletterData])];
       }
+      const assetIds = [...new Set([...user.assetIds, assetId])];
+
       user = await db.user.update({
         where: { email },
-        data: { newsletters },
+        data: { newsletters, assetIds },
       });
     }
     // schedule the next send or avoid (when 0)

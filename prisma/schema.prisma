@@ -72,6 +72,7 @@ model User {
   id             String       @id @default(auto()) @map("_id") @db.ObjectId
   confirmed      Boolean      @default(false)
   // file ownership
+  // assets         Asset[]
   assets         Asset[]
   files          File[]
   publicKey      String?      @unique
@@ -87,6 +88,7 @@ model User {
   stripe         Json?
   // subscriptions
   newsletters    NewsLetter[]
+  assetIds       String[] // experiment
   // dates
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt

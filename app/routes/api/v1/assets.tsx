@@ -14,6 +14,25 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  if (intent === "get_enrolled_users") {
+    const assetId = formData.get("assetId") as string;
+    // @todo interesting problem...
+    const users = await db.user.findMany({
+      where: {
+        assetIds: { has: assetId },
+      },
+      select: {
+        displayName: true,
+        id: true,
+        email: true,
+        newsletters: true,
+        assets: true,
+      },
+    });
+    console.log("USERS: ", users);
+    return users;
+  }
+
   if (intent === "update_asset_action") {
     const action = JSON.parse(formData.get("action") as string);
     const assetId = formData.get("assetId") as string;

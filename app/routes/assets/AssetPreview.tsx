@@ -4,6 +4,7 @@ import { FaBoxOpen, FaCopy, FaShare } from "react-icons/fa";
 import toast, { Toaster } from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";
 import { useRef } from "react";
+import { EnrolledUsers } from "~/components/fullstack/EnrolledUsers";
 
 export const AssetPreview = ({
   asset,
@@ -38,6 +39,7 @@ export const AssetPreview = ({
         >
           <FaCopy />
         </button>
+        <EnrolledUsers assetId={asset.id} />
         {/* <span className="text-xl">
           <FaBoxOpen />
         </span> */}

@@ -35,8 +35,8 @@ export const sendNewsLetter = (options: {
       subject,
       html: getTemplate(),
     })
-    .then((r: unknown) => console.info(r))
-    .catch((e: unknown) => console.error(e));
+    .then((r: unknown) => console.info("RESUT::", r))
+    .catch((e: unknown) => console.error("ERROR::", e));
   // return awsSendMail({
   //   subject: subject || "👽 Confirmando que eres humano 🤖",
   //   emails: [email],
