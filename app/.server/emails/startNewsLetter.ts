@@ -4,6 +4,7 @@ import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { db } from "../db";
 import Agenda, { type Job, type JobAttributesData } from "agenda";
+import { interpolateStyles } from "~/routes/api/v1/utils";
 
 // schedule this is v1 (@todo we want to bulk)
 let agenda: Agenda;
@@ -99,7 +100,7 @@ export const scheduleNext = async (options: {
       subject: firstAction.name, // @revisit name used as subject
       email: user.email,
       // @ts-ignore
-      getTemplate: () => sanitizeHtml(marked(firstAction.markdown)),
+      getTemplate: () => interpolateStyles(firstAction.markdown),
     });
     // nld.next = 0; // 🪄✨ ???
   }
@@ -113,41 +114,6 @@ export const scheduleNext = async (options: {
   });
   console.info("::Send Scheduled::" + (asset.actions[nld.next] as Action)?.gap);
 };
-
-export const startNewsletter = async (assetId: string, user: User) => {
-  const asset = await db.asset.findUnique({
-    where: {
-      id: assetId,
-    },
-  });
-  if (!asset) throw new Error("Asset not found");
-
-  const newsLetterData = findNewsletter(assetId, user.newsletters);
-
-  if (!newsLetterData || newsLetterData.next === 0) {
-    console.error(new Error("Newsletter not found or " + newsLetterData?.next));
-    return; // avoid if 0
-  }
-  // first action (welcome)
-  const action = asset.actions[0] as Action;
-  await sendNewsLetter({
-    subject: action.name, // @revisit name used as subject
-    email: user.email,
-    // @ts-ignore
-    getTemplate: () => sanitizeHtml(marked(action.markdown)),
-  });
-
-  //set 1 to newsletter state
-  await updateNewsletterState(asset.id, user, asset);
-
-  const agenda = getAgenda();
-  await agenda.start();
-  agenda.schedule(action.gap, "send_newsletter", {
-    userId: user.id,
-    assetId,
-  });
-};
-
 // sendNewsLetter
 getAgenda().define("send_newsletter", async (job: Job) => {
   const {
@@ -177,11 +143,12 @@ getAgenda().define("send_newsletter", async (job: Job) => {
     subject: action.name,
     email: user.email, // @todo bulk
     //@ts-ignore
-    getTemplate: () => sanitizeHtml(marked(action.markdown)),
+    getTemplate: () => interpolateStyles(action.markdown),
     // @todo el token?
     // @todo avoid if already current is grater
   });
-  console.log("Send result:", result);
+  const isOk = result.response.includes("OK");
+  if (!isOk) return; // if first sent failed stops
   // if(result.error) return; @todo
   //set n to newsletter state
   await updateNewsletterState(asset.id, user, asset);

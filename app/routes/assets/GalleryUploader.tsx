@@ -76,8 +76,6 @@ export const GalleryUploader = ({
 
   const canUpload = limit > links.length;
 
-  console.log("Can upload", canUpload, links.length, limit);
-
   return (
     <article className="">
       <h2 className="mt-8 mb-2">Galería y miniatura principal</h2>
