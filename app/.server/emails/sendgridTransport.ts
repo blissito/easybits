@@ -18,7 +18,7 @@ export const gmailTransport = nodemailer.createTransport({
   port: 587,
   secure: false,
   auth: {
-    user: "fixtergeek@gmail.com",
+    user: "contacto@fixter.org",
     pass: process.env.GMAIL_APP_PASSWORD,
   },
 });

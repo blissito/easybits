@@ -30,7 +30,7 @@ export const sendNewsLetter = (options: {
   // return sesTransport
   return gmailTransport
     .sendMail({
-      from: "fixtergeek@gmail.com",
+      from: "contacto@fixter.org",
       to: email,
       subject,
       html: getTemplate(),

@@ -29,7 +29,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         assets: true,
       },
     });
-    console.log("USERS: ", users);
+
     return users;
   }
 
