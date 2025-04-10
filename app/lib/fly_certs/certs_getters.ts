@@ -30,7 +30,7 @@ mutation($appId: ID!, $hostname: String!) {
   try {
     result = await getClient().request(query, variables);
   } catch (e: unknown) {
-    if (e instanceof Error) console.error(e);
+    if (e instanceof Error) console.error(e.message);
   }
   return result;
 }
