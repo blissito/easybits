@@ -63,4 +63,6 @@ export default [
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
   route("waitlist", "routes/waitlist.tsx"),
+  // Plugin APIs
+  route("/kit/*", "routes/api/v1/kit/kit_endpoint.tsx"),
 ] satisfies RouteConfig;

@@ -1,4 +1,4 @@
-import { createCookieSessionStorage } from "react-router";
+import { createCookie, createCookieSessionStorage } from "react-router";
 
 export const { getSession, commitSession, destroySession } =
   createCookieSessionStorage({
@@ -11,3 +11,8 @@ export const { getSession, commitSession, destroySession } =
       secrets: [process.env.JWT_SECRET || "easyBitsByFixterorg"],
     },
   });
+
+export const redirectCookie = createCookie("redirect", {
+  maxAge: 604_800, // one week
+  // secrets: ["blissmo", "easybits.cloud"],
+});
