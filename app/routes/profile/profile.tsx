@@ -1,14 +1,53 @@
 // import type { User } from "@prisma/client";
+import { createPortalSessionURL, retrieveCustomer } from "~/.server/stripe";
 import type { Route } from "./+types/profile";
 import { ProfileCard, SuscriptionCard } from "./profileComponents";
-// import { getUserOrRedirect } from "~/.server/getters";
+import { getUserOrRedirect } from "~/.server/getters";
+import { redirect } from "react-router";
 
-// export const loader = async ({ request }: Route.ClientLoaderArgs) => {
-//   return {
-//     user: await getUserOrRedirect(request),
-//   };
-// };
+export const loader = async ({ request }: Route.ClientLoaderArgs) => {
+  const user = await getUserOrRedirect(request);
+  let customer;
+  if (user.customer) customer = await retrieveCustomer(user.customer);
+  return {
+    user,
+    customer,
+  };
+};
 
+export const action = async ({ request }) => {
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+  if (intent === "redirect_to_portal") {
+    const user = await getUserOrRedirect(request);
+    const url = await createPortalSessionURL(user.customer);
+    if (!url) {
+      throw redirect("/planes");
+    }
+    throw redirect(url);
+  }
+};
+
+export function HydrateFallback() {
+  return <ProfileSkeleton />;
+}
+
+export default function Profile({ loaderData }: Route.ComponentProps) {
+  const { user, customer } = loaderData;
+  return (
+    <article className=" min-h-screen w-full relative box-border inline-block md:py-10 pt-16 pb-6 px-4 md:pr-[5%] md:pl-[10%] xl:px-0">
+      <div className="max-w-7xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-semibold pt-1 md:pt-1">
+          Perfil
+        </h2>
+        <ProfileCard user={user} />
+        <SuscriptionCard customer={customer} />
+      </div>
+    </article>
+  );
+}
+
+// leave it for yutu 🍋‍🟩🍺
 const ProfileSkeleton = () => {
   return (
     <article className="h-screen flex flex-col gap-6 place-content-center w-full animate-pulse p-4">
@@ -48,24 +87,3 @@ const ProfileSkeleton = () => {
     </article>
   );
 };
-
-export function HydrateFallback() {
-  return <ProfileSkeleton />;
-}
-
-export const clientLoader = () => new Promise((res) => setTimeout(res, 10000));
-
-export default function Profile({ loaderData }: Route.ComponentProps) {
-  // const { user } = loaderData;
-  return (
-    <article className=" min-h-screen w-full relative box-border inline-block md:py-10 pt-16 pb-6 px-4 md:pr-[5%] md:pl-[10%] xl:px-0">
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-3xl md:text-4xl font-semibold pt-1 md:pt-1">
-          Perfil
-        </h2>
-        <ProfileCard user={{}} />
-        <SuscriptionCard />
-      </div>
-    </article>
-  );
-}

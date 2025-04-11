@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from "react";
 import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
+import { cn } from "~/utils/cn";
 
 export const Pricing = () => {
   return (
@@ -86,27 +87,14 @@ const PlanForm = ({
 }) => {
   const fetcher = useFetcher();
   return (
-    <fetcher.Form
-      action="/api/v1/stripe/plans"
-      method="post"
-      // onSubmit={(e: FormEvent) => {
-      //   e.preventDefault();
-      //   console.log("submiting");
-      //   fetcher.submit(
-      //     {
-      //       intent,
-      //     },
-      //     { method: "post", action: "/api/v1/stripe/plans" }
-      //   );
-      // }}
-    >
+    <fetcher.Form action="/api/v1/stripe/plans" method="post">
       <BrutalButton
         name="intent"
         value={intent}
         isLoading={fetcher.state !== "idle"}
         type="submit"
-        containerClassName="w-full"
-        className={buttonClassName}
+        className={cn("w-full", buttonClassName)}
+        containerClassName={cn("w-full")}
       >
         <span>¡Empezar!</span>
       </BrutalButton>
@@ -130,7 +118,7 @@ export const PlanCard = ({
   cta?: ReactNode;
 }) => {
   const button = cta || (
-    <BrutalButton containerClassName="w-full " className={classNameButton}>
+    <BrutalButton className="w-full bg-[#F6DB7F]" containerClassName="w-full">
       <span>¡Empezar!!</span>
     </BrutalButton>
   );

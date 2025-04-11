@@ -9,8 +9,22 @@ export const getStripe = (key?: string) => {
   });
   return stripe;
 };
-
 const isDev = process.env.NODE_ENV === "development";
+const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud"; // @todo move to envs?
+
+export const createPortalSessionURL = (customer?: string | null) => {
+  if (!customer) return null;
+
+  return getStripe().billingPortal.sessions.create({
+    customer: customer,
+    return_url: `${location}/dash/perfil`,
+  });
+};
+
+export const retrieveCustomer = (id: string) => {
+  return getStripe().customers.retrieve(id);
+};
+
 export const getStripeCheckout = async (options: {
   coupon?: string;
   customer_email?: string;
@@ -23,9 +37,6 @@ export const getStripeCheckout = async (options: {
 
   // const asset = await db.asset.findUnique({where:{id:assetId}}) // @todo for assets
 
-  const location = isDev
-    ? "http://localhost:3000"
-    : "https://www.easybits.cloud"; // @todo move to envs?
   const successURL = `${location}/api/v1/stripe/plans?priceId=${priceId}&customer_email=${customer_email}`;
   const session = await getStripe(secret).checkout.sessions.create({
     metadata: {
