@@ -17,8 +17,9 @@ export const getStripeCheckout = async (options: {
   assetId?: string;
   priceId?: string;
   secret?: string;
+  plan?: string;
 }) => {
-  const { customer_email, priceId, secret } = options || {};
+  const { plan, customer_email, priceId, secret } = options || {};
 
   // const asset = await db.asset.findUnique({where:{id:assetId}}) // @todo for assets
 
@@ -30,6 +31,7 @@ export const getStripeCheckout = async (options: {
     metadata: {
       customer_email,
       priceId,
+      plan,
     },
     customer_email,
     mode: "subscription",

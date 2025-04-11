@@ -89,6 +89,7 @@ model User {
   // subscriptions
   newsletters    NewsLetter[]
   assetIds       String[] // experiment
+  customer       String       @unique @default(uuid())
   // dates
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt

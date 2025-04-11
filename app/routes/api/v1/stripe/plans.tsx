@@ -11,6 +11,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       await getStripeCheckout({
         priceId: "price_1RCmryIW1Nfyq2zeLLyg0gT9", // this is prod
         secret: process.env.DEV_STRIPE_SECRET_KEY,
+        plan: "creative",
       })
     );
   }
@@ -18,6 +19,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "expert_plan") {
     console.log("inside");
     const url = await getStripeCheckout({
+      plan: "expert",
       priceId: "price_1RCmssIW1Nfyq2zeGz8uiNoA", // prod
       secret: process.env.DEV_STRIPE_SECRET_KEY,
     });
