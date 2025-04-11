@@ -7,11 +7,13 @@ export const Bento = ({
   children,
   image,
   position = "left",
+  className,
 }: {
   position?: "left" | "right";
   title: string;
   image?: string;
   children: ReactNode;
+  className?: string;
 }) => {
   return (
     <article
@@ -19,7 +21,8 @@ export const Bento = ({
         "border-b-black border-b-[2px] lg:min-h-[680px] flex flex-row-reverse flex-wrap md:flex-nowrap",
         {
           "flex-row": position === "right",
-        }
+        },
+        className
       )}
     >
       <section className="w-full md:w-[50%]  h-[384px] md:h-[480px] lg:h-[680px] ">

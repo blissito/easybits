@@ -32,7 +32,7 @@ export const Pricing = () => {
         <PlanCard
           badge="/hero/foco.svg"
           planName="Starter"
-          classNameButton="bg-[#F6DB7F]"
+          classNameButton="bg-[#F6DB7F] w-full"
           perks={[
             "1 asset en venta",
             "Dashboard de administración",
@@ -46,7 +46,7 @@ export const Pricing = () => {
             badge="/hero/rocket.svg"
             planName="Creative"
             price={199}
-            classNameButton="bg-[#A1CCE5]"
+            classNameButton="bg-[#A1CCE5] w-full"
             perks={[
               "Assets ilimitados",
               "Dashboard de administración",
@@ -61,6 +61,7 @@ export const Pricing = () => {
           />{" "}
         </div>
         <PlanCard
+          classNameButton="w-full"
           badge="/hero/coder.svg"
           planName="Expert"
           price={299}
@@ -118,7 +119,10 @@ export const PlanCard = ({
   cta?: ReactNode;
 }) => {
   const button = cta || (
-    <BrutalButton className="w-full bg-[#F6DB7F]" containerClassName="w-full">
+    <BrutalButton
+      className={cn("w-full bg-[#F6DB7F]", classNameButton)}
+      containerClassName="w-full"
+    >
       <span>¡Empezar!!</span>
     </BrutalButton>
   );
