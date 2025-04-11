@@ -3,7 +3,7 @@ import { Stripe } from "stripe";
 export const getPublishableKey = () => process.env.STRIPE_PUBLISHABLE_KEY;
 
 let stripe;
-const getStripe = (key?: string) => {
+export const getStripe = (key?: string) => {
   stripe ??= new Stripe(key || (process.env.STRIPE_SECRET_KEY as string), {
     apiVersion: "2023-08-16",
   });
@@ -16,8 +16,9 @@ export const getStripeCheckout = async (options: {
   customer_email?: string;
   assetId?: string;
   priceId?: string;
+  secret?: string;
 }) => {
-  const { customer_email, priceId } = options || {};
+  const { customer_email, priceId, secret } = options || {};
 
   // const asset = await db.asset.findUnique({where:{id:assetId}}) // @todo for assets
 
@@ -25,7 +26,7 @@ export const getStripeCheckout = async (options: {
     ? "http://localhost:3000"
     : "https://www.easybits.cloud"; // @todo move to envs?
   const successURL = `${location}/api/v1/stripe/plans?priceId=${priceId}&customer_email=${customer_email}`;
-  const session = await getStripe().checkout.sessions.create({
+  const session = await getStripe(secret).checkout.sessions.create({
     metadata: {
       customer_email,
       priceId,

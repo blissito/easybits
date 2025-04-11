@@ -9,7 +9,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "creative_plan") {
     throw redirect(
       await getStripeCheckout({
-        priceId: "price_1RCiRjIW1Nfyq2zeK57hbxu0",
+        priceId: "price_1RCmryIW1Nfyq2zeLLyg0gT9", // this is prod
+        secret: process.env.DEV_STRIPE_SECRET_KEY,
       })
     );
   }
@@ -17,7 +18,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "expert_plan") {
     console.log("inside");
     const url = await getStripeCheckout({
-      priceId: "price_1RCiTHIW1Nfyq2zecsPxxPvR",
+      priceId: "price_1RCmssIW1Nfyq2zeGz8uiNoA", // prod
+      secret: process.env.DEV_STRIPE_SECRET_KEY,
     });
     throw redirect(url);
   }
