@@ -1,4 +1,4 @@
-import { redirect as rredirect } from "react-router";
+import { redirect as rrRedirect } from "react-router";
 
 const message = JSON.stringify({
   message: "t(*_*t)",
@@ -18,7 +18,9 @@ const catchURLS = async (request: Request, params: Record<string, any>) => {
       throw new Response(message);
     case "oauth":
       const redirect = url.searchParams.get("redirect");
-      throw ((_: Request) => rredirect(`/login?redirect=${redirect}`))(request);
+      throw ((_: Request) => rrRedirect(`/login?redirect=${redirect}`))(
+        request
+      );
     default:
       await new Promise((r) => setTimeout(r, 1000));
       break;
@@ -43,6 +45,9 @@ export const action = async ({ request, params }) => {
  * http://localhost:3000/kit/oauth?redirect=https://www.easybits.cloud/kit/callback?client_id=
  *
  * The redirect its just  success signal to Kit we need to send client_id
+ * 
+ * THIS IS THe REAL CLINET_ID
+ * https://app.kit.com/apps/EasyBits.cloud?success=true
  * 
  * THIS IS THE REAL REDIRECT URL
  * https://app.kit.com/oauth/authorize?

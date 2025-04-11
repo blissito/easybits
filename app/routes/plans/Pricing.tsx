@@ -1,3 +1,5 @@
+import type { FormEvent, ReactNode } from "react";
+import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
 
@@ -52,6 +54,9 @@ export const Pricing = () => {
               "Configuración de tu propio dominio ",
               "50 GB de almacenamiento ",
             ]}
+            cta={
+              <PlanForm intent="creative_plan" buttonClassName="bg-[#A1CCE5]" />
+            }
           />{" "}
         </div>
         <PlanCard
@@ -66,9 +71,47 @@ export const Pricing = () => {
             "Iframes PRO de video y audio para la visualización del contenido en tu web",
             "Optimización del contenido",
           ]}
+          cta={<PlanForm intent="expert_plan" />}
         />
       </div>
     </section>
+  );
+};
+
+const PlanForm = ({
+  intent,
+  buttonClassName,
+}: {
+  buttonClassName?: string;
+  intent: string;
+}) => {
+  const fetcher = useFetcher();
+  return (
+    <fetcher.Form
+      action="/api/v1/stripe/plans"
+      method="post"
+      // onSubmit={(e: FormEvent) => {
+      //   e.preventDefault();
+      //   console.log("submiting");
+      //   fetcher.submit(
+      //     {
+      //       intent,
+      //     },
+      //     { method: "post", action: "/api/v1/stripe/plans" }
+      //   );
+      // }}
+    >
+      <BrutalButton
+        name="intent"
+        value={intent}
+        isLoading={fetcher.state !== "idle"}
+        type="submit"
+        containerClassName="w-full"
+        className={buttonClassName}
+      >
+        <span>¡Empezar!</span>
+      </BrutalButton>
+    </fetcher.Form>
   );
 };
 
@@ -78,13 +121,20 @@ export const PlanCard = ({
   price,
   perks = [],
   classNameButton,
+  cta,
 }: {
   badge: string;
   planName: string;
   price?: number;
   perks: string[];
   classNameButton?: string;
+  cta?: ReactNode;
 }) => {
+  const button = cta || (
+    <BrutalButton containerClassName="w-full " className={classNameButton}>
+      <span>¡Empezar!!</span>
+    </BrutalButton>
+  );
   return (
     <section className="bg-black max-w-[340px] rounded-xl group ">
       <div className="bg-white border-2 border-black rounded-xl py-6 text-left group-hover:-translate-x-2 group-hover:-translate-y-2 transition-all">
@@ -103,12 +153,7 @@ export const PlanCard = ({
               <PerkItem perk={perk} key={index} />
             ))}
           </div>
-          <BrutalButton
-            containerClassName="w-full "
-            className={classNameButton}
-          >
-            <span>¡Empezar!</span>
-          </BrutalButton>
+          {button}
         </div>
       </div>
     </section>

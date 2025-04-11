@@ -2,16 +2,54 @@ import { Stripe } from "stripe";
 
 export const getPublishableKey = () => process.env.STRIPE_PUBLISHABLE_KEY;
 
-const stripe = () => {
-  const client = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+let stripe;
+const getStripe = (key?: string) => {
+  stripe ??= new Stripe(key || (process.env.STRIPE_SECRET_KEY as string), {
     apiVersion: "2023-08-16",
   });
-  return client;
+  return stripe;
+};
+
+const isDev = process.env.NODE_ENV === "development";
+export const getStripeCheckout = async (options: {
+  coupon?: string;
+  customer_email?: string;
+  assetId?: string;
+  priceId?: string;
+}) => {
+  const { customer_email, priceId } = options || {};
+
+  // const asset = await db.asset.findUnique({where:{id:assetId}}) // @todo for assets
+
+  const location = isDev
+    ? "http://localhost:3000"
+    : "https://www.easybits.cloud"; // @todo move to envs?
+  const successURL = `${location}/api/v1/stripe/plans?priceId=${priceId}&customer_email=${customer_email}`;
+  const session = await getStripe().checkout.sessions.create({
+    metadata: {
+      customer_email,
+      priceId,
+    },
+    customer_email,
+    mode: "subscription",
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    success_url: `${successURL}&success=1`,
+    cancel_url: `${successURL}&success=0`,
+    discounts: options.coupon ? [{ coupon: options.coupon }] : undefined,
+    allow_promotion_codes: options.coupon ? undefined : true,
+    // <= @todo multi moneda?
+  });
+  return session.url || "/404";
 };
 
 export const createAccountSession = async ({ account }) => {
   try {
-    const accountSession = await stripe().accountSessions.create({
+    const accountSession = await getStripe().accountSessions.create({
       account: account,
       components: {
         account_onboarding: { enabled: true },
@@ -32,7 +70,7 @@ export const createAccountSession = async ({ account }) => {
 
 export const createAccount = async () => {
   try {
-    const account = await stripe().accounts.create({
+    const account = await getStripe().accounts.create({
       controller: {
         stripe_dashboard: {
           type: "none",
