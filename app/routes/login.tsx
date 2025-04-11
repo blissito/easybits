@@ -43,33 +43,34 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       case "stripe":
         await createStripeSession(code, request);
       case "google":
-        const cookie = await getRedirectCookie(request);
-        await createGoogleSession(code, request, (user: User) => {
-          if (!cookie.redirect) return;
+        // const cookie = await getRedirectCookie(request);
+        await createGoogleSession(code, request);
+      // , (user: User) => {
+      //         if (!cookie.redirect) return;
 
-          const url = new URL("https://app.kit.com/oauth/authorize");
-          // const url = new URL(cookie.redirect || request.url);
-          url.searchParams.set("client_id", "easybits");
-          url.searchParams.set("response_type", "code");
-          url.searchParams.set(
-            "redirect_uri",
-            "http://localhost:3000/kit/callback"
-            // "https://www.easybits.cloud/kit/callback"
-          );
-          // url.searchParams.set("state", "blissmo");
-          throw rrRedirect(url.toString());
-        });
-      case "email-pass":
-        return { message: "Login with email/pass" };
+      //         const url = new URL("https://app.kit.com/oauth/authorize");
+      //         // const url = new URL(cookie.redirect || request.url);
+      //         url.searchParams.set("client_id", "easybits");
+      //         url.searchParams.set("response_type", "code");
+      //         url.searchParams.set(
+      //           "redirect_uri",
+      //           "http://localhost:3000/kit/callback"
+      //           // "https://www.easybits.cloud/kit/callback"
+      //         );
+      //         // url.searchParams.set("state", "blissmo");
+      //         throw rrRedirect(url.toString());
+      //       });
+      //     case "email-pass":
+      //       return { message: "Login with email/pass" };
       default:
         return { error: "Error" };
     }
   }
 
+  const cookie = await setRedirectCookie(request, redirect);
   // redirect trick 🪄
   if (redirect) {
     // cookie creation
-    const cookie = await setRedirectCookie(request, redirect);
     return new Response(null, {
       headers: {
         "Set-Cookie": await redirectCookie.serialize(cookie),

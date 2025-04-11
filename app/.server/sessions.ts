@@ -13,6 +13,6 @@ export const { getSession, commitSession, destroySession } =
   });
 
 export const redirectCookie = createCookie("redirect", {
-  maxAge: 604_800, // one week
+  maxAge: 3600, // one hour
   // secrets: ["blissmo", "easybits.cloud"],
 });
