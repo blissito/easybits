@@ -47,7 +47,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
         await createGoogleSession(code, request, (user: User) => {
           if (!cookie.redirect) return;
 
-          const url = new URL(cookie.redirect || request.url);
+          const url = new URL("https://app.kit.com/oauth/authorize");
+          // const url = new URL(cookie.redirect || request.url);
           url.searchParams.set("client_id", "easybits");
           url.searchParams.set("response_type", "code");
           url.searchParams.set(

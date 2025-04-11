@@ -58,6 +58,7 @@ export default [
     ...prefix("stripe", [
       route("account", "routes/api/v1/stripe/account.tsx"),
       route("account_session", "routes/api/v1/stripe/account_session.tsx"),
+      route("plans", "routes/api/v1/stripe/plans.tsx"),
     ]),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
