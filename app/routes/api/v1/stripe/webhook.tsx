@@ -59,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     case "invoice.payment_action_required":
     case "customer.subscription.deleted":
     case "customer.subscription.paused":
-      user = await db.user.findUnique({
+      user = await db.user.findFirst({
         where: {
           customer: session.customer,
         },
@@ -67,7 +67,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (!user) return new Response("No user found", { status: 404 });
 
       await db.user.update({
-        where: { customer: session.customer },
+        where: { id: user.id },
         data: {
           roles: user.roles.filter((r) => r !== "creative" && r !== "expert"),
         },
