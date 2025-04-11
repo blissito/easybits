@@ -131,7 +131,7 @@ export const PlanCard = ({
   cta?: ReactNode;
 }) => {
   const button = cta || (
-    <BrutalButton containerClassName="w-full " className={classNameButton}>
+    <BrutalButton containerClassName="!w-full " className={classNameButton}>
       <span>¡Empezar!!</span>
     </BrutalButton>
   );
