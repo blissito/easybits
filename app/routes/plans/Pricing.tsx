@@ -123,7 +123,7 @@ export const PlanCard = ({
       className={cn("w-full bg-[#F6DB7F]", classNameButton)}
       containerClassName="w-full"
     >
-      <span>¡Empezar!!</span>
+      <span>¡Empezar!</span>
     </BrutalButton>
   );
   return (
