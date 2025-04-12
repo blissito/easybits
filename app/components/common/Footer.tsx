@@ -131,7 +131,7 @@ export const Footer = () => {
           <div className="hidden md:block col-span-1"></div>
           <div className="col-span-12 md:col-span-2">
             <h3 className="text-white mb-3">Síguenos</h3>
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <a
                 href="https://www.facebook.com/profile.php?id=61574014173527"
                 target="_blank"

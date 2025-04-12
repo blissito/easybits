@@ -65,7 +65,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
 const FeaturesScroll = () => {
   return (
     <section className=" w-full bg-white ">
-      <div className="sticky top-0 w-full  h-screen flex justify-center items-center">
+      <div className="sticky top-0 w-full  h-[90vh] flex justify-center items-center">
         <img
           className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
           alt="star"
@@ -87,7 +87,7 @@ const FeaturesScroll = () => {
           src="/hero/asterisk.svg"
         />
         <img
-          className="absolute w-12 right-12 top-96"
+          className="absolute w-12 right-12 bottom-40 md:top-96"
           alt="diamonds"
           src="/hero/diamonds.svg"
         />
@@ -96,7 +96,7 @@ const FeaturesScroll = () => {
           alt="espiral"
           src="/hero/espiral.svg"
         />
-        <div className="z-50 relative">
+        <div className="z-10 relative">
           <img
             className="w-40 md:w-48 mx-auto mb-10"
             src="/hero/logo-glasses.svg"
@@ -108,11 +108,11 @@ const FeaturesScroll = () => {
         </div>
       </div>
 
-      <div className=" mx-auto px-[5%] md:px-[0%] lg:px-[5%] w-full pb-0 md:pb-40  overflow-hidden ">
-        <div className="w-full md:grid grid-cols-6 flex flex-col   ">
+      <div className=" mx-auto px-4 md:px-[5%] xl:px-[0] w-full pb-0 md:pb-40 max-w-7xl  overflow-hidden ">
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6  ">
           <Card
-            className="col-span-1 col-start-1  "
             icon={<MdVideogameAsset />}
+            className="bg-sky"
             title="Vender assets digitales de todo tipo"
             description={
               <p>
@@ -120,7 +120,7 @@ const FeaturesScroll = () => {
                 ¿Eres un creativo o profesional que tiene algo que compartir? No
                 importa si eres diseñador, arquitecto, escritor o artista. Vende
                 cualquier tipo de assets digitales:{" "}
-                <span className="text-brand-500  font-bold">
+                <span className="text-[#457D7B]  font-bold">
                   {" "}
                   libros electrónicos, videos, audio y música, o cualquier otro
                   archivo como PSD o AI.
@@ -130,23 +130,21 @@ const FeaturesScroll = () => {
           />
 
           <Card
-            className="col-start-1 md:col-start-5 md:mt-40 col-span-1  "
-            classIcon="bg-munsell"
+            bgColor="bg-berry"
             icon={<PiPaintBrushBroad />}
             title="Personalizar tus landing pages"
             description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, por correo o whats app. "
           />
 
           <Card
-            className="col-start-2 col-span-1  "
-            classIcon="bg-berry"
+            className="bg-[#ECD66E]"
             icon={<CgWebsite />}
             title="Crear tu propio website de ventas"
             description={
               <p>
                 Con un par de clics ten listo tu website completamente
                 optimizado para todos los dispositivos.&nbsp;
-                <span className="text-brand-500  font-bold">
+                <span className="text-[#9D771D]  font-bold">
                   Añade tu logotipo, foto de portada, cambia los colores y
                   personaliza la tipografía,
                 </span>{" "}
@@ -155,10 +153,9 @@ const FeaturesScroll = () => {
             }
           />
           <Card
-            className="col-start-4 md:mt-40 col-span-1 scale-100 md:scale-90  "
-            classIcon="bg-lime"
+            bgColor="bg-lime"
             icon={<RiDiscountPercentLine />}
-            title="Administración de descuentos"
+            title="Administrar descuentos"
             description={
               <p>
                 Crea{" "}
@@ -172,9 +169,9 @@ const FeaturesScroll = () => {
               </p>
             }
           />
+          <Card image="/images/kit.png" variant="fullImage" />
           <Card
-            className="col-start-1 md:mt-10 col-span-1  "
-            classIcon="bg-rose"
+            bgColor="bg-sea"
             icon={<TbWorldWww />}
             title="Configurar tu dominio"
             description={
@@ -189,14 +186,13 @@ const FeaturesScroll = () => {
             }
           />
           <Card
-            className="col-start-3 md:mt-96 col-span-1  "
-            classIcon="bg-linen"
+            className="bg-[#EFD7BC]"
             icon={<MdOutlineStorage />}
             title="Almacenar archivos"
             description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
           />
           <Card
-            className="col-start-5 mt-40 col-span-1 md:scale-110 "
+            bgColor="bg-munsell"
             icon={<AiOutlineApi />}
             title="API para archivos"
             description={
@@ -213,16 +209,14 @@ const FeaturesScroll = () => {
             }
           />
           <Card
-            className="col-start-2 md:mt-40 col-span-1 scale-100 md:scale-125 "
-            classIcon="bg-brand-grass"
+            className="bg-[#EBBBE9]"
             icon={<BiSupport />}
             title="Recibir soporte en español"
             description="¿Dudas o preguntas? Nuestro equipo estará listo para ayudarte a través de nuestras redes sociales o contacto directo."
           />
 
           <Card
-            className="col-start-6 mt-0 col-span-1  "
-            classIcon="bg-lime"
+            bgColor="bg-rose"
             icon={<FaUsers />}
             title="Tener acceso completo a la información de tus clientes"
             description={
@@ -237,15 +231,14 @@ const FeaturesScroll = () => {
             }
           />
           <Card
-            className="col-start-1 md:mt-40 col-span-1  "
-            classIcon="bg-rose"
+            className="bg-[#B5E8A2]"
             icon={<MdStorefront />}
             title="Acceder a la comunidad EasyBits para aumentar tus ventas"
             description={
               <p>
                 Aumenta tus ventas siendo parte de la comunidad EasyBits en
                 donde miles de usuarios exploran y compran assets digitales.{" "}
-                <span className="text-brand-500  font-bold">
+                <span className="text-[#537C44]  font-bold">
                   La comunidad es un escaparte más para tus assets sin ningún
                   costo o comisión adicional.
                 </span>
@@ -253,8 +246,7 @@ const FeaturesScroll = () => {
             }
           />
           <Card
-            className="col-start-5 md:mt-80  col-span-1 md:scale-125 "
-            classIcon="bg-berry"
+            bgColor="bg-sky"
             icon={<SiGooglecontaineroptimizedos />}
             title="Optimizar tus archivos"
             description="Todos el contenido el video es optimizado bajo el protocolo HLS (HTTP Live Streaming), el cuál permite adaptar la calidad del video a las condiciones de la red. "
@@ -270,36 +262,52 @@ const Card = ({
   description,
   icon,
   className,
-  classIcon,
+  bgColor,
+  variant = "default",
+  image,
 }: {
-  title: string;
-  description: ReactNode;
-  icon: ReactNode;
+  title?: string;
+  description?: ReactNode;
+  icon?: ReactNode;
   className?: string;
-  classIcon?: string;
+  bgColor?: string;
+  variant?: string;
+  image?: string;
 }) => {
   return (
-    <div className={cn("z-0 w-full md:w-[340px] bg-transparent", className)}>
-      <div className="border-x-2 border-black w-full h-4"></div>
+    <div className={cn("z-20 w-full col-span-1 bg-white ", className)}>
       <div
-        className={cn("border-[2px] bg-white h-fit border-black p-6 md:p-10 ")}
+        className={cn("border-[2px]  h-full border-black p-6 md:p-10 ", {
+          "p-0 md:p-0": variant === "fullImage",
+        })}
       >
-        <div className="flex gap-3 items-center flex-wrap">
-          <span className={cn("text-3xl bg-sky p-1 rounded", classIcon)}>
-            {icon}
-          </span>
-          <h3 className="text-2xl font-bold">{title}</h3>
-        </div>
-        <p className="mt-6">{description}</p>
+        {variant === "fullImage" ? (
+          <img src={image} className="w-full h-hull object-cover" />
+        ) : (
+          <>
+            {" "}
+            <div className="flex flex-col items-start  gap-3  flex-wrap">
+              <span
+                className={cn(
+                  "text-3xl bg-white w-12 h-12 rounded-full flex justify-center items-center border border-black",
+                  bgColor
+                )}
+              >
+                {icon}
+              </span>
+              <h3 className="text-2xl font-bold">{title}</h3>
+            </div>
+            <p className="mt-6">{description}</p>
+          </>
+        )}
       </div>
-      <div className="border-x-2 border-black w-full h-4"></div>
     </div>
   );
 };
 
 const FeaturesHeader = () => {
   return (
-    <section className=" pt-32 md:pt-[200px] min-h-[74vh] mb-20 w-full  md:mb-40 text-center relative px-4 md:px-[5%] xl:px-0 ">
+    <section className=" pt-32 md:pt-[200px] mb-20  md:mb-40 min-h-[74vh]  w-full  text-center relative px-4 md:px-[5%] xl:px-0 ">
       <img
         className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
         alt="star"
@@ -321,7 +329,7 @@ const FeaturesHeader = () => {
         src="/hero/asterisk.svg"
       />
       <img
-        className="absolute w-12 right-12 top-96"
+        className="absolute w-8 right-12 bottom-64 md:top-96"
         alt="diamonds"
         src="/hero/diamonds.svg"
       />
@@ -335,7 +343,7 @@ const FeaturesHeader = () => {
         alt="circles"
         src="/hero/circles.svg"
       />
-      <article className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap justify-between items-center mt-6 md:mt-20 gap-20">
+      <article className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap justify-between items-center mt-0 md:mt-20 gap-10 md:gap-20">
         <div className="md:text-left w-full md:w-[55%] text-center">
           <TextBlurEffect>
             <h2 className="text-4xl lg:text-6xl font-bold leading-tight">
@@ -350,7 +358,7 @@ const FeaturesHeader = () => {
         </div>
         <div className="w-full md:w-[45%]">
           <img
-            className="w-[80%] mx-auto md:w-full"
+            className="w-[90%] mx-auto md:w-full"
             src="/features-easybits.webp"
             alt="laptop con la pagina de easybits"
           />

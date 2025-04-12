@@ -70,9 +70,12 @@ export default function StartComponent() {
         <div className="w-full lg:w-[756px] mx-auto rounded-xl border border-black bg-white h-20 px-6 md:px-8 flex items-center justify-between">
           <p className="text-md">
             {STRINGS.anyQuestion}{" "}
-            <span className="text-brand-500 underline">
+            <a
+            // href="mailto:hola@easybits.cloud" //  @todo please set the right email
+            // className="text-brand-500 underline"
+            >
               {STRINGS.contactUs}
-            </span>
+            </a>
           </p>
           <img src={Escribenos} className="w-[48px] h-[48px] mr-4 md:mr-8" />
         </div>

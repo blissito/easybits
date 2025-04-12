@@ -1,5 +1,6 @@
 import { createUserSession } from "./getters";
 import { config } from "./config";
+import type { User } from "@prisma/client";
 
 const location = config.baseUrl;
 
@@ -69,15 +70,27 @@ export const getGoogleURL = () => {
 };
 
 // export to use in loader
-export const createGoogleSession = async (code: string, request: Request) => {
+export const createGoogleSession = async (
+  code: string,
+  request: Request,
+  cb?: (user: User) => void,
+  config?: { redirectURL: string }
+) => {
+  const { redirectURL } = config || {};
   const { error, access_token, refresh_token } =
     await validateGoogleAccessToken(code);
   if (error) {
     console.error("::CODE_ERROR::", error);
-    throw new Error("wrong google code");
+    throw new Error("wrong google code", error);
   }
   if (!access_token) throw new Error("No access_token found in response");
   const userData = await getGoogleExtraData(access_token);
   if (!userData.email) throw new Error("Wrong google user data");
-  await createUserSession({ ...userData, id: undefined }, request);
+  const url = new URL(request.url);
+  // const redirectURL = url.searchParams.get("redirect") as string;
+  await createUserSession(
+    { ...userData, id: undefined, redirectURL: redirectURL || undefined },
+    request,
+    cb
+  );
 };

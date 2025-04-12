@@ -31,19 +31,22 @@ export const createUserSession = async (
     email: string;
     verified_email: boolean;
     picture: string;
+    redirectURL?: string;
   },
-  request: Request
+  request: Request,
+  cb?: (user: User) => void
 ) => {
+  console.log("Redirection??", userData.redirectURL);
   const cookie = request.headers.get("Cookie");
   const session = await getSession(cookie);
   const host = userData.email.split("@")[0];
-  await db.user.upsert({
+  const user = await db.user.upsert({
     where: { email: userData.email.toLocaleLowerCase() },
     create: {
       email: userData.email,
       verified_email: userData.verified_email,
       picture: userData.picture,
-      publicKey: randomUUID(),
+      publicKey: randomUUID(), // @revisit
       host,
     },
     update: {
@@ -52,10 +55,14 @@ export const createUserSession = async (
       picture: userData.picture,
     },
   });
+
   session.set("email", userData.email);
   // create certificate
-  await createHost(`${host}.easybits.cloud`);
-  throw redirect("/dash", {
+  await createHost(`${host}.easybits.cloud`); // @revisit
+  // @todo revisit!
+  await cb?.(user);
+  throw redirect(userData.redirectURL || "/dash", {
+    // @todo revisit
     // @todo: redirect to dash
     headers: {
       "set-cookie": await commitSession(session),

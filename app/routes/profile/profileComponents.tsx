@@ -11,7 +11,7 @@ import { useEscape } from "~/hooks/useEscape";
 const DEFAULT_PIC =
   "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
 
-export const SuscriptionCard = () => {
+export const SuscriptionCard = ({ customer }: { customer: unknown }) => {
   return (
     <section
       className={cn(
@@ -26,18 +26,18 @@ export const SuscriptionCard = () => {
         )}
       >
         <h3 className={cn("font-semibold text-xl", "md:text-2xl")}>
-          Plan Profesional
+          {customer?.subscription || "Plan Starter"}
         </h3>
         <span className={cn("text-xl font-semibold", "md:text-2xl")}>
-          $199.00 mxn/mes
+          $0 mxn/mes
         </span>
       </div>
-      <PerkItem perk="Hasta 10 assets" />
-      <PerkItem perk="Hasta 10 assets" />
-      <PerkItem perk="Hasta 10 assets" />
-      <PerkItem perk="Hasta 10 assets" />
-      <PerkItem perk="Hasta 10 assets" />
-      <PerkItem perk="Hasta 10 assets" />
+      <PerkItem perk="Hasta 1 assets" />
+      <PerkItem perk="Hasta 1 gigabaytes" />
+      <PerkItem perk="Sin acceso al API" />
+      <PerkItem perk="Sin acceso a iFrames" />
+      <PerkItem perk="Sin acceso a componentes" />
+      <PerkItem perk="Sin plantillas" />
       <hr className={cn("bg-tale h-[1px] border-none my-4 w-full", "my-2")} />
       <div
         className={cn(
@@ -45,10 +45,18 @@ export const SuscriptionCard = () => {
           "md:flex-nowrap"
         )}
       >
-        <p className="text-iron">Próxima fecha de pago 18 Agosto 2025</p>
-        <Button mode="primary" className="w-full">
-          Administrar plan
-        </Button>
+        <p className="text-iron">Próxima fecha de pago: 29 Agosto 2026</p>
+        <Form method="post">
+          <Button
+            mode="primary"
+            className="w-full"
+            value="redirect_to_portal"
+            name="intent"
+            type="submit"
+          >
+            Administrar plan
+          </Button>
+        </Form>
       </div>
     </section>
   );

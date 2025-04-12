@@ -11,6 +11,7 @@ import { Assets } from "./Assets";
 import type { Route } from "./+types/home";
 import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
+import { Steps } from "./Steps";
 
 export const clientLoader = async ({}: Route.ClientLoaderArgs) => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
@@ -39,11 +40,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           asset <Robot /> Almacena tus archivos <Robot />
         </>
       </Banners>
-      <Quote />
+      <Steps />
+
       <Bento
         title="Vende lo que quieras"
         position="right"
         image="https://i.imgur.com/JjN1Q0l.png"
+        className="border-t-2 border-black"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
           Desde cursos en video y libros, hasta ilustraciones, fotografías,

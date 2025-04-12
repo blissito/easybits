@@ -1,11 +1,9 @@
-import clsx from "clsx";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router";
-import { animate, AnimatePresence, motion, useAnimate } from "motion/react";
+import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
-import Logo from "/icons/easybits-logo.svg";
-import TextLogo from "/icons/easybits-logo-text.svg";
+import Logo from "/icons/eyes-logo-purple.svg";
 
 interface MenuItemProps {
   path: string;
@@ -19,115 +17,96 @@ interface MenuItemProps {
 }
 
 export const SideBar = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scope, animate] = useAnimate();
-  const handleMouseEnter = () => {
-    animate(
-      scope.current,
-      {
-        x: 220,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(true);
-  };
-
-  const handleMouseLeave = () => {
-    animate(
-      scope.current,
-      {
-        x: 0,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(false);
-  };
-
-  const handleClick = () => {
-    animate(
-      scope.current,
-      {
-        x: 0,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(false);
-  };
-
   return (
     <section>
       <div className="fixed right-4 bottom-0 z-30 block md:hidden  ">
         <FoldMenu />
       </div>
-      <div className="fixed h-screen  z-20 hidden md:block ">
-        <div
-          onMouseEnter={handleMouseEnter}
-          className="w-20 bg-black pt-4 pb-6 h-screen box-border absolute top-0 z-10 flex flex-col justify-between "
-        >
-          <div className="w-full ">
-            <div className="px-5 mb-4">
-              <MenuItem
-                path={"/"}
-                icon={Logo}
-                iconSize={52}
-                title={
-                  <img
-                    src={TextLogo}
-                    alt="easybits-text"
-                    className="w-[104px] h-[40px]"
-                  />
-                }
-                // isOpen={isOpen}
-                isLogo
-              />
-            </div>
-            <ul className="flex flex-col gap-6 py-6">
-              {ITEMS.navItems.map((item, key) => (
-                <MenuItem key={key} {...item} isOpen={isOpen} />
-              ))}
-            </ul>
-            <div className="border-t border-white/15 w-full" />
-            <ul className="flex flex-col gap-6 py-6">
-              {ITEMS.sectionItems.map((item, key) => (
-                <MenuItem key={key} {...item} isOpen={isOpen} />
-              ))}
-            </ul>
-          </div>
-          <ul className="flex flex-col gap-6 w-full mt-auto">
-            {ITEMS.bottomItems.map((item, key) => (
-              <MenuItem key={key} {...item} isOpen={isOpen} />
-            ))}
-          </ul>
-        </div>
-        <div
-          ref={scope}
-          onMouseLeave={handleMouseLeave}
-          onClick={handleClick}
-          className={cn(
-            "w-48 bg-black pt-16 pb-6 h-full absolute  top-0 -left-52 flex flex-col justify-between  "
-          )}
-        >
-          <div className="w-full ">
-            <ul className="flex flex-col gap-6 py-6 pl-20">
-              {ITEMS.navItems.map((item, key) => (
-                <MenuItemFold key={key} {...item} />
-              ))}
-            </ul>
-            <div className="border-t border-white/15 w-full" />
-            <ul className="flex flex-col gap-6 py-6 pl-20 ">
-              {ITEMS.sectionItems.map((item, key) => (
-                <MenuItemFold key={key} {...item} />
-              ))}
-            </ul>
-          </div>
-          <ul className="flex flex-col gap-6 pl-20 w-full">
-            {ITEMS.bottomItems.map((item, key) => (
-              <MenuItemFold key={key} {...item} />
-            ))}
-          </ul>
-        </div>
-      </div>
+      <SideBarWeb />
     </section>
+  );
+};
+
+const SideBarWeb = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [scope, animate] = useAnimate();
+  return (
+    <section className="w-20 h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2   flex-col gap-4">
+      <SideBarItem isLogo={true} />
+      <ul className="flex flex-col gap-3 pt-2 pb-3 items-center">
+        {ITEMS.navItems.map((item, key) => (
+          <SideBarItem key={key} {...item} isOpen={isOpen} />
+        ))}
+      </ul>
+      <hr className="bg-white opacity-20 h-[1px] w-full" />
+      <ul className="flex flex-col gap-3 py-3 items-center">
+        {ITEMS.sectionItems.map((item, key) => (
+          <SideBarItem key={key} {...item} isOpen={isOpen} />
+        ))}
+      </ul>
+      <ul className="flex flex-col items-center pb-6 gap-3 w-full mt-auto">
+        {ITEMS.bottomItems.map((item, key) => (
+          <SideBarItem key={key} {...item} isOpen={isOpen} />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
+  const [isActive, setIsActive] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setIsActive(location.pathname === path);
+  }, [location.pathname, path]);
+
+  const [scope, animate] = useAnimate();
+  const handleMouseEnter = () => {
+    animate(scope.current, { opacity: 1, scale: 1 });
+  };
+
+  const handleMouseLeave = () => {
+    animate(scope.current, { opacity: 0, scale: 0.75 });
+  };
+  return (
+    <Link to={path}>
+      <div className="relative group w-full ">
+        <div
+          className="w-full flex justify-center relative"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          {isLogo ? (
+            <img className="w-14 mx-auto" src={Logo} />
+          ) : (
+            <motion.div
+              className={cn(
+                "p-[6px] relative flex justify-center items-center hover:bg-white/15 rounded-lg"
+              )}
+            >
+              {isActive ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ bounce: 2 }}
+                  className="w-full h-full bg-brand-500 rounded-lg  absolute"
+                ></motion.div>
+              ) : null}
+              <span className="relative z-20">{icon}</span>
+            </motion.div>
+          )}
+        </div>{" "}
+        {isLogo ? null : (
+          <button
+            ref={scope}
+            className=" bg-white border scale-75 border-gray-200 absolute left-12 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+          >
+            <span className="whitespace-nowrap ">{title}</span>
+          </button>
+        )}
+      </div>{" "}
+    </Link>
   );
 };
 
@@ -201,83 +180,6 @@ const DashBurger = ({
       <div id="top" className=" w-8 h-[3px]  rounded-full"></div>
       <div id="bottom" className="w-8 h-[3px]  rounded-full"></div>
     </button>
-  );
-};
-
-const MenuItem = ({
-  path = "",
-  icon,
-  iconSize,
-  isOpen,
-  isLogo,
-  end,
-}: MenuItemProps) => {
-  const [isActive, setIsActive] = useState(false);
-  const location = useLocation();
-
-  useEffect(() => {
-    setIsActive(location.pathname === path);
-  }, [location.pathname, path]);
-
-  return (
-    <NavLink end={end} to={path}>
-      <li
-        className={clsx("w-full flex items-center gap-4 h-[32px] relative ", {
-          "px-7": !isLogo,
-        })}
-      >
-        {isActive && (
-          <motion.div
-            layoutId="active-border"
-            className={cn(
-              "absolute -right-1 top-0 w-full h-full border-r-4 border-brand-500 rounded-sm",
-              { "left-32 ": isOpen }
-            )}
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ type: "spring", bounce: 0 }}
-          />
-        )}
-        {isLogo ? (
-          <img src={icon} className={clsx(`w-[${iconSize || 32}px]`)} />
-        ) : (
-          <span>{icon}</span>
-        )}
-      </li>
-    </NavLink>
-  );
-};
-
-const MenuItemFold = ({ path = "", title, end }: MenuItemProps) => {
-  const [isActive, setIsActive] = useState(false);
-  const location = useLocation();
-
-  useEffect(() => {
-    setIsActive(location.pathname === path);
-  }, [location.pathname, path]);
-
-  return (
-    <NavLink end={end} to={path}>
-      <li className="w-full gap-4 h-[32px] group">
-        <motion.p
-          className={cn(
-            "text-white group-hover:text-brand-500 pt-1 transition-all",
-            {
-              "text-brand-500": isActive,
-            }
-          )}
-          initial={{ opacity: 0, scale: 0 }}
-          animate={{
-            opacity: 1,
-            scale: 1,
-            transition: { delay: 0.3, duration: 0.3 },
-          }}
-          exit={{ opacity: 0, scale: 0 }}
-        >
-          {title}
-        </motion.p>
-      </li>
-    </NavLink>
   );
 };
 

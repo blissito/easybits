@@ -1,5 +1,8 @@
+import type { FormEvent, ReactNode } from "react";
+import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
+import { cn } from "~/utils/cn";
 
 export const Pricing = () => {
   return (
@@ -29,7 +32,7 @@ export const Pricing = () => {
         <PlanCard
           badge="/hero/foco.svg"
           planName="Starter"
-          classNameButton="bg-[#F6DB7F]"
+          classNameButton="bg-[#F6DB7F] w-full"
           perks={[
             "1 asset en venta",
             "Dashboard de administración",
@@ -43,7 +46,7 @@ export const Pricing = () => {
             badge="/hero/rocket.svg"
             planName="Creative"
             price={199}
-            classNameButton="bg-[#A1CCE5]"
+            classNameButton="bg-[#A1CCE5] w-full"
             perks={[
               "Assets ilimitados",
               "Dashboard de administración",
@@ -52,9 +55,13 @@ export const Pricing = () => {
               "Configuración de tu propio dominio ",
               "50 GB de almacenamiento ",
             ]}
+            cta={
+              <PlanForm intent="creative_plan" buttonClassName="bg-[#A1CCE5]" />
+            }
           />{" "}
         </div>
         <PlanCard
+          classNameButton="w-full"
           badge="/hero/coder.svg"
           planName="Expert"
           price={299}
@@ -65,9 +72,34 @@ export const Pricing = () => {
             "Iframes PRO de video y audio para la visualización del contenido en tu web",
             "Optimización del contenido",
           ]}
+          cta={<PlanForm intent="expert_plan" />}
         />
       </div>
     </section>
+  );
+};
+
+const PlanForm = ({
+  intent,
+  buttonClassName,
+}: {
+  buttonClassName?: string;
+  intent: string;
+}) => {
+  const fetcher = useFetcher();
+  return (
+    <fetcher.Form action="/api/v1/stripe/plans" method="post">
+      <BrutalButton
+        name="intent"
+        value={intent}
+        isLoading={fetcher.state !== "idle"}
+        type="submit"
+        className={cn("w-full", buttonClassName)}
+        containerClassName={cn("w-full")}
+      >
+        <span>¡Empezar!</span>
+      </BrutalButton>
+    </fetcher.Form>
   );
 };
 
@@ -77,13 +109,23 @@ export const PlanCard = ({
   price,
   perks = [],
   classNameButton,
+  cta,
 }: {
   badge: string;
   planName: string;
   price?: number;
   perks: string[];
   classNameButton?: string;
+  cta?: ReactNode;
 }) => {
+  const button = cta || (
+    <BrutalButton
+      className={cn("w-full bg-[#F6DB7F]", classNameButton)}
+      containerClassName="w-full"
+    >
+      <span>¡Empezar!</span>
+    </BrutalButton>
+  );
   return (
     <section className="bg-black max-w-[340px] rounded-xl group ">
       <div className="bg-white border-2 border-black rounded-xl py-6 text-left group-hover:-translate-x-2 group-hover:-translate-y-2 transition-all">
@@ -102,12 +144,7 @@ export const PlanCard = ({
               <PerkItem perk={perk} key={index} />
             ))}
           </div>
-          <BrutalButton
-            containerClassName="w-full "
-            className={classNameButton}
-          >
-            <span>¡Empezar!</span>
-          </BrutalButton>
+          {button}
         </div>
       </div>
     </section>
