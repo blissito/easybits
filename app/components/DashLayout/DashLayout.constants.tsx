@@ -21,33 +21,68 @@ import { Purchase } from "../icons/purchase";
 export const ITEMS = {
   navItems: [
     {
-      icon: <Rocket />,
+      icon: <img className="scale" src="/images/rocket.svg" />,
       path: "/dash/",
       title: "¡Empieza ya!",
       end: true,
       index: 9,
     },
     {
-      icon: <Stonks />,
+      icon: <img className="scale" src="/images/stats.svg" />,
       path: "/dash/estadisticas",
       title: "Estadísticas",
       index: 8,
     },
-    { icon: <MagicBox />, path: "/dash/assets", title: "Assets", index: 7 },
-    { icon: <Money />, path: "/dash/tienda", title: "Mi tienda", index: 6 },
-    { icon: <Money />, path: "/dash/ventas", title: "Ventas", index: 5 },
-    { icon: <Clients />, path: "/dash/clientes", title: "Clientes", index: 4 },
+    {
+      icon: <img className="scale" src="/images/assets.svg" />,
+      path: "/dash/assets",
+      title: "Assets",
+      index: 7,
+    },
+    {
+      icon: <img className="scale" src="/images/website.svg" />,
+      path: "/dash/tienda",
+      title: "Mi tienda",
+      index: 6,
+    },
+    {
+      icon: <img className="scale" src="/images/money.svg" />,
+      path: "/dash/ventas",
+      title: "Ventas",
+      index: 5,
+    },
+    {
+      icon: <img className="scale" src="/images/clients.svg" />,
+      path: "/dash/clientes",
+      title: "Clientes",
+      index: 4,
+    },
   ],
 
   sectionItems: [
-    { icon: <Storage />, path: "/dash/archivos", title: "Archivos", index: 3 },
-    { icon: <Purchase />, path: "/dash/compras", title: "Compras", index: 2 },
+    {
+      icon: <img className="scale" src="/images/storage.svg" />,
+      path: "/dash/archivos",
+      title: "Archivos",
+      index: 3,
+    },
+    {
+      icon: <img className="scale" src="/images/bag.svg" />,
+      path: "/dash/compras",
+      title: "Compras",
+      index: 2,
+    },
   ],
 
   bottomItems: [
-    { icon: <Profile />, path: "/dash/perfil", title: "Perfil", index: 1 },
     {
-      icon: <Logout />,
+      icon: <img className="scale" src="/images/profile.svg" />,
+      path: "/dash/perfil",
+      title: "Perfil",
+      index: 1,
+    },
+    {
+      icon: <img className="scale" src="/images/out.svg" />,
       path: "/login?signout=1",
       title: "Cerrar Sesión",
       index: 0,
