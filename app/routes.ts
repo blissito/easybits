@@ -41,6 +41,7 @@ export default [
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
+      route("websites", "routes/dash/websites.tsx"),
     ]),
   ]),
   // multipar upload
