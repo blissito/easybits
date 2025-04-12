@@ -93,7 +93,7 @@ const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
                   className="w-full h-full bg-brand-500 rounded-lg  absolute"
                 ></motion.div>
               ) : null}
-              <span className="relative z-20">{icon}</span>
+              <span className="relative z-20 pointer-events-none">{icon}</span>
             </motion.div>
           )}
         </div>{" "}

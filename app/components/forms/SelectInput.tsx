@@ -38,10 +38,10 @@ export const SelectInput = ({
         className={cn(
           "w-full",
           "text-black",
-          "border-2 border-black",
-          "rounded-xl p-4 text-lg",
+          "border border-black",
+          "rounded-xl px-4 h-12 text-lg",
           "bg-white",
-          "focus:outline-none focus:border-brand-500",
+          "focus:outline-none focus:border-brand-500 focus:ring-transparent",
           className
         )}
       >

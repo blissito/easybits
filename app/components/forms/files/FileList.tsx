@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
+import { IoClose } from "react-icons/io5";
 import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
 import { cn } from "~/utils/cn";
 
@@ -54,19 +55,15 @@ const AddMoreButton = ({
       layout
       transition={{ delay: index * 0.08 }}
       onClick={onClick}
-      className={cn(
-        "group bg-black",
-        "text-brand-gray",
-        "rounded-xl",
-        className
-      )}
+      className={cn("group bg-black", "text-marengo", "rounded-xl", className)}
       {...props}
     >
       <div
         className={cn(
-          "flex items-center gap-3 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white px-2 py-3",
-          "border border-dashed border-brand-gray rounded-xl active:group-hover:translate-x-0 active:group-hover:translate-y-0",
-          "transition-all"
+          "flex items-center gap-3  bg-white px-2 py-3",
+          "border border-dashed border-marengo rounded-xl active:group-hover:translate-x-0 active:group-hover:translate-y-0",
+          "transition-all",
+          "group-hover:text-brand-500 group-hover:border-brand-500"
         )}
       >
         <img className="w-8 h-8" src="/icons/image-upload.svg" />
@@ -99,12 +96,12 @@ const FileItem = ({
       className={cn(
         "flex items-center gap-2",
         "rounded-xl",
-        "border-2 border-dashed border-brand-gray px-2 py-3"
+        "border border-dashed border-black px-3 py-3"
       )}
     >
       {file.type.includes("image") && (
         <img
-          className="border rounded-xl w-8 h-8"
+          className="border rounded-lg w-8 h-8"
           src={URL.createObjectURL(file)}
           alt="preview"
         />
@@ -112,7 +109,9 @@ const FileItem = ({
       <span className="truncate max-w-md" ref={ref}>
         {file.name}
       </span>
-      <BrutalButtonClose onClick={onRemove} className="ml-auto" />
+      <button className="w-6 h-6 bg-black rounded-full flex justify-center items-center ml-auto ">
+        <IoClose onClick={onRemove} className="text-white text-xl " />
+      </button>
     </motion.div>
   );
 };

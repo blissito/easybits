@@ -131,7 +131,7 @@ export const FilesTable = ({
               <span className="">
                 <input
                   type="checkbox"
-                  className="text-brand-500 focus:outline-brand-500"
+                  className="text-brand-500 border rounded focus:outline-brand-500 border-black"
                 />
               </span>
               <button

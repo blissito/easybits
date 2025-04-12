@@ -75,13 +75,13 @@ export const FilesForm = ({
           className="w-full"
           value={privacy}
           onChange={(value) => setPrivacy(value)}
-          label="privacidad del archivo"
+          label="Privacidad del archivo"
           options={[
             { label: "Privado", value: "private" },
             { label: "Público", value: "public-read" },
           ]}
           error={
-            <p className="text-brand-500 mb-2">
+            <p className="text-black text-sm mb-6">
               La privacidad de los archivos es permanente
             </p>
           }

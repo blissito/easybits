@@ -59,7 +59,7 @@ export const ClientsTable = ({}: {}) => {
             <span className="">
               <input
                 type="checkbox"
-                className="text-brand-500 focus:outline-brand-500"
+                className="text-brand-500 border rounded focus:outline-brand-500 border-black"
               />
             </span>
             <button className="truncate font-semibold col-span-2 md:col-span-1 text-left flex flex-col">
