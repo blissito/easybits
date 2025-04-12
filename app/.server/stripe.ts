@@ -1,7 +1,11 @@
 import { Stripe } from "stripe";
+import { config } from "./config";
 
 export const getPublishableKey = () => process.env.STRIPE_PUBLISHABLE_KEY;
 
+/*
+ * initiate stripe
+ */
 const stripe = () => {
   const client = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
     apiVersion: "2023-08-16",
@@ -9,6 +13,9 @@ const stripe = () => {
   return client;
 };
 
+/*
+ * create account session
+ */
 export const createAccountSession = async ({ account }) => {
   try {
     const accountSession = await stripe().accountSessions.create({
@@ -19,7 +26,6 @@ export const createAccountSession = async ({ account }) => {
         notification_banner: { enabled: true },
       },
     });
-    console.log({ accountSession });
     return accountSession.client_secret;
   } catch (error) {
     console.error(
@@ -30,6 +36,10 @@ export const createAccountSession = async ({ account }) => {
   }
 };
 
+/**
+ *
+ * create account
+ */
 export const createAccount = async () => {
   try {
     const account = await stripe().accounts.create({
@@ -55,4 +65,43 @@ export const createAccount = async () => {
     );
     throw error.message;
   }
+};
+
+/**
+ * create checkout session
+ */
+
+// Set your secret key. Remember to switch to your live secret key in production.
+// See your keys here: https://dashboard.stripe.com/apikeys
+
+export const createCheckoutSession = async ({ stripeAccount, asset }) => {
+  const { slug, price, name, currency } = asset;
+  const applicationFee = price * 0.1;
+  const session = await stripe().checkout.sessions.create(
+    {
+      line_items: [
+        {
+          price_data: {
+            currency: currency,
+            product_data: {
+              name: `${name}-${id} `,
+            },
+            unit_amount: 1000,
+          },
+          quantity: 1,
+        },
+      ],
+      payment_intent_data: {
+        application_fee_amount: applicationFee,
+      },
+      mode: "payment",
+      ui_mode: "embedded",
+      return_url: `${config.baseUrl}/p/${slug}?session_id={CHECKOUT_SESSION_ID}`,
+    },
+    {
+      stripeAccount,
+    }
+  );
+
+  return session;
 };
