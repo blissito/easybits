@@ -22,7 +22,7 @@ export const ITEMS = {
   navItems: [
     {
       icon: <img className="scale" src="/images/rocket.svg" />,
-      path: "/dash/",
+      path: "/dash",
       title: "¡Empieza ya!",
       end: true,
       index: 9,

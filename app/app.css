@@ -5,13 +5,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* * {
+* {
   box-sizing: border-box;
-} */
+}
 
 html,
 body {
   font-family: "Cabin", serif;
+  margin: 0px;
+  padding: 0px;
 }
 .font-jersey {
   font-family: "Jersey 10", serif;
