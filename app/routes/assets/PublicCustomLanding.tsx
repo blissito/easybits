@@ -6,7 +6,7 @@ import {
   EmbeddedCheckoutProvider,
   EmbeddedCheckout,
 } from "@stripe/react-stripe-js";
-import { getUserOrNull } from "~/.server/getters";
+// import { getUserOrNull } from "~/.server/getters";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
 import { Form, useActionData } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -33,44 +33,71 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   if (!asset) throw new Response("Asset not found", { status: 404 });
 
   const publishableKey = await getPublishableKey();
-  const user = await getUserOrNull(request); //asset.user
+  //get own user for testing
+  //const user = await getUserOrNull(request); //asset.user
 
-  return { asset, publishableKey, user };
+  return {
+    asset,
+    publishableKey,
+    // user
+  };
 };
 
-export const action = async ({ request }: Route.ClientActionArgs) => {
+export const action = async ({ request, params }: Route.ClientActionArgs) => {
+  /** reuse this logic from loader, but can make it a getter funtion or something */
+  const url = new URL(request.url);
+  const host = url.hostname.split(".")[0]; // host
+  const hostExists = await db.user.findFirst({
+    where: { host },
+  });
+  if (!hostExists && host !== "localhost")
+    throw new Response("User not found", { status: 404 });
+
+  const asset = await db.asset.findUnique({
+    where: {
+      userId: hostExists?.id,
+      slug: params.assetSlug,
+    },
+    include: {
+      user: true,
+    },
+  });
+
   const formData = await request.formData();
   const stripeAccount = formData.get("stripeAccount");
   const checkoutSession = await createCheckoutSession({
     stripeAccount,
+    asset,
   });
 
   return { checkoutSession };
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { asset, user, publishableKey } = loaderData;
+  const {
+    asset,
+    publishableKey,
+    //user
+  } = loaderData;
   const actionData = useActionData();
+  const assetUserStripeId = asset?.user?.stripe?.id; //can youse your own user if already loggued in stripe for testing
 
   const stripePromise = useMemo(() => {
     if (!publishableKey) return null;
     return loadStripe(publishableKey, {
-      stripeAccount: user?.stripe?.id,
+      stripeAccount: assetUserStripeId,
     });
-  }, [publishableKey, user?.stripe?.id]);
+  }, [publishableKey, assetUserStripeId]);
 
   return (
     <article>
       <HeaderTemplate asset={asset} />
       <ContentTemplate asset={asset} />
+
       {/*pass loginc to template Button */}
-      {asset?.user?.stripe?.id && (
+      {assetUserStripeId && (
         <Form method="post">
-          <input
-            type="hidden"
-            name="stripeAccount"
-            value={asset.user.stripe.id}
-          />
+          <input type="hidden" name="stripeAccount" value={assetUserStripeId} />
           <BrutalButton type="submit">pagaleee</BrutalButton>
         </Form>
       )}

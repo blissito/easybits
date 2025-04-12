@@ -124,8 +124,8 @@ export const createAccount = async () => {
 // See your keys here: https://dashboard.stripe.com/apikeys
 
 export const createCheckoutSession = async ({ stripeAccount, asset }) => {
-  const { slug, price, name, currency } = asset;
-  const applicationFee = price * 0.1;
+  const { slug, price, title, currency } = asset;
+  const applicationFee = price * 0.1 * 100;
   const session = await getStripe().checkout.sessions.create(
     {
       line_items: [
@@ -133,7 +133,7 @@ export const createCheckoutSession = async ({ stripeAccount, asset }) => {
           price_data: {
             currency: currency,
             product_data: {
-              name: `${name}-${id} `,
+              name: title || slug,
             },
             unit_amount: 1000,
           },
