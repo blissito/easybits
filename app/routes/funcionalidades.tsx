@@ -87,7 +87,7 @@ const FeaturesScroll = () => {
           src="/hero/asterisk.svg"
         />
         <img
-          className="absolute w-12 right-12 top-96"
+          className="absolute w-12 right-12 bottom-40 md:top-96"
           alt="diamonds"
           src="/hero/diamonds.svg"
         />
@@ -96,7 +96,7 @@ const FeaturesScroll = () => {
           alt="espiral"
           src="/hero/espiral.svg"
         />
-        <div className="z-50 relative">
+        <div className="z-10 relative">
           <img
             className="w-40 md:w-48 mx-auto mb-10"
             src="/hero/logo-glasses.svg"
@@ -275,7 +275,7 @@ const Card = ({
   image?: string;
 }) => {
   return (
-    <div className={cn("z-0 w-full col-span-1 bg-white ", className)}>
+    <div className={cn("z-20 w-full col-span-1 bg-white ", className)}>
       <div
         className={cn("border-[2px]  h-full border-black p-6 md:p-10 ", {
           "p-0 md:p-0": variant === "fullImage",
@@ -329,7 +329,7 @@ const FeaturesHeader = () => {
         src="/hero/asterisk.svg"
       />
       <img
-        className="absolute w-8 right-12 top-96"
+        className="absolute w-8 right-12 bottom-64 md:top-96"
         alt="diamonds"
         src="/hero/diamonds.svg"
       />
