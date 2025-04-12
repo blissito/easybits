@@ -32,7 +32,7 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
               <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-1 group-hover:translate-y-1 opacity-0 group-hover:opacity-100" />
               <div
                 className={cn(
-                  "rounded-xl z-10 text-black text-lg w-full border-black border cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white",
+                  "rounded-xl z-10 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white",
                   className
                 )}
               >
@@ -52,14 +52,14 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
           ))}
         </div>
         <div className="w-full grid grid-cols-12 gap-6 py-6 md:py-10 h-full   ">
-          <div className="col-span-12 lg:col-span-8 rounded-xl border border-black p-4 md:p-6 bg-white h-full flex flex-col justify-between ">
+          <div className="col-span-12 lg:col-span-8 rounded-xl border-2 border-black p-4 md:p-6 bg-white h-full flex flex-col justify-between ">
             <p className="mb-10">Ventas</p>
             <div className="w-full h-full  min-h-[200px]">
               <LineChart data={salesData} />
             </div>
           </div>
           <div
-            className="col-span-12 lg:col-span-4 rounded-xl border border-black p-4 md:p-6 bg-white order-first lg:order-2
+            className="col-span-12 lg:col-span-4 rounded-xl border-2 border-black p-4 md:p-6 bg-white order-first lg:order-2
 "
           >
             <p className="mb-2 font-semibold text-lg">Productos mas vendidos</p>

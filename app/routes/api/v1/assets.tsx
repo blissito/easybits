@@ -115,7 +115,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
       where: {
         id: data.id,
       },
-      data: { ...data, id: undefined, userId: user.id }, // @todo remove id in parsing
+      data: {
+        ...data,
+        price: Number(data.price),
+        id: undefined,
+        userId: user.id,
+      }, // @todo remove id in parsing
     });
   }
 

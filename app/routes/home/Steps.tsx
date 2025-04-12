@@ -4,7 +4,7 @@ export const Steps = () => {
       <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 md:mb-20">
         Empieza hoy mismo
       </h2>
-      <div className="w-full grid grid-cols-3 gap-24">
+      <div className="w-full grid grid-col-1 md:grid-cols-3 gap-10 lg:gap-24">
         <StepCard
           title="Crea tu primer asset"
           text="Elige ese libro, cuento o ilustración en la que has trabajado tanto y conviételo en un asset. Agrega fotos y una descripción que enamore a tus clientes. "
@@ -35,9 +35,14 @@ const StepCard = ({
 }) => {
   return (
     <div className="text-center flex flex-col justify-center items-center">
-      <img className="h-[322px]" src={image ? image : "/hero/step1.webp"} />
-      <h2 className="text-2xl font-bold mt-10">{title}</h2>
-      <p className="text-iron mt-4">{text}</p>
+      <div className="h-fit  md:h-[322px]">
+        <img
+          className="w-full h-auto "
+          src={image ? image : "/hero/step1.webp"}
+        />{" "}
+      </div>
+      <h2 className="text-2xl font-bold mt-6 md:mt-10">{title}</h2>
+      <p className="text-iron mt-2 md:mt-4">{text}</p>
     </div>
   );
 };

@@ -65,7 +65,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
 const FeaturesScroll = () => {
   return (
     <section className=" w-full bg-white ">
-      <div className="sticky top-0 w-full  h-screen flex justify-center items-center">
+      <div className="sticky top-0 w-full  h-[90vh] flex justify-center items-center">
         <img
           className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
           alt="star"
@@ -87,7 +87,7 @@ const FeaturesScroll = () => {
           src="/hero/asterisk.svg"
         />
         <img
-          className="absolute w-12 right-12 top-96"
+          className="absolute w-12 right-12 bottom-40 md:top-96"
           alt="diamonds"
           src="/hero/diamonds.svg"
         />
@@ -96,7 +96,7 @@ const FeaturesScroll = () => {
           alt="espiral"
           src="/hero/espiral.svg"
         />
-        <div className="z-50 relative">
+        <div className="z-10 relative">
           <img
             className="w-40 md:w-48 mx-auto mb-10"
             src="/hero/logo-glasses.svg"
@@ -109,7 +109,7 @@ const FeaturesScroll = () => {
       </div>
 
       <div className=" mx-auto px-4 md:px-[5%] xl:px-[0] w-full pb-0 md:pb-40 max-w-7xl  overflow-hidden ">
-        <div className="w-full grid grid-cols-3 gap-6  ">
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6  ">
           <Card
             icon={<MdVideogameAsset />}
             className="bg-sky"
@@ -275,7 +275,7 @@ const Card = ({
   image?: string;
 }) => {
   return (
-    <div className={cn("z-0 w-full col-span-1 bg-white ", className)}>
+    <div className={cn("z-20 w-full col-span-1 bg-white ", className)}>
       <div
         className={cn("border-[2px]  h-full border-black p-6 md:p-10 ", {
           "p-0 md:p-0": variant === "fullImage",
@@ -307,7 +307,7 @@ const Card = ({
 
 const FeaturesHeader = () => {
   return (
-    <section className=" pt-32 md:pt-[200px] min-h-[74vh] mb-20 w-full  md:mb-40 text-center relative px-4 md:px-[5%] xl:px-0 ">
+    <section className=" pt-32 md:pt-[200px] mb-20  md:mb-40 min-h-[74vh]  w-full  text-center relative px-4 md:px-[5%] xl:px-0 ">
       <img
         className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
         alt="star"
@@ -329,7 +329,7 @@ const FeaturesHeader = () => {
         src="/hero/asterisk.svg"
       />
       <img
-        className="absolute w-12 right-12 top-96"
+        className="absolute w-8 right-12 bottom-64 md:top-96"
         alt="diamonds"
         src="/hero/diamonds.svg"
       />
@@ -343,7 +343,7 @@ const FeaturesHeader = () => {
         alt="circles"
         src="/hero/circles.svg"
       />
-      <article className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap justify-between items-center mt-6 md:mt-20 gap-20">
+      <article className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap justify-between items-center mt-0 md:mt-20 gap-10 md:gap-20">
         <div className="md:text-left w-full md:w-[55%] text-center">
           <TextBlurEffect>
             <h2 className="text-4xl lg:text-6xl font-bold leading-tight">
@@ -358,7 +358,7 @@ const FeaturesHeader = () => {
         </div>
         <div className="w-full md:w-[45%]">
           <img
-            className="w-[80%] mx-auto md:w-full"
+            className="w-[90%] mx-auto md:w-full"
             src="/features-easybits.webp"
             alt="laptop con la pagina de easybits"
           />

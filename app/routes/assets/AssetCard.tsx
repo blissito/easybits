@@ -15,7 +15,7 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
           "group bg-white rounded-xl transition-all",
           "flex flex-col",
-          "border border-black rounded-2xl",
+          "border-2 border-black rounded-2xl",
           "overflow-hidden"
         )}
       >
