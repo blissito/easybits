@@ -46,22 +46,16 @@ export default function LoginComponent() {
       <main className="w-full ">
         <div className="flex flex-col min-w-full items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
-          <motion.div
-            whileHover={{ scale: 1.5 }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-            className="hover:p-10"
-          >
-            <motion.img
-              src={logoPurple}
-              className="w-[95px]"
-              animate={{
-                x: offset.x,
-                y: offset.y,
-                transition: { type: "spring", stiffness: 500, damping: 10 },
-              }}
-            />
-          </motion.div>
+
+          <motion.img
+            src={logoPurple}
+            className="w-[95px]"
+            animate={{
+              x: offset.x,
+              y: offset.y,
+              transition: { type: "spring", stiffness: 500, damping: 10 },
+            }}
+          />
 
           <fetcher.Form method="post">
             <AnimatePresence mode="wait">

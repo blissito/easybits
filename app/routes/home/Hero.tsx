@@ -8,8 +8,8 @@ import { TextBlurEffect } from "~/components/TextBlurEffect";
 
 export const Hero = () => {
   return (
-    <section className=" h-fit pt-24 pb-6 md:pb-0  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-6 lg:gap-10">
-      <div className="w-full md:w-[50%]">
+    <section className=" h-fit pt-24 pb-6 md:pb-0  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-0 lg:gap-10">
+      <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
             Vende tus assets digitales en línea{" "}
@@ -25,7 +25,7 @@ export const Hero = () => {
           <BrutalButton>Crear mi primer Asset</BrutalButton>
         </Link>
       </div>
-      <div className="w-full md:w-[40%] relative">
+      <div className="w-full md:w-[40%] relative min-h-[285px] ">
         <img className="absolute" alt="star" src="/hero/star.svg" />
         <img
           className="absolute -left-[800px] w-16"
@@ -78,7 +78,7 @@ export const Hero = () => {
           </FloatingItem>
         </div>
         <img
-          className="w-[65%] md:w-full mx-auto -mt-12"
+          className="w-[65%] md:w-full mx-auto -mt-12 "
           alt="platform features"
           src="/hero-img.png"
         />

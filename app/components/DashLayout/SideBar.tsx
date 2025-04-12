@@ -1,11 +1,9 @@
-import clsx from "clsx";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router";
-import { animate, AnimatePresence, motion, useAnimate } from "motion/react";
+import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
-import Logo from "/icons/easybits-logo.svg";
-import TextLogo from "/icons/easybits-logo-text.svg";
+import Logo from "/icons/eyes-logo-purple.svg";
 
 interface MenuItemProps {
   path: string;
@@ -19,41 +17,6 @@ interface MenuItemProps {
 }
 
 export const SideBar = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scope, animate] = useAnimate();
-  const handleMouseEnter = () => {
-    animate(
-      scope.current,
-      {
-        x: 220,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(true);
-  };
-
-  const handleMouseLeave = () => {
-    animate(
-      scope.current,
-      {
-        x: 0,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(false);
-  };
-
-  const handleClick = () => {
-    animate(
-      scope.current,
-      {
-        x: 0,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(false);
-  };
-
   return (
     <section>
       <div className="fixed right-4 bottom-0 z-30 block md:hidden  ">
@@ -67,41 +30,9 @@ export const SideBar = () => {
 const SideBarWeb = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scope, animate] = useAnimate();
-  const handleMouseEnter = () => {
-    animate(
-      scope.current,
-      {
-        x: 220,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(true);
-  };
-
-  const handleMouseLeave = () => {
-    animate(
-      scope.current,
-      {
-        x: 0,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(false);
-  };
-
-  const handleClick = () => {
-    animate(
-      scope.current,
-      {
-        x: 0,
-      },
-      { bounce: 0.4 }
-    );
-    setIsOpen(false);
-  };
   return (
     <section className="w-20 h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2   flex-col gap-4">
-      <SideBarItem isLogo />
+      <SideBarItem isLogo={true} />
       <ul className="flex flex-col gap-3 pt-2 pb-3 items-center">
         {ITEMS.navItems.map((item, key) => (
           <SideBarItem key={key} {...item} isOpen={isOpen} />
@@ -147,7 +78,7 @@ const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
           onMouseLeave={handleMouseLeave}
         >
           {isLogo ? (
-            <img className="w-14 mx-auto" src="/logo-purple.svg" />
+            <img className="w-14 mx-auto" src={Logo} />
           ) : (
             <motion.div
               className={cn(

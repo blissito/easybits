@@ -105,5 +105,9 @@ export const meta = () =>
   });
 
 export default function Login({ loaderData }: Route.ComponentProps) {
-  return <LoginComponent />;
+  return (
+    <section className="h-screen overflow-hidden w-full">
+      <LoginComponent />
+    </section>
+  );
 }
