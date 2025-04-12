@@ -41,7 +41,7 @@ export const AuthNav = ({ user, noCTA }: { user?: User }) => {
     <header
       ref={scope}
       className={cn(
-        "z-10",
+        "z-30",
         "bg-black h-14 md:h-20 md:px-0 border-b-[1px] border-white/30 fixed inset-0"
       )}
     >
