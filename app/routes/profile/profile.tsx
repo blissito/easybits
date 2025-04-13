@@ -35,7 +35,7 @@ export function HydrateFallback() {
 export default function Profile({ loaderData }: Route.ComponentProps) {
   const { user, customer } = loaderData;
   return (
-    <article className=" min-h-screen w-full relative box-border inline-block md:py-10 pt-16 pb-6 px-4 md:pr-[5%] md:pl-[10%] xl:px-0">
+    <article className=" min-h-screen w-full relative box-border inline-block md:py-10 pt-16 pb-6 px-4 md:pl-28 md:pr-8 xl:px-0">
       <div className="max-w-7xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-semibold pt-1 md:pt-1">
           Perfil

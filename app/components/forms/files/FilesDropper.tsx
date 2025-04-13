@@ -17,7 +17,7 @@ export const FilesDropper = ({
       type="button"
       onClick={onClick}
       className={cn(
-        "border border-black border-dashed rounded-xl px-32 flex items-center gap-3 h-[228px] box-border",
+        "border border-black border-dashed rounded-xl px-4 lg:px-32 flex items-center gap-3 h-[228px] box-border",
         "group hover:cursor-pointer hover:border-brand-500",
         "transition-all",
         {

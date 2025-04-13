@@ -143,12 +143,13 @@ export const EditAssetForm = ({
     <article className="w-full px-4">
       <LayoutGroup>
         <Form onSubmit={handleSubmit} className="bg-white w-full">
-          <h2 className="text-2xl my-4">Detalles de tu Asset</h2>
+          <h2 className="text-2xl mt-6 mb-4">Detalles de tu Asset</h2>
           <Input
             defaultValue={asset.title}
             onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
             label="Título"
             name="title"
+            className="mb-6"
           />
 
           <Input
@@ -156,6 +157,7 @@ export const EditAssetForm = ({
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
             label="Tags"
             placeholder="curso, programación"
+            className="mb-3"
           />
           <MarkEditor
             defaultValue={asset.description}
@@ -216,7 +218,7 @@ export const EditAssetForm = ({
 
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
-    <nav className="mb-8 flex justify-end gap-4 sticky bottom-4 mr-16">
+    <nav className="py-4 md:py-6 flex justify-end gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white">
       <Link to="/dash/assets">
         <BrutalButton mode="ghost" isDisabled={isLoading}>
           Cancelar
@@ -230,5 +232,5 @@ const Footer = ({ isLoading }: { isLoading?: boolean }) => {
 };
 
 const HR = () => {
-  return <hr className="my-10" />;
+  return <hr className="my-8" />;
 };

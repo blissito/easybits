@@ -112,8 +112,8 @@ export const Modal = ({
               />
             )}
             <h2
-              className={cn("text-2xl md:text-3xl font-semibold mb-4 ", {
-                "my-3": mode === "naked",
+              className={cn("text-2xl md:text-3xl font-semibold  ", {
+                "mb-1": mode === "naked",
               })}
             >
               {title}

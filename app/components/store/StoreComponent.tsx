@@ -20,9 +20,11 @@ import clsx from "clsx";
 export default function StoreComponent({ assets }) {
   const [currentFilter, setCurrentFilter] = useState();
   return (
-    <div className="w-full max-w-7xl mx-auto py-10 px-4 md:pr-[5%] md:pl-[10%]  xl:px-0 ">
+    <div className="w-full max-w-7xl mx-auto py-10 px-4 md:pl-28 md:pr-8 xl:px-0 ">
       <div className="flex justify-between h-12 mb-8  w-full">
-        <h2 className="text-3xl md:text-4xl font-semibold">Mi tienda</h2>
+        <h2 className="text-3xl lg:text-4xl font-semibold my-auto">
+          Mi tienda
+        </h2>
         <div className="flex gap-3">
           <HeaderIconButton>
             <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">

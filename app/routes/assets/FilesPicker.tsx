@@ -27,9 +27,11 @@ export const FilesPicker = ({
   const unoUOtro = files.length > 0 || assetFiles.length > 0;
   return (
     <article>
-      <h2 className="text-2xl">Archivos que se entregarán a los compradores</h2>
+      <h2 className="text-2xl">Archivos de tu asset</h2>
       <nav className="pt-3 pb-1 flex justify-between ">
-        <p className="">Agrega los archivos del producto</p>
+        <p className="">
+          Agrega los archivos que entregaremos a tus clientes compra
+        </p>
         <button disabled className="text-xs text-brand-500 hidden md:block">
           Selecciona el archivo
         </button>
@@ -253,10 +255,10 @@ const Dropper = ({
     <button
       ref={ref}
       className={cn(
-        "items-center",
+        "items-center mt-1",
         "flex gap-4",
         "w-full",
-        "border-[1px] border-dashed border-black rounded-xl",
+        "border-[1px] border-dashed border-black hover:border-brand-500 rounded-xl",
         {
           "border-iron": isHovered === "hover",
           "border-brand-500": isHovered === "dropping",
@@ -266,16 +268,15 @@ const Dropper = ({
       )}
     >
       <img
-        className={cn("w-10 aspect-square", {
+        className={cn("w-8 aspect-square", {
           "w-6": mode === "slim",
         })}
         src="/icons/image-upload.svg"
         alt="upload illustration"
       />
       <p
-        className={cn("max-w-md text-brand-gray", {
-          "text-black": isHovered === "hover",
-          "text-brand-500": isHovered === "dropping",
+        className={cn("max-w-md text-brand-gray text-sm", {
+          "text-brand-500": isHovered === "hover",
           "text-left text-xs": mode === "slim",
         })}
       >
