@@ -143,7 +143,7 @@ export const EditAssetForm = ({
     <article className="w-full px-4">
       <LayoutGroup>
         <Form onSubmit={handleSubmit} className="bg-white w-full">
-          <h2 className="text-2xl mt-6 mb-4">Detalles de tu Asset</h2>
+          <h2 className="text-2xl mt-6 mb-4 font-bold">Detalles de tu Asset</h2>
           <Input
             defaultValue={asset.title}
             onChange={(ev) => handleChange("title")(ev.currentTarget.value)}

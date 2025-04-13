@@ -26,7 +26,7 @@ export const PriceInput = ({
 
   return (
     <section>
-      <h2 className="text-2xl">Precio</h2>
+      <h2 className="text-2xl font-bold">Precio</h2>
       <p className="pt-2 pb-2">Ponle precio a tu asset</p>
       <div className="flex items-center gap-4">
         <Input
