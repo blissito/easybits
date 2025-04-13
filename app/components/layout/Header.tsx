@@ -22,8 +22,8 @@ export const Header = ({
         className
       )}
     >
-      <h1 className="text-3xl lg:text-4xl  my-auto font-semibold ">{title}</h1>
-      <div className="flex gap-3 mt-4 md:mt-0">
+      <h1 className="text-3xl lg:text-4xl m-0 p-0 font-semibold ">{title}</h1>
+      <div className="flex gap-3">
         {!noButtons && (
           <>
             <HeaderIconButton>
