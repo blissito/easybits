@@ -16,11 +16,18 @@ import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
 import { useState } from "react";
 import clsx from "clsx";
+import { cn } from "~/utils/cn";
+const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export default function StoreComponent({ assets }) {
   const [currentFilter, setCurrentFilter] = useState();
   return (
-    <div className="w-full max-w-7xl mx-auto py-10 px-4 md:pl-28 md:pr-8 xl:px-0 ">
+    <div
+      className={cn(
+        " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0 ",
+        LAYOUT_PADDING
+      )}
+    >
       <div className="flex justify-between h-12 mb-8  w-full">
         <h2 className="text-3xl lg:text-4xl font-semibold my-auto">
           Mi tienda
