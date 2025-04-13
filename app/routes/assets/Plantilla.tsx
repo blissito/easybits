@@ -40,7 +40,7 @@ export const Plantilla = ({
 
   return (
     <motion.section layout>
-      <h2 className="text-2xl">Personaliza tu plantilla</h2>
+      <h2 className="text-2xl font-bold">Personaliza tu plantilla</h2>
       <p className="pt-3 pb-2">Elije el texto para tu botón de compra</p>
       <Input
         onChange={handleChange("ctaText")}

@@ -24,7 +24,7 @@ export const ExtraConfig = ({
 
   return (
     <motion.section layout className="flex flex-col gap-4">
-      <h2 className="text-2xl">Extras</h2>
+      <h2 className="text-2xl font-bold">Extras</h2>
       <Switch
         onChange={(on: boolean) => {
           setState((st) => ({ ...st, stock: on ? 10 : 0 }));

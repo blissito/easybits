@@ -27,7 +27,7 @@ export const FilesPicker = ({
   const unoUOtro = files.length > 0 || assetFiles.length > 0;
   return (
     <article>
-      <h2 className="text-2xl">Archivos de tu asset</h2>
+      <h2 className="text-2xl font-bold">Archivos de tu asset</h2>
       <nav className="pt-3 pb-1 flex justify-between ">
         <p className="">
           Agrega los archivos que entregaremos a tus clientes compra
