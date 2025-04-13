@@ -36,6 +36,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
             )
           }
           title="Mis Assets digitales"
+          className="gap-y-2"
         />
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
         <AssetList assets={assets} />
