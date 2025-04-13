@@ -34,7 +34,7 @@ export const FilesFormModal = ({
     <AnimatePresence>
       <Modal
         key="selector"
-        containerClassName="z-30"
+        containerClassName="z-50"
         isOpen={isOpen}
         title={"Sube tus archivos"}
         onClose={onClose}

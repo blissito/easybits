@@ -14,7 +14,7 @@ export default function StartComponent() {
    */
 
   return (
-    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-16 pb-6 px-4 md:px-[5%] xl:px-0">
+    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-16 pb-6 px-4 md:pl-28 md:pr-8 2xl:px-0">
       <div className="w-full ">
         <div className="w-full lg:w-[756px] mx-auto rounded-xl border-[2px] border-black bg-white mb-8">
           <div className="p-6 md:p-8 flex justify-between items-center">

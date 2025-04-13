@@ -18,11 +18,11 @@ export const Header = ({
   return (
     <nav
       className={cn(
-        "flex justify-between items-center relative mb-6 md:mb-10  ",
+        "flex justify-between flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-10  ",
         className
       )}
     >
-      <h1 className="text-3xl md:text-4xl font-semibold ">{title}</h1>
+      <h1 className="text-3xl lg:text-4xl m-0 p-0 font-semibold ">{title}</h1>
       <div className="flex gap-3">
         {!noButtons && (
           <>

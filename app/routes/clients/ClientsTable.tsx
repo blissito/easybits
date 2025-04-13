@@ -35,8 +35,8 @@ export const ClientsTable = ({}: {}) => {
         <section className="grid grid-cols-12 pl-4 py-2 border-b-[2px] border-black">
           <span className=""></span>
           <span className=" col-span-2 md:col-span-1">Foto</span>
-          <span className="col-span-5 md:col-span-2">Email</span>
-          <span className="col-span-2 hidden md:block ">Nombre</span>
+          <span className="col-span-5  md:col-span-4 lg:col-span-2">Email</span>
+          <span className="col-span-2 hidden lg:block ">Nombre</span>
           <span className="col-span-1">Compras</span>
           <span className="col-span-2 hidden md:block">Fecha de registro</span>
           <span className="col-span-2  hidden md:block">Última compra</span>
@@ -69,12 +69,12 @@ export const ClientsTable = ({}: {}) => {
                 alt="user"
               />
             </button>
-            <div className="text-brand-gray col-span-5 md:col-span-2 flex flex-col">
+            <div className="text-brand-gray col-span-5 md:col-span-4 lg:col-span-2 flex flex-col">
               <span className="text-black"> fulanitolopex@gmail.com</span>
-              <span className="block md:hidden"> Fulanito Lopez</span>
+              <span className="block lg:hidden"> Fulanito Lopez</span>
             </div>
 
-            <span className="text-brand-gray col-span-2 hidden md:block">
+            <span className="text-brand-gray col-span-2 hidden lg:block">
               {" "}
               Fulanito Lopez
             </span>

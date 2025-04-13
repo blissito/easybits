@@ -23,6 +23,7 @@ body {
 
 .font-cabin {
   font-family: "Cabin", serif;
+  font-weight: 600;
 }
 
 .grid-overlay {

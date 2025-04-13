@@ -40,15 +40,15 @@ export const Plantilla = ({
 
   return (
     <motion.section layout>
-      <h2 className="text-2xl">Personaliza tu plantilla</h2>
-      <p className="pt-2 pb-0">Elije el texto para tu botón de compra</p>
+      <h2 className="text-2xl font-bold">Personaliza tu plantilla</h2>
+      <p className="pt-3 pb-2">Elije el texto para tu botón de compra</p>
       <Input
         onChange={handleChange("ctaText")}
         value={state.ctaText}
         placeholder="Compar ahora"
         isError={!!error}
       />
-      <p className="pt-2 pb-0">Personaliza el link de tu Asset</p>
+      <p className="pt-3 pb-2">Personaliza el link de tu Asset</p>
       <div className="relative flex">
         <Input
           value={state.slug}
@@ -58,13 +58,13 @@ export const Plantilla = ({
           isError={!!error}
         />
         <div className="pointer-events-none absolute bottom-0 top-0 grid place-items-center left-2">
-          <p className="border border-brand-500 rounded-xl p-1">
+          <p className="border border-brand-500 rounded-lg p-1">
             https://{state.host}.easybits.cloud/p/
           </p>
         </div>
         <CopyButton
           text={`https://${state.host}.easybits.cloud/p/${state.slug}`}
-          className="absolute right-4 top-2 border rounded-md p-2 hover:shadow"
+          className="absolute right-2 top-2 border rounded-lg p-1 hover:shadow h-8 w-8 flex justify-center items-center"
         />
       </div>
       {error && (
