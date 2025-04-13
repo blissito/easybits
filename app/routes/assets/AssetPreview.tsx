@@ -1,10 +1,12 @@
 import type { Asset } from "@prisma/client";
-import { useToaster } from "react-hot-toast";
-import { FaBoxOpen, FaCopy, FaShare } from "react-icons/fa";
 import toast, { Toaster } from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { EnrolledUsers } from "~/components/fullstack/EnrolledUsers";
+import { MdContentCopy } from "react-icons/md";
+import { IoShareSocialOutline } from "react-icons/io5";
+import { Modal } from "~/components/common/Modal";
+import { FaBoxOpen } from "react-icons/fa6";
 
 export const AssetPreview = ({
   asset,
@@ -20,13 +22,22 @@ export const AssetPreview = ({
 
     iframeRef.current.src = iframeRef.current.src;
   };
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleModal = () => {
+    setIsOpen(true);
+    console.log("si sirce", isOpen);
+  };
   return (
-    <aside className="md:block hidden w-[40%] h-screen bg-black p-8 text-white sticky top-0">
+    <aside className="md:block hidden w-[40%] h-screen bg-black px-8 pt-6 pb-8 text-white sticky top-0">
       <Toaster />
-      <nav className="flex items-center my-8 gap-4">
+      <nav className="flex items-center mb-8 gap-4">
         <h3 className="w-max text-xl mr-auto">Vista previa</h3>
         <button onClick={reloadIframe} className="text-xl active:text-gray-500">
           <LuRefreshCcw />
+        </button>
+        <button onClick={handleModal} isOpen={isOpen}>
+          <IoShareSocialOutline className="text-2xl" />
         </button>
         <button
           onClick={() => {
@@ -37,18 +48,10 @@ export const AssetPreview = ({
           }}
           className="text-xl"
         >
-          <FaCopy />
+          <MdContentCopy />
         </button>
         <EnrolledUsers assetId={asset.id} />
-        {/* <span className="text-xl">
-          <FaBoxOpen />
-        </span> */}
       </nav>
-      {/* <img
-        className="rounded-2xl"
-        src="/hero/example1.png"
-        alt="template preview"
-      /> */}
       <div className="bg-white h-[80%]">
         <iframe
           ref={iframeRef}
@@ -67,3 +70,20 @@ export const AssetPreview = ({
     </aside>
   );
 };
+
+// const ShareLink = ({ isOpen }: { isOpen?: boolean }) => {
+//   return (
+//     <>
+//       <Modal
+//         key="selector"
+//         containerClassName="z-50"
+//         isOpen={isOpen}
+//         title="Sube tus archivos"
+//         // onClose={onClose}
+//         block={false}
+//       >
+//         kkkkdssss
+//       </Modal>
+//     </>
+//   );
+// };

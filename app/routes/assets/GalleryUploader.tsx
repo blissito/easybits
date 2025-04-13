@@ -78,7 +78,7 @@ export const GalleryUploader = ({
 
   return (
     <article className="">
-      <h2 className="mt-8 mb-2">Galería y miniatura principal</h2>
+      <h2 className="mt-5 mb-2">Galería y miniatura principal</h2>
 
       <section
         className="overflow-auto"
@@ -87,7 +87,6 @@ export const GalleryUploader = ({
       >
         {links.length < 1 && canUpload && (
           <motion.button
-            whileHover={{ scale: 1.2 }}
             layoutId="upload_button"
             onClick={() => fileInputRef.current?.click()}
             onDragEnter={handleDragEnter}
@@ -96,7 +95,7 @@ export const GalleryUploader = ({
             type="button"
             className={cn(
               "w-full",
-              "flex gap-3 border-dashed border-[1px] rounded-2xl py-11 justify-center items-center border-black",
+              "flex gap-3 border-dashed border-[1px] hover:border-brand-500 rounded-2xl py-11 justify-center items-center border-iron",
               {
                 "border-iron": isHovered === "hover",
                 "border-brand-500": isHovered === "dropping",
@@ -109,16 +108,15 @@ export const GalleryUploader = ({
                 "text-brand-500": isHovered === "dropping",
               })}
             >
-              <LuImageUp />
+              <img className="w-8 h-8" src="/icons/image-upload.svg" />
             </span>
             <p
-              className={cn("max-w-md text-brand-gray", {
-                "text-black": isHovered === "hover",
-                "text-brand-500": isHovered === "dropping",
+              className={cn("max-w-md text-brand-gray text-sm", {
+                "text-brand-500": isHovered === "hover",
               })}
             >
               Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o
-              sube hasta 50 archivos con un peso máximo de 1 TB en total.
+              sube hasta 50 archivos con un peso máximo de 250 mb en total.
             </p>
           </motion.button>
         )}
@@ -169,11 +167,9 @@ const RowGalleryEditor = ({
             onClick={onClick}
             layoutId="upload_button"
             type="button"
-            className="grid place-items-center border-2 rounded-2xl border-dashed aspect-square h-[100px]"
+            className="grid place-items-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square  max-w-[144px] min-w-[144px]"
           >
-            <span className={cn("text-4xl text-brand-gray")}>
-              <LuImageUp />
-            </span>
+            <img className="w-8 h-8" src="/icons/image-upload.svg" />
           </motion.button>
         )}
       </LayoutGroup>

@@ -12,7 +12,7 @@ export default function Clients() {
     <>
       <article
         className={cn(
-          " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pr-[5%] md:pl-[10%] xl:px-0",
+          " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 xl:px-0",
           LAYOUT_PADDING
         )}
       >

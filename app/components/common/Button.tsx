@@ -30,7 +30,7 @@ export const Button = ({
         disabled={isDisabled}
         type={type}
         className={cn(
-          "rounded-xl flex gap-2 items-center justify-center text-black text-lg w-full border-black border-1 cursor-pointer relative duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 h-12 min-w-[28]",
+          "rounded-xl flex gap-2 items-center justify-center text-black text-lg w-full border-black border-2 cursor-pointer relative duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 h-12 min-w-[28]",
           "bg-white",
           "px-8 py-3 ",
           {

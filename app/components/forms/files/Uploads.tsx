@@ -1,22 +1,24 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { FaCloudArrowUp } from "react-icons/fa6";
-import { FaPause, FaRegCheckCircle } from "react-icons/fa";
+import { FaCheckCircle } from "react-icons/fa";
 import { IoMdCloseCircle } from "react-icons/io";
 import { cn } from "~/utils/cn";
 import type { Task } from "~/hooks/useUploadManager";
+import { AiOutlineFileSearch } from "react-icons/ai";
 
 export const ActiveUploads = ({ tasks }: { tasks: Task[] }) => {
   const length = Object.keys(tasks).length;
   const iterable = Object.values(tasks);
 
   if (length < 1) return null;
+
   return (
     <motion.section layoutId="FilesFormModal">
       {iterable.map((task) => (
         <Upload
           key={task.id}
           task={task}
+          className={cn(length === 1 && "border-none")}
           // onClose={removeDone} // @todo cancel (abort)
         />
       ))}
@@ -26,18 +28,20 @@ export const ActiveUploads = ({ tasks }: { tasks: Task[] }) => {
 
 const Upload = ({
   task,
+  className,
 }: {
   task: Task;
+  className?: string;
   onClose?: (arg0: string) => void;
   access?: "public-read" | "private";
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div className="border-b-2 border-dashed py-3 border-black">
+    <div className={cn("border-b border-dashed py-3 border-black", className)}>
       <nav className="flex items-center justify-between">
         <p className="font-medium truncate pr-1">{task.file.name}</p>
-        <span className="text-xs px-1 text-brand-gray">
+        <span className="text-sm px-1 text-brand-gray ml-auto">
           {task.percentage < 1
             ? "Puesto en espera por el navegador"
             : task.percentage < 5
@@ -48,22 +52,28 @@ const Upload = ({
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           className={cn(
-            "mr-1 text-xl hover:animate-none hover:scale-105 active:scale-100 transition-all",
+            " text-2xl w-8 h-8 flex justify-center items-center hover:animate-none hover:scale-105 active:scale-100 transition-all",
             {
               "animate-pulse": task.percentage < 100,
             }
           )}
         >
           {isHovered ? (
-            <IoMdCloseCircle />
+            <IoMdCloseCircle className="text-[28px]" />
           ) : task.percentage > 99 ? (
-            <span className="text-green-700">
-              <FaRegCheckCircle />
+            <span className="text-green-700 ">
+              <FaCheckCircle />
             </span>
           ) : task.percentage < 1 ? (
-            <FaPause />
+            <AiOutlineFileSearch />
           ) : (
-            <FaCloudArrowUp />
+            <div className="w-8 h-8 overflow-hidden">
+              <img
+                className="scale-[270%]"
+                src="/images/Cloud.gif"
+                alt="nube subiendo archivo"
+              />
+            </div>
           )}
         </button>
       </nav>

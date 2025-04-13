@@ -25,8 +25,8 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
   const [showModal, setShowModal] = useState(false);
 
   return (
-    <section className="max-w-7xl w-full mx-auto  box-border pt-16 pb-6 md:py-10 px-4 md:pr-[5%] md:pl-[10%]  xl:px-0">
-      <article className={cn("flex-1 items-center ")}>
+    <section className="max-w-7xl w-full mx-auto  box-border pt-16 pb-6 md:py-10 px-4 md:pl-28 md:pr-8  xl:px-0">
+      <article className={cn("flex-1 items-center  ")}>
         <Header
           cta={
             assets.length > 0 && (
