@@ -275,7 +275,7 @@ const Dropper = ({
         alt="upload illustration"
       />
       <p
-        className={cn("max-w-md text-brand-gray text-sm", {
+        className={cn("max-w-md text-brand-gray text-sm text-left", {
           "text-brand-500": isHovered === "hover",
           "text-left text-xs": mode === "slim",
         })}
@@ -283,7 +283,7 @@ const Dropper = ({
         {mode === "default" ? (
           <>
             Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o
-            sube hasta 50 archivos con un peso máximo de 1 TB en total.
+            sube hasta 50 archivos con un peso máximo de 250 mb en total.
           </>
         ) : mode === "slim" ? (
           <>Arrastra o selecciona más archivos</>

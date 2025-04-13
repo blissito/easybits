@@ -95,23 +95,20 @@ export const GalleryUploader = ({
             type="button"
             className={cn(
               "w-full",
-              "flex gap-3 border-dashed border-[1px] hover:border-brand-500 rounded-2xl py-11 justify-center items-center border-iron",
+              "flex gap-3 border-dashed border-[1px] p-4 hover:border-brand-500 rounded-2xl py-11 justify-center items-center border-iron",
               {
                 "border-iron": isHovered === "hover",
                 "border-brand-500": isHovered === "dropping",
               }
             )}
           >
-            <span
-              className={cn("text-4xl text-brand-gray", {
-                "text-black": isHovered === "hover",
-                "text-brand-500": isHovered === "dropping",
-              })}
-            >
-              <img className="w-8 h-8" src="/icons/image-upload.svg" />
-            </span>
+            <img
+              className={cn("w-8 aspect-square", {})}
+              src="/icons/image-upload.svg"
+              alt="upload illustration"
+            />
             <p
-              className={cn("max-w-md text-brand-gray text-sm", {
+              className={cn("max-w-md text-brand-gray text-left text-sm", {
                 "text-brand-500": isHovered === "hover",
               })}
             >
