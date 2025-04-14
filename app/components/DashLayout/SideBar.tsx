@@ -67,7 +67,7 @@ const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
   };
 
   const handleMouseLeave = () => {
-    animate(scope.current, { opacity: 0, scale: 0.75 });
+    animate(scope.current, { opacity: 0, scale: 0.0 });
   };
   return (
     <Link to={path}>
@@ -100,7 +100,7 @@ const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
         {isLogo ? null : (
           <button
             ref={scope}
-            className=" bg-white border scale-75 border-gray-200 absolute left-12 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+            className=" bg-white border scale-75 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
           >
             <span className="whitespace-nowrap ">{title}</span>
           </button>

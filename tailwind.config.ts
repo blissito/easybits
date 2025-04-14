@@ -12,6 +12,7 @@ export default {
         "brand-grass": "#96B894",
         "brand-pink": "#FFAFA3",
         brand: {
+          100: "#F3F0F5",
           500: "#9870ED",
         },
         greenGrass: "#A6EB9A",
