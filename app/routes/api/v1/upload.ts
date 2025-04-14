@@ -10,7 +10,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   return await handler(
     request,
     async (complete: Complete) => {
-      console.log("Complete: ", complete.data);
       // create on DB
       await createFile({
         status: "DONE",
@@ -22,8 +21,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
         contentType: complete.contentType,
         access: complete.access,
         name: complete.metadata.name,
-        actionId: complete.data.actionId,
-        assetIds: complete.data.assetId ? [complete.data.assetId] : undefined, // new
+        actionId: complete.data?.actionId,
+        assetIds: complete.data?.assetId ? [complete.data.assetId] : undefined, // new
       });
       return new Response(JSON.stringify(complete));
     },

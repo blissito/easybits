@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useUploadMultipart } from "react-hook-multipart/react";
 
 export type UploadManager = {
-  addFiles: (arg0: File[]) => void;
+  addFiles: (arg0: File[], config?: LocalConfig) => void;
   getFiles: () => File[];
   tasks: Task[];
   clearTask: (arg0: string) => void;
@@ -82,11 +82,8 @@ export const useUploadManager = (input?: useUploadManagerInput) => {
     console.info("::UPLOAD_STARTED_FOR::", task.file.name);
   };
 
-  const addFiles = (
-    newFiles: File[],
-    localConfig: LocalConfig = { access: "private" | "public-read" }
-  ) => {
-    const { access } = localConfig;
+  const addFiles = (newFiles: File[], localConfig?: LocalConfig) => {
+    const { access = "private" } = localConfig || {};
 
     taskMap.set("files", taskMap.get("files").concat(newFiles));
     const newTasks = newFiles.map((file) => createTask(file));
