@@ -55,12 +55,12 @@ export const Modal = ({
       {isOpen ? (
         <article
           className={cn(
-            "z-50", // try to not go further than 30
+            "z-50 relative", // try to not go further than 30
             "grid place-content-center ",
-            "fixed",
+            "fixed overflow-hidden",
 
             {
-              "inset-0": mode !== "naked",
+              "inset-0 overflow-y-auto": mode !== "naked",
               "place-content-end p-3": mode === "naked",
               "bottom-0 right-0": mode === "naked",
             },
