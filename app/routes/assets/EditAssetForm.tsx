@@ -121,11 +121,6 @@ export const EditAssetForm = ({
       console.error(error);
       return;
     }
-    console.log("gallery", form.gallery);
-    if (asset.gallery[0]) {
-      console.log("Get meta");
-      resize({ link: asset.gallery[0] });
-    }
 
     fetcher.submit(
       {
