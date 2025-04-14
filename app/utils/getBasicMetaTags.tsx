@@ -52,5 +52,13 @@ export default function getBasicMetaTags({
       name: "twitter:image",
       content: image,
     },
+    // {
+    //   name: "og:image:width",
+    //   content: "300",
+    // },
+    // {
+    //   name: "og:image:height",
+    //   content: "300",
+    // },
   ];
 }

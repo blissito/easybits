@@ -12,8 +12,8 @@ export const useImageResize = (options?: {
   ) => {
     let {
       maxDimensions = {
-        width: 640,
-        height: 480,
+        width: 300,
+        height: 200,
       },
     } = options || {};
     const imageNode = document.createElement("img");

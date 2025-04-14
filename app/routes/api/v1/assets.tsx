@@ -80,9 +80,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);
-    let fileName = formData.get("fileName") as string; // + nanoid(3);
-    const arr = fileName.split(".");
-    fileName = `${nanoid()}.${arr[arr.length - 1]}`; // better for urlsearchparams
+    let fileName = formData.get("fileName") as string;
+
+    if (fileName !== "metaImage") {
+      const arr = fileName.split(".");
+      fileName = `${nanoid()}.${arr[arr.length - 1]}`; // best for urlsearchparams
+    }
     const assetId = formData.get("assetId"); // + nanoid(3);
     const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;
     const url = await getPutFileUrl(storageKey, 900, {

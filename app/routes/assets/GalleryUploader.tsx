@@ -54,11 +54,8 @@ export const GalleryUploader = ({
     defaultLinks: asset.gallery,
   });
 
-  const { resize } = useImageResize();
-  const uploadMetaImage = async () => {
-    const file = files[0];
-    if (!file) return;
-    resize(file).then(async (blob) => {
+  const { resize } = useImageResize({
+    async callback(blob) {
       // 1. get put url & update model?
       const response = await fetch("/api/v1/assets", {
         method: "post",
@@ -69,9 +66,22 @@ export const GalleryUploader = ({
         }),
       });
       const putURL = await response.text();
-      console.log("Got url:", url);
       // 2. upload
-    });
+      await fetch(putURL, {
+        method: "put",
+        body: blob,
+        headers: {
+          "content-type": blob.type,
+        },
+      });
+      console.info("file_uploaded");
+      // 3. update model... no need... because of name conventions
+    },
+  });
+  const uploadMetaImage = async () => {
+    const file = files[0];
+    if (!file) return;
+    resize(file);
   };
 
   useEffect(() => {

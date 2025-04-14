@@ -1,6 +1,22 @@
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/PublicCustomLanding";
 import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
+
+const defaultURL = `https://easybits-public.fly.storage.tigris.dev/679442f532aff63d473fde99/gallery/67cb288d1d00d14f5e4bc605/metaImage`;
+
+export const meta = ({
+  data: {
+    asset: { title, description, user, id },
+  },
+}: Route.MetaArgs) => {
+  return getBasicMetaTags({
+    title,
+    description: description?.slice(0, 50).replace("#", ""),
+    image: `https://easybits-public.fly.storage.tigris.dev/${user.id}/gallery/${id}/metaImage`,
+    twitterCard: "summary_large_image",
+  });
+};
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
