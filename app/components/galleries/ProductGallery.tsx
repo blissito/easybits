@@ -43,15 +43,15 @@ export const ProductGallery = ({
       )}
     >
       <div className="">
-        {items.length < 2 ? (
+        {items.length == 1 ? (
           <img className="object-contain h-full" src={items[0].src} />
-        ) : (
+        ) : items.length >= 3 ? (
           <ImageItem
             item={items[currentIndex]}
             onClick={(index) => setCurrentIndex(index)}
             currentIndex={currentIndex}
           />
-        )}
+        ) : null}
       </div>
     </section>
   );

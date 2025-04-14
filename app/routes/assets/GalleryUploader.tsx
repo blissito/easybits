@@ -6,6 +6,7 @@ import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { useUploader } from "~/hooks/useUploader";
+import { useImageResize } from "~/hooks/useImageResize";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -18,7 +19,6 @@ export const GalleryUploader = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
-  // const [links, setLinks] = useState<string[]>([]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -49,19 +49,9 @@ export const GalleryUploader = ({
     setFiles(fls);
   };
 
-  const fetcher = useFetcher();
   const { upload, links, onRemove } = useUploader({
     assetId: asset.id,
     defaultLinks: asset.gallery,
-    // async onLinksUpdated(lks) {
-    //   fetcher.submit(
-    //     {
-    //       intent: "update_asset_gallery_links",
-    //       data: JSON.stringify({ gallery: lks, id: asset.id }),
-    //     },
-    //     { method: "post", action: "/api/v1/assets" }
-    //   );
-    // },
   });
 
   useEffect(() => {
