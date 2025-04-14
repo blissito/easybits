@@ -12,7 +12,7 @@ export const meta = ({
 }: Route.MetaArgs) => {
   return getBasicMetaTags({
     title,
-    description: description?.slice(0, 50).replace("#", ""),
+    description: description?.slice(0, 80).replace("#", "") + "...",
     image: `https://easybits-public.fly.storage.tigris.dev/${user.id}/gallery/${id}/metaImage`,
     twitterCard: "summary_large_image",
   });
