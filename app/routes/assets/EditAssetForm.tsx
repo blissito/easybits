@@ -12,6 +12,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
+import { useImageResize } from "~/hooks/useImageResize";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -76,6 +77,16 @@ export const EditAssetForm = ({
   const [form, setForm] = useState<Asset>(asset);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // resize
+  const { resize } = useImageResize({
+    async callback(blob) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "metaImage.webp";
+      a.click();
+    },
+  });
+
   const setState = (obj: {
     [x: string]:
       | number
@@ -110,9 +121,11 @@ export const EditAssetForm = ({
       console.error(error);
       return;
     }
-
-    // console.log("Data", form);
-    // return;
+    console.log("gallery", form.gallery);
+    if (asset.gallery[0]) {
+      console.log("Get meta");
+      resize({ link: asset.gallery[0] });
+    }
 
     fetcher.submit(
       {
