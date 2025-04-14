@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "~/utils/cn";
 
 type Item = {
-  name: string;
-  text: string;
+  name?: string;
+  text?: string;
   src: string;
 };
 
@@ -42,11 +42,17 @@ export const ProductGallery = ({
         className
       )}
     >
-      <div className="">
-        {items.length == 1 ? (
-          <img className="object-contain h-full" src={items[0].src} />
+      <div className="w-full h-full">
+        {items.length == 0 ? (
+          <img
+            className="object-contain h-full w-full"
+            src="/images/easybits-default.webp"
+          />
+        ) : items.length == 1 ? (
+          <img className="object-cover h-full w-full" src={items[0].src} />
         ) : items.length >= 3 ? (
           <ImageItem
+            images={items}
             item={items[currentIndex]}
             onClick={(index) => setCurrentIndex(index)}
             currentIndex={currentIndex}
@@ -61,16 +67,26 @@ const ImageItem = ({
   item = {} as Item,
   onClick,
   currentIndex,
+  images,
 }: {
   currentIndex: number;
   onClick?: (arg0: number) => void;
   item: Item;
+  images: string[];
 }) => {
   return (
     <AnimatePresence mode="popLayout">
       <section className="flex items-center justify-between h-[280px] md:h-[600px] w-full relative ">
         <section className=" absolute flex w-full z-30 justify-center bottom-4 md:bottom-10 gap-2">
-          <DotButton
+          {images.map((image, i) => (
+            <DotButton
+              index={i}
+              currentIndex={currentIndex}
+              key={i}
+              onClick={() => onClick?.(i)}
+            />
+          ))}
+          {/* <DotButton
             currentIndex={currentIndex}
             index={0}
             onClick={() => onClick?.(0)}
@@ -85,6 +101,20 @@ const ImageItem = ({
             index={2}
             onClick={() => onClick?.(2)}
           />
+          {lenght === 4 ? (
+            <DotButton
+              currentIndex={currentIndex}
+              index={2}
+              onClick={() => onClick?.(3)}
+            />
+          ) : null}
+          {lenght === 5 ? (
+            <DotButton
+              currentIndex={currentIndex}
+              index={2}
+              onClick={() => onClick?.(5)}
+            />
+          ) : null} */}
         </section>
 
         <motion.img
@@ -92,7 +122,7 @@ const ImageItem = ({
           animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
           exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
           key={item.src}
-          className="w-full h-full object-contain object-bottom"
+          className="w-full h-full object-cover object-center"
           src={item.src}
           alt="user"
         />

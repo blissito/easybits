@@ -19,11 +19,9 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
         <ProductGallery
-          className="bg-black"
+          className="bg-[#F6F5F5]"
           items={asset.gallery.map((src) => ({
             src,
-            text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
-            name: "pelusina",
           }))}
         />
         <div className="grid grid-cols-8 border-t-[2px] border-black">
