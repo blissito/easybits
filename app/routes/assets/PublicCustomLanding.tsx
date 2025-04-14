@@ -14,7 +14,6 @@ export const meta = ({
     title,
     description: description?.slice(0, 80).replace("#", "") + "...",
     image: `https://easybits-public.fly.storage.tigris.dev/${user.id}/gallery/${id}/metaImage`,
-    twitterCard: "summary_large_image",
   });
 };
 
