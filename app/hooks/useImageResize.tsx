@@ -64,6 +64,7 @@ export const useImageResize = (options?: {
         .then((b) => callback?.(b, true));
     };
   };
+  // var file = new File([myBlob], "name");
 
   return {
     resize,

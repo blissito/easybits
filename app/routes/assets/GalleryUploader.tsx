@@ -54,6 +54,26 @@ export const GalleryUploader = ({
     defaultLinks: asset.gallery,
   });
 
+  const { resize } = useImageResize();
+  const uploadMetaImage = async () => {
+    const file = files[0];
+    if (!file) return;
+    resize(file).then(async (blob) => {
+      // 1. get put url & update model?
+      const response = await fetch("/api/v1/assets", {
+        method: "post",
+        body: new URLSearchParams({
+          intent: "get_put_file_url",
+          fileName: "metaImage",
+          assetId: asset.id,
+        }),
+      });
+      const putURL = await response.text();
+      console.log("Got url:", url);
+      // 2. upload
+    });
+  };
+
   useEffect(() => {
     if (files.length < 1) return;
 
@@ -62,6 +82,7 @@ export const GalleryUploader = ({
       await Promise.all(promises);
     };
     asyncUpload();
+    uploadMetaImage();
   }, [files]);
 
   const canUpload = limit > links.length;
