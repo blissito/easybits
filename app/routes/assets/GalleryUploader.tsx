@@ -6,6 +6,7 @@ import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { useUploader } from "~/hooks/useUploader";
+import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
 
 export const GalleryUploader = ({
@@ -123,10 +124,14 @@ export const GalleryUploader = ({
               }
             )}
           >
-            <img
+            {/* <img
               className={cn("w-8 aspect-square", {})}
               src="/icons/image-upload.svg"
               alt="upload illustration"
+            /> */}
+            <ImageIcon
+              className="w-8 h-"
+              fill={isHovered ? "#9870ED" : " #6A6966"}
             />
             <p
               className={cn("max-w-md text-brand-gray text-left text-sm", {

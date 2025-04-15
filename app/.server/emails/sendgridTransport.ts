@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
-import aws from "@aws-sdk/client-ses";
-import { defaultProvider } from "@aws-sdk/credential-provider-node";
+// import aws from "@aws-sdk/client-ses";
+// import { defaultProvider } from "@aws-sdk/credential-provider-node";
 // import { getDefaultRoleAssumerWithWebIdentity } from "@aws-sdk/client-sts";
 
 export const sendgridTransport = nodemailer.createTransport({
@@ -29,17 +29,17 @@ export const gmailTransport = nodemailer.createTransport({
 //   region: "mx-central-1",
 //   defaultProvider,
 // });
-export const sesTransport = nodemailer.createTransport({
-  // SES: { ses, aws },
-  // sendingRate: 1,
-  host: process.env.SMTP_HOST, // Replace with your region's SMTP endpoint
-  port: process.env.NODE_ENV === "development" ? 587 : 465, // TLS port (use 465 for SSL)
-  secure: process.env.NODE_ENV === "development" ? false : true, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER, // Your SES SMTP username
-    pass: process.env.SMTP_PASSWORD, // Your SES SMTP password
-  },
-});
+// export const sesTransport = nodemailer.createTransport({
+// SES: { ses, aws },
+// sendingRate: 1,
+//   host: process.env.SMTP_HOST, // Replace with your region's SMTP endpoint
+//   port: process.env.NODE_ENV === "development" ? 587 : 465, // TLS port (use 465 for SSL)
+//   secure: process.env.NODE_ENV === "development" ? false : true, // true for 465, false for other ports
+//   auth: {
+//     user: process.env.SMTP_USER, // Your SES SMTP username
+//     pass: process.env.SMTP_PASSWORD, // Your SES SMTP password
+//   },
+// });
 
 // transporter.sendMail(
 //   {

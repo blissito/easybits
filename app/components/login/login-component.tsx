@@ -131,7 +131,7 @@ export default function LoginComponent() {
                   </p>
                   <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
                     <Input
-                      className="md:max-w-[420px]"
+                      className="md:max-w-[420px] text-white"
                       label="Email"
                       type="email"
                       name="email"
@@ -139,10 +139,11 @@ export default function LoginComponent() {
                       inputClassName="w-full"
                     />
                     <Input
-                      className="md:max-w-[420px]"
+                      className="md:max-w-[420px] text-white"
                       label="Contraseña"
                       type="password"
                       name="password"
+                      inputClassName="w-full "
                       placeholder="Al menos 8 caracteres"
                     />
                     <Button
