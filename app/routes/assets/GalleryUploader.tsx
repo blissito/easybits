@@ -74,14 +74,14 @@ export const GalleryUploader = ({
           "content-type": blob.type,
         },
       });
-      console.info("file_uploaded");
+      // console.info("metaImage updated");
       // 3. update model... no need... because of name conventions
     },
   });
   const uploadMetaImage = async () => {
-    const file = files[0];
-    if (!file) return;
-    resize(file);
+    const link = links[0];
+    if (!link) return;
+    resize({ link });
   };
 
   useEffect(() => {

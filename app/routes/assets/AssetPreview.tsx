@@ -1,22 +1,16 @@
 import type { Asset } from "@prisma/client";
-import toast, { Toaster, useToaster, useToasterStore } from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";
 import { useRef, useState, type ReactNode } from "react";
 import { EnrolledUsers } from "~/components/fullstack/EnrolledUsers";
 import { MdContentCopy } from "react-icons/md";
 import { IoShareSocialOutline } from "react-icons/io5";
 import { Modal } from "~/components/common/Modal";
-import { FaBoxOpen, FaXTwitter } from "react-icons/fa6";
+import { FaXTwitter } from "react-icons/fa6";
 import { PiLinkSimpleBold } from "react-icons/pi";
-import {
-  FaFacebookF,
-  FaInstagram,
-  FaLinkedinIn,
-  FaWhatsapp,
-} from "react-icons/fa";
-import type { String } from "aws-sdk/clients/cloudhsm";
+import { FaFacebookF, FaLinkedinIn } from "react-icons/fa";
 import { twMerge } from "tailwind-merge";
-import { RiInstagramFill, RiWhatsappFill } from "react-icons/ri";
+import { RiWhatsappFill } from "react-icons/ri";
 import { cn } from "~/utils/cn";
 import { Input } from "~/components/common/Input";
 import { useAnimate, motion } from "motion/react";
@@ -60,10 +54,15 @@ export const AssetPreview = ({
         </button>
         <button
           onClick={() => {
-            navigator.clipboard.writeText(
-              `https://${host}.easybits.cloud/p/${asset.slug}`
-            );
             toast("Link copiado ✅", { position: "top-right" });
+            const uri = location.hostname.includes("localhost")
+              ? `http://localhost:3000/p/${asset.slug}`
+              : `https://${host}.easybits.cloud/p/${asset.slug}`;
+            navigator.clipboard.writeText(uri);
+            const a = document.createElement("a");
+            a.target = "_blank";
+            a.href = uri;
+            a.click();
           }}
           className="text-xl"
         >

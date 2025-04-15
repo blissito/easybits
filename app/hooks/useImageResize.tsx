@@ -4,12 +4,13 @@ export const useImageResize = (options?: {
   const { callback } = options || {};
 
   const resize = async (
-    file: File,
+    file: File | Blob,
     options?: {
       maxDimensions?: { width: number; height: number };
       // callback?: (file: Blob, success: boolean) => void;
     }
   ) => {
+    if (file.type?.includes("gif")) return; // avoid @todo: convert
     let {
       maxDimensions = {
         width: 300,
@@ -18,6 +19,7 @@ export const useImageResize = (options?: {
     } = options || {};
     const imageNode = document.createElement("img");
     if (Object.keys(file).includes("link")) {
+      // specific for this program
       const blob = await fetch(file.link).then((r) => r.blob());
       const url = URL.createObjectURL(blob);
       imageNode.src = url;
@@ -49,15 +51,13 @@ export const useImageResize = (options?: {
         callback?.(file, false);
       }
       // actual work:
-      console.log("actual work started");
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(imageNode, 0, 0, width, height);
       // only if blob support
-      console.log("toBlob?", canvas.toBlob);
-      // canvas.toBlob((blob) => callback?.(blob!, true), file.type);
+      // canvas.toBlob((blob) => callback?.(blob!, true), file.type); // @todo optional
       const du = canvas.toDataURL("image/webp", 0.5);
       fetch(du)
         .then((r) => r.blob())

@@ -46,7 +46,7 @@ model Asset {
   roomId      String? // provisional
   metadata    AssetWebinarMetadata? // used for type webinar, for example.
   type        AssetType              @default(DOWNLOADABLE)
-  price       Float                  @default(0)
+  price       Float?                 @default(0)
   currency    String                 @default("mxn")
   gallery     String[]
   fileIds     String[]               @db.ObjectId
