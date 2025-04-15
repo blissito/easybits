@@ -55,7 +55,7 @@ export const Modal = ({
       {isOpen ? (
         <article
           className={cn(
-            "z-50 relative", // try to not go further than 30
+            "z-[90] relative", // try to not go further than 30
             "grid place-content-center ",
             "fixed overflow-hidden",
 
