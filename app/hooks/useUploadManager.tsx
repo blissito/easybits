@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-// @ts-ignore
+
 import { useUploadMultipart } from "react-hook-multipart/react";
 
 export type UploadManager = {
