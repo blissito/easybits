@@ -117,7 +117,6 @@ const ShareLink = ({
         className="min-h-fit"
         title={"¡Comparte tu asset!"}
         onClose={onClose}
-        block={false}
       >
         <div className="mt-4 text-iron">
           <p className="mb-8">

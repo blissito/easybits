@@ -20,7 +20,11 @@ export const ProductGallery = ({
 
   const change = () => {
     timeout.current && clearTimeout(timeout.current);
-    setCurrentIndex((i) => (i + 1) % 3);
+    setCurrentIndex((i) => (i + 1) % items.length);
+    timeout.current = setTimeout(change, 3000);
+  };
+  const start = () => {
+    timeout.current && clearTimeout(timeout.current);
     timeout.current = setTimeout(change, 3000);
   };
   const pause = () => timeout.current && clearTimeout(timeout.current);
@@ -30,7 +34,7 @@ export const ProductGallery = ({
   };
 
   useEffect(() => {
-    change();
+    start();
   }, []);
 
   return (
@@ -50,9 +54,9 @@ export const ProductGallery = ({
           />
         ) : items.length == 1 ? (
           <img className="object-cover h-full w-full" src={items[0].src} />
-        ) : items.length >= 3 ? (
+        ) : items.length >= 2 ? (
           <ImageItem
-            images={items}
+            items={items.map((i) => i.name)} // esto se puede evitar
             item={items[currentIndex]}
             onClick={(index) => setCurrentIndex(index)}
             currentIndex={currentIndex}
@@ -67,18 +71,18 @@ const ImageItem = ({
   item = {} as Item,
   onClick,
   currentIndex,
-  images,
+  items,
 }: {
   currentIndex: number;
   onClick?: (arg0: number) => void;
   item: Item;
-  images: string[];
+  items: string[];
 }) => {
   return (
     <AnimatePresence mode="popLayout">
       <section className="flex items-center justify-between h-[280px] md:h-[600px] w-full relative ">
         <section className=" absolute flex w-full z-30 justify-center bottom-4 md:bottom-10 gap-2">
-          {images.map((image, i) => (
+          {items.map((_, i) => (
             <DotButton
               index={i}
               currentIndex={currentIndex}
@@ -86,45 +90,20 @@ const ImageItem = ({
               onClick={() => onClick?.(i)}
             />
           ))}
-          {/* <DotButton
-            currentIndex={currentIndex}
-            index={0}
-            onClick={() => onClick?.(0)}
-          />
-          <DotButton
-            currentIndex={currentIndex}
-            index={1}
-            onClick={() => onClick?.(1)}
-          />
-          <DotButton
-            currentIndex={currentIndex}
-            index={2}
-            onClick={() => onClick?.(2)}
-          />
-          {lenght === 4 ? (
-            <DotButton
-              currentIndex={currentIndex}
-              index={2}
-              onClick={() => onClick?.(3)}
-            />
-          ) : null}
-          {lenght === 5 ? (
-            <DotButton
-              currentIndex={currentIndex}
-              index={2}
-              onClick={() => onClick?.(5)}
-            />
-          ) : null} */}
         </section>
 
         <motion.img
-          initial={{ x: 30, opacity: 0, filter: "blur(4px)" }}
+          initial={{
+            x: 30,
+            opacity: 1,
+            filter: "blur(4px)",
+          }}
           animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
           exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
           key={item.src}
-          className="w-full h-full object-cover object-center"
+          className="w-full h-full object-cover object-center bg-black"
           src={item.src}
-          alt="user"
+          alt="asset"
         />
       </section>
     </AnimatePresence>
