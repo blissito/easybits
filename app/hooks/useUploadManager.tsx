@@ -64,7 +64,7 @@ export const useUploadManager = (input?: useUploadManagerInput) => {
     setTasks(reversed);
   };
 
-  const startUpload = (taskId: string, access: string) => {
+  const startUpload = (taskId: string, access: "public-read" | "private") => {
     const { upload } = useUploadMultipart({ access }); // used here because the access limitation (upload should receive access too)
     const task: Task = taskMap.get(taskId);
     upload(task.file.name, task.file, ({ percentage }) => {

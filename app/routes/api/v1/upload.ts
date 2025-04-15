@@ -19,7 +19,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         url: `${HOST}/${complete.key}`,
         ownerId: user.id,
         contentType: complete.contentType,
-        access: complete.access,
+        access: complete.access, // @todo fix type?
         name: complete.metadata.name,
         actionId: complete.data?.actionId,
         assetIds: complete.data?.assetId ? [complete.data.assetId] : undefined, // new

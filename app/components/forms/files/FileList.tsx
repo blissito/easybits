@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { IoClose } from "react-icons/io5";
-import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
 import { cn } from "~/utils/cn";
 
 export const FileList = ({
