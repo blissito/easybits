@@ -1,5 +1,5 @@
 import { gmailTransport } from "./sendgridTransport";
-import { welcomeEmail } from "./templates/WelcomeEmail";
+import { welcomeEmail } from "./templates/welcomeEmail";
 
 export const sendWelcomeEmail = (email: string, displayName?: string) => {
   return gmailTransport
