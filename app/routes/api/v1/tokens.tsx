@@ -26,13 +26,17 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     if (!tokenData.email) {
       return { success: false };
     }
-    const data = { ...tokenData, confirmed: true };
+    const data = {
+      email: tokenData.email,
+      displayName: tokenData.displayName,
+      confirmed: true,
+    };
     await db.user.upsert({
       where: { email: tokenData.email },
       update: data,
       create: data,
     });
-    await sendWelcomeEmail(tokenData.email, tokenData.displayName);
+    await sendWelcomeEmail(data.email, data.displayName);
     return { success: true };
   }
 

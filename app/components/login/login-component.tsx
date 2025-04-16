@@ -31,11 +31,11 @@ export default function LoginComponent({ state }: { state?: string }) {
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setLoginType("showing_email_instructions");
     const form = Object.fromEntries(new FormData(e.currentTarget)) as {
       displayName: string;
       email: string;
     };
-    // return;
     fetcher.submit(
       {
         email: form.email,
@@ -46,7 +46,6 @@ export default function LoginComponent({ state }: { state?: string }) {
         method: "post",
       }
     );
-    setLoginType("showing_email_instructions");
   };
 
   const isLoading = fetcher.state !== "idle";
