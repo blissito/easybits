@@ -11,7 +11,7 @@ const isDev = process.env.NODE_ENV === "development";
 const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
 export const sendMagicLink = (email: string, data: any) => {
-  const magicToken = generateUserToken({ email });
+  const magicToken = generateUserToken({ email, ...data });
   const url = new URL(`${location}/api/v1/tokens`);
   url.searchParams.set("intent", "magic_link");
   url.searchParams.set("token", magicToken);

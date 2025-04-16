@@ -2,11 +2,12 @@ import { db } from "~/.server/db";
 import type { Route } from "./+types/tokens";
 import { getReadURL } from "react-hook-multipart";
 import { decodeToken } from "~/utils/tokens";
-import { Link } from "react-router";
+import { Form, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import Logo from "/icons/easybits-logo.svg";
 import { FlipLetters } from "~/components/animated/FlipLetters";
 import { setSessionCookie } from "~/.server/getters";
+import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 
 const decode = (url: URL) => {
   const token = url.searchParams.get("token") as string;
@@ -22,11 +23,16 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const intent = url.searchParams.get("intent");
   if (intent === "confirm_account") {
     const tokenData = decode(url)!;
-    await db.user.update({
+    if (!tokenData.email) {
+      return { success: false };
+    }
+    const data = { ...tokenData, confirmed: true };
+    await db.user.upsert({
       where: { email: tokenData.email },
-      data: { confirmed: true },
+      update: data,
+      create: data,
     });
-    // @todo create session
+    await sendWelcomeEmail(tokenData.email, tokenData.displayName);
     return { success: true };
   }
 
@@ -57,11 +63,22 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return { url };
   }
 
+  if (intent === "set_session") {
+    const tokenData = decode(new URL(request.url));
+    if (!tokenData) throw redirect("/dash");
+
+    return await setSessionCookie({
+      email: tokenData.email,
+      request,
+    });
+  }
+
   return null;
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { success } = loaderData;
+
   return (
     <article className="grid h-screen place-content-center bg-black text-white">
       <nav className="flex gap-2">
@@ -73,12 +90,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         {!success && "Hay un problema con el token"}
       </h2>
 
-      <Link to="/dash">
-        <BrutalButton>
-          {success && "Mira tu dashboard"}
-          {!success && "Intenta con un token nuevo"}
-        </BrutalButton>
-      </Link>
+      {!success && (
+        <Link to="/dash">
+          <BrutalButton>Intenta con un token nuevo</BrutalButton>
+        </Link>
+      )}
+      {success && (
+        <Form method="post">
+          <BrutalButton name="intent" value="set_session" type="submit">
+            Mira tu dashboard
+          </BrutalButton>
+        </Form>
+      )}
     </article>
   );
 }

@@ -7,6 +7,7 @@ export const decodeToken = (token: string) => {
     const decoded = jwt.verify(token, SECRET) as {
       email: string;
       tags?: string[];
+      displayName?: string;
     };
     return {
       success: true,
@@ -28,14 +29,6 @@ export const decodeToken = (token: string) => {
     }
   }
 };
-
-export const generateEmailToken = (
-  email: string,
-  expiresIn: "1h" | "72h" = "72h"
-) =>
-  jwt.sign({ email }, SECRET, {
-    expiresIn,
-  });
 
 export const generateUserToken = (data: {
   email: string;

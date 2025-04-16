@@ -1,11 +1,11 @@
-import { gmailTransport } from "./sendgridTransport";
+import { getSesTransport } from "./sendgridTransport";
 import { welcomeEmail } from "./templates/welcomeEmail";
 
 export const sendWelcomeEmail = (email: string, displayName?: string) => {
-  return gmailTransport
+  return getSesTransport()
     .sendMail({
-      from: "contacto@fixter.org",
-      subject: "Bienvenido a ",
+      from: "no-replay@easybits.cloud",
+      subject: "Bienvenid@ a EasyBits 🎉 📻",
       bcc: [email],
       html: welcomeEmail({ displayName }),
     })
