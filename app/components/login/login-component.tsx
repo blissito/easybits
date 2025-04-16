@@ -50,8 +50,6 @@ export default function LoginComponent({ state }: { state?: string }) {
 
   const isLoading = fetcher.state !== "idle";
 
-  console.log("FETCHER_DATA", fetcher.data);
-
   return (
     <section className="w-full border-[1px] border-black h-screen bg-cover bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
