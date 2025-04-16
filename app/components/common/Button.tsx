@@ -10,6 +10,7 @@ interface ButtonProps {
   type?: "button" | "submit";
   isDisabled?: boolean;
   className?: string;
+  [x: string]: unknown;
 }
 
 export const Button = ({

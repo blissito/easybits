@@ -227,7 +227,7 @@ export const EditAssetForm = ({
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
     <nav className="py-4 md:py-6 flex justify-end gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white">
-      <Link to="/dash/assets">
+      <Link prefetch="intent" to="/dash/assets">
         <BrutalButton mode="ghost" isDisabled={isLoading}>
           Cancelar
         </BrutalButton>

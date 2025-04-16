@@ -1,19 +1,47 @@
-import {
-  gmailTransport,
-  sendgridTransport,
-  // sesTransport,
-} from "./sendgridTransport";
+import { generateUserToken } from "~/utils/tokens";
+import { getSesTransport, gmailTransport } from "./sendgridTransport";
 import { confirmation } from "./templates/confirmation";
 import AWS from "aws-sdk";
+import { magic_link } from "./templates/magic_link";
 AWS.config.update({ region: "us-east-2" });
 
-export const sendConfrimation = (email: string, data: any, html?: string) => {
-  return sendgridTransport
+// EXAMPLE AMAZON REPLACING LINK: http://jls7lj7d.r.us-east-2.awstrack.me/L0/http:%2F%2Flocalhost:3000%2F%3Fintent=confirm_account%26token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZpeHRlcmdlZWtAZ21haWwuY29tIiwiaWF0IjoxNzQ0ODIyMDc2LCJleHAiOjE3NDUwODEyNzZ9.Ycfu9hqXderEKOsO34jFS3ewgjs9BqrfSmUMEw0tDXM/1/010f01963f800604-633ab96d-7fc6-4fc4-aed9-950ac8836f83-000000/smoa_w4iLPzncdB2qomLIl1Qh_k=207
+
+const isDev = process.env.NODE_ENV === "development";
+const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
+
+export const sendMagicLink = (email: string, data: any) => {
+  const magicToken = generateUserToken({ email });
+  const url = new URL(`${location}/api/v1/tokens`);
+  url.searchParams.set("intent", "magic_link");
+  url.searchParams.set("token", magicToken);
+  return getSesTransport()
     .sendMail({
-      from: "contacto@fixter.org",
+      from: "no-reply@easybits.cloud",
       subject: "👽 Confirmando que eres humano 🤖",
       bcc: [email],
-      html: confirmation({ link: `@todo link` }),
+      html: magic_link({ ...data, link: url.toString() }),
+    })
+    .then((result: unknown) => console.log(result))
+    .catch((e: Error) => console.error(e));
+};
+
+type SendConfirmationData = { displayName: string };
+export const sendConfrimation = (
+  email: string,
+  data: SendConfirmationData
+  // getTemplate?: (data: SendConfirmationData) => string
+) => {
+  const confirmationToken = generateUserToken({ email });
+  const url = new URL(`${location}/api/v1/tokens`);
+  url.searchParams.set("intent", "confirm_account");
+  url.searchParams.set("token", confirmationToken);
+  return getSesTransport()
+    .sendMail({
+      from: "no-reply@easybits.cloud",
+      subject: "👽 Confirmando que eres humano 🤖",
+      bcc: [email],
+      html: confirmation({ ...data, link: url.toString() }),
     })
     .then((result: unknown) => console.log(result))
     .catch((e: Error) => console.error(e));
@@ -26,8 +54,6 @@ export const sendNewsLetter = (options: {
   getTemplate: (data?: any) => string;
 }) => {
   const { getTemplate, subject, data, email } = options;
-  // return sendgridTransport
-  // return sesTransport
   return gmailTransport
     .sendMail({
       from: "contacto@fixter.org",
@@ -37,87 +63,4 @@ export const sendNewsLetter = (options: {
     })
     .then((r: unknown) => console.info("RESUT::", r))
     .catch((e: unknown) => console.error("ERROR::", e));
-  // return awsSendMail({
-  //   subject: subject || "👽 Confirmando que eres humano 🤖",
-  //   emails: [email],
-  //   getBody: () => getTemplate(data),
-  // });
-};
-
-type ParamsType = {
-  Destination: { CcAddresses: string[]; ToAddresses: string[] };
-  Message: any;
-  Source: string;
-  ReplyToAddresses: string[];
-};
-
-const params: ParamsType = {
-  Destination: {
-    /* required */
-    // CcAddresses: [
-    //   "EMAIL_ADDRESS",
-    //   /* more items */
-    // ],
-    // ToAddresses: [
-    //   "EMAIL_ADDRESS",
-    //   /* more items */
-    // ],
-  },
-  Message: {
-    /* required */
-    Body: {
-      /* required */
-      // Html: {
-      //   Charset: "UTF-8",
-      //   Data: "HTML_FORMAT_BODY",
-      // },
-      // Text: {
-      //   Charset: "UTF-8",
-      //   Data: "TEXT_FORMAT_BODY",
-      // },
-    },
-    Subject: {
-      Charset: "UTF-8",
-      Data: "Test email",
-    },
-  },
-  Source: "fixtergeek@gmail.com" /* required */,
-  ReplyToAddresses: [
-    "fixtergeek@gmail.com",
-    /* more items */
-  ],
-};
-
-// adapter
-type AWSSendMailOptions = {
-  emails: string[];
-  subject: string;
-  getBody?: () => string;
-};
-const getParams = (options: AWSSendMailOptions) => {
-  params.Destination.CcAddresses = options.emails;
-  params.Message.Subject.Data = options.subject;
-  params.Message.Body = {
-    Html: {
-      Charset: "UTF-8",
-      Data: options.getBody?.(),
-    },
-  };
-  return params;
-};
-
-const awsSendMail = (options: AWSSendMailOptions) => {
-  // Create the promise and SES service object
-  const promise = new AWS.SES({ apiVersion: "2010-12-01" })
-    .sendEmail(getParams(options))
-    .promise();
-
-  // Handle promise's fulfilled/rejected states
-  promise
-    .then(function (data) {
-      console.log("::SES::DATA::", data);
-    })
-    .catch(function (err) {
-      console.error(err, err.stack);
-    });
 };

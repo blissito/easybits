@@ -27,6 +27,25 @@ export const getUserOrNull = async (request: Request) => {
   return user;
 };
 
+export const setSessionCookie = async ({
+  email,
+  redirectURL = "/dash",
+  request,
+}: {
+  email: string;
+  redirectURL?: string;
+  request: Request;
+}) => {
+  const cookie = request.headers.get("Cookie");
+  const session = await getSession(cookie);
+  session.set("email", email);
+  throw redirect(redirectURL, {
+    headers: {
+      "set-cookie": await commitSession(session),
+    },
+  });
+};
+
 export const createUserSession = async (
   userData: {
     email: string;
@@ -38,7 +57,6 @@ export const createUserSession = async (
   request: Request,
   cb?: (user: User) => void
 ) => {
-  console.log("Redirection??", userData.redirectURL);
   const cookie = request.headers.get("Cookie");
   const session = await getSession(cookie);
   const host = userData.email.split("@")[0];

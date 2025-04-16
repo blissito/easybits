@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { Switch } from "./Switch";
 import { Input } from "~/components/common/Input";
 import { useEffect, useState, type ChangeEvent } from "react";
@@ -24,7 +23,7 @@ export const ExtraConfig = ({
   }, [state]);
 
   return (
-    <motion.section layout className="flex flex-col gap-4">
+    <section className="flex flex-col gap-4">
       <h2 className="text-2xl font-bold">Extras</h2>
       <Switch
         onChange={(on: boolean) => {
@@ -54,6 +53,6 @@ export const ExtraConfig = ({
         value={state.showReviews}
         label="Mostrar reseñas"
       />
-    </motion.section>
+    </section>
   );
 };
