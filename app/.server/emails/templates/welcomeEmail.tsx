@@ -1,4 +1,10 @@
-export const welcomeEmail = ({ displayName }: { displayName?: string }) => `
+export const welcomeEmail = ({
+  displayName,
+  link,
+}: {
+  link: string;
+  displayName?: string;
+}) => `
 <div style="font-family:Arial;background-color:#000000; ">
   <div style="background: #000000; margin: 0 auto; padding: 16px">
       <div
@@ -152,7 +158,7 @@ export const welcomeEmail = ({ displayName }: { displayName?: string }) => `
             ti! 🔥🚀
           </p>
 
-          <a href="https://www.easybits.cloud/dash" target="blank">
+          <a href="${link}" target="_blank">
             <div
               style="
                 background: black;
