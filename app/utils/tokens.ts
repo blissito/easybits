@@ -30,13 +30,16 @@ export const decodeToken = (token: string) => {
   }
 };
 
-export const generateUserToken = (data: {
-  email: string;
-  tags?: string[];
-  [x: string]: unknown;
-}) => {
+export const generateUserToken = (
+  data: {
+    email: string;
+    tags?: string[];
+    [x: string]: unknown;
+  },
+  expiresIn: "1h" | "7d" = "1h"
+) => {
   return jwt.sign(data, SECRET, {
-    expiresIn: "1h",
+    expiresIn,
   });
 };
 
