@@ -22,8 +22,6 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
           className="bg-black"
           items={asset.gallery.map((src) => ({
             src,
-            text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
-            name: "pelusina",
           }))}
         />
         <div className="grid grid-cols-8 border-t-[2px] border-black">

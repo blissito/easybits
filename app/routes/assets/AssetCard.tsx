@@ -22,7 +22,7 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
         <Link to={`${asset.id}/edit`} className="">
           <img
             className="h-[180px] object-cover w-full flex-grow-0"
-            src={asset.gallery?.[0] || "/client.png"}
+            src={asset.gallery?.[0] || "/images/easybits-default.webp"}
             alt="cover"
           />
           <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3 h-full">

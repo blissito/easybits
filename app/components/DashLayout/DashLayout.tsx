@@ -17,7 +17,7 @@ export default function DashLayout({
   loaderData: { user },
 }: Route.ComponentProps) {
   return (
-    <main className="flex relative z-10 min-h-screen">
+    <main className="flex relative  min-h-screen">
       <HeaderMobile />
       <SideBar />
       <Outlet />
