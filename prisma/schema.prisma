@@ -80,7 +80,7 @@ model User {
   displayName    String?
   email          String       @unique
   host           String?      @unique
-  verified_email Boolean      @default(false)
+  verified_email Boolean?
   picture        String?
   phoneNumber    String?
   roles          String[]
