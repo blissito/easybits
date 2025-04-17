@@ -28,7 +28,7 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
     data: { stripe: account },
   });
 
-  return { account };
+  return { account, updatedUser };
 };
 
 export default function Stripe() {
