@@ -9,6 +9,7 @@ import { useState, type FormEvent } from "react";
 import { Input } from "../common/Input";
 import { motion, AnimatePresence } from "motion/react";
 import { Form, useFetcher } from "react-router";
+import Spinner from "../common/Spinner";
 
 export default function LoginComponent({ state }: { state?: string }) {
   const fetcher = useFetcher();
@@ -178,6 +179,7 @@ export default function LoginComponent({ state }: { state?: string }) {
                 </p>
               </motion.form>
             )}
+            {isLoading && <Spinner />}
             {fetcher.data?.state === "confirmation_success" && (
               <p className="text-white text-2xl">
                 Te hemos enviado un correo de confirmación.

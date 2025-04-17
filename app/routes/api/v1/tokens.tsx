@@ -31,6 +31,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       displayName: tokenData.displayName,
       confirmed: true,
     };
+    console.log("Data", data);
     await db.user.upsert({
       where: { email: tokenData.email },
       update: data,

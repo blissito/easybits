@@ -11,7 +11,7 @@ const isDev = process.env.NODE_ENV === "development";
 const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
 export const sendMagicLink = (email: string, data: any) => {
-  const magicToken = generateUserToken({ email, ...data });
+  const magicToken = generateUserToken({ ...data, email });
   const url = new URL(`${location}/api/v1/tokens`);
   url.searchParams.set("intent", "magic_link");
   url.searchParams.set("token", magicToken);
@@ -32,7 +32,7 @@ export const sendConfrimation = (
   data: SendConfirmationData
   // getTemplate?: (data: SendConfirmationData) => string
 ) => {
-  const confirmationToken = generateUserToken({ email });
+  const confirmationToken = generateUserToken({ ...data, email });
   const url = new URL(`${location}/api/v1/tokens`);
   url.searchParams.set("intent", "confirm_account");
   url.searchParams.set("token", confirmationToken);
