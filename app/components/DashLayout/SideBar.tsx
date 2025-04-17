@@ -14,6 +14,7 @@ interface MenuItemProps {
   isLogo?: boolean;
   end?: boolean;
   index?: number;
+  isCurrentActive?: boolean;
 }
 
 export const SideBar = () => {
@@ -30,12 +31,23 @@ export const SideBar = () => {
 const SideBarWeb = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scope, animate] = useAnimate();
+  const location = useLocation();
+
   return (
     <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2 flex-col gap-4">
-      <SideBarItem isLogo={true} />
+      <SideBarItem isLogo />
       <ul className="flex flex-col gap-3 pt-2 pb-0 items-center">
         {ITEMS.navItems.map((item, key) => (
-          <SideBarItem key={key} {...item} isOpen={isOpen} />
+          <SideBarItem
+            isCurrentActive={
+              item.title === "Assets"
+                ? location.pathname.includes(item.path)
+                : undefined
+            }
+            key={key}
+            {...item}
+            isOpen={isOpen}
+          />
         ))}
       </ul>
       <hr className="bg-white opacity-20 h-[1px] w-full" />
@@ -53,13 +65,17 @@ const SideBarWeb = () => {
   );
 };
 
-const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
-  const [isActive, setIsActive] = useState(false);
+const SideBarItem = ({
+  isCurrentActive = false,
+  title,
+  path = "",
+  icon,
+  isLogo,
+}: MenuItemProps) => {
   const location = useLocation();
-
-  useEffect(() => {
-    setIsActive(location.pathname === path);
-  }, [location.pathname, path]);
+  const [isActive, setIsActive] = useState(
+    isCurrentActive || location.pathname === path
+  );
 
   const [scope, animate] = useAnimate();
   const handleMouseEnter = () => {
