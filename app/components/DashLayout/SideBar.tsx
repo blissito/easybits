@@ -6,10 +6,10 @@ import { cn } from "~/utils/cn";
 import Logo from "/icons/eyes-logo-purple.svg";
 
 interface MenuItemProps {
-  path: string;
-  icon: ReactNode;
+  path?: string;
+  icon?: ReactNode;
   iconSize?: number;
-  title: string | ReactNode;
+  title?: string | ReactNode;
   isOpen?: boolean;
   isLogo?: boolean;
   end?: boolean;
@@ -19,20 +19,17 @@ interface MenuItemProps {
 
 export const SideBar = () => {
   return (
-    <section>
-      <div className="fixed right-4 bottom-0 z-20 block md:hidden  ">
+    <>
+      <section className="fixed right-4 bottom-0 z-20 block md:hidden  ">
         <FoldMenu />
-      </div>
+      </section>
       <SideBarWeb />
-    </section>
+    </>
   );
 };
 
 const SideBarWeb = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scope, animate] = useAnimate();
   const location = useLocation();
-
   return (
     <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2 flex-col gap-4">
       <SideBarItem isLogo />
@@ -46,19 +43,18 @@ const SideBarWeb = () => {
             }
             key={key}
             {...item}
-            isOpen={isOpen}
           />
         ))}
       </ul>
       <hr className="bg-white opacity-20 h-[1px] w-full" />
       <ul className="flex flex-col gap-3 py-0 items-center">
         {ITEMS.sectionItems.map((item, key) => (
-          <SideBarItem key={key} {...item} isOpen={isOpen} />
+          <SideBarItem key={key} {...item} />
         ))}
       </ul>
       <ul className="flex flex-col items-center pb-0 gap-3 w-full mt-auto">
         {ITEMS.bottomItems.map((item, key) => (
-          <SideBarItem key={key} {...item} isOpen={isOpen} />
+          <SideBarItem key={key} {...item} />
         ))}
       </ul>
     </section>
