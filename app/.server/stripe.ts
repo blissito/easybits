@@ -1,4 +1,5 @@
 import { Stripe } from "stripe";
+import { config } from "./config";
 
 export const getPublishableKey = () => process.env.STRIPE_PUBLISHABLE_KEY;
 
@@ -10,7 +11,7 @@ export const getStripe = (key?: string) => {
   return stripe;
 };
 const isDev = process.env.NODE_ENV === "development";
-const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud"; // @todo move to envs?
+const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud"; // @todo move to envs? // we have this in ./config file
 
 export const createPortalSessionURL = (customer?: string | null) => {
   if (!customer) return null;
@@ -61,6 +62,9 @@ export const getStripeCheckout = async (options: {
   return session.url || "/404";
 };
 
+/*
+ * create account session
+ */
 export const createAccountSession = async ({ account }) => {
   try {
     const accountSession = await getStripe().accountSessions.create({
@@ -71,7 +75,6 @@ export const createAccountSession = async ({ account }) => {
         notification_banner: { enabled: true },
       },
     });
-    console.log({ accountSession });
     return accountSession.client_secret;
   } catch (error) {
     console.error(
@@ -82,6 +85,10 @@ export const createAccountSession = async ({ account }) => {
   }
 };
 
+/**
+ *
+ * create account
+ */
 export const createAccount = async () => {
   try {
     const account = await getStripe().accounts.create({
@@ -107,4 +114,43 @@ export const createAccount = async () => {
     );
     throw error.message;
   }
+};
+
+/**
+ * create checkout session
+ */
+
+// Set your secret key. Remember to switch to your live secret key in production.
+// See your keys here: https://dashboard.stripe.com/apikeys
+
+export const createCheckoutSession = async ({ stripeAccount, asset }) => {
+  const { slug, price, title, currency } = asset;
+  const applicationFee = price * 0.1 * 100;
+  const session = await getStripe().checkout.sessions.create(
+    {
+      line_items: [
+        {
+          price_data: {
+            currency: currency,
+            product_data: {
+              name: title || slug,
+            },
+            unit_amount: 1000,
+          },
+          quantity: 1,
+        },
+      ],
+      payment_intent_data: {
+        application_fee_amount: applicationFee,
+      },
+      mode: "payment",
+      ui_mode: "embedded",
+      return_url: `${config.baseUrl}/p/${slug}?session_id={CHECKOUT_SESSION_ID}`,
+    },
+    {
+      stripeAccount,
+    }
+  );
+
+  return session;
 };
