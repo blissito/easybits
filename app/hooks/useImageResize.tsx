@@ -1,7 +1,26 @@
+import { useState } from "react";
+
 export const useImageResize = (options?: {
   callback?: (blob: Blob, success: boolean) => Promise<void>;
 }) => {
   const { callback } = options || {};
+  const [blob, setBlob] = useState<Blob | null>(null);
+
+  const getDimensions = (
+    imageNode: HTMLImageElement,
+    maxDimensions: { width: number; height: number }
+  ) => {
+    let width = imageNode.width;
+    let height = imageNode.height;
+    if (width >= height && width > maxDimensions.width) {
+      height *= maxDimensions.width / width;
+      width = maxDimensions.width;
+    } else if (height > maxDimensions.height) {
+      width *= maxDimensions.height / height;
+      height = maxDimensions.height;
+    }
+    return [width, height];
+  };
 
   const resize = async (
     file: File | Blob,
@@ -31,42 +50,30 @@ export const useImageResize = (options?: {
     }
 
     imageNode.onload = () => {
-      let width = imageNode.width;
-      let height = imageNode.height;
-      let isTooLarge = false;
-
-      if (width >= height && width > maxDimensions.width) {
-        // width is the largest and too much.
-        height *= maxDimensions.width / width;
-        width = maxDimensions.width;
-        isTooLarge = true;
-      } else if (height > maxDimensions.height) {
-        // height is oversized
-        width *= maxDimensions.height / height;
-        height = maxDimensions.height;
-        isTooLarge = true;
-      }
-      if (!isTooLarge) {
-        // no need to resize
-        callback?.(file, false);
-      }
+      const [width, height] = getDimensions(imageNode, maxDimensions);
       // actual work:
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      const canvas = Object.assign(document.createElement("canvas"), {
+        width,
+        height,
+      });
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(imageNode, 0, 0, width, height);
       // only if blob support
       // canvas.toBlob((blob) => callback?.(blob!, true), file.type); // @todo optional
-      const du = canvas.toDataURL("image/webp", 0.5);
+      const du = canvas.toDataURL("image/webp", 0.5); // mid quality
       fetch(du)
         .then((r) => r.blob())
-        .then((b) => callback?.(b, true));
+        .then((b) => {
+          setBlob(b);
+          callback?.(b, true);
+        });
     };
   };
-  // var file = new File([myBlob], "name");
 
   return {
     resize,
+    blob,
   };
 };
+
+// var file = new File([myBlob], "name");

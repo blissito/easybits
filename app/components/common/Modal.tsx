@@ -18,7 +18,7 @@ export const Modal = ({
   block?: boolean;
   footer?: ReactNode;
   noCloseButton?: boolean;
-  mode?: "overlay" | "naked";
+  mode?: "overlay" | "naked" | "drawer";
   className?: string;
   containerClassName?: string;
   onClose?: () => void;
@@ -50,6 +50,61 @@ export const Modal = ({
     };
   }, [isOpen]);
 
+  const getForModal = (type: string) => {
+    switch (type) {
+      case "exit":
+        return {
+          y: 10,
+          filter: "blur(4px)",
+          opacity: 0,
+        };
+      case "initial":
+        return {
+          y: 10,
+          filter: "blur(4px)",
+          opacity: 0,
+        };
+      case "animate":
+        return {
+          y: 0,
+          filter: "blur(0px)",
+          opacity: 1,
+        };
+    }
+  };
+
+  const getForDrawer = (type: string) => {
+    switch (type) {
+      case "exit":
+        return {
+          x: 10,
+          filter: "blur(4px)",
+          opacity: 0,
+        };
+      case "initial":
+        return {
+          x: 10,
+          filter: "blur(4px)",
+          opacity: 0,
+        };
+      case "animate":
+        return {
+          x: 0,
+          filter: "blur(0px)",
+          opacity: 1,
+        };
+    }
+  };
+
+  const getProps = (type: string) => {
+    switch (mode) {
+      case "drawer":
+        return getForDrawer(type);
+      default:
+        return getForModal(type);
+    }
+  };
+
   return (
     <AnimatePresence mode="popLayout">
       {isOpen ? (
@@ -62,37 +117,26 @@ export const Modal = ({
             {
               "inset-0 overflow-y-auto": mode !== "naked",
               "place-content-end p-3": mode === "naked",
-              "bottom-0 right-0": mode === "naked",
+              "bottom-0 right-0": mode === "naked" || mode === "drawer",
             },
             containerClassName
           )}
         >
-          {mode === "overlay" && (
-            <motion.article
-              onClick={onClose}
-              className="grid-overlay absolute inset-0 "
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            />
-          )}
+          {mode === "overlay" ||
+            (mode === "drawer" && (
+              <motion.article
+                onClick={onClose}
+                className="grid-overlay absolute inset-0 "
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              />
+            ))}
           <motion.section
             onClick={(e) => e.stopPropagation()}
-            exit={{
-              y: 10,
-              filter: "blur(4px)",
-              opacity: 0,
-            }}
-            initial={{
-              y: 10,
-              filter: "blur(4px)",
-              opacity: 0,
-            }}
-            animate={{
-              y: 0,
-              filter: "blur(0px)",
-              opacity: 1,
-            }}
+            exit={getProps("exit")}
+            initial={getProps("initial")}
+            animate={getProps("animate")}
             className={cn(
               "bg-white",
               "border-2 border-black",
@@ -101,6 +145,8 @@ export const Modal = ({
               "max-w-[600px]  mx-auto  md:w-[600px] lg:min-w-[600px]",
               {
                 "min-h-[0px] max-w-[300px]": mode === "naked",
+                "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute":
+                  mode === "drawer",
               },
               className
             )}

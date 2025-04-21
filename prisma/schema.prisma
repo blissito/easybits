@@ -130,3 +130,20 @@ model File {
   updatedAt             DateTime   @updatedAt
   // ^ auto-dates
 }
+
+model Client {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  email       String
+  displayName String
+
+  phone       String?
+  address     String?
+  companyName String?
+  comments    String?
+  assets      String[] @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // ^ auto-dates
+}

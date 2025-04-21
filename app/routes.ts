@@ -54,6 +54,7 @@ export default [
     route("conversion_webhook", "routes/api/v1/conversion_webhook.tsx"),
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
+    route("clients", "routes/api/v1/clients.tsx"),
     route("files", "routes/api/v1/files.tsx"),
     route("utils", "routes/api/v1/utils.tsx"),
     route("uploads/:storageKey", "routes/api/v1/direct-upload-edit.ts"),
