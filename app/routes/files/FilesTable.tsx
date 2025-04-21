@@ -105,8 +105,8 @@ export const FilesTable = ({
           {/* <span className="">Fuente</span> */}
           <span className="hidden md:block">Asset</span>
           <span>Tipo</span>
-          <span className="col-span-2 md:col-span-1 ">Privacidad</span>
-          <span className="col-span-2 ">HLS</span>
+          <span className="col-span-2  lg:col-span-1 ">Privacidad</span>
+          <span className="col-span-2 hidden lg:block">HLS</span>
           <span className="">Link</span>
           <span className=""></span>
         </section>
@@ -131,7 +131,7 @@ export const FilesTable = ({
               <span className="">
                 <input
                   type="checkbox"
-                  className="text-brand-500 focus:outline-brand-500"
+                  className="text-brand-500 border rounded focus:outline-brand-500 border-black"
                 />
               </span>
               <button
@@ -173,7 +173,7 @@ export const FilesTable = ({
                   }}
                 />
               </span>
-              <span className="col-span-2 md:col-span-1 flex items-center">
+              <span className="col-span-2 lg:col-span-1 flex items-center">
                 {file.access === "private" ? (
                   <span className="bg-brand-aqua rounded-full py-px px-1 border border-black">
                     Privado
@@ -184,7 +184,7 @@ export const FilesTable = ({
                   </span>
                 )}
               </span>
-              <span className="col-span-2 flex flex-wrap gap-px items-start">
+              <span className="col-span-2  flex-wrap gap-px items-start hidden lg:flex">
                 {file.contentType.includes("video") &&
                   file.versions?.length > 0 && (
                     <HLSVersions versions={file.versions} />

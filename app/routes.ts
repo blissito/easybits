@@ -17,6 +17,7 @@ export default [
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/blog", "routes/blog.tsx"),
+  route("/terminos-y-condiciones", "routes/terminos.tsx"),
   route("/blogPost", "routes/blogPost.tsx"),
   // public video link @todo revisit private only? tokens?
   route("/videos/:storageKey", "routes/videos/public.tsx"),
@@ -41,6 +42,7 @@ export default [
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
+      route("websites", "routes/dash/websites.tsx"),
     ]),
   ]),
   // multipar upload

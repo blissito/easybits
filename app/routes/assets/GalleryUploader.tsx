@@ -6,6 +6,8 @@ import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { useUploader } from "~/hooks/useUploader";
+import { ImageIcon } from "~/components/icons/image";
+import { useImageResize } from "~/hooks/useImageResize";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -18,7 +20,6 @@ export const GalleryUploader = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
-  // const [links, setLinks] = useState<string[]>([]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -49,20 +50,40 @@ export const GalleryUploader = ({
     setFiles(fls);
   };
 
-  const fetcher = useFetcher();
   const { upload, links, onRemove } = useUploader({
     assetId: asset.id,
     defaultLinks: asset.gallery,
-    // async onLinksUpdated(lks) {
-    //   fetcher.submit(
-    //     {
-    //       intent: "update_asset_gallery_links",
-    //       data: JSON.stringify({ gallery: lks, id: asset.id }),
-    //     },
-    //     { method: "post", action: "/api/v1/assets" }
-    //   );
-    // },
   });
+
+  const { resize } = useImageResize({
+    async callback(blob) {
+      // 1. get put url & update model?
+      const response = await fetch("/api/v1/assets", {
+        method: "post",
+        body: new URLSearchParams({
+          intent: "get_put_file_url",
+          fileName: "metaImage",
+          assetId: asset.id,
+        }),
+      });
+      const putURL = await response.text();
+      // 2. upload
+      await fetch(putURL, {
+        method: "put",
+        body: blob,
+        headers: {
+          "content-type": blob.type,
+        },
+      });
+      // console.info("metaImage updated");
+      // 3. update model... no need... because of name conventions
+    },
+  });
+  const uploadMetaImage = async () => {
+    const link = links[0];
+    if (!link) return;
+    resize({ link });
+  };
 
   useEffect(() => {
     if (files.length < 1) return;
@@ -72,13 +93,14 @@ export const GalleryUploader = ({
       await Promise.all(promises);
     };
     asyncUpload();
+    uploadMetaImage();
   }, [files]);
 
   const canUpload = limit > links.length;
 
   return (
     <article className="">
-      <h2 className="mt-8 mb-2">Galería y miniatura principal</h2>
+      <h2 className="mt-5 mb-2">Galería y miniatura principal</h2>
 
       <section
         className="overflow-auto"
@@ -87,7 +109,6 @@ export const GalleryUploader = ({
       >
         {links.length < 1 && canUpload && (
           <motion.button
-            whileHover={{ scale: 1.2 }}
             layoutId="upload_button"
             onClick={() => fileInputRef.current?.click()}
             onDragEnter={handleDragEnter}
@@ -96,29 +117,29 @@ export const GalleryUploader = ({
             type="button"
             className={cn(
               "w-full",
-              "flex gap-3 border-dashed border-[1px] rounded-2xl py-11 justify-center items-center border-black",
+              "flex gap-3 border-dashed border-[1px] p-4 hover:border-brand-500 rounded-2xl py-11 justify-center items-center border-iron",
               {
                 "border-iron": isHovered === "hover",
                 "border-brand-500": isHovered === "dropping",
               }
             )}
           >
-            <span
-              className={cn("text-4xl text-brand-gray", {
-                "text-black": isHovered === "hover",
-                "text-brand-500": isHovered === "dropping",
-              })}
-            >
-              <LuImageUp />
-            </span>
+            {/* <img
+              className={cn("w-8 aspect-square", {})}
+              src="/icons/image-upload.svg"
+              alt="upload illustration"
+            /> */}
+            <ImageIcon
+              className="w-8 h-"
+              fill={isHovered ? "#9870ED" : " #6A6966"}
+            />
             <p
-              className={cn("max-w-md text-brand-gray", {
-                "text-black": isHovered === "hover",
-                "text-brand-500": isHovered === "dropping",
+              className={cn("max-w-md text-brand-gray text-left text-sm", {
+                "text-brand-500": isHovered === "hover",
               })}
             >
               Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o
-              sube hasta 50 archivos con un peso máximo de 1 TB en total.
+              sube hasta 50 archivos con un peso máximo de 250 mb en total.
             </p>
           </motion.button>
         )}
@@ -169,11 +190,9 @@ const RowGalleryEditor = ({
             onClick={onClick}
             layoutId="upload_button"
             type="button"
-            className="grid place-items-center border-2 rounded-2xl border-dashed aspect-square h-[100px]"
+            className="grid place-items-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square  max-w-[144px] min-w-[144px]"
           >
-            <span className={cn("text-4xl text-brand-gray")}>
-              <LuImageUp />
-            </span>
+            <img className="w-8 h-8" src="/icons/image-upload.svg" />
           </motion.button>
         )}
       </LayoutGroup>

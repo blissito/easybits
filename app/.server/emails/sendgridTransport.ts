@@ -1,7 +1,6 @@
 import nodemailer from "nodemailer";
-import aws from "@aws-sdk/client-ses";
-import { defaultProvider } from "@aws-sdk/credential-provider-node";
-// import { getDefaultRoleAssumerWithWebIdentity } from "@aws-sdk/client-sts";
+import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
+// import { defaultProvider } from "@aws-sdk/credential-provider-node";
 
 export const sendgridTransport = nodemailer.createTransport({
   host: "smtp.sendgrid.net",
@@ -23,37 +22,23 @@ export const gmailTransport = nodemailer.createTransport({
   },
 });
 
-// const ses = new aws.SES({
-//   apiVersion: "2010-12-01",
-//   // region: "us-east-2",
-//   region: "mx-central-1",
-//   defaultProvider,
-// });
-export const sesTransport = nodemailer.createTransport({
-  // SES: { ses, aws },
-  // sendingRate: 1,
-  host: process.env.SMTP_HOST, // Replace with your region's SMTP endpoint
-  port: process.env.NODE_ENV === "development" ? 587 : 465, // TLS port (use 465 for SSL)
-  secure: process.env.NODE_ENV === "development" ? false : true, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER, // Your SES SMTP username
-    pass: process.env.SMTP_PASSWORD, // Your SES SMTP password
-  },
-});
-
-// transporter.sendMail(
-//   {
-//     from: "sender@example.com",
-//     to: "recipient@example.com",
-//     subject: "Message",
-//     text: "I hope this message gets sent!",
-//     ses: {
-//       // optional extra arguments for SendRawEmail
-//       Tags: [
-//         {
-//           Name: "tag_name",
-//           Value: "tag_value",
-//         },
-//       ],
-//     },
-//   },
+let sesClient;
+const getSesClient = () => {
+  // @ts-ignore
+  sesClient ??= new SESClient({
+    region: process.env.SES_REGION,
+    credentials: {
+      accessKeyId: process.env.SES_KEY,
+      secretAccessKey: process.env.SES_SECRET,
+    },
+  });
+  return sesClient;
+};
+export const getSesTransport = () => {
+  return nodemailer.createTransport({
+    SES: {
+      ses: getSesClient(),
+      aws: { SendRawEmailCommand },
+    },
+  });
+};

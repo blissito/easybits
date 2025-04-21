@@ -46,9 +46,8 @@ export const Switch = ({
         )}
       >
         <motion.div
-          transition={{ duration: 0.25 }}
           layout
-          className="border-black bg-white rounded-full w-4 h-4 border"
+          className="border-black bg-white rounded-full w-4 h-4 border transition-all"
         />
       </div>
       <span>{label}</span>

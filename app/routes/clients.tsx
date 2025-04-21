@@ -5,14 +5,15 @@ import { cn } from "~/utils/cn";
 import { Track } from "livekit-client";
 import { ClientsTable } from "./clients/ClientsTable";
 
-const LAYOUT_PADDING = "py-6 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
+const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export default function Clients() {
   return (
     <>
       <article
         className={cn(
-          " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pr-[5%] md:pl-[10%] xl:px-0",
+          " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0 ",
+
           LAYOUT_PADDING
         )}
       >

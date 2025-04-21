@@ -3,7 +3,7 @@ import { FilesForm } from "./FilesForm";
 import { AnimatePresence } from "motion/react";
 import { ActiveUploads } from "./Uploads";
 import { useUploadManager } from "~/hooks/useUploadManager";
-import { useNavigate, useSubmit } from "react-router";
+import { useSubmit } from "react-router";
 
 export const FilesFormModal = ({
   isOpen,
@@ -34,7 +34,7 @@ export const FilesFormModal = ({
     <AnimatePresence>
       <Modal
         key="selector"
-        containerClassName="z-30"
+        containerClassName="z-50"
         isOpen={isOpen}
         title={"Sube tus archivos"}
         onClose={onClose}

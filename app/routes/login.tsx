@@ -5,13 +5,13 @@ import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
 import { destroySession, getSession, redirectCookie } from "~/.server/sessions";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
-import type { User } from "@prisma/client";
+import {
+  sendConfrimation,
+  sendMagicLink,
+} from "~/.server/emails/sendNewsLetter";
+import { db } from "~/.server/db";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  // const user = await getUserOrNull(request);
-  // if (user) {
-  // throw rrRedirect("/dash"); // @todo revisit
-  // }
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const auth = url.searchParams.get("auth");
@@ -26,9 +26,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       },
     });
   }
-  // util
-  const getRedirectCookie = async (request: Request) =>
-    (await redirectCookie.parse(request.headers.get("Cookie"))) || {};
 
   const setRedirectCookie = async (request: Request, redirect: string) => {
     const cookieHeader = request.headers.get("Cookie");
@@ -84,15 +81,23 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export const action = async ({ request }: Route.ClientActionArgs) => {
   const formData = await request.formData();
   const auth = formData.get("auth");
-  // save url?
   switch (auth) {
     case "stripe":
       return rrRedirect(getStripeURL());
     case "google":
       return rrRedirect(getGoogleURL());
-    case "email-pass":
-      // @todo auth handler
-      return { message: "Login with email/pass" };
+    case "email_signup":
+      // @todo email_magic_link
+      const email = formData.get("email") as string;
+      const displayName = formData.get("displayName") as string;
+      const exists = await db.user.findUnique({ where: { email } });
+      if (exists && exists.confirmed) {
+        // @todo send login-magic-link
+        await sendMagicLink(email, { displayName });
+        return { state: "success" };
+      }
+      await sendConfrimation(email, { displayName });
+      return { state: "confirmation_success" };
     default:
       return { error: "Error" };
   }
@@ -104,6 +109,6 @@ export const meta = () =>
     description: "Elige tu plan y vende tu primer asset",
   });
 
-export default function Login({ loaderData }: Route.ComponentProps) {
+export default function Login() {
   return <LoginComponent />;
 }

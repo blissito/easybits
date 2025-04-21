@@ -26,8 +26,8 @@ export const PriceInput = ({
 
   return (
     <section>
-      <h2 className="text-2xl">Precio</h2>
-      <p className="pt-2 pb-0">Establece el precio de tu Asset digital</p>
+      <h2 className="text-2xl font-bold">Precio</h2>
+      <p className="pt-2 pb-2">Ponle precio a tu asset</p>
       <div className="flex items-center gap-4">
         <Input
           className="flex-1 "
@@ -42,7 +42,7 @@ export const PriceInput = ({
         <select
           onChange={(e) => onCurrencyChange(e.currentTarget.value)}
           defaultValue={defaultCurrency}
-          className="rounded-2xl h-12 bg-black border-none text-white focus:ring-0"
+          className="rounded-xl h-12 bg-black border-none text-white focus:ring-0"
         >
           <option value="usd">USD</option>
           <option value="mxn">MXN</option>

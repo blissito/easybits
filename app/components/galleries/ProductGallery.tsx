@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "~/utils/cn";
 
 type Item = {
-  name: string;
-  text: string;
+  name?: string;
+  text?: string;
   src: string;
 };
 
@@ -20,7 +20,11 @@ export const ProductGallery = ({
 
   const change = () => {
     timeout.current && clearTimeout(timeout.current);
-    setCurrentIndex((i) => (i + 1) % 3);
+    setCurrentIndex((i) => (i + 1) % items.length);
+    timeout.current = setTimeout(change, 3000);
+  };
+  const start = () => {
+    timeout.current && clearTimeout(timeout.current);
     timeout.current = setTimeout(change, 3000);
   };
   const pause = () => timeout.current && clearTimeout(timeout.current);
@@ -30,7 +34,7 @@ export const ProductGallery = ({
   };
 
   useEffect(() => {
-    change();
+    start();
   }, []);
 
   return (
@@ -42,16 +46,22 @@ export const ProductGallery = ({
         className
       )}
     >
-      <div className="">
-        {items.length < 2 ? (
-          <img className="object-contain h-full" src={items[0].src} />
-        ) : (
+      <div className="w-full h-full">
+        {items.length == 0 ? (
+          <img
+            className="object-contain h-full w-full"
+            src="/images/easybits-default.webp"
+          />
+        ) : items.length == 1 ? (
+          <img className="object-cover h-full w-full" src={items[0].src} />
+        ) : items.length >= 2 ? (
           <ImageItem
+            items={items.map((i) => i.name)} // esto se puede evitar
             item={items[currentIndex]}
             onClick={(index) => setCurrentIndex(index)}
             currentIndex={currentIndex}
           />
-        )}
+        ) : null}
       </div>
     </section>
   );
@@ -61,40 +71,39 @@ const ImageItem = ({
   item = {} as Item,
   onClick,
   currentIndex,
+  items,
 }: {
   currentIndex: number;
   onClick?: (arg0: number) => void;
   item: Item;
+  items: string[];
 }) => {
   return (
     <AnimatePresence mode="popLayout">
       <section className="flex items-center justify-between h-[280px] md:h-[600px] w-full relative ">
         <section className=" absolute flex w-full z-30 justify-center bottom-4 md:bottom-10 gap-2">
-          <DotButton
-            currentIndex={currentIndex}
-            index={0}
-            onClick={() => onClick?.(0)}
-          />
-          <DotButton
-            currentIndex={currentIndex}
-            index={1}
-            onClick={() => onClick?.(1)}
-          />
-          <DotButton
-            currentIndex={currentIndex}
-            index={2}
-            onClick={() => onClick?.(2)}
-          />
+          {items.map((_, i) => (
+            <DotButton
+              index={i}
+              currentIndex={currentIndex}
+              key={i}
+              onClick={() => onClick?.(i)}
+            />
+          ))}
         </section>
 
         <motion.img
-          initial={{ x: 30, opacity: 0, filter: "blur(4px)" }}
+          initial={{
+            x: 30,
+            opacity: 1,
+            filter: "blur(4px)",
+          }}
           animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
           exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
           key={item.src}
-          className="w-full h-full object-contain object-bottom"
+          className="w-full h-full object-cover object-center bg-black"
           src={item.src}
-          alt="user"
+          alt="asset"
         />
       </section>
     </AnimatePresence>

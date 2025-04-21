@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { Switch } from "./Switch";
 import { Input } from "~/components/common/Input";
 import { useEffect, useState, type ChangeEvent } from "react";
@@ -14,6 +13,7 @@ export const ExtraConfig = ({
   onChange?: (arg0: Extra) => void;
   extra: Extra;
 }) => {
+  const [isStockActive, setIsStockActive] = useState(false);
   const [state, setState] = useState(extra || { stock: 0 });
   const handleChange = (field: string) => (value: boolean | string) =>
     setState((st) => ({ ...st, [field]: value }));
@@ -23,16 +23,17 @@ export const ExtraConfig = ({
   }, [state]);
 
   return (
-    <motion.section layout className="flex flex-col gap-4">
-      <h2 className="text-2xl">Extras</h2>
+    <section className="flex flex-col gap-4">
+      <h2 className="text-2xl font-bold">Extras</h2>
       <Switch
         onChange={(on: boolean) => {
+          setIsStockActive(on);
           setState((st) => ({ ...st, stock: on ? 10 : 0 }));
         }}
         value={state.stock > 0}
         label="Limitar el número de ventas"
       />
-      {Number(state.stock) > 0 && (
+      {isStockActive && (
         <Input
           value={state.stock}
           onChange={(ev: ChangeEvent<HTMLInputElement>) =>
@@ -52,6 +53,6 @@ export const ExtraConfig = ({
         value={state.showReviews}
         label="Mostrar reseñas"
       />
-    </motion.section>
+    </section>
   );
 };

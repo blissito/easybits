@@ -12,6 +12,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
+import { useImageResize } from "~/hooks/useImageResize";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -76,6 +77,16 @@ export const EditAssetForm = ({
   const [form, setForm] = useState<Asset>(asset);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // resize
+  const { resize } = useImageResize({
+    async callback(blob) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "metaImage.webp";
+      a.click();
+    },
+  });
+
   const setState = (obj: {
     [x: string]:
       | number
@@ -111,9 +122,6 @@ export const EditAssetForm = ({
       return;
     }
 
-    // console.log("Data", form);
-    // return;
-
     fetcher.submit(
       {
         data: JSON.stringify({ ...form, slug: asset.slug, id: asset.id }),
@@ -143,12 +151,13 @@ export const EditAssetForm = ({
     <article className="w-full px-4">
       <LayoutGroup>
         <Form onSubmit={handleSubmit} className="bg-white w-full">
-          <h2 className="text-2xl my-4">Detalles de tu Asset</h2>
+          <h2 className="text-2xl mt-6 mb-4 font-bold">Detalles de tu Asset</h2>
           <Input
             defaultValue={asset.title}
             onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
             label="Título"
             name="title"
+            className="mb-6"
           />
 
           <Input
@@ -156,6 +165,7 @@ export const EditAssetForm = ({
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
             label="Tags"
             placeholder="curso, programación"
+            className="mb-3"
           />
           <MarkEditor
             defaultValue={asset.description}
@@ -216,8 +226,8 @@ export const EditAssetForm = ({
 
 const Footer = ({ isLoading }: { isLoading?: boolean }) => {
   return (
-    <nav className="mb-8 flex justify-end gap-4 sticky bottom-4 mr-16">
-      <Link to="/dash/assets">
+    <nav className="py-4 md:py-6 flex justify-end gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white">
+      <Link prefetch="intent" to="/dash/assets">
         <BrutalButton mode="ghost" isDisabled={isLoading}>
           Cancelar
         </BrutalButton>
@@ -230,5 +240,5 @@ const Footer = ({ isLoading }: { isLoading?: boolean }) => {
 };
 
 const HR = () => {
-  return <hr className="my-10" />;
+  return <hr className="my-8" />;
 };

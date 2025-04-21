@@ -15,14 +15,14 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
           "group bg-white rounded-xl transition-all",
           "flex flex-col",
-          "border border-black rounded-2xl",
+          "border-2 border-black rounded-2xl",
           "overflow-hidden"
         )}
       >
         <Link to={`${asset.id}/edit`} className="">
           <img
             className="h-[180px] object-cover w-full flex-grow-0"
-            src={asset.gallery?.[0] || "/client.png"}
+            src={asset.gallery?.[0] || "/images/easybits-default.webp"}
             alt="cover"
           />
           <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3 h-full">

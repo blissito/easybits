@@ -5,6 +5,7 @@ import type { User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
 import { createHost } from "~/lib/fly_certs/certs_getters";
+import { sendWelcomeEmail } from "./emails/sendWelcome";
 
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
@@ -26,17 +27,36 @@ export const getUserOrNull = async (request: Request) => {
   return user;
 };
 
+export const setSessionCookie = async ({
+  email,
+  redirectURL = "/dash",
+  request,
+}: {
+  email: string;
+  redirectURL?: string;
+  request: Request;
+}) => {
+  const cookie = request.headers.get("Cookie");
+  const session = await getSession(cookie);
+  session.set("email", email);
+  throw redirect(redirectURL, {
+    headers: {
+      "set-cookie": await commitSession(session),
+    },
+  });
+};
+
 export const createUserSession = async (
   userData: {
     email: string;
     verified_email: boolean;
     picture: string;
     redirectURL?: string;
+    displayName?: string;
   },
   request: Request,
   cb?: (user: User) => void
 ) => {
-  console.log("Redirection??", userData.redirectURL);
   const cookie = request.headers.get("Cookie");
   const session = await getSession(cookie);
   const host = userData.email.split("@")[0];
@@ -48,6 +68,7 @@ export const createUserSession = async (
       picture: userData.picture,
       publicKey: randomUUID(), // @revisit
       host,
+      displayName: userData.displayName,
     },
     update: {
       email: userData.email,
@@ -55,6 +76,14 @@ export const createUserSession = async (
       picture: userData.picture,
     },
   });
+
+  //si el usuario es nuevo, manda el correo de bienvenida
+  const date = Date.now();
+  const mins = new Date(user.createdAt).getTime();
+  const min3 = date - 180000 <= mins;
+  if (min3) {
+    sendWelcomeEmail(user.email, user.displayName!);
+  }
 
   session.set("email", userData.email);
   // create certificate

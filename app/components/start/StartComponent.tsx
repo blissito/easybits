@@ -14,9 +14,9 @@ export default function StartComponent() {
    */
 
   return (
-    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-16 pb-6 px-4 md:px-[5%] xl:px-0">
+    <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-16 pb-6 px-4 md:pl-28 md:pr-8 2xl:px-0">
       <div className="w-full ">
-        <div className="w-full lg:w-[756px] mx-auto rounded-xl border border-black bg-white mb-8">
+        <div className="w-full lg:w-[756px] mx-auto rounded-xl border-[2px] border-black bg-white mb-8">
           <div className="p-6 md:p-8 flex justify-between items-center">
             <div>
               <p className="font-semibold text-2xl md:text-2xl">
@@ -30,7 +30,7 @@ export default function StartComponent() {
               <StepProgress steps={steps} completed={completed} />
             </div>
           </div>
-          <div className="border-b border-black" />
+          <div className="border-b-2 border-black" />
 
           <div className="p-4 md:p-8 flex flex-col gap-6 md:gap-8">
             {STRINGS.steps.map(
@@ -55,7 +55,7 @@ export default function StartComponent() {
                       <Link to={path}>
                         <BrutalButton
                           containerClassName="h-8 rounded-xl text-base font-medium"
-                          className="h-8 w-auto min-w-24 rounded-xl text-base font-medium"
+                          className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
                         >
                           {cta}
                         </BrutalButton>
@@ -67,7 +67,7 @@ export default function StartComponent() {
             )}
           </div>
         </div>
-        <div className="w-full lg:w-[756px] mx-auto rounded-xl border border-black bg-white h-20 px-6 md:px-8 flex items-center justify-between">
+        <div className="w-full lg:w-[756px] mx-auto rounded-xl border-[2px] border-black bg-white h-20 px-6 md:px-8 flex items-center justify-between">
           <p className="text-md">
             {STRINGS.anyQuestion}{" "}
             <a

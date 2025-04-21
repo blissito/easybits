@@ -1,10 +1,10 @@
 import { nanoid } from "nanoid";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-// @ts-ignore
+
 import { useUploadMultipart } from "react-hook-multipart/react";
 
 export type UploadManager = {
-  addFiles: (arg0: File[]) => void;
+  addFiles: (arg0: File[], config?: LocalConfig) => void;
   getFiles: () => File[];
   tasks: Task[];
   clearTask: (arg0: string) => void;
@@ -64,7 +64,7 @@ export const useUploadManager = (input?: useUploadManagerInput) => {
     setTasks(reversed);
   };
 
-  const startUpload = (taskId: string, access: string) => {
+  const startUpload = (taskId: string, access: "public-read" | "private") => {
     const { upload } = useUploadMultipart({ access }); // used here because the access limitation (upload should receive access too)
     const task: Task = taskMap.get(taskId);
     upload(task.file.name, task.file, ({ percentage }) => {
@@ -82,11 +82,8 @@ export const useUploadManager = (input?: useUploadManagerInput) => {
     console.info("::UPLOAD_STARTED_FOR::", task.file.name);
   };
 
-  const addFiles = (
-    newFiles: File[],
-    localConfig: LocalConfig = { access: "private" | "public-read" }
-  ) => {
-    const { access } = localConfig;
+  const addFiles = (newFiles: File[], localConfig?: LocalConfig) => {
+    const { access = "private" } = localConfig || {};
 
     taskMap.set("files", taskMap.get("files").concat(newFiles));
     const newTasks = newFiles.map((file) => createTask(file));

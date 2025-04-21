@@ -6,60 +6,72 @@ import { cn } from "~/utils/cn";
 import Logo from "/icons/eyes-logo-purple.svg";
 
 interface MenuItemProps {
-  path: string;
-  icon: ReactNode;
+  path?: string;
+  icon?: ReactNode;
   iconSize?: number;
-  title: string | ReactNode;
+  title?: string | ReactNode;
   isOpen?: boolean;
   isLogo?: boolean;
   end?: boolean;
   index?: number;
+  isCurrentActive?: boolean;
 }
 
 export const SideBar = () => {
   return (
-    <section>
-      <div className="fixed right-4 bottom-0 z-30 block md:hidden  ">
+    <>
+      <section className="fixed right-4 bottom-0 z-20 block md:hidden  ">
         <FoldMenu />
-      </div>
+      </section>
       <SideBarWeb />
-    </section>
+    </>
   );
 };
 
 const SideBarWeb = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scope, animate] = useAnimate();
+  const location = useLocation();
   return (
-    <section className="w-20 h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2   flex-col gap-4">
-      <SideBarItem isLogo={true} />
-      <ul className="flex flex-col gap-3 pt-2 pb-3 items-center">
+    <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2 flex-col gap-4">
+      <SideBarItem isLogo />
+      <ul className="flex flex-col gap-3 pt-2 pb-0 items-center">
         {ITEMS.navItems.map((item, key) => (
-          <SideBarItem key={key} {...item} isOpen={isOpen} />
+          <SideBarItem
+            isCurrentActive={
+              item.title === "Assets"
+                ? location.pathname.includes(item.path)
+                : undefined
+            }
+            key={key}
+            {...item}
+          />
         ))}
       </ul>
       <hr className="bg-white opacity-20 h-[1px] w-full" />
-      <ul className="flex flex-col gap-3 py-3 items-center">
+      <ul className="flex flex-col gap-3 py-0 items-center">
         {ITEMS.sectionItems.map((item, key) => (
-          <SideBarItem key={key} {...item} isOpen={isOpen} />
+          <SideBarItem key={key} {...item} />
         ))}
       </ul>
-      <ul className="flex flex-col items-center pb-6 gap-3 w-full mt-auto">
+      <ul className="flex flex-col items-center pb-0 gap-3 w-full mt-auto">
         {ITEMS.bottomItems.map((item, key) => (
-          <SideBarItem key={key} {...item} isOpen={isOpen} />
+          <SideBarItem key={key} {...item} />
         ))}
       </ul>
     </section>
   );
 };
 
-const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
-  const [isActive, setIsActive] = useState(false);
+const SideBarItem = ({
+  isCurrentActive = false,
+  title,
+  path = "",
+  icon,
+  isLogo,
+}: MenuItemProps) => {
   const location = useLocation();
-
-  useEffect(() => {
-    setIsActive(location.pathname === path);
-  }, [location.pathname, path]);
+  const [isActive, setIsActive] = useState(
+    isCurrentActive || location.pathname === path
+  );
 
   const [scope, animate] = useAnimate();
   const handleMouseEnter = () => {
@@ -67,7 +79,7 @@ const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
   };
 
   const handleMouseLeave = () => {
-    animate(scope.current, { opacity: 0, scale: 0.75 });
+    animate(scope.current, { opacity: 0, scale: 0.0 });
   };
   return (
     <Link to={path}>
@@ -93,14 +105,14 @@ const SideBarItem = ({ title, path = "", icon, isLogo }: MenuItemProps) => {
                   className="w-full h-full bg-brand-500 rounded-lg  absolute"
                 ></motion.div>
               ) : null}
-              <span className="relative z-20">{icon}</span>
+              <span className="relative z-20 pointer-events-none">{icon}</span>
             </motion.div>
           )}
         </div>{" "}
         {isLogo ? null : (
           <button
             ref={scope}
-            className=" bg-white border scale-75 border-gray-200 absolute left-12 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+            className=" bg-white border scale-75 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
           >
             <span className="whitespace-nowrap ">{title}</span>
           </button>
