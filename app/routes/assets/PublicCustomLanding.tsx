@@ -9,9 +9,9 @@ import {
 } from "@stripe/react-stripe-js";
 // import { getUserOrNull } from "~/.server/getters";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
-import { Form, useActionData } from "react-router";
-import { BrutalButton } from "~/components/common/BrutalButton";
+import { useActionData } from "react-router";
 import { useMemo } from "react";
+import PaymentModal from "./PaymentModal";
 
 const defaultURL = `https://easybits-public.fly.storage.tigris.dev/679442f532aff63d473fde99/gallery/67cb288d1d00d14f5e4bc605/metaImage`;
 
@@ -107,24 +107,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <article>
       <HeaderTemplate asset={asset} />
-      <ContentTemplate asset={asset} />
-
-      {/*pass loginc to template Button */}
-      {assetUserStripeId && (
-        <Form method="post">
-          <input type="hidden" name="stripeAccount" value={assetUserStripeId} />
-          <BrutalButton type="submit">pagaleee</BrutalButton>
-        </Form>
-      )}
-      {/* pass this embedded to a Modal or a better UI */}
-      {actionData?.checkoutSession?.client_secret && stripePromise && (
-        <EmbeddedCheckoutProvider
-          stripe={stripePromise}
-          options={{ clientSecret: actionData.checkoutSession.client_secret }}
-        >
-          <EmbeddedCheckout />
-        </EmbeddedCheckoutProvider>
-      )}
+      <ContentTemplate
+        asset={asset}
+        stripePromise={stripePromise}
+        checkoutSession={actionData?.checkoutSession}
+      />
       <FooterTemplate asset={asset} />
     </article>
   );
