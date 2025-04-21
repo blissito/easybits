@@ -8,8 +8,14 @@ import { Button } from "../common/Button";
 import { useState, type FormEvent } from "react";
 import { Input } from "../common/Input";
 import { motion, AnimatePresence } from "motion/react";
-import { Form, useFetcher } from "react-router";
+import { useFetcher } from "react-router";
 import Spinner from "../common/Spinner";
+
+const transition = {
+  duration: 0.3,
+  delay: 0.1,
+  ease: [0, 0.71, 0.2, 1.01],
+};
 
 export default function LoginComponent({ state }: { state?: string }) {
   const fetcher = useFetcher();
@@ -19,11 +25,7 @@ export default function LoginComponent({ state }: { state?: string }) {
   const [isLogin, setIsLogin] = useState<boolean>(false);
 
   const SELECTED_STRINGS = isLogin ? STRINGS["login"] : STRINGS["signup"];
-  const transition = {
-    duration: 0.3,
-    delay: 0.1,
-    ease: [0, 0.71, 0.2, 1.01],
-  };
+
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const isGoogleLoading =
     fetcher.state !== "idle" && fetcher.formData?.get("auth") === "google";
@@ -77,114 +79,27 @@ export default function LoginComponent({ state }: { state?: string }) {
             }}
           />
           <AnimatePresence mode="wait">
-            <article>
-              {loginType === "social" && (
-                <motion.div
-                  key="social"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={transition}
-                  className="w-[98vw] px-4 md:px-[5%] xl:px-0   mx-auto flex flex-col items-center"
-                >
-                  <p className="text-center font-bold text-3xl whitespace-pre-line mb-10 w-full text-white">
-                    {SELECTED_STRINGS.title}
-                  </p>
-                  <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
-                    <Button
-                      mode="large"
-                      isLoading={isGoogleLoading}
-                      className="bg-[#A6EB9A] md:min-w-[420px] "
-                      type="button"
-                      onClick={handleLogin("google")}
-                    >
-                      <FcGoogle />
-                      Iniciar con Gmail
-                    </Button>
-                    <Button
-                      mode="large"
-                      isLoading={isStripeLoading}
-                      className="bg-[#6772E5] md:min-w-[420px]"
-                      type="button"
-                      onClick={handleLogin("stripe")}
-                    >
-                      <BsStripe fill="white" />
-                      Iniciar con Stripe
-                    </Button>
-                    <Button
-                      mode="large"
-                      className="md:min-w-[420px]"
-                      type="button"
-                      onClick={() => {
-                        setLoginType("email");
-                      }}
-                    >
-                      <AiFillMail />
-                      Iniciar con Email
-                    </Button>
-                  </div>
-                  <p className="text-center text-white">
-                    {SELECTED_STRINGS.actionQuestion}
-                    <span
-                      className="text-[#9870ED] cursor-pointer underline"
-                      onClick={() => setIsLogin((prev) => !prev)}
-                    >
-                      {SELECTED_STRINGS.action}
-                    </span>
-                  </p>
-                </motion.div>
-              )}
-            </article>
+            {loginType === "social" && (
+              <SocialButtons
+                SELECTED_STRINGS={SELECTED_STRINGS}
+                handleLogin={handleLogin}
+                isGoogleLoading={isGoogleLoading}
+                isStripeLoading={isStripeLoading}
+                onEmailClick={() => {
+                  setLoginType("email");
+                }}
+              />
+            )}
+
             {loginType === "email" && (
-              <motion.form
+              <EmailForm
                 onSubmit={handleSubmit}
-                key="email"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={transition}
-                className="w-[98vw] px-4 md:px-[5%] xl:px-0   mx-auto flex flex-col items-center"
-              >
-                <p className="text-center max-w-md  text-3xl whitespace-pre-line font-bold mb-8 text-white">
-                  {SELECTED_STRINGS.formTitle}
-                </p>
-                <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
-                  <Input
-                    className="md:max-w-[420px] text-white"
-                    label="Nombre"
-                    name="displayName"
-                    placeholder="¿Cómo te gusta que te llamen?"
-                    inputClassName="w-full"
-                  />
-                  <Input
-                    className="md:max-w-[420px] text-white"
-                    label="Email"
-                    type="email"
-                    name="email"
-                    placeholder="tucorreo@gmail.com"
-                    inputClassName="w-full"
-                  />
-                  <Button
-                    className="bg-brand-500 mt-2 md:min-w-[420px]"
-                    type="submit"
-                    name="loginType"
-                    value="email-pass"
-                    isLoading={isLoading}
-                  >
-                    {SELECTED_STRINGS.formSubmit}
-                  </Button>
-                </div>
-                <p className="text-center text-white mt-0">
-                  <span
-                    className="text-brand-500 underline cursor-pointer "
-                    onClick={() => {
-                      setLoginType("social");
-                    }}
-                  >
-                    {SELECTED_STRINGS.formAction}
-                  </span>
-                </p>
-              </motion.form>
+                SELECTED_STRINGS={SELECTED_STRINGS}
+                isLoading={isLoading}
+                onAction={() => {
+                  setLoginType("social");
+                }}
+              />
             )}
             {isLoading && <Spinner />}
             {fetcher.data?.state === "confirmation_success" && (
@@ -208,3 +123,118 @@ export default function LoginComponent({ state }: { state?: string }) {
     </section>
   );
 }
+
+const SocialButtons = ({
+  isGoogleLoading,
+  SELECTED_STRINGS,
+  isStripeLoading,
+  handleLogin,
+  onEmailClick,
+}) => {
+  return (
+    <motion.div
+      key="social"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={transition}
+      className="w-[98vw] px-4 md:px-[5%] xl:px-0   mx-auto flex flex-col items-center"
+    >
+      <p className="text-center font-bold text-3xl whitespace-pre-line mb-10 w-full text-white">
+        {SELECTED_STRINGS.title}
+      </p>
+      <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
+        <Button
+          mode="large"
+          isLoading={isGoogleLoading}
+          className="bg-[#A6EB9A] md:min-w-[420px] "
+          type="button"
+          onClick={handleLogin("google")}
+        >
+          <FcGoogle />
+          Iniciar con Gmail
+        </Button>
+        <Button
+          mode="large"
+          isLoading={isStripeLoading}
+          className="bg-[#6772E5] md:min-w-[420px]"
+          type="button"
+          onClick={handleLogin("stripe")}
+        >
+          <BsStripe fill="white" />
+          Iniciar con Stripe
+        </Button>
+        <Button
+          mode="large"
+          className="md:min-w-[420px]"
+          type="button"
+          onClick={onEmailClick}
+        >
+          <AiFillMail />
+          Iniciar con Email
+        </Button>
+      </div>
+      <p className="text-center text-white">
+        {SELECTED_STRINGS.actionQuestion}
+        <span
+          className="text-[#9870ED] cursor-pointer underline"
+          onClick={() => setIsLogin((prev) => !prev)}
+        >
+          {SELECTED_STRINGS.action}
+        </span>
+      </p>
+    </motion.div>
+  );
+};
+
+const EmailForm = ({ onSubmit, SELECTED_STRINGS, isLoading, onAction }) => {
+  return (
+    <motion.form
+      onSubmit={onSubmit}
+      key="email"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={transition}
+      className="w-[98vw] px-4 md:px-[5%] xl:px-0   mx-auto flex flex-col items-center"
+    >
+      <p className="text-center max-w-md  text-3xl whitespace-pre-line font-bold mb-8 text-white">
+        {SELECTED_STRINGS.formTitle}
+      </p>
+      <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
+        <Input
+          className="md:max-w-[420px] text-white"
+          label="Nombre"
+          name="displayName"
+          placeholder="¿Cómo te gusta que te llamen?"
+          inputClassName="w-full"
+        />
+        <Input
+          className="md:max-w-[420px] text-white"
+          label="Email"
+          type="email"
+          name="email"
+          placeholder="tucorreo@gmail.com"
+          inputClassName="w-full"
+        />
+        <Button
+          className="bg-brand-500 mt-2 md:min-w-[420px]"
+          type="submit"
+          name="loginType"
+          value="email-pass"
+          isLoading={isLoading}
+        >
+          {SELECTED_STRINGS.formSubmit}
+        </Button>
+      </div>
+      <p className="text-center text-white mt-0">
+        <button
+          className="text-brand-500 underline cursor-pointer "
+          onClick={onAction}
+        >
+          {SELECTED_STRINGS.formAction}
+        </button>
+      </p>
+    </motion.form>
+  );
+};

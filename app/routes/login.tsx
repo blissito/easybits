@@ -87,12 +87,10 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
     case "google":
       return rrRedirect(getGoogleURL());
     case "email_signup":
-      // @todo email_magic_link
       const email = formData.get("email") as string;
       const displayName = formData.get("displayName") as string;
       const exists = await db.user.findUnique({ where: { email } });
       if (exists && exists.confirmed) {
-        // @todo send login-magic-link
         await sendMagicLink(email, { displayName });
         return { state: "success" };
       }
