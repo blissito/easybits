@@ -55,6 +55,7 @@ export const AssetForm = ({
       onSubmit={handleSubmit(submit)}
       className="flex flex-col h-max "
     >
+      <br />
       <Input
         pattern=".{3,}"
         // @ts-ignore

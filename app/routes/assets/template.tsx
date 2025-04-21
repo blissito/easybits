@@ -67,29 +67,42 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
     }
   };
   return (
-    <main className="flex h-fit md:h-16 border-b-[2px] border-black">
-      <section
-        style={{
-          scrollbarWidth: "none",
-        }}
-        className={cn(
-          "overflow-scroll",
-          "flex items-center px-4 gap-2 text-left h-10 border-r-2 border-black ",
-          "md:col-span-5 md:px-6 md:h-full md:border-transparent"
-        )}
-      >
-        {asset.tags
-          .trim()
-          .split(",")
-          .map((tag, i) => (
-            <Tag className="h-6 md:h-8" variant="outline" label={tag} key={i} />
-          ))}
-      </section>
+    <main className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black">
+      {asset.tags.length === 0 ? null : (
+        <>
+          <section
+            style={{
+              scrollbarWidth: "none",
+            }}
+            className={cn(
+              "overflow-scroll",
+              "flex items-center px-4 gap-2 text-left h-10 border-b-2 border-black md:border-none ",
+              "col-span-10 md:col-span-7 md:px-6 md:h-full md:border-transparent"
+            )}
+          >
+            {asset.tags
+              .trim()
+              .split(",")
+              .map((tag, i) => (
+                <Tag
+                  className="h-6 md:h-8"
+                  variant="outline"
+                  label={tag}
+                  key={i}
+                />
+              ))}
+          </section>
+        </>
+      )}
+
       <section
         className={cn(
           "min-w-max",
-          "h-10 border-x-[0px] border-r-[2px]  border-black px-3 flex items-center gap-2",
-          "md:border-x-[2px] md:h-full   md:col-span-2"
+          "h-10  px-3 flex items-center  gap-2",
+          "md:h-full border-l-2 border-black col-span-5 md:col-span-2",
+          {
+            "border-l-0": asset.tags.length === 0,
+          }
         )}
       >
         {
@@ -97,11 +110,14 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
             {asset.extra?.showSold ? asset.extra?.sold : 0} {getTypeOfBrag()}
           </p>
         }
-
         <img src="/icons/download.svg" alt="download" />
       </section>
       {asset.extra?.showReviews && (
-        <section className={cn("min-w-max px-3 flex items-center gap-2")}>
+        <section
+          className={cn(
+            "min-w-max px-3 col-span-5 md:col-span-1 flex border-l-2 border-black items-center gap-2"
+          )}
+        >
           <p className="underline">
             {/* @todo map reviews */}
             {asset.extra?.reviews || 4.7}

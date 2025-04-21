@@ -12,10 +12,17 @@ export default function Index() {
   }, []);
   return (
     <main className="bg-brand_dark">
-      <div className="bg-white rounded-b-[40px] pb-[120px]">
+      <div className="bg-white rounded-b-[40px] pb-0 md:pb-[120px]">
         <AuthNav />
-
-        <div className="grid grid-cols-8 max-w-[90%] xl:max-w-7xl mx-auto gap-12 pt-[240px] ">
+        <div className="grid grid-cols-8 max-w-[90%] xl:max-w-7xl mx-auto gap-12 pt-32 md:pt-[240px] ">
+          <div className="bg-coverInfo bg-center h-56 rounded-xl border-2 border-black p-6 col-span-8 flex items-center lg:hidden">
+            <div>
+              <h2 className=" text-4xl lg:text-6xl	font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
+                Términos y condiciones
+              </h2>
+              <p className="mt-4">Última actualización: 21 de Abril 2025</p>{" "}
+            </div>
+          </div>
           <Tabs />
           <Info />
         </div>
@@ -27,13 +34,13 @@ export default function Index() {
 
 const Info = () => {
   return (
-    <section className="col-span-6  ">
-      <div className="bg-munsell h-56 rounded-xl border-2 border-black p-6 flex items-center">
+    <section className="col-span-8 lg:col-span-6  ">
+      <div className="bg-coverInfo hidden lg:flex bg-center h-56 rounded-xl border-2 border-black p-6  items-center">
         <div>
           <h2 className=" text-4xl lg:text-6xl	font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
             Términos y condiciones
           </h2>
-          <p className="mt-4">Última actualización: 16 de Abril 2025</p>{" "}
+          <p className="mt-4">Última actualización: 21 de Abril 2025</p>{" "}
         </div>
       </div>
       <div>
@@ -170,39 +177,110 @@ const Info = () => {
             </p>
           </div>
         </Clause>
-        <Clause id="cuatro" name="4. API">
+        <Clause id="cuatro" name="4. Uso de la API">
           <div className="flex flex-col gap-4">
             <p>
-              <strong className="font-satoMiddle">
-                a. Definición de Comunidad EasyBits:
-              </strong>{" "}
-              "Comunidad EasyBits" se refiere al marketplace proporcionado por
-              EasyBits, en el cual los creadores que utilizan los servicios de
-              EasyBits pueden aparecer en listados y obtener ventas adicionales
-              a través de búsquedas y solicitudes de usuarios externos.
+              La Plataforma pone a disposición de ciertos usuarios autorizados
+              una Interfaz de Programación de Aplicaciones (API) para acceder de
+              forma programática a algunas funcionalidades y datos de la
+              plataforma. El acceso a esta API está sujeto a los siguientes
+              términos:
             </p>
             <p>
               <strong className="font-satoMiddle">
-                b. Opción de Participación:
+                4.1. Acceso y Autenticación
               </strong>{" "}
-              La participación de un Creador en Comunidad EasyBits es
-              completamente opcional y a elección del Creador.
+            </p>
+            <ul>
+              <li>
+                {" "}
+                &bull; Para utilizar la API, se requiere una clave de acceso
+                (API Key) personal e intransferible.
+              </li>
+              <li>
+                &bull; Usted es responsable de mantener la confidencialidad de
+                dicha clave.
+              </li>
+              <li>
+                &bull; Cualquier acción realizada con su clave será considerada
+                como realizada por usted.
+              </li>
+            </ul>
+            <p>
+              <strong className="font-satoMiddle">4.2. Uso Permitido</strong>{" "}
+            </p>
+            <p>Usted puede usar la API exclusivamente para:</p>
+            <ul>
+              <li>
+                {" "}
+                &bull; Integrar funcionalidades de la plataforma en su propia
+                aplicación, sitio web o sistema.
+              </li>
+              <li>
+                {" "}
+                &bull; Acceder a archivos multimedia disponibles desde la
+                cuenta.
+              </li>
+            </ul>
+            <p>
+              <strong className="font-satoMiddle">
+                4.3. Restricciones de Uso
+              </strong>{" "}
+            </p>
+            <p>No está permitido:</p>
+            <ul>
+              <li>
+                {" "}
+                &bull; Interferir con el rendimiento, estabilidad o seguridad de
+                la plataforma.
+              </li>
+              <li> &bull; Compartir su clave de API con terceros.</li>
+              <li>
+                &bull; Realizar scraping fuera de los métodos y límites
+                definidos por la API.
+              </li>
+              <li>
+                &bull; Utilizar la API para crear servicios que compitan
+                directamente con EasyBits.
+              </li>
+            </ul>
+            <p>
+              <strong className="font-satoMiddle">
+                4.4. Límite de Peticiones
+              </strong>{" "}
+            </p>
+            <p>
+              La Plataforma podrá aplicar límites de uso (rate limits) por
+              usuario, hora o día, según su plan o nivel de acceso.
             </p>
             <p>
               <strong className="font-satoMiddle">
-                c. Posición en Comunidad EasyBits:
+                4.5. Terminación del Acceso
               </strong>{" "}
-              La posición de un Negocio dentro de las búsquedas de Comunidad
-              EasyBits se determinará a discreción de EasyBits. Sin garantías de
-              ubicación específica.
             </p>
+            <p>La Plataforma se reserva el derecho de:</p>
+            <ul>
+              <li>
+                {" "}
+                &bull; Revocar o suspender su acceso a la API en cualquier
+                momento y sin previo aviso, por razones de seguridad, abuso o
+                incumplimiento de estos términos.
+              </li>
+              <li>
+                {" "}
+                &bull; Modificar o discontinuar la API, total o parcialmente, en
+                cualquier momento.
+              </li>
+            </ul>
             <p>
               <strong className="font-satoMiddle">
-                d. Inclusión en Búsquedas:
+                4.6. Exención de Garantías
               </strong>{" "}
-              Dneík se reserva el derecho de decidir si un Negocio será incluido
-              o no en las búsquedas de Comunidad EasyBits, y no estamos
-              obligados a proporcionar explicaciones detalladas para cada caso.
+              <p>
+                La API se proporciona "tal cual", sin garantías de
+                disponibilidad, velocidad o precisión. Su uso es bajo su propio
+                riesgo.
+              </p>
             </p>
           </div>
         </Clause>
@@ -213,7 +291,7 @@ const Info = () => {
                 a. Definición de Comunidad EasyBits
               </strong>{" "}
               "Comunidad EasyBits" se refiere al marketplace proporcionado por
-              EasyBits, en el cual los negocios que utilizan los servicios de
+              EasyBits, en el cual los creadores que utilizan los servicios de
               EasyBits pueden aparecer enlistados y obtener ventas adicionales a
               través de búsquedas y compras de usuarios externos.
             </p>
@@ -370,7 +448,7 @@ const Info = () => {
               El pago podrá realizarse mediante tarjeta de crédito o débito.
             </p>
             <p>
-              El Negocio deberá indicar los datos necesarios y veraces para la
+              El Creador deberá indicar los datos necesarios y veraces para la
               correcta facturación y tratamiento tributario que corresponda,
               liberando a EasyBits de las responsabilidades por la inexactitud
               en la entrega de la información. Deberá señalar el Creador un
@@ -740,7 +818,7 @@ const handleClick = (id: string) => {
 
 const Tabs = () => {
   return (
-    <section className="col-span-6 xl:col-span-2 ">
+    <section className="col-span-8 lg:col-span-2 ">
       <div className="bg-white rounded-2xl overflow-hidden sticky top-[280px] flex flex-col gap-2 text-brand_dark">
         <div
           onClick={() => {
@@ -773,7 +851,7 @@ const Tabs = () => {
             handleClick("#cuatro");
           }}
         >
-          4. Funcionalidad Integraciones API
+          4. Uso de la API
         </p>
         <p
           className="cursor-pointer hover:text-brand-500"

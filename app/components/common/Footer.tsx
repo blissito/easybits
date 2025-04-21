@@ -132,6 +132,11 @@ export const Footer = () => {
                 Términos y condiciones
               </p>
             </Link>
+            <Link to="/aviso-de-privacidad">
+              <p className="text-white/50 hover:text-brand-500 transition-all">
+                Aviso de Privacidad
+              </p>
+            </Link>
           </div>
           <div className="hidden md:block col-span-1"></div>
           <div className="col-span-12 md:col-span-2">

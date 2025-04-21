@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LittleBrutalImage } from "../illustrations/LittleBrutalImage";
 import { cn } from "~/utils/cn";
+import { FaCircleCheck } from "react-icons/fa6";
 
 export const RadioGroup = ({
   onChange,
@@ -73,12 +74,19 @@ export const RadioInput = ({
     >
       <div
         className={cn(
-          "border border-black rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
+          "border border-black relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
           {
-            "-translate-y-2 -translate-x-2 bg-brand-500": isSelected,
+            "-translate-y-2 -translate-x-2 ": isSelected,
           }
         )}
       >
+        {isSelected ? (
+          <img
+            className="w-5 top-3 right-3 absolute"
+            src="/hero/chec.svg"
+            alt="check"
+          />
+        ) : null}
         <img className="h-10 mb-1" src={icon} alt="descargable" />
         <h4>{label}</h4>
         <p className="text-xs">{description}</p>
