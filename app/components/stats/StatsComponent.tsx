@@ -62,7 +62,7 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
             className="col-span-12 lg:col-span-4 rounded-xl border-2 border-black p-4 md:p-6 bg-white order-first lg:order-2
 "
           >
-            <p className="mb-2 font-semibold text-lg">Productos mas vendidos</p>
+            <p className="mb-2 font-semibold text-lg">Productos más vendidos</p>
             {mostSoldProducts.map(
               ({ imageUrl, title, soldTimes, unitPrice }) => (
                 <div className="flex justify-between gap-4 items-start py-4 border-b border-li">
@@ -72,11 +72,11 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
                   />
                   <div className="w-full">
                     <p className="text-sm text-start">{title}</p>
-                    <p className="text-xs text-brand-gray">
+                    <p className="text-xs text-iron">
                       {soldTimes} venta{soldTimes > 1 ? "s" : null}
                     </p>
                   </div>
-                  <p className="text-base text-brand-gray">
+                  <p className="text-base text-iron">
                     ${soldTimes * unitPrice}
                   </p>
                 </div>

@@ -291,7 +291,7 @@ const Info = () => {
                 a. Definición de Comunidad EasyBits
               </strong>{" "}
               "Comunidad EasyBits" se refiere al marketplace proporcionado por
-              EasyBits, en el cual los negocios que utilizan los servicios de
+              EasyBits, en el cual los creadores que utilizan los servicios de
               EasyBits pueden aparecer enlistados y obtener ventas adicionales a
               través de búsquedas y compras de usuarios externos.
             </p>
@@ -448,7 +448,7 @@ const Info = () => {
               El pago podrá realizarse mediante tarjeta de crédito o débito.
             </p>
             <p>
-              El Negocio deberá indicar los datos necesarios y veraces para la
+              El Creador deberá indicar los datos necesarios y veraces para la
               correcta facturación y tratamiento tributario que corresponda,
               liberando a EasyBits de las responsabilidades por la inexactitud
               en la entrega de la información. Deberá señalar el Creador un
