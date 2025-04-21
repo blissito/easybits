@@ -34,6 +34,7 @@ export default {
       backgroundImage: {
         patternDark: "url('/pattern-dark.svg')",
         coverSuscription: "url('/hero/cover-yellow.svg')",
+        coverInfo: "url('/hero/info.svg')",
       },
       fontFamily: {
         jersey: ["Jersey 10"], // not working, you can remove

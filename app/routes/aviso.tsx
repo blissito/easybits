@@ -1,0 +1,179 @@
+import { useEffect, type ReactNode } from "react";
+import { Footer } from "~/components/common/Footer";
+import { AuthNav } from "~/components/login/auth-nav";
+
+export default function Index() {
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    });
+  }, []);
+  return (
+    <main className="bg-brand_dark">
+      <AuthNav />
+      <Content />
+      <Footer />
+    </main>
+  );
+}
+
+const Content = () => {
+  return (
+    <section className="py-32 lg:py-40 max-w-7xl mx-auto px-4 md:px-[5%] 2xl:px-0">
+      <div className="bg-coverInfo bg-center  h-56 rounded-xl border-2 border-black p-6 flex flex-col justify-center items-start">
+        <h2 className=" text-4xl lg:text-6xl font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
+          Aviso de Privacidad
+        </h2>
+        <p className="mt-4">Última actualización: 21 de Abril 2025</p>{" "}
+      </div>
+      <div className="mt-10 lg:mt-20">
+        <p>
+          EasyBits Cloud, en cumplimiento con lo dispuesto por la Ley Federal de
+          Protección de Datos Personales en Posesión de los Particulares, hace
+          de su conocimiento el presente Aviso de Privacidad, a fin de
+          informarle sobre el tratamiento que se dará a los datos personales que
+          usted nos proporciona a través de nuestro sitio web
+          https://www.easybits.cloud (en adelante, el “Sitio”).
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          1. Identidad del Responsable
+        </h3>
+        <p className="mt-4">
+          El responsable del tratamiento de sus datos personales es EasyBits
+          Cloud (en adelante, “EasyBits”), quien los utilizará conforme a las
+          finalidades establecidas en este Aviso.
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          2. Datos personales que se recaban
+        </h3>
+        <p className="mt-4">
+          Los datos personales que podremos recabar directamente de usted o a
+          través del uso del Sitio son:
+        </p>
+        <ul className="mt-4">
+          <li>&bull; Nombre completo</li>
+          <li>&bull; Dirección de correo electrónico</li>
+          <li>&bull; Empresa u organización</li>
+          <li>
+            &bull; Información de facturación (RFC, domicilio fiscal, etc.)
+          </li>
+          <li>&bull; Información técnica de conexión y navegación</li>
+        </ul>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          3. Finalidades del tratamiento
+        </h3>
+        <p className="my-4">
+          Sus datos personales serán tratados para las siguientes finalidades:
+        </p>
+        <p>Finalidades primarias: :</p>
+        <ul className="mt-4">
+          <li>&bull; Proveer los productos y servicios solicitados.</li>
+          <li>&bull; Dar cumplimiento a obligaciones contractuales.</li>
+          <li>
+            &bull; Contactarlo para dar seguimiento a servicios, soporte técnico
+            o aclaraciones.
+          </li>
+          <li>&bull; Facturación y cobro de servicios.</li>
+          <li>
+            &bull; Envío de actualizaciones o avisos importantes sobre el
+            servicio.
+          </li>
+        </ul>
+        <p>Finalidades secundarias:</p>
+        <ul className="mt-4">
+          <li>
+            &bull; Envío de promociones, boletines informativos y comunicaciones
+            de marketing.
+          </li>
+          <li>
+            &bull; Realización de encuestas de satisfacción y estudios de
+            mercado.
+          </li>
+        </ul>
+        <p>
+          Si no desea que sus datos se utilicen para finalidades secundarias,
+          puede manifestarlo enviando un correo a: soporte@easybits.cloud.
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          4. Uso de cookies y tecnologías de rastreo
+        </h3>
+        <p className="my-4">
+          Nuestro Sitio utiliza cookies, web beacons y otras tecnologías
+          similares para monitorear su comportamiento como usuario de Internet y
+          brindarle un mejor servicio. Usted puede deshabilitar el uso de
+          cookies desde su navegador.
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          5. Transferencias de datos
+        </h3>
+        <p className="my-4">
+          Sus datos personales no serán transferidos a terceros sin su
+          consentimiento, salvo en los casos permitidos por la ley, como a
+          proveedores que prestan servicios en nuestro nombre bajo cláusulas de
+          confidencialidad.
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          6. Derechos ARCO
+        </h3>
+        <p className="my-4">Usted tiene derecho a:</p>
+        <ul className="mt-4">
+          <li>&bull; Acceder a sus datos personales.</li>
+          <li>&bull; Rectificarlos si son inexactos o incompletos.</li>
+          <li>
+            &bull; Cancelarlos cuando considere que no se requieren para las
+            finalidades señaladas.
+          </li>
+          <li>
+            &bull; Oponerse al tratamiento de los mismos para fines específicos.
+          </li>
+        </ul>
+        <p>
+          Puede ejercer sus derechos ARCO enviando un correo electrónico a
+          soporte@easybits.cloud, indicando su nombre completo, la relación que
+          tiene con nosotros, el derecho que desea ejercer y una descripción
+          clara de su solicitud.
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          7. Cambios al Aviso de Privacidad
+        </h3>
+        <p className="my-4">
+          Nos reservamos el derecho de modificar este Aviso de Privacidad en
+          cualquier momento. Las modificaciones estarán disponibles en el Sitio
+          en la sección correspondiente. Se recomienda revisarlo periódicamente.
+        </p>
+        <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
+          8. Contacto
+        </h3>
+        <p className="my-4">
+          Para cualquier duda, comentario o solicitud relacionada con el
+          presente Aviso de Privacidad, puede contactarnos en:
+        </p>
+        <p>
+          📧 Correo electrónico:{" "}
+          <a
+            href="mailto:soporte@easybits.cloud"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-500 transition-all underline"
+          >
+            soporte@easybits.cloud
+          </a>
+        </p>
+        <p>
+          🌐 Sitio web:{" "}
+          <a
+            href="https://www.easybits.cloud"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-500 transition-all underline"
+          >
+            https://www.easybits.cloud
+          </a>
+        </p>
+        <p></p>
+      </div>
+    </section>
+  );
+};
