@@ -183,6 +183,7 @@ export const EditAssetForm = ({
             onCurrencyChange={handleChange("currency")}
           />
           <Input
+            defaultValue={asset.note}
             onChange={(ev) => handleChange("note")(ev.currentTarget.value)}
             label="Nota sobre el producto"
             placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
@@ -203,7 +204,9 @@ export const EditAssetForm = ({
           )}
 
           {asset.type === "DOWNLOADABLE" && (
-            <FilesPicker assetFiles={assetFiles} asset={asset} />
+            <>
+              <FilesPicker assetFiles={assetFiles} asset={asset} />
+            </>
           )}
 
           <HR />

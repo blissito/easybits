@@ -61,6 +61,6 @@ export const sendNewsLetter = (options: {
       subject,
       html: getTemplate(),
     })
-    .then((r: unknown) => console.info("RESUT::", r))
-    .catch((e: unknown) => console.error("ERROR::", e));
+    .then((r: unknown) => console.info("EMAIL_SUCCESS::", r))
+    .catch((e: unknown) => console.error("EMAIL_ERROR::", e));
 };

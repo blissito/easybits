@@ -94,6 +94,10 @@ export const scheduleNext = async (options: {
 
   if (nld.next === 1) {
     const firstAction = asset.actions[0] as Action;
+    if (!firstAction) {
+      console.error("Newsletter not found");
+      return;
+    }
     console.log("FIRST SEND 1", nld, firstAction.name);
     // @revisit send 0?
     await sendNewsLetter({

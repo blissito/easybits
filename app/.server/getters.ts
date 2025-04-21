@@ -130,3 +130,18 @@ export const createUserKeys = async (user: Partial<User>) => {
   });
 };
 // example: expiresIn: '1h'
+
+export const getFilesForAssetId = (assetId: string) =>
+  db.file.findMany({
+    orderBy: { createdAt: "desc" },
+    where: {
+      assetIds: {
+        has: assetId,
+      },
+    },
+    select: {
+      name: true,
+      id: true,
+      size: true,
+    },
+  });

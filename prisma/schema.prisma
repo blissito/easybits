@@ -8,11 +8,11 @@ datasource db {
 }
 
 enum AssetType {
-  DOWNLOADABLE
   VOD_COURSE
   EMAIL_COURSE
   WEBINAR
   EBOOK
+  DOWNLOADABLE
 }
 
 type AssetExtraSettings {
@@ -49,7 +49,6 @@ model Asset {
   price       Float?                 @default(0)
   currency    String                 @default("mxn")
   gallery     String[]
-  fileIds     String[]               @db.ObjectId
   template    AssetTemplateSettings?
   published   Boolean                @default(false)
   publicLink  String?
@@ -58,6 +57,7 @@ model Asset {
   // ownership and metadata
   userId      String                 @db.ObjectId
   user        User                   @relation(fields: [userId], references: [id])
+  files       File[]
   // dates
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
@@ -129,6 +129,8 @@ model File {
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
   // ^ auto-dates
+  Asset                 Asset?     @relation(fields: [assetId], references: [id])
+  assetId               String?    @db.ObjectId
 }
 
 model Client {

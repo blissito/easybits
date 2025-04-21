@@ -3,7 +3,8 @@ import type { Route } from "./+types/user";
 import { db } from "~/.server/db";
 
 import { findNewsletter, scheduleNext } from "~/.server/emails/startNewsLetter";
-
+import { sendPurchase } from "~/.server/emails/sendPurchase";
+// @TODO: recaptcha (cloudflare?)
 // @todo use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
 
@@ -12,11 +13,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  // @todo is this ok in here?
   if (intent === "free_subscription") {
     const email = formData.get("email") as string;
     const displayName = formData.get("displayName") as string;
     const assetId = formData.get("assetId") as string;
 
+    // @todo separate this in an if block
     const initialNewsletterData = {
       next: 1,
       assetId,
@@ -34,6 +37,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
           displayName,
           newsletters: [initialNewsletterData],
           email: email.toLowerCase(),
+          assetIds: [assetId],
         },
       });
     } else {
@@ -48,8 +52,21 @@ export const action = async ({ request }: Route.ActionArgs) => {
         where: { email },
         data: { newsletters, assetIds },
       });
+      // send purchase email?
+      const asset = await db.asset.findUnique({
+        where: { id: assetId },
+        select: { title: true },
+      });
+      await sendPurchase({
+        email: user.email,
+        data: {
+          assetName: asset.title,
+          date: asset.createdAt,
+          price: asset.price,
+        },
+      });
     }
-    // schedule the next send or avoid (when 0)
+    // schedule the next send or avoid (when 0) //@todo make this a if block
     await scheduleNext({ userId: user.id, assetId });
     return { success: true };
   }

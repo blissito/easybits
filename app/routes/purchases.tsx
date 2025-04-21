@@ -1,12 +1,32 @@
-import { GridBackground } from "~/components/common/backgrounds/GridBackground";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
 import { Empty } from "./assets/Empty";
+import type { Route } from "./+types/purchases";
+import { getUserOrRedirect } from "~/.server/getters";
+import { db } from "~/.server/db";
+import { AssetCard } from "./assets/AssetCard";
+import { BiLinkExternal } from "react-icons/bi";
 
 const LAYOUT_PADDING = "py-16 md:py-10";
 
-export default function Purchases() {
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const user = await getUserOrRedirect(request);
+  const assets = await db.asset.findMany({
+    where: {
+      id: {
+        in: user.assetIds,
+      },
+    },
+    include: {
+      user: false, // @fix this
+    },
+  });
+  return { assets };
+};
+
+export default function Purchases({ loaderData }: Route.ComponentProps) {
+  const { assets } = loaderData;
   return (
     <>
       <article
@@ -16,7 +36,22 @@ export default function Purchases() {
         )}
       >
         <Header title="Mis compras" />
-        <EmptyPurchases />
+        {assets.length < 1 && <EmptyPurchases />}
+        <section className="flex gap-4 flex-wrap">
+          {assets.map((asset) => (
+            <AssetCard
+              to={`/dash/compras/${asset.id}`}
+              key={asset.id}
+              asset={asset}
+              left={<p className="h-10" />}
+              right={
+                <a className="text-2xl">
+                  <BiLinkExternal />
+                </a>
+              }
+            />
+          ))}
+        </section>
       </article>
     </>
   );

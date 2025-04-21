@@ -42,11 +42,13 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
 
   if (intent === "magic_link") {
+    const redirectURL = url.searchParams.get("next") as string;
     const tokenData = decode(url)!;
     if (tokenData.email) {
       return await setSessionCookie({
         email: tokenData.email,
         request,
+        redirectURL,
       });
     }
   }

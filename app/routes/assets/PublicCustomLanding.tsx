@@ -3,17 +3,9 @@ import type { Route } from "./+types/PublicCustomLanding";
 import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
 import { loadStripe } from "@stripe/stripe-js";
-import {
-  EmbeddedCheckoutProvider,
-  EmbeddedCheckout,
-} from "@stripe/react-stripe-js";
-// import { getUserOrNull } from "~/.server/getters";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
 import { useActionData } from "react-router";
 import { useMemo } from "react";
-import PaymentModal from "./PaymentModal";
-
-const defaultURL = `https://easybits-public.fly.storage.tigris.dev/679442f532aff63d473fde99/gallery/67cb288d1d00d14f5e4bc605/metaImage`;
 
 export const meta = ({
   data: {
@@ -51,7 +43,23 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   //get own user for testing
   //const user = await getUserOrNull(request); //asset.user
 
+  // file names
+  const files = await db.file.findMany({
+    orderBy: { createdAt: "desc" },
+    where: {
+      assetIds: {
+        has: asset!.id,
+      },
+    },
+    select: {
+      name: true,
+      id: true,
+      size: true,
+    },
+  });
+
   return {
+    files,
     asset,
     publishableKey,
     // user
@@ -89,11 +97,7 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const {
-    asset,
-    publishableKey,
-    //user
-  } = loaderData;
+  const { asset, publishableKey, files } = loaderData;
   const actionData = useActionData();
   const assetUserStripeId = asset?.user?.stripe?.id; //can youse your own user if already loggued in stripe for testing
 
@@ -111,6 +115,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         asset={asset}
         stripePromise={stripePromise}
         checkoutSession={actionData?.checkoutSession}
+        files={files}
       />
       <FooterTemplate asset={asset} />
     </article>

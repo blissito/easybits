@@ -39,6 +39,7 @@ export default [
         route("stripe", "routes/stripe.tsx"),
       ]),
       route("clientes", "routes/clients.tsx"),
+      route("compras/:assetId", "routes/purchase_detail.tsx"),
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),

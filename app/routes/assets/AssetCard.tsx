@@ -1,11 +1,21 @@
 import type { Asset } from "@prisma/client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { CopyButton } from "~/components/common/CopyButton";
 import { usePublicLink } from "~/hooks/usePublicLink";
 import { cn } from "~/utils/cn";
 
-export const AssetCard = ({ asset }: { asset: Asset }) => {
+export const AssetCard = ({
+  left,
+  asset,
+  right,
+  to,
+}: {
+  to?: string;
+  left?: ReactNode;
+  asset: Asset;
+  right?: ReactNode;
+}) => {
   const publicLink = usePublicLink(asset);
   return (
     <main className="group bg-black rounded-2xl">
@@ -19,7 +29,7 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
           "overflow-hidden"
         )}
       >
-        <Link to={`${asset.id}/edit`} className="">
+        <Link to={to || `${asset.id}/edit`} className="">
           <img
             className="h-[180px] object-cover w-full flex-grow-0"
             src={asset.gallery?.[0] || "/images/easybits-default.webp"}
@@ -30,8 +40,12 @@ export const AssetCard = ({ asset }: { asset: Asset }) => {
           </h3>
         </Link>
         <nav className="flex justify-between pr-4 mt-auto">
-          <p className="text-brand-gray px-3 py-2">${asset.price || 0} mxn</p>
-          <CopyButton className="" text={publicLink} />
+          {left ? (
+            left
+          ) : (
+            <p className="text-brand-gray px-3 py-2">${asset.price || 0} mxn</p>
+          )}
+          {right ? right : <CopyButton className="" text={publicLink} />}
         </nav>
       </div>
     </main>

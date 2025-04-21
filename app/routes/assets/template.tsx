@@ -7,7 +7,7 @@ import { ProductGallery } from "~/components/galleries/ProductGallery";
 import { Form, Link, useFetcher } from "react-router";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import type { Asset } from "@prisma/client";
+import type { Asset, File } from "@prisma/client";
 import type { FormEvent, ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
 import { Input } from "~/components/common/Input";
@@ -19,7 +19,9 @@ export const ContentTemplate = ({
   asset,
   stripePromise,
   checkoutSession,
+  files = [],
 }: {
+  files?: File[];
   asset: Asset;
 }) => {
   return (
@@ -44,6 +46,7 @@ export const ContentTemplate = ({
             </div>
           </div>
           <Info
+            files={files}
             asset={asset}
             stripePromise={stripePromise}
             checkoutSession={checkoutSession}
@@ -111,7 +114,15 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
   );
 };
 
-const Info = ({ asset, stripePromise, checkoutSession }: { asset: Asset }) => {
+const Info = ({
+  files = [],
+  asset,
+  stripePromise,
+  checkoutSession,
+}: {
+  asset: Asset;
+  files?: File[];
+}) => {
   const text = asset.template?.ctaText
     ? asset.template.ctaText
     : asset.price <= 0
@@ -136,7 +147,7 @@ const Info = ({ asset, stripePromise, checkoutSession }: { asset: Asset }) => {
       </div>
       {asset.price <= 0 && <Subscription asset={asset} text={text} />}
 
-      {asset.price && (
+      {asset.price > 0 && (
         <PaymentModal
           stripePromise={stripePromise}
           asset={asset}
@@ -151,7 +162,7 @@ const Info = ({ asset, stripePromise, checkoutSession }: { asset: Asset }) => {
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
       ) : (
-        <Formats />
+        <Formats files={files} />
       )}
     </div>
   );
@@ -258,23 +269,19 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
   );
 };
 
-const Formats = () => {
+const Formats = ({ files }: { files: File[] }) => {
+  const getSizeInMB = () => {
+    const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
+    return (bytes / 1_000_000).toFixed(2) + " mb";
+  };
   return (
     <>
-      <div className="h-10 border-b-[2px] border-black content-center">
-        <AttributeList textLeft="Formato" textRight="png, jpg" />
-      </div>
-      <div className="h-10 border-b-[2px] border-black content-center">
-        <AttributeList textLeft="Formato" textRight="png, jpg" />
-      </div>
-      <div
-        className={cn(
-          "h-10 border-b-0 border-black content-center",
-          "border-b-[2px]"
-        )}
-      >
-        <AttributeList textLeft="Formato" textRight="png, jpg" />
-      </div>
+      <AttributeList textLeft="Número de archivos:" textRight={files.length} />
+      <AttributeList
+        textLeft="Formatos:"
+        textRight={files.map((f) => `${f.name.split(".")[1]}, `)}
+      />
+      <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
     </>
   );
 };
@@ -394,11 +401,9 @@ const AttributeList = ({
   textRight: ReactNode;
 }) => {
   return (
-    <section className="h-10 border-b-[2px] border-black content-center">
-      <div className="py-2 h-6 flex justify-between items-center px-6">
-        <p>{textLeft}</p>
-        <div>{textRight}</div>
-      </div>
+    <section className="border-b-[2px] border-black flex justify-between p-3 gap-3">
+      <p className="min-w-max">{textLeft}</p>
+      <div className="max-w-[420px]">{textRight}</div>
     </section>
   );
 };

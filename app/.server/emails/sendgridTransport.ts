@@ -42,3 +42,5 @@ export const getSesTransport = () => {
     },
   });
 };
+
+export const getSesRemitent = () => `no-reply@easybits.cloud`;
