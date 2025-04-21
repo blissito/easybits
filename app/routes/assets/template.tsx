@@ -13,8 +13,15 @@ import Markdown from "~/components/common/Markdown";
 import { Input } from "~/components/common/Input";
 import { EmojiConfetti } from "~/components/Confetti";
 import { useFetcherSubmit } from "~/hooks/useFetcherSubmit";
+import PaymentModal from "./PaymentModal";
 
-export const ContentTemplate = ({ asset }: { asset: Asset }) => {
+export const ContentTemplate = ({
+  asset,
+  stripePromise,
+  checkoutSession,
+}: {
+  asset: Asset;
+}) => {
   return (
     <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
@@ -36,7 +43,11 @@ export const ContentTemplate = ({ asset }: { asset: Asset }) => {
               <Markdown>{asset.description}</Markdown>
             </div>
           </div>
-          <Info asset={asset} />
+          <Info
+            asset={asset}
+            stripePromise={stripePromise}
+            checkoutSession={checkoutSession}
+          />
         </div>
       </div>
     </section>
@@ -100,7 +111,13 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
   );
 };
 
-const Info = ({ asset }: { asset: Asset }) => {
+const Info = ({ asset, stripePromise, checkoutSession }: { asset: Asset }) => {
+  const text = asset.template?.ctaText
+    ? asset.template.ctaText
+    : asset.price <= 0
+    ? "Suscribirse gratis"
+    : "Comprar";
+
   const getPriceString = () => `$${asset.price} ${asset.currency}`;
   return (
     <div
@@ -117,7 +134,17 @@ const Info = ({ asset }: { asset: Asset }) => {
       >
         <h3 className="text-2xl font-bold text-white">{getPriceString()}</h3>
       </div>
-      {asset.price <= 0 && <Subscription asset={asset} />}
+      {asset.price <= 0 && <Subscription asset={asset} text={text} />}
+
+      {asset.price && (
+        <PaymentModal
+          stripePromise={stripePromise}
+          asset={asset}
+          checkoutSession={checkoutSession}
+          text={text}
+        />
+      )}
+
       <div className="h-fit p-6 border-b-[2px] border-black content-center">
         <Markdown>{asset.note}</Markdown>
       </div>
@@ -133,6 +160,7 @@ const Info = ({ asset }: { asset: Asset }) => {
 const Subscription = ({
   asset,
   actionId,
+  text,
 }: {
   actionId?: string;
   asset: Asset;
@@ -188,11 +216,7 @@ const Subscription = ({
           "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center disabled:text-gray-500 disabled:bg-gray-400/40"
         )}
       >
-        {asset.template?.ctaText
-          ? asset.template.ctaText
-          : asset.price <= 0
-          ? "Suscribirse gratis"
-          : "Comprar"}
+        {text}
       </button>
     </fetcher.Form>
   );
