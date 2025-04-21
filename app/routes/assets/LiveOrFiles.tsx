@@ -79,21 +79,18 @@ export const LiveOrFiles = ({
         <BrutalButton
           onClick={handleTypeUpdate("VOD_COURSE")}
           mode={type === "VOD_COURSE" ? "brand" : "ghost"}
-          className="py-3"
         >
           Pre-grabado
         </BrutalButton>
         <BrutalButton
           onClick={handleTypeUpdate("WEBINAR")}
           mode={type === "WEBINAR" ? "brand" : "ghost"}
-          className="py-3"
         >
           En vivo
         </BrutalButton>
         <BrutalButton
           onClick={handleTypeUpdate("EMAIL_COURSE")}
           mode={type === "EMAIL_COURSE" ? "brand" : "ghost"}
-          className="py-3"
         >
           Por correo
         </BrutalButton>

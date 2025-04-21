@@ -69,9 +69,11 @@ const SideBarItem = ({
   isLogo,
 }: MenuItemProps) => {
   const location = useLocation();
-  const [isActive, setIsActive] = useState(
-    isCurrentActive || location.pathname === path
-  );
+  const [isActive, setIsActive] = useState(false);
+
+  useEffect(() => {
+    setIsActive(isCurrentActive || location.pathname === path);
+  }, [location.pathname, path]);
 
   const [scope, animate] = useAnimate();
   const handleMouseEnter = () => {
