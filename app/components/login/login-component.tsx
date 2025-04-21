@@ -51,6 +51,15 @@ export default function LoginComponent({ state }: { state?: string }) {
 
   const isLoading = fetcher.state !== "idle";
 
+  const handleLogin = (auth: "google" | "stripe") => () => {
+    fetcher.submit(
+      {
+        auth,
+      },
+      { method: "post" }
+    );
+  };
+
   return (
     <section className="w-full border-[1px] border-black h-screen bg-cover bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
@@ -68,7 +77,7 @@ export default function LoginComponent({ state }: { state?: string }) {
             }}
           />
           <AnimatePresence mode="wait">
-            <fetcher.Form onSubmit={handleSubmit} method="post">
+            <article>
               {loginType === "social" && (
                 <motion.div
                   key="social"
@@ -86,9 +95,8 @@ export default function LoginComponent({ state }: { state?: string }) {
                       mode="large"
                       isLoading={isGoogleLoading}
                       className="bg-[#A6EB9A] md:min-w-[420px] "
-                      type="submit"
-                      name="auth"
-                      value="google"
+                      type="button"
+                      onClick={handleLogin("google")}
                     >
                       <FcGoogle />
                       Iniciar con Gmail
@@ -97,9 +105,8 @@ export default function LoginComponent({ state }: { state?: string }) {
                       mode="large"
                       isLoading={isStripeLoading}
                       className="bg-[#6772E5] md:min-w-[420px]"
-                      type="submit"
-                      name="auth"
-                      value="stripe"
+                      type="button"
+                      onClick={handleLogin("stripe")}
                     >
                       <BsStripe fill="white" />
                       Iniciar con Stripe
@@ -127,7 +134,7 @@ export default function LoginComponent({ state }: { state?: string }) {
                   </p>
                 </motion.div>
               )}
-            </fetcher.Form>
+            </article>
             {loginType === "email" && (
               <motion.form
                 onSubmit={handleSubmit}

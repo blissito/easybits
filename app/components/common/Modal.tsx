@@ -160,6 +160,7 @@ export const Modal = ({
             <h2
               className={cn("text-2xl md:text-3xl font-semibold  ", {
                 "mb-1": mode === "naked",
+                "mb-4": mode === "drawer",
               })}
             >
               {title}

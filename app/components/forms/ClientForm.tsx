@@ -6,6 +6,7 @@ import { Input } from "./Input";
 import { RadioGroup } from "./RadioInput";
 import { useEffect, type ChangeEvent } from "react";
 import { type NewAssetSchema } from "~/utils/zod.schemas";
+import { Avatar } from "../common/Avatar";
 
 export const ClientForm = ({
   onClose,
@@ -50,33 +51,22 @@ export const ClientForm = ({
   };
 
   return (
-    <fetcher.Form
-      // @ts-ignore
-      onSubmit={handleSubmit(submit)}
-      className="flex flex-col h-max "
-    >
-      <Input
-        pattern=".{3,}"
-        // @ts-ignore
-        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-          handleChange("title", e.currentTarget.value)
-        }
-        label="Ponle nombre a tu asset"
-        placeholder="Curso de macramé"
-      />
+    <article>
+      <Avatar size="xl" className="mb-4" />
 
-      <h3 className="mb-4 font-medium">¿Qué tipo de asset es?</h3>
-
-      <RadioGroup onChange={(value: string) => handleChange("type", value)} />
-
-      <nav className="flex justify-end mt-12 gap-6 md:gap-8">
+      <nav className="flex justify-end mt-12 gap-6 md:gap-8 fixed bottom-8 right-8">
         <BrutalButton className="bg-white" onClick={onClose} type="button">
           Cancelar
         </BrutalButton>
-        <BrutalButton isDisabled={!isValid} isLoading={isLoading} type="submit">
-          Continuar
+        <BrutalButton
+          mode="danger"
+          isDisabled={!isValid}
+          isLoading={isLoading}
+          type="submit"
+        >
+          Bloquear
         </BrutalButton>
       </nav>
-    </fetcher.Form>
+    </article>
   );
 };

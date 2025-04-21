@@ -76,53 +76,66 @@ const Row = ({ menu, client }: { menu?: ReactNode; client: Client }) => {
         "grid grid-cols-12 py-2 md:py-3 border-b  items-center"
       )}
     >
-      <span className="">
+      <Cell>
         <input
           type="checkbox"
           className="text-brand-500 border rounded focus:outline-brand-500 border-black"
         />
-      </span>
-      <button className="truncate font-semibold col-span-2 md:col-span-1 text-left flex flex-col">
+      </Cell>
+      <Cell>
         <img
           className="h-10 w-10 rounded-full"
           src="https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200"
           alt="user"
         />
-      </button>
-      <div className="text-brand-gray col-span-5 md:col-span-4 lg:col-span-2 flex flex-col">
-        <span className="text-black"> {client.email}</span>
-        <span className="block lg:hidden"> {client.displayName}</span>
-      </div>
-
-      <span className="text-brand-gray col-span-2 hidden lg:block">
-        {" "}
-        Fulanito Lopez
-      </span>
-      <span className="text-brand-gray col-span-2 md:col-span-1 ">1</span>
-      <span className=" items-center  col-span-2 hidden md:flex">
-        {" "}
-        10 nov 2024
-      </span>
-      <span className=" items-center  col-span-2 hidden md:flex">
-        15 dic 2024
-      </span>
-
-      <DotsMenu>{menu}</DotsMenu>
+      </Cell>
+      <Cell className="col-span-3">
+        <span> {client.email}</span>
+      </Cell>
+      <Cell className="col-span-3">
+        <span> {client.displayName}</span>
+      </Cell>
+      <Cell>10</Cell>
+      <Cell className="col-span-2">
+        {new Date().toLocaleDateString("es-MX", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}
+      </Cell>
+      <Cell>
+        <DotsMenu>{menu}</DotsMenu>
+      </Cell>
     </motion.section>
+  );
+};
+
+const Cell = ({
+  children,
+  className,
+  ...props
+}: {
+  className?: string;
+  children: ReactNode;
+  [x: string]: unknown;
+}) => {
+  return (
+    <section {...props} className={className}>
+      {children}
+    </section>
   );
 };
 
 const Header = () => {
   return (
     <section className="grid bg-brand-100 grid-cols-12 pl-4 py-2 border-b-[2px] border-black">
-      <span className=""></span>
-      <span className=" col-span-2 md:col-span-1">Foto</span>
-      <span className="col-span-5  md:col-span-4 lg:col-span-2">Email</span>
-      <span className="col-span-2 hidden lg:block ">Nombre</span>
+      <span className="col-span-1" />
+      <span className="col-span-1" />
+      <span className="col-span-3">Email</span>
+      <span className="col-span-3">Cliente</span>
       <span className="col-span-1">Compras</span>
-      <span className="col-span-2 hidden md:block">Fecha de registro</span>
-      <span className="col-span-2  hidden md:block">Última compra</span>
-      <span className="col-span-1"></span>
+      <span className="col-span-2">Última compra</span>
+      <span className="">Acciones</span>
     </section>
   );
 };

@@ -20,12 +20,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 };
 
 export default function Clients({ loaderData }: Route.ComponentProps) {
-  const { clients, user } = loaderData;
-
+  // const { clients, user } = loaderData;
   const [showForm, setShowForm] = useState(false);
-  const handleCTAClick = () => {
-    handleOpen();
-  };
 
   const handleClose = () => {
     setShowForm(false);
@@ -43,18 +39,24 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
         LAYOUT_PADDING
       )}
     >
-      <Header
-        cta={
-          <BrutalButton onClick={handleCTAClick}>Añadir cliente</BrutalButton>
-        }
-        title="Clientes"
-      />
+      <Header title="Clientes" />
       {/* Aquí está el crud 👇🏼 */}
       <ClientsTable
         onOpen={handleOpen}
         onClose={handleClose}
         isFormOpen={showForm}
-        clients={clients}
+        clients={[
+          {
+            id: "abc",
+            email: "perro@blissmo.com",
+            displayName: "Pedro Vargas Gonzalez Garcia",
+          },
+          {
+            id: "abc2",
+            email: "sam@blissmo.com",
+            displayName: "Samantha Figueroa Gardini de Lozada",
+          },
+        ]}
       />
     </article>
   );
