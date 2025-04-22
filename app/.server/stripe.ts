@@ -120,12 +120,9 @@ export const createAccount = async () => {
  * create checkout session
  */
 
-// Set your secret key. Remember to switch to your live secret key in production.
-// See your keys here: https://dashboard.stripe.com/apikeys
-
 export const createCheckoutSession = async ({ stripeAccount, asset }) => {
   const { slug, price, title, currency } = asset;
-  const applicationFee = price * 0.1 * 100;
+  const applicationFee = price * 0.5 * 100;
   const session = await getStripe().checkout.sessions.create(
     {
       line_items: [
@@ -135,7 +132,7 @@ export const createCheckoutSession = async ({ stripeAccount, asset }) => {
             product_data: {
               name: title || slug,
             },
-            unit_amount: 1000,
+            unit_amount: asset.price,
           },
           quantity: 1,
         },
