@@ -2,14 +2,14 @@ import { db } from "~/.server/db";
 import type { Route } from "./+types/tokens";
 import { getReadURL } from "react-hook-multipart";
 import { decodeToken } from "~/utils/tokens";
-import { Form, Link, redirect } from "react-router";
+import { data, Form, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import Logo from "/icons/easybits-logo.svg";
 import { FlipLetters } from "~/components/animated/FlipLetters";
 import { setSessionCookie } from "~/.server/getters";
 import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 
-const decode = (url: URL) => {
+export const decode = (url: URL) => {
   const token = url.searchParams.get("token") as string;
   const tokenData = decodeToken(token);
   if (!tokenData?.success) {
@@ -60,6 +60,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
   if (intent === "generate_token") {
+    console.log("here");
     const fileId = formData.get("fileId") as string;
     const expInSecs = formData.get("expInSecs") as string;
     const expiresIn = formData.get("expiresIn") as string;
@@ -71,7 +72,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       file.storageKey,
       Number(expiresIn || expInSecs)
     );
-    return { url };
+    return data({ url });
   }
 
   if (intent === "set_session") {
@@ -89,7 +90,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { success } = loaderData;
-
+  return null;
   return (
     <article className="grid h-screen place-content-center bg-black text-white">
       <nav className="flex gap-2">

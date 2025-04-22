@@ -8,29 +8,28 @@ export const DownloablePreview = ({
   asset: Asset;
   files: File[];
 }) => {
+  // @todo make this a hook?
   const handleDownload = async () => {
-    const file = files[0];
-    console.log(file.storageKey);
-    const downloadLink = await fetch("/api/v1/tokens", {
+    for await (let file of files) {
+      await download(file);
+    }
+  };
+
+  const download = async (file: File) => {
+    const { url } = await fetch("/api/v1/downloads", {
       method: "post",
       body: new URLSearchParams({
         intent: "generate_token",
         fileId: file.id,
       }),
     }).then((r) => r.json());
+    const blob = await fetch(url).then((r) => r.blob());
     const a = document.createElement("a");
-    a.href = downloadLink;
+    a.href = URL.createObjectURL(blob);
+    a.target = "_blank";
     a.download = file.name;
-    console.log("Link:", downloadLink);
-    // a.click();
-    // await fetcher.submit(
-    //   {
-    //     intent: "generate_token",
-    //     fileId: tokenFor.id,
-    //     expInSecs,
-    //   },
-    //   { method: "post", action: "/api/v1/tokens" }
-    // );
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   return (
