@@ -6,6 +6,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
 import { useActionData } from "react-router";
 import { useMemo } from "react";
+import { EmojiConfetti } from "~/components/Confetti";
 
 export const meta = ({
   data: {
@@ -40,9 +41,9 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   if (!asset) throw new Response("Asset not found", { status: 404 });
 
   const publishableKey = await getPublishableKey();
-  //get own user for testing
-  //const user = await getUserOrNull(request); //asset.user
+  const searchParams = url.searchParams;
 
+  const successStripeId = searchParams.get("session_id");
   // file names
   const files = await db.file.findMany({
     orderBy: { createdAt: "desc" },
@@ -62,7 +63,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     files,
     asset,
     publishableKey,
-    // user
+    successStripeId,
   };
 };
 
@@ -97,9 +98,9 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { asset, publishableKey, files } = loaderData;
+  const { asset, publishableKey, files, successStripeId } = loaderData;
   const actionData = useActionData();
-  const assetUserStripeId = asset?.user?.stripe?.id; //can youse your own user if already loggued in stripe for testing
+  const assetUserStripeId = asset?.user?.stripe?.id;
 
   const stripePromise = useMemo(() => {
     if (!publishableKey) return null;
@@ -111,6 +112,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <article>
       <HeaderTemplate asset={asset} />
+      {successStripeId && <EmojiConfetti />}
       <ContentTemplate
         asset={asset}
         stripePromise={stripePromise}

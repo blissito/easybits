@@ -2,10 +2,6 @@ import {
   EmbeddedCheckoutProvider,
   EmbeddedCheckout,
 } from "@stripe/react-stripe-js";
-// import { getUserOrNull } from "~/.server/getters";
-
-import { Form } from "react-router";
-import { BrutalButton } from "~/components/common/BrutalButton";
 import { useState } from "react";
 import { Modal } from "~/components/common/Modal";
 import { useSubmit } from "react-router";
