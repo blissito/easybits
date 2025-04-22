@@ -8,6 +8,31 @@ export const DownloablePreview = ({
   asset: Asset;
   files: File[];
 }) => {
+  const handleDownload = async () => {
+    const file = files[0];
+    console.log(file.storageKey);
+    const downloadLink = await fetch("/api/v1/tokens", {
+      method: "post",
+      body: new URLSearchParams({
+        intent: "generate_token",
+        fileId: file.id,
+      }),
+    }).then((r) => r.json());
+    const a = document.createElement("a");
+    a.href = downloadLink;
+    a.download = file.name;
+    console.log("Link:", downloadLink);
+    // a.click();
+    // await fetcher.submit(
+    //   {
+    //     intent: "generate_token",
+    //     fileId: tokenFor.id,
+    //     expInSecs,
+    //   },
+    //   { method: "post", action: "/api/v1/tokens" }
+    // );
+  };
+
   return (
     <section className="border my-10 md:mt-0 border-white max-w-3xl rounded-2xl mx-auto flex flex-wrap md:flex-nowrap h-fit md:h-[600px] overflow-hidden ">
       <div className="w-full md:w-[50%] h-full bg-slate-600">
@@ -46,6 +71,7 @@ export const DownloablePreview = ({
           </div>
           <div className="border-t border-white py-3 px-4">
             <BrutalButton
+              onClick={handleDownload}
               type="button"
               className="w-full"
               containerClassName="w-full"

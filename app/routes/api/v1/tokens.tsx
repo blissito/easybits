@@ -62,11 +62,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "generate_token") {
     const fileId = formData.get("fileId") as string;
     const expInSecs = formData.get("expInSecs") as string;
+    const expiresIn = formData.get("expiresIn") as string;
     const file = await db.file.findUnique({ where: { id: fileId } });
     if (!file || !file.storageKey)
       throw new Response("The file does not exist", { status: 404 });
 
-    const url = await getReadURL(file.storageKey, expInSecs);
+    const url = await getReadURL(
+      file.storageKey,
+      Number(expiresIn || expInSecs)
+    );
     return { url };
   }
 

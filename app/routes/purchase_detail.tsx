@@ -6,7 +6,7 @@ import { db } from "~/.server/db";
 import { getFilesForAssetId, getUserOrRedirect } from "~/.server/getters";
 import { DownloablePreview } from "./viewer/DownloablePreview";
 
-const LAYOUT_PADDING = "py-16 md:py-10";
+const LAYOUT_PADDING = "pt-10 px-20";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -36,19 +36,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   // DOWNLOADABLE
   switch (asset.type) {
     case "DOWNLOADABLE":
-      //   viewer = <Downloadable files={files} asset={asset} />;
       viewer = <DownloablePreview asset={asset} files={files} />;
   }
 
   return (
-    <article
-      className={cn(
-        "text-white bg-black",
-        " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0",
-
-        LAYOUT_PADDING
-      )}
-    >
+    <article className={cn("text-white bg-black", "w-full", LAYOUT_PADDING)}>
       <Link
         prefetch="intent"
         to="/dash/compras"

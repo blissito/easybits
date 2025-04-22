@@ -8,7 +8,7 @@ interface BrutalButtonProps {
   containerClassName?: string;
   isDisabled?: boolean;
   isLoading?: boolean;
-  // icon?: ReactNode;
+  onClick?: () => void;
   mode?: "ghost" | "brand" | "danger";
   type?: "button" | "submit";
   [x: string]: unknown;
@@ -17,6 +17,7 @@ interface BrutalButtonProps {
 export const BrutalButton = ({
   mode = "brand",
   children,
+  onClick,
   className,
   containerClassName,
   isLoading,
@@ -26,6 +27,7 @@ export const BrutalButton = ({
 }: BrutalButtonProps) => {
   return (
     <button
+      onClick={onClick}
       disabled={isDisabled || isLoading}
       className={cn("group rounded-xl h-12 bg-black", containerClassName, {
         "bg-black/70": isDisabled || isLoading,

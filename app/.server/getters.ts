@@ -143,5 +143,6 @@ export const getFilesForAssetId = (assetId: string) =>
       name: true,
       id: true,
       size: true,
+      storageKey: true,
     },
   });
