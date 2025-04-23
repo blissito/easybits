@@ -29,13 +29,17 @@ export const ActiveUploads = ({ tasks }: { tasks: Task[] }) => {
 const Upload = ({
   task,
   className,
+  onAbort,
 }: {
   task: Task;
   className?: string;
   onClose?: (arg0: string) => void;
   access?: "public-read" | "private";
+  onAbort?: () => void;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+
+  const handleAbort = () => task.abortController.abort("::ABORTED_BY_USER::");
 
   return (
     <div className={cn("border-b border-dashed py-3 border-black", className)}>
@@ -49,6 +53,7 @@ const Upload = ({
             : `${task.percentage.toFixed(0)}%`}
         </span>
         <button
+          onClick={handleAbort}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           className={cn(
@@ -71,7 +76,7 @@ const Upload = ({
               <img
                 className="scale-[270%]"
                 src="/images/Cloud.gif"
-                alt="nube subiendo archivo"
+                alt="uploading cloud"
               />
             </div>
           )}

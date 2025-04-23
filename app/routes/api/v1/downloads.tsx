@@ -1,8 +1,5 @@
 import { getReadURL } from "react-hook-multipart";
 import type { Route } from "./+types/downloads";
-import { redirect } from "react-router";
-import { decode } from "./tokens";
-import { setSessionCookie } from "~/.server/getters";
 import { db } from "~/.server/db";
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -20,16 +17,5 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const url = await getReadURL(file.storageKey, Number(expiresIn));
     return { url };
   }
-
-  if (intent === "set_session") {
-    const tokenData = decode(new URL(request.url));
-    if (!tokenData) throw redirect("/dash");
-
-    return await setSessionCookie({
-      email: tokenData.email,
-      request,
-    });
-  }
-
   return null;
 };

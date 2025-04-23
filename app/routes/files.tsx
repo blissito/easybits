@@ -32,36 +32,29 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const openTokensModal = (file: File) => setTokenFor(file);
   return (
     <>
-      <article className="min-h-[calc(100vh-2px)] overflow-hidden box-border relative w-full">
-        <section className=" max-w-7xl mx-auto w-full pt-16 pb-6 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0 ">
-          <div className="flex h-fit mb-8 md:mb-10 flex-wrap">
-            <h2 className="text-3xl lg:text-4xl font-semibold  my-auto">
-              Almacenamiento de archivos
-            </h2>{" "}
-            {files.length > 1 && (
-              <BrutalButton
-                onClick={open}
-                containerClassName="block ml-0 mt-3 md:mt-0 md:ml-auto "
-              >
-                + Subir archivo
-              </BrutalButton>
-            )}
-          </div>
-          {files.length < 1 && (
-            <EmptyFiles onClick={() => setShowModal(true)} />
-          )}
-
-          {files.length > 0 && (
-            <FilesTable
-              onTokenClick={openTokensModal}
-              files={files}
-              onDetail={(file: File) => {
-                setDetailFile(file);
-              }}
-            />
-          )}
-        </section>
-      </article>
+      <Layout
+        cta={
+          files.length > 1 && (
+            <BrutalButton
+              onClick={open}
+              containerClassName="block md:mt-0 md:ml-auto "
+            >
+              + Subir archivo
+            </BrutalButton>
+          )
+        }
+      >
+        {files.length < 1 && <EmptyFiles onClick={() => setShowModal(true)} />}
+        {files.length > 0 && (
+          <FilesTable
+            onTokenClick={openTokensModal}
+            files={files}
+            onDetail={(file: File) => {
+              setDetailFile(file);
+            }}
+          />
+        )}
+      </Layout>
       <FilesFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
       <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
       <FileDetailModal
@@ -72,3 +65,19 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     </>
   );
 }
+
+const Layout = ({ cta, children }) => {
+  return (
+    <article className="min-h-[calc(100vh-2px)] overflow-hidden box-border relative w-full">
+      <section className=" max-w-7xl mx-auto w-full pt-16 pb-6 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0 ">
+        <div className="mb-8 md:mb-10 flex justify-between items-center">
+          <h2 className="text-3xl lg:text-4xl font-semibold">
+            Almacenamiento de archivos
+          </h2>
+          {cta}
+        </div>
+        {children}
+      </section>
+    </article>
+  );
+};

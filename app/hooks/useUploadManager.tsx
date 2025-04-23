@@ -18,15 +18,26 @@ const taskMap = new Map();
 
 export type Task = {
   id: string;
-  index?: number;
   file: File;
   percentage: number;
   status: "Pending" | "Working" | "Done";
   thumbnail: undefined; // get frame from encoding blob? @todo
+  index?: number;
+  abortController: AbortController;
 };
 
 type useUploadManagerInput = {
   onTaskEnd?: (task: Task) => void;
+};
+
+let abortController: AbortController;
+const getAbortController = () => {
+  // reset controller to upload other files
+  if (abortController?.signal.aborted) {
+    abortController = new AbortController();
+    return;
+  }
+  return (abortController ??= new AbortController()) as AbortController;
 };
 
 export const useUploadManager = (input?: useUploadManagerInput) => {
@@ -35,24 +46,28 @@ export const useUploadManager = (input?: useUploadManagerInput) => {
   taskMap.set("files", []);
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  const findTask = (id: string) => tasks.find((t) => t.id === id);
+
   const clearTask = (id: string) => {
-    if (
-      taskMap.get(id).status === "Done" ||
-      taskMap.get(id).status === "Error"
-    ) {
-      taskMap.delete(id);
-      updateState();
-    }
-    // @todo abort
+    taskMap.delete(id);
+    updateState();
   };
 
   const createTask = (file: File): Task => {
+    const id = nanoid(3);
+    // const ac = getAbortController();
+    const ac = new AbortController();
+    ac.signal.addEventListener("abort", () => {
+      console.info("::TRYING_TO_ABORT::");
+      clearTask(id);
+    });
     return {
-      id: nanoid(3),
+      id,
       file,
       percentage: 0,
       status: "Pending",
       thumbnail: undefined, // get frame from encoding blob? @todo
+      abortController: ac, // @todo:revisit is this gonna be used for every upload?
     };
   };
 
@@ -65,8 +80,12 @@ export const useUploadManager = (input?: useUploadManagerInput) => {
   };
 
   const startUpload = (taskId: string, access: "public-read" | "private") => {
-    const { upload } = useUploadMultipart({ access }); // used here because the access limitation (upload should receive access too)
     const task: Task = taskMap.get(taskId);
+    const { upload } = useUploadMultipart({
+      access,
+      signal: task.abortController.signal,
+    }); // used here because the access limitation (upload should receive access too)
+
     upload(task.file.name, task.file, ({ percentage }) => {
       task.percentage = percentage;
       task.status = "Working";
