@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { FaCheckCircle } from "react-icons/fa";
 import { IoMdCloseCircle } from "react-icons/io";
