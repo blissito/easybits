@@ -8,7 +8,7 @@ export const usePublicLink = (asset: Asset & { user: User }) => {
   useEffect(() => {
     let h = `${location.host}`;
     // const th = asset.template!.host as string; deprecated
-    const th = asset.user?.host || "";
+    const th = asset.user?.host || ""; // user host intead of the template one
     // should trhow or redirect?
     h = h.replace("www", th); // duh! (not replacing in localhost)
     // // ussing asset slug instead of the template one

@@ -3,6 +3,7 @@ import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { FaWindowClose } from "react-icons/fa";
 import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
 import { Input } from "~/components/common/Input";
 
 export const useHostEditor = ({ user }: { user: User }) => {
@@ -50,12 +51,17 @@ export const useHostEditor = ({ user }: { user: User }) => {
     Modal: () => (
       <>
         <Modal onClose={onClose} open={open} setOpen={setOpen} user={user}>
-          <Input
-            onChange={formatHost}
-            value={host}
-            placeholder="Selecciona un subdominio"
-            label="Selecciona un subdominio:"
-          />
+          <div className="flex items-end gap-2 w-full">
+            <p className="">https://</p>
+            <Input
+              onChange={formatHost}
+              value={host}
+              placeholder="mi-negocio"
+              label="Selecciona un subdominio:"
+              className="my-[-10px]"
+            />
+            <p className="">.easybits.cloud</p>
+          </div>
           <p className="text-xs text-red-500">{error}</p>
           <BrutalButton
             isLoading={isLoading}
@@ -114,12 +120,7 @@ const Modal = ({
           <h1 className="text-xl">
             Editar el nombre de tu subdominio gratuito
           </h1>
-          <button
-            onClick={onClose}
-            className="text-2xl hover:scale-105 active:scale-100"
-          >
-            <FaWindowClose />
-          </button>
+          <BrutalButtonClose onClick={onClose} />
         </nav>
         <hr className="my-2" />
         {children}
