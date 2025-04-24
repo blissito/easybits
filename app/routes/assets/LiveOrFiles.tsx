@@ -108,98 +108,79 @@ export const LiveOrFiles = ({
         </BrutalButton>
       </nav>
       <AnimatePresence mode="popLayout">
-        {isLive && (
-          <motion.div
-            key={"live"}
-            initial={{
-              scale: 0.8,
-              opacity: 0,
-              filter: "blur(4px)",
-            }}
-            exit={{
-              scale: 0.8,
-              opacity: 0,
-              filter: "blur(4px)",
-            }}
-            animate={{
-              scale: 1,
-              opacity: 1,
-              filter: "blur(0px)",
-            }}
-          >
-            <p>Selecciona la fecha y hora del evento</p>
-            <div className="flex gap-4">
+        <motion.div
+          key={type}
+          initial={{
+            scale: 0.8,
+            opacity: 0,
+            filter: "blur(4px)",
+          }}
+          exit={{
+            scale: 0.8,
+            opacity: 0,
+            filter: "blur(4px)",
+          }}
+          animate={{
+            scale: 1,
+            opacity: 1,
+            filter: "blur(0px)",
+          }}
+        >
+          {isLive && (
+            <>
+              <p>Selecciona la fecha y hora del evento</p>
+              <div className="flex gap-4">
+                <Input
+                  onChange={handleDateChange}
+                  type="date"
+                  className="w-full"
+                  defaultValue={defaultDate}
+                />
+                <Input
+                  defaultValue={defaultTime}
+                  onChange={handleTimeChange}
+                  type="time"
+                  className="w-full"
+                />
+              </div>
+              <p>Coloca el número de sesiones</p>
               <Input
-                onChange={handleDateChange}
-                type="date"
+                min="1"
+                type="number"
+                defaultValue={asset.metadata?.numberOfSessions || "1"}
+                onChange={(ev) =>
+                  onChangeMetadata?.({
+                    numberOfSessions: Number(ev.currentTarget.value),
+                  })
+                }
                 className="w-full"
-                defaultValue={defaultDate}
               />
-              <Input
-                defaultValue={defaultTime}
-                onChange={handleTimeChange}
-                type="time"
-                className="w-full"
-              />
-            </div>
-            <p>Coloca el número de sesiones</p>
-            <Input
-              min="1"
-              type="number"
-              defaultValue={asset.metadata?.numberOfSessions || "1"}
-              onChange={(ev) =>
-                onChangeMetadata?.({
-                  numberOfSessions: Number(ev.currentTarget.value),
-                })
-              }
-              className="w-full"
-            />
-          </motion.div>
-        )}
-        {isEmailCourse && ( // @todo make another componente without privacy selection
-          <motion.div
-            key={"vod"}
-            initial={{
-              scale: 0.8,
-              opacity: 0,
-              filter: "blur(4px)",
-            }}
-            exit={{
-              scale: 0.8,
-              opacity: 0,
-              filter: "blur(4px)",
-            }}
-            animate={{
-              scale: 1,
-              opacity: 1,
-              filter: "blur(0px)",
-            }}
-          >
-            <NewsLetterMicroApp files={files} asset={asset} />
-          </motion.div>
-        )}
-        {isVOD && (
-          <motion.div
-            key={"vod"}
-            initial={{
-              scale: 0.8,
-              opacity: 0,
-              filter: "blur(4px)",
-            }}
-            exit={{
-              scale: 0.9,
-              opacity: 0,
-              filter: "blur(4px)",
-            }}
-            animate={{
-              scale: 1,
-              opacity: 1,
-              filter: "blur(0px)",
-            }}
-          >
-            {vode_course}
-          </motion.div>
-        )}
+            </>
+          )}
+          {isEmailCourse && ( // @todo make another componente without privacy selection
+            <motion.div
+              key={"vod"}
+              initial={{
+                scale: 0.8,
+                opacity: 0,
+                filter: "blur(4px)",
+              }}
+              exit={{
+                scale: 0.8,
+                opacity: 0,
+                filter: "blur(4px)",
+              }}
+              animate={{
+                scale: 1,
+                opacity: 1,
+                filter: "blur(0px)",
+              }}
+            >
+              <NewsLetterMicroApp files={files} asset={asset} />
+            </motion.div>
+          )}
+          {isVOD && vode_course}
+        </motion.div>
       </AnimatePresence>
     </section>
   );
