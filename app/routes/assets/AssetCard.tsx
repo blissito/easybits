@@ -1,5 +1,5 @@
 import type { Asset } from "@prisma/client";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link } from "react-router";
 import { CopyButton } from "~/components/common/CopyButton";
 import { usePublicLink } from "~/hooks/usePublicLink";
@@ -16,8 +16,6 @@ export const AssetCard = ({
   asset: Asset;
   right?: ReactNode;
 }) => {
-  const publicLink = usePublicLink(asset as any);
-
   return (
     <main className="group bg-black rounded-2xl">
       <div
@@ -46,7 +44,11 @@ export const AssetCard = ({
           ) : (
             <p className="text-brand-gray px-3 py-2">${asset.price || 0} mxn</p>
           )}
-          {right ? right : <CopyButton className="" text={publicLink} />}
+          {right ? (
+            right
+          ) : (
+            <CopyButton className="" text={usePublicLink(asset as any)} />
+          )}
         </nav>
       </div>
     </main>
