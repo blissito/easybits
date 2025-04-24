@@ -16,7 +16,8 @@ export const AssetCard = ({
   asset: Asset;
   right?: ReactNode;
 }) => {
-  const publicLink = usePublicLink(asset);
+  const publicLink = usePublicLink(asset as any);
+
   return (
     <main className="group bg-black rounded-2xl">
       <div

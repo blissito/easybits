@@ -16,6 +16,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     where: {
       userId: user.id,
     },
+    include: {
+      user: true,
+    },
   });
   return { assets };
 };
