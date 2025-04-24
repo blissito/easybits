@@ -26,6 +26,7 @@ export default function Store({ loaderData }: Route.ComponentProps) {
     <div className=" w-full flex justify-center">
       <Modal />
       <StoreComponent
+        user={user}
         assets={assets}
         cta={
           <button
