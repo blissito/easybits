@@ -1,11 +1,12 @@
 import { Input } from "~/components/common/Input";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FilesForm } from "~/components/forms/files/FilesForm";
 import type { Asset, File as AssetFile } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useFetcher } from "react-router";
 import { NewsLetterMicroApp } from "~/components/forms/NewsLetterForm";
+import { FilesPicker } from "./FilesPicker";
 
 export const LiveOrFiles = ({
   onChangeEventDate,
@@ -14,7 +15,11 @@ export const LiveOrFiles = ({
   type,
   files,
   defaultEventDate = new Date(),
+  vode_course,
+  onTypeChange,
 }: {
+  onTypeChange?: (type: string) => void;
+  vode_course?: ReactNode;
   onChangeMetadata?: (arg0: unknown) => void;
   asset: Asset;
   files: AssetFile[];
@@ -58,8 +63,14 @@ export const LiveOrFiles = ({
 
   const isEmailCourse = type === "EMAIL_COURSE";
   const isLive = type === "WEBINAR";
+  const isVOD = type === "VOD_COURSE";
 
+  const [localType, setLocalType] = useState<string>(type);
+  useEffect(() => {
+    setLocalType(type);
+  }, [type]);
   const handleTypeUpdate = (type: string) => () => {
+    setLocalType(type);
     fetcher.submit(
       {
         intent: "update_asset",
@@ -70,6 +81,7 @@ export const LiveOrFiles = ({
       },
       { method: "post", action: "/api/v1/assets" }
     );
+    onTypeChange?.(type);
   };
 
   return (
@@ -78,76 +90,114 @@ export const LiveOrFiles = ({
       <nav className="flex flex-wrap gap-4 items-center mb-4 ">
         <BrutalButton
           onClick={handleTypeUpdate("VOD_COURSE")}
-          mode={type === "VOD_COURSE" ? "brand" : "ghost"}
+          mode={localType === "VOD_COURSE" ? "brand" : "ghost"}
         >
           Pre-grabado
         </BrutalButton>
         <BrutalButton
           onClick={handleTypeUpdate("WEBINAR")}
-          mode={type === "WEBINAR" ? "brand" : "ghost"}
+          mode={localType === "WEBINAR" ? "brand" : "ghost"}
         >
           En vivo
         </BrutalButton>
         <BrutalButton
           onClick={handleTypeUpdate("EMAIL_COURSE")}
-          mode={type === "EMAIL_COURSE" ? "brand" : "ghost"}
+          mode={localType === "EMAIL_COURSE" ? "brand" : "ghost"}
         >
           Por correo
         </BrutalButton>
       </nav>
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="popLayout">
         {isLive && (
-          <>
-            <motion.div
-              key={"live"}
-              initial={{ opacity: 0, filter: "blur(4px)" }}
-              exit={{ opacity: 0, filter: "blur(4px)" }}
-              animate={{ opacity: 1, filter: "blur(0px)" }}
-            >
-              <p>Selecciona la fecha y hora del evento</p>
-              <div className="flex gap-4">
-                <Input
-                  onChange={handleDateChange}
-                  type="date"
-                  className="w-full"
-                  defaultValue={defaultDate}
-                />
-                <Input
-                  defaultValue={defaultTime}
-                  onChange={handleTimeChange}
-                  type="time"
-                  className="w-full"
-                />
-              </div>
-              <p>Coloca el número de sesiones</p>
+          <motion.div
+            key={"live"}
+            initial={{
+              scale: 0.8,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            exit={{
+              scale: 0.8,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            animate={{
+              scale: 1,
+              opacity: 1,
+              filter: "blur(0px)",
+            }}
+          >
+            <p>Selecciona la fecha y hora del evento</p>
+            <div className="flex gap-4">
               <Input
-                min="1"
-                type="number"
-                defaultValue={asset.metadata?.numberOfSessions || "1"}
-                onChange={(ev) =>
-                  onChangeMetadata?.({
-                    numberOfSessions: Number(ev.currentTarget.value),
-                  })
-                }
+                onChange={handleDateChange}
+                type="date"
+                className="w-full"
+                defaultValue={defaultDate}
+              />
+              <Input
+                defaultValue={defaultTime}
+                onChange={handleTimeChange}
+                type="time"
                 className="w-full"
               />
-            </motion.div>
-          </>
+            </div>
+            <p>Coloca el número de sesiones</p>
+            <Input
+              min="1"
+              type="number"
+              defaultValue={asset.metadata?.numberOfSessions || "1"}
+              onChange={(ev) =>
+                onChangeMetadata?.({
+                  numberOfSessions: Number(ev.currentTarget.value),
+                })
+              }
+              className="w-full"
+            />
+          </motion.div>
         )}
-        {!isLive && ( // @todo make another componente without privacy selection
+        {isEmailCourse && ( // @todo make another componente without privacy selection
           <motion.div
             key={"vod"}
-            initial={{ opacity: 0, filter: "blur(4px)" }}
-            exit={{ opacity: 0, filter: "blur(4px)" }}
-            animate={{ opacity: 1, filter: "blur(0px)" }}
+            initial={{
+              scale: 0.8,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            exit={{
+              scale: 0.8,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            animate={{
+              scale: 1,
+              opacity: 1,
+              filter: "blur(0px)",
+            }}
           >
-            {isEmailCourse ? (
-              <NewsLetterMicroApp files={files} asset={asset} />
-            ) : (
-              <FilesForm
-                mode={isEmailCourse ? "private_by_default" : undefined}
-              />
-            )}
+            <NewsLetterMicroApp files={files} asset={asset} />
+          </motion.div>
+        )}
+        {isVOD && (
+          <motion.div
+            key={"vod"}
+            initial={{
+              scale: 0.8,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            exit={{
+              scale: 0.9,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            animate={{
+              scale: 1,
+              opacity: 1,
+              filter: "blur(0px)",
+            }}
+          >
+            {vode_course}
           </motion.div>
         )}
       </AnimatePresence>

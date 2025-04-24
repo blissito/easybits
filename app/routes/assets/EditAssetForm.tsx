@@ -13,6 +13,7 @@ import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
 import { useImageResize } from "~/hooks/useImageResize";
+import { motion } from "motion/react";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -191,15 +192,21 @@ export const EditAssetForm = ({
           <HR />
 
           {(asset.type === "EMAIL_COURSE" ||
-            asset.type === "VOD_COURSE" ||
+            asset.type === "VOD_COURSE" || // @todo get buttons outside of here
             asset.type === "WEBINAR") && (
             <LiveOrFiles
+              onTypeChange={(type) => {
+                setState({ type });
+              }}
               files={files}
               onChangeEventDate={handleEventChange}
               defaultEventDate={asset.eventDate}
               type={asset.type}
               asset={asset}
               onChangeMetadata={handleMetadataChange}
+              vode_course={
+                <FilesPicker assetFiles={assetFiles} asset={asset} />
+              }
             />
           )}
 
