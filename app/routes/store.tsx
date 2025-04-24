@@ -13,6 +13,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       userId: user.id,
       // published: true, // @todo publish switch in form?
     },
+    include: {
+      user: true,
+    },
   });
   return { assets, user };
 };
