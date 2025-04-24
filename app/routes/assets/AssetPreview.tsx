@@ -73,7 +73,6 @@ export const AssetPreview = ({
       <div className="bg-white h-[80%]">
         <iframe
           ref={iframeRef}
-          // src={`https://${host}.easybits.cloud/${asset.slug}`}
           src={`https://${host}.easybits.cloud/p/${asset.slug}`} // should work locally?
           style={{
             width: "100%",

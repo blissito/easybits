@@ -4,6 +4,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
 import { db } from "~/.server/db";
 import { AssetPreview } from "./AssetPreview";
+import { redirect } from "react-router";
 
 const PADDING_LAYOUT = `pl-4`;
 
@@ -15,6 +16,7 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
       userId: user.id,
     },
   });
+  if (!asset) return redirect("/dash/assets");
   const files = await db.file.findMany({
     orderBy: { createdAt: "desc" },
     where: {
@@ -24,12 +26,6 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     },
   });
   return { host: user.host!, asset, files };
-};
-
-export const action = async ({ request }: Route.ActionArgs) => {
-  const formData = await request.formData();
-  // const intent = formData.get("intent");
-  return null;
 };
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {

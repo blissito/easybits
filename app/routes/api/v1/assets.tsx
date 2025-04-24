@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
 import type { Asset } from "@prisma/client";
-import { getPutFileUrl, deleteObject, getReadURL } from "react-hook-multipart";
+import { getPutFileUrl, deleteObject } from "react-hook-multipart";
 import type { Action } from "~/components/forms/NewsLetterForm";
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -159,14 +159,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     return await db.asset.update({ where: { id: assetId }, data: { actions } });
   }
-
-  // if (intent === "get_validated_download_link") {
-  //   // @todo validate ownership
-  //   console.log("Read link requested::");
-  //   const storageKey = formData.get("storageKey") as string;
-  //   const expiresIn = formData.get("expiresIn") as string;
-  //   return await getReadURL(storageKey, Number(expiresIn));
-  // }
 
   return null;
 };
