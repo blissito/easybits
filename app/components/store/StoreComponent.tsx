@@ -17,9 +17,16 @@ import { AssetList } from "~/routes/assets/AssetList";
 import { useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { cn } from "~/utils/cn";
+import type { Asset } from "@prisma/client";
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
-export default function StoreComponent({ assets, cta }: { cta?: ReactNode }) {
+export default function StoreComponent({
+  assets,
+  cta,
+}: {
+  assets: Asset[];
+  cta?: ReactNode;
+}) {
   const [currentFilter, setCurrentFilter] = useState();
   return (
     <div
@@ -117,7 +124,7 @@ export default function StoreComponent({ assets, cta }: { cta?: ReactNode }) {
           ))}
         </div>
         <div className="p-4">
-          <AssetList assets={assets} />
+          <AssetList isPublic assets={assets} />
         </div>
       </div>
     </div>

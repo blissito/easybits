@@ -92,16 +92,18 @@ const Modal = ({
 }) => {
   useEffect(() => {
     const escHanlder = (e: KeyboardEvent) => {
-      if (!open)
-        return () => {
-          document.body.style.overflow = "auto";
-          removeEventListener("keydown", escHanlder);
-        };
-
       if (e.key === "Escape") {
         setOpen(false);
       }
     };
+
+    if (!open) {
+      return () => {
+        document.body.style.overflow = "auto";
+        removeEventListener("keydown", escHanlder);
+      };
+    }
+
     addEventListener("keydown", escHanlder);
     document.body.style.overflow = "hidden";
 
@@ -109,7 +111,7 @@ const Modal = ({
       document.body.style.overflow = "auto";
       removeEventListener("keydown", escHanlder);
     };
-  }, []);
+  }, [open]);
 
   if (!open) return null;
   return (

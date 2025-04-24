@@ -1,24 +1,27 @@
 import StoreComponent from "~/components/store/StoreComponent";
-import type { Route } from "../+types/root";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
 import GlobeIcon from "/icons/globe.svg";
 import { useHostEditor } from "~/hooks/useHostEditor";
+import type { Route } from "./+types/store";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   // get store details
   const assets = await db.asset.findMany({
-    // where: {
-    //   userId: user.id,
-    // },
+    where: {
+      userId: user.id,
+      // published: true, // @todo publish switch in form?
+    },
   });
   return { assets, user };
 };
 
-export default function Store({ loaderData }) {
+export default function Store({ loaderData }: Route.ComponentProps) {
   const { assets, user } = loaderData;
   const { onOpen, Modal } = useHostEditor({ user });
+  // @todo StoreComponent should be two componentes, the template (display) one and the config one with the edit buttons, something like:
+  //  <> <StoreEditor /> <StoreDisplay /> </>
   return (
     <div className=" w-full flex justify-center">
       <Modal />

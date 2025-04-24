@@ -1,12 +1,23 @@
 import type { Asset } from "@prisma/client";
 import { AssetCard } from "./AssetCard";
+import { usePublicLink } from "~/hooks/usePublicLink";
 
-export const AssetList = ({ assets }: { assets?: Asset[] }) => {
+export const AssetList = ({
+  isPublic,
+  assets,
+}: {
+  isPublic?: boolean;
+  assets?: Asset[];
+}) => {
   return (
     <article className="relative  ">
       <section className="grid-cols-1 md:grid-cols-2 lg:grid-cols-4 grid gap-8">
         {assets?.map((asset) => (
-          <AssetCard key={asset.id} asset={asset} />
+          <AssetCard
+            to={isPublic ? usePublicLink(asset as any) || undefined : undefined}
+            key={asset.id}
+            asset={asset}
+          />
         ))}
       </section>
     </article>
