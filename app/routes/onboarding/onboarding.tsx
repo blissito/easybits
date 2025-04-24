@@ -1,0 +1,22 @@
+import { Link } from "react-router";
+import { cn } from "~/utils/cn";
+import Logo from "/icons/easybits-logo.svg";
+import { FlipLetters } from "~/components/animated/FlipLetters";
+import { StepTwo } from "./StepTwo";
+import { StepOne } from "./StepOne";
+
+export default function Onboarding() {
+  return (
+    <section
+      className={cn("bg-white h-screen flex  w-full ", "md:flex-row relative")}
+    >
+      <Link to="/">
+        <div className="flex gap-3 absolute left-4 md:left-20">
+          <img src={Logo} alt="easybits" className="w-12" />
+          <FlipLetters word="EasyBits" />
+        </div>
+      </Link>
+      <StepOne />
+    </section>
+  );
+}
