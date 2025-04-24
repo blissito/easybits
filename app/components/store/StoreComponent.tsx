@@ -14,12 +14,12 @@ import {
 import { FaXTwitter } from "react-icons/fa6";
 import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { cn } from "~/utils/cn";
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
-export default function StoreComponent({ assets }) {
+export default function StoreComponent({ assets, cta }: { cta?: ReactNode }) {
   const [currentFilter, setCurrentFilter] = useState();
   return (
     <div
@@ -35,9 +35,13 @@ export default function StoreComponent({ assets }) {
         </h2>
         <div className="flex gap-3">
           <HeaderIconButton>
-            <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
-              <img className="w-full" src={GlobeIcon} />
-            </div>
+            {cta ? (
+              cta
+            ) : (
+              <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
+                <img className="w-full" src={GlobeIcon} />
+              </div>
+            )}
           </HeaderIconButton>
           <HeaderIconButton>
             <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
@@ -97,8 +101,9 @@ export default function StoreComponent({ assets }) {
           </div>
         </div>
         <div className="flex justify-center gap-3 mb-6">
-          {["Todos", "Nuevos", "Assets", "Libros"].map((f) => (
+          {["Todos", "Nuevos", "Assets", "Libros"].map((f, i) => (
             <button
+              key={i}
               className={clsx(
                 "rounded-full p-3 border border-black cursor-pointer",
                 {

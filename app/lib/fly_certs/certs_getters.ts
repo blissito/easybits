@@ -3,6 +3,31 @@ import { GraphQLClient } from "graphql-request";
 const endpoint = "https://api.fly.io/graphql";
 const APP_NAME = "easybits";
 
+export async function removeHost(hostname: string) {
+  const query = `
+     mutation($appId: ID!, $hostname: String!) {
+        deleteCertificate(appId: $appId, hostname: $hostname) {
+            app {
+                name
+            }
+            certificate {
+                hostname
+                id
+            }
+        }
+    }
+  `;
+  const variables = { appId: APP_NAME, hostname };
+  let result;
+  try {
+    result = await getClient().request(query, variables);
+  } catch (e: unknown) {
+    if (e instanceof Error)
+      console.error("::ERROR_ON_CERT_DELETION::", e.message);
+  }
+  return result;
+}
+
 export async function createHost(hostname: string) {
   const query = `
 mutation($appId: ID!, $hostname: String!) {
@@ -30,7 +55,8 @@ mutation($appId: ID!, $hostname: String!) {
   try {
     result = await getClient().request(query, variables);
   } catch (e: unknown) {
-    if (e instanceof Error) console.error(e.message);
+    if (e instanceof Error)
+      console.error("::ERROR_ON_CERT_CREATION::", e.message);
   }
   return result;
 }

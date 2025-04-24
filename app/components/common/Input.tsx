@@ -25,7 +25,7 @@ interface InputProps {
   inputClassName?: string;
   isError?: boolean;
   defaultValue?: string | null;
-  onChange?: (ev: ChangeEvent<HTMLInputElement>) => void;
+  onChange?: (ev: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   [x: string]: unknown;
 }
 
@@ -41,14 +41,7 @@ export const Input = ({
   onChange,
   ...props
 }: InputProps) => {
-  // const ref = useRef<HTMLInputElement>(null);
-
-  // useEffect(() => {
-  //   ref.current?.focus();
-  // }, [isError]);
-
   const ElementName = type === "textarea" ? "textarea" : "input";
-
   return (
     <label
       className={cn(
@@ -56,7 +49,6 @@ export const Input = ({
         "flex flex-col gap-2 text-gray text-black",
         className,
         {
-          // "h-[50%]": type === "textarea",
           "h-[600px]": type === "textarea",
         }
       )}
@@ -64,7 +56,7 @@ export const Input = ({
       {label && <span>{label}</span>}
       <div className="relative flex-1">
         <ElementName
-          onChange={onChange}
+          autoFocus
           defaultValue={defaultValue}
           className={cn(
             "rounded-xl p-4 text-lg h-12 w-full placeholder:text-tale placeholder:font-light border border-black  bg-white text-black",
@@ -76,6 +68,7 @@ export const Input = ({
             inputClassName
           )}
           {...props}
+          onChange={onChange}
         />
         {copy && <CopyMagnetButton text={copy} />}
       </div>
