@@ -35,7 +35,7 @@ export const StepTwo = ({ profile = { title: "", type: "" } }) => {
         </div>
         <BrutalButton className="mt-auto w-full">Continue</BrutalButton>
       </div>
-      <div className="w-full hidden md:block h-full md:w-[50%] ">
+      <div className="w-full hidden md:block h-full md:w-[50%]  border-l-2 border-black">
         <img
           className="h-full w-full object-cover"
           src="/hero/onboarding-1.png"
