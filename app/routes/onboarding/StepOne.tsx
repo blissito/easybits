@@ -7,7 +7,7 @@ export const StepOne = () => {
       <div className="w-full h-full flex flex-col md:w-[50%] pt-40 px-4 md:px-20 pb-4 md:pb-12 ">
         <div className="h-full">
           <h2 className="text-3xl font-bold">
-            Personaliza el nombre tu website y subdominio EasyBits
+            Personaliza el nombre de tu website y subdominio EasyBits
           </h2>
           <p className="text-lg text-iron mt-4 mb-16">
             Escribe tu nombre o el nombre de tu marca que hará destacar tu
