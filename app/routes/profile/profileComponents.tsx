@@ -8,6 +8,7 @@ import { Input } from "~/components/common/Input";
 import { Form, useFetcher } from "react-router";
 import { useEscape } from "~/hooks/useEscape";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { Switch } from "../assets/Switch";
 
 export const DEFAULT_PIC =
   "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
@@ -144,5 +145,48 @@ export const ProfileCard = ({ user }: { user: User }) => {
         </p>
       </div>
     </section>
+  );
+};
+
+export const Notifications = () => {
+  //Add
+  return (
+    <section className="border-2 bg-white max-w-2xl border-black rounded-2xl p-4 md:p-6 mt-4 md:mt-8 flex flex-col items-center gap-3 md:gap-6">
+      <NotiItem
+        title="Newsletter"
+        description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
+        distinctio quibusdam aliquam eligendi veniam sed,"
+      />
+      <hr className="w-full bg-black border-none h-[1px]" />
+      <NotiItem
+        title="Ventas"
+        description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
+        distinctio quibusdam aliquam eligendi veniam sed,"
+      />
+      <hr className="w-full bg-black border-none h-[1px]" />
+      <NotiItem
+        title="Nuevas reseñas"
+        description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
+        distinctio quibusdam aliquam eligendi veniam sed,"
+      />
+    </section>
+  );
+};
+
+const NotiItem = ({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) => {
+  return (
+    <div className="flex justify-between items-center w-full gap-4">
+      <div>
+        <h2 className="text-lg font-bold">{title}</h2>
+        <p className="text-iron text-sm">{description}</p>
+      </div>
+      <Switch />
+    </div>
   );
 };
