@@ -40,7 +40,7 @@ export default function Stripe() {
   const actionData = useActionData();
   const isLoading = fetcher.state !== "idle";
   const connectedAccountId =
-    loaderData?.user?.stripe?.id || actionData?.account?.id; //"acct_1R56FqRNPuQQakDO";
+    loaderData?.user?.stripe?.id || actionData?.account?.id;
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
     publishableKey: loaderData.publishableKey,

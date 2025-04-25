@@ -42,7 +42,7 @@ export default function PaymentModal({
         </button>
       )}
       <Modal
-        key="selector"
+        key="asset-payment"
         containerClassName="z-50 text-black text-center "
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
