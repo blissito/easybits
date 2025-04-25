@@ -23,7 +23,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export default function Store({ loaderData }: Route.ComponentProps) {
   const { assets, user } = loaderData;
   const { onOpen, Modal } = useHostEditor({ user });
-  // @todo StoreComponent should be two componentes, the template (display) one and the config one with the edit buttons, something like:
+  // @todo StoreComponent should be two components, the template (display) one and the config one with the edit buttons, something like:
   //  <> <StoreEditor /> <StoreDisplay /> </>
   return (
     <div className=" w-full flex justify-center">
