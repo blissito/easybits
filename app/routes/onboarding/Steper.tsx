@@ -37,7 +37,7 @@ export const StepThree = ({
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6">
-          Selecciona la opción que más coincida
+          Selecciona la o las opciones que más coincidan con tu contenido
         </p>
         <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
           <SmallRadioCard
