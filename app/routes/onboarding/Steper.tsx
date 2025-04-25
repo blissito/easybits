@@ -146,7 +146,6 @@ const SmallRadioCard = ({
   value: string;
 }) => {
   const ref = useRef(null);
-  console.log(value, isSelected, "aqui");
 
   return (
     <button className={cn("group rounded-xl bg-black h-full")}>
