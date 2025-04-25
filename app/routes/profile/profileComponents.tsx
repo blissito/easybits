@@ -9,7 +9,7 @@ import { Form, useFetcher } from "react-router";
 import { useEscape } from "~/hooks/useEscape";
 import { BrutalButton } from "~/components/common/BrutalButton";
 
-const DEFAULT_PIC =
+export const DEFAULT_PIC =
   "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
 
 export const SuscriptionCard = ({ customer }: { customer: unknown }) => {

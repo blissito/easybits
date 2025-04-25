@@ -16,14 +16,13 @@ export const Plantilla = ({
   slug: string;
   host: string;
 }) => {
-  const [state, setState] = useState(
-    template || {
-      ctaText: "Compra ahora",
-      templateName: "default",
-      host,
-      slug,
-    }
-  );
+  const [state, setState] = useState({
+    ctaText: "Compra ahora",
+    templateName: "default",
+    ...template, // @todo take host out of template
+    slug,
+    host,
+  });
 
   const update = (obj: Record<string, string>) => {
     setState((st) => ({ ...st, ...obj }));

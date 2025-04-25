@@ -4,6 +4,12 @@ import { db } from "~/.server/db";
 
 import { findNewsletter, scheduleNext } from "~/.server/emails/startNewsLetter";
 import { sendPurchase } from "~/.server/emails/sendPurchase";
+import {
+  createHost,
+  listHosts,
+  removeHost,
+} from "~/lib/fly_certs/certs_getters";
+import { FaLessThanEqual } from "react-icons/fa";
 // @TODO: recaptcha (cloudflare?)
 // @todo use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
@@ -85,6 +91,41 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "self") {
     return await getUserOrNull(request);
   }
+
+  if (intent === "update_host") {
+    const userId = formData.get("userId") as string;
+    const host = formData.get("host") as string;
+    const exists = await db.user.findFirst({
+      where: {
+        host,
+      },
+    });
+    if (exists) {
+      return { error: "Este host ya está tomado, intenta con otro" };
+    }
+
+    // removing previous
+    const user = await db.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+    if (!user) return { error: "User not found" };
+
+    // console.log("removing:", `${user.host}.easybits.cloud`);
+    await removeHost(`${user.host}.easybits.cloud`);
+    // const r = await listHosts();
+    // console.log("LIST", JSON.stringify(r, false, 2));
+    await db.user.update({
+      where: {
+        id: userId,
+      },
+      data: { host },
+    });
+    await createHost(`${host}.easybits.cloud`);
+    return { success: true };
+  }
+
   return null;
 };
 

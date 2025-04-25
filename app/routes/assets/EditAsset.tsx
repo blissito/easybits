@@ -25,11 +25,13 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
       },
     },
   });
+
   return { host: user.host!, asset, files };
 };
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
   const { host, asset, files } = loaderData;
+
   // return null;
   return (
     <article className="w-screen">

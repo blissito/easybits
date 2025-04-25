@@ -41,7 +41,7 @@ const StepCard = ({
           src={image ? image : "/hero/step1.webp"}
         />{" "}
       </div>
-      <h2 className="text-2xl font-bold mt-6 md:mt-10">{title}</h2>
+      <h2 className="text-2xl font-bold mt-6 md:mt-14">{title}</h2>
       <p className="text-iron mt-2 md:mt-4">{text}</p>
     </div>
   );
