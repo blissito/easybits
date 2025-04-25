@@ -4,6 +4,7 @@ import type { Route } from "./+types/profile";
 import { ProfileCard, SuscriptionCard } from "./profileComponents";
 import { getUserOrRedirect } from "~/.server/getters";
 import { redirect } from "react-router";
+import { ProfileTabs } from "./ProfileTabs";
 
 export const loader = async ({ request }: Route.ClientLoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -40,8 +41,9 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
         <h2 className="text-3xl md:text-4xl font-semibold pt-1 md:pt-1">
           Perfil
         </h2>
-        <ProfileCard user={user} />
-        <SuscriptionCard customer={customer} />
+        <ProfileTabs user={user} customer={customer} />
+        {/* <ProfileCard user={user} />
+        <SuscriptionCard customer={customer} /> */}
       </div>
     </article>
   );
