@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { BrutalElement } from "~/components/common/BrutalElement";
 import { cn } from "~/utils/cn";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 
 export const Steper = () => {
   return (
@@ -16,6 +17,32 @@ export const Steper = () => {
           src="/hero/onboarding-2.png"
           alt="onboarding"
         />
+      </div>
+    </section>
+  );
+};
+
+//Este es el componente de success cuando completas el onbaording, uselo donde quiera, el copy esta pendiente//
+export const OnboardingSuccess = () => {
+  return (
+    <section className="flex justify-center items-center w-full h-screen text-center">
+      <div className="max-w-3xl">
+        <img
+          className="mx-auto"
+          alt="logo completo"
+          src="/hero/logo-full.svg"
+        />
+        <h3 className="text-3xl lg:text-5xl font-bold mt-8">
+          ¡Tu cuenta esta lista!
+        </h3>
+        <p className="text-lg mt-4 mb-10">
+          Lorem ipsum dolor sit amet consectetur. Faucibus leo leo leo lectus
+          etiam consequat sit adipiscing justo. Sed orci ipsum facilisis euismod
+          pellentesque interdum egest
+        </p>
+        <Link to="/dash">
+          <BrutalButton>¡Empezar!</BrutalButton>{" "}
+        </Link>
       </div>
     </section>
   );
