@@ -89,7 +89,7 @@ export const RadioCard = ({
           <h4 className="text-xl font-bold">{label}</h4>
           <p className="text-base text-iron">{description}</p>
           <input
-            //   ref={ref}
+            ref={ref}
             type="radio"
             name={name}
             value={value}
