@@ -149,22 +149,22 @@ export const ProfileCard = ({ user }: { user: User }) => {
 };
 
 export const Notifications = () => {
-  //Add
+  //Pending copy
   return (
     <section className="border-2 bg-white max-w-2xl border-black rounded-2xl p-4 md:p-6 mt-4 md:mt-8 flex flex-col items-center gap-3 md:gap-6">
-      <NotiItem
+      <SwitchItem
         title="Newsletter"
         description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
         distinctio quibusdam aliquam eligendi veniam sed,"
       />
       <hr className="w-full bg-black border-none h-[1px]" />
-      <NotiItem
+      <SwitchItem
         title="Ventas"
         description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
         distinctio quibusdam aliquam eligendi veniam sed,"
       />
       <hr className="w-full bg-black border-none h-[1px]" />
-      <NotiItem
+      <SwitchItem
         title="Nuevas reseñas"
         description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
         distinctio quibusdam aliquam eligendi veniam sed,"
@@ -173,7 +173,7 @@ export const Notifications = () => {
   );
 };
 
-const NotiItem = ({
+const SwitchItem = ({
   title,
   description,
 }: {
