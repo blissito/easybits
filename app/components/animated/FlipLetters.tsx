@@ -1,8 +1,15 @@
+import type { String } from "aws-sdk/clients/cloudsearchdomain";
 import { stagger, useAnimate } from "motion/react";
 import { useEffect, useState } from "react";
 import { cn } from "~/utils/cn";
 
-export const FlipLetters = ({ word }: { word: string }) => {
+export const FlipLetters = ({
+  word,
+  type,
+}: {
+  word: string;
+  type?: string;
+}) => {
   const letters = word.split("");
   const [isHovered, setIsHovered] = useState(false);
   return (
@@ -12,8 +19,13 @@ export const FlipLetters = ({ word }: { word: string }) => {
       style={{ perspective: 1000, transformStyle: "preserve-3d" }}
       className="text-3xl font-bold relative h-20 w-[120px] font-jersey"
     >
-      <DominoesBox isHovered={isHovered} letters={letters} />
-      <DominoesBox reversed isHovered={isHovered} letters={letters} />
+      <DominoesBox isHovered={isHovered} letters={letters} type={type} />
+      <DominoesBox
+        reversed
+        isHovered={isHovered}
+        letters={letters}
+        type={type}
+      />
     </section>
   );
 };
@@ -22,10 +34,12 @@ const DominoesBox = ({
   isHovered,
   letters,
   reversed,
+  type,
 }: {
   reversed?: boolean;
   isHovered?: boolean;
   letters: string[];
+  type?: string;
 }) => {
   const [scope, animate] = useAnimate();
   const transition = {
@@ -54,7 +68,9 @@ const DominoesBox = ({
     <div
       ref={scope}
       className={cn("text-gray-100 flex absolute top-6", {
+        "text-black ": type === "light",
         "text-white top-[50%]": reversed,
+        "text-black top-[50%]": reversed && type === "light",
       })}
     >
       {letters.map((letter, i) => (

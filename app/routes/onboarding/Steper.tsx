@@ -7,14 +7,15 @@ import { cn } from "~/utils/cn";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
+//Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
 export const Steper = () => {
   return (
     <section className="flex w-full">
-      <StepThree />
+      <StepTwo />
       <div className="w-full hidden md:block fixed right-0 h-full md:w-[50%] border-2 border-black ">
         <img
           className="h-full w-full object-cover"
-          src="/hero/onboarding-2.png"
+          src="/hero/onboarding-1.webp"
           alt="onboarding"
         />
       </div>
@@ -63,7 +64,7 @@ export const StepThree = ({
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6">
+        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
         <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
