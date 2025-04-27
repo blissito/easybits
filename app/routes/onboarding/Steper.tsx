@@ -1,24 +1,127 @@
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Input } from "~/components/common/Input";
 import { RadioCardGroup } from "./RadioCardGroup";
-import { useForm } from "react-hook-form";
-import { BrutalElement } from "~/components/common/BrutalElement";
 import { cn } from "~/utils/cn";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useFetcher } from "react-router";
+import type { User } from "@prisma/client";
+import { AnimatePresence, motion } from "motion/react";
 
 //Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
-export const Steper = () => {
+export const Steper = ({ user }: { user: User }) => {
+  const [step, setStep] = useState(0);
+  const fetcher = useFetcher();
+
+  const [host, setHost] = useState(user.host);
+  const [metadata, setMetadata] = useState(
+    (user.metadata || { metadata: {}, asset_types: [] }) as User["metadata"]
+  );
+  const handleStep = (step: number) => async () => {
+    if (step === 2) {
+      await fetcher.submit(
+        {
+          intent: "update_profile",
+          data: JSON.stringify({
+            metadata: {
+              customer_type: metadata!.customer_type,
+              asset_types: metadata!.asset_types,
+            },
+          }),
+        },
+        { method: "post", action: "/api/v1/user" }
+      );
+      setStep(3);
+    }
+    if (step === 1) {
+      await fetcher.submit(
+        {
+          intent: "update_profile",
+          data: JSON.stringify({
+            metadata: {
+              customer_type: metadata!.customer_type,
+              asset_types: metadata!.asset_types,
+            },
+          }),
+        },
+        { method: "post", action: "/api/v1/user" }
+      );
+      setStep(2);
+    }
+    if (step === 0) {
+      // @todo revisit
+      await fetcher.submit(
+        {
+          intent: "update_host",
+          host,
+          userId: user.id,
+        },
+        { method: "post", action: "/api/v1/user" }
+      );
+      if (fetcher.data?.error) {
+      } else {
+        setStep(1);
+      }
+    }
+  };
+
+  const isLoading = fetcher.state !== "idle";
+  const error = fetcher.data?.error;
+
+  const handleMetadataChange = (name: string, value: string) => {
+    setMetadata((m) => ({ ...m, [name]: value }));
+  };
+
+  const handleAssetTypes = (value: string[]) => {
+    setMetadata((m) => ({ ...m, asset_types: value }));
+  };
+
+  const getStep = () => {
+    switch (step) {
+      case 3:
+        return <OnboardingSuccess />;
+      case 2:
+        return (
+          <StepThree
+            isLoading={isLoading}
+            defaultValue={user.metadata?.asset_types}
+            onChange={handleAssetTypes}
+            onClick={handleStep(2)}
+          />
+        );
+      case 1:
+        return (
+          <StepTwo
+            isLoading={isLoading}
+            defaultValue={user.metadata?.customer_type}
+            onChange={(value) => handleMetadataChange("customer_type", value)}
+            onClick={handleStep(1)}
+          />
+        );
+      case 0:
+        return (
+          <StepOne
+            isLoading={isLoading}
+            error={error}
+            value={host}
+            onChange={setHost}
+            onClick={handleStep(0)}
+          />
+        );
+    }
+  };
+  const images = ["/hero/onboarding-1.webp", "/hero/onboarding-2.webp"];
   return (
-    <section className="flex w-full">
-      <StepTwo />
-      <div className="w-full hidden md:block fixed right-0 h-full md:w-[50%] border-2 border-black ">
-        <img
-          className="h-full w-full object-cover"
-          src="/hero/onboarding-1.webp"
-          alt="onboarding"
-        />
-      </div>
+    <section className="flex w-full overflow-hidden">
+      <AnimatePresence mode="popLayout">{getStep()}</AnimatePresence>
+      {step !== 3 && (
+        <div className="w-full hidden md:block fixed right-0 h-full md:w-[50%] border-2 border-black ">
+          <img
+            className="h-full w-full object-cover"
+            src={step === 0 ? images[0] : images[1]}
+            alt="onboarding"
+          />
+        </div>
+      )}
     </section>
   );
 };
@@ -26,7 +129,12 @@ export const Steper = () => {
 //Este es el componente de success cuando completas el onbaording, uselo donde quiera, el copy esta pendiente//
 export const OnboardingSuccess = () => {
   return (
-    <section className="flex justify-center items-center w-full h-screen text-center">
+    <motion.section
+      initial={{ x: -100, opacity: 0, scale: 0.5 }}
+      animate={{ x: 0, opacity: 1, scale: 1 }}
+      exit={{ x: 100, opacity: 0, scale: 0.8 }}
+      className="flex justify-center items-center w-full h-screen text-center"
+    >
       <div className="max-w-3xl">
         <img
           className="mx-auto"
@@ -37,31 +145,51 @@ export const OnboardingSuccess = () => {
           ¡Tu cuenta esta lista!
         </h3>
         <p className="text-lg mt-4 mb-10">
-          Lorem ipsum dolor sit amet consectetur. Faucibus leo leo leo lectus
-          etiam consequat sit adipiscing justo. Sed orci ipsum facilisis euismod
-          pellentesque interdum egest
+          Todo está en su lugar. Es hora de poner manos a la obra y crear tu
+          primer asset.
+          <br /> ¡Qué emoción, ya pronto vamos a vender!
         </p>
         <Link to="/dash">
           <BrutalButton>¡Empezar!</BrutalButton>{" "}
         </Link>
       </div>
-    </section>
+    </motion.section>
   );
 };
 
 export const StepThree = ({
   onChange,
+  isLoading,
+  defaultValue = [],
+  onClick,
 }: {
-  onChange?: (arg0: string) => void;
+  isLoading?: boolean;
+  defaultValue?: string[];
+  onClick?: () => void;
+  onChange?: (arg0: string[]) => void;
 }) => {
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState<string[]>(defaultValue);
+  const add = (value: string) => {
+    setSelected((s) => [...s, value]);
+  };
+  const remove = (value: String) => {
+    setSelected((s) => s.filter((v) => v !== value));
+  };
+  const toggle = (value: string) => () => {
+    selected.includes(value) ? remove(value) : add(value);
+  };
   useEffect(() => {
     onChange?.(selected);
   }, [selected]);
   return (
-    <div className="w-full h-full min-h-fit lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 lg:pt-40 px-4 lg:px-20 pb-4 lg:pb-12 ">
+    <motion.div
+      initial={{ x: 100, opacity: 0, scale: 0.8 }}
+      animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
+      exit={{ y: -100, x: 0, opacity: 0, scale: 0.8 }}
+      className="w-full h-full min-h-fit lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 px-4 lg:px-20 pb-4 lg:pb-12"
+    >
       <div className="h-full min-h-fit lg:h-full pb-6">
-        <h2 className="text-2xl lg:text-3xl font-bold">
+        <h2 className="text-2xl lg:text-2xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
@@ -69,92 +197,101 @@ export const StepThree = ({
         </p>
         <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
           <SmallRadioCard
+            onClick={toggle("diseño")}
+            isSelected={selected.includes("diseño")}
             value="DISEÑO"
-            isSelected={selected === "DISEÑO"}
             title="Diseño"
             description="Iconos, dibujos, templates,  ilustraciones,  modelad 3d."
           />
           <SmallRadioCard
-            value="FOTOGRAFIA"
-            isSelected={selected === "FOTOGRAFIA"}
+            onClick={toggle("fotografía")}
+            isSelected={selected.includes("fotografía")}
             img="/hero/camera.svg"
             title="Fotografía"
             description="Fotos de stock de cualquier tema."
           />
           <SmallRadioCard
-            value="CURSOS"
-            isSelected={selected === "CURSOS"}
+            onClick={toggle("cursos")}
+            isSelected={selected.includes("cursos")}
             img="/hero/course.svg"
             title="Cursos"
             description="Idiomas, finanzas, cocina, pintura y más."
           />
           <SmallRadioCard
-            value="WEBINARS"
-            isSelected={selected === "WEBINARS"}
+            onClick={toggle("webinars")}
+            isSelected={selected.includes("webinars")}
             img="/hero/micro.svg"
             title=" Webinars"
             description="En vivo o pre-grabados de cualquier tema."
           />
           <SmallRadioCard
-            value="AUDIO"
-            isSelected={selected === "AUDIO"}
+            onClick={toggle("audio")}
+            isSelected={selected.includes("audio")}
             img="/hero/audio.svg"
             title="Audio y Música"
             description="Tonos, canciones,  tracks o historias de miedo. "
           />
           <SmallRadioCard
-            value="SOFTWARE"
-            isSelected={selected === "SOFTWARE"}
+            onClick={toggle("software")}
+            isSelected={selected.includes("software")}
             img="/hero/code.svg"
             title="Software"
             description="Proyectos, componentes, templates o librerías."
           />
           <SmallRadioCard
-            value="CUENTOS"
-            isSelected={selected === "CUENTOS"}
+            onClick={toggle("cuentos")}
+            isSelected={selected.includes("cuentos")}
             img="/hero/cloud.svg"
             title="Cuentos e historias"
             description="Historias, cuentos, poemas, ensayos o reflexiones. "
           />
           <SmallRadioCard
-            value="CLASES"
-            isSelected={selected === "CLASES"}
+            onClick={toggle("clases")}
+            isSelected={selected.includes("clases")}
             title="Master Class"
             description="Clases únicas de temas específicos."
             img="/hero/class.svg"
           />
           <SmallRadioCard
-            value="LIBROS"
-            isSelected={selected === "LIBROS"}
+            onClick={toggle("libros")}
+            isSelected={selected.includes("libros")}
             img="/hero/book.svg"
             title="Libros"
             description="Libros de cocina, ciencia ficción, romance o comedia. "
           />
           <SmallRadioCard
-            value="UI"
-            isSelected={selected === "UI"}
+            onClick={toggle("ui")}
+            isSelected={selected.includes("ui")}
             img="/default.svg"
             title="Diseño UI"
             description="Mockups, templates o sistemas de diseño."
           />
           <SmallRadioCard
-            value="PLANTILLAS"
-            isSelected={selected === "PLANTILLAS"}
+            onClick={toggle("plantillas")}
+            isSelected={selected.includes("plantillas")}
             img="/hero/template.svg"
             title="Plantillas"
-            description="Para KeyNote, Canva, Powe Point, Figma."
+            description="Para Excel, Canva, Powe-Point, Figma, etc."
           />
           <SmallRadioCard
-            value="PAPPERS"
-            isSelected={selected === "PAPPERS"}
+            onClick={toggle("pappers")}
+            isSelected={selected.includes("pappers")}
             title="Pappers"
-            description="Pappers de divulgación  o investigación científica."
+            description="Pappers de investigación o divulgación científica."
             img="/hero/science.svg"
           />
         </div>
       </div>
-      <BrutalButton className="mt-auto  w-full">Continue</BrutalButton>
-    </div>
+      <BrutalButton
+        isLoading={isLoading}
+        onClick={onClick}
+        type="button"
+        isDisabled={selected.length < 1}
+        className="mt-auto  w-full"
+      >
+        Continue
+      </BrutalButton>
+    </motion.div>
   );
 };
 
@@ -165,7 +302,9 @@ const SmallRadioCard = ({
   onChange,
   isSelected,
   value,
+  onClick,
 }: {
+  onClick?: () => void;
   img?: string;
   title: string;
   description: string;
@@ -176,7 +315,12 @@ const SmallRadioCard = ({
   const ref = useRef(null);
 
   return (
-    <button className={cn("group rounded-xl bg-black h-full")}>
+    <button
+      onClick={onClick}
+      className={cn("group rounded-xl bg-black h-full", {
+        "bg-brand-500": isSelected,
+      })}
+    >
       <div
         className={cn(
           "block w-full col-span-1 relative  rounded-xl transition-all h-full bg-white px-2 py-3  text-left  align-start ",
@@ -209,44 +353,73 @@ const SmallRadioCard = ({
   );
 };
 
-export const StepTwo = ({ profile = { title: "", type: "" } }) => {
-  const {
-    handleSubmit,
-    register,
-    formState: { isValid },
-    setValue,
-  } = useForm({
-    defaultValues: profile,
-  });
-  const registerVirtualFields = () => {
-    register("title", { value: "", required: true });
-    register("type", { value: "", required: true });
-  };
-  const handleChange = (name: "title" | "type", value: string) => {
-    setValue(name, value, { shouldValidate: true, shouldDirty: true });
+export const StepTwo = ({
+  onChange,
+  defaultValue,
+  onClick,
+  isLoading,
+}: {
+  isLoading?: boolean;
+  onClick?: () => void;
+  onChange?: (arg0: string) => void;
+  defaultValue?: string;
+}) => {
+  const [customer_type, setCustomerType] = useState(defaultValue || "");
+
+  const handleChange = (value: string) => {
+    setCustomerType(value);
+    onChange?.(value);
   };
 
   return (
-    <div className="w-full h-full flex flex-col md:w-[50%]  pt-20 lg:pt-40 px-4 lg:px-20 pb-4 lg:pb-12 ">
+    <motion.div
+      initial={{ x: 100, opacity: 0, scale: 0.8 }}
+      animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
+      exit={{ y: -100, x: 0, opacity: 0, scale: 0.8 }}
+      className="w-full h-full flex flex-col md:w-[50%]  pt-20 px-4 lg:px-20 pb-4 lg:pb-12 "
+    >
       <div className="h-full">
         <h2 className="text-2xl lg:text-3xl font-bold">
-          ¿Qué opción describe mejor tu objetivo al usar EasyBits?
+          ¿Qué opción te describe mejor al usar EasyBits?
         </h2>
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
-          Esto nos ayuda a personalizar tu experiencia
+          Esto nos ayuda a personalizar tu experiencia. 🥸
         </p>
-        <RadioCardGroup
-          onChange={(value: string) => handleChange("type", value)}
-        />
+        <RadioCardGroup defaultValue={defaultValue} onChange={handleChange} />
       </div>
-      <BrutalButton className="mt-auto w-full">Continue</BrutalButton>
-    </div>
+      <BrutalButton
+        isLoading={isLoading}
+        type="button"
+        onClick={onClick}
+        isDisabled={!customer_type}
+        className="mt-auto w-full"
+      >
+        Continue
+      </BrutalButton>
+    </motion.div>
   );
 };
 
-export const StepOne = () => {
+export const StepOne = ({
+  onClick,
+  value,
+  onChange,
+  error,
+  isLoading,
+}: {
+  isLoading?: boolean;
+  onClick?: () => void;
+  onChange?: (arg0: string) => void;
+  value: string;
+  error?: string;
+}) => {
   return (
-    <div className="w-full h-full flex flex-col md:w-[50%]  pt-20 lg:pt-40 px-4 lg:px-20 pb-4 lg:pb-12 ">
+    <motion.div
+      initial={{ x: 10, opacity: 0, scale: 0.8 }}
+      animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
+      exit={{ y: -10, x: 0, opacity: 0, scale: 0.8 }}
+      className="w-full h-full flex flex-col md:w-[50%]  pt-20 lg:pt-40 px-4 lg:px-20 pb-4 lg:pb-12 "
+    >
       <div className="h-full">
         <h2 className="text-2xl lg:text-3xl font-bold">
           Personaliza el nombre de tu website y subdominio EasyBits
@@ -254,9 +427,27 @@ export const StepOne = () => {
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
           Escribe tu nombre o el nombre de tu marca que hará destacar tu tienda
         </p>
-        <Input />
+        <div className="flex items-baseline">
+          <p>https://</p>
+          <section className="w-full">
+            <Input
+              onChange={(e) => onChange?.(e.currentTarget.value)}
+              value={value}
+              placeholder="brendi_tienda"
+            />
+            <p className="text-red-500 text-xs">{error}</p>
+          </section>
+          <p>.easybits.cloud</p>
+        </div>
       </div>
-      <BrutalButton className="mt-auto w-full">Continue</BrutalButton>
-    </div>
+      <BrutalButton
+        type="button"
+        isLoading={isLoading}
+        onClick={onClick}
+        className="mt-auto w-full"
+      >
+        Continuar
+      </BrutalButton>
+    </motion.div>
   );
 };

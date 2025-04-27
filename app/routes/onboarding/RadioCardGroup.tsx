@@ -3,10 +3,12 @@ import { cn } from "~/utils/cn";
 
 export const RadioCardGroup = ({
   onChange,
+  defaultValue,
 }: {
+  defaultValue?: string;
   onChange?: (arg0: string) => void;
 }) => {
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(defaultValue || "");
 
   useEffect(() => {
     onChange?.(selected);
@@ -16,7 +18,7 @@ export const RadioCardGroup = ({
     <section className="flex flex-col gap-6 justify-evenly">
       <RadioCard
         isSelected={selected === "BEGINNER"}
-        onChange={(value) => setSelected(value)}
+        onChange={setSelected}
         description="Apenas estoy empezando a crear contenido digital y quiero compartirlo con amigos y conocidos "
         name="type"
         value="BEGINNER"
@@ -25,7 +27,7 @@ export const RadioCardGroup = ({
       />
       <RadioCard
         isSelected={selected === "INDIE"}
-        onChange={(value) => setSelected(value)}
+        onChange={setSelected}
         description="Cuento con una base de seguidores y busco monetizar mi audiencia vendiendo mi arte"
         name="type"
         value="INDIE"
@@ -34,7 +36,7 @@ export const RadioCardGroup = ({
       />
       <RadioCard
         isSelected={selected === "PROFESIONAL"}
-        onChange={(value) => setSelected(value)}
+        onChange={setSelected}
         description="Cuento con un negocio establecido y quiero vender mis productos digitales en línea"
         name="type"
         value="PROFESIONAL"
@@ -87,7 +89,7 @@ export const RadioCard = ({
         ) : null}
         <div>
           <h4 className="text-xl font-bold">{label}</h4>
-          <p className="text-base text-iron">{description}</p>
+          <p className="text-base text-iron text-xs">{description}</p>
           <input
             ref={ref}
             type="radio"

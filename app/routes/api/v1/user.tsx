@@ -80,12 +80,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "update_profile") {
     const user = await getUserOrRedirect(request);
     const data = JSON.parse(formData.get("data") as string);
-    return await db.user.update({
+    await db.user.update({
       where: {
         id: user.id,
       },
       data,
     });
+    return { success: true };
   }
 
   if (intent === "self") {
@@ -101,7 +102,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       },
     });
     if (exists) {
-      return { error: "Este host ya está tomado, intenta con otro" };
+      return { error: "Este dominio ya está tomado, intenta con otro" };
     }
 
     // removing previous

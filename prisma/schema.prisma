@@ -68,6 +68,11 @@ type NewsLetter {
   assetId String
 }
 
+type Metadata {
+  asset_types   String[]
+  customer_type String?
+}
+
 model User {
   id             String       @id @default(auto()) @map("_id") @db.ObjectId
   confirmed      Boolean      @default(false)
@@ -84,7 +89,7 @@ model User {
   picture        String?
   phoneNumber    String?
   roles          String[]
-  metadata       Json?
+  metadata       Metadata?
   stripe         Json?
   // subscriptions
   newsletters    NewsLetter[]
