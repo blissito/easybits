@@ -124,7 +124,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       data: { host },
     });
     await createHost(`${host}.easybits.cloud`);
-    return { success: true };
+    return { success: true, nextStep: 1 };
   }
 
   return null;

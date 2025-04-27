@@ -49,7 +49,7 @@ export const Steper = ({ user }: { user: User }) => {
     }
     if (step === 0) {
       // @todo revisit
-      await fetcher.submit(
+      fetcher.submit(
         {
           intent: "update_host",
           host,
@@ -57,12 +57,14 @@ export const Steper = ({ user }: { user: User }) => {
         },
         { method: "post", action: "/api/v1/user" }
       );
-      if (fetcher.data?.error) {
-      } else {
-        setStep(1);
-      }
     }
   };
+
+  useEffect(() => {
+    if (fetcher.data?.success && fetcher.data.nextStep === 1) {
+      setStep(1);
+    }
+  }, [fetcher]);
 
   const isLoading = fetcher.state !== "idle";
   const error = fetcher.data?.error;
@@ -427,11 +429,13 @@ export const StepOne = ({
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
           Escribe tu nombre o el nombre de tu marca que hará destacar tu tienda
         </p>
-        <div className="flex items-baseline">
+        <div className="flex items-baseline gap-1">
           <p>https://</p>
           <section className="w-full">
             <Input
-              onChange={(e) => onChange?.(e.currentTarget.value)}
+              onChange={(e) =>
+                onChange?.(e.currentTarget.value.trim().replaceAll("_", ""))
+              }
               value={value}
               placeholder="brendi_tienda"
             />

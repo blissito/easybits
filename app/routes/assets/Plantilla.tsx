@@ -2,6 +2,7 @@ import { Input } from "~/components/common/Input";
 import { motion } from "motion/react";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { CopyButton } from "~/components/common/CopyButton";
+import slugify from "slugify";
 
 export const Plantilla = ({
   onChange,
@@ -30,7 +31,8 @@ export const Plantilla = ({
 
   const handleChange =
     (field: string) => (event: ChangeEvent<HTMLInputElement>) => {
-      update({ [field]: event.currentTarget.value });
+      const formated = slugify(event.currentTarget.value);
+      update({ [field]: formated });
     };
 
   useEffect(() => {
@@ -48,21 +50,20 @@ export const Plantilla = ({
         isError={!!error}
       />
       <p className="pt-3 pb-2">Personaliza el link de tu Asset</p>
-      <div className="relative flex">
+      <div className="relative flex items-center gap-1">
+        <p className="border border-brand-500 rounded-lg p-2 pointer-events-none min-w-max">
+          https://{state.host}.easybits.cloud/tienda/
+        </p>
+
         <Input
           value={state.slug}
           placeholder="super_curso"
-          inputClassName="pl-[254px]"
+          inputClassName="text-md pr-12 truncate"
           onChange={handleChange("slug")}
           isError={!!error}
         />
-        <div className="pointer-events-none absolute bottom-0 top-0 grid place-items-center left-2">
-          <p className="border border-brand-500 rounded-lg p-1">
-            https://{state.host}.easybits.cloud/p/
-          </p>
-        </div>
         <CopyButton
-          text={`https://${state.host}.easybits.cloud/p/${state.slug}`}
+          text={`https://${state.host}.easybits.cloud/tienda/${state.slug}`}
           className="absolute right-2 top-2 border rounded-lg p-1 hover:shadow h-8 w-8 flex justify-center items-center"
         />
       </div>
