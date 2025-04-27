@@ -1,5 +1,5 @@
 import TextLogo from "/icons/easybits-logo-text.svg";
-import Logo from "/icons/easybits-logo.svg";
+import Logo from "/icons/eyes-logo-purple.svg";
 import type { User } from "@prisma/client";
 import { Link } from "react-router";
 import { useEffect, useState } from "react";
