@@ -78,6 +78,7 @@ model User {
   confirmed      Boolean      @default(false)
   // file ownership
   // assets         Asset[]
+  // storageUsed    Int?         @default(0) // thinking about it @todo
   assets         Asset[]
   files          File[]
   publicKey      String?      @unique
