@@ -1,21 +1,7 @@
-import { Outlet, redirect } from "react-router";
-import { getUserOrRedirect } from "~/.server/getters";
-import type { Route } from "../DashLayout/+types/DashLayout";
+import { Outlet } from "react-router";
 import { HeaderMobile, SideBar } from "./SideBar";
 
-export const loader = async ({ request }: Route.LoaderArgs) => {
-  const user = await getUserOrRedirect(request);
-  const isEnrolled = user.roles.find((r) => r === "Enrolled");
-  const isProd = process.env.NODE_ENV !== "development";
-  if (isProd && !isEnrolled) {
-    return redirect("/waitlist");
-  }
-  return { user };
-};
-
-export default function DashLayout({
-  loaderData: { user },
-}: Route.ComponentProps) {
+export default function DashLayout() {
   return (
     <main className="flex relative  min-h-screen">
       <HeaderMobile />

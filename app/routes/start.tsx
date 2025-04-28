@@ -7,10 +7,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   // @todo move to a function?
   if (
-    (user.metadata?.asset_types.length || 0) < 1 ||
-    !user.metadata?.customer_type
+    !user.metadata?.customer_type ||
+    (user.metadata?.asset_types.length || 0) < 1
   ) {
     return redirect("/onboarding");
+  }
+  const isEnrolled = user.roles.find((r) => r === "Enrolled");
+  const isProd = process.env.NODE_ENV !== "development";
+  if (isProd && !isEnrolled) {
+    return redirect("/waitlist");
   }
   return null;
 };
