@@ -13,7 +13,22 @@ import { Switch } from "../assets/Switch";
 export const DEFAULT_PIC =
   "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
 
-export const SuscriptionCard = ({ customer }: { customer: unknown }) => {
+export const SuscriptionCard = ({
+  plan,
+  used,
+  customer,
+}: {
+  used: number;
+  plan: string;
+  customer: unknown;
+}) => {
+  const plans: {
+    [x: string]: Record<string, number>;
+  } = {
+    Starter: { price: 0, max: 0.5 },
+    Creative: { price: 199, max: 10 },
+    Expert: { price: 299, max: 100 },
+  };
   return (
     <section
       className={cn(
@@ -28,20 +43,20 @@ export const SuscriptionCard = ({ customer }: { customer: unknown }) => {
           )}
         >
           <h3 className={cn("font-semibold text-xl", "md:text-2xl")}>
-            {customer?.subscription || "Plan Starter"}
+            {customer?.subscription || "Plan " + plan}
           </h3>
           <span className={cn("text-xl font-semibold", "md:text-2xl")}>
-            $0 mxn/mes
+            ${plans[plan].price} mxn/mes
           </span>
         </div>
         <PerkItem perk="Hasta 1 asset en venta" />
         <PerkItem perk="Dashboard de administración" />
         <PerkItem perk="Landing page personalizable para tu asset" />
         <PerkItem perk="Sistema de venta en línea con integración Stripe o Paypal" />
-        <PerkItem perk="Hasta 500 mb de almacenamiento" />
+        <PerkItem perk={`Hasta ${plans[plan].max} GB de almacenamiento`} />
       </div>
       <hr className={cn("bg-black h-[1px] border-none  w-full")} />
-      <StorageBar />
+      <StorageBar current={used} plan={plans[plan]} />
 
       <hr className={cn("bg-black h-[1px] border-none w-full")} />
       <div
@@ -66,15 +81,29 @@ export const SuscriptionCard = ({ customer }: { customer: unknown }) => {
   );
 };
 
-const StorageBar = () => {
+const StorageBar = ({
+  plan,
+  current = 0.4,
+}: {
+  current: number;
+  plan: {
+    max: number;
+    price: number;
+  };
+}) => {
   return (
     <section className="w-full p-4 md:p-6">
       <nav className="flex items-center justify-between">
         <p className="font-medium truncate pr-1">Uso del almacenamiento</p>
-        <span className="text-sm px-1 text-iron ml-auto">100 de 500 mb</span>
+        <span className="text-sm px-1 text-iron ml-auto">
+          {current.toFixed(2)} de {plan.max} GB
+        </span>
       </nav>
       <div className="h-[10px] bg-black w-full rounded-full border-2 border-black relative mt-1">
         <div
+          style={{
+            width: `${(current / plan.max) * 100}%`,
+          }}
           className={cn(
             "bg-brand-500 w-full absolute inset-0 rounded-full transition-all"
           )}

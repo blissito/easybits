@@ -13,8 +13,12 @@ import { cn } from "~/utils/cn";
 
 export const ProfileTabs = ({
   user,
+  plan,
+  used,
   customer,
 }: {
+  used: number;
+  plan?: string | null;
   user: User;
   customer: Customer;
 }) => {
@@ -70,7 +74,7 @@ export const ProfileTabs = ({
       <TabPanels>
         <TabPanel>
           <ProfileCard user={user} />
-          <SuscriptionCard customer={customer} />
+          <SuscriptionCard used={used} customer={customer} plan={plan!} />
         </TabPanel>
         <TabPanel>
           <Notifications />{" "}

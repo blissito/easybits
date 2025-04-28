@@ -15,6 +15,8 @@ import { FilesPicker } from "./FilesPicker";
 import { useImageResize } from "~/hooks/useImageResize";
 import { motion } from "motion/react";
 import Spinner from "~/components/common/Spinner";
+import { useControlSave } from "~/hooks/useControlSave";
+import toast from "react-hot-toast";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -148,6 +150,11 @@ export const EditAssetForm = ({
   }) => {
     setState({ metadata: { numberOfSessions } });
   };
+
+  useControlSave(() => {
+    handleSubmit({ preventDefault: () => {} });
+    toast.success("Tu Asset se ha guardado");
+  });
 
   return (
     <article className="w-full px-4">
