@@ -2,12 +2,12 @@ import { AuthNav } from "~/components/login/auth-nav";
 import type { Route } from "./+types/blog";
 import { Link } from "react-router";
 
-export const clientLoader = async () => {
-  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
-  return { user };
-};
+// export const clientLoader = async () => {
+//   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+//   return { user };
+// };
 export default function Waitlist({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
+  // const { user } = loaderData;
   return (
     <section className="overflow-hidden">
       <AuthNav user={null} noCTA />

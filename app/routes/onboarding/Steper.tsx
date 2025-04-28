@@ -113,8 +113,8 @@ export const Steper = ({ user }: { user: User }) => {
   };
   const images = ["/hero/onboarding-1.webp", "/hero/onboarding-2.webp"];
   return (
-    <section className="flex w-full overflow-hidden">
-      <AnimatePresence mode="popLayout">{getStep()}</AnimatePresence>
+    <section className="flex w-full overflow-x-hidden">
+      <AnimatePresence>{getStep()}</AnimatePresence>
       {step !== 3 && (
         <div className="w-full hidden md:block fixed right-0 h-full md:w-[50%] border-2 border-black ">
           <img
@@ -132,9 +132,10 @@ export const Steper = ({ user }: { user: User }) => {
 export const OnboardingSuccess = () => {
   return (
     <motion.section
-      initial={{ x: -100, opacity: 0, scale: 0.5 }}
-      animate={{ x: 0, opacity: 1, scale: 1 }}
-      exit={{ x: 100, opacity: 0, scale: 0.8 }}
+      key="step_four"
+      initial={{ y: -100, opacity: 0, scale: 0.5 }}
+      animate={{ y: 0, opacity: 1, scale: 1 }}
+      exit={{ y: 100, opacity: 0, scale: 0.8 }}
       className="flex justify-center items-center w-full h-screen text-center"
     >
       <div className="max-w-3xl">
@@ -185,19 +186,20 @@ export const StepThree = ({
   }, [selected]);
   return (
     <motion.div
-      initial={{ x: 100, opacity: 0, scale: 0.8 }}
+      key="step_three"
+      initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
-      exit={{ y: -100, x: 0, opacity: 0, scale: 0.8 }}
+      exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
       className="w-full h-full min-h-fit lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 px-4 lg:px-20 pb-4 lg:pb-12"
     >
-      <div className="h-full min-h-fit lg:h-full pb-6">
+      <article>
         <h2 className="text-2xl lg:text-2xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
+        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-8">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
-        <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
           <SmallRadioCard
             onClick={toggle("diseño")}
             isSelected={selected.includes("diseño")}
@@ -283,13 +285,14 @@ export const StepThree = ({
             img="/hero/science.svg"
           />
         </div>
-      </div>
+      </article>
       <BrutalButton
         isLoading={isLoading}
         onClick={onClick}
         type="button"
         isDisabled={selected.length < 1}
-        className="mt-auto  w-full"
+        containerClassName="mt-auto mb-4"
+        className="w-full"
       >
         Continuar
       </BrutalButton>
@@ -325,7 +328,7 @@ const SmallRadioCard = ({
     >
       <div
         className={cn(
-          "block w-full col-span-1 relative  rounded-xl transition-all h-full bg-white px-2 py-3  text-left  align-start ",
+          "block w-full col-span-1 relative  rounded-xl transition-all h-full bg-white px-2 py-2  text-left  align-start ",
           "hover:-translate-x-2 hover:-translate-y-2 border border-black   ",
           {
             "-translate-y-2 -translate-x-2 ": isSelected,
@@ -375,9 +378,10 @@ export const StepTwo = ({
 
   return (
     <motion.div
-      initial={{ x: 100, opacity: 0, scale: 0.8 }}
+      key="step_two"
+      initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
-      exit={{ y: -100, x: 0, opacity: 0, scale: 0.8 }}
+      exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
       className="w-full h-full flex flex-col md:w-[50%]  pt-20 px-4 lg:px-20 pb-4 lg:pb-12 "
     >
       <div className="h-full">
@@ -417,9 +421,10 @@ export const StepOne = ({
 }) => {
   return (
     <motion.div
-      initial={{ x: 10, opacity: 0, scale: 0.8 }}
+      key="step_one"
+      initial={{ y: -10, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
-      exit={{ y: -10, x: 0, opacity: 0, scale: 0.8 }}
+      exit={{ y: 10, x: 0, opacity: 0, scale: 0.8 }}
       className="w-full h-full flex flex-col md:w-[50%]  pt-20 lg:pt-40 px-4 lg:px-20 pb-4 lg:pb-12 "
     >
       <div className="h-full">
@@ -434,7 +439,9 @@ export const StepOne = ({
           <section className="w-full">
             <Input
               onChange={(e) =>
-                onChange?.(e.currentTarget.value.trim().replaceAll("_", ""))
+                onChange?.(
+                  e.currentTarget.value.trim().replaceAll("_", "").toLowerCase()
+                )
               }
               value={value}
               placeholder="brendi_tienda"

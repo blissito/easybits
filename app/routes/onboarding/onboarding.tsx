@@ -22,7 +22,11 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   return (
     <section
-      className={cn("bg-white h-screen flex  w-full ", "md:flex-row relative")}
+      className={cn(
+        "bg-white h-screen flex  w-full ",
+        "md:flex-row relative",
+        "overflow-hidden"
+      )}
     >
       <Link to="/">
         <div className="flex gap-3 absolute left-4 lg:left-20">

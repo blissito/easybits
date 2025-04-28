@@ -69,7 +69,10 @@ export const RadioCard = ({
   return (
     <label
       className={cn(
-        "group bg-black w-full cursor-pointer relative block rounded-xl"
+        "group bg-black w-full cursor-pointer relative block rounded-xl",
+        {
+          "bg-brand-500": isSelected,
+        }
       )}
     >
       <div
