@@ -23,13 +23,13 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
   return (
     <section
       className={cn(
-        "bg-white h-screen flex  w-full ",
+        "bg-white  box-border h-screen flex  w-full ",
         "md:flex-row relative",
         "overflow-hidden"
       )}
     >
       <Link to="/">
-        <div className="flex gap-3 absolute left-4 lg:left-20">
+        <div className="flex gap-3 absolute left-4 xl:left-20">
           <img src={Logo} alt="easybits" className="w-12" />
           <FlipLetters word="EasyBits" type="light" />
         </div>
