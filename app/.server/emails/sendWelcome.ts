@@ -13,7 +13,7 @@ export const sendWelcomeEmail = (email: string, displayName?: string) => {
   url.searchParams.set("token", magicToken);
   return getSesTransport()
     .sendMail({
-      from: "no-reply@easybits.cloud",
+      from: "EasyBits@easybits.cloud",
       subject: "Bienvenid@ a EasyBits 🎉 📻",
       bcc: [email],
       html: welcomeEmail({ displayName, link: url.toString() }),
