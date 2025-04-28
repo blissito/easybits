@@ -77,6 +77,13 @@ export const Steper = ({ user }: { user: User }) => {
   const handleAssetTypes = (value: string[]) => {
     setMetadata((m) => ({ ...m, asset_types: value }));
   };
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    });
+  }, []);
 
   const getStep = () => {
     switch (step) {
@@ -204,7 +211,7 @@ export const StepThree = ({
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 min-h-[716px] md:min-h-fit">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 ">
           <SmallRadioCard
             onClick={toggle("diseño")}
             isSelected={selected.includes("diseño")}
