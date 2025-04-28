@@ -1,16 +1,10 @@
 import { AuthNav } from "~/components/login/auth-nav";
 import type { Route } from "./+types/blog";
 import { Link } from "react-router";
-
-// export const clientLoader = async () => {
-//   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
-//   return { user };
-// };
-export default function Waitlist({ loaderData }: Route.ComponentProps) {
-  // const { user } = loaderData;
+export default function Waitlist() {
   return (
     <section className="overflow-hidden">
-      <AuthNav user={null} noCTA />
+      <AuthNav noCTA />
       <section className="border-b-[2px] border-b-black min-h-[100vh] grid place-content-center md:px-20">
         <div className="max-w-7xl mx-auto -mt-20 flex flex-col items-center px-4 md:px-[5%] xl:px-0">
           <img src="/logo-purple.svg" className="mx-auto mb-6" alt="logo" />
