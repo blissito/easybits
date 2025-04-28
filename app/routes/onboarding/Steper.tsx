@@ -187,6 +187,7 @@ export const StepThree = ({
   useEffect(() => {
     onChange?.(selected);
   }, [selected]);
+
   return (
     <motion.div
       key="step_three"
@@ -194,16 +195,16 @@ export const StepThree = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full h-full min-h-fit lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
+      className="w-full h-full min-h-fit  overflow-y-scroll  lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
-      <article className="h-fit ">
+      <article className="w-full h-full min-h-fit pb-6   ">
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 pb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <SmallRadioCard
             onClick={toggle("diseño")}
             isSelected={selected.includes("diseño")}

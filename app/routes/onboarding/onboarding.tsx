@@ -23,7 +23,7 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
   return (
     <section
       className={cn(
-        "bg-white  box-border h-screen flex  w-full ",
+        "bg-white  box-border max-h-screen flex  w-full ",
         "md:flex-row relative",
         "overflow-hidden"
       )}
