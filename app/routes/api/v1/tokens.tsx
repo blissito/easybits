@@ -31,7 +31,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       displayName: tokenData.displayName,
       confirmed: true,
     };
-    console.log("Data", data);
     await db.user.upsert({
       where: { email: tokenData.email },
       update: data,
@@ -90,7 +89,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { success } = loaderData;
-  return null;
   return (
     <article className="grid h-screen place-content-center bg-black text-white">
       <nav className="flex gap-2">

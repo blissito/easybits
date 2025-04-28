@@ -4,16 +4,17 @@ import { LiveOrFiles } from "./LiveOrFiles";
 import { Plantilla } from "./Plantilla";
 import { GalleryUploader } from "./GalleryUploader";
 import { ExtraConfig } from "./ExtraConfig";
-import { MarkEditor } from "./MarkEditor";
+import { MarkEditor } from "./MarkEditor.client";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { Suspense, useState, type ChangeEvent, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
 import { useImageResize } from "~/hooks/useImageResize";
 import { motion } from "motion/react";
+import Spinner from "~/components/common/Spinner";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -50,9 +51,9 @@ export const assetSchema = z.object({
   publicLink: z.string().optional().nullable(),
   extra: z
     .object({
-      stock: z.coerce.number(),
-      showSold: z.boolean().default(false),
-      showReviews: z.boolean().default(true),
+      stock: z.coerce.number().default(0),
+      showSold: z.boolean().default(false).nullable(),
+      showReviews: z.boolean().default(true).nullable(),
     })
     .optional()
     .nullable(),
@@ -168,12 +169,13 @@ export const EditAssetForm = ({
             placeholder="curso, programación"
             className="mb-3"
           />
-          <MarkEditor
-            defaultValue={asset.description}
-            onChange={handleChange("description")}
-            name="description"
-            error={errors.description}
-          />
+          <Suspense fallback={<Spinner />}>
+            <MarkEditor
+              defaultValue={asset.description}
+              onChange={handleChange("description")}
+              error={errors.description}
+            />
+          </Suspense>
           <GalleryUploader limit={3} asset={asset} host={host} />
           <HR />
           <PriceInput

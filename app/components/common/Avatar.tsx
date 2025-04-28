@@ -13,6 +13,7 @@ export const Avatar = ({
   return (
     <div
       className={cn(
+        "overflow-hidden",
         "w-10 h-10 border border-black bg-black  rounded-full grid place-content-center",
         className,
         {
@@ -28,7 +29,7 @@ export const Avatar = ({
         className={cn("w-full h-full object-contain", {
           "w-40 h-40": size === "xl",
         })}
-        src={src ? src : DEFAULT_PIC}
+        src={src || DEFAULT_PIC}
       />
     </div>
   );

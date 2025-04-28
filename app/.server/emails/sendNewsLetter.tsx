@@ -17,7 +17,7 @@ export const sendMagicLink = (email: string, data: any) => {
   url.searchParams.set("token", magicToken);
   return getSesTransport()
     .sendMail({
-      from: "no-reply@easybits.cloud",
+      from: "EasyBits@easybits.cloud",
       subject: "🔑 Aquí está tu llave",
       bcc: [email],
       html: magic_link({ ...data, link: url.toString() }),
@@ -38,7 +38,7 @@ export const sendConfrimation = (
   url.searchParams.set("token", confirmationToken);
   return getSesTransport()
     .sendMail({
-      from: "no-reply@easybits.cloud",
+      from: "EasyBits@easybits.cloud",
       subject: "👽 Confirmando que eres humano 🤖",
       bcc: [email],
       html: confirmation({ ...data, link: url.toString() }),
