@@ -15,6 +15,7 @@
     "@aws-sdk/client-ses": "^3.782.0",
     "@aws-sdk/client-sts": "^3.782.0",
     "@aws-sdk/credential-provider-node": "^3.782.0",
+    "@headlessui/react": "^2.2.2",
     "@livekit/components-react": "^2.8.1",
     "@livekit/components-styles": "^1.1.4",
     "@prisma/client": "^6.1.0",
