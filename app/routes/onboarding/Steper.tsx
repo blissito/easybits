@@ -291,7 +291,7 @@ export const StepThree = ({
         isDisabled={selected.length < 1}
         className="mt-auto  w-full"
       >
-        Continue
+        Continuar
       </BrutalButton>
     </motion.div>
   );
@@ -396,7 +396,7 @@ export const StepTwo = ({
         isDisabled={!customer_type}
         className="mt-auto w-full"
       >
-        Continue
+        Continuar
       </BrutalButton>
     </motion.div>
   );
