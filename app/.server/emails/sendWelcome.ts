@@ -1,4 +1,3 @@
-import { generateUserToken } from "~/utils/tokens";
 import { getSesTransport } from "./sendgridTransport";
 import { welcomeEmail } from "./templates/welcomeEmail";
 
