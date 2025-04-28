@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import JSConfetti from "js-confetti";
 
-const confettiColors = ["#85ddcb", "#19262a", "#37ab93"];
+const confettiColors = ["#9870ED", "#F3F0F5", "#FFFFFF"];
 const initial = ["🎉", "👾", "💿", "🚀", "📖", "🕹", "📺"];
 export const EmojiConfetti = ({
   emojis = initial,

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import type { User } from "@prisma/client";
 import { AnimatePresence, motion } from "motion/react";
+import { EmojiConfetti } from "~/components/Confetti";
 
 //Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
 export const Steper = ({ user }: { user: User }) => {
@@ -132,6 +133,7 @@ export const Steper = ({ user }: { user: User }) => {
 export const OnboardingSuccess = () => {
   return (
     <motion.section
+      transition={{ type: "spring", bounce: 0 }}
       key="step_four"
       initial={{ y: -100, opacity: 0, scale: 0.5 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -153,9 +155,10 @@ export const OnboardingSuccess = () => {
           <br /> ¡Qué emoción, ya pronto vamos a vender!
         </p>
         <Link to="/dash">
-          <BrutalButton>¡Empezar!</BrutalButton>{" "}
+          <BrutalButton>¡Empezar!</BrutalButton>
         </Link>
       </div>
+      <EmojiConfetti emojis={false} />
     </motion.section>
   );
 };
@@ -187,6 +190,7 @@ export const StepThree = ({
   return (
     <motion.div
       key="step_three"
+      transition={{ type: "spring", bounce: 0 }}
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
@@ -378,6 +382,7 @@ export const StepTwo = ({
 
   return (
     <motion.div
+      transition={{ type: "spring", bounce: 0 }}
       key="step_two"
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
@@ -421,6 +426,7 @@ export const StepOne = ({
 }) => {
   return (
     <motion.div
+      transition={{ type: "spring", bounce: 0 }}
       key="step_one"
       initial={{ y: -10, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
