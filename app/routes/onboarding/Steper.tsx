@@ -77,6 +77,13 @@ export const Steper = ({ user }: { user: User }) => {
   const handleAssetTypes = (value: string[]) => {
     setMetadata((m) => ({ ...m, asset_types: value }));
   };
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    });
+  }, []);
 
   const getStep = () => {
     switch (step) {
@@ -187,6 +194,7 @@ export const StepThree = ({
   useEffect(() => {
     onChange?.(selected);
   }, [selected]);
+
   return (
     <motion.div
       key="step_three"
@@ -194,16 +202,16 @@ export const StepThree = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full h-full min-h-fit lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 px-4 lg:px-20 pb-4 lg:pb-12"
+      className="w-full h-full min-h-[1028px]   lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
-      <article>
-        <h2 className="text-2xl lg:text-2xl font-bold">
+      <article className="w-full h-full min-h-fit pb-6   ">
+        <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-8">
+        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 ">
           <SmallRadioCard
             onClick={toggle("diseño")}
             isSelected={selected.includes("diseño")}
@@ -265,7 +273,7 @@ export const StepThree = ({
             isSelected={selected.includes("libros")}
             img="/hero/book.svg"
             title="Libros"
-            description="Libros de cocina, ciencia ficción, romance o comedia. "
+            description="De cocina, ciencia ficción, romance o comedia. "
           />
           <SmallRadioCard
             onClick={toggle("ui")}
@@ -295,7 +303,7 @@ export const StepThree = ({
         onClick={onClick}
         type="button"
         isDisabled={selected.length < 1}
-        containerClassName="mt-auto mb-4"
+        containerClassName="mt-auto "
         className="w-full"
       >
         Continuar
@@ -326,13 +334,13 @@ const SmallRadioCard = ({
   return (
     <button
       onClick={onClick}
-      className={cn("group rounded-xl bg-black h-full", {
-        "bg-brand-500": isSelected,
+      className={cn("group rounded-xl bg-black h-full ", {
+        "bg-brand-500 border border-black": isSelected,
       })}
     >
       <div
         className={cn(
-          "block w-full col-span-1 relative  rounded-xl transition-all h-full bg-white px-2 py-2  text-left  align-start ",
+          "block w-full col-span-1 relative   rounded-xl transition-all h-full bg-white px-2 py-2  text-left  align-start ",
           "hover:-translate-x-2 hover:-translate-y-2 border border-black   ",
           {
             "-translate-y-2 -translate-x-2 ": isSelected,
@@ -387,13 +395,13 @@ export const StepTwo = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full h-full flex flex-col md:w-[50%]  pt-20 px-4 lg:px-20 pb-4 lg:pb-12 "
+      className="w-full min-h-[648px] md:min-h-0 h-full flex  flex-col md:w-[50%] pt-20  lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
-      <div className="h-full">
+      <div className="w-full h-full pb-6 min-h-[364px] md:min-h-0  ">
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué opción te describe mejor al usar EasyBits?
         </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
+        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
           Esto nos ayuda a personalizar tu experiencia. 🥸
         </p>
         <RadioCardGroup defaultValue={defaultValue} onChange={handleChange} />
@@ -431,13 +439,13 @@ export const StepOne = ({
       initial={{ y: -10, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 10, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full h-full flex flex-col md:w-[50%]  pt-20 lg:pt-40 px-4 lg:px-20 pb-4 lg:pb-12 "
+      className="w-full h-full flex flex-col md:w-[50%] pt-20  lg:pt-28  px-4 xl:px-20 pb-4 xl:pb-12 "
     >
       <div className="h-full">
         <h2 className="text-2xl lg:text-3xl font-bold">
           Personaliza el nombre de tu website y subdominio EasyBits
         </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-16">
+        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
           Escribe tu nombre o el nombre de tu marca que hará destacar tu tienda
         </p>
         <div className="flex items-baseline gap-1">

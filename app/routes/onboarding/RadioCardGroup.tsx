@@ -69,15 +69,15 @@ export const RadioCard = ({
   return (
     <label
       className={cn(
-        "group bg-black w-full cursor-pointer relative block rounded-xl",
+        "group bg-black w-full cursor-pointer relative  z-0 block rounded-xl",
         {
-          "bg-brand-500": isSelected,
+          "bg-brand-500 border-black border": isSelected,
         }
       )}
     >
       <div
         className={cn(
-          "border border-black flex gap-10 justify-between relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
+          "border border-black flex gap-4 lg:gap-10 justify-between relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
           {
             "-translate-y-2 -translate-x-2 ": isSelected,
           }
@@ -92,7 +92,7 @@ export const RadioCard = ({
         ) : null}
         <div>
           <h4 className="text-xl font-bold">{label}</h4>
-          <p className="text-base text-iron text-xs">{description}</p>
+          <p className="lg:text-base text-iron text-xs">{description}</p>
           <input
             ref={ref}
             type="radio"
@@ -102,7 +102,7 @@ export const RadioCard = ({
             className="hidden"
           />
         </div>
-        <img className="h-20 mb-1" src={icon} alt="descargable" />
+        <img className="h-16 md:h-20 mb-1" src={icon} alt="descargable" />
       </div>
     </label>
   );
