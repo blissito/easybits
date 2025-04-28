@@ -20,7 +20,7 @@ export default function Waitlist() {
             nadie.
           </p>
           <Link
-            to="https://www.linkedin.com/in/easybits/"
+            to="https://www.linkedin.com/company/fixtergeek"
             className="text-xl mx-auto  mt-12 group "
           >
             Síguenos
