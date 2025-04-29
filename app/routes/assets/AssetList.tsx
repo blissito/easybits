@@ -10,7 +10,7 @@ export const AssetList = ({
   assets?: Asset[];
 }) => {
   return (
-    <article className="relative  ">
+    <article className="relative   ">
       <section className="grid-cols-1 md:grid-cols-2 lg:grid-cols-4 grid gap-8">
         {assets?.map((asset) => (
           <AssetCard

@@ -16,7 +16,7 @@ export const Empty = ({
   onClick?: () => void;
 }) => {
   return (
-    <section className="z-10 relative grid max-w-2xl mx-auto place-content-center place-items-center min-h-[70vh] md:min-h-[80vh] ">
+    <section className="z-10 relative grid max-w-2xl mx-auto place-content-center place-items-center min-h-[60vh] md:min-h-[80vh] ">
       <div className="w-48 mx-auto md:w-52 flex justify-center">
         {illustration ? illustration : <MagicWand />}
       </div>
