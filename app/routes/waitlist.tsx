@@ -29,6 +29,7 @@ export default function Waitlist() {
               &#8702;
             </span>
           </Link>
+          <Link to="/logout">Cerrar sesión</Link>
         </div>
       </section>
     </section>

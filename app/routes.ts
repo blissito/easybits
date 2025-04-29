@@ -13,6 +13,7 @@ export default [
   index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
+  route("/logout", "routes/logout.tsx"),
   route("/preview", "routes/preview.tsx"),
   route("/onboarding", "routes/onboarding/onboarding.tsx"),
   route("/planes", "routes/planes.tsx"),
