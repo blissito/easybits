@@ -105,7 +105,7 @@ const ShareLink = ({
   host: string;
   slug: string;
 }) => {
-  const link = `https://${host}.easybits.cloud/p/${slug}`;
+  const link = `https://${host}.easybits.cloud/tienda/${slug}`;
   return (
     <>
       <Modal
