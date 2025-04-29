@@ -54,11 +54,11 @@ export const AssetPreview = ({
         </button>
         <button
           onClick={() => {
-            navigator.clipboard.writeText(uri);
-            toast("Link copiado ✅", { position: "top-right" });
             const uri = location.hostname.includes("localhost")
               ? `http://localhost:3000/tienda/${asset.slug}`
               : `https://${host}.easybits.cloud/tienda/${asset.slug}`;
+            navigator.clipboard.writeText(uri);
+            toast("Link copiado ✅", { position: "top-right" });
             const a = document.createElement("a");
             a.target = "_blank";
             a.href = uri;
