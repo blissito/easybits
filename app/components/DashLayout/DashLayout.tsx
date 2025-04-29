@@ -22,7 +22,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function DashLayout() {
   return (
-    <main className="flex relative  min-h-screen">
+    <main className="flex relative  min-h-svh">
       <HeaderMobile />
       <SideBar />
       <Outlet />

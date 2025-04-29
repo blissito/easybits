@@ -67,7 +67,7 @@ export default function LoginComponent({ state }: { state?: string }) {
   }, []);
 
   return (
-    <section className="w-full border-[1px] border-black h-[95vh] bg-cover bg-center bg-patternDark flex justify-center  items-center overflow-hidden">
+    <section className="w-full border-[1px] border-black h-svh bg-cover bg-center bg-patternDark flex justify-center  items-center overflow-hidden">
       <AuthNav />
       <main className="w-full">
         <div className="flex flex-col min-w-full items-center justify-center">
