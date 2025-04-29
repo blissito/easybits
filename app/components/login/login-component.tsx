@@ -72,7 +72,7 @@ export default function LoginComponent({ state }: { state?: string }) {
       <main className="w-full">
         <div className="flex flex-col min-w-full items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
-          <img src={logoPurple} className="w-[95px]" />
+          {/* <img src={logoPurple} className="w-[95px]" /> */}
           <AnimatePresence mode="popLayout">
             {loginType === "social" && (
               <SocialButtons
@@ -135,9 +135,9 @@ const SocialButtons = ({
       transition={transition}
       className="w-[98vw] px-4 md:px-[5%] xl:px-0   mx-auto flex flex-col items-center"
     >
-      <p className="text-center font-bold text-3xl whitespace-pre-line mb-10 w-full text-white">
+      {/* <p className="text-center font-bold text-3xl whitespace-pre-line mb-10 w-full text-white">
         {SELECTED_STRINGS.title}
-      </p>
+      </p> */}
       <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
         <Button
           mode="large"
@@ -169,7 +169,7 @@ const SocialButtons = ({
           Iniciar con Email
         </Button>
       </div>
-      <p className="text-center text-white">
+      {/* <p className="text-center text-white">
         {SELECTED_STRINGS.actionQuestion}
         <span
           className="text-[#9870ED] cursor-pointer underline"
@@ -177,7 +177,7 @@ const SocialButtons = ({
         >
           {SELECTED_STRINGS.action}
         </span>
-      </p>
+      </p> */}
     </motion.div>
   );
 };
