@@ -5,7 +5,7 @@ import { FcGoogle } from "react-icons/fc";
 import { BsStripe } from "react-icons/bs";
 import { AiFillMail } from "react-icons/ai";
 import { Button } from "../common/Button";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Input } from "../common/Input";
 import { motion, AnimatePresence } from "motion/react";
 import { useFetcher } from "react-router";
@@ -62,8 +62,12 @@ export default function LoginComponent({ state }: { state?: string }) {
     );
   };
 
+  useEffect(() => {
+    document.body.style.background = "black";
+  }, []);
+
   return (
-    <section className="w-full border-[1px] border-black h-screen bg-cover bg-center bg-patternDark flex justify-center  items-center">
+    <section className="w-full border-[1px] border-black h-[95vh] bg-cover bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
       <main className="w-full ">
         <div className="flex flex-col min-w-full items-center justify-center">

@@ -19,7 +19,8 @@ export const loader = async ({ request }: Route.ClientLoaderArgs) => {
     },
   });
   // Bytes => GB
-  const total = files.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024;
+  const total =
+    files.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024 / 1024;
 
   return {
     total,

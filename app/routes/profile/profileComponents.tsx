@@ -10,6 +10,14 @@ import { useEscape } from "~/hooks/useEscape";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Switch } from "../assets/Switch";
 
+export const plans: {
+  [x: string]: Record<string, number>;
+} = {
+  Starter: { price: 0, max: 0.5 },
+  Creative: { price: 199, max: 10 },
+  Expert: { price: 299, max: 100 },
+};
+
 export const DEFAULT_PIC =
   "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
 
@@ -22,13 +30,6 @@ export const SuscriptionCard = ({
   plan: string;
   customer: unknown;
 }) => {
-  const plans: {
-    [x: string]: Record<string, number>;
-  } = {
-    Starter: { price: 0, max: 0.5 },
-    Creative: { price: 199, max: 10 },
-    Expert: { price: 299, max: 100 },
-  };
   return (
     <section
       className={cn(
@@ -99,7 +100,7 @@ const StorageBar = ({
           {current.toFixed(2)} de {plan.max} GB
         </span>
       </nav>
-      <div className="h-[10px] bg-black w-full rounded-full border-2 border-black relative mt-1">
+      <div className="h-[10px] bg-black w-full rounded-full border-2 border-black relative mt-1 overflow-hidden">
         <div
           style={{
             width: `${(current / plan.max) * 100}%`,
@@ -177,26 +178,46 @@ export const ProfileCard = ({ user }: { user: User }) => {
   );
 };
 
-export const Notifications = () => {
-  //Pending copy
+export const Notifications = ({ user }: { user: User }) => {
+  const fetcher = useFetcher();
+  const handle = (key: string) => (value: boolean) => {
+    const update = {
+      ...user.notifications,
+      [key]: value,
+    };
+
+    fetcher.submit(
+      {
+        intent: "update_profile",
+        data: JSON.stringify({
+          notifications: update,
+        }),
+      },
+      { method: "post", action: "/api/v1/user" }
+    );
+  };
+
   return (
     <section className="border-2 bg-white max-w-2xl border-black rounded-2xl p-4 md:p-6 mt-4 md:mt-8 flex flex-col items-center gap-3 md:gap-6">
       <SwitchItem
+        onChange={handle("newsletter")}
+        value={user.notifications?.newsletter!}
         title="Newsletter"
-        description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
-        distinctio quibusdam aliquam eligendi veniam sed,"
+        description="Cuando encendido, te enviaremos nuestro newletter regularmente"
       />
       <hr className="w-full bg-black border-none h-[1px]" />
       <SwitchItem
+        onChange={handle("sells")}
+        value={user.notifications?.sells!}
         title="Ventas"
-        description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
-        distinctio quibusdam aliquam eligendi veniam sed,"
+        description="Si encendido, te enviaremos un correo cada que hagas una venta"
       />
       <hr className="w-full bg-black border-none h-[1px]" />
       <SwitchItem
+        onChange={handle("reviews")}
+        value={user.notifications?.reviews!}
         title="Nuevas reseñas"
-        description="   Lorem ipsum dolor sit amet consectetur adipisicing elit. Impedit
-        distinctio quibusdam aliquam eligendi veniam sed,"
+        description="Si activado, te notificaremos cuando tus clientes hagan alguna reseña"
       />
     </section>
   );
@@ -204,8 +225,12 @@ export const Notifications = () => {
 
 const SwitchItem = ({
   title,
+  value,
   description,
+  onChange,
 }: {
+  value: boolean;
+  onChange?: (arg0: boolean) => void;
   title: string;
   description: string;
 }) => {
@@ -215,7 +240,7 @@ const SwitchItem = ({
         <h2 className="text-lg font-bold">{title}</h2>
         <p className="text-iron text-sm">{description}</p>
       </div>
-      <Switch />
+      <Switch value={value} onChange={onChange} />
     </div>
   );
 };

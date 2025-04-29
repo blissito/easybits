@@ -73,19 +73,25 @@ type Metadata {
   customer_type String?
 }
 
+type Notifications {
+  sells      Boolean @default(true)
+  reviews    Boolean @default(true)
+  newsletter Boolean @default(true)
+}
+
 model User {
-  id             String       @id @default(auto()) @map("_id") @db.ObjectId
-  confirmed      Boolean      @default(false)
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  confirmed      Boolean        @default(false)
   // file ownership
   // assets         Asset[]
   // storageUsed    Int?         @default(0) // thinking about it @todo
   assets         Asset[]
   files          File[]
-  publicKey      String?      @unique
+  publicKey      String?        @unique
   // defaults
   displayName    String?
-  email          String       @unique
-  host           String?      @unique
+  email          String         @unique
+  host           String?        @unique
   verified_email Boolean?
   picture        String?
   phoneNumber    String?
@@ -94,11 +100,12 @@ model User {
   stripe         Json?
   // subscriptions
   newsletters    NewsLetter[]
+  notifications  Notifications?
   assetIds       String[] // experiment
   customer       String?
   // dates
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 }
 
 enum FileStatus {

@@ -77,7 +77,7 @@ export const ProfileTabs = ({
           <SuscriptionCard used={used} customer={customer} plan={plan!} />
         </TabPanel>
         <TabPanel>
-          <Notifications />{" "}
+          <Notifications user={user} />{" "}
         </TabPanel>
         <TabPanel>Content 3</TabPanel>
       </TabPanels>
