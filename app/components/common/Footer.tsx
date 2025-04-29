@@ -90,7 +90,7 @@ export const Footer = () => {
                 alt="logo blanco"
               />
             </h2>
-            <div className="max-w-[500px] -pt-10 h-[134px]  overflow-y-hidden">
+            {/* <div className="max-w-[500px] -pt-10 h-[134px]  overflow-y-hidden">
               <div className="-ml-4">
                 <iframe
                   frameBorder="0"
@@ -102,7 +102,7 @@ export const Footer = () => {
                   style={{ margin: "0 auto", display: "block" }}
                 ></iframe>
               </div>{" "}
-            </div>
+            </div> */}
           </div>
           <div className="hidden md:block col-span-1"></div>
           <div className="col-span-12 md:col-span-2 flex flex-col gap-2">
