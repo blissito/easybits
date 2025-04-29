@@ -145,16 +145,16 @@ export const OnboardingSuccess = () => {
       initial={{ y: -100, opacity: 0, scale: 0.5 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, opacity: 0, scale: 0.8 }}
-      className="flex justify-center items-center w-full h-screen text-center"
+      className="flex justify-center items-center w-full h-svh text-center px-4 md:px-[5%] "
     >
-      <div className="max-w-3xl">
+      <div className="max-w-3xl ">
         <img
           className="mx-auto"
           alt="logo completo"
           src="/hero/logo-full.svg"
         />
         <h3 className="text-3xl lg:text-5xl font-bold mt-8">
-          ¡Tu cuenta esta lista!
+          ¡Tu cuenta está lista!
         </h3>
         <p className="text-lg mt-4 mb-10">
           Todo está en su lugar. Es hora de poner manos a la obra y crear tu

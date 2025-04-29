@@ -31,7 +31,7 @@ export default function Purchases({ loaderData }: Route.ComponentProps) {
     <>
       <article
         className={cn(
-          " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0",
+          " min-h-svh w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0",
           LAYOUT_PADDING
         )}
       >

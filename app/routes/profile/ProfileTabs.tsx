@@ -24,7 +24,7 @@ export const ProfileTabs = ({
 }) => {
   return (
     <TabGroup className="mt-10">
-      <TabList className="flex gap-6 border-b-2 w-full max-w-2xl pb-4 px-2 border-black ">
+      <TabList className="flex gap-3 md:gap-6 border-b-2 w-full max-w-2xl pb-4 px-2 border-black ">
         <Tab as={Fragment}>
           {({ hover, selected }) => (
             <button
