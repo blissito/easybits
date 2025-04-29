@@ -111,13 +111,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           },
           {
             src: "/client.png",
-            text: " consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere Lorem ipsum dolor sit amet inventore illo sunt consequuntur exercitationem,",
-            name: "pelusino",
+            text: "Todo el tiempo estamos aprendiendo en comunidad, la demanda de mi audiencia por contenido nuevo es siempre vigente, por eso, EasyBits se ha vuelto una de mis mejores herramientas para planear mi siguiente asset digital, desarrollarlo, publicarlo y cobrar. 💵",
+            name: "Héctorbliss",
           },
           {
             src: "/client.png",
-            text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem.",
-            name: "pelusine",
+            text: "Antes hacía mis webinars juntando contactos por whatsapp, y enviando links de zoom, ahora construyo mi comunidad unicamente con EasyBits, y sus fabulosas herramientas para Webinar. No necesito ningúna otra app más.",
+            name: "Karla Ocampo",
           },
         ]}
       />
