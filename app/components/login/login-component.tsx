@@ -69,20 +69,11 @@ export default function LoginComponent({ state }: { state?: string }) {
   return (
     <section className="w-full border-[1px] border-black h-[95vh] bg-cover bg-center bg-patternDark flex justify-center  items-center">
       <AuthNav />
-      <main className="w-full ">
+      <main className="w-full">
         <div className="flex flex-col min-w-full items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
-
-          <motion.img
-            src={logoPurple}
-            className="w-[95px]"
-            animate={{
-              x: offset.x,
-              y: offset.y,
-              transition: { type: "spring", stiffness: 500, damping: 10 },
-            }}
-          />
-          <AnimatePresence mode="wait">
+          <img src={logoPurple} className="w-[95px]" />
+          <AnimatePresence mode="popLayout">
             {loginType === "social" && (
               <SocialButtons
                 SELECTED_STRINGS={SELECTED_STRINGS}
