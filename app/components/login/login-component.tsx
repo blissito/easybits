@@ -62,10 +62,6 @@ export default function LoginComponent({ state }: { state?: string }) {
     );
   };
 
-  useEffect(() => {
-    document.body.style.background = "black";
-  }, []);
-
   return (
     <section className="w-full border-[1px] border-black h-svh bg-cover bg-center bg-patternDark flex justify-center  items-center overflow-hidden">
       <AuthNav />
