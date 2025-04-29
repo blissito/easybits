@@ -121,7 +121,7 @@ export const Steper = ({ user }: { user: User }) => {
   };
   const images = ["/hero/onboarding-1.webp", "/hero/onboarding-2.webp"];
   return (
-    <section className="flex w-full overflow-x-hidden">
+    <section className="flex w-full h-full  overflow-x-hidden">
       <AnimatePresence>{getStep()}</AnimatePresence>
       {step !== 3 && (
         <div className="w-full hidden md:block fixed right-0 h-full md:w-[50%] border-2 border-black ">
@@ -202,16 +202,16 @@ export const StepThree = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full h-full min-h-[1028px]   lg:min-h-0 box-border flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
+      className="w-full  min-h-[1024px] md:min-h-0 h-full   flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-16 xl:pb-12 "
     >
-      <article className="w-full h-full min-h-fit pb-6   ">
+      <div className="w-full h-full md:min-h-0  pb-6 ">
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
         <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4 ">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <SmallRadioCard
             onClick={toggle("diseño")}
             isSelected={selected.includes("diseño")}
@@ -297,7 +297,7 @@ export const StepThree = ({
             img="/hero/science.svg"
           />
         </div>
-      </article>
+      </div>
       <BrutalButton
         isLoading={isLoading}
         onClick={onClick}
