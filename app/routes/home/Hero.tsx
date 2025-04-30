@@ -20,9 +20,9 @@ export const Hero = () => {
             assets digitales y consigue tu primera venta
           </p>
         </TextBlurEffect>
-        <Link to="/login" id="CrearAssetHome">
+        <Link to="/login">
           {" "}
-          <BrutalButton>Crear mi primer Asset</BrutalButton>
+          <BrutalButton id="CrearAssetHome">Crear mi primer Asset</BrutalButton>
         </Link>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">

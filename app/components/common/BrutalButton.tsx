@@ -29,7 +29,6 @@ export const BrutalButton = ({
 }: BrutalButtonProps) => {
   return (
     <button
-      id={id}
       onClick={onClick}
       disabled={isDisabled || isLoading}
       className={cn("group rounded-xl h-12 bg-black", containerClassName, {
@@ -39,6 +38,7 @@ export const BrutalButton = ({
       {...props}
     >
       <span
+        id={id}
         className={cn(
           "w-max",
           "min-w-32 h-12 px-4",
