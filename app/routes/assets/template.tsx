@@ -302,9 +302,11 @@ const Formats = ({ files }: { files: File[] }) => {
   );
 };
 
-export const FooterTemplate = ({ asset }: { asset: Asset }) => {
-  const getPriceString = () => `$${asset.price} ${asset.currency}`;
-
+export const FooterTemplate = ({
+  form,
+}: {
+  form: (arg0: { isLoading: boolean }) => ReactNode;
+}) => {
   const { handleSubmit, isLoading, success, message } = useFetcherSubmit({
     action: "/api/v1/user",
     intent: "free_subscription",
@@ -321,41 +323,10 @@ export const FooterTemplate = ({ asset }: { asset: Asset }) => {
         <img alt="isotipo easybits" src="/isotipo-eb.svg" />
         <span>Powered by</span>
         <Link to="/" className="mt-1">
-          <img alt="isotipo easybits " src="/logo-eb.svg" />{" "}
+          <img alt="isotipo easybits" src="/logo-eb.svg" />{" "}
         </Link>
       </section>
-      {success ? (
-        message
-      ) : (
-        <Form
-          onSubmit={handleSubmit}
-          className="md:hidden border-t-[2px] border-x-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center"
-        >
-          <p className="text-white font-bold whitespace-pre px-4">
-            {getPriceString()}
-          </p>
-          <input type="hidden" name="assetId" value={asset.id} />
-          <Input
-            required
-            placeholder="Escribe tu email"
-            name="email"
-            className="min-h-full m-0"
-            inputClassName="border-0 border-b-2 rounded-none"
-          />
-          <BrutalButton
-            isLoading={isLoading}
-            type="submit"
-            containerClassName="rounded-lg"
-            className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium mx-4"
-          >
-            {asset.template?.ctaText
-              ? asset.template.ctaText
-              : asset.price <= 0
-              ? "Suscribirse gratis"
-              : "Comprar"}
-          </BrutalButton>
-        </Form>
-      )}
+      {success ? message : form({ isLoading, handleSubmit })}
     </>
   );
 };

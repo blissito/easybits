@@ -1,6 +1,6 @@
-import { createUserSession } from "./getters";
+import { getUserSession } from "./getters";
 import { config } from "./config";
-import type { User } from "@prisma/client";
+import { db } from "./db";
 
 const location = config.baseUrl;
 
@@ -44,6 +44,9 @@ type GoogleExtraData = {
   email: string;
   verified_email: boolean;
   picture: string;
+  name: string;
+  given_name: string;
+  family_name: string;
 };
 // step 3 @todo: displayName?
 const getGoogleExtraData = (access_token: string): Promise<GoogleExtraData> => {
@@ -64,19 +67,13 @@ export const getGoogleURL = () => {
   url.searchParams.set("response_type", "code");
   url.searchParams.set(
     "scope",
-    "https://www.googleapis.com/auth/userinfo.email"
+    "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
   );
   return url.toString();
 };
 
 // export to use in loader
-export const createGoogleSession = async (
-  code: string,
-  request: Request,
-  cb?: (user: User) => void,
-  config?: { redirectURL: string }
-) => {
-  const { redirectURL } = config || {};
+export const createGoogleSession = async (code: string, request: Request) => {
   const { error, access_token, refresh_token } =
     await validateGoogleAccessToken(code);
   if (error) {
@@ -84,13 +81,24 @@ export const createGoogleSession = async (
     throw new Error("wrong google code", error);
   }
   if (!access_token) throw new Error("No access_token found in response");
+
   const userData = await getGoogleExtraData(access_token);
-  if (!userData.email) throw new Error("Wrong google user data");
-  const url = new URL(request.url);
-  // const redirectURL = url.searchParams.get("redirect") as string;
-  await createUserSession(
-    { ...userData, id: undefined, redirectURL: redirectURL || undefined },
-    request,
-    cb
-  );
+  if (!userData.email) throw new Error("::Missing User Data::(email)");
+
+  const data = {
+    picture: userData.picture,
+    family_name: userData.family_name,
+    given_name: userData.given_name,
+    verified_email: userData.verified_email,
+    displayName: userData.name,
+    email: userData.email,
+  };
+  await db.user.upsert({
+    where: {
+      email: userData.email,
+    },
+    create: data,
+    update: data,
+  }); // @revisit
+  return await getUserSession(userData.email, request);
 };

@@ -9,18 +9,19 @@ export const sendPurchase = (options: {
   email: string;
   data: {
     assetName: string;
-    date: string;
+    date: string | Date;
     price: number | string;
+    assetId: string;
   };
   subject?: string;
-  getTemplate: (data?: any) => string;
+  getTemplate?: (data?: any) => string;
 }) => {
   const { subject = "Aquí está tu asset", data, email } = options;
   const magicToken = generateUserToken({ ...data, email });
   const url = new URL(`${location}/api/v1/tokens`);
   url.searchParams.set("token", magicToken);
   url.searchParams.set("intent", "magic_link");
-  url.searchParams.set("next", "/dash/compras");
+  url.searchParams.set("next", "/dash/compras/" + data.assetId);
   return getSesTransport()
     .sendMail({
       from: getSesRemitent(),

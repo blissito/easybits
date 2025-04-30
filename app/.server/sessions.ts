@@ -12,7 +12,7 @@ export const { getSession, commitSession, destroySession } =
     },
   });
 
-export const redirectCookie = createCookie("redirect", {
+export const redirectCookie = createCookie("next", {
   maxAge: 3600, // one hour
   // secrets: ["blissmo", "easybits.cloud"],
 });

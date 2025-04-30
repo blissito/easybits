@@ -83,7 +83,7 @@ export const ITEMS = {
     },
     {
       icon: <img className="scale" src="/images/out.svg" />,
-      path: "/login?signout=1",
+      path: "/logout",
       title: "Cerrar Sesión",
       index: 0,
     },
