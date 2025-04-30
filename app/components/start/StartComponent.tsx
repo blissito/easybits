@@ -40,12 +40,10 @@ export default function StartComponent({
   useEffect(() => {
     setLanding(getLandingFlag());
     setShare(getShareFlag());
-    tasks[3] = landing === 1;
-    tasks[4] = share === 1;
     // if (Object.values(tasks).every(Boolean)) {
     //   navigate("/dash/estadisticas");
     // } // @todo @brendi confirmar si se redirecciona porfs
-  }, [tasks, landing, share]);
+  }, []);
 
   return (
     <div className="flex justify-center items-center relative  w-full ">
@@ -63,7 +61,9 @@ export default function StartComponent({
                 </p>
               </div>
               <div className="w-1/4 flex justify-end mr-0 md:mr-8">
-                <StepProgress tasks={tasks} />
+                <StepProgress
+                  tasks={{ ...tasks, 3: landing === 1, 4: share === 1 }}
+                />
               </div>
             </div>
             <div className="border-b-2 border-black" />
