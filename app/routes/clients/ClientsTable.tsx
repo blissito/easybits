@@ -3,7 +3,7 @@ import { cn } from "~/utils/cn";
 // import toast from "react-hot-toast";
 import { DotsMenu } from "../files/DotsMenu";
 // import { useCrud } from "~/hooks/useCrud";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Order, User } from "@prisma/client";
 import { createPortal } from "react-dom";
 import { ClientFormModal } from "~/components/forms/ClientFormModal";
@@ -30,6 +30,16 @@ export const ClientsTable = ({
     // remove(id); // @todo: block instead
   };
 
+  const [detail, setDetail] = useState<Partial<User> | null>(null);
+  const openDetailModal = (userId: string) => () => {
+    const client = clients.find((c) => c.id === userId);
+    setDetail(client as User);
+  };
+
+  const closeDetailModal = () => {
+    setDetail(null);
+  };
+
   useEffect(() => {
     if (document.body) {
       portalNode.current = document.body;
@@ -46,19 +56,32 @@ export const ClientsTable = ({
             orders={orders}
             client={client}
             menu={
-              <button
-                onClick={handleRemove(client.id!)}
-                className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
-              >
-                Bloquear
-              </button>
+              <>
+                <button
+                  onClick={handleRemove(client.id!)}
+                  className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
+                >
+                  Bloquear
+                </button>
+                <button
+                  onClick={openDetailModal(client.id!)}
+                  className="w-max p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-500 transition-all"
+                >
+                  Ver detalle
+                </button>
+              </>
             }
           />
         ))}
       </AnimatePresence>
-      {isFormOpen &&
+      {detail &&
         createPortal(
-          <ClientFormModal onClose={onClose} isOpen={isFormOpen} />,
+          <ClientFormModal
+            orders={orders.filter((o) => o.userId === detail.id)}
+            client={detail}
+            onClose={closeDetailModal}
+            isOpen={!!detail}
+          />,
           portalNode.current!
         )}
     </article>

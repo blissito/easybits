@@ -122,15 +122,16 @@ export const Modal = ({
             containerClassName
           )}
         >
-          {mode === "overlay" && (
-            <motion.article
-              onClick={onClose}
-              className="grid-overlay absolute inset-0 "
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            />
-          )}
+          {mode === "overlay" ||
+            (mode === "drawer" && (
+              <motion.article
+                onClick={onClose}
+                className="grid-overlay absolute inset-0 "
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              />
+            ))}
           <motion.section
             onClick={(e) => e.stopPropagation()}
             exit={getProps("exit")}

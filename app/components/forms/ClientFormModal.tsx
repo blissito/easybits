@@ -1,10 +1,15 @@
+import type { Order, User } from "@prisma/client";
 import { Modal } from "../common/Modal";
 import { ClientForm } from "./ClientForm";
 
 export const ClientFormModal = ({
   isOpen,
   onClose,
+  client,
+  orders = [],
 }: {
+  orders: Order[];
+  client: Partial<User>;
   isOpen: boolean;
   onClose?: () => void;
 }) => {
@@ -15,7 +20,7 @@ export const ClientFormModal = ({
       title="Datos del cliente"
       onClose={onClose}
     >
-      <ClientForm onClose={onClose} />
+      <ClientForm orders={orders} client={client} onClose={onClose} />
     </Modal>
   );
 };

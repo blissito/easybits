@@ -8,16 +8,16 @@ export const Avatar = ({
 }: {
   size?: "xl";
   className?: string;
-  src?: string;
+  src?: string | null;
 }) => {
   return (
     <div
       className={cn(
-        "overflow-hidden",
-        "w-10 h-10 border border-black bg-black  rounded-full grid place-content-center",
+        "overflow-hidden rounded-full",
+        "w-10 h-10 border border-black bg-black ",
         className,
         {
-          "w-20 h-20 p-4": size === "xl",
+          "w-20 h-20": size === "xl",
         }
       )}
     >
@@ -26,10 +26,8 @@ export const Avatar = ({
           currentTarget.onerror = null;
           currentTarget.src = DEFAULT_PIC;
         }}
-        className={cn("w-full h-full object-contain", {
-          "w-40 h-40": size === "xl",
-        })}
         src={src || DEFAULT_PIC}
+        className={cn("w-full h-full object-cover")}
       />
     </div>
   );

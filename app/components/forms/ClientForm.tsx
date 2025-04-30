@@ -1,72 +1,61 @@
-import type { Asset } from "@prisma/client";
-import { useFetcher } from "react-router";
-import { useForm, type FieldValues, type SubmitHandler } from "react-hook-form";
+import type { Order, User } from "@prisma/client";
 import { BrutalButton } from "../common/BrutalButton";
-import { Input } from "./Input";
-import { RadioGroup } from "./RadioInput";
-import { useEffect, type ChangeEvent } from "react";
-import { type NewAssetSchema } from "~/utils/zod.schemas";
 import { Avatar } from "../common/Avatar";
 
 export const ClientForm = ({
   onClose,
-  asset = { title: "" },
+  client,
+  orders,
 }: {
-  asset?: NewAssetSchema;
+  orders: Order[];
+  client: Partial<User>;
   onClose?: () => void;
 }) => {
-  const fetcher = useFetcher();
-  const isLoading = fetcher.state !== "idle";
-
-  const submit = (values: SubmitHandler<FieldValues>) => {
-    fetcher.submit(
-      { intent: "new_asset", data: JSON.stringify(values) },
-      {
-        method: "post",
-        action: "/api/v1/assets",
-      }
-    );
-    onClose?.();
-  };
-
-  const {
-    handleSubmit,
-    register,
-    formState: { isValid },
-    setValue,
-  } = useForm({
-    defaultValues: asset,
-  });
-  const registerVirtualFields = () => {
-    register("title", { value: "", required: true });
-    register("type", { value: "", required: true });
-  };
-
-  useEffect(() => {
-    registerVirtualFields();
-  }, []);
-
-  const handleChange = (name: "title" | "type", value: string) => {
-    setValue(name, value, { shouldValidate: true, shouldDirty: true });
-  };
-
   return (
     <article>
-      <Avatar size="xl" className="mb-4" />
-
+      <Avatar src={client.picture} size="xl" className="mb-4" />
+      <ShowInfo user={client} />
+      <Orders orders={orders} />
       <nav className="flex justify-end mt-12 gap-6 md:gap-8 fixed bottom-8 right-8">
         <BrutalButton className="bg-white" onClick={onClose} type="button">
           Cancelar
         </BrutalButton>
-        <BrutalButton
-          mode="danger"
-          isDisabled={!isValid}
-          isLoading={isLoading}
-          type="submit"
-        >
+        <BrutalButton mode="danger" isDisabled type="submit">
           Bloquear
         </BrutalButton>
       </nav>
+    </article>
+  );
+};
+
+const Orders = ({ orders }: { orders: Order[] }) => {
+  return (
+    <div className="mb-4">
+      <h3 className="font-bold">Assets:</h3>
+      <ul>
+        {orders.map((o) => (
+          <li key={o.id}>{o.assetId}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+const ShowInfo = ({ user }: { user: Partial<User> }) => {
+  return (
+    <article>
+      <div className="mb-4">
+        <h3 className="font-bold">Nombre:</h3>
+        <p>{user.displayName}</p>
+      </div>
+      <div className="mb-4">
+        <h3 className="font-bold">Email:</h3>
+        <p>{user.email}</p>
+      </div>
+      <div className="mb-4">
+        <h3 className="font-bold">Teléfono:</h3>
+        <p>{user.phoneNumber || "Ninguno"}</p>
+      </div>
     </article>
   );
 };
