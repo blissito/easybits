@@ -1,24 +1,44 @@
 import { BrutalButton } from "../common/BrutalButton";
 import { STRINGS } from "./StartComponent.constants";
+import { Link } from "react-router";
+import { useEffect } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import StepCheck from "/icons/y-check.png";
 import Escribenos from "/icons/escribenos.svg";
 import StepProgress from "../common/StepProgress";
-
-import { Link } from "react-router";
 
 export default function StartComponent({
   tasks,
 }: {
   tasks: Record<number, boolean>;
 }) {
-  const steps = STRINGS.steps.length;
-  const completed = STRINGS.steps.filter((item) => item.isCompleted).length;
-  /*   TODO: check its progress somehow
-   *    change icons
-   */
+  const saveLandingFlag = (num: number) => {
+    localStorage.setItem("landingFlag", String(num));
+  };
+  const getLandingFlag = () => Number(localStorage.getItem("landingFlag"));
+  const saveShareFlag = (val: number) =>
+    localStorage.setItem("shareFlag", String(val));
+
+  const getShareFlag = () => Number(localStorage.getItem("shareFlag"));
+
+  const handleLandingClick = () => {
+    saveLandingFlag(1);
+    // navigating with Link
+  };
+
+  const handleShareClick = () => {
+    saveShareFlag(1);
+    toast.success("El enlace a tu tienda se ha copiado al portapapeles ");
+  };
+
+  useEffect(() => {
+    tasks[3] = getLandingFlag() === 1;
+    tasks[4] = getShareFlag() === 1;
+  }, [tasks]);
 
   return (
     <div className="flex justify-center items-center relative  w-full ">
+      <Toaster />
       <div className="flex min-h-screen w-full justify-center items-center max-w-7xl mx-auto md:py-10 pt-16 pb-6 px-4 md:pl-28 md:pr-8 2xl:px-0">
         <div className="w-full ">
           <div className="w-full lg:w-[756px] mx-auto rounded-xl border-[2px] border-black bg-white mb-8">
@@ -32,7 +52,7 @@ export default function StartComponent({
                 </p>
               </div>
               <div className="w-1/4 flex justify-end mr-0 md:mr-8">
-                <StepProgress steps={steps} completed={completed} />
+                <StepProgress tasks={tasks} />
               </div>
             </div>
             <div className="border-b-2 border-black" />
@@ -59,6 +79,14 @@ export default function StartComponent({
                       ) : (
                         <Link to={path}>
                           <BrutalButton
+                            type="button"
+                            onClick={
+                              path === "/dash/tienda"
+                                ? handleLandingClick
+                                : path === ""
+                                ? handleShareClick
+                                : undefined
+                            }
                             containerClassName="h-8 rounded-xl text-base font-medium"
                             className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
                           >
@@ -76,8 +104,8 @@ export default function StartComponent({
             <p className="text-md">
               {STRINGS.anyQuestion}{" "}
               <a
-              // href="mailto:hola@easybits.cloud" //  @todo please set the right email
-              // className="text-brand-500 underline"
+                href="mailto:brenda@fixter.org" //  @todo please set the right email
+                className="text-brand-500 underline"
               >
                 {STRINGS.contactUs}
               </a>

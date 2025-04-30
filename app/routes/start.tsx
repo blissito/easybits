@@ -14,6 +14,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     tasks: {
       0: true,
       1: assetsCount > 0,
+      2: !!user.stripe,
+      3: false,
+      4: false,
     },
   };
 };

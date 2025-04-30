@@ -40,7 +40,7 @@ export const STRINGS = {
       image: Website,
       cta: "Visitar",
       isCompleted: false,
-      path: "/dash/profile",
+      path: "/dash/tienda",
     },
     {
       title: "Comparte el link con tus seguidores o clientes",
@@ -48,7 +48,7 @@ export const STRINGS = {
       image: ShoppingShare,
       cta: "Copiar",
       isCompleted: false,
-      path: "/dash/assets", //easybits url
+      path: "", //easybits url
     },
   ],
 };

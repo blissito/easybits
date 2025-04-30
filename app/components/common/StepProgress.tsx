@@ -1,19 +1,13 @@
 import { useState } from "react";
 
-const StepProgress = ({
-  steps,
-  completed,
-}: {
-  steps: number;
-  completed: number;
-}) => {
-  const totalSteps = steps;
+const StepProgress = ({ tasks }: { tasks: Record<number, boolean> }) => {
+  const totalSteps = Object.keys(tasks).length;
   const strokeWidth = 10;
   const radius = 40; // Radius of the circle
   const circumference = 2 * Math.PI * radius; // Full circumference
   const segmentLength = circumference / totalSteps; // Each step is 1/5 of the border
+  const completed = Object.values(tasks).filter((bool) => bool).length;
   const progress = completed * segmentLength; // Progress based on completed steps
-
   return (
     <div className="flex flex-col items-center space-y-4">
       {/* Circular Progress Bar */}
