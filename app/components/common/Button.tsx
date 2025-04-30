@@ -15,6 +15,7 @@ interface ButtonProps {
 }
 
 export const Button = ({
+  id,
   isLoading,
   children,
   onClick,
@@ -29,6 +30,7 @@ export const Button = ({
       {/* Shadow button */}
       <div className="absolute inset-0 w-full bg-black rounded-xl duration-300  group-hover:translate-x-1 group-hover:translate-y-1 group-hover:opacity-100" />
       <button
+        id={id}
         disabled={isDisabled}
         type={type}
         className={cn(

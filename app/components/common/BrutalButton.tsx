@@ -16,6 +16,7 @@ interface BrutalButtonProps {
 }
 
 export const BrutalButton = ({
+  id,
   mode = "brand",
   children,
   onClick,
@@ -28,6 +29,7 @@ export const BrutalButton = ({
 }: BrutalButtonProps) => {
   return (
     <button
+      id={id}
       onClick={onClick}
       disabled={isDisabled || isLoading}
       className={cn("group rounded-xl h-12 bg-black", containerClassName, {
