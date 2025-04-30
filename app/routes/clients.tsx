@@ -6,21 +6,44 @@ import type { Route } from "./+types/clients";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { useState } from "react";
+import type { Client } from "@prisma/client";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  const clients = await db.client.findMany({
+  const assets = await db.asset.findMany({
     where: {
-      userId: user.id,
+      userId: user!.id,
     },
   });
-  return { clients, user };
+  const assetIds = assets.map((a) => a.id);
+  const clients = await db.user.findMany({
+    where: {
+      assetIds: {
+        hasSome: assetIds, // @revisit interesting?
+      },
+    },
+    select: {
+      picture: true,
+      id: true,
+      displayName: true,
+      email: true,
+    },
+  });
+  const orders = await db.order.findMany({
+    where: {
+      assetId: {
+        in: assetIds,
+      },
+    },
+  });
+  // const userOrders = orders.filter(o=>clients[0].id === o.userId)
+  return { clients, user, orders };
 };
 
 export default function Clients({ loaderData }: Route.ComponentProps) {
-  // const { clients, user } = loaderData;
+  const { clients, orders } = loaderData;
   const [showForm, setShowForm] = useState(false);
 
   const handleClose = () => {
@@ -45,18 +68,8 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
         onOpen={handleOpen}
         onClose={handleClose}
         isFormOpen={showForm}
-        clients={[
-          {
-            id: "abc",
-            email: "perro@blissmo.com",
-            displayName: "Pedro Vargas Gonzalez Garcia",
-          },
-          {
-            id: "abc2",
-            email: "sam@blissmo.com",
-            displayName: "Samantha Figueroa Gardini de Lozada",
-          },
-        ]}
+        clients={clients as Partial<Client>[]}
+        orders={orders}
       />
     </article>
   );

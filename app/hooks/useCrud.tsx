@@ -25,6 +25,6 @@ export const useCrud = (options: { modelName: string }) => {
     );
   };
   const update = () => {};
-  const remove = (id: string) => {};
+  const remove = (id: string) => {}; // @todo
   return { create, update, remove };
 };

@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
-import toast from "react-hot-toast";
+// import toast from "react-hot-toast";
 import { DotsMenu } from "../files/DotsMenu";
-import { useCrud } from "~/hooks/useCrud";
+// import { useCrud } from "~/hooks/useCrud";
 import { useEffect, useRef, type ReactNode } from "react";
-import type { Client } from "@prisma/client";
+import type { Order, User } from "@prisma/client";
 import { createPortal } from "react-dom";
 import { ClientFormModal } from "~/components/forms/ClientFormModal";
 
@@ -13,19 +13,21 @@ export const ClientsTable = ({
   isFormOpen,
   onClose,
   onOpen,
+  orders = [],
 }: {
+  orders?: Order[];
   onClose: () => void;
   onOpen: () => void;
   isFormOpen?: boolean;
-  clients: Client[];
+  clients: Partial<User>[];
 }) => {
   const portalNode = useRef<HTMLElement>(null);
-  const { create, update, remove } = useCrud({
-    modelName: "Client",
-  });
+  // const { create, update, remove } = useCrud({
+  //   modelName: "Client",
+  // });
 
   const handleRemove = (id: string) => () => {
-    remove(id);
+    // remove(id); // @todo: block instead
   };
 
   useEffect(() => {
@@ -33,20 +35,22 @@ export const ClientsTable = ({
       portalNode.current = document.body;
     }
   }, []);
-
   return (
-    <article className="bg-white border-[2px] rounded-xl border-black text-xs overflow-hidden">
+    <article className="bg-white border-[2px] border-black text-xs">
       <Header />
       <AnimatePresence>
         {clients.map((client) => (
+          // Necesitamos no usar overflow-hidden en el padre para mostrar el menu correctamente
           <Row
+            key={client.id}
+            orders={orders}
             client={client}
             menu={
               <button
-                onClick={handleRemove(client.id)}
+                onClick={handleRemove(client.id!)}
                 className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all"
               >
-                Eliminar
+                Bloquear
               </button>
             }
           />
@@ -62,7 +66,27 @@ export const ClientsTable = ({
 };
 
 // @TODO: create a portal for the menu, to avoid overflow hidden
-const Row = ({ menu, client }: { menu?: ReactNode; client: Client }) => {
+const Row = ({
+  menu,
+  client,
+  orders = [],
+}: {
+  orders?: Order[];
+  menu?: ReactNode;
+  client: Partial<User>;
+}) => {
+  const getOrdersLength = (userId: string) => {
+    return orders.filter((o) => o.userId === userId).length;
+  };
+  const getLastOrder = (userId: string) => {
+    const os = orders.filter((o) => o.userId === userId);
+    os.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // @revisit and confirm
+    return new Date(os[0]?.createdAt).toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
   return (
     <motion.section
       layout
@@ -85,7 +109,12 @@ const Row = ({ menu, client }: { menu?: ReactNode; client: Client }) => {
       <Cell>
         <img
           className="h-10 w-10 rounded-full"
-          src="https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200"
+          src={client.picture}
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src =
+              "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
+          }}
           alt="user"
         />
       </Cell>
@@ -95,14 +124,8 @@ const Row = ({ menu, client }: { menu?: ReactNode; client: Client }) => {
       <Cell className="col-span-3">
         <span> {client.displayName}</span>
       </Cell>
-      <Cell>10</Cell>
-      <Cell className="col-span-2">
-        {new Date().toLocaleDateString("es-MX", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}
-      </Cell>
+      <Cell>{getOrdersLength(client.id)}</Cell>
+      <Cell className="col-span-2">{getLastOrder(client.id)}</Cell>
       <Cell>
         <DotsMenu>{menu}</DotsMenu>
       </Cell>
