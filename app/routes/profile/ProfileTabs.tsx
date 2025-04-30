@@ -1,12 +1,10 @@
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
-import clsx from "clsx";
 import { Fragment } from "react";
 import {
   Notifications,
   ProfileCard,
   SuscriptionCard,
 } from "./profileComponents";
-import type { Route } from "./+types/profile";
 import type { User } from "@prisma/client";
 import type { Customer } from "aws-sdk/clients/connect";
 import { cn } from "~/utils/cn";

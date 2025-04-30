@@ -80,7 +80,8 @@ const Row = ({
   };
   const getLastOrder = (userId: string) => {
     const os = orders.filter((o) => o.userId === userId);
-    os.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // @revisit and confirm
+    // @ts-ignore
+    os.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); // @revisit and confirm
     return new Date(os[0]?.createdAt).toLocaleDateString("es-MX", {
       year: "numeric",
       month: "long",

@@ -9,17 +9,17 @@ import { sendWelcomeEmail } from "./emails/sendWelcome";
 
 const throwRedirect = (request: Request) => {
   const url = new URL(request.url);
-  throw redirect("/login?next=" + url.pathname);
+  return redirect("/login?next=" + url.pathname);
 };
 
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
-  if (!session.has("email")) throwRedirect(request);
+  if (!session.has("email")) throw throwRedirect(request);
 
   const user = await db.user.findUnique({
     where: { email: session.get("email") },
   });
-  if (!user) throwRedirect(request);
+  if (!user) throw throwRedirect(request);
   return user;
 };
 

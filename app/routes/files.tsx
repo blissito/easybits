@@ -38,7 +38,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <Layout
         used={total}
         cta={
-          files.length > 1 && (
+          files.length > 0 && (
             <BrutalButton
               isDisabled={plans[plan].max < total}
               onClick={open}
