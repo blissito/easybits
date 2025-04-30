@@ -14,7 +14,7 @@ import {
 import { createAccount } from "~/.server/stripe";
 import useStripeConnect from "~/hooks/useStripeConnect";
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
-import { useActionData, useFetcher, useLoaderData } from "react-router";
+import { useFetcher } from "react-router";
 import { updateUser } from "~/.server/user";
 import Spinner from "~/components/common/Spinner";
 import { Modal } from "~/components/common/Modal";
@@ -64,19 +64,14 @@ export default function Sales({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const [accountCreatePending, setAccountCreatePending] = useState(false);
-  const [onboardingExited, setOnboardingExited] = useState(false);
-  const [error, setError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const fetcher = useFetcher();
-  // const loaderData = useLoaderData();
-  // const actionData = useActionData();
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
     loaderData?.user?.stripe?.id || actionData?.account?.id;
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
-    publishableKey: loaderData.publishableKey,
+    publishableKey: loaderData.user.publicKey || "",
   });
   const { orders } = loaderData;
   return (
@@ -92,7 +87,7 @@ export default function Sales({
           <EmptyPayment
             connectedAccountId={connectedAccountId}
             stripeConnectInstance={stripeConnectInstance}
-            setOnboardingExited={setOnboardingExited}
+            // setOnboardingExited={setOnboardingExited} // not used?
             isStripeLoading={isStripeLoading}
             isModalOpen={isModalOpen}
             setIsModalOpen={setIsModalOpen}
@@ -100,7 +95,7 @@ export default function Sales({
         )}
 
         {orders.length < 1 && <EmptySales />}
-        <SalesTable orders={orders} />
+        {orders.length > 0 && <SalesTable orders={orders} />}
       </article>
     </>
   );
@@ -113,14 +108,14 @@ const EmptyPayment = ({
   isStripeLoading,
   isModalOpen,
   setIsModalOpen,
-}) => {
+}: // @todo types
+any) => {
   const submit = useSubmit();
   const handleSubmit = () => {
     setIsModalOpen(true);
 
     const formData = new FormData();
-    // formData.append("stripeAccount", assetUserStripeId);
-
+    // formData.append("stripeAccount", assetUserStripeId); // revisit?
     submit(formData, {
       method: "post",
     });
@@ -141,7 +136,6 @@ const EmptyPayment = ({
               <BsStripe />
             </BrutalButton>
           ) : (
-            // <Link to="/dash/ventas/stripe">
             <BrutalButton
               className="bg-[#6772E5] flex gap-2 items-center"
               onClick={() => setIsModalOpen(true)}
