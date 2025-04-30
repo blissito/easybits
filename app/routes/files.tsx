@@ -10,6 +10,7 @@ import type { File } from "@prisma/client";
 import { FileDetailModal } from "~/components/forms/files/FileDetailModal";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { plans } from "./profile/profileComponents";
+import { Link } from "react-router";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -21,6 +22,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     },
   });
   const total = files.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024 / 1024; // GB
+
   return { plan, files, total };
 };
 
@@ -36,6 +38,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <Layout
+        plan={plan}
         used={total}
         cta={
           files.length > 0 && (
@@ -74,8 +77,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 const Layout = ({
   used,
   cta,
+  plan,
   children,
 }: {
+  plan: string;
   used: number;
   cta?: ReactNode;
   children: ReactNode;
@@ -89,7 +94,11 @@ const Layout = ({
               Almacenamiento de archivos
             </h2>
             <p>
-              Usado: <strong>{used.toFixed(2)} GB</strong>
+              Usado: <strong>{used.toFixed(2)} GB</strong> de{" "}
+              <strong>{plans[plan].max}</strong> GB (Plan {plan}){" "}
+              <Link to="/planes" className="text-xs underline text-brand-500º">
+                Mejorar plan
+              </Link>
             </p>
           </div>
           {cta}
