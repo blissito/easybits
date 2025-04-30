@@ -22,6 +22,7 @@ export const Footer = () => {
               whileTap={{ borderRadius: "199px" }}
               transition={{ type: "tween" }}
               className="bg-brand-500 w-full h-full  text-3xl md:text-5xl lg:text-[80px] font-medium "
+              id="EmpezarGratisHome"
             >
               Empezar gratis
             </motion.button>

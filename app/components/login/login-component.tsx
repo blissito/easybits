@@ -136,6 +136,7 @@ const SocialButtons = ({
       </p>
       <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
         <Button
+          id="GmailLogin"
           mode="large"
           isLoading={isGoogleLoading}
           className="bg-[#A6EB9A] md:min-w-[420px] "
@@ -146,6 +147,7 @@ const SocialButtons = ({
           Iniciar con Gmail
         </Button>
         <Button
+          id="StripeLogin"
           mode="large"
           isLoading={isStripeLoading}
           className="bg-[#6772E5] md:min-w-[420px]"

@@ -3,6 +3,7 @@ import { cn } from "~/utils/cn";
 import Spinner from "./Spinner";
 
 interface BrutalButtonProps {
+  id?: string;
   children?: ReactNode;
   className?: string;
   containerClassName?: string;

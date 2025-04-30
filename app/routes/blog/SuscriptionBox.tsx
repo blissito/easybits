@@ -23,7 +23,10 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
             className="bg-white  rounded-xl w-full border-2 border-black "
             placeholder="ejemplo@easybist.cloud"
           />{" "}
-          <BrutalButton containerClassName=" -mt-[2px] ml-[1px]">
+          <BrutalButton
+            containerClassName=" -mt-[2px] ml-[1px]"
+            id="Suscripcion"
+          >
             ¡Apuntarme!
           </BrutalButton>
         </div>
