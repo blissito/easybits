@@ -39,6 +39,9 @@ const SideBarWeb = () => {
             isCurrentActive={
               item.title === "Assets"
                 ? location.pathname.includes(item.path)
+                : item.title === "¡Empieza ya!"
+                ? location.pathname === "/dash" ||
+                  location.pathname === "/dash/" // hack 🤓
                 : undefined
             }
             key={key}
