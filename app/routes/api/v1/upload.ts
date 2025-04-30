@@ -20,7 +20,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         ownerId: user.id,
         contentType: complete.contentType,
         access: complete.access, // @todo fix type?
-        name: complete.metadata.name,
+        name: complete.metadata?.name,
         actionId: complete.data?.actionId,
         assetIds: complete.data?.assetId ? [complete.data.assetId] : undefined, // new
       });
