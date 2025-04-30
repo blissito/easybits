@@ -46,7 +46,7 @@ const ShowInfo = ({ user }: { user: Partial<User> }) => {
     <article>
       <div className="mb-4">
         <h3 className="font-bold">Nombre:</h3>
-        <p>{user.displayName}</p>
+        <p>{user.displayName || "Ninguno"}</p>
       </div>
       <div className="mb-4">
         <h3 className="font-bold">Email:</h3>
