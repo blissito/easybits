@@ -68,7 +68,7 @@ export default function StartComponent({
             </div>
             <div className="border-b-2 border-black" />
 
-            <div className="p-4 md:p-8 flex flex-col gap-6 md:gap-8">
+            <div className="p-4 md:p-8 flex flex-col gap-4">
               {STRINGS.steps.map(
                 ({ title, subtitle, image, cta, isCompleted, path }, key) => (
                   <div
