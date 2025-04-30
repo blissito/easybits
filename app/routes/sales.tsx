@@ -94,6 +94,7 @@ export default function Sales({
           />
         )}
 
+        {/* // ya estas en stripe y no has vendido */}
         {orders.length < 1 && <EmptySales />}
         {orders.length > 0 && <SalesTable orders={orders} />}
       </article>
