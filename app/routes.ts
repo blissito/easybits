@@ -39,7 +39,7 @@ export default [
 
       ...prefix("ventas", [
         index("routes/sales.tsx"),
-        route("stripe", "routes/stripe.tsx"),
+        route("stripe", "routes/stripe.tsx"), // why?
       ]),
       route("clientes", "routes/clients.tsx"),
       route("compras/:assetId", "routes/purchase_detail.tsx"),

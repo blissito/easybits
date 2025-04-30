@@ -1,4 +1,4 @@
-import type { File } from "@prisma/client";
+import type { Asset, File, Order, User } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
@@ -7,89 +7,72 @@ import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachi
 import toast from "react-hot-toast";
 import { DotsMenu } from "../files/DotsMenu";
 
-export const SalesTable = ({}: {}) => {
-  const fetcher = useFetcher();
-
-  const { requestHLS } = useStartVersioningFlyMachine();
-  const [forceWorkingSpinner, setForceWorkingSpinner] = useState("");
-  const handleHLS = async (file: File) => {
-    setForceWorkingSpinner(file.id);
-    toast.success("Procesando todas las versiones para: " + file.name, {
-      position: "bottom-center",
-      duration: 15000,
-    });
-
-    const machineInfo = await requestHLS(file.storageKey);
-    console.log("INFO::", machineInfo);
-
-    toast("Esto tomará algún tiempo, puedes olvidarte, yo me encargo. 🤖", {
-      position: "bottom-center",
-      icon: "⏲️",
-      duration: 20000,
-    });
-  };
-
+export const SalesTable = ({ orders }: { orders: Order[] }) => {
   return (
     <>
       <article className="bg-white border-[1px] rounded-xl border-black text-xs ">
         <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
-          <span className=" col-span-2 md:col-span-1 hidden md:block"></span>
-          <span className="col-span-5 md:col-span-2">Email</span>
-          <span className="col-span-2 hidden md:block ">Nombre</span>
-          <span className="col-span-3 md:col-span-2">Asset</span>
-          <span className="col-span-2 hidden md:block">Fecha </span>
-          <span className="col-span-3 md:col-span-2 block">Precio</span>
-          <span className="col-span-1"></span>
+          <span className="col-span-3">Email</span>
+          <span className="col-span-2">Asset</span>
+          <span className="col-span-3">Fecha </span>
+          <span className="col-span-2">Precio</span>
+          <span className="col-span-2"></span>
         </section>
-
         <AnimatePresence>
-          <motion.section
-            layout
-            initial={{ x: 10, opacity: 0 }}
-            exit={{ x: -10, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            key=""
-            className={cn(
-              "pl-4",
-              "hover:bg-gray-100 ",
-              "grid grid-cols-12 py-2 md:py-3 border-b items-center"
-            )}
-          >
-            <button className="truncate font-semibold col-span-2 md:col-span-1 text-left  flex-col hidden md:flex">
-              <img
-                className="h-10 w-10 rounded-xl"
-                src="https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200"
-                alt="user"
-              />
-            </button>
-            <div className="text-brand-gray col-span-5 md:col-span-2 flex flex-col">
-              <span className="text-black"> fulanitolopex@gmail.com</span>
-              <span className="block md:hidden"> Fulanito Lopez</span>
-            </div>
-
-            <span className="text-brand-gray col-span-2 hidden md:block">
-              {" "}
-              Fulanito Lopez
-            </span>
-            <span className="text-black col-span-3 md:col-span-2 ">
-              Template UI
-            </span>
-            <span className=" items-center text-brand-gray col-span-2 hidden md:flex">
-              {" "}
-              10 nov 2024
-            </span>
-            <span className=" items-center  col-span-3  md:col-span-2 flex">
-              $399.00 MXN
-            </span>
-
-            <DotsMenu>
-              <button className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-red transition-all">
-                Eliminar
-              </button>
-            </DotsMenu>
-          </motion.section>
+          {orders.map((o) => (
+            <Row order={o} key={o.id} />
+          ))}
         </AnimatePresence>
       </article>
     </>
+  );
+};
+
+const Row = ({ order }: { order: Order & { user: User; asset: Asset } }) => {
+  return (
+    <motion.section
+      layout
+      initial={{ x: 10, opacity: 0 }}
+      exit={{ x: -10, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      key=""
+      className={cn(
+        "pl-4",
+        "hover:bg-gray-100 ",
+        "grid grid-cols-12 py-2 md:py-3 border-b items-center"
+      )}
+    >
+      {/* Email */}
+      <section className={cn("col-span-3", "text-brand-gray flex flex-col")}>
+        <span className="text-black"> {order.user.email}</span>
+        <span className="block md:hidden"> {order.user.displayName}</span>
+      </section>
+      {/* Asset title */}
+      <section className={cn("col-span-2", "text-brand-gray")}>
+        <span> {order.asset.title}</span>
+      </section>
+      {/* Fecha */}
+      <section className={cn("col-span-3", "text-black md:col-span-2")}>
+        <span>
+          {new Date(order.createdAt).toLocaleDateString("es-MX", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </span>
+      </section>
+      {/* Precio */}
+      <section className={cn("col-span-2", "items-center md:col-span-2 flex")}>
+        <span>
+          $ {order.asset.price} {order.asset.currency}
+        </span>
+      </section>
+      {/* Acciones */}
+      <DotsMenu>
+        <button className="w-full p-3 rounded-lg hover:bg-gray-100 text-xs text-brand-grass transition-all">
+          Exportar
+        </button>
+      </DotsMenu>
+    </motion.section>
   );
 };

@@ -1,33 +1,50 @@
 import { BsStripe } from "react-icons/bs";
-import { FaPaypal } from "react-icons/fa";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
 import { SalesTable } from "./sales/SalesTable";
 import { Empty } from "./assets/Empty";
 import { IoCopy } from "react-icons/io5";
-import { Link, useSubmit } from "react-router";
-import React, { useState } from "react";
+import { useSubmit } from "react-router";
+import { useState } from "react";
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-import { createAccount, getPublishableKey } from "~/.server/stripe";
+import { createAccount } from "~/.server/stripe";
 import useStripeConnect from "~/hooks/useStripeConnect";
-import { getUserOrNull } from "~/.server/getters";
-import { Form, useActionData, useFetcher, useLoaderData } from "react-router";
+import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
+import { useActionData, useFetcher, useLoaderData } from "react-router";
 import { updateUser } from "~/.server/user";
 import Spinner from "~/components/common/Spinner";
 import { Modal } from "~/components/common/Modal";
+import type { Route } from "./+types/sales";
+import { db } from "~/.server/db";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const user = await getUserOrNull(request);
-  const publishableKey = await getPublishableKey();
+  const user = await getUserOrRedirect(request);
+  const assets = await db.asset.findMany({
+    where: {
+      userId: user.id,
+    },
+  });
+  const assetIds = assets.map((a) => a.id);
+  const orders = await db.order.findMany({
+    where: {
+      assetId: {
+        in: assetIds,
+      },
+    },
+    include: {
+      user: true,
+      asset: true,
+    },
+  });
   return {
+    orders,
     user,
-    publishableKey,
   };
 };
 
@@ -43,14 +60,17 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
   return { account, updatedUser };
 };
 
-export default function Sales() {
+export default function Sales({
+  loaderData,
+  actionData,
+}: Route.ComponentProps) {
   const [accountCreatePending, setAccountCreatePending] = useState(false);
   const [onboardingExited, setOnboardingExited] = useState(false);
   const [error, setError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const fetcher = useFetcher();
-  const loaderData = useLoaderData();
-  const actionData = useActionData();
+  // const loaderData = useLoaderData();
+  // const actionData = useActionData();
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
     loaderData?.user?.stripe?.id || actionData?.account?.id;
@@ -58,6 +78,7 @@ export default function Sales() {
     connectedAccountId,
     publishableKey: loaderData.publishableKey,
   });
+  const { orders } = loaderData;
   return (
     <>
       <article
@@ -78,8 +99,8 @@ export default function Sales() {
           />
         )}
 
-        {/* {connectedAccountId && no sales && <EmptySales />} */}
-        {/* <SalesTable /> */}
+        {orders.length < 1 && <EmptySales />}
+        <SalesTable orders={orders} />
       </article>
     </>
   );
