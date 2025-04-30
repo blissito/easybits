@@ -40,11 +40,12 @@ export default function StartComponent({
   useEffect(() => {
     setLanding(getLandingFlag());
     setShare(getShareFlag());
-
+    tasks[3] = landing === 1;
+    tasks[4] = share === 1;
     // if (Object.values(tasks).every(Boolean)) {
     //   navigate("/dash/estadisticas");
     // } // @todo @brendi confirmar si se redirecciona porfs
-  }, [tasks]);
+  }, [tasks, landing, share]);
 
   return (
     <div className="flex justify-center items-center relative  w-full ">
