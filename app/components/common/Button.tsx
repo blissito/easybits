@@ -3,6 +3,7 @@ import { cn } from "~/utils/cn";
 import Spinner from "./Spinner";
 
 interface ButtonProps {
+  id?: string;
   children?: ReactNode;
   onClick?: () => void;
   isLoading?: boolean;

@@ -96,6 +96,7 @@ const PlanForm = ({
         type="submit"
         className={cn("w-full", buttonClassName)}
         containerClassName={cn("w-full")}
+        id="SeleccionDePlan"
       >
         <span>¡Empezar!</span>
       </BrutalButton>
@@ -122,6 +123,7 @@ export const PlanCard = ({
     <BrutalButton
       className={cn("w-full bg-[#F6DB7F]", classNameButton)}
       containerClassName="w-full"
+      id="EmpezarPlanes"
     >
       <span>¡Empezar!</span>
     </BrutalButton>

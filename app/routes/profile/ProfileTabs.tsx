@@ -29,7 +29,7 @@ export const ProfileTabs = ({
           {({ hover, selected }) => (
             <button
               className={cn(
-                "px-4 h-10 text-black border-2 border-white",
+                "px-2 md:px-4 h-10 text-black border-2 border-white",
                 { " border-black": hover },
                 {
                   "bg-brand-500  border-black focus:outline-none": selected,
@@ -44,7 +44,7 @@ export const ProfileTabs = ({
           {({ hover, selected }) => (
             <button
               className={cn(
-                "px-4 h-10 text-black border-2 border-white",
+                "px-2 md:px-4 h-10 text-black border-2 border-white",
                 { " border-black": hover },
                 {
                   "bg-brand-500   border-black focus:outline-none": selected,
@@ -59,7 +59,7 @@ export const ProfileTabs = ({
           {({ hover, selected }) => (
             <button
               className={cn(
-                "px-4 h-10 text-black border-2 border-white",
+                "px-2 md:px-4 h-10 text-black border-2 border-white",
                 { " border-black": hover },
                 {
                   "bg-brand-500   border-black focus:outline-none": selected,
