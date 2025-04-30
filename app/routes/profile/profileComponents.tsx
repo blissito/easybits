@@ -66,7 +66,7 @@ export const SuscriptionCard = ({
           "md:flex-nowrap"
         )}
       >
-        <p className="text-iron">Obtén más beneficios con el Plan Creative</p>
+        <p className="text-iron">Obtén más beneficios con el Plan {plan}</p>
         <Form method="post">
           <BrutalButton
             className="w-full"
