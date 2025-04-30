@@ -6,7 +6,11 @@ import StepProgress from "../common/StepProgress";
 
 import { Link } from "react-router";
 
-export default function StartComponent() {
+export default function StartComponent({
+  tasks,
+}: {
+  tasks: Record<number, boolean>;
+}) {
   const steps = STRINGS.steps.length;
   const completed = STRINGS.steps.filter((item) => item.isCompleted).length;
   /*   TODO: check its progress somehow
@@ -50,7 +54,7 @@ export default function StartComponent() {
                       </div>
                     </div>
                     <div className="flex justify-center w-1/4">
-                      {isCompleted ? (
+                      {tasks[key] ? (
                         <img src={StepCheck} className="w-[64px]" />
                       ) : (
                         <Link to={path}>
