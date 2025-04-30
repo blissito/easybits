@@ -1,7 +1,7 @@
 import { BrutalButton } from "../common/BrutalButton";
 import { STRINGS } from "./StartComponent.constants";
-import { Link } from "react-router";
-import { useEffect } from "react";
+import { Link, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import StepCheck from "/icons/y-check.png";
 import Escribenos from "/icons/escribenos.svg";
@@ -12,12 +12,18 @@ export default function StartComponent({
 }: {
   tasks: Record<number, boolean>;
 }) {
+  const [landing, setLanding] = useState(0);
+  const [share, setShare] = useState(0);
   const saveLandingFlag = (num: number) => {
     localStorage.setItem("landingFlag", String(num));
+    setLanding(num);
   };
   const getLandingFlag = () => Number(localStorage.getItem("landingFlag"));
-  const saveShareFlag = (val: number) =>
+
+  const saveShareFlag = (val: number) => {
     localStorage.setItem("shareFlag", String(val));
+    setShare(val);
+  };
 
   const getShareFlag = () => Number(localStorage.getItem("shareFlag"));
 
@@ -32,8 +38,12 @@ export default function StartComponent({
   };
 
   useEffect(() => {
-    tasks[3] = getLandingFlag() === 1;
-    tasks[4] = getShareFlag() === 1;
+    setLanding(getLandingFlag());
+    setShare(getShareFlag());
+
+    // if (Object.values(tasks).every(Boolean)) {
+    //   navigate("/dash/estadisticas");
+    // } // @todo @brendi confirmar si se redirecciona porfs
   }, [tasks]);
 
   return (
@@ -74,7 +84,9 @@ export default function StartComponent({
                       </div>
                     </div>
                     <div className="flex justify-center w-1/4">
-                      {tasks[key] ? (
+                      {tasks[key] ||
+                      (key === 3 && landing) ||
+                      (key === 4 && share) ? (
                         <img src={StepCheck} className="w-[64px]" />
                       ) : (
                         <Link to={path}>

@@ -15,8 +15,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       0: true,
       1: assetsCount > 0,
       2: !!user.stripe,
-      3: false,
-      4: false,
+      3: false, // @todo revisit?
+      4: false, // this both are localStorare in client
     },
   };
 };
