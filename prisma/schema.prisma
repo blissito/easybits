@@ -33,6 +33,25 @@ type AssetWebinarMetadata {
   roomId           String?
 }
 
+model Order {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  customer_email  String
+  assetId         String   @db.ObjectId
+  customerId      String?
+  userId          String?  @db.ObjectId
+  stripePriceId   String?
+  stripeInvoiceId String?
+  pricePaid       String? // `$ 1024.50 MXN`
+  note            String?
+  //
+  user            User?    @relation(fields: [userId], references: [id])
+  asset           Asset?   @relation(fields: [assetId], references: [id])
+  // dates
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model Asset {
   id    String @id @default(auto()) @map("_id") @db.ObjectId
   slug  String @unique
@@ -61,6 +80,7 @@ model Asset {
   // dates
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
+  Order       Order[]
 }
 
 type NewsLetter {
@@ -93,6 +113,8 @@ model User {
   email          String         @unique
   host           String?        @unique
   verified_email Boolean?
+  family_name    String?
+  given_name     String?
   picture        String?
   phoneNumber    String?
   roles          String[]
@@ -106,6 +128,7 @@ model User {
   // dates
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  Order          Order[]
 }
 
 enum FileStatus {

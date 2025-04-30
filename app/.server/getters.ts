@@ -7,13 +7,19 @@ import { randomUUID } from "crypto";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { sendWelcomeEmail } from "./emails/sendWelcome";
 
+const throwRedirect = (request: Request) => {
+  const url = new URL(request.url);
+  throw redirect("/login?next=" + url.pathname);
+};
+
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
-  if (!session.has("email")) throw redirect("/login");
+  if (!session.has("email")) throwRedirect(request);
+
   const user = await db.user.findUnique({
     where: { email: session.get("email") },
   });
-  if (!user) throw redirect("/login");
+  if (!user) throwRedirect(request);
   return user;
 };
 
@@ -146,3 +152,27 @@ export const getFilesForAssetId = (assetId: string) =>
       storageKey: true,
     },
   });
+
+export const createOrder = ({
+  userId,
+  assetId,
+  email,
+}: {
+  email: string;
+  userId: string;
+  assetId: string;
+}) =>
+  db.order.create({
+    data: {
+      customer_email: email,
+      assetId,
+      userId,
+    },
+  });
+
+export const getUserSession = async (email: string, request: Request) => {
+  const cookie = request.headers.get("Cookie");
+  const session = await getSession(cookie);
+  session.set("email", email);
+  return session;
+};

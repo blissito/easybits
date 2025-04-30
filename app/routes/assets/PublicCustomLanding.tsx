@@ -4,9 +4,12 @@ import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
 import { loadStripe } from "@stripe/stripe-js";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
-import { useActionData } from "react-router";
+import { Form, useActionData } from "react-router";
 import { useMemo } from "react";
 import { EmojiConfetti } from "~/components/Confetti";
+import { Input } from "~/components/common/Input";
+import { BrutalButton } from "~/components/common/BrutalButton";
+import { FooterSuscription } from "~/components/forms/FooterSubscription";
 
 export const meta = ({
   data: {
@@ -119,7 +122,25 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         checkoutSession={actionData?.checkoutSession}
         files={files}
       />
-      <FooterTemplate asset={asset} />
+
+      <FooterTemplate
+        asset={asset}
+        form={({
+          isLoading,
+          handleSubmit,
+        }: {
+          handleSubmit: () => void;
+          isLoading: boolean;
+        }) => {
+          return (
+            <FooterSuscription
+              onSubmit={handleSubmit}
+              asset={asset}
+              isLoading={isLoading}
+            />
+          );
+        }}
+      />
     </article>
   );
 }

@@ -1,4 +1,8 @@
-import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
+import {
+  createOrder,
+  getUserOrNull,
+  getUserOrRedirect,
+} from "~/.server/getters";
 import type { Route } from "./+types/user";
 import { db } from "~/.server/db";
 
@@ -10,12 +14,14 @@ import {
   removeHost,
 } from "~/lib/fly_certs/certs_getters";
 import { FaLessThanEqual } from "react-icons/fa";
+import { redirect } from "react-router";
 // @TODO: recaptcha (cloudflare?)
 // @todo use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
 
+// @todo separate this in an if block !! yes please!
+
 export const action = async ({ request }: Route.ActionArgs) => {
-  const url = new URL(request.url);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -24,19 +30,22 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const email = formData.get("email") as string;
     const displayName = formData.get("displayName") as string;
     const assetId = formData.get("assetId") as string;
-
-    // @todo separate this in an if block
     const initialNewsletterData = {
       next: 1,
       assetId,
     };
+
+    const asset = await db.asset.findUnique({
+      where: { id: assetId },
+      select: { title: true, id: true, createdAt: true, price: true },
+    });
+    if (!asset) throw new Response("Asset not found", { status: 404 });
 
     let user = await db.user.findUnique({
       where: {
         email,
       },
     });
-
     if (!user) {
       user = await db.user.create({
         data: {
@@ -47,33 +56,48 @@ export const action = async ({ request }: Route.ActionArgs) => {
         },
       });
     } else {
+      // newsletter stuff... @todo revisit? move from here?
       let newsletters = [...user.newsletters];
       const found = findNewsletter(assetId, newsletters);
       if (!found) {
         newsletters = [...new Set([...newsletters, initialNewsletterData])];
       }
+      //
       const assetIds = [...new Set([...user.assetIds, assetId])];
-
       user = await db.user.update({
         where: { email },
         data: { newsletters, assetIds },
       });
-      // send purchase email?
-      const asset = await db.asset.findUnique({
-        where: { id: assetId },
-        select: { title: true },
-      });
-      await sendPurchase({
-        email: user.email,
-        data: {
-          assetName: asset.title,
-          date: asset.createdAt,
-          price: asset.price,
-        },
-      });
     }
-    // schedule the next send or avoid (when 0) //@todo make this a if block
-    await scheduleNext({ userId: user.id, assetId });
+
+    const orderExists = await db.order.findFirst({
+      where: {
+        assetId,
+        userId: user.id,
+      },
+    });
+    // avoid order creation
+    if (orderExists) {
+      throw redirect("/dash/compras/" + assetId); // ventajas de usar fetcher pa todo...
+    }
+    // order creation @todo count stats?
+    await createOrder({
+      userId: user.id,
+      assetId: asset.id,
+      email: user.email,
+    });
+    // deliver product @todo downloadable file link?
+    await sendPurchase({
+      email: user.email,
+      data: {
+        assetId,
+        assetName: asset.title,
+        date: asset.createdAt,
+        price: asset.price!,
+      },
+    });
+    // @todo what else? any other notification?
+    await scheduleNext({ userId: user.id, assetId }); // @todo revisit, improve
     return { success: true };
   }
 
