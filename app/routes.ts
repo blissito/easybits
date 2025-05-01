@@ -9,6 +9,7 @@ import {
 export default [
   // public assetLanding
   route("tienda/:assetSlug", "routes/assets/PublicCustomLanding.tsx"),
+  route("tienda", "routes/assets/publicStore.tsx"),
   // public info
   index("routes/home/home.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),

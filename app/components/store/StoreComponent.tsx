@@ -26,7 +26,7 @@ export default function StoreComponent({
   cta,
   user,
 }: {
-  user: User;
+  user?: User; // this component is used in SEO public views (no user present)
   assets: Asset[];
   cta?: ReactNode;
 }) {
