@@ -1,7 +1,7 @@
 export const STRINGS = {
   login: {
     title: "¡Ya te extrañabamos! \u000A Inicia sesión",
-    formTitle: "Completa tus datos para entrar a tu cuenta ¡de una!",
+    formTitle: "Completa tus datos para ingresar a tu cuenta ",
     actionQuestion: "¿No tienes cuenta? ",
     action: "Crea una cuenta",
     formAction: "Iniciar sesión una red social.",
@@ -9,7 +9,7 @@ export const STRINGS = {
   },
   signup: {
     title: "¡Vamos a empezar! \u000A Abre una cuenta",
-    formTitle: "Completa tus datos \n y obten tu llave",
+    formTitle: "Completa tus datos \n y obten tu magiclink",
     actionQuestion: "¿Ya tienes cuenta? ",
     action: "Inicia sesión",
     formAction: "Abre tu cuenta con una red social.",

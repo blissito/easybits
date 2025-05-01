@@ -195,7 +195,7 @@ const EmailForm = ({ onSubmit, SELECTED_STRINGS, isLoading, onAction }) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={transition}
-      id="loginform"
+      id="login_form"
       className="w-[98vw] px-4 md:px-[5%] xl:px-0   mx-auto flex flex-col items-center"
     >
       <p className="text-center max-w-md  text-3xl whitespace-pre-line font-bold mb-8 text-white">
