@@ -96,9 +96,8 @@ const PlanForm = ({
         type="submit"
         className={cn("w-full", buttonClassName)}
         containerClassName={cn("w-full")}
-        id="SeleccionDePlan"
       >
-        <span>¡Empezar!</span>
+        <span id="SeleccionDePlan">¡Empezar!</span>
       </BrutalButton>
     </fetcher.Form>
   );
