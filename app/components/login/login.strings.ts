@@ -12,7 +12,7 @@ export const STRINGS = {
     formTitle: "Completa tus datos \n y obten tu magiclink",
     actionQuestion: "¿Ya tienes cuenta? ",
     action: "Inicia sesión",
-    formAction: "Abre tu cuenta con una red social.",
-    formSubmit: "Abrir mi cuenta",
+    formAction: "Crea tu cuenta con una red social.",
+    formSubmit: "Crear mi cuenta",
   },
 };

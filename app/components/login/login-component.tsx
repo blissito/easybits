@@ -5,7 +5,7 @@ import { FcGoogle } from "react-icons/fc";
 import { BsStripe } from "react-icons/bs";
 import { AiFillMail } from "react-icons/ai";
 import { Button } from "../common/Button";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Input } from "../common/Input";
 import { motion, AnimatePresence } from "motion/react";
 import { useFetcher } from "react-router";
@@ -19,14 +19,12 @@ const transition = {
 
 export default function LoginComponent({ state }: { state?: string }) {
   const fetcher = useFetcher();
-  const [loginType, setLoginType] = useState<
-    "social" | "email" | "showing_email_instructions"
+  const [screen, setScreen] = useState<
+    "social" | "email" | "create" | "showing_email_instructions"
   >("social");
-  const [isLogin, setIsLogin] = useState<boolean>(false);
 
-  const SELECTED_STRINGS = isLogin ? STRINGS["login"] : STRINGS["signup"];
-
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const SELECTED_STRINGS =
+    screen === "social" ? STRINGS["login"] : STRINGS["signup"];
   const isGoogleLoading =
     fetcher.state !== "idle" && fetcher.formData?.get("auth") === "google";
   const isStripeLoading =
@@ -34,7 +32,7 @@ export default function LoginComponent({ state }: { state?: string }) {
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoginType("showing_email_instructions");
+    setScreen("showing_email_instructions");
     const form = Object.fromEntries(new FormData(e.currentTarget)) as {
       displayName: string;
       email: string;
@@ -62,6 +60,10 @@ export default function LoginComponent({ state }: { state?: string }) {
     );
   };
 
+  const swapScreen = () => {
+    setScreen((s) => (s === "social" ? "create" : "social"));
+  };
+
   return (
     <section className="w-full border-[1px] border-black h-svh bg-cover bg-center bg-patternDark flex justify-center  items-center overflow-hidden">
       <AuthNav />
@@ -70,29 +72,55 @@ export default function LoginComponent({ state }: { state?: string }) {
           {/* hover animation can improve... just like everything in this F** world*/}
           <img src={logoPurple} className="w-[95px]" />
           <AnimatePresence mode="popLayout">
-            {loginType === "social" && (
+            {screen === "social" && (
               <SocialButtons
+                cta={
+                  <button
+                    className="text-[#9870ED] cursor-pointer underline"
+                    onClick={swapScreen}
+                  >
+                    {SELECTED_STRINGS.action}
+                  </button>
+                }
                 SELECTED_STRINGS={SELECTED_STRINGS}
                 handleLogin={handleLogin}
                 isGoogleLoading={isGoogleLoading}
                 isStripeLoading={isStripeLoading}
                 onEmailClick={() => {
-                  setLoginType("email");
+                  setScreen("email");
                 }}
               />
             )}
 
-            {loginType === "email" && (
+            {screen === "email" && (
+              <EmailForm
+                noName
+                onSubmit={handleSubmit}
+                SELECTED_STRINGS={{
+                  title: "perro",
+                  formTitle: "Te enviaremos una llave 🔑", // @todo fix not standard naming
+                  formSubmit: "Solicitar link mágico",
+                  formAction: "Iniciar sesión una red social.",
+                }}
+                isLoading={isLoading}
+                onAction={() => {
+                  setScreen("social");
+                }}
+              />
+            )}
+            {screen === "create" && (
               <EmailForm
                 onSubmit={handleSubmit}
                 SELECTED_STRINGS={SELECTED_STRINGS}
                 isLoading={isLoading}
                 onAction={() => {
-                  setLoginType("social");
+                  setScreen("social");
                 }}
               />
             )}
-            {isLoading && <Spinner />}
+            {(screen === "email" || screen === "create") && isLoading && (
+              <Spinner />
+            )}
             {fetcher.data?.state === "confirmation_success" && (
               <>
                 <p className="text-white text-2xl text-center max-w-4xl mt-6">
@@ -127,6 +155,7 @@ const SocialButtons = ({
   isStripeLoading,
   handleLogin,
   onEmailClick,
+  cta,
 }) => {
   return (
     <motion.div
@@ -174,19 +203,22 @@ const SocialButtons = ({
         </Button>
       </div>
       <p className="text-center text-white">
-        {SELECTED_STRINGS.actionQuestion}
-        <span
-          className="text-[#9870ED] cursor-pointer underline"
-          onClick={() => setIsLogin((prev) => !prev)}
-        >
-          {SELECTED_STRINGS.action}
-        </span>
+        {SELECTED_STRINGS.actionQuestion} {cta}
       </p>
     </motion.div>
   );
 };
 
-const EmailForm = ({ onSubmit, SELECTED_STRINGS, isLoading, onAction }) => {
+const EmailForm = ({
+  onSubmit,
+  SELECTED_STRINGS,
+  isLoading,
+  onAction,
+  noName = false,
+}: {
+  noName?: boolean;
+  SELECTED_STRINGS: typeof SELECTED_STRINGS;
+}) => {
   return (
     <motion.form
       onSubmit={onSubmit}
@@ -202,13 +234,15 @@ const EmailForm = ({ onSubmit, SELECTED_STRINGS, isLoading, onAction }) => {
         {SELECTED_STRINGS.formTitle}
       </p>
       <div className="flex min-w-full flex-col md:items-center justify-center gap-6 mb-8 mx-auto">
-        <Input
-          className="md:max-w-[420px] text-white"
-          label="Nombre"
-          name="displayName"
-          placeholder="¿Cómo te gusta que te llamen?"
-          inputClassName="w-full"
-        />
+        {!noName && (
+          <Input
+            className="md:max-w-[420px] text-white"
+            label="Nombre"
+            name="displayName"
+            placeholder="¿Cómo te gusta que te llamen?"
+            inputClassName="w-full"
+          />
+        )}
         <Input
           className="md:max-w-[420px] text-white"
           label="Email"
@@ -229,6 +263,7 @@ const EmailForm = ({ onSubmit, SELECTED_STRINGS, isLoading, onAction }) => {
       </div>
       <p className="text-center text-white mt-0">
         <button
+          type="button"
           className="text-brand-500 underline cursor-pointer "
           onClick={onAction}
         >
