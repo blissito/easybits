@@ -24,14 +24,14 @@ const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (
 export default function StoreComponent({
   assets,
   cta,
-  user,
+  user: rootUser,
 }: {
   user?: User; // this component is used in SEO public views (no user present)
   assets: Asset[];
   cta?: ReactNode;
 }) {
   const [currentFilter, setCurrentFilter] = useState();
-
+  const user = rootUser || assets[0].user;
   return (
     <div
       className={cn(
@@ -64,11 +64,13 @@ export default function StoreComponent({
               <img className="w-full" src={ShareIcon} />
             </div>
           </HeaderIconButton>
-          <HeaderIconButton>
-            <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
-              <img className="w-full" src={OpenIcon} />
-            </div>
-          </HeaderIconButton>
+          <Link to={`https://${user.host}.easybits.cloud/tienda`}>
+            <HeaderIconButton>
+              <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
+                <img className="w-full" src={OpenIcon} />
+              </div>
+            </HeaderIconButton>
+          </Link>
         </div>
       </div>
       <div className="border-[2px] border-black rounded-2xl overflow-hidden">

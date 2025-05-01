@@ -9,11 +9,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     where: { host },
   });
   //   if (!hostExists && host !== "localhost")
-  if (!hostExists) throw new Response("User not found", { status: 404 });
+  if (!hostExists) throw new Response("Seller not found", { status: 404 });
 
   const assets = await db.asset.findMany({
     where: {
       userId: hostExists.id,
+      //   published:true // @todo activate?
     },
     include: {
       user: true,
