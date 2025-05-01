@@ -49,6 +49,9 @@ export const AssetForm = ({
     setValue(name, value, { shouldValidate: true, shouldDirty: true });
   };
 
+  const getRandomString = (elements: string[]): string =>
+    elements[Math.floor(Math.random() * elements.length)];
+
   return (
     <fetcher.Form
       // @ts-ignore
@@ -63,7 +66,16 @@ export const AssetForm = ({
           handleChange("title", e.currentTarget.value)
         }
         label="Ponle nombre a tu asset"
-        placeholder="Curso de macramé"
+        placeholder={`Curso de ${getRandomString([
+          "macramé",
+          "programación",
+          "auto-administración",
+          "coctelería",
+          "cocina",
+          "autodefensa",
+          "literatura",
+          "autodidactismo",
+        ])}`}
       />
 
       <h3 className="mb-4 font-medium">¿Qué tipo de asset es?</h3>

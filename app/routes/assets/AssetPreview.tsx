@@ -1,5 +1,5 @@
 import type { Asset } from "@prisma/client";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";
 import { useRef, useState, type ReactNode } from "react";
 import { EnrolledUsers } from "~/components/fullstack/EnrolledUsers";
@@ -43,7 +43,6 @@ export const AssetPreview = ({
 
   return (
     <aside className="md:block hidden w-[40%] h-screen bg-black px-8 pt-6 pb-8 text-white sticky top-0">
-      <Toaster />
       <nav className="flex items-center mb-8 gap-4">
         <h3 className="w-max text-xl mr-auto">Vista previa</h3>
         <button onClick={reloadIframe} className="text-xl active:text-gray-500">
