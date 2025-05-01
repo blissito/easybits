@@ -5,24 +5,195 @@ export const magic_link = ({
   link: string;
   displayName?: string;
 }) => `
-  <div style="padding:80px 16px;font-family:sans-serif;font-size:18px;max-width:420px;margin:0 auto;color:#0E1317;">
-     <img alt="logo" style="width:160px;" src="https://i.imgur.com/mpzZhT9.png" />
-    <h2 style="font-size:32px;margin-top:24px;">
-      👋🏼 ¡Hola ${displayName ? displayName : "EasyBiter"}! 🤓
-    </h2>
-    <p>
-      Esta es una llave 🔑 para que puedas entrar.
-      <br/>
-      <strong>
-        Así, no tienes que recordar constraseñas. 🤭
-      </strong> 
-    </p>
-    <br />
-    <p>
-      Solo da clic en el enlace.
-    </p>
-    <a rel="noreferer" target="_blank" href="${link}" style="border-radius:24px;text-decoration:none;background:#83F3D3;padding:12px 16px;font-size:18px;margin:32px 0;display:block;max-width:180px;text-align:center;cursor:pointer;color:#0E1317;">
-      Abrir mi cuenta
-    </a>
-  </div>
+  <body style="font-family: Arial; background: #000000">
+    <div style="background: #000000; margin: 0 auto; padding: 24px 16px">
+      <div
+        style="
+          text-align: left;
+          background-color: white;
+          border-radius: 16px;
+          margin: 0 auto;
+          max-width: 600px;
+          overflow: hidden;
+        "
+      >
+        <div
+          style="
+            background-image: url(https://i.imgur.com/vt00XNp.png);
+            padding: 4% 4% 16px 4%;
+          "
+        >
+          <img
+            alt="logo"
+            style="height: 54px; width: auto"
+            src="https://i.imgur.com/CNLuhvz.png"
+          />
+        </div>
+
+        <div style="padding: 0 4%">
+         
+          <h2
+            style="
+              color: #000000;
+              font-size: 24px;
+              margin-top: 24px;
+              line-height: 120%;
+              text-align: left;
+            "
+          >
+            ¡Bienvenid@ de nuevo  ${displayName ? displayName : "EasyBiter"}!🤓
+          </h2>
+          <p
+            style="
+              margin-top: 12px;
+              color: #323232;
+              text-align: left;
+              line-height: 140%;
+              font-size: 16px;
+            "
+          >
+           Aquí esta el elnace para iniciar sesión en EasyBits.
+           
+        </p>
+        <p
+            style="
+              margin-top: 12px;
+              color: #323232;
+              text-align: left;
+              line-height: 140%;
+              font-size: 16px;
+            "
+          >
+          Haz clic abajo para iniciar sesión y empezar a vender tus assets digitales. El enlace es válido durante 24 horas o hasta que se use:
+     
+        </p>
+         
+                 <a  href="${link}" target="blank"   rel="noreferer">
+            <div
+              style="
+                background: black;
+                height: 40px;
+                width: 180px;
+       
+                border-radius: 12px;
+                     margin-top:40px;
+              "
+            >
+              <button
+                style="
+                  background: #9870ed;
+                  height: 40px;
+                  font-weight: 550;
+                  border-radius: 12px;
+                  border: 2px solid black;
+                  color: black;
+                  width: 180px;
+                  text-align: center;
+                  font-size: 14px;
+                  margin-left: -4px;
+                  margin-top: -4px;
+                "
+              >
+              Iniciar sesión en EsyBits
+              </button>
+            </div>
+          </a>
+          <hr
+            style="
+              background: #f2f2f2;
+              height: 1px;
+              border: none;
+              width: 100%;
+              margin-top: 32px;
+              margin-bottom: 0px;
+            "
+          />
+        </div>
+        <div
+          style="
+            background-image: url(https://i.imgur.com/vt00XNp.png);
+            padding: 4%;
+          "
+        >
+          <div
+            style="
+              text-align: center;
+              margin-bottom: 0px;
+              background-image: url(https://i.imgur.com/vt00XNp.png);
+            "
+          >
+            <a
+              href="https://www.facebook.com/profile.php?id=61554028371141"
+              target="blank"
+              style="text-decoration: none"
+                 rel="noreferer"
+            >
+              <img
+                alt="facebook"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/UPZRiNu.png"
+              />
+            </a>
+            <a
+              href="https://www.instagram.com/_formmyapp/"
+              target="blank"
+              style="text-decoration: none"
+                 rel="noreferer"
+            >
+              <img
+                alt="instagram"
+                style="width: 18px; height: 18px; margin: 0 4px"
+                src="https://i.imgur.com/npFiXsH.png"
+              />
+            </a>
+            <a
+              href="https://www.linkedin.com/company/99530596"
+              target="blank"
+              style="text-decoration: none"
+                 rel="noreferer"
+            >
+              <img
+                alt="linkedin"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/SiJY9vZ.png"
+              />
+            </a>
+
+            <a
+              href="https://twitter.com/FormmyApp1"
+              target="blank"
+              style="text-decoration: none"
+                 rel="noreferer"
+            >
+              <img
+                alt="twitter"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/Ft5uWk4.png"
+              />
+            </a>
+            <a
+              href="https://www.youtube.com/@_FormmyApp"
+              target="blank"
+              style="text-decoration: none"
+                 rel="noreferer"
+            >
+              <img
+                alt="youtube"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/OCSq1sz.png"
+              />
+            </a>
+            <div style="text-align: center; margin-top: 16px">
+              <p style="color: #6a6966; font-size: 10px">
+                EasyBits. La mejor plataforma para compartir tu trabajo.
+              </p>
+              <p style="color: #6a6966; font-size: 10px">
+                Derechos Reservados 2025©
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
   `;

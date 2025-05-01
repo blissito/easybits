@@ -18,7 +18,7 @@ export const sendMagicLink = (email: string, data: any) => {
   return getSesTransport()
     .sendMail({
       from: "EasyBits@easybits.cloud",
-      subject: "🔑 Aquí está tu llave",
+      subject: "Aquí está tu Magic Link 🪄",
       bcc: [email],
       html: magic_link({ ...data, link: url.toString() }),
     })
