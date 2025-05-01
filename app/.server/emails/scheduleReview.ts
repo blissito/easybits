@@ -11,13 +11,15 @@ const getAgenda = () => {
 export const scheduleReview = async ({
   asset,
   user,
+  when = "in 7 days", // change time span here
 }: {
+  when: string;
   asset: Asset & { user: User };
   user: User;
 }) => {
   const agenda = getAgenda();
   await agenda.start();
-  agenda.schedule("in 1 minute", "send_review", {
+  agenda.schedule(when, "send_review", {
     assetId: asset.id,
     assetTitle: asset.title,
     creatorName: asset.user.displayName,

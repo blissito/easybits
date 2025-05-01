@@ -101,7 +101,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
     await scheduleNext({ userId: user.id, assetId }); // @todo revisit, improve
     // Schedule ask_for_review_send
     await scheduleReview({
-      asset: asset as Asset & { user: User },
+      // @ts-ignore
+      asset,
       user,
     });
     return { success: true };
