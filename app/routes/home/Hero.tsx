@@ -22,7 +22,9 @@ export const Hero = () => {
         </TextBlurEffect>
         <Link to="/login">
           {" "}
-          <BrutalButton id="CrearAssetHome">Crear mi primer Asset</BrutalButton>
+          <BrutalButton id="EmpezarGratisHome">
+            Crear mi primer Asset
+          </BrutalButton>
         </Link>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">
