@@ -5,18 +5,15 @@ import {
 } from "~/.server/getters";
 import type { Route } from "./+types/user";
 import { db } from "~/.server/db";
-
 import { findNewsletter, scheduleNext } from "~/.server/emails/startNewsLetter";
-import { sendPurchase } from "~/.server/emails/sendPurchase";
-import {
-  createHost,
-  listHosts,
-  removeHost,
-} from "~/lib/fly_certs/certs_getters";
-import { FaLessThanEqual } from "react-icons/fa";
+// import { sendPurchase } from "~/.server/emails/sendPurchase";
+import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { redirect } from "react-router";
+import { scheduleReview } from "~/.server/emails/scheduleReview";
+import type { Asset, User } from "@prisma/client";
+import { sendPurchase } from "~/.server/emails/sendPurchase";
 // @TODO: recaptcha (cloudflare?)
-// @todo use transactions
+// @todo try use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
 
 // @todo separate this in an if block !! yes please!
@@ -24,8 +21,7 @@ import { redirect } from "react-router";
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
-
-  // @todo is this ok in here?
+  // @todo is this ok in here? good question, is comfortable, yes...
   if (intent === "free_subscription") {
     const email = formData.get("email") as string;
     const displayName = formData.get("displayName") as string;
@@ -34,10 +30,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
       next: 1,
       assetId,
     };
-
     const asset = await db.asset.findUnique({
       where: { id: assetId },
-      select: { title: true, id: true, createdAt: true, price: true },
+      select: {
+        title: true,
+        id: true,
+        createdAt: true,
+        price: true,
+        user: true,
+      },
     });
     if (!asset) throw new Response("Asset not found", { status: 404 });
 
@@ -86,7 +87,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       assetId: asset.id,
       email: user.email,
     });
-    // deliver product @todo downloadable file link?
+    // // deliver product @todo downloadable file link?
     await sendPurchase({
       email: user.email,
       data: {
@@ -98,6 +99,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
     // @todo what else? any other notification?
     await scheduleNext({ userId: user.id, assetId }); // @todo revisit, improve
+    // Schedule ask_for_review_send
+    await scheduleReview({
+      asset: asset as Asset & { user: User },
+      user,
+    });
     return { success: true };
   }
 

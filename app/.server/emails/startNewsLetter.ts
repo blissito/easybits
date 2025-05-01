@@ -1,9 +1,7 @@
 import type { Asset, User } from "@prisma/client";
 import { sendNewsLetter } from "./sendNewsLetter";
-import { marked } from "marked";
-import sanitizeHtml from "sanitize-html";
 import { db } from "../db";
-import Agenda, { type Job, type JobAttributesData } from "agenda";
+import Agenda, { type Job } from "agenda";
 import { interpolateStyles } from "~/routes/api/v1/utils";
 
 // schedule this is v1 (@todo we want to bulk)

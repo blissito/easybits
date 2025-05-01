@@ -41,8 +41,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
 
   if (intent === "magic_link") {
-    const redirectURL = url.searchParams.get("next") as string;
     const tokenData = decode(url)!;
+    const redirectURL = url.searchParams.get("next") as string;
+
     if (tokenData.email) {
       return await setSessionCookie({
         email: tokenData.email,
