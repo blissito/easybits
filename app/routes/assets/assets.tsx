@@ -33,7 +33,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
         <Header
           cta={
             assets.length > 0 && (
-              <BrutalButton onClick={() => setShowModal(true)}>
+              <BrutalButton id="CrearAsset" onClick={() => setShowModal(true)}>
                 Crear asset
               </BrutalButton>
             )

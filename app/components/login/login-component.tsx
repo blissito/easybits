@@ -94,11 +94,17 @@ export default function LoginComponent({ state }: { state?: string }) {
             )}
             {isLoading && <Spinner />}
             {fetcher.data?.state === "confirmation_success" && (
-              <p className="text-white text-2xl">
-                Te hemos enviado un correo de confirmación.
-                <br />
-                Por favor, valida tu cuenta para comenzar. ✅
-              </p>
+              <>
+                <p className="text-white text-2xl text-center max-w-4xl mt-6">
+                  Te hemos enviado un correo de confirmación, valida tu cuenta
+                  para comenzar. ✅
+                </p>
+                <p className="text-white text-2xl text-center max-w-4xl mt-4">
+                  {" "}
+                  ¡A veces el mail acabar en SPAM! Esperamos que no sea así pero
+                  si no llega en uno o tres minutos, ya sabes donde encontrarlo.
+                </p>
+              </>
             )}
 
             {fetcher.data?.state === "success" && (
