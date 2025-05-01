@@ -56,7 +56,11 @@ export const Pricing = () => {
               "50 GB de almacenamiento ",
             ]}
             cta={
-              <PlanForm intent="creative_plan" buttonClassName="bg-[#A1CCE5]" />
+              <PlanForm
+                id="creative_plan"
+                intent="creative_plan"
+                buttonClassName="bg-[#A1CCE5]"
+              />
             }
           />{" "}
         </div>
@@ -72,7 +76,7 @@ export const Pricing = () => {
             "Iframes PRO de video y audio para la visualización del contenido en tu web",
             "Optimización del contenido",
           ]}
-          cta={<PlanForm intent="expert_plan" />}
+          cta={<PlanForm id="expert_plan" intent="expert_plan" />}
         />
       </div>
     </section>
@@ -82,9 +86,11 @@ export const Pricing = () => {
 const PlanForm = ({
   intent,
   buttonClassName,
+  id,
 }: {
   buttonClassName?: string;
   intent: string;
+  id?: string;
 }) => {
   const fetcher = useFetcher();
   return (
@@ -96,8 +102,9 @@ const PlanForm = ({
         type="submit"
         className={cn("w-full", buttonClassName)}
         containerClassName={cn("w-full")}
+        id={id}
       >
-        <span id="SeleccionDePlan">¡Empezar!</span>
+        <span>¡Empezar!</span>
       </BrutalButton>
     </fetcher.Form>
   );
