@@ -17,7 +17,7 @@ export const scheduleReview = async ({
 }) => {
   const agenda = getAgenda();
   await agenda.start();
-  agenda.schedule("in 7 days", "send_review", {
+  agenda.schedule("in 1 minute", "send_review", {
     assetId: asset.id,
     assetTitle: asset.title,
     creatorName: asset.user.displayName,
