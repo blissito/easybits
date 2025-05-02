@@ -4,12 +4,11 @@ import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
 import { loadStripe } from "@stripe/stripe-js";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
-import { Form, useActionData } from "react-router";
+import { useActionData } from "react-router";
 import { useMemo } from "react";
 import { EmojiConfetti } from "~/components/Confetti";
-import { Input } from "~/components/common/Input";
-import { BrutalButton } from "~/components/common/BrutalButton";
 import { FooterSuscription } from "~/components/forms/FooterSubscription";
+import type { Asset } from "@prisma/client";
 
 export const meta = ({
   data: {
@@ -26,21 +25,43 @@ export const meta = ({
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const host = url.hostname.split(".")[0]; // host
-  const hostExists = await db.user.findFirst({
-    where: { host },
-  });
-  if (!hostExists && host !== "localhost")
-    throw new Response("User not found", { status: 404 });
+  const domain = url.hostname;
 
-  const asset = await db.asset.findUnique({
-    where: {
-      userId: hostExists?.id,
-      slug: params.assetSlug,
-    },
-    include: {
-      user: true,
-    },
-  });
+  let asset: Asset;
+
+  if (!domain.includes("easybits")) {
+    const user = await db.user.findFirst({
+      where: {
+        domain,
+      },
+    });
+    asset = await db.asset.findUnique({
+      where: {
+        userId: user?.id, // undefined pass it, useful for dev (localhost)
+        slug: params.assetSlug,
+      },
+      include: {
+        user: true,
+      },
+    });
+    // @todo this could throw in here
+  } else {
+    const hostExists = await db.user.findFirst({
+      where: { host },
+    });
+    if (!hostExists && host !== "localhost")
+      throw new Response("User not found", { status: 404 });
+
+    asset = await db.asset.findUnique({
+      where: {
+        userId: hostExists?.id,
+        slug: params.assetSlug,
+      },
+      include: {
+        user: true,
+      },
+    });
+  }
   if (!asset) throw new Response("Asset not found", { status: 404 });
 
   const publishableKey = await getPublishableKey();

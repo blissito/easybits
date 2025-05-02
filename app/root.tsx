@@ -16,6 +16,7 @@ import { useTagManager } from "./utils/useTagManager";
 import { Toaster } from "react-hot-toast";
 import { db } from "./.server/db";
 import StoreComponent from "./components/store/StoreComponent";
+import Page from "./routes/assets/PublicCustomLanding";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -53,7 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const loader = async ({ request }: Route.LoaderArgs) => {
+export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
 
   // custom_domain & no_home => render Store
@@ -77,6 +78,19 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
         user: true,
       },
     });
+    // if is asset public detail
+    if (params.assetSlug) {
+      const asset = await db.asset.findUnique({
+        where: {
+          userId: {
+            equals: user.id,
+          },
+          slug: params.assetSlug,
+        },
+        include: { user: true },
+      });
+      return { asset, user, screen: "public_detail", files: [] };
+    }
     return { assets, user, screen: "public_store" }; // data to render
   }
 
@@ -89,9 +103,22 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function App({ loaderData }) {
   // @todo This coould be a second app (just for custom domains)
-  const { screen, assets, user } = loaderData || {};
+  const {
+    screen,
+    assets,
+    user,
+    asset,
+    publishableKey,
+    files,
+    successStripeId,
+  } = loaderData || {};
   if (screen === "public_store") {
     return <StoreComponent assets={assets} user={user} />;
+  }
+  if (screen === "public_detail") {
+    return (
+      <Page loaderData={{ asset, publishableKey, files, successStripeId }} />
+    );
   }
   return <Outlet />;
 }
