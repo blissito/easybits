@@ -46,7 +46,7 @@ export const BrutalButton = ({
           "block", // así podemos usar translate
           "text-lg font-semibold",
           "rounded-xl border-[2px] border-black bg-brand-500",
-          "transition-all",
+          "transition-all ",
           className,
           {
             "bg-white": mode === "ghost",

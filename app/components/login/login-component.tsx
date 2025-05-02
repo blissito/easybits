@@ -136,10 +136,10 @@ export default function LoginComponent({ state }: { state?: string }) {
             )}
 
             {fetcher.data?.state === "success" && (
-              <p className="text-white text-2xl">
-                Te hemos enviado un correo con tu llave. 🗝️
+              <p className="text-white text-2xl text-center">
+                Te hemos enviado un correo con tu magic link. 🗝️
                 <br />
-                Ahora, entra a tu correo y da clic al enlace. ✅
+                Solo entra a tu correo y da clic al enlace. ✅
               </p>
             )}
           </AnimatePresence>

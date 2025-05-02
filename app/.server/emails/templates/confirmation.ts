@@ -75,8 +75,7 @@ export const confirmation = ({
      
         </p>
          
-          <a rel="noreferer" target="_blank" href="${link}" 
-
+          <a rel="noreferer" target="_blank" href="${link}" >
             <div
               style="
                 background: black;
