@@ -53,11 +53,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
+  if (url.pathname === "/tienda") {
+    return null;
+  }
   if (
     !url.hostname.includes("easybits") &&
     !url.hostname.includes("localhost")
   ) {
-    return redirect("/tienda"); // GLOBAL REDIRECT to make domains work
+    return redirect("/tienda"); // GLOBAL REDIRECT to make custom domains limited
   }
 };
 

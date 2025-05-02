@@ -10,9 +10,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     where: { host },
   });
 
-  // if (!url.hostname.includes("easybits") && !url.hostname.includes('localhost')){
-
-  // }
   const domainExists = await db.user.findFirst({
     where: { domain: url.hostname },
   });
