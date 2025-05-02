@@ -138,6 +138,7 @@ export const confirmation = ({
               href="https://www.facebook.com/profile.php?id=61554028371141"
               target="blank"
               style="text-decoration: none"
+              rel="noreferer"
             >
               <img
                 alt="facebook"
@@ -149,6 +150,7 @@ export const confirmation = ({
               href="https://www.instagram.com/_formmyapp/"
               target="blank"
               style="text-decoration: none"
+              rel="noreferer"
             >
               <img
                 alt="instagram"
@@ -160,6 +162,7 @@ export const confirmation = ({
               href="https://www.linkedin.com/company/99530596"
               target="blank"
               style="text-decoration: none"
+              rel="noreferer"
             >
               <img
                 alt="linkedin"
@@ -172,6 +175,7 @@ export const confirmation = ({
               href="https://twitter.com/FormmyApp1"
               target="blank"
               style="text-decoration: none"
+              rel="noreferer"
             >
               <img
                 alt="twitter"
@@ -183,6 +187,7 @@ export const confirmation = ({
               href="https://www.youtube.com/@_FormmyApp"
               target="blank"
               style="text-decoration: none"
+              rel="noreferer"
             >
               <img
                 alt="youtube"

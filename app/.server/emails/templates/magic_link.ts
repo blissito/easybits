@@ -5,7 +5,7 @@ export const magic_link = ({
   link: string;
   displayName?: string;
 }) => `
-    <div style="background: #000000; margin: 0 auto; padding: 24px 16px">
+    <div style="background: #000000; margin: 0 auto; padding: 24px 16px; font-family: Arial;">
       {{ses:openTracker}}
       <div
         style="
@@ -96,6 +96,7 @@ export const magic_link = ({
                   font-size: 14px;
                   margin-left: -4px;
                   margin-top: -4px;
+                  cursor:pointer;
                 "
               >
               Iniciar sesión en EsyBits
