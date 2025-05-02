@@ -7,7 +7,11 @@ import type { Route } from "./+types/user";
 import { db } from "~/.server/db";
 import { findNewsletter, scheduleNext } from "~/.server/emails/startNewsLetter";
 // import { sendPurchase } from "~/.server/emails/sendPurchase";
-import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
+import {
+  createHost,
+  removeHost,
+  showHost,
+} from "~/lib/fly_certs/certs_getters";
 import { redirect } from "react-router";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
 import type { Asset, User } from "@prisma/client";
@@ -17,6 +21,25 @@ import { sendPurchase } from "~/.server/emails/sendPurchase";
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
 
 // @todo separate this in an if block !! yes please!
+
+export type CertificateResponse = {
+  addCertificate: {
+    certificate: {
+      configured: true;
+      acmeDnsConfigured: false;
+      acmeAlpnConfigured: true;
+      certificateAuthority: "lets_encrypt";
+      certificateRequestedAt: "2025-05-01T21:54:07Z";
+      dnsProvider: "googledomains";
+      dnsValidationInstructions: "CNAME _acme-challenge.blissmos.easybits.cloud => blissmos.easybits.cloud.jnk0nd.flydns.net.";
+      dnsValidationHostname: "_acme-challenge.blissmos.easybits.cloud";
+      dnsValidationTarget: "blissmos.easybits.cloud.jnk0nd.flydns.net";
+      hostname: "blissmos.easybits.cloud";
+      id: "cert_6nkrnj";
+      source: "fly";
+    };
+  };
+};
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
@@ -124,6 +147,51 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return await getUserOrNull(request);
   }
 
+  if (intent === "update_domain") {
+    const userId = formData.get("userId") as string;
+    const domain = formData.get("domain") as string;
+    const exists = await db.user.findFirst({
+      where: {
+        domain,
+      },
+    });
+    if (exists) {
+      // return { error: "Este dominio ya está en uso, intenta con otro" };
+    }
+    const user = await getUserOrNull(request);
+    user?.domain && (await removeHost(user.domain));
+    const domainResult = (await createHost(domain)) as CertificateResponse;
+
+    // const domainResult: any = await showHost(domain);
+
+    if (domainResult) {
+      await db.user.update({
+        where: {
+          id: userId,
+        },
+        data: { domain, dnsConfig: domainResult.addCertificate.certificate },
+      });
+    }
+    return { success: true };
+  }
+
+  if (intent === "check_domain") {
+    const user = await getUserOrNull(request);
+    if (!user) return null;
+
+    const domain = formData.get("domain") as string;
+    const domainResult = await showHost(domain);
+    console.log("RESULT:", domainResult);
+    if (domainResult?.app?.certificate) {
+      await db.user.update({
+        where: {
+          id: user.id,
+        },
+        data: { domain, dnsConfig: domainResult.app.certificate },
+      });
+    }
+  }
+
   if (intent === "update_host") {
     const userId = formData.get("userId") as string;
     const host = formData.get("host") as string;
@@ -146,24 +214,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     // console.log("removing:", `${user.host}.easybits.cloud`);
     await removeHost(`${user.host}.easybits.cloud`);
-    const hostResult = (await createHost(`${host}.easybits.cloud`)) as {
-      addCertificate: {
-        certificate: {
-          configured: true;
-          acmeDnsConfigured: false;
-          acmeAlpnConfigured: true;
-          certificateAuthority: "lets_encrypt";
-          certificateRequestedAt: "2025-05-01T21:54:07Z";
-          dnsProvider: "googledomains";
-          dnsValidationInstructions: "CNAME _acme-challenge.blissmos.easybits.cloud => blissmos.easybits.cloud.jnk0nd.flydns.net.";
-          dnsValidationHostname: "_acme-challenge.blissmos.easybits.cloud";
-          dnsValidationTarget: "blissmos.easybits.cloud.jnk0nd.flydns.net";
-          hostname: "blissmos.easybits.cloud";
-          id: "cert_6nkrnj";
-          source: "fly";
-        };
-      };
-    };
+    const hostResult = (await createHost(
+      `${host}.easybits.cloud`
+    )) as CertificateResponse;
 
     const {
       addCertificate: { certificate },

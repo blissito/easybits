@@ -22,7 +22,7 @@ import { DEFAULT_PIC } from "~/routes/profile/profileComponents";
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export default function StoreComponent({
-  assets,
+  assets = [],
   cta,
   user: rootUser,
 }: {
@@ -31,7 +31,7 @@ export default function StoreComponent({
   cta?: ReactNode;
 }) {
   const [currentFilter, setCurrentFilter] = useState();
-  const user = rootUser || assets[0].user;
+  const user = rootUser || assets?.[0]?.user;
   return (
     <div
       className={cn(

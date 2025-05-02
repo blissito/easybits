@@ -1,6 +1,7 @@
 import StoreComponent from "~/components/store/StoreComponent";
 import type { Route } from "./+types/publicStore";
 import { db } from "~/.server/db";
+import type { Asset } from "@prisma/client";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -8,18 +9,41 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const hostExists = await db.user.findFirst({
     where: { host },
   });
-  //   if (!hostExists && host !== "localhost")
-  if (!hostExists) throw new Response("Seller not found", { status: 404 });
 
-  const assets = await db.asset.findMany({
-    where: {
-      userId: hostExists.id,
-      //   published:true // @todo activate?
-    },
-    include: {
-      user: true,
-    },
+  // if (!url.hostname.includes("easybits") && !url.hostname.includes('localhost')){
+
+  // }
+  const domainExists = await db.user.findFirst({
+    where: { domain: url.hostname },
   });
+
+  let assets: Asset[] = [];
+  if (hostExists) {
+    assets = await db.asset.findMany({
+      where: {
+        userId: hostExists.id,
+        //   published:true // @todo activate?
+      },
+      include: {
+        user: true,
+      },
+    });
+  }
+  if (domainExists) {
+    assets = await db.asset.findMany({
+      where: {
+        userId: domainExists.id,
+        //   published:true // @todo activate?
+      },
+      include: {
+        user: true,
+      },
+    });
+  }
+  console.log("Asset", hostExists, domainExists);
+  if (assets.length < 1) {
+    // throw new Response("Seller not found", { status: 404 });
+  }
   return { assets };
 };
 

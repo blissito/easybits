@@ -28,6 +28,45 @@ export async function removeHost(hostname: string) {
   return result;
 }
 
+export async function showHost(hostname: string) {
+  const query = `
+          query($appId: String!, $hostname: String!) {
+          app(name: $appId) {
+            certificate(hostname: $hostname) {
+              configured
+              acmeDnsConfigured
+              acmeAlpnConfigured
+              certificateAuthority
+              createdAt
+              dnsProvider
+              dnsValidationInstructions
+              dnsValidationHostname
+              dnsValidationTarget
+              hostname
+              id
+              source
+              clientStatus
+              issued {
+                nodes {
+                  type
+                  expiresAt
+                }
+              }
+            }
+          }
+        }
+  `;
+  const variables = { appId: APP_NAME, hostname };
+  let result;
+  try {
+    result = await getClient().request(query, variables);
+  } catch (e: unknown) {
+    if (e instanceof Error)
+      console.error("::ERROR_ON_CERT_CREATION::", e.message);
+  }
+  return result;
+}
+
 export async function createHost(hostname: string) {
   const query = `
 mutation($appId: ID!, $hostname: String!) {
@@ -45,6 +84,7 @@ mutation($appId: ID!, $hostname: String!) {
             hostname
             id
             source
+            clientStatus
         }
     }
 }
