@@ -3,6 +3,7 @@ import { db } from "./app/.server/db";
 
 export default {
   ssr: true,
+  prerender: ["/inicio"],
   // prerender: async () => {
   //   const assets = await db.asset.findMany({
   //     where: { published: true },

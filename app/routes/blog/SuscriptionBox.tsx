@@ -1,3 +1,4 @@
+import { Form } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { cn } from "~/utils/cn";
 
@@ -18,18 +19,27 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
           business para creadores, o de las nuevas funcionalidades nuevas de
           EasyBits.
         </p>
-        <div className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center">
+        <Form
+          action="/api/v1/utils"
+          method="post"
+          className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center"
+        >
           <input
+            name="email"
+            required
             className="bg-white  rounded-xl w-full border-2 border-black "
             placeholder="ejemplo@easybist.cloud"
           />{" "}
           <BrutalButton
+            name="intent"
+            value="send_confirmation"
+            type="submit"
             containerClassName=" -mt-[2px] ml-[1px]"
             id="Suscripcion"
           >
             ¡Apuntarme!
           </BrutalButton>
-        </div>
+        </Form>
       </div>
     </section>
   );

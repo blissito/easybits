@@ -36,7 +36,7 @@ export const sendMagicLink = (email: string, data: any) => {
 type SendConfirmationData = { displayName: string };
 export const sendConfrimation = (
   email: string,
-  data: SendConfirmationData
+  data: SendConfirmationData = { displayName: "" }
   // getTemplate?: (data: SendConfirmationData) => string
 ) => {
   const confirmationToken = generateUserToken({ ...data, email });

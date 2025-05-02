@@ -1,14 +1,24 @@
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/utils";
-import { sendNewsLetter } from "~/.server/emails/sendNewsLetter";
+import {
+  sendConfrimation,
+  sendNewsLetter,
+} from "~/.server/emails/sendNewsLetter";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
+import { z } from "zod";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   await getUserOrRedirect(request);
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "send_confirmation") {
+    const email = formData.get("email") as string;
+    z.string().email().parse(email); // validation
+    await sendConfrimation(email); // @WIP @bliss
+  }
 
   if (intent === "test_action_email") {
     const emails = formData.get("emails") as string;
