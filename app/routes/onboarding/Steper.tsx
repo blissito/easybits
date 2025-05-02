@@ -452,6 +452,7 @@ export const StepOne = ({
           <p>https://</p>
           <section className="w-full">
             <Input
+              required
               onChange={(e) =>
                 onChange?.(
                   e.currentTarget.value.trim().replaceAll("_", "").toLowerCase()
@@ -466,6 +467,7 @@ export const StepOne = ({
         </div>
       </div>
       <BrutalButton
+        isDisabled={!value || value.length < 3}
         type="button"
         isLoading={isLoading}
         onClick={onClick}
