@@ -85,7 +85,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
     );
   };
 
-  const [isConfigOpen, setIsConfigOpen] = useState(!!domain);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const openDomainConfig = () => {
     setIsConfigOpen(true);
   };
