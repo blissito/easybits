@@ -24,4 +24,4 @@ export const magic_link = ({
     <a rel="noreferer" target="_blank" href="${link}" style="border-radius:24px;text-decoration:none;background:#83F3D3;padding:12px 16px;font-size:18px;margin:32px 0;display:block;max-width:180px;text-align:center;cursor:pointer;color:#0E1317;">
       Abrir mi cuenta
     </a>
-  </div>
+  </div>`;
