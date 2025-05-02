@@ -202,16 +202,16 @@ export const StepThree = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full  min-h-[1024px] md:min-h-0 h-full   flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-16 xl:pb-12 "
+      className="w-full  min-h-fit h-full   flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
-      <div className="w-full h-full md:min-h-0  pb-6 ">
+      <div className="w-full h-full min-h-fit  pb-6 ">
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
+        <p className="text-base lg:text-lg mt-2 lg:mt-4 mb-6 lg:mb-10">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4  md:grid-cols-2 xl:grid-cols-4 gap-4">
           <SmallRadioCard
             onClick={toggle("diseño")}
             isSelected={selected.includes("diseño")}
@@ -395,9 +395,9 @@ export const StepTwo = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full min-h-[648px] md:min-h-0 h-full flex  flex-col md:w-[50%] pt-20  lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
+      className="w-full min-h-fit h-full flex  flex-col md:w-[50%] pt-20  lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
-      <div className="w-full h-full pb-6 min-h-[364px] md:min-h-0  ">
+      <div className="w-full h-full pb-6 min-h-[364px] md:min-h-fit  ">
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué opción te describe mejor al usar EasyBits?
         </h2>
