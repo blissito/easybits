@@ -9,7 +9,7 @@ export const AssetFormModal = ({
   onClose?: () => void;
 }) => {
   return (
-    <Modal isOpen={isOpen} title="¡Empecemos!" onClose={onClose}>
+    <Modal isOpen={isOpen} title="¡Empecemos!" mode="overlay" onClose={onClose}>
       <AssetForm onClose={onClose} />
     </Modal>
   );
