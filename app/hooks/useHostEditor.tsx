@@ -43,8 +43,8 @@ export const useHostEditor = ({ user }: { user: User }) => {
 };
 
 export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
-  const [isEditing, setIsEditing] = useState(true);
   const [localHost, setLocalHost] = useState(user.host);
+  const [domain, setDomain] = useState(user.domain || "no-configurado");
   const fetcher = useFetcher();
   const error = fetcher.data?.error;
   const isLoading = fetcher.state !== "idle";
@@ -64,13 +64,6 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
     <>
       <Modal onClose={onClose} open={isOpen} setOpen={onOpen} user={user}>
         <DNSInput
-          ref={useClickOutside({
-            isActive: isEditing,
-            onOutsideClick() {
-              setIsEditing(false);
-              fetcher.data = null; // to remove errors
-            },
-          })}
           submitNode={
             // @todo inject props for disable?
             <BrutalButton
@@ -83,22 +76,71 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               Actualizar
             </BrutalButton>
           }
-          isEditing={isEditing}
-          onEditClick={() => setIsEditing(true)}
-          icon={(link: string) => <CopyButton text={link} />}
+          value={localHost}
           onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
-          value={isEditing ? localHost : user.host}
           error={error}
         />
 
-        <BrutalButton
-          // isLoading={isLoading}
-          onClick={onSubmit}
-          isDisabled={isEditing}
-          containerClassName="ml-auto"
-        >
-          Agregar dominio
-        </BrutalButton>
+        <hr className="w-full my-2" />
+        <DNSInput
+          mode="domain"
+          value={domain}
+          label={"Tu dominio propio"}
+          submitNode={
+            // @todo inject props for disable?
+            <BrutalButton
+              type="button"
+              isLoading={isLoading}
+              onClick={onSubmit}
+              containerClassName="ml-auto mr-2 h-9"
+              className="h-9"
+            >
+              Actualizar
+            </BrutalButton>
+          }
+          onChange={(e: ChangeType) => setDomain(e.currentTarget.value)}
+          error={error}
+        />
+
+        {/* Header */}
+        <article className="w-full">
+          <section className="border-2 border-black rounded-t-lg p-1 grid grid-cols-3 border-b-0 gap-2">
+            <span className="col-span-1">Tipo de registro</span>
+            <span className="col-span-1">Nombre del dominio</span>
+            <span className="col-span-1">Valor</span>
+          </section>
+          {/* Content */}
+          <section className="border-2 border-black rounded-b-lg p-1 grid grid-cols-3 text-xs gap-2">
+            <span>
+              {user.dnsConfig?.dnsValidationInstructions.split(" ")[0]}
+            </span>
+            <div className="flex items-center">
+              <p className="max-w-20 truncate">
+                {" "}
+                {user.dnsConfig?.dnsValidationHostname}
+              </p>
+              <CopyButton text={user.dnsConfig?.dnsValidationHostname} />
+            </div>
+
+            <div className="col-span-1 w-max items-center flex">
+              <p className="max-w-20 truncate">
+                {" "}
+                {user.dnsConfig?.dnsValidationTarget}
+              </p>
+              <CopyButton text={user.dnsConfig?.dnsValidationTarget} />
+            </div>
+          </section>
+        </article>
+
+        {/* {!user.domain && (
+          <BrutalButton
+            // isLoading={isLoading}
+            onClick={onSubmit}
+            containerClassName="ml-auto"
+          >
+            Agregar dominio
+          </BrutalButton>
+        )} */}
       </Modal>
     </>
   );
@@ -106,43 +148,52 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
 
 const DNSInput = ({
   onChange,
+  mode,
   error,
   value,
-  icon,
-  ref,
-  onEditClick,
-  isEditing,
-
   submitNode,
+  label = "Tu dominio gratis",
+  link,
 }: {
+  mode?: "domain";
+  label?: string;
   error?: string;
-  ref?: RefObject<HTMLElement | null>;
   submitNode?: ReactNode;
-  isEditing?: boolean;
-  onEditClick?: () => void;
-  icon?: (arg0: string) => ReactNode;
   onChange?: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   value: string;
+  link?: string;
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const ref = useClickOutside({
+    isActive: isEditing,
+    onOutsideClick() {
+      setIsEditing(false);
+      // fetcher.data = null; // to remove errors
+    },
+  });
+  const l =
+    link || mode === "domain"
+      ? `https://${value}/tienda`
+      : `https://${value}.easybits.cloud/tienda`;
   return (
-    <article className="w-full" ref={ref}>
-      <p className="mb-2">Tu subdominio actual</p>
+    <article ref={ref} className="w-full">
+      <p className="mb-2">{label}</p>
       <section className="flex gap-3 items-center rounded-xl border-2 border-black">
         {!isEditing && (
-          <span className="text-xl p-px border-brand-500 rounded-lg border ml-1">
-            https://{value}.easybits.cloud
+          <span className="text-md p-1 border-brand-500 rounded-lg border ml-1">
+            {l}
           </span>
         )}
 
         {!isEditing && (
           <>
             <CopyButton
-              text={`https://${value}.easybits.cloud`}
+              text={`https://${value}.easybits.cloud/tienda`}
               className="ml-auto"
             />
             <button
               type="button"
-              onClick={onEditClick}
+              onClick={() => setIsEditing(true)}
               className="active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl"
             >
               <BiEditAlt />
@@ -152,7 +203,7 @@ const DNSInput = ({
 
         {isEditing && (
           <div className="p-1 flex items-baseline gap-1">
-            <p>https://</p>
+            {mode !== "domain" && <p>https://</p>}
             <input
               autoFocus
               value={value}
@@ -161,7 +212,7 @@ const DNSInput = ({
               type="text"
               className="rounded-xl border-brand-500"
             />
-            <p>.easybits.cloud</p>
+            {mode !== "domain" && <p>.easybits.cloud</p>}
           </div>
         )}
 
@@ -188,7 +239,7 @@ const Modal = ({
   useEffect(() => {
     const escHanlder = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setOpen(false);
+        onClose?.();
       }
     };
 
