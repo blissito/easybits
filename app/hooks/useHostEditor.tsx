@@ -8,7 +8,7 @@ import { CopyButton } from "~/components/common/CopyButton";
 import { useClickOutside } from "./useOutsideClick";
 import { cn } from "~/utils/cn";
 import { IoWarningOutline } from "react-icons/io5";
-import { FaCheck } from "react-icons/fa";
+import { FaBackward, FaCheck } from "react-icons/fa";
 
 const statuses = ["Awaiting configuration", "Awaiting certificates"];
 
@@ -43,7 +43,7 @@ export const useHostEditor = ({ user }: { user: User }) => {
 
 export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
   const [localHost, setLocalHost] = useState(user.host);
-  const [domain, setDomain] = useState(user.domain || "no-configurado");
+  const [domain, setDomain] = useState<string>(user.domain || "");
   const fetcher = useFetcher();
   const error = fetcher.data?.error;
   const isLoading = fetcher.state !== "idle";
@@ -85,62 +85,135 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
     );
   };
 
+  const [isConfigOpen, setIsConfigOpen] = useState(!!domain);
+  const openDomainConfig = () => {
+    setIsConfigOpen(true);
+  };
+
+  const handleClose = () => {
+    setIsConfigOpen(false);
+    onClose?.();
+  };
+
   return (
     <>
-      <Modal onClose={onClose} open={isOpen} setOpen={onOpen} user={user}>
-        <DNSInput
-          submitNode={
-            // @todo inject props for disable?
-            <BrutalButton
-              type="button"
-              isLoading={isLoading}
-              onClick={onSubmit}
-              containerClassName="ml-auto mr-2 h-9"
-              className="h-9"
-            >
-              Actualizar
+      <Modal onClose={handleClose} open={isOpen} setOpen={onOpen} user={user}>
+        {!isConfigOpen && (
+          <>
+            <DNSInput
+              submitNode={
+                // @todo inject props for disable?
+                <BrutalButton
+                  type="button"
+                  isLoading={isLoading}
+                  onClick={onSubmit}
+                  containerClassName="ml-auto mr-2 h-9"
+                  className="h-9 bg-white"
+                >
+                  Actualizar
+                </BrutalButton>
+              }
+              value={localHost}
+              onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
+              error={error}
+            />
+            <hr className="w-full my-2" />
+            {user.domain && (
+              <DNSInput
+                isDisabled
+                label="Tu dominio propio"
+                mode="domain"
+                submitNode={
+                  // @todo inject props for disable?
+                  <BrutalButton
+                    type="button"
+                    isLoading={isLoading}
+                    onClick={onSubmit}
+                    containerClassName="ml-auto mr-2 h-9"
+                    className="h-9 bg-white"
+                  >
+                    Actualizar
+                  </BrutalButton>
+                }
+                editButton={
+                  <button
+                    type="button"
+                    onClick={() => setIsConfigOpen(true)}
+                    className={cn(
+                      "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l-2 border-black"
+                    )}
+                  >
+                    <BiEditAlt />
+                  </button>
+                }
+                value={user.domain}
+                onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
+                error={error}
+              />
+            )}
+          </>
+        )}
+
+        {isConfigOpen ? (
+          <>
+            <DNSInput
+              copyButton={
+                !user.domain ? (
+                  <div className="ml-auto text-yellow-600">
+                    <IoWarningOutline />
+                  </div>
+                ) : undefined
+              }
+              mode="domain"
+              value={domain}
+              label={"Tu dominio propio"}
+              submitNode={
+                // @todo inject props for disable?
+                <BrutalButton
+                  type="button"
+                  isLoading={isLoading}
+                  onClick={updateDomain}
+                  containerClassName="ml-auto mr-2 h-9"
+                  className="h-9 bg-white"
+                >
+                  Actualizar
+                </BrutalButton>
+              }
+              onChange={(e: ChangeType) => setDomain(e.currentTarget.value)}
+              error={error}
+            />
+            <DNSConfig user={user} />
+            <IPsInfo user={user} />
+            <nav className="flex justify-between w-full">
+              <BrutalButton
+                onClick={() => setIsConfigOpen(false)}
+                className="bg-white min-w-10"
+              >
+                {/* @todo volveré a buscar y cambiar el icono correcto, tal vez... */}
+                <FaBackward />
+              </BrutalButton>
+              <BrutalButton
+                isLoading={isLoading}
+                onClick={verifyDomain}
+                containerClassName="ml-auto"
+              >
+                Verificar
+              </BrutalButton>
+            </nav>
+          </>
+        ) : (
+          <nav className="flex justify-between w-full">
+            <BrutalButton onClick={onClose} className="bg-white min-w-10">
+              {/* @todo volveré a buscar y cambiar el icono correcto, tal vez... */}
+              <FaBackward />
             </BrutalButton>
-          }
-          value={localHost}
-          onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
-          error={error}
-        />
-        <hr className="w-full my-2" />
-        <DNSInput
-          copyButton={
-            !user.domain ? (
-              <div className="ml-auto text-yellow-600">
-                <IoWarningOutline />
-              </div>
-            ) : undefined
-          }
-          mode="domain"
-          value={domain}
-          label={"Tu dominio propio"}
-          submitNode={
-            // @todo inject props for disable?
-            <BrutalButton
-              type="button"
-              isLoading={isLoading}
-              onClick={updateDomain}
-              containerClassName="ml-auto mr-2 h-9"
-              className="h-9"
-            >
-              Actualizar
-            </BrutalButton>
-          }
-          onChange={(e: ChangeType) => setDomain(e.currentTarget.value)}
-          error={error}
-        />
-        <DNSConfig user={user} />
-        <IPsInfo user={user} />
-        <BrutalButton
-          isLoading={isLoading}
-          onClick={verifyDomain}
-          containerClassName="ml-auto"
-        >
-          Verificar
-        </BrutalButton>
+            {!user.domain && (
+              <BrutalButton onClick={openDomainConfig}>
+                Agregar dominio
+              </BrutalButton>
+            )}
+          </nav>
+        )}
       </Modal>
     </>
   );
@@ -236,6 +309,7 @@ const DNSConfig = ({ user }: { user: User }) => {
 };
 
 const DNSInput = ({
+  isDisabled,
   onChange,
   copyButton,
   mode,
@@ -244,8 +318,11 @@ const DNSInput = ({
   submitNode,
   label = "Tu dominio gratis",
   link,
+  editButton,
 }: {
+  isDisabled?: boolean;
   copyButton?: ReactNode;
+  editButton?: ReactNode;
   mode?: "domain";
   label?: string;
   error?: string;
@@ -264,10 +341,9 @@ const DNSInput = ({
   });
   const l =
     mode === "domain"
-      ? `https://${value}/tienda`
+      ? `https://${value}`
       : `https://${value}.easybits.cloud/tienda`;
 
-  console.log("Link", l, mode);
   return (
     <article ref={ref} className="w-full">
       <p className="mb-2">{label}</p>
@@ -285,15 +361,20 @@ const DNSInput = ({
             ) : (
               <CopyButton text={l} className="ml-auto" />
             )}
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className={cn(
-                "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl"
-              )}
-            >
-              <BiEditAlt />
-            </button>
+            {editButton ? (
+              editButton
+            ) : (
+              <button
+                disabled={isDisabled}
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={cn(
+                  "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l-2 border-black"
+                )}
+              >
+                <BiEditAlt />
+              </button>
+            )}
           </>
         )}
 

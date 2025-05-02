@@ -181,7 +181,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     const domain = formData.get("domain") as string;
     const domainResult = await showHost(domain);
-    console.log("RESULT:", domainResult);
+
+    // @todo document this "specialities"
     if (domainResult?.app?.certificate) {
       await db.user.update({
         where: {

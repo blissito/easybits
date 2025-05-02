@@ -8,11 +8,11 @@ import {
 
 export default [
   // public tienda
-  index("routes/tienda.tsx"),
+  // index("routes/tienda.tsx"),
   route("/inicio", "routes/home/home.tsx"),
   // public assetLanding
   route("tienda/:assetSlug", "routes/assets/PublicCustomLanding.tsx"),
-  route("tienda", "routes/assets/publicStore.tsx"),
+  // route("tienda", "routes/assets/publicStore.tsx"),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
   route("/logout", "routes/logout.tsx"),
