@@ -1,80 +1,175 @@
 import type { User } from "@prisma/client";
-import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
-import { FaWindowClose } from "react-icons/fa";
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { BiEditAlt } from "react-icons/bi";
 import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
-import { Input } from "~/components/common/Input";
+import { CopyButton } from "~/components/common/CopyButton";
+import { useClickOutside } from "./useOutsideClick";
+
+type ChangeType = ChangeEvent<HTMLInputElement | HTMLTextAreaElement>;
+
+const formatHost = (e: ChangeType) => {
+  let f = e.currentTarget.value.trim();
+  f = f.replace(".", "");
+  f = f.replace(":", "");
+  f = f.replace(";", "");
+  f = f.replace("ñ", "");
+  f = f.replace("Ñ", "");
+  // setHost(f);
+  return f;
+};
 
 export const useHostEditor = ({ user }: { user: User }) => {
   const [open, setOpen] = useState(false);
-  const [host, setHost] = useState(user.host || "");
-
-  const formatHost = (e: ChangeEvent<HTMLInputElement>) => {
-    let f = e.currentTarget.value.trim();
-    f = f.replace(".", "");
-    f = f.replace(":", "");
-    f = f.replace(";", "");
-    f = f.replace("ñ", "");
-    f = f.replace("Ñ", "");
-    setHost(f);
-  };
-
   const onOpen = () => {
     setOpen(true);
   };
   const onClose = () => {
-    setHost(user.host || "");
     setOpen(false);
-    fetcher.data = null;
-  };
-
-  const fetcher = useFetcher();
-  const error = fetcher.data?.error;
-  const isLoading = fetcher.state !== "idle";
-
-  const onSubmit = async () => {
-    await fetcher.submit(
-      {
-        intent: "update_host",
-        host,
-        userId: user.id,
-      },
-      { method: "post", action: "/api/v1/user" }
-    );
   };
 
   return {
     onOpen,
     onClose,
     isOpen: open,
-    Modal: () => (
-      <>
-        <Modal onClose={onClose} open={open} setOpen={setOpen} user={user}>
-          <div className="flex items-end gap-2 w-full">
-            <p className="">https://</p>
-            <Input
-              onChange={formatHost}
-              value={host}
-              placeholder="mi-negocio"
-              label="Selecciona un subdominio:"
-              className="my-[-10px]"
-            />
-            <p className="">.easybits.cloud</p>
-          </div>
-          <p className="text-xs text-red-500">{error}</p>
-          <BrutalButton
-            isLoading={isLoading}
-            onClick={onSubmit}
-            isDisabled={host === user.host}
-            containerClassName="ml-auto"
-          >
-            Actualizar
-          </BrutalButton>
-        </Modal>
-      </>
-    ),
   };
+};
+
+export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
+  const [isEditing, setIsEditing] = useState(true);
+  const [localHost, setLocalHost] = useState(user.host);
+  const fetcher = useFetcher();
+  const error = fetcher.data?.error;
+  const isLoading = fetcher.state !== "idle";
+  const onSubmit = async () => {
+    await fetcher.submit(
+      {
+        intent: "update_host",
+        host: localHost,
+        userId: user.id,
+      },
+      { method: "post", action: "/api/v1/user" }
+    );
+    console.log("finish????");
+  };
+
+  return (
+    <>
+      <Modal onClose={onClose} open={isOpen} setOpen={onOpen} user={user}>
+        <DNSInput
+          ref={useClickOutside({
+            isActive: isEditing,
+            onOutsideClick() {
+              setIsEditing(false);
+              fetcher.data = null; // to remove errors
+            },
+          })}
+          submitNode={
+            // @todo inject props for disable?
+            <BrutalButton
+              type="button"
+              isLoading={isLoading}
+              onClick={onSubmit}
+              containerClassName="ml-auto mr-2 h-9"
+              className="h-9"
+            >
+              Actualizar
+            </BrutalButton>
+          }
+          isEditing={isEditing}
+          onEditClick={() => setIsEditing(true)}
+          icon={(link: string) => <CopyButton text={link} />}
+          onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
+          value={isEditing ? localHost : user.host}
+          error={error}
+        />
+
+        <BrutalButton
+          // isLoading={isLoading}
+          onClick={onSubmit}
+          isDisabled={isEditing}
+          containerClassName="ml-auto"
+        >
+          Agregar dominio
+        </BrutalButton>
+      </Modal>
+    </>
+  );
+};
+
+const DNSInput = ({
+  onChange,
+  error,
+  value,
+  icon,
+  ref,
+  onEditClick,
+  isEditing,
+
+  submitNode,
+}: {
+  error?: string;
+  ref?: RefObject<HTMLElement | null>;
+  submitNode?: ReactNode;
+  isEditing?: boolean;
+  onEditClick?: () => void;
+  icon?: (arg0: string) => ReactNode;
+  onChange?: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  value: string;
+}) => {
+  return (
+    <article className="w-full" ref={ref}>
+      <p className="mb-2">Tu subdominio actual</p>
+      <section className="flex gap-3 items-center rounded-xl border-2 border-black">
+        {!isEditing && (
+          <span className="text-xl p-px border-brand-500 rounded-lg border ml-1">
+            https://{value}.easybits.cloud
+          </span>
+        )}
+
+        {!isEditing && (
+          <>
+            <CopyButton
+              text={`https://${value}.easybits.cloud`}
+              className="ml-auto"
+            />
+            <button
+              type="button"
+              onClick={onEditClick}
+              className="active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl"
+            >
+              <BiEditAlt />
+            </button>
+          </>
+        )}
+
+        {isEditing && (
+          <div className="p-1 flex items-baseline gap-1">
+            <p>https://</p>
+            <input
+              autoFocus
+              value={value}
+              onChange={onChange}
+              // onBlur={toggleIsEditing}
+              type="text"
+              className="rounded-xl border-brand-500"
+            />
+            <p>.easybits.cloud</p>
+          </div>
+        )}
+
+        {isEditing && submitNode}
+      </section>
+      {isEditing && error && <p className="text-xs text-red-500">{error}</p>}
+    </article>
+  );
 };
 
 const Modal = ({
@@ -119,8 +214,8 @@ const Modal = ({
       <section className="absolute inset-0 bg-black/50 backdrop-blur"></section>
       <section className="relative bg-white p-6 rounded-2xl flex flex-col items-start gap-3">
         <nav className="flex justify-between gap-4">
-          <h1 className="text-xl">
-            Editar el nombre de tu subdominio gratuito
+          <h1 className="text-xl font-bold">
+            Usa tu subdominio EasyBits o ¡Agrega tu propio dominio! 🔥
           </h1>
           <BrutalButtonClose onClick={onClose} />
         </nav>

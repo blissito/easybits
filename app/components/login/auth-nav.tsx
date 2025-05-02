@@ -8,7 +8,7 @@ import { BrutalButton } from "../common/BrutalButton";
 import { FlipLetters } from "../animated/FlipLetters";
 import { cn } from "~/utils/cn";
 
-export const AuthNav = ({ user, noCTA }: { user?: User }) => {
+export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
   const navItems = [
     {

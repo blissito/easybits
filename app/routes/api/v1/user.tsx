@@ -133,7 +133,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       },
     });
     if (exists) {
-      return { error: "Este dominio ya está tomado, intenta con otro" };
+      return { error: "Este dominio ya está en uso, intenta con otro" };
     }
 
     // removing previous
@@ -146,15 +146,36 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     // console.log("removing:", `${user.host}.easybits.cloud`);
     await removeHost(`${user.host}.easybits.cloud`);
-    // const r = await listHosts();
-    // console.log("LIST", JSON.stringify(r, false, 2));
+    const hostResult = (await createHost(`${host}.easybits.cloud`)) as {
+      addCertificate: {
+        certificate: {
+          configured: true;
+          acmeDnsConfigured: false;
+          acmeAlpnConfigured: true;
+          certificateAuthority: "lets_encrypt";
+          certificateRequestedAt: "2025-05-01T21:54:07Z";
+          dnsProvider: "googledomains";
+          dnsValidationInstructions: "CNAME _acme-challenge.blissmos.easybits.cloud => blissmos.easybits.cloud.jnk0nd.flydns.net.";
+          dnsValidationHostname: "_acme-challenge.blissmos.easybits.cloud";
+          dnsValidationTarget: "blissmos.easybits.cloud.jnk0nd.flydns.net";
+          hostname: "blissmos.easybits.cloud";
+          id: "cert_6nkrnj";
+          source: "fly";
+        };
+      };
+    };
+
+    const {
+      addCertificate: { certificate },
+    } = hostResult || { addCertificate: {} };
+
     await db.user.update({
       where: {
         id: userId,
       },
-      data: { host },
+      data: { host, dnsConfig: certificate },
     });
-    await createHost(`${host}.easybits.cloud`);
+
     return { success: true, nextStep: 1 };
   }
 

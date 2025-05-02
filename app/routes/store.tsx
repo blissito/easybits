@@ -2,7 +2,7 @@ import StoreComponent from "~/components/store/StoreComponent";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
 import GlobeIcon from "/icons/globe.svg";
-import { useHostEditor } from "~/hooks/useHostEditor";
+import { DNSModal, useHostEditor } from "~/hooks/useHostEditor";
 import type { Route } from "./+types/store";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -22,12 +22,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Store({ loaderData }: Route.ComponentProps) {
   const { assets, user } = loaderData;
-  const { onOpen, Modal } = useHostEditor({ user });
+  const { onOpen, isOpen, onClose } = useHostEditor({ user });
   // @todo StoreComponent should be two components, the template (display) one and the config one with the edit buttons, something like:
   //  <> <StoreEditor /> <StoreDisplay /> </>
   return (
     <div className=" w-full flex justify-center">
-      <Modal />
+      <DNSModal onOpen={onOpen} onClose={onClose} user={user} isOpen={isOpen} />
       <StoreComponent
         user={user}
         assets={assets}

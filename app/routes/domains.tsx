@@ -5,7 +5,7 @@ import { AuthNav } from "~/components/login/auth-nav";
 export default function DomainsRoute() {
   return (
     <>
-      <AuthNav user={{}} />
+      <AuthNav />
       <article className="pt-24 px-4 mx-auto max-w-4xl">
         <h1 className="text-3xl font-bold tracking-wider">
           Agrega tu propio dominio

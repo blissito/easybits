@@ -111,7 +111,6 @@ model User {
   // defaults
   displayName    String?
   email          String         @unique
-  host           String?        @unique
   verified_email Boolean?
   family_name    String?
   given_name     String?
@@ -120,6 +119,9 @@ model User {
   roles          String[]
   metadata       Metadata?
   stripe         Json?
+  // domain stuff
+  host           String?        @unique
+  dnsConfig      Json?
   // subscriptions
   newsletters    NewsLetter[]
   notifications  Notifications?
