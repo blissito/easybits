@@ -1,6 +1,6 @@
 export const STRINGS = {
   login: {
-    title: "¡Ya te extrañabamos! \u000A Inicia sesión",
+    title: "Vamos a empezar \u000A Inicia sesión o crea una cuenta",
     formTitle: "Completa tus datos para ingresar a tu cuenta ",
     actionQuestion: "¿No tienes cuenta? ",
     action: "Crea una cuenta",
