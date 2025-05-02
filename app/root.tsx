@@ -66,8 +66,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     });
     // no user, redirect or dev.
     if (!user) {
-      // return url.hostname.includes("localhost") ? null : redirect("/home");
-      return redirect("/home");
+      return url.hostname.includes("localhost") ? null : redirect("/inicio");
+      // return redirect("/home");
     }
 
     return { user, screen: "public_store" }; // data to render
@@ -75,7 +75,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
   // easybits & home
   if (url.hostname.includes("easybits") && url.pathname === "/") {
-    return redirect("/home");
+    return redirect("/inicio");
   }
   return null; // render normaly inside easybits
 };
