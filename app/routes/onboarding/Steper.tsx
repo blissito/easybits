@@ -202,9 +202,9 @@ export const StepThree = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full  min-h-fit h-full   flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
+      className="w-full  min-h-[1000px] xl:min-h-0  h-full   flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
-      <div className="w-full h-full min-h-fit  pb-6 ">
+      <div className="w-full h-full  min-h-fit  pb-6 ">
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
@@ -395,7 +395,7 @@ export const StepTwo = ({
       initial={{ y: -100, opacity: 0, scale: 0.8 }}
       animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
       exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full min-h-fit h-full flex  flex-col md:w-[50%] pt-20  lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
+      className="w-full min-h-[680px]  xl:min-h-0 h-full flex  flex-col md:w-[50%] pt-20  lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12 "
     >
       <div className="w-full h-full pb-6 min-h-[364px] md:min-h-fit  ">
         <h2 className="text-2xl lg:text-3xl font-bold">

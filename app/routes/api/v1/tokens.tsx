@@ -108,7 +108,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       )}
       {success && (
         <Form method="post">
-          <BrutalButton name="intent" value="set_session" type="submit">
+          <BrutalButton
+            name="intent"
+            value="set_session"
+            type="submit"
+            className="text-black"
+          >
             Mira tu dashboard
           </BrutalButton>
         </Form>
