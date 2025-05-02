@@ -338,6 +338,7 @@ const DNSInput = ({
     isActive: isEditing,
     onOutsideClick() {
       setIsEditing(false);
+      onChange?.({ currentTarget: { value: defaultValue } });
       // fetcher.data = null; // to remove errors
     },
   });
