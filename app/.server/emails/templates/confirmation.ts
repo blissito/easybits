@@ -42,7 +42,9 @@ export const confirmation = ({
             "
           >
            👋🏼 ¡Hola ${
-             displayName ? displayName : "EasyBiter"
+             displayName && displayName !== "undefined"
+               ? displayName
+               : "EasyBiter"
            }! Verifica tu cuenta 🤓
 
           </h2>
