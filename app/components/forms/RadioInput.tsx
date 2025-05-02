@@ -19,7 +19,7 @@ export const RadioGroup = ({
       <RadioInput
         isSelected={selected === "DOWNLOADABLE"}
         onChange={(value) => setSelected(value)}
-        description="Ilustraciones, pdfs, videos, imágenes, etc."
+        description="Ilustraciones, imágenes, pdfs, videos,  etc."
         name="type"
         value="DOWNLOADABLE"
         label="Descargable"
@@ -69,12 +69,15 @@ export const RadioInput = ({
   return (
     <label
       className={cn(
-        "group bg-black w-[120px] grow md:w-[160px] cursor-pointer relative block rounded-xl"
+        "group bg-black w-[120px] grow md:w-[160px] cursor-pointer relative block rounded-xl",
+        {
+          "bg-brand-500 border border-black": isSelected,
+        }
       )}
     >
       <div
         className={cn(
-          "border border-black relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
+          "border border-black h-full relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all",
           {
             "-translate-y-2 -translate-x-2 ": isSelected,
           }
