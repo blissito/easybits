@@ -56,7 +56,7 @@ export const magic_link = ({
               font-size: 16px;
             "
           >
-           Aquí esta el elnace para iniciar sesión en EasyBits.
+           Aquí esta el enlace para iniciar sesión en EasyBits.
            
         </p>
         <p
@@ -68,7 +68,7 @@ export const magic_link = ({
               font-size: 16px;
             "
           >
-          Haz clic abajo para iniciar sesión y empezar a vender tus assets digitales. El enlace es válido durante 24 horas o hasta que se use:
+          Haz clic abajo para iniciar sesión y empezar a vender tus assets digitales. El enlace es válido durante 24 horas o hasta que se use.
      
         </p>
          
