@@ -14,12 +14,14 @@ export const sendReview = (
   }
 ) => {
   const { assetTitle, creatorName, assetId } = data || {};
-  const magicToken = generateUserToken({ email }, "7d");
-  const url = new URL(`${location}/api/v1/tokens`);
-  url.searchParams.set("token", magicToken);
-  url.searchParams.set("intent", "magic_link");
-  url.searchParams.set("next", "/dash/compras/" + assetId);
-  console.info("Sending", magicToken);
+  const magicToken = generateUserToken(
+    {
+      email,
+      next: `/dash/compras/${assetId}`,
+    },
+    "7d"
+  );
+  const url = new URL(`${location}/api/v1/tokens/${magicToken}`);
   return getSesTransport()
     .sendMail({
       from: "EasyBits@easybits.cloud",

@@ -6,7 +6,11 @@ import { data, Form, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import Logo from "/icons/easybits-logo.svg";
 import { FlipLetters } from "~/components/animated/FlipLetters";
-import { setSessionCookie } from "~/.server/getters";
+import {
+  getUserOrNull,
+  getUserOrRedirect,
+  setSessionCookie,
+} from "~/.server/getters";
 import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 
 export const decode = (url: URL) => {
@@ -17,38 +21,67 @@ export const decode = (url: URL) => {
   }
   return tokenData.decoded;
 };
+// @todo send welcome?
+export const loader = async ({ request, params }: Route.LoaderArgs) => {
+  // const url = new URL(request.url);
+  // const intent = url.searchParams.get("intent");
+  // if (intent === "confirm_account") {
+  //   const tokenData = decode(url)!;
+  //   if (!tokenData.email) {
+  //     return { success: false };
+  //   }
+  //   const data = {
+  //     email: tokenData.email,
+  //     displayName: tokenData.displayName,
+  //     confirmed: true,
+  //   };
+  //   await db.user.upsert({
+  //     where: { email: tokenData.email },
+  //     update: data,
+  //     create: data,
+  //   });
+  //   await sendWelcomeEmail(data.email, data.displayName);
+  //   return { success: true };
+  // }
 
-export const loader = async ({ request }: Route.LoaderArgs) => {
-  const url = new URL(request.url);
-  const intent = url.searchParams.get("intent");
-  if (intent === "confirm_account") {
-    const tokenData = decode(url)!;
-    if (!tokenData.email) {
-      return { success: false };
-    }
-    const data = {
-      email: tokenData.email,
-      displayName: tokenData.displayName,
-      confirmed: true,
-    };
-    await db.user.upsert({
-      where: { email: tokenData.email },
-      update: data,
-      create: data,
-    });
-    await sendWelcomeEmail(data.email, data.displayName);
-    return { success: true };
-  }
+  // if (intent === "magic_link") {
+  //   const tokenData = decode(url)!;
+  //   const redirectURL = url.searchParams.get("next") as string;
 
-  if (intent === "magic_link") {
-    const tokenData = decode(url)!;
-    const redirectURL = url.searchParams.get("next") as string;
+  //   if (tokenData.email) {
+  //     return await setSessionCookie({
+  //       email: tokenData.email,
+  //       request,
+  //       redirectURL,
+  //     });
+  //   }
+  // }
 
-    if (tokenData.email) {
+  // if no intent
+  const token = params.token;
+  if (token) {
+    const { decoded, success } = decodeToken(token);
+    if (success && decoded) {
+      // confirm here?
+      const user = await db.user.upsert({
+        where: { email: decoded.email },
+        create: { email: decoded.email },
+        update: {},
+        // update: {confirmed:true} // need to know to send welcome
+      });
+      if (!user.confirmed) {
+        await db.user.update({
+          where: {
+            id: user.id,
+          },
+          data: { confirmed: true },
+        });
+        await sendWelcomeEmail(user.email); // welcome after confirm
+      }
       return await setSessionCookie({
-        email: tokenData.email,
+        email: decoded.email,
         request,
-        redirectURL,
+        redirectURL: decoded.next || undefined,
       });
     }
   }

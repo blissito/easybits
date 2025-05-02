@@ -3,6 +3,7 @@ import {
   Links,
   Meta,
   Outlet,
+  redirect,
   Scripts,
   ScrollRestoration,
 } from "react-router";
@@ -49,6 +50,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     </html>
   );
 }
+
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const url = new URL(request.url);
+  if (
+    !url.hostname.includes("easybits") &&
+    !url.hostname.includes("localhost")
+  ) {
+    return redirect("/tienda"); // GLOBAL REDIRECT to make domains work
+  }
+};
 
 export default function App() {
   return <Outlet />;

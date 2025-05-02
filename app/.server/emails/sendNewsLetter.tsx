@@ -10,11 +10,18 @@ AWS.config.update({ region: "us-east-2" });
 const isDev = process.env.NODE_ENV === "development";
 const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
+let timer: number;
 export const sendMagicLink = (email: string, data: any) => {
+  if (timer < Date.now()) {
+    console.error("Avoided");
+  } else {
+    timer = Date.now() + 120000; // 2 min de espera para un nuevo link
+  }
   const magicToken = generateUserToken({ ...data, email });
-  const url = new URL(`${location}/api/v1/tokens`);
-  url.searchParams.set("intent", "magic_link");
-  url.searchParams.set("token", magicToken);
+  const url = new URL(location);
+  url.pathname = "/api/v1/tokens/" + magicToken;
+  // url.searchParams.set("intent", "magic_link");
+  // url.searchParams.set("token", magicToken);
   return getSesTransport()
     .sendMail({
       from: "EasyBits@easybits.cloud",

@@ -17,17 +17,21 @@ export const sendPurchase = (options: {
   getTemplate?: (data?: any) => string;
 }) => {
   const { subject = "Aquí está tu asset", data, email } = options;
-  const magicToken = generateUserToken({ ...data, email });
-  const url = new URL(`${location}/api/v1/tokens`);
-  url.searchParams.set("token", magicToken);
-  url.searchParams.set("intent", "magic_link");
-  url.searchParams.set("next", "/dash/compras/" + data.assetId);
+  const { assetName, price, date, assetId } = data || {};
+  const magicToken = generateUserToken(
+    {
+      email,
+      next: `/dash/compras/${assetId}`,
+    },
+    "7d"
+  );
+  const url = new URL(`${location}/api/v1/tokens/${magicToken}`);
   return getSesTransport()
     .sendMail({
       from: getSesRemitent(),
       subject,
       to: email,
-      html: purchase({ ...data, link: url.toString() }),
+      html: purchase({ assetName, price, date, link: url.toString() }),
     })
     .then((r: unknown) => console.info("EMAIL_SUCCESS::", r))
     .catch((e: unknown) => console.error("EMAIL_ERROR::", e));

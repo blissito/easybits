@@ -11,14 +11,6 @@ import type { Route } from "./+types/home";
 import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Steps } from "./Steps";
-import { redirect } from "react-router";
-
-export const loader = async ({ request }: Route.LoaderArgs) => {
-  const url = new URL(request.url);
-  if (!url.hostname.includes("easybits")) {
-    return redirect("/tienda");
-  }
-};
 
 export const clientLoader = async ({}: Route.ClientLoaderArgs) => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());

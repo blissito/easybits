@@ -6,7 +6,7 @@ export const purchase = ({
 }: {
   link: string;
   price: number | string;
-  date: string;
+  date: string | Date;
   assetName: string;
 }) => {
   return `<html>

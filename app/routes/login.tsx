@@ -5,11 +5,7 @@ import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
 import { commitSession, redirectCookie } from "~/.server/sessions";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
-import {
-  sendConfrimation,
-  sendMagicLink,
-} from "~/.server/emails/sendNewsLetter";
-import { db } from "~/.server/db";
+import { sendMagicLink } from "~/.server/emails/sendNewsLetter";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const setRedirectCookie = async (request: Request, next: string) => {
@@ -88,12 +84,14 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
     case "email_signup":
       const email = formData.get("email") as string;
       const displayName = formData.get("displayName") as string;
-      const exists = await db.user.findUnique({ where: { email } });
-      if (exists && exists.confirmed) {
-        await sendMagicLink(email, { displayName });
-        return { state: "success" };
-      }
-      await sendConfrimation(email, { displayName });
+      // const exists = await db.user.findUnique({ where: { email } });
+      // if (exists && exists.confirmed) { // @todo texperimenting
+      const url = new URL(request.url);
+      const next = url.searchParams.get("next");
+      await sendMagicLink(email, { displayName, next }); // @todo notify that can be avoided to user?
+      return { state: "success" };
+      // }
+      // await sendConfrimation(email, { displayName });
       return { state: "confirmation_success" };
     default:
       return { error: "Error" };

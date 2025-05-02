@@ -244,6 +244,7 @@ const EmailForm = ({
           />
         )}
         <Input
+          required
           className="md:max-w-[420px] text-white"
           label="Email"
           type="email"
