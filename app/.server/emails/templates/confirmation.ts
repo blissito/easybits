@@ -5,8 +5,8 @@ export const confirmation = ({
   link: string;
   displayName?: string;
 }) => `  
-   <body style="font-family: Arial; background: #000000">
-    <div style="background: #000000; margin: 0 auto; padding: 24px 16px">
+<div style="font-family:Arial;background-color:#000000; ">
+  <div style="background: #000000; margin: 0 auto; padding: 24px 16px">
       <div
         style="
           text-align: left;
@@ -41,9 +41,10 @@ export const confirmation = ({
               text-align: left;
             "
           >
-        👋🏼 ¡Hola ${
-          displayName ? displayName : "EasyBiter"
-        }! Verifica tu cuenta 🤓
+           👋🏼 ¡Hola ${
+             displayName ? displayName : "EasyBiter"
+           }! Verifica tu cuenta 🤓
+
           </h2>
           <p
             style="
@@ -74,7 +75,8 @@ export const confirmation = ({
      
         </p>
          
-                    <a rel="noreferer" target="_blank" href="${link}" 
+          <a rel="noreferer" target="_blank" href="${link}" 
+
             <div
               style="
                 background: black;
@@ -199,6 +201,6 @@ export const confirmation = ({
         </div>
       </div>
     </div>
-  </body>
+</div>
 
 `;
