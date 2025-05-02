@@ -14,6 +14,8 @@ import useGoogleTM from "./utils/useGoogleTM";
 import useHotjar from "./utils/useHotjar";
 import { useTagManager } from "./utils/useTagManager";
 import { Toaster } from "react-hot-toast";
+import { db } from "./.server/db";
+import StoreComponent from "./components/store/StoreComponent";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -53,18 +55,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
-  if (url.pathname === "/tienda") {
-    return null;
+
+  // custom_domain & no_home => render Store
+  if (!url.hostname.includes("easybits") && url.pathname !== "/home") {
+    // look for store
+    const user = await db.user.findFirst({
+      where: {
+        domain: url.hostname,
+      },
+    });
+    // no user, redirect or dev.
+    if (!user) {
+      // return url.hostname.includes("localhost") ? null : redirect("/home");
+      return redirect("/home");
+    }
+
+    return { user, screen: "public_store" }; // data to render
   }
-  if (
-    !url.hostname.includes("easybits") &&
-    !url.hostname.includes("localhost")
-  ) {
-    return redirect("/tienda"); // GLOBAL REDIRECT to make custom domains limited
+
+  // easybits & home
+  if (url.hostname.includes("easybits") && url.pathname === "/") {
+    return redirect("/home");
   }
+  return null; // render normaly inside easybits
 };
 
-export default function App() {
+export default function App({ loaderData }) {
+  const { screen, user } = loaderData || {};
+  if (screen === "public_store") {
+    return <StoreComponent assets={[]} user={user} />;
+  }
   return <Outlet />;
 }
 
