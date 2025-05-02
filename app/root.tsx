@@ -69,8 +69,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       return url.hostname.includes("localhost") ? null : redirect("/inicio");
       // return redirect("/home");
     }
-
-    return { user, screen: "public_store" }; // data to render
+    const assets = await db.asset.findMany({
+      where: {
+        userId: user.id,
+      },
+      include: {
+        user: true,
+      },
+    });
+    return { assets, user, screen: "public_store" }; // data to render
   }
 
   // easybits & home
@@ -81,9 +88,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 };
 
 export default function App({ loaderData }) {
-  const { screen, user } = loaderData || {};
+  // @todo This coould be a second app (just for custom domains)
+  const { screen, assets, user } = loaderData || {};
   if (screen === "public_store") {
-    return <StoreComponent assets={[]} user={user} />;
+    return <StoreComponent assets={assets} user={user} />;
   }
   return <Outlet />;
 }
