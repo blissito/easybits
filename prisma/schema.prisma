@@ -122,6 +122,7 @@ model User {
   // domain stuff
   host           String?        @unique
   dnsConfig      Json?
+  domain         String?
   // subscriptions
   newsletters    NewsLetter[]
   notifications  Notifications?
