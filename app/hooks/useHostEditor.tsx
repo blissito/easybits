@@ -91,6 +91,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
   };
 
   const handleClose = () => {
+    setLocalHost(user.host);
     setIsConfigOpen(false);
     onClose?.();
   };
@@ -114,6 +115,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
                 </BrutalButton>
               }
               value={localHost}
+              defaultValue={user.host}
               onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
               error={error}
             />
@@ -309,6 +311,7 @@ const DNSConfig = ({ user }: { user: User }) => {
 };
 
 const DNSInput = ({
+  defaultValue,
   isDisabled,
   onChange,
   copyButton,
@@ -317,9 +320,9 @@ const DNSInput = ({
   value,
   submitNode,
   label = "Tu dominio gratis",
-  link,
   editButton,
 }: {
+  defaultValue?: string;
   isDisabled?: boolean;
   copyButton?: ReactNode;
   editButton?: ReactNode;
@@ -329,7 +332,6 @@ const DNSInput = ({
   submitNode?: ReactNode;
   onChange?: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   value: string;
-  link?: string;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const ref = useClickOutside({
@@ -342,7 +344,7 @@ const DNSInput = ({
   const l =
     mode === "domain"
       ? `https://${value}`
-      : `https://${value}.easybits.cloud/tienda`;
+      : `https://${defaultValue}.easybits.cloud/tienda`;
 
   return (
     <article ref={ref} className="w-full">
