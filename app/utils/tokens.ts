@@ -6,7 +6,7 @@ export const decodeToken = (token: string) => {
   try {
     const decoded = jwt.verify(token, SECRET) as {
       email: string;
-      [x: string]: string;
+      [x: string]: string | undefined;
     };
     return {
       success: true,

@@ -35,7 +35,7 @@ export const getUserOrNull = async (request: Request) => {
 
 export const setSessionCookie = async ({
   email,
-  redirectURL = "/dash/perro",
+  redirectURL = "/dash",
   request,
 }: {
   email: string;

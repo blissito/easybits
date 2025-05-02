@@ -6,86 +6,43 @@ import { data, Form, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import Logo from "/icons/easybits-logo.svg";
 import { FlipLetters } from "~/components/animated/FlipLetters";
-import {
-  getUserOrNull,
-  getUserOrRedirect,
-  setSessionCookie,
-} from "~/.server/getters";
+import { setSessionCookie } from "~/.server/getters";
 import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 
-export const decode = (url: URL) => {
-  const token = url.searchParams.get("token") as string;
+export const decode = (token: string) => {
   const tokenData = decodeToken(token);
   if (!tokenData?.success) {
     throw new Response("Corrupt token", { status: 400 });
   }
-  return tokenData.decoded;
+  return tokenData.decoded!;
 };
 // @todo send welcome?
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
-  // const url = new URL(request.url);
-  // const intent = url.searchParams.get("intent");
-  // if (intent === "confirm_account") {
-  //   const tokenData = decode(url)!;
-  //   if (!tokenData.email) {
-  //     return { success: false };
-  //   }
-  //   const data = {
-  //     email: tokenData.email,
-  //     displayName: tokenData.displayName,
-  //     confirmed: true,
-  //   };
-  //   await db.user.upsert({
-  //     where: { email: tokenData.email },
-  //     update: data,
-  //     create: data,
-  //   });
-  //   await sendWelcomeEmail(data.email, data.displayName);
-  //   return { success: true };
-  // }
-
-  // if (intent === "magic_link") {
-  //   const tokenData = decode(url)!;
-  //   const redirectURL = url.searchParams.get("next") as string;
-
-  //   if (tokenData.email) {
-  //     return await setSessionCookie({
-  //       email: tokenData.email,
-  //       request,
-  //       redirectURL,
-  //     });
-  //   }
-  // }
-
-  // if no intent
-  const token = params.token;
-  if (token) {
-    const { decoded, success } = decodeToken(token);
-    if (success && decoded) {
-      // confirm here?
-      const user = await db.user.upsert({
-        where: { email: decoded.email },
-        create: { email: decoded.email },
-        update: {},
-        // update: {confirmed:true} // need to know to send welcome
+  if (params.token) {
+    const { email, next } = decode(params.token);
+    // upsert
+    const user = await db.user.upsert({
+      where: { email: email },
+      create: { email: email },
+      update: {},
+    });
+    // welcome
+    if (!user.confirmed) {
+      await db.user.update({
+        where: {
+          id: user.id,
+        },
+        data: { confirmed: true },
       });
-      if (!user.confirmed) {
-        await db.user.update({
-          where: {
-            id: user.id,
-          },
-          data: { confirmed: true },
-        });
-        await sendWelcomeEmail(user.email); // welcome after confirm
-      }
-      return await setSessionCookie({
-        email: decoded.email,
-        request,
-        redirectURL: decoded.next || undefined,
-      });
+      await sendWelcomeEmail(user.email); // welcome after confirm
     }
+    // turn on session & redirect to next
+    return await setSessionCookie({
+      email: email,
+      request,
+      redirectURL: next,
+    });
   }
-
   return { success: false };
 };
 
