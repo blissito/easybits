@@ -102,7 +102,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 };
 
 export default function App({ loaderData }) {
-  // @todo This coould be a second app (just for custom domains)
+  // @todo This coould be moved into a second app (just for custom domains)
   const {
     screen,
     assets,
@@ -116,6 +116,7 @@ export default function App({ loaderData }) {
     return <StoreComponent assets={assets} user={user} />;
   }
   if (screen === "public_detail") {
+    // @todo revisit
     return (
       <Page loaderData={{ asset, publishableKey, files, successStripeId }} />
     );
