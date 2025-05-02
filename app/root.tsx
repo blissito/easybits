@@ -59,6 +59,13 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
   // custom_domain & no_home => render Store
   if (!url.hostname.includes("easybits") && url.pathname !== "/home") {
+    if (
+      url.pathname === "/dash" ||
+      url.pathname === "/dash/" ||
+      url.pathname === "/login"
+    ) {
+      return null;
+    }
     // look for store
     const user = await db.user.findFirst({
       where: {

@@ -25,7 +25,9 @@ export default function StoreComponent({
   assets = [],
   cta,
   user: rootUser,
+  isPublic,
 }: {
+  isPublic?: boolean;
   user?: User; // this component is used in SEO public views (no user present)
   assets: Asset[];
   cta?: ReactNode;
@@ -140,7 +142,7 @@ export default function StoreComponent({
           ))}
         </div>
         <div className="p-4">
-          <AssetList isPublic assets={assets} />
+          <AssetList isPublic={isPublic} assets={assets} />
         </div>
       </div>
     </div>

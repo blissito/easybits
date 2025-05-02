@@ -186,6 +186,13 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
             />
             <DNSConfig user={user} />
             <IPsInfo user={user} />
+            {/* <p className="text-xs">
+              Algunos provedores de DNS solo necesitan el nombre del subdominio:
+              <strong>
+                {user.dnsConfig?.dnsValidationTarget.split(".")[0]}
+              </strong>{" "}
+              o @ si es la raíz del dominio
+            </p> */}
             <nav className="flex justify-between w-full">
               <BrutalButton
                 onClick={() => setIsConfigOpen(false)}
