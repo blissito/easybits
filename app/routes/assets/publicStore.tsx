@@ -40,10 +40,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       },
     });
   }
-  console.log("Asset", hostExists, domainExists);
-  if (assets.length < 1) {
-    // throw new Response("Seller not found", { status: 404 });
-  }
+
   return { assets };
 };
 

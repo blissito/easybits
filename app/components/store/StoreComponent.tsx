@@ -31,7 +31,7 @@ export default function StoreComponent({
   cta?: ReactNode;
 }) {
   const [currentFilter, setCurrentFilter] = useState();
-  const user = rootUser || assets?.[0]?.user;
+  const user = rootUser || assets?.[0]?.user || {};
   return (
     <div
       className={cn(

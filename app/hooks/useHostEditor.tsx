@@ -148,7 +148,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
 
 const IPsInfo = ({ user }: { user: User }) => {
   return (
-    <article className="w-full mt-6">
+    <article className="w-full mt-4">
       <h2 className="mb-2">
         Agrega estas entradas DNS para dirigir el tráfico
       </h2>
@@ -201,12 +201,12 @@ const DNSConfig = ({ user }: { user: User }) => {
           <span className="col-span-1">Tipo de registro</span>
           <span className="col-span-1">Nombre del dominio</span>
           <span className="col-span-1">Valor</span>{" "}
-          {user.dnsConfig?.clientStatus !== "Ready" && (
+          {[statuses[0]].includes(user.dnsConfig?.clientStatus) && (
             <div className="absolute text-yellow-600 right-2 top-2">
               <IoWarningOutline />
             </div>
           )}
-          {user.dnsConfig?.clientStatus === "Ready" && (
+          {![statuses[0]].includes(user.dnsConfig?.clientStatus) && (
             <div className="absolute text-green-600 right-2 top-2">
               <FaCheck />
             </div>
@@ -263,9 +263,11 @@ const DNSInput = ({
     },
   });
   const l =
-    link || mode === "domain"
+    mode === "domain"
       ? `https://${value}/tienda`
       : `https://${value}.easybits.cloud/tienda`;
+
+  console.log("Link", l, mode);
   return (
     <article ref={ref} className="w-full">
       <p className="mb-2">{label}</p>
@@ -281,10 +283,7 @@ const DNSInput = ({
             {copyButton ? (
               copyButton
             ) : (
-              <CopyButton
-                text={`https://${value}.easybits.cloud/tienda`}
-                className="ml-auto"
-              />
+              <CopyButton text={l} className="ml-auto" />
             )}
             <button
               type="button"
@@ -361,7 +360,7 @@ const Modal = ({
     <article className="fixed inset-0 z-20 grid place-content-center">
       <section className="absolute inset-0 bg-black/50 backdrop-blur"></section>
       <section className="relative bg-white p-6 rounded-2xl flex flex-col items-start gap-3">
-        <nav className="flex justify-between gap-4">
+        <nav className="flex justify-between gap-4 w-full">
           <h1 className="text-xl font-bold">
             Usa tu subdominio EasyBits o ¡Agrega tu propio dominio! 🔥
           </h1>
