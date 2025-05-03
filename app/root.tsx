@@ -1,5 +1,6 @@
 import {
   isRouteErrorResponse,
+  Link,
   Links,
   Meta,
   Outlet,
@@ -57,8 +58,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
 
+  // localhost || inicio
+  if (url.hostname === "localhost") {
+    if (url.pathname === "/") {
+      console.info("::working_on_localhost:: redirecting to /inicio");
+      return redirect("/inicio");
+    } else {
+      return null;
+    }
+  }
+
   // custom_domain & no_home => render Store
-  if (!url.hostname.includes("easybits") && url.pathname !== "/home") {
+  if (!url.hostname.includes("easybits") && url.pathname !== "/inicio") {
     if (
       url.pathname === "/dash" ||
       url.pathname === "/dash/" ||
@@ -75,7 +86,6 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     // no user, redirect or dev.
     if (!user) {
       return url.hostname.includes("localhost") ? null : redirect("/inicio");
-      // return redirect("/home");
     }
     const assets = await db.asset.findMany({
       where: {

@@ -17,7 +17,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "send_confirmation") {
     const email = formData.get("email") as string;
     z.string().email().parse(email); // validation
-    await sendConfrimation(email); // @WIP @bliss
+    await sendConfrimation(email);
   }
 
   if (intent === "test_action_email") {

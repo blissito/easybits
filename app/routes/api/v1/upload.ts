@@ -26,6 +26,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       });
       return new Response(JSON.stringify(complete));
     },
-    { directory: `${user.email}/` } // this becomes part of the storageKey and is not used anywhere else, is just a prefix
+    { directory: `${user.id}/` }
   );
 };

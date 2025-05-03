@@ -40,9 +40,7 @@ export const sendConfrimation = (
   // getTemplate?: (data: SendConfirmationData) => string
 ) => {
   const confirmationToken = generateUserToken({ ...data, email });
-  const url = new URL(`${location}/api/v1/tokens`);
-  url.searchParams.set("intent", "confirm_account");
-  url.searchParams.set("token", confirmationToken);
+  const url = new URL(`${location}/api/v1/tokens/${confirmationToken}`);
   return getSesTransport()
     .sendMail({
       from: "EasyBits@easybits.cloud",
