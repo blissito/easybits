@@ -6,7 +6,7 @@ export const HeaderIconButton = ({ children }: { children: ReactNode }) => {
     <div className="bg-black h-max rounded-xl group">
       <span
         className={cn(
-          "group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all block"
+          "group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all block cursor-pointer"
         )}
       >
         {children}

@@ -29,7 +29,13 @@ export const CopyButton = ({
       onClick={handleCopyToClipboard(text)}
       className={cn("w-max", className)}
     >
-      <span>{copied ? <FaCheck /> : children || <CopyIcon />}</span>
+      <span className="flex justify-center w-5">
+        {copied ? (
+          <FaCheck className="text-brand-grass" />
+        ) : (
+          children || <CopyIcon />
+        )}
+      </span>
     </button>
   );
 };
