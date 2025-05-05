@@ -7,6 +7,8 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { useState } from "react";
 import type { Client } from "@prisma/client";
+import { Empty } from "./assets/Empty";
+import { MdOutlineContentCopy } from "react-icons/md";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -64,13 +66,33 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
     >
       <Header title="Clientes" />
       {/* Aquí está el crud 👇🏼 */}
-      <ClientsTable
-        onOpen={handleOpen}
-        onClose={handleClose}
-        isFormOpen={showForm}
-        clients={clients as Partial<Client>[]}
-        orders={orders}
-      />
+      {clients.length > 0 ? (
+        <ClientsTable
+          onOpen={handleOpen}
+          onClose={handleClose}
+          isFormOpen={showForm}
+          clients={clients as Partial<Client>[]}
+          orders={orders}
+        />
+      ) : (
+        <EmptyClients />
+      )}
     </article>
   );
 }
+
+const EmptyClients = () => {
+  return (
+    <Empty
+      illustration={<img className="w-44 mx-auto " src="/clients-empty.webp" />}
+      title=" ¡Ups! Aún no hay clientes en tu lista"
+      text={<span>Comparte tu tienda y consigue tu primera venta.</span>}
+      footer={
+        <BrutalButton className=" flex gap-2 items-center">
+          <MdOutlineContentCopy />
+          Copiar link
+        </BrutalButton>
+      }
+    />
+  );
+};
