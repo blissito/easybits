@@ -46,7 +46,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
       )}
     >
       <nav className=" max-w-7xl z-[99] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center px-4 md:px-0">
-        <Link to="/">
+        <Link to="/inicio">
           <div className="flex gap-3 ">
             <img src={Logo} alt="easybits" className="w-12" />
             <FlipLetters word="EasyBits" />
