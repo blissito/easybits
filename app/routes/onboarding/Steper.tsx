@@ -10,7 +10,7 @@ import { BrendisConfetti, EmojiConfetti } from "~/components/Confetti";
 
 //Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
 export const Steper = ({ user }: { user: User }) => {
-  const [step, setStep] = useState(3);
+  const [step, setStep] = useState(0);
   const fetcher = useFetcher();
 
   const [host, setHost] = useState(user.host);
@@ -139,12 +139,12 @@ export const Steper = ({ user }: { user: User }) => {
 //Este es el componente de success cuando completas el onbaording, uselo donde quiera, el copy esta pendiente//
 export const OnboardingSuccess = () => {
   return (
-    <motion.section
-      transition={{ type: "spring", bounce: 0 }}
-      key="step_four"
-      initial={{ y: -100, opacity: 0, scale: 0.5 }}
-      animate={{ y: 0, opacity: 1, scale: 1 }}
-      exit={{ y: 100, opacity: 0, scale: 0.8 }}
+    <section
+      // transition={{ type: "spring", bounce: 0 }}
+      // key="step_four"
+      // initial={{ y: -100, opacity: 0, scale: 0.5 }}
+      // animate={{ y: 0, opacity: 1, scale: 1 }}
+      // exit={{ y: 100, opacity: 0, scale: 0.8 }}
       className="flex justify-center items-center w-full h-svh text-center px-4 md:px-[5%] "
     >
       <div className="max-w-3xl ">
@@ -168,7 +168,7 @@ export const OnboardingSuccess = () => {
       {/* <EmojiConfetti emojis={false} /> */}
       {/* Aún estoy experimentando */}
       <BrendisConfetti duration={3} />
-    </motion.section>
+    </section>
   );
 };
 
