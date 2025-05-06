@@ -3,7 +3,7 @@ import JSConfetti from "js-confetti";
 import "~/styles/brendisConfetti.css"; // confetti animations
 import { cn } from "~/utils/cn";
 
-export const BrendisConfetti = ({ duration }: { duration: number }) => {
+export const BrendisConfetti = ({ duration }: { duration?: number }) => {
   // useBrendisConfetti({ duration });
   const len = 50;
   let animations = useRef<Animation[]>([]).current;
@@ -40,7 +40,7 @@ export const BrendisConfetti = ({ duration }: { duration: number }) => {
           // direction: "alternate",
         }
       );
-      player.playbackRate = 2;
+      // player.playbackRate = 2;
       animations.push(player);
     });
   }, []);

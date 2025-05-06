@@ -6,11 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import type { User } from "@prisma/client";
 import { AnimatePresence, motion } from "motion/react";
-import { BrendisConfetti, EmojiConfetti } from "~/components/Confetti";
+import { BrendisConfetti } from "~/components/Confetti";
 
 //Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
 export const Steper = ({ user }: { user: User }) => {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(3);
   const fetcher = useFetcher();
 
   const [host, setHost] = useState(user.host);
@@ -167,7 +167,7 @@ export const OnboardingSuccess = () => {
       </div>
       {/* <EmojiConfetti emojis={false} /> */}
       {/* Aún estoy experimentando */}
-      <BrendisConfetti duration={3} />
+      <BrendisConfetti />
     </section>
   );
 };

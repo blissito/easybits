@@ -29,7 +29,7 @@
 }
 
 .confetti .askew {
-  perspective: 1000;
+  perspective: 600;
 
   transform: skewY(10deg);
   width: 1rem;
