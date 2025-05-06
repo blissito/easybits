@@ -4,18 +4,16 @@ import "~/styles/brendisConfetti.css"; // confetti animations
 import { cn } from "~/utils/cn";
 
 export const BrendisConfetti = ({ duration }: { duration?: number }) => {
-  // useBrendisConfetti({ duration });
+  // @todo pause animation, stop animation (with Animation)
   const len = 50;
-  let animations = useRef<Animation[]>([]).current;
 
   useEffect(() => {
-    // document.body.style.transformStyle = "preserve-3d";
     const elements = document.querySelectorAll(".confetti");
     [...elements].slice(0).forEach((element, i) => {
       const scale = Math.random() * 0.6 + 0.5;
-      var player = element.animate(
+      element.animate(
         {
-          opacity: scale,
+          opacity: [scale],
           transform: [
             `translate3d(${
               (i / len) * 100
@@ -34,14 +32,13 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
         },
         {
           duration: Math.random() * 3000 + 4000,
-          // duration: 1000,
           iterations: Infinity,
-          delay: -(Math.random() * 7000),
+          delay: Math.random() * 5000,
           // direction: "alternate",
         }
       );
       // player.playbackRate = 2;
-      animations.push(player);
+      // animations.push(player);
     });
   }, []);
 

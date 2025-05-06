@@ -4,8 +4,8 @@
   height: 1rem;
   display: inline-block;
   position: absolute;
-  top: 0rem;
-  left: 0rem;
+  top: -2rem;
+  left: -2rem;
   z-index: 50;
   transform-style: preserve-3d;
   user-select: none;
