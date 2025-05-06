@@ -30,6 +30,8 @@ export default {
         berry: "#E299A4",
         munsell: "#DAA23D",
         sea: "#83D0E4",
+        emerald: "#9ADDAA",
+        maya: "#75BAF9",
       },
       backgroundImage: {
         patternDark: "url('/pattern-dark.svg')",

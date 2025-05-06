@@ -124,7 +124,6 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               <DNSInput
                 isDisabled
                 label="Tu dominio propio "
-                editingLabel="Edita el dominio o da clic afuera para cancelar"
                 mode="domain"
                 submitNode={
                   // @todo inject props for disable?
@@ -170,6 +169,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               mode="domain"
               value={domain}
               label={"Tu dominio propio"}
+              editingLabel="Edita el dominio o da clic afuera para cancelar"
               submitNode={
                 // @todo inject props for disable?
                 <BrutalButton
@@ -332,7 +332,7 @@ const DNSInput = ({
   value,
   submitNode,
   label = "Tu subdominio actual",
-  editingLabel = "Edita tu dominio o da clic afuera para cancelar",
+  editingLabel = "Edita tu subdominio o da clic afuera para cancelar",
   editButton,
 }: {
   defaultValue?: string;

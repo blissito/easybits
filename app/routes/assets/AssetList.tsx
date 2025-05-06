@@ -1,24 +1,21 @@
-import type { Asset } from "@prisma/client";
-import { AssetCard } from "./AssetCard";
-import { usePublicLink } from "~/hooks/usePublicLink";
+import type { ReactNode } from "react";
+import { cn } from "~/utils/cn";
 
 export const AssetList = ({
-  isPublic,
-  assets,
+  children,
+  isFolded,
 }: {
-  isPublic?: boolean;
-  assets?: Asset[];
+  children: ReactNode;
+  isFolded?: boolean;
 }) => {
   return (
     <article className="relative   ">
-      <section className="grid-cols-1 md:grid-cols-2 lg:grid-cols-4 grid gap-8">
-        {assets?.map((asset) => (
-          <AssetCard
-            to={isPublic ? usePublicLink(asset as any) || undefined : undefined}
-            key={asset.id}
-            asset={asset}
-          />
-        ))}
+      <section
+        className={cn("grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-4", {
+          "grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6": isFolded,
+        })}
+      >
+        {children}
       </section>
     </article>
   );

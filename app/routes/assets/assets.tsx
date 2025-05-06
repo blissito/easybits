@@ -8,6 +8,9 @@ import { Empty } from "./Empty";
 import type { Route } from "./+types/assets";
 import { cn } from "~/utils/cn";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { AssetCard, CollapsedAssetCard } from "./AssetCard";
+import { usePublicLink } from "~/hooks/usePublicLink";
+import { AnimatePresence } from "motion/react";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -20,12 +23,26 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       user: true,
     },
   });
-  return { assets };
+  const orders = await db.order.findMany({
+    where: {
+      assetId: {
+        in: assets.map((a) => a.id),
+      },
+    },
+  });
+
+  return {
+    assets,
+    host: user.host || undefined,
+    orders,
+    salesAmount: 0,
+  };
 };
 
 export default function Assets({ loaderData }: Route.ComponentProps) {
-  const { assets } = loaderData;
+  const { assets, host, orders, salesAmount } = loaderData;
   const [showModal, setShowModal] = useState(false);
+  const [isFolded, setIsFolded] = useState(false);
 
   return (
     <section className="max-w-7xl w-full mx-auto h-svh  box-border pt-16 pb-6 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0">
@@ -40,9 +57,41 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
           }
           title="Mis Assets digitales"
           className="mt-[6px] gap-y-2"
+          folded={() => setIsFolded((value) => !value)}
+          isFolded={isFolded}
         />
         {assets.length < 1 && <Empty onClick={() => setShowModal(true)} />}
-        <AssetList assets={assets} />
+        <AssetList isFolded={isFolded}>
+          <AnimatePresence>
+            {isFolded ? (
+              <div className="grid grid-cols-12 gap-6 px-4 font-semibold">
+                <div className="col-span-3 col-start-2">Nombre</div>
+                <div className="col-span-2">Estatus</div>
+                <div className="col-span-2">Precio</div>
+                <div className="col-span-1">Ventas</div>
+                <div className="col-span-2">Ingresos</div>
+                <div className="col-span-1"></div>
+              </div>
+            ) : null}
+
+            {assets?.map((asset) =>
+              !isFolded ? (
+                <AssetCard key={asset.id} asset={asset} />
+              ) : (
+                <CollapsedAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  host={host}
+                  orderCount={
+                    orders.filter((order, i) => asset.id === order.assetId)
+                      .length
+                  }
+                  salesAmount={salesAmount}
+                />
+              )
+            )}
+          </AnimatePresence>
+        </AssetList>
       </article>
       <AssetFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
     </section>
