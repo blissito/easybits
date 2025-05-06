@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 
 type Particle = {
-  id: number;
   x: number;
   y: number;
   size: number;
@@ -22,33 +21,30 @@ type BrendisConfettiArgs = {
 };
 
 const initialColors = [
-  "DodgerBlue",
-  "OliveDrab",
-  "Gold",
-  "pink",
-  "SlateBlue",
-  "lightblue",
-  "Violet",
-  "PaleGreen",
-  "SteelBlue",
-  "SandyBrown",
-  "Chocolate",
-  "Crimson",
+  "#6A6966",
+  "#BAD9D8",
+  "#ECD66E",
+  "#AA4958",
+  "#96B894",
+  "#FFAFA3",
+  "#F3F0F5",
+  "#9870ED",
 ];
 // @todo move to refs?
-let angle = 0;
+let angle = 0; // wind 🌬️
 let tiltAngle = 0;
 export const useBrendisConfetti = (options?: BrendisConfettiArgs) => {
   const { colors = initialColors, duration = 3 } = options || {};
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particles = useRef<Particle[]>([]).current;
+  const particlesRef = useRef<Particle[]>([]);
   //   const animationHandler = useRef<number>(null)
   const start = () => {
     const canvas = getCanvas();
     const ctx = canvas.getContext("2d");
     ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    // cleanParticles(); // @todo
     requestAnimationFrame(start);
-    createParticle(); // one more
+    particlesRef.current.length < 500 && createParticle(); // one more
     updateParticles(); // move
     drawParticles(); // draw
   };
@@ -57,35 +53,48 @@ export const useBrendisConfetti = (options?: BrendisConfettiArgs) => {
   }, []);
 
   // Main funcs
+  const cleanParticles = () => {
+    particlesRef.current = particlesRef.current.filter(
+      (p) => p.y < innerHeight
+    );
+  };
   const updateParticles = () => {
+    const particles = particlesRef.current;
+    // const indexesToremove: number[] = [];
     // @todo wind
     angle += 0.01;
     tiltAngle += 0.1;
-    particles.forEach((p) => {
-      p.tiltAngle += p.tiltAngleIncremental;
-      p.y += (Math.cos(angle + p.density) + p.size / 2) / 2;
-      p.x += Math.sin(angle);
-      p.tilt = Math.sin(p.tiltAngle - p.id / 3) * 15;
+    particles.forEach((particle, i) => {
+      particle.tiltAngle += particle.tiltAngleIncremental;
+      //   particle.y += Math.cos(particle.angle) / 1.2;
+      particle.y += (Math.cos(angle) + particle.size) / 4;
+      particle.x += Math.sin(particle.angle);
+      particle.tilt = Math.sin(particle.tiltAngle - i) * 5; // giro
+      // @wip
+      if (
+        particle.y > innerHeight ||
+        particle.x < 0 - particle.size ||
+        particle.x > innerWidth
+      ) {
+        // @todo clean up
+        // particles.splice(i, 1);
+        // indexesToremove.push(i);
+      } else {
+      }
     });
+
+    console.log("Length", particles.length);
   };
 
   const drawParticles = () => {
+    const particles = particlesRef.current;
     const ctx = getCanvas().getContext("2d")!;
     particles.forEach((p) => {
       ctx.beginPath();
-
-      ctx.lineWidth = p.size / 2;
+      ctx.lineWidth = p.size;
       ctx.strokeStyle = p.color;
-      ctx.moveTo(p.x + p.size + p.size / 4, p.y);
-      ctx.lineTo(p.x + p.size, p.y + p.size + p.size / 4);
-      //   ctx.setTransform(
-      //     Math.cos(p.tiltAngle), // set the x axis to the tilt angle
-      //     Math.sin(p.tiltAngle),
-      //     0,
-      //     1,
-      //     p.x,
-      //     p.y // set the origin
-      //   );
+      ctx.moveTo(p.x + p.tilt / 15 + p.size / 4, p.y);
+      ctx.lineTo(p.x, p.y + p.tilt);
       return ctx.stroke();
     });
   };
@@ -108,29 +117,26 @@ export const useBrendisConfetti = (options?: BrendisConfettiArgs) => {
   };
   const rand = (min = 1, max = min + (min = 0)) =>
     Math.floor(Math.random() * (max - min) + min);
+  const floatRand = (min = 1, max = min + (min = 0)) =>
+    Math.random() * (max - min) + min;
   const getColor = (i?: number) => colors[i || rand(0, colors.length)];
 
-  let id = 0;
   // creation
   const createParticle = () => {
+    const particles = particlesRef.current;
     const canvas = getCanvas();
     particles.push({
-      id: id++,
       x: Math.random() * canvas.width,
-      //   y: Math.random() * canvas.height - canvas.height, // to the top
-      y: Math.random() * canvas.height, // to the top
-      size: Math.random() * 6 + 3 + Math.floor(Math.random() * 10) - 10, // tilt
-      speedX: (Math.random() - 0.5) * 4,
-      speedY: Math.random() * 4 + 2,
-      rotation: (Math.random() - 0.5) * 5,
-      //   color: `hsl(${Math.random() * 360}, 80%, 60%)`,
+      y: Math.random() * canvas.height - canvas.height,
+      size: rand(3, 5),
       color: getColor(),
       // experiment
       tiltAngle: 0,
-      tilt: 0.01,
-      tiltAngleIncremental: (rand(0.08) + 0.04) * (rand() < 0.5 ? -1 : 1),
+      tilt: 0,
+      tiltAngleIncremental: floatRand(0.04, 0.05),
+      //   tiltAngleIncremental: rand(0.07) + 0.05,
       angle: rand(Math.PI * 2),
-      density: rand(150) + 10, //density @todo I don't like density 😅
+      density: rand(100) + 10,
     });
     // console.info(particles.length);
   };
