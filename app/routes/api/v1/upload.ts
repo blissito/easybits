@@ -26,6 +26,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       });
       return new Response(JSON.stringify(complete));
     },
-    { directory: `${user.id}/` }
+    { directory: `${user.id}/` } // @todo expose in the library
   );
 };

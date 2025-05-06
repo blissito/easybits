@@ -1,5 +1,11 @@
 import { useEffect } from "react";
 import JSConfetti from "js-confetti";
+import { useBrendisConfetti } from "~/hooks/useBrendisConfetti";
+
+export const BrendisConfetti = ({ duration }: { duration: number }) => {
+  useBrendisConfetti({ duration });
+  return <></>;
+};
 
 const confettiColors = ["#9870ED", "#F3F0F5", "#FFFFFF"];
 const initial = ["🎉", "👾", "💿", "🚀", "📖", "🕹", "📺"];
