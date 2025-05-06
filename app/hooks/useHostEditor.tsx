@@ -8,7 +8,7 @@ import { CopyButton } from "~/components/common/CopyButton";
 import { useClickOutside } from "./useOutsideClick";
 import { cn } from "~/utils/cn";
 import { IoWarningOutline } from "react-icons/io5";
-import { FaBackward, FaCheck } from "react-icons/fa";
+import { FaArrowLeft, FaBackward, FaCheck } from "react-icons/fa";
 
 const statuses = ["Awaiting configuration", "Awaiting certificates"];
 
@@ -108,8 +108,8 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
                   type="button"
                   isLoading={isLoading}
                   onClick={onSubmit}
-                  containerClassName="ml-auto mr-2 h-9"
-                  className="h-9 bg-white"
+                  containerClassName="ml-auto mr-1 h-9"
+                  className="h-9 bg-brand-500 text-black"
                 >
                   Actualizar
                 </BrutalButton>
@@ -119,11 +119,11 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
               error={error}
             />
-            <hr className="w-full my-2" />
+
             {user.domain && (
               <DNSInput
                 isDisabled
-                label="Tu dominio propio"
+                label="Tu dominio propio "
                 mode="domain"
                 submitNode={
                   // @todo inject props for disable?
@@ -142,7 +142,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
                     type="button"
                     onClick={() => setIsConfigOpen(true)}
                     className={cn(
-                      "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l-2 border-black"
+                      "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l border-black"
                     )}
                   >
                     <BiEditAlt />
@@ -169,6 +169,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               mode="domain"
               value={domain}
               label={"Tu dominio propio"}
+              editingLabel="Edita el dominio o da clic afuera para cancelar"
               submitNode={
                 // @todo inject props for disable?
                 <BrutalButton
@@ -193,13 +194,12 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               </strong>{" "}
               o @ si es la raíz del dominio
             </p> */}
-            <nav className="flex justify-between w-full">
+            <nav className="flex justify-between w-full mt-6">
               <BrutalButton
                 onClick={() => setIsConfigOpen(false)}
                 className="bg-white min-w-10"
               >
-                {/* @todo volveré a buscar y cambiar el icono correcto, tal vez... */}
-                <FaBackward />
+                <FaArrowLeft />
               </BrutalButton>
               <BrutalButton
                 isLoading={isLoading}
@@ -211,10 +211,9 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
             </nav>
           </>
         ) : (
-          <nav className="flex justify-between w-full">
+          <nav className="flex justify-between w-full mt-6">
             <BrutalButton onClick={onClose} className="bg-white min-w-10">
-              {/* @todo volveré a buscar y cambiar el icono correcto, tal vez... */}
-              <FaBackward />
+              <FaArrowLeft />
             </BrutalButton>
             {!user.domain && (
               <BrutalButton onClick={openDomainConfig}>
@@ -230,39 +229,39 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
 
 const IPsInfo = ({ user }: { user: User }) => {
   return (
-    <article className="w-full mt-4">
+    <article className="w-full ">
       <h2 className="mb-2">
-        Agrega estas entradas DNS para dirigir el tráfico
+        Y por último, agrega los siguientes registros DNS:
       </h2>
-      <section className="border-2 border-black rounded-t-lg p-1 grid grid-cols-3 border-b-0 gap-2 relative text-gray-500">
+      <section className="border text-sm border-black rounded-t-lg p-1 grid grid-cols-3 border-b-0 gap-2 relative text-black">
         <span className="col-span-1">Tipo de registro</span>
         <span className="col-span-1">Nombre del dominio</span>
         <span className="col-span-1">Valor</span>{" "}
       </section>
       {/* Content */}
-      <section className="border-2 border-black border-b-0 p-1 grid grid-cols-3 text-xs gap-2">
+      <section className="border border-black border-b-0 p-1 grid grid-cols-3 text-xs gap-2">
         <span>A</span>
         <div className="flex items-center">
           <p className="truncate"> {user.domain}</p>
-          <CopyButton text={user.domain} />
+          <CopyButton className="ml-1" text={user.domain} />
         </div>
 
         <div className="col-span-1 w-max items-center flex">
           <p className="truncate"> 66.241.125.82</p>
-          <CopyButton text={"66.241.125.82"} />
+          <CopyButton className="ml-1" text={"66.241.125.82"} />
         </div>
       </section>
       {/* Content */}
-      <section className="border-2 border-black rounded-b-lg p-1 grid grid-cols-3 text-xs gap-2">
+      <section className="border border-black rounded-b-lg p-1 grid grid-cols-3 text-xs gap-2">
         <span>AAAA</span>
         <div className="flex items-center">
           <p className="truncate"> {user.domain}</p>
-          <CopyButton text={user.domain} />
+          <CopyButton className="ml-1" text={user.domain} />
         </div>
 
         <div className="col-span-1 w-max items-center flex">
           <p className="truncate"> 2a09:8280:1::5c:8bf9:0</p>
-          <CopyButton text={"2a09:8280:1::5c:8bf9:0"} />
+          <CopyButton className="ml-1" text={"2a09:8280:1::5c:8bf9:0"} />
         </div>
       </section>
     </article>
@@ -273,14 +272,14 @@ const DNSConfig = ({ user }: { user: User }) => {
   return (
     <>
       {/* Header */}
-      <article className="w-full my-6">
+      <article className="w-full ">
         <h2 className="mb-2">
           Agrega el siguiente registro CNAME a tu proveedor DNS para verificar
           que eres el propietario de {" "}
           <strong className="text-brand-500">{user.domain}</strong>
         </h2>
-        <section className="border-2 border-black rounded-t-lg p-1 grid grid-cols-3 border-b-0 gap-2 relative text-gray-500">
-          <span className="col-span-1">Tipo de registro</span>
+        <section className="border text-sm text-black border-black rounded-t-lg p-1 grid grid-cols-3 border-b-0 gap-2 relative ">
+          <span className="col-span-1 ">Tipo de registro</span>
           <span className="col-span-1">Nombre del dominio</span>
           <span className="col-span-1">Valor</span>{" "}
           {[statuses[0]].includes(user.dnsConfig?.clientStatus) && (
@@ -295,21 +294,27 @@ const DNSConfig = ({ user }: { user: User }) => {
           )}
         </section>
         {/* Content */}
-        <section className="border-2 border-black rounded-b-lg p-1 grid grid-cols-3 text-xs gap-2">
-          <span>{user.dnsConfig?.dnsValidationInstructions.split(" ")[0]}</span>
+        <section className="border border-black rounded-b-lg p-1 grid grid-cols-3 place-content-center text-xs gap-2">
+          <span className="flex items-center">
+            {user.dnsConfig?.dnsValidationInstructions.split(" ")[0]}{" "}
+          </span>
           <div className="flex items-center">
             <p className="truncate">
               {" "}
               {user.dnsConfig?.dnsValidationHostname.split(".")[0]}
             </p>
             <CopyButton
+              className="ml-1"
               text={user.dnsConfig?.dnsValidationHostname.split(".")[0]}
             />
           </div>
 
           <div className="col-span-1 w-max items-center flex">
             <p className="truncate"> {user.dnsConfig?.dnsValidationTarget}</p>
-            <CopyButton text={user.dnsConfig?.dnsValidationTarget} />
+            <CopyButton
+              className="ml-1"
+              text={user.dnsConfig?.dnsValidationTarget}
+            />
           </div>
         </section>
       </article>
@@ -326,7 +331,8 @@ const DNSInput = ({
   error,
   value,
   submitNode,
-  label = "Tu dominio gratis",
+  label = "Tu subdominio actual",
+  editingLabel = "Edita tu subdominio o da clic afuera para cancelar",
   editButton,
 }: {
   defaultValue?: string;
@@ -335,6 +341,7 @@ const DNSInput = ({
   editButton?: ReactNode;
   mode?: "domain";
   label?: string;
+  editingLabel?: string;
   error?: string;
   submitNode?: ReactNode;
   onChange?: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
@@ -355,9 +362,14 @@ const DNSInput = ({
       : `https://${defaultValue}.easybits.cloud/tienda`;
 
   return (
-    <article ref={ref} className="w-full">
-      <p className="mb-2">{label}</p>
-      <section className="flex gap-3 items-center rounded-xl border-2 border-black">
+    <article ref={ref} className="w-full ">
+      {isEditing ? (
+        <p className="mb-2">{editingLabel}</p>
+      ) : (
+        <p className="mb-2">{label} </p>
+      )}
+
+      <section className="flex gap-3  h-12 items-center rounded-xl border border-black">
         {!isEditing && (
           <span className="text-md p-1 border-brand-500 rounded-lg border ml-1">
             {l}
@@ -379,7 +391,7 @@ const DNSInput = ({
                 type="button"
                 onClick={() => setIsEditing(true)}
                 className={cn(
-                  "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l-2 border-black"
+                  "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l border-black"
                 )}
               >
                 <BiEditAlt />
@@ -397,7 +409,7 @@ const DNSInput = ({
               onChange={onChange}
               // onBlur={toggleIsEditing}
               type="text"
-              className="rounded-xl border-brand-500"
+              className="rounded-xl border-brand-500 h-10 focus:border-brand-500 focus:ring-brand-500"
             />
             {mode !== "domain" && <p>.easybits.cloud</p>}
           </div>
@@ -450,14 +462,14 @@ const Modal = ({
   return (
     <article className="fixed inset-0 z-20 grid place-content-center">
       <section className="absolute inset-0 bg-black/50 backdrop-blur"></section>
-      <section className="relative bg-white p-6 rounded-2xl flex flex-col items-start gap-3">
-        <nav className="flex justify-between gap-4 w-full">
-          <h1 className="text-xl font-bold">
+      <section className="relative max-w-[800px]  mx-auto border-2 border-black bg-white p-8 rounded-2xl flex flex-col items-start gap-6">
+        <nav className="flex justify-between items-start gap-4 w-full ">
+          <h1 className="text-2xl md:text-3xl font-semibold">
             Usa tu subdominio EasyBits o ¡Agrega tu propio dominio! 🔥
           </h1>
           <BrutalButtonClose onClick={onClose} />
         </nav>
-        <hr className="my-2" />
+
         {children}
       </section>
     </article>

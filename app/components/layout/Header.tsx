@@ -3,17 +3,22 @@ import { HeaderIconButton } from "~/components/common/HeaderIconButton";
 import { ListIcon } from "~/components/illustrations/ListIcon";
 import { LupaIcon } from "~/components/illustrations/LupaIcon";
 import { cn } from "~/utils/cn";
+import { LayoutIcon } from "../illustrations/LayoutIcon";
 
 export const Header = ({
   className,
   title,
   noButtons,
   cta,
+  folded,
+  isFolded,
 }: {
   cta?: ReactNode;
   noButtons?: boolean;
   title?: string;
   className?: string;
+  folded?: () => void;
+  isFolded: boolean;
 }) => {
   return (
     <nav
@@ -29,8 +34,8 @@ export const Header = ({
             <HeaderIconButton>
               <LupaIcon />
             </HeaderIconButton>
-            <HeaderIconButton>
-              <ListIcon />
+            <HeaderIconButton onClick={folded}>
+              {isFolded ? <ListIcon /> : <LayoutIcon />}
             </HeaderIconButton>
             {cta}
           </>

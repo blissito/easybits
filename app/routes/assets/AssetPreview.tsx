@@ -34,7 +34,6 @@ export const AssetPreview = ({
 
   const handleModal = () => {
     setIsOpen(true);
-    console.log("si sirce", isOpen);
   };
 
   const handleClose = () => {
@@ -181,7 +180,7 @@ export const Sharing = ({ link }: { link: string }) => {
   );
 };
 
-const SocialMedia = ({
+export const SocialMedia = ({
   className,
   children,
   name,

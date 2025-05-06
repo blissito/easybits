@@ -67,7 +67,7 @@ const SideBarWeb = () => {
 const SideBarItem = ({
   isCurrentActive = false,
   title,
-  path = "",
+  path = "/inicio",
   icon,
   isLogo,
 }: MenuItemProps) => {
