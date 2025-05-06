@@ -9,6 +9,7 @@ export const BrendisConfetti = ({ duration }: { duration: number }) => {
   let animations = useRef<Animation[]>([]).current;
 
   useEffect(() => {
+    // document.body.style.transformStyle = "preserve-3d";
     const elements = document.querySelectorAll(".confetti");
     [...elements].slice(0).forEach((element, i) => {
       var player = element.animate(
@@ -44,9 +45,8 @@ export const BrendisConfetti = ({ duration }: { duration: number }) => {
 
   return Array.from({ length: 50 }).map((_, i) => (
     <div className="confetti" key={i}>
-      <div className="rotate">
-        <div className="askew"></div>
-      </div>
+      <div className="rotate" />
+      <div className="askew" />
     </div>
   ));
 };
