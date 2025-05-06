@@ -1,13 +1,52 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import JSConfetti from "js-confetti";
 import { useBrendisConfetti } from "~/hooks/useBrendisConfetti";
 
 export const BrendisConfetti = ({ duration }: { duration: number }) => {
   // useBrendisConfetti({ duration });
+  var scale = Math.random() * 0.7 + 0.3;
+  const len = 50;
+  let animations = useRef<Animation[]>([]).current;
+
+  useEffect(() => {
+    const elements = document.querySelectorAll(".confetti");
+    [...elements].slice(0).forEach((element, i) => {
+      var player = element.animate(
+        {
+          transform: [
+            `translate3d(${
+              (i / len) * 100
+            }vw,-5vh,0) scale(${scale}) rotate(0turn)`,
+            `translate3d(${
+              (i / len) * 100 + 10
+            }vw, 105vh,0) scale(${scale}) rotate(${
+              Math.random() > 0.5 ? "" : "-"
+            }2turn)`,
+            // "skewY(10deg) translate3d(-250%, 0, 0)",
+            // "skewY(-12deg) translate3d(250%, 0, 0)",
+          ],
+          // duration: "1s",
+
+          // duration: Math.random() * 3000 + 4000,
+        },
+        {
+          duration: Math.random() * 3000 + 4000,
+          // duration: 1000,
+          iterations: Infinity,
+          delay: -(Math.random() * 7000),
+          // direction: "alternate",
+        }
+      );
+      player.playbackRate = 2;
+      animations.push(player);
+    });
+  }, []);
 
   return Array.from({ length: 50 }).map((_, i) => (
     <div className="confetti" key={i}>
-      <div className="askew"></div>
+      <div className="rotate">
+        <div className="askew"></div>
+      </div>
     </div>
   ));
 };
