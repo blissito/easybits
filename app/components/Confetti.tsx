@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import JSConfetti from "js-confetti";
-import { useBrendisConfetti } from "~/hooks/useBrendisConfetti";
+import "~/styles/brendisConfetti.css"; // confetti animations
+import { cn } from "~/utils/cn";
 
 export const BrendisConfetti = ({ duration }: { duration: number }) => {
   // useBrendisConfetti({ duration });
-  var scale = Math.random() * 0.7 + 0.3;
   const len = 50;
   let animations = useRef<Animation[]>([]).current;
 
@@ -12,8 +12,10 @@ export const BrendisConfetti = ({ duration }: { duration: number }) => {
     // document.body.style.transformStyle = "preserve-3d";
     const elements = document.querySelectorAll(".confetti");
     [...elements].slice(0).forEach((element, i) => {
+      const scale = Math.random() * 0.6 + 0.5;
       var player = element.animate(
         {
+          opacity: scale,
           transform: [
             `translate3d(${
               (i / len) * 100
@@ -43,11 +45,25 @@ export const BrendisConfetti = ({ duration }: { duration: number }) => {
     });
   }, []);
 
-  return Array.from({ length: 50 }).map((_, i) => (
-    <div className="confetti" key={i}>
-      <div className="rotate" />
-      <div className="askew" />
-    </div>
+  return Array.from({ length: 25 }).map((_, i) => (
+    <section key={i}>
+      <div className="confetti">
+        <div
+          className={cn("rotate", {
+            yellow: i % 2 === 0,
+            purple: i % 2 !== 0,
+          })}
+        />
+      </div>
+      <div className="confetti">
+        <div
+          className={cn("askew", {
+            yellow: i % 2 === 0,
+            purple: i % 2 !== 0,
+          })}
+        />
+      </div>
+    </section>
   ));
 };
 

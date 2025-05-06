@@ -10,7 +10,7 @@ import { BrendisConfetti, EmojiConfetti } from "~/components/Confetti";
 
 //Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
 export const Steper = ({ user }: { user: User }) => {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(3);
   const fetcher = useFetcher();
 
   const [host, setHost] = useState(user.host);
@@ -121,7 +121,7 @@ export const Steper = ({ user }: { user: User }) => {
   };
   const images = ["/hero/onboarding-1.webp", "/hero/onboarding-2.webp"];
   return (
-    <section className="flex w-full h-full  overflow-x-hidden">
+    <section className="flex w-full h-svh  overflow-x-hidden">
       <AnimatePresence>{getStep()}</AnimatePresence>
       {step !== 3 && (
         <div className="w-full hidden md:block fixed right-0 h-full md:w-[50%] border-2 border-black ">
