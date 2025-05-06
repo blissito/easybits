@@ -157,3 +157,53 @@ body {
   border-radius: 32px;
   box-shadow: 4px 4px 3px gray;
 }
+
+/* Animación de confetti experimento */
+.confetti {
+  width: 1rem;
+  height: 1rem;
+  display: inline-block;
+  position: absolute;
+  top: 10rem;
+  left: 10rem;
+  z-index: 50;
+}
+
+.confetti .askew {
+  background: linear-gradient(
+    var(--grad-direction, to bottom),
+    hsl(50deg 77% 68%) 25%,
+    hsl(259deg 78% 68%) 0% 66.667%,
+    hsl(43, 100%, 100%) 0% 100%
+  );
+  transform: skewY(10deg);
+  width: 2rem;
+  height: 3.2rem;
+  animation: drifty 1s infinite alternate both ease-in-out;
+  perspective: 1000;
+  clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
+}
+
+@keyframes drifty {
+  0% {
+    transform: skewY(10deg) translate3d(-250%, 0, 0);
+  }
+  100% {
+    transform: skewY(-12deg) translate3d(250%, 0, 0);
+  }
+}
+@keyframes driftyRotate {
+  0% {
+    transform: rotateX(0);
+  }
+  100% {
+    transform: rotateX(359deg);
+  }
+}
+
+.confetti .askew {
+  background: hsl(259deg 78% 68%);
+  width: 1rem;
+  height: 2rem;
+  clip-path: polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 50% 90%, 0% 100%);
+}

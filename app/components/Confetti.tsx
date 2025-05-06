@@ -3,8 +3,13 @@ import JSConfetti from "js-confetti";
 import { useBrendisConfetti } from "~/hooks/useBrendisConfetti";
 
 export const BrendisConfetti = ({ duration }: { duration: number }) => {
-  useBrendisConfetti({ duration });
-  return <></>;
+  // useBrendisConfetti({ duration });
+
+  return Array.from({ length: 50 }).map((_, i) => (
+    <div className="confetti" key={i}>
+      <div className="askew"></div>
+    </div>
+  ));
 };
 
 const confettiColors = ["#9870ED", "#F3F0F5", "#FFFFFF"];
