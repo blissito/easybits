@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import JSConfetti from "js-confetti";
-import "~/styles/brendisConfetti.css"; // confetti animations
+import "~/styles/brendisConfetti.css"; // brendi's confetti styles and keyframes
 import { cn } from "~/utils/cn";
 
 export const BrendisConfetti = ({ duration }: { duration?: number }) => {
   // @todo pause animation, stop animation (with Animation)
-  const len = 50;
+  const len = 80;
 
   useEffect(() => {
     const elements = document.querySelectorAll(".confetti");
@@ -23,54 +23,53 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
             }vw, 105vh,0) scale(${scale}) rotate(${
               Math.random() > 0.5 ? "" : "-"
             }2turn)`,
-            // "skewY(10deg) translate3d(-250%, 0, 0)",
-            // "skewY(-12deg) translate3d(250%, 0, 0)",
           ],
-          // duration: "1s",
-
-          // duration: Math.random() * 3000 + 4000,
         },
         {
           duration: Math.random() * 3000 + 4000,
           iterations: Infinity,
           delay: Math.random() * 5000,
-          // direction: "alternate",
         }
       );
-
-      // player.playbackRate = 2;
-      // animations.push(player);
-      setTimeout(() => {
-        // player.pause();
-      }, 5000);
+      player.playbackRate = 1;
     });
   }, []);
 
+  // @todo make it a client component to avoid console warning
   const rand = (min = 0, max = (min = 0)) => Math.random() * (max - min) + min;
-
-  return Array.from({ length: len }).map((_, i) => (
-    <section key={i}>
-      <div className="confetti">
-        <div
-          style={{
-            animationDuration: `${rand(0.6, 2.8)}s`,
-          }}
-          className={cn("rotate")}
-        >
+  const colors = [
+    "yellow",
+    "bg-purple-400",
+    "purple",
+    "purple",
+    "purple",
+    "purple",
+    "purple",
+    "purple",
+  ];
+  return Array.from({ length: len }).map((_, i) => {
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    return (
+      <section key={i}>
+        <div className="confetti">
           <div
             style={{
-              animationDuration: `${rand(1, 2)}s`,
-              animationDelay: `${rand(1, 3)}s`,
+              animationDuration: `${rand(0.6, 2.8)}s`,
             }}
-            className={cn("askew", {
-              yellow: i % 2 === 0,
-              purple: i % 2 !== 0,
-            })}
-          />
+            className={cn("rotate")}
+          >
+            <div
+              style={{
+                animationDuration: `${rand(1, 2)}s`,
+                animationDelay: `${rand(1, 3)}s`,
+              }}
+              className={cn("askew", color)}
+            />
+          </div>
         </div>
-      </div>
-    </section>
-  ));
+      </section>
+    );
+  });
 };
 
 const confettiColors = ["#9870ED", "#F3F0F5", "#FFFFFF"];
