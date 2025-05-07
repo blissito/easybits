@@ -1,4 +1,3 @@
-import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/utils";
 import {
   sendConfrimation,
