@@ -24,30 +24,36 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
           business para creadores, o de las nuevas funcionalidades nuevas de
           EasyBits.
         </p>
-        <fetcher.Form
-          action="/api/v1/utils"
-          method="post"
-          className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center"
-        >
-          <input
-            name="email"
-            required
-            className="bg-white  rounded-xl w-full border-2 border-black "
-            placeholder="ejemplo@easybist.cloud"
-          />{" "}
-          <BrutalButton
-            name="intent"
-            value="send_confirmation"
-            type="submit"
-            containerClassName=" -mt-[2px] ml-[1px]"
-            id="Suscripcion"
+        {!isSuccess && (
+          <fetcher.Form
+            action="/api/v1/utils"
+            method="post"
+            className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center"
           >
-            ¡Apuntarme!
-          </BrutalButton>
-          <Turnstile />
-        </fetcher.Form>
+            <input
+              name="email"
+              required
+              className="bg-white  rounded-xl w-full border-2 border-black "
+              placeholder="ejemplo@easybist.cloud"
+            />{" "}
+            <BrutalButton
+              isLoading={fetcher.state !== "idle"}
+              name="intent"
+              value="send_confirmation"
+              type="submit"
+              containerClassName=" -mt-[2px] ml-[1px]"
+              id="Suscripcion"
+            >
+              ¡Apuntarme!
+            </BrutalButton>
+            <Turnstile />
+          </fetcher.Form>
+        )}
         {isSuccess && (
-          <p>¡Super! Ahora revisa tu correo para confirmar tu cuenta. 🎊</p>
+          // @Todo ponga un monito de tv o radio pequeñito 🤖 en vez del emoji
+          <p className="text-xl mt-2 md:mt-3 font-bold text-brand-500">
+            ¡Super! Ahora, revisa tu correo para confirmar tu cuenta. 🎊
+          </p>
         )}
         {isSuccess && <BrendisConfetti />}
       </div>

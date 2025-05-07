@@ -20,7 +20,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
     z.string().email().parse(email); // validation
     // turnstile
     const success = await handleTurnstilePost(request, formData);
-    if (!success) throw new Response(null, { status: 400 });
+    if (!success)
+      throw new Response("Pensamos que eres un robot. 🤖 No puedes pasar.", {
+        status: 401,
+      });
 
     await sendConfrimation(email);
     return { success };
