@@ -2,11 +2,13 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/utils";
 import {
   sendConfrimation,
+  // sendConfrimation,
   sendNewsLetter,
 } from "~/.server/emails/sendNewsLetter";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
+import { handleTurnstilePost } from "~/.server/turnstile";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   await getUserOrRedirect(request);
@@ -17,7 +19,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "send_confirmation") {
     const email = formData.get("email") as string;
     z.string().email().parse(email); // validation
+    // turnstile
+    const success = await handleTurnstilePost(request, formData);
+    if (!success) throw new Response(null, { status: 400 });
+
     await sendConfrimation(email);
+    return { success };
   }
 
   if (intent === "test_action_email") {
