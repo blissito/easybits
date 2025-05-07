@@ -26,6 +26,9 @@ import { RiWhatsappFill } from "react-icons/ri";
 import toast from "react-hot-toast";
 import { Modal } from "../common/Modal";
 import { Input } from "../common/Input";
+import { AssetCard } from "~/routes/assets/AssetCard";
+import StoreConfig from "./StoreConfig";
+
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export default function StoreComponent({
@@ -42,6 +45,7 @@ export default function StoreComponent({
   const [currentFilter, setCurrentFilter] = useState();
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
 
   const handleModal = () => {
     setIsOpen(true);
@@ -55,7 +59,6 @@ export default function StoreComponent({
       <div
         className={cn(
           " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0 ",
-
           LAYOUT_PADDING
         )}
       >
@@ -74,7 +77,10 @@ export default function StoreComponent({
               )}
             </HeaderIconButton>
             <HeaderIconButton>
-              <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
+              <div
+                className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]"
+                onClick={() => setIsConfigOpen(true)}
+              >
                 <img className="w-full" src={EditIcon} />
               </div>
             </HeaderIconButton>
@@ -95,7 +101,7 @@ export default function StoreComponent({
             </Link>
           </div>
         </div>
-        <div className="border-[2px] border-black rounded-2xl overflow-hidden">
+        <div className="overflow-hidden">
           <div className="w-full h-[200px] relative ">
             <img
               className="object-cover w-full h-full"
@@ -126,6 +132,7 @@ export default function StoreComponent({
                 {user.displayName}
               </p>
               <div className="flex justify-center gap-3">
+                {/* check if RRSS and display them */}
                 <Link to="/RRSS">
                   <FaFacebookF />
                 </Link>
@@ -148,6 +155,7 @@ export default function StoreComponent({
             </div>
           </div>
           <div className="flex justify-center gap-3 mb-6">
+            {/* review which categories to show and display cause notr everyone publishes from all categories */}
             {["Todos", "Nuevos", "Assets", "Libros"].map((f, i) => (
               <button
                 key={i}
@@ -164,7 +172,11 @@ export default function StoreComponent({
             ))}
           </div>
           <div className="p-4">
-            <AssetList isPublic={isPublic} assets={assets} />
+            <AssetList isPublic={isPublic} assets={assets}>
+              {assets.map((asset) => (
+                <AssetCard key={asset.id} asset={asset} />
+              ))}
+            </AssetList>
           </div>
         </div>
       </div>
@@ -173,6 +185,8 @@ export default function StoreComponent({
         isOpen={isOpen}
         link={`https://${user.host}.easybits.cloud/tienda`}
       />
+
+      <StoreConfig isOpen={isConfigOpen} onClose={setIsConfigOpen} />
     </>
   );
 }
