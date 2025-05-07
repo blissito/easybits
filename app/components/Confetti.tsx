@@ -11,7 +11,7 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
     const elements = document.querySelectorAll(".confetti");
     [...elements].slice(0).forEach((element, i) => {
       const scale = Math.random() * 0.6 + 0.5;
-      element.animate(
+      const player = element.animate(
         {
           opacity: [scale],
           transform: [
@@ -37,28 +37,37 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
           // direction: "alternate",
         }
       );
+
       // player.playbackRate = 2;
       // animations.push(player);
+      setTimeout(() => {
+        // player.pause();
+      }, 5000);
     });
   }, []);
 
-  return Array.from({ length: 25 }).map((_, i) => (
+  const rand = (min = 0, max = (min = 0)) => Math.random() * (max - min) + min;
+
+  return Array.from({ length: len }).map((_, i) => (
     <section key={i}>
       <div className="confetti">
         <div
-          className={cn("rotate", {
-            yellow: i % 2 === 0,
-            purple: i % 2 !== 0,
-          })}
-        />
-      </div>
-      <div className="confetti">
-        <div
-          className={cn("askew", {
-            yellow: i % 2 === 0,
-            purple: i % 2 !== 0,
-          })}
-        />
+          style={{
+            animationDuration: `${rand(0.6, 2.8)}s`,
+          }}
+          className={cn("rotate")}
+        >
+          <div
+            style={{
+              animationDuration: `${rand(1, 2)}s`,
+              animationDelay: `${rand(1, 3)}s`,
+            }}
+            className={cn("askew", {
+              yellow: i % 2 === 0,
+              purple: i % 2 !== 0,
+            })}
+          />
+        </div>
       </div>
     </section>
   ));
