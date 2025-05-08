@@ -23,6 +23,13 @@ export default function StoreConfigForm({
     typography: "Avenir",
     hexColor: "#DADADA",
     socialNetworks: true,
+    showProducts: true,
+    instagram: "",
+    facebook: "",
+    tiktok: "",
+    youtube: "",
+    linkedin: "",
+    otherWebsite: "",
   };
 
   const { handleSubmit, control, register } = useForm({
@@ -32,7 +39,7 @@ export default function StoreConfigForm({
   const steps = [LookAndFeel, LinksStep];
 
   const { stepIndex, isFirst, isLast, next, previous, goTo } = useStep({
-    initialStep: 1,
+    initialStep: 0,
     steps,
   });
   const StepComponent = steps[stepIndex];
@@ -59,7 +66,7 @@ export default function StoreConfigForm({
       <Modal
         mode="drawer"
         containerClassName="z-50"
-        isOpen={true}
+        isOpen={isOpen}
         title={"Personaliza el look de tu sitio"}
         onClose={onClose}
       >

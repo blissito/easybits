@@ -94,7 +94,7 @@ export default function LinksStep({ control, register }) {
       </div>
       <div className="mt-2">
         <Input
-          {...register("other")}
+          {...register("otherWebsite")}
           placeholder="https://www.bitor.com"
           label={
             <span className="flex gap-1 items-center">
