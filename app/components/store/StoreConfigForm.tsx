@@ -10,6 +10,7 @@ import LinksStep from "./LinksStep";
 export default function StoreConfigForm({
   isOpen,
   onClose,
+  storeConfig,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -29,7 +30,9 @@ export default function StoreConfigForm({
     tiktok: "",
     youtube: "",
     linkedin: "",
-    otherWebsite: "",
+    x: "",
+    website: "",
+    ...storeConfig,
   };
 
   const { handleSubmit, control, register } = useForm({
@@ -45,17 +48,19 @@ export default function StoreConfigForm({
   const StepComponent = steps[stepIndex];
 
   const submit = (values) => {
-    console.log({ values });
-    // fetcher.submit(
-    //   { intent: "store_config", data: JSON.stringify(values) },
-    //   {
-    //     method: "patch",
-    //     action: "/api/v1/profile",
-    //   }
-    // );
     if (isLast) {
       goTo(0);
       onClose?.();
+      fetcher.submit(
+        {
+          intent: "update_profile",
+          data: JSON.stringify({ storeConfig: values }),
+        },
+        {
+          method: "post",
+          action: "/api/v1/user",
+        }
+      );
       return;
     }
     next();

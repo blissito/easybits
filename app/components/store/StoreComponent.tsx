@@ -5,13 +5,14 @@ import OpenIcon from "/icons/open.svg";
 import ShareIcon from "/icons/share.svg";
 
 import {
-  FaFacebookF,
-  FaLinkedinIn,
+  FaFacebook,
   FaInstagram,
+  FaLinkedin,
   FaTiktok,
+  FaYoutube,
+  FaXTwitter,
   FaGlobe,
-} from "react-icons/fa";
-import { FaXTwitter } from "react-icons/fa6";
+} from "react-icons/fa6";
 import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
 import { useState, type ReactNode } from "react";
@@ -41,7 +42,21 @@ export default function StoreComponent({
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const storeConfig = user?.storeConfig || {};
+  const {
+    instagram,
+    facebook,
+    x,
+    youtube,
+    website,
+    linkedin,
+    tiktok,
+    hexColor,
+    colorMode,
+    logoImage,
+    portadaImage,
+    showProducts,
+    socialNetworks,
+  } = user?.storeConfig || {};
 
   const handleModal = () => {
     setIsOpen(true);
@@ -100,13 +115,10 @@ export default function StoreComponent({
         <div className="overflow-hidden">
           <div
             className="w-full h-[200px] relative bg-brand-500"
-            style={{ backgroundColor: storeConfig?.hexColor }}
+            style={{ backgroundColor: hexColor }}
           >
-            {storeConfig?.portada && (
-              <img
-                className="object-cover w-full h-full"
-                src={storeConfig?.portada}
-              />
+            {portadaImage && (
+              <img className="object-cover w-full h-full" src={portadaImage} />
             )}
 
             <div className="absolute w-[150px] h-[150px] inset-0 bg-black rounded-full scale-100 translate-x-2 opacity-100 top-[calc(100%-75px)] left-[calc(50%-75px)]" />
@@ -126,27 +138,46 @@ export default function StoreComponent({
               <p className="font-semibold text-center mb-3">
                 {user.displayName}
               </p>
-              <div className="flex justify-center gap-3">
-                {/* check if RRSS and display them */}
-                <Link to="/RRSS">
-                  <FaFacebookF />
-                </Link>
-                <Link to="/RRSS">
-                  <FaLinkedinIn />
-                </Link>
-                <Link to="/RRSS">
-                  <FaInstagram />
-                </Link>
-                <Link to="/RRSS">
-                  <FaTiktok />
-                </Link>
-                <Link to="/RRSS">
-                  <FaXTwitter />
-                </Link>
-                <Link to="/RRSS">
-                  <FaGlobe />
-                </Link>
-              </div>
+              {socialNetworks && (
+                <div className="flex justify-center gap-3">
+                  {/* check if RRSS and display them */}
+                  {instagram && (
+                    <Link to={instagram}>
+                      <FaInstagram />
+                    </Link>
+                  )}
+                  {facebook && (
+                    <Link to={facebook}>
+                      <FaFacebook />
+                    </Link>
+                  )}
+                  {x && (
+                    <Link to={x}>
+                      <FaXTwitter />
+                    </Link>
+                  )}
+                  {youtube && (
+                    <Link to={youtube}>
+                      <FaYoutube />
+                    </Link>
+                  )}
+                  {tiktok && (
+                    <Link to={tiktok}>
+                      <FaTiktok />
+                    </Link>
+                  )}
+                  {linkedin && (
+                    <Link to={linkedin}>
+                      <FaLinkedin />
+                    </Link>
+                  )}
+                  {website && (
+                    <Link to={website}>
+                      <FaGlobe />
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-center gap-3 mb-6">
@@ -184,6 +215,7 @@ export default function StoreComponent({
       <StoreConfigForm
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
+        storeConfig={user?.storeConfig}
       />
     </>
   );

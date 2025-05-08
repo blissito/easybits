@@ -1,17 +1,14 @@
-import { FileInput } from "../forms/FileInput";
 import { Input } from "../forms/Input";
-import { LuMoonStar, LuSun } from "react-icons/lu";
-import ButtonGroupInput from "../forms/ButtonGroupInput";
-import { cn } from "~/utils/cn";
 import { Controller, useForm } from "react-hook-form";
 import { Switch } from "../forms/Switch";
 import {
   FaFacebook,
   FaInstagram,
-  FaLink,
+  FaGlobe,
   FaLinkedin,
   FaTiktok,
   FaYoutube,
+  FaXTwitter,
 } from "react-icons/fa6";
 
 export default function LinksStep({ control, register }) {
@@ -40,6 +37,17 @@ export default function LinksStep({ control, register }) {
             <span className="flex gap-1 items-center">
               <FaInstagram />
               Instagram
+            </span>
+          }
+        />
+      </div>
+      <div className="mt-2">
+        <Input
+          {...register("x")}
+          placeholder="https://www.x.com/Bitor"
+          label={
+            <span className="flex gap-1 items-center">
+              <FaXTwitter />X
             </span>
           }
         />
@@ -94,11 +102,11 @@ export default function LinksStep({ control, register }) {
       </div>
       <div className="mt-2">
         <Input
-          {...register("otherWebsite")}
+          {...register("website")}
           placeholder="https://www.bitor.com"
           label={
             <span className="flex gap-1 items-center">
-              <FaLink />
+              <FaGlobe />
               Otro Website
             </span>
           }
