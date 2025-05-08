@@ -36,10 +36,11 @@ const ButtonGroupInput = ({
 
   return (
     <div className={`flex gap-3 ${className}`}>
-      {options.map((option) => {
+      {options.map((option, key) => {
         const isSelected = option.value === value;
         return (
           <div
+            key={key}
             className={cn(
               "group bg-brand-500 grow cursor-pointer relative block rounded-xl",
               shadowClassName,

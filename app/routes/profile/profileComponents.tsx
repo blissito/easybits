@@ -8,7 +8,7 @@ import { Input } from "~/components/common/Input";
 import { Form, useFetcher } from "react-router";
 import { useEscape } from "~/hooks/useEscape";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { Switch } from "../assets/Switch";
+import { Switch } from "../../components/forms/Switch";
 
 export const plans: {
   [x: string]: Record<string, number>;

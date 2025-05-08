@@ -15,19 +15,14 @@ import { FaXTwitter } from "react-icons/fa6";
 import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
 import { useState, type ReactNode } from "react";
-import clsx from "clsx";
 import { cn } from "~/utils/cn";
 import type { Asset, User } from "@prisma/client";
 import { DEFAULT_PIC } from "~/routes/profile/profileComponents";
 import { Sharing, SocialMedia } from "~/routes/assets/AssetPreview";
-import { PiLinkSimpleBold } from "react-icons/pi";
-import { SiGmail } from "react-icons/si";
-import { RiWhatsappFill } from "react-icons/ri";
-import toast from "react-hot-toast";
 import { Modal } from "../common/Modal";
 import { Input } from "../common/Input";
 import { AssetCard } from "~/routes/assets/AssetCard";
-import StoreConfig from "./StoreConfig";
+import StoreConfigForm from "./StoreConfigForm";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -159,7 +154,7 @@ export default function StoreComponent({
             {["Todos", "Nuevos", "Assets", "Libros"].map((f, i) => (
               <button
                 key={i}
-                className={clsx(
+                className={cn(
                   "rounded-full p-3 border border-black cursor-pointer",
                   {
                     "bg-black text-white": f === currentFilter,
@@ -186,7 +181,10 @@ export default function StoreComponent({
         link={`https://${user.host}.easybits.cloud/tienda`}
       />
 
-      <StoreConfig isOpen={isConfigOpen} onClose={setIsConfigOpen} />
+      <StoreConfigForm
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+      />
     </>
   );
 }
