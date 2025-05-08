@@ -13,7 +13,7 @@ export type ButtonGroupProps = {
   buttonClassName?: string;
   shadowClassName?: string;
   selectedButtonClassName?: string;
-  selectedLabelClassName?: string;
+  selectedShadowClassName?: string;
   renderOption?: (option: ButtonOption, isSelected: boolean) => React.ReactNode;
 };
 
@@ -25,7 +25,7 @@ const ButtonGroupInput = ({
   buttonClassName = "",
   shadowClassName = "",
   selectedButtonClassName = "",
-  selectedLabelClassName = "",
+  selectedShadowClassName = "",
   renderOption, // (option, isSelected) => JSX
 }: ButtonGroupProps) => {
   const handleClick = (val) => {
@@ -41,11 +41,11 @@ const ButtonGroupInput = ({
         return (
           <div
             className={cn(
-              "group bg-black grow cursor-pointer relative block rounded-xl",
+              "group bg-brand-500 grow cursor-pointer relative block rounded-xl",
               shadowClassName,
               {
                 "bg-brand-500 border border-black": isSelected,
-                [selectedLabelClassName]: isSelected,
+                [selectedShadowClassName]: isSelected,
               }
             )}
           >
@@ -53,7 +53,7 @@ const ButtonGroupInput = ({
               key={option.value}
               onClick={() => handleClick(option.value)}
               className={cn(
-                "border border-black h-full relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all text-center",
+                "border border-black h-full min-h-10 relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all text-center overflow-hidden",
                 buttonClassName,
                 {
                   "-translate-y-2 -translate-x-2 ": isSelected,

@@ -1,14 +1,14 @@
-import { Input } from "../forms/Input";
 import { Modal } from "../common/Modal";
-import { SelectInput } from "../forms/SelectInput";
 import { useFetcher } from "react-router";
 import { FileInput } from "../forms/FileInput";
+import { Input } from "../forms/Input";
 import { BrutalButton } from "../common/BrutalButton";
 import { LuMoonStar, LuSun } from "react-icons/lu";
 
 import { useState } from "react";
 import ButtonGroupInput from "../forms/ButtonGroupInput";
 import { FaArrowLeft } from "react-icons/fa";
+import { cn } from "~/utils/cn";
 
 export default function StoreConfig({
   isOpen,
@@ -23,6 +23,7 @@ export default function StoreConfig({
   const files = [];
   const [selectedColor, setColor] = useState();
   const [selectedTypo, setTypo] = useState();
+  const [hexColor, setHexColor] = useState("#000000");
   return (
     <>
       <Modal
@@ -41,31 +42,37 @@ export default function StoreConfig({
           <div className="grid grid-cols-12 gap-3">
             <div className="col-span-4">
               <FileInput
+                assetId=""
                 actionId={action.id}
                 files={files}
                 placeholder="Arrastra o selecciona tu logo"
-                isCustom
+                placeholderClassName="text-black"
+                svgClassName="text-black"
+                buttonClassName="flex-col p-0 py-4 min-h-[150px] border-black border-2 m-0"
               />
             </div>
             <div className="col-span-8">
               <FileInput
+                assetId=""
                 actionId={action.id}
                 files={files}
                 placeholder="Arrastra o selecciona tu foto de portada"
-                isCustom
+                placeholderClassName="text-black"
+                svgClassName="text-black"
+                buttonClassName="flex-col p-0 py-4 min-h-[150px] border-black border-2 m-0"
               />
             </div>
           </div>
 
           {/* colores */}
-          <p className="text-lg my-4 font-semibold">Colores</p>
+          <p className="text-lg mt-4 mb-2 font-semibold">Colores</p>
           <p className="text-lg text-brand-gray mb-4">
             Elige el tema de tu sitio
           </p>
           <div className="grid grid-cols-2">
             <ButtonGroupInput
-              // selectedButtonClassName="bg-green-500" ejemplos que podemos customizar mas si queremos siuuu
-              // selectedLabelClassName="bg-red-500"
+              shadowClassName="bg-black"
+              selectedShadowClassName="bg-black"
               options={[
                 { value: "light", label: "Light", Icon: LuSun },
                 { value: "dark", label: "Dark", Icon: LuMoonStar },
@@ -80,16 +87,57 @@ export default function StoreConfig({
               )}
             />
           </div>
+          <p className="text-lg text-brand-gray my-2">
+            Ingresa o elige el color principal
+          </p>
+          <div className="grid grid-cols-12 items-center gap-4">
+            <div className="col-span-4">
+              <Input
+                name="hexColor"
+                type="text"
+                maxLength={7}
+                prefix={
+                  <div
+                    style={{ backgroundColor: hexColor }}
+                    className={cn("h-6 w-10 rounded-md")}
+                  />
+                }
+                value={hexColor}
+                onChange={(e) => {
+                  const unmasked = e.target.value.replace("#", "");
+                  setHexColor(`#${unmasked}`);
+                }}
+              />
+            </div>
+            <div className="col-span-8">
+              <ButtonGroupInput
+                className="gap-4"
+                shadowClassName="bg-black"
+                selectedShadowClassName="bg-black"
+                buttonClassName="p-0"
+                options={[
+                  { value: "bg-brand-500", label: "bg-brand-500" },
+                  { value: "bg-brand-yellow", label: "bg-brand-500" },
+                  { value: "bg-brand-red", label: "bg-brand-500" },
+                  { value: "bg-brand-grass", label: "bg-brand-500" },
+                  { value: "bg-brand-aqua", label: "bg-brand-500" },
+                ]}
+                value={selectedColor}
+                onChange={setColor}
+                renderOption={(option, isSelected) => (
+                  <div className={cn(option.value, "h-full")}></div>
+                )}
+              />
+            </div>
+          </div>
 
           {/* tipografía */}
-          <p className="text-lg my-4 font-semibold">Tipografía</p>
+          <p className="text-lg mt-4 mb-2 font-semibold">Tipografía</p>
           <div>
             <ButtonGroupInput
-              // selectedButtonClassName="bg-green-500" ejemplos que podemos customizar mas si queremos siuuu
-              // selectedLabelClassName="bg-red-500"
               className="grid grid-cols-2"
-              // shadowClassName="col-span-1"
-              // buttonClassName="col-span-1"
+              shadowClassName="bg-black"
+              selectedShadowClassName="bg-black"
               options={[
                 { value: "typo1", label: "Alejandro Sans" },
                 { value: "typo2", label: "Comic Sans" },
