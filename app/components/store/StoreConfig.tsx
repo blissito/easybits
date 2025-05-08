@@ -21,8 +21,8 @@ export default function StoreConfig({
   const fetcher = useFetcher();
   const handleSubmit = () => {};
   const files = [];
-  const [selectedColor, setColor] = useState();
-  const [selectedTypo, setTypo] = useState();
+  const [typography, setTypography] = useState();
+  const [colorMode, setColorMode] = useState();
   const [hexColor, setHexColor] = useState("#000000");
   return (
     <>
@@ -66,7 +66,7 @@ export default function StoreConfig({
 
           {/* colores */}
           <p className="text-lg mt-4 mb-2 font-semibold">Colores</p>
-          <p className="text-lg text-brand-gray mb-4">
+          <p className="text-lg text-brand-gray mb-2">
             Elige el tema de tu sitio
           </p>
           <div className="grid grid-cols-2">
@@ -77,8 +77,8 @@ export default function StoreConfig({
                 { value: "light", label: "Light", Icon: LuSun },
                 { value: "dark", label: "Dark", Icon: LuMoonStar },
               ]}
-              value={selectedColor}
-              onChange={setColor}
+              value={colorMode}
+              onChange={setColorMode}
               renderOption={(option, isSelected) => (
                 <div className="flex items-center justify-start gap-3">
                   <option.Icon />
@@ -87,7 +87,7 @@ export default function StoreConfig({
               )}
             />
           </div>
-          <p className="text-lg text-brand-gray my-2">
+          <p className="text-lg text-brand-gray mt-4 mb-2">
             Ingresa o elige el color principal
           </p>
           <div className="grid grid-cols-12 items-center gap-4">
@@ -99,13 +99,15 @@ export default function StoreConfig({
                 prefix={
                   <div
                     style={{ backgroundColor: hexColor }}
-                    className={cn("h-6 w-10 rounded-md")}
+                    className={cn("h-6 w-10 rounded-md  border")}
                   />
                 }
                 value={hexColor}
                 onChange={(e) => {
+                  // to do this in the input level so we can use this if needed
                   const unmasked = e.target.value.replace("#", "");
-                  setHexColor(`#${unmasked}`);
+                  const masked = `#${unmasked}`;
+                  setHexColor(masked);
                 }}
               />
             </div>
@@ -116,16 +118,19 @@ export default function StoreConfig({
                 selectedShadowClassName="bg-black"
                 buttonClassName="p-0"
                 options={[
-                  { value: "bg-brand-500", label: "bg-brand-500" },
-                  { value: "bg-brand-yellow", label: "bg-brand-500" },
-                  { value: "bg-brand-red", label: "bg-brand-500" },
-                  { value: "bg-brand-grass", label: "bg-brand-500" },
-                  { value: "bg-brand-aqua", label: "bg-brand-500" },
+                  { value: "#9870ED", label: "purple" },
+                  { value: "#E5A000", label: "orange" },
+                  { value: "#E46962", label: "red" },
+                  { value: "#83DD7E", label: "green" },
+                  { value: "#87E1F2", label: "blue" },
                 ]}
-                value={selectedColor}
-                onChange={setColor}
+                value={hexColor}
+                onChange={setHexColor}
                 renderOption={(option, isSelected) => (
-                  <div className={cn(option.value, "h-full")}></div>
+                  <div
+                    className={cn("h-full")}
+                    style={{ backgroundColor: option.value }}
+                  />
                 )}
               />
             </div>
@@ -144,8 +149,8 @@ export default function StoreConfig({
                 { value: "typo3", label: "Roboto" },
                 { value: "typo4", label: "Arial" },
               ]}
-              value={selectedTypo}
-              onChange={setTypo}
+              value={typography}
+              onChange={setTypography}
               renderOption={(option, isSelected) => (
                 <div className="text-start">
                   {/* use the current font idk how */}
@@ -158,7 +163,7 @@ export default function StoreConfig({
           </div>
 
           <div className="flex justify-between gap-2 mt-4">
-            <BrutalButton mode="ghost" type="button" className="w-auto">
+            <BrutalButton mode="ghost" type="button" className="min-w-10">
               <FaArrowLeft />
             </BrutalButton>
             <BrutalButton isLoading={fetcher.state !== "idle"} type="submit">
