@@ -4,7 +4,7 @@ import type { Route } from "./+types/webinar";
 import { redirect, useFetcher } from "react-router";
 import { WebinarRoom } from "~/components/experimental/Room";
 import { getCallToken, updateCanPublish } from "~/.server/livekit/utils";
-import { Switch } from "../assets/Switch";
+import { Switch } from "../../components/forms/Switch";
 import { useState } from "react";
 import { db } from "~/.server/db";
 import { getUserOrNull } from "~/.server/getters";

@@ -5,29 +5,25 @@ import OpenIcon from "/icons/open.svg";
 import ShareIcon from "/icons/share.svg";
 
 import {
-  FaFacebookF,
-  FaLinkedinIn,
+  FaFacebook,
   FaInstagram,
+  FaLinkedin,
   FaTiktok,
+  FaYoutube,
+  FaXTwitter,
   FaGlobe,
-} from "react-icons/fa";
-import { FaXTwitter } from "react-icons/fa6";
+} from "react-icons/fa6";
 import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
 import { useState, type ReactNode } from "react";
-import clsx from "clsx";
 import { cn } from "~/utils/cn";
 import type { Asset, User } from "@prisma/client";
 import { DEFAULT_PIC } from "~/routes/profile/profileComponents";
 import { Sharing, SocialMedia } from "~/routes/assets/AssetPreview";
-import { PiLinkSimpleBold } from "react-icons/pi";
-import { SiGmail } from "react-icons/si";
-import { RiWhatsappFill } from "react-icons/ri";
-import toast from "react-hot-toast";
 import { Modal } from "../common/Modal";
 import { Input } from "../common/Input";
 import { AssetCard } from "~/routes/assets/AssetCard";
-import StoreConfig from "./StoreConfig";
+import StoreConfigForm from "./StoreConfigForm";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -46,6 +42,21 @@ export default function StoreComponent({
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const {
+    instagram,
+    facebook,
+    x,
+    youtube,
+    website,
+    linkedin,
+    tiktok,
+    hexColor,
+    colorMode,
+    logoImage,
+    portadaImage,
+    showProducts,
+    socialNetworks,
+  } = user?.storeConfig || {};
 
   const handleModal = () => {
     setIsOpen(true);
@@ -102,13 +113,13 @@ export default function StoreComponent({
           </div>
         </div>
         <div className="overflow-hidden">
-          <div className="w-full h-[200px] relative ">
-            <img
-              className="object-cover w-full h-full"
-              src={
-                "https://imgs.search.brave.com/bSUGXZesc43Z_H_5LgsRNW3pZgEsA1ISXD9RcT7noMs/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly90NC5m/dGNkbi5uZXQvanBn/LzA3Lzg4LzMzLzU3/LzM2MF9GXzc4ODMz/NTc0MF9GdklvSlR1/NWgzOVF4Y1Q1Wkl3/ZldZMHNvQ2NtU1hS/Ty5qcGc"
-              }
-            />
+          <div
+            className="w-full h-[200px] relative bg-brand-500"
+            style={{ backgroundColor: hexColor }}
+          >
+            {portadaImage && (
+              <img className="object-cover w-full h-full" src={portadaImage} />
+            )}
 
             <div className="absolute w-[150px] h-[150px] inset-0 bg-black rounded-full scale-100 translate-x-2 opacity-100 top-[calc(100%-75px)] left-[calc(50%-75px)]" />
             <div className="absolute z-10 rounded-full w-[150px] h-[150px] overflow-hidden top-[calc(100%-75px)] left-[calc(50%-75px)]">
@@ -118,11 +129,7 @@ export default function StoreComponent({
                   e.currentTarget.src = DEFAULT_PIC;
                 }}
                 className="object-cover w-full h-full"
-                src={
-                  user.picture ||
-                  DEFAULT_PIC ||
-                  "https://imgs.search.brave.com/QU-6LktECopmY-f2KpSBiKk7DPVCnp6Xk0iE6jh-IuU/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly90My5m/dGNkbi5uZXQvanBn/LzA5LzY3LzA3LzE2/LzM2MF9GXzk2NzA3/MTY4M19yR1dPaGxj/YUo2c2Z0WEMxdXRE/Y2ttN0s2MzdJTUxW/Wi5qcGc"
-                }
+                src={user.picture || DEFAULT_PIC}
               />
             </div>
           </div>
@@ -131,27 +138,46 @@ export default function StoreComponent({
               <p className="font-semibold text-center mb-3">
                 {user.displayName}
               </p>
-              <div className="flex justify-center gap-3">
-                {/* check if RRSS and display them */}
-                <Link to="/RRSS">
-                  <FaFacebookF />
-                </Link>
-                <Link to="/RRSS">
-                  <FaLinkedinIn />
-                </Link>
-                <Link to="/RRSS">
-                  <FaInstagram />
-                </Link>
-                <Link to="/RRSS">
-                  <FaTiktok />
-                </Link>
-                <Link to="/RRSS">
-                  <FaXTwitter />
-                </Link>
-                <Link to="/RRSS">
-                  <FaGlobe />
-                </Link>
-              </div>
+              {socialNetworks && (
+                <div className="flex justify-center gap-3">
+                  {/* check if RRSS and display them */}
+                  {instagram && (
+                    <Link to={instagram}>
+                      <FaInstagram />
+                    </Link>
+                  )}
+                  {facebook && (
+                    <Link to={facebook}>
+                      <FaFacebook />
+                    </Link>
+                  )}
+                  {x && (
+                    <Link to={x}>
+                      <FaXTwitter />
+                    </Link>
+                  )}
+                  {youtube && (
+                    <Link to={youtube}>
+                      <FaYoutube />
+                    </Link>
+                  )}
+                  {tiktok && (
+                    <Link to={tiktok}>
+                      <FaTiktok />
+                    </Link>
+                  )}
+                  {linkedin && (
+                    <Link to={linkedin}>
+                      <FaLinkedin />
+                    </Link>
+                  )}
+                  {website && (
+                    <Link to={website}>
+                      <FaGlobe />
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-center gap-3 mb-6">
@@ -159,7 +185,7 @@ export default function StoreComponent({
             {["Todos", "Nuevos", "Assets", "Libros"].map((f, i) => (
               <button
                 key={i}
-                className={clsx(
+                className={cn(
                   "rounded-full p-3 border border-black cursor-pointer",
                   {
                     "bg-black text-white": f === currentFilter,
@@ -186,7 +212,11 @@ export default function StoreComponent({
         link={`https://${user.host}.easybits.cloud/tienda`}
       />
 
-      <StoreConfig isOpen={isConfigOpen} onClose={setIsConfigOpen} />
+      <StoreConfigForm
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+        storeConfig={user?.storeConfig}
+      />
     </>
   );
 }
