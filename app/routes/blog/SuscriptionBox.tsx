@@ -29,7 +29,12 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
           <fetcher.Form
             action="/api/v1/utils"
             method="post"
-            className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center"
+            className={cn(
+              "flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center",
+              {
+                "pointer-events-none": isDisabled,
+              }
+            )}
           >
             <input
               name="email"
@@ -53,7 +58,7 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
         )}
         {isSuccess && (
           // @Todo ponga un monito de tv o radio pequeñito 🤖 en vez del emoji
-          <div className="text-xl mt-2 md:mt-3 font-bold text-brand-500">
+          <div className="text-xl mt-2 md:mt-4 font-bold">
             ¡Super! Ahora, revisa tu correo para confirmar tu cuenta. 🎊
           </div>
         )}
