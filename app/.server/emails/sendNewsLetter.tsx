@@ -3,7 +3,11 @@ import { getSesTransport, gmailTransport } from "./sendgridTransport";
 import { confirmation } from "./templates/confirmation";
 import AWS from "aws-sdk";
 import { magic_link } from "./templates/magic_link";
+import { db } from "../db";
+import { z } from "zod";
 AWS.config.update({ region: "us-east-2" });
+
+export const emailSchema = z.string().email();
 
 // EXAMPLE AMAZON REPLACING LINK: http://jls7lj7d.r.us-east-2.awstrack.me/L0/http:%2F%2Flocalhost:3000%2F%3Fintent=confirm_account%26token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZpeHRlcmdlZWtAZ21haWwuY29tIiwiaWF0IjoxNzQ0ODIyMDc2LCJleHAiOjE3NDUwODEyNzZ9.Ycfu9hqXderEKOsO34jFS3ewgjs9BqrfSmUMEw0tDXM/1/010f01963f800604-633ab96d-7fc6-4fc4-aed9-950ac8836f83-000000/smoa_w4iLPzncdB2qomLIl1Qh_k=207
 
@@ -33,12 +37,20 @@ export const sendMagicLink = (email: string, data: any) => {
     .catch((e: Error) => console.error(e));
 };
 
-type SendConfirmationData = { displayName: string };
-export const sendConfrimation = (
+type SendConfirmationData = { displayName: string; validate: boolean };
+export const sendConfrimation = async (
   email: string,
-  data: SendConfirmationData = { displayName: "" }
+  data: SendConfirmationData // @todo fix mixed propuses
   // getTemplate?: (data: SendConfirmationData) => string
 ) => {
+  const { validate = false } = data || {};
+
+  if (validate) {
+    email = emailSchema.parse(email); // validation
+    const user = await db.user.findUnique({ where: { email } }); // DB query
+    if (user?.confirmed) return false; // sending avoided
+  }
+
   const confirmationToken = generateUserToken({ ...data, email });
   const url = new URL(`${location}/api/v1/tokens/${confirmationToken}`);
   return getSesTransport()

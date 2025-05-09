@@ -5,20 +5,16 @@ import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
 import { commitSession, redirectCookie } from "~/.server/sessions";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
-import { sendMagicLink } from "~/.server/emails/sendNewsLetter";
+import {
+  sendConfrimation,
+  sendMagicLink,
+} from "~/.server/emails/sendNewsLetter";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const setRedirectCookie = async (request: Request, next: string) => {
     const cookieHeader = request.headers.get("Cookie");
     const cookie = (await redirectCookie.parse(cookieHeader)) || {};
     cookie["next"] = next;
-    return cookie as Cookie;
-  };
-
-  const clearRedirectCookie = async (request: Request) => {
-    const cookieHeader = request.headers.get("Cookie");
-    const cookie = (await redirectCookie.parse(cookieHeader)) || {};
-    cookie["next"] = undefined;
     return cookie as Cookie;
   };
 
@@ -51,6 +47,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
         break;
       case "google":
         session = await createGoogleSession(code, request);
+        // @todo update account?
+        sendConfrimation(session.get("email"), { validate: true });
         break;
       default:
         return { error: "Error" };
