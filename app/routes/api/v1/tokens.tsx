@@ -1,25 +1,21 @@
 import { db } from "~/.server/db";
 import type { Route } from "./+types/tokens";
 import { getReadURL } from "react-hook-multipart";
-import { decodeToken } from "~/utils/tokens";
 import { data, Form, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import Logo from "/icons/easybits-logo.svg";
 import { FlipLetters } from "~/components/animated/FlipLetters";
 import { setSessionCookie } from "~/.server/getters";
 import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
+import { decode } from "~/.server/tokens";
 
-export const decode = (token: string) => {
-  const tokenData = decodeToken(token);
-  if (!tokenData?.success) {
-    throw new Response("Corrupt token", { status: 400 });
-  }
-  return tokenData.decoded!;
-};
 // @todo send welcome?
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   if (params.token) {
-    const { email, next } = decode(params.token);
+    const { email, next, error } = decode(params.token);
+    if (error) {
+      return { success: false };
+    }
     // upsert
     const user = await db.user.upsert({
       where: { email: email },
@@ -32,7 +28,10 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
         where: {
           id: user.id,
         },
-        data: { confirmed: true },
+        data: {
+          confirmed: true,
+          newsletters: { push: { assetId: "easybits" } }, // @todo is ok to suscribe here?
+        },
       });
       await sendWelcomeEmail(user.email); // welcome after confirm
     }
@@ -66,7 +65,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "set_session") {
-    const tokenData = decode(new URL(request.url));
+    const tokenData = decode(new URL(request.url).searchParams.get("token")!);
     if (!tokenData) throw redirect("/dash");
 
     return await setSessionCookie({

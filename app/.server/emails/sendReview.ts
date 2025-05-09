@@ -1,4 +1,4 @@
-import { generateUserToken } from "~/utils/tokens";
+import { generateUserToken } from "~/.server/tokens";
 import { getSesTransport } from "./sendgridTransport";
 import { review } from "./templates/review";
 

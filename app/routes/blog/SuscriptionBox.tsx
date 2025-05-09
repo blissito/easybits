@@ -1,4 +1,5 @@
-import { Form, useFetcher } from "react-router";
+import { useRef, useState } from "react";
+import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrendisConfetti } from "~/components/Confetti";
 import { useScript } from "~/hooks/useScript";
@@ -6,8 +7,8 @@ import { cn } from "~/utils/cn";
 
 export const SuscriptionBox = ({ className }: { className?: string }) => {
   const fetcher = useFetcher();
-  useScript("https://challenges.cloudflare.com/turnstile/v0/api.js");
   const isSuccess = fetcher.data?.success;
+  const [isDisabled, setIsDisabled] = useState(true);
   return (
     <section
       className={cn(
@@ -19,16 +20,21 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
         <h3 className="text-2xl md:text-3xl font-bold">
           Suscríbete a nuestro newsletter
         </h3>
-        <p className="text-base md:text-xl mt-2 md:mt-3 max-w-4xl mx-auto">
+        <div className="text-base md:text-xl mt-2 md:mt-3 max-w-4xl mx-auto">
           Recibe un resumen mensual de las mejores consejos de marketing y
           business para creadores, o de las nuevas funcionalidades nuevas de
           EasyBits.
-        </p>
+        </div>
         {!isSuccess && (
           <fetcher.Form
             action="/api/v1/utils"
             method="post"
-            className="flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center"
+            className={cn(
+              "flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center",
+              {
+                "pointer-events-none": isDisabled,
+              }
+            )}
           >
             <input
               name="email"
@@ -37,6 +43,7 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
               placeholder="ejemplo@easybist.cloud"
             />{" "}
             <BrutalButton
+              isDisabled={isDisabled}
               isLoading={fetcher.state !== "idle"}
               name="intent"
               value="send_confirmation"
@@ -46,14 +53,14 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
             >
               ¡Apuntarme!
             </BrutalButton>
-            <Turnstile />
+            <Turnstile setIsDisabled={setIsDisabled} />
           </fetcher.Form>
         )}
         {isSuccess && (
           // @Todo ponga un monito de tv o radio pequeñito 🤖 en vez del emoji
-          <p className="text-xl mt-2 md:mt-3 font-bold text-brand-500">
+          <div className="text-xl mt-2 md:mt-4 font-bold">
             ¡Super! Ahora, revisa tu correo para confirmar tu cuenta. 🎊
-          </p>
+          </div>
         )}
         {isSuccess && <BrendisConfetti />}
       </div>
@@ -61,14 +68,30 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
   );
 };
 
-export const Turnstile = () => {
-  return (
-    <div className="fixed bottom-0 right-0 z-50">
-      <div
-        className="cf-turnstile"
-        data-sitekey="0x4AAAAAABbVIYBqxYY44hTw"
-        data-theme="light"
-      ></div>
-    </div>
-  );
+export const Turnstile = ({
+  setIsDisabled,
+}: {
+  setIsDisabled?: (arg0: boolean) => void;
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useScript("https://challenges.cloudflare.com/turnstile/v0/api.js", () => {
+    //@ts-ignore
+    window.turnstile?.ready(() => {
+      if (ref.current?.id) return;
+      ref.current!.id = "loaded"; // avoiding duplication
+      // @ts-ignore
+      window.turnstile?.render(ref.current, {
+        callback: enable,
+        sitekey: "0x4AAAAAABbVIYBqxYY44hTw",
+      });
+    });
+  });
+  const enable = (token: string) => {
+    if (token) {
+      setIsDisabled?.(false);
+    } else {
+      setIsDisabled?.(true);
+    }
+  };
+  return <div ref={ref} className="fixed bottom-0 right-0 z-50" />;
 };

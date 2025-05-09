@@ -8,10 +8,9 @@ import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 import { handleTurnstilePost } from "~/.server/turnstile";
+import { db } from "~/.server/db";
 
 export const action = async ({ request }: Route.ActionArgs) => {
-  // await getUserOrRedirect(request);
-
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -24,6 +23,28 @@ export const action = async ({ request }: Route.ActionArgs) => {
       throw new Response("Pensamos que eres un robot. 🤖 No puedes pasar.", {
         status: 401,
       });
+
+    const isConfirmed = await db.user.findUnique({
+      where: {
+        email,
+        confirmed: true,
+      },
+    });
+
+    // suscribed already
+    if (isConfirmed) {
+      const nFound = isConfirmed.newsletters.find(
+        (n) => n.assetId === "easybits"
+      );
+      if (!nFound) {
+        // @todo move suscription from here
+        await db.user.update({
+          where: { id: isConfirmed.id },
+          data: { newsletters: { push: { assetId: "easybits" } } },
+        });
+      }
+      return { success };
+    }
 
     await sendConfrimation(email);
     return { success };

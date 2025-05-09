@@ -1,4 +1,4 @@
-import { generateUserToken } from "~/utils/tokens";
+import { generateUserToken } from "~/.server/tokens";
 import { getSesRemitent, getSesTransport } from "./sendgridTransport";
 import { purchase } from "./templates/purchase";
 
