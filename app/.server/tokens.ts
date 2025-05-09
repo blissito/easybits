@@ -29,6 +29,16 @@ export const decodeToken = (token: string) => {
   }
 };
 
+export const decode = (
+  token: string
+): { error?: string; [x: string]: string } => {
+  const tokenData = decodeToken(token);
+  if (!tokenData?.success) {
+    return { error: "Corrupt token" };
+  }
+  return tokenData.decoded!;
+};
+
 export const generateUserToken = (
   data: {
     email: string;

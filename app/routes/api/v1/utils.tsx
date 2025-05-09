@@ -10,8 +10,6 @@ import { z } from "zod";
 import { handleTurnstilePost } from "~/.server/turnstile";
 
 export const action = async ({ request }: Route.ActionArgs) => {
-  // await getUserOrRedirect(request);
-
   const formData = await request.formData();
   const intent = formData.get("intent");
 

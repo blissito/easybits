@@ -1,4 +1,4 @@
-import { generateUserToken } from "~/utils/tokens";
+import { generateUserToken } from "~/.server/tokens";
 import { getSesTransport, gmailTransport } from "./sendgridTransport";
 import { confirmation } from "./templates/confirmation";
 import AWS from "aws-sdk";

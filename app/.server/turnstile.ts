@@ -1,21 +1,19 @@
 export const handleTurnstilePost = async (request: Request, body: FormData) => {
   // Turnstile injects a token in "cf-turnstile-response".
-  const token = body.get("cf-turnstile-response") as string;
-  const ip = request.headers.get("CF-Connecting-IP") as string;
+  const response = body.get("cf-turnstile-response") as string;
+  const remoteip = request.headers.get("CF-Connecting-IP") as string;
 
   // Validate the token by calling the
   // "/siteverify" API endpoint.
-  let formData = new FormData();
-  formData.append("secret", process.env.TURNSTILE_SECRET!); // SECRET
-  formData.append("response", token);
-  formData.append("remoteip", ip);
-
   const url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
   const result = await fetch(url, {
-    body: formData,
+    body: new URLSearchParams({
+      secret: process.env.TURNSTILE_SECRET!,
+      response,
+      remoteip,
+    }),
     method: "POST",
   });
-
   const outcome = (await result.json()) as { success: boolean };
   console.info("::TURNSTILE_SITEVERIFY_RESPONSE::", outcome); // INFO
   return outcome.success;

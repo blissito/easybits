@@ -1,4 +1,4 @@
-import { Form, useFetcher } from "react-router";
+import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrendisConfetti } from "~/components/Confetti";
 import { useScript } from "~/hooks/useScript";
@@ -6,7 +6,6 @@ import { cn } from "~/utils/cn";
 
 export const SuscriptionBox = ({ className }: { className?: string }) => {
   const fetcher = useFetcher();
-  useScript("https://challenges.cloudflare.com/turnstile/v0/api.js");
   const isSuccess = fetcher.data?.success;
   return (
     <section
@@ -62,6 +61,7 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
 };
 
 export const Turnstile = () => {
+  useScript("https://challenges.cloudflare.com/turnstile/v0/api.js");
   return (
     <div className="fixed bottom-0 right-0 z-50">
       <div
