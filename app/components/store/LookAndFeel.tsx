@@ -36,7 +36,7 @@ export default function LookAndFeel({ control }) {
       </div>
 
       {/* colores */}
-      <p className="text-lg mt-4 mb-2 font-semibold">Colores</p>
+      <p className="text-lg my-2 font-semibold">Colores</p>
       <p className="text-lg text-brand-gray mb-2">Elige el tema de tu sitio</p>
       <div className="grid grid-cols-2">
         <Controller
@@ -117,7 +117,7 @@ export default function LookAndFeel({ control }) {
       />
 
       {/* tipografía */}
-      <p className="text-lg mt-4 mb-2 font-semibold">Tipografía</p>
+      <p className="text-lg my-2 font-semibold">Tipografía</p>
       <div>
         <Controller
           name="typography"

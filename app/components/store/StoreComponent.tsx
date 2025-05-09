@@ -5,13 +5,13 @@ import OpenIcon from "/icons/open.svg";
 import ShareIcon from "/icons/share.svg";
 
 import {
-  FaFacebook,
+  FaFacebookF,
   FaInstagram,
   FaLinkedin,
   FaTiktok,
   FaYoutube,
   FaXTwitter,
-  FaGlobe,
+  FaLink,
 } from "react-icons/fa6";
 import { Link } from "react-router";
 import { AssetList } from "~/routes/assets/AssetList";
@@ -129,7 +129,7 @@ export default function StoreComponent({
                   e.currentTarget.src = DEFAULT_PIC;
                 }}
                 className="object-cover w-full h-full"
-                src={user.picture || DEFAULT_PIC}
+                src={user.picture || logoImage || DEFAULT_PIC}
               />
             </div>
           </div>
@@ -148,7 +148,7 @@ export default function StoreComponent({
                   )}
                   {facebook && (
                     <Link to={facebook}>
-                      <FaFacebook />
+                      <FaFacebookF />
                     </Link>
                   )}
                   {x && (
@@ -173,7 +173,7 @@ export default function StoreComponent({
                   )}
                   {website && (
                     <Link to={website}>
-                      <FaGlobe />
+                      <FaLink />
                     </Link>
                   )}
                 </div>
@@ -197,13 +197,15 @@ export default function StoreComponent({
               </button>
             ))}
           </div>
-          <div className="p-4">
-            <AssetList isPublic={isPublic} assets={assets}>
-              {assets.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} />
-              ))}
-            </AssetList>
-          </div>
+          {showProducts && (
+            <div className="p-4">
+              <AssetList isPublic={isPublic} assets={assets}>
+                {assets.map((asset) => (
+                  <AssetCard key={asset.id} asset={asset} />
+                ))}
+              </AssetList>
+            </div>
+          )}
         </div>
       </div>
       <ShareStoreLink

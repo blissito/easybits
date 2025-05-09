@@ -2,9 +2,9 @@ import { Input } from "../forms/Input";
 import { Controller, useForm } from "react-hook-form";
 import { Switch } from "../forms/Switch";
 import {
-  FaFacebook,
+  FaFacebookF,
   FaInstagram,
-  FaGlobe,
+  FaLink,
   FaLinkedin,
   FaTiktok,
   FaYoutube,
@@ -13,7 +13,7 @@ import {
 
 export default function LinksStep({ control, register }) {
   return (
-    <div className="mt-4">
+    <div>
       <div className="mt-2">
         <Controller
           name="socialNetworks"
@@ -36,78 +36,80 @@ export default function LinksStep({ control, register }) {
           label={
             <span className="flex gap-1 items-center">
               <FaInstagram />
-              Instagram
+              <span className="font-light"> Instagram</span>
             </span>
           }
         />
       </div>
-      <div className="mt-2">
+      <div>
         <Input
           {...register("x")}
           placeholder="https://www.x.com/Bitor"
           label={
             <span className="flex gap-1 items-center">
-              <FaXTwitter />X
+              <FaXTwitter />
+
+              <span className="font-light">X</span>
             </span>
           }
         />
       </div>
-      <div className="mt-2">
+      <div>
         <Input
           {...register("facebook")}
           placeholder="https://www.facebook.com/Bitor"
           label={
             <span className="flex gap-1 items-center">
-              <FaFacebook />
-              Facebook
+              <FaFacebookF />
+              <span className="font-light">Facebook</span>
             </span>
           }
         />
       </div>
-      <div className="mt-2">
+      <div>
         <Input
           {...register("tiktok")}
           placeholder="https://www.tiktok.com/Bitor"
           label={
             <span className="flex gap-1 items-center">
               <FaTiktok />
-              Tiktok
+              <span className="font-light"> Tiktok</span>
             </span>
           }
         />
       </div>
-      <div className="mt-2">
+      <div>
         <Input
           {...register("youtube")}
           placeholder="https://www.youtube.com/Bitor"
           label={
             <span className="flex gap-1 items-center">
               <FaYoutube />
-              Youtube
+              <span className="font-light"> Youtube</span>
             </span>
           }
         />
       </div>
-      <div className="mt-2">
+      <div>
         <Input
           {...register("linkedin")}
           placeholder="https://www.linkedin.com/Bitor"
           label={
             <span className="flex gap-1 items-center">
               <FaLinkedin />
-              Linkedin
+              <span className="font-light"> Linkedin</span>
             </span>
           }
         />
       </div>
-      <div className="mt-2">
+      <div>
         <Input
           {...register("website")}
           placeholder="https://www.bitor.com"
           label={
             <span className="flex gap-1 items-center">
-              <FaGlobe />
-              Otro Website
+              <FaLink />
+              <span className="font-light"> Otro Website</span>
             </span>
           }
         />
