@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrendisConfetti } from "~/components/Confetti";
