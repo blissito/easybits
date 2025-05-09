@@ -73,11 +73,13 @@ export const Turnstile = ({
 }: {
   setIsDisabled?: (arg0: boolean) => void;
 }) => {
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
   useScript("https://challenges.cloudflare.com/turnstile/v0/api.js", () => {
+    //@ts-ignore
     window.turnstile?.ready(() => {
-      if (ref.current.id) return;
-      ref.current.id = "loaded"; // avoiding duplication
+      if (ref.current?.id) return;
+      ref.current!.id = "loaded"; // avoiding duplication
+      // @ts-ignore
       window.turnstile?.render(ref.current, {
         callback: enable,
         sitekey: "0x4AAAAAABbVIYBqxYY44hTw",
@@ -85,7 +87,6 @@ export const Turnstile = ({
     });
   });
   const enable = (token: string) => {
-    console.log(token);
     if (token) {
       setIsDisabled?.(false);
     } else {
