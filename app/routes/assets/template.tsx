@@ -1,12 +1,18 @@
 import { AiFillInstagram } from "react-icons/ai";
-import { FaFacebookF, FaLink, FaTiktok, FaYoutube } from "react-icons/fa";
-import { RiTwitterXFill } from "react-icons/ri";
+import {
+  FaFacebookF,
+  FaInstagram,
+  FaLink,
+  FaLinkedin,
+  FaTiktok,
+  FaYoutube,
+  FaXTwitter,
+} from "react-icons/fa6";
 import { Avatar } from "~/components/common/Avatar";
 import { Tag } from "~/components/common/Tag";
 import { ProductGallery } from "~/components/galleries/ProductGallery";
-import { Form, Link, useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { cn } from "~/utils/cn";
-import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Asset, File } from "@prisma/client";
 import type { FormEvent, ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
@@ -192,6 +198,7 @@ const Subscription = ({
   actionId?: string;
   asset: Asset;
 }) => {
+  const { hexColor } = asset?.user?.storeConfig || {};
   const fetcher = useFetcher();
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -242,6 +249,7 @@ const Subscription = ({
         className={cn(
           "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center disabled:text-gray-500 disabled:bg-gray-400/40"
         )}
+        style={{ background: hexColor }}
       >
         {text}
       </button>
@@ -334,23 +342,73 @@ export const FooterTemplate = ({
 export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
   const title = asset.title || "+20 Praga pack";
   const authorName = asset.user.displayName || "Sin nombre";
-  const authorPic = asset.user.picture || "Sin nombre";
+  const {
+    instagram,
+    facebook,
+    x,
+    youtube,
+    website,
+    linkedin,
+    tiktok,
+    hexColor,
+    colorMode,
+    logoImage,
+    socialNetworks,
+  } = asset?.user?.storeConfig || {};
+  const authorPic = asset.user.picture || logoImage || "Sin nombre";
+
   return (
-    <section className="border-b-[2px] border-black bg-[#CE95F9]">
+    <section
+      className="border-b-[2px] border-black bg-[#CE95F9]"
+      style={{ background: hexColor }}
+    >
       <div className="border-b-[2px] border-black h-16">
         <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
           <div className="flex gap-2 items-center h-full">
             <Avatar src={authorPic} />{" "}
             <h3 className="underline">{authorName}</h3>
           </div>
-          <div className="flex items-center gap-3">
-            <FaFacebookF className="text-black text-lg" />
-            <FaYoutube className="text-black text-lg " />
-            <RiTwitterXFill className="text-black text-lg" />
-            <AiFillInstagram className="text-black text-lg" />{" "}
-            <FaTiktok className="text-black text-lg" />
-            <FaLink className="text-black text-lg" />
-          </div>
+
+          {socialNetworks && (
+            <div className="flex items-center gap-3">
+              {/* check if RRSS and display them */}
+              {instagram && (
+                <Link to={instagram}>
+                  <FaInstagram className="text-black text-lg" />
+                </Link>
+              )}
+              {facebook && (
+                <Link to={facebook}>
+                  <FaFacebookF className="text-black text-lg" />
+                </Link>
+              )}
+              {x && (
+                <Link to={x}>
+                  <FaXTwitter className="text-black text-lg" />
+                </Link>
+              )}
+              {youtube && (
+                <Link to={youtube}>
+                  <FaYoutube className="text-black text-lg" />
+                </Link>
+              )}
+              {tiktok && (
+                <Link to={tiktok}>
+                  <FaTiktok className="text-black text-lg" />
+                </Link>
+              )}
+              {linkedin && (
+                <Link to={linkedin}>
+                  <FaLinkedin className="text-black text-lg" />
+                </Link>
+              )}
+              {website && (
+                <Link to={website}>
+                  <FaLink className="text-black text-lg" />
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] border-black px-4 flex justify-between h-fit py-6 md:py-9 relative ">

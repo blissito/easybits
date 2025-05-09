@@ -125,7 +125,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const { asset, publishableKey, files, successStripeId } = loaderData;
   const actionData = useActionData();
   const assetUserStripeId = asset?.user?.stripe?.id;
-
   const stripePromise = useMemo(() => {
     if (!publishableKey) return null;
     return loadStripe(publishableKey, {
