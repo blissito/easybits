@@ -11,7 +11,7 @@ import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-import { createAccount } from "~/.server/stripe";
+import { createAccount, getPublishableKey } from "~/.server/stripe";
 import useStripeConnect from "~/hooks/useStripeConnect";
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import { useFetcher } from "react-router";
@@ -25,6 +25,7 @@ const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  const publishableKey = await getPublishableKey();
   const assets = await db.asset.findMany({
     where: {
       userId: user.id,
@@ -45,6 +46,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   return {
     orders,
     user,
+    publishableKey,
   };
 };
 
@@ -69,10 +71,12 @@ export default function Sales({
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
     loaderData?.user?.stripe?.id || actionData?.account?.id;
+  // use the stripe account creation component
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
-    publishableKey: loaderData.user.publicKey || "",
+    publishableKey: loaderData.publishableKey || "",
   });
+
   const { orders } = loaderData;
   return (
     <>
@@ -131,7 +135,7 @@ any) => {
           {!connectedAccountId ? (
             <BrutalButton
               className="bg-[#6772E5] flex gap-2 items-center"
-              onCick={handleSubmit}
+              onClick={handleSubmit}
             >
               Conectar Stripe
               <BsStripe />
@@ -147,21 +151,23 @@ any) => {
           )}
           <Modal
             key="asset-payment"
-            containerClassName="z-50 text-black text-center "
+            containerClassName="z-50 text-black text-center"
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
           >
-            {stripeConnectInstance || isStripeLoading ? (
-              <ConnectComponentsProvider
-                connectInstance={stripeConnectInstance}
-              >
-                <ConnectAccountOnboarding
-                  onExit={() => setOnboardingExited(true)}
-                />
-              </ConnectComponentsProvider>
-            ) : (
-              <Spinner />
-            )}
+            <div className="h-full overflow-scroll px-3">
+              {stripeConnectInstance || isStripeLoading ? (
+                <ConnectComponentsProvider
+                  connectInstance={stripeConnectInstance}
+                >
+                  <ConnectAccountOnboarding
+                    onExit={() => setOnboardingExited(true)}
+                  />
+                </ConnectComponentsProvider>
+              ) : (
+                <Spinner />
+              )}
+            </div>
           </Modal>
         </div>
       }
