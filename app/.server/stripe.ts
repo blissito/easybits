@@ -129,7 +129,7 @@ export const fetchAccount = async ({ accountId }: { accountId: string }) => {
       "An error occurred when calling the Stripe API to create an account",
       error
     );
-    throw error.message;
+    return error.message;
   }
 };
 

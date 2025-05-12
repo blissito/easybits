@@ -56,7 +56,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     orders,
     user,
     publishableKey,
-    stripeAccount,
+    hasValidStripeAccount: stripeAccount?.id ? true : false,
   };
 };
 
@@ -80,10 +80,10 @@ export default function Sales({
   const fetcher = useFetcher();
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
-    loaderData?.stripeAccount?.id ||
-    loaderData?.user?.stripe?.id ||
+    (loaderData.hasValidStripeAccount && loaderData?.user?.stripe?.id) ||
     actionData?.account?.id;
   // use the stripe account creation component
+
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
     publishableKey: loaderData.publishableKey || "",
@@ -107,6 +107,8 @@ export default function Sales({
             isStripeLoading={isStripeLoading}
             isModalOpen={isModalOpen}
             setIsModalOpen={setIsModalOpen}
+            hasValidStripeAccount={loaderData?.hasValidStripeAccount}
+            user={loaderData?.user}
           />
         )}
 
@@ -125,6 +127,8 @@ const EmptyPayment = ({
   isStripeLoading,
   isModalOpen,
   setIsModalOpen,
+  hasValidStripeAccount,
+  user,
 }: // @todo types
 any) => {
   const submit = useSubmit();
@@ -149,7 +153,9 @@ any) => {
               className="bg-[#6772E5] flex gap-2 items-center"
               onClick={handleSubmit}
             >
-              Conectar Stripe
+              {user?.stripe?.id && !hasValidStripeAccount
+                ? "Reconectar Stripe"
+                : "Conectar Stripe"}
               <BsStripe />
             </BrutalButton>
           ) : (
