@@ -35,7 +35,6 @@ export const useStripeConnect = ({
           throw ("An error occurred: ", error);
         } else {
           const data = await response.text();
-          console.log(data);
           return data;
         }
       };

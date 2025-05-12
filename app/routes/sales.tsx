@@ -11,7 +11,11 @@ import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-import { createAccount, getPublishableKey } from "~/.server/stripe";
+import {
+  createAccount,
+  fetchAccount,
+  getPublishableKey,
+} from "~/.server/stripe";
 import useStripeConnect from "~/hooks/useStripeConnect";
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import { useFetcher } from "react-router";
@@ -43,10 +47,16 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       asset: true,
     },
   });
+  // get all stripe account just in case
+  const stripeAccount = await fetchAccount({
+    accountId: user?.stripe?.id,
+  });
+
   return {
     orders,
     user,
     publishableKey,
+    stripeAccount,
   };
 };
 
@@ -70,7 +80,9 @@ export default function Sales({
   const fetcher = useFetcher();
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
-    loaderData?.user?.stripe?.id || actionData?.account?.id;
+    loaderData?.stripeAccount?.id ||
+    loaderData?.user?.stripe?.id ||
+    actionData?.account?.id;
   // use the stripe account creation component
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,

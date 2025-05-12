@@ -117,6 +117,23 @@ export const createAccount = async () => {
 };
 
 /**
+ * retreive an account to check its status in stripe
+ */
+
+export const fetchAccount = async ({ accountId }: { accountId: string }) => {
+  try {
+    const account = await getStripe().accounts.retrieve(accountId);
+    return account;
+  } catch (error) {
+    console.error(
+      "An error occurred when calling the Stripe API to create an account",
+      error
+    );
+    throw error.message;
+  }
+};
+
+/**
  * create checkout session
  */
 
