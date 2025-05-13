@@ -47,10 +47,10 @@ export const Input = ({
       className={cn(
         "w-full",
         "flex flex-col gap-2 text-gray text-black",
-        className,
         {
           "h-[600px]": type === "textarea",
-        }
+        },
+        className
       )}
     >
       {label && <span>{label}</span>}
