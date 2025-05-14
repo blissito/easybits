@@ -49,7 +49,7 @@ export const ProductGallery = ({
       <div className="w-full h-full">
         {items.length == 0 ? (
           <img
-            className="object-contain h-full w-full"
+            className="object-cover h-full w-full"
             src="/images/easybits-default.webp"
           />
         ) : items.length == 1 ? (

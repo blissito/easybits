@@ -34,6 +34,7 @@ export default {
         maya: "#75BAF9",
       },
       backgroundImage: {
+        pattern: "url('/pattern.svg')",
         patternDark: "url('/pattern-dark.svg')",
         coverSuscription: "url('/hero/cover-yellow.svg')",
         coverInfo: "url('/hero/info.svg')",
