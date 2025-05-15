@@ -1,3 +1,4 @@
+import type { Asset } from "@prisma/client";
 import type { ChangeEvent } from "react";
 import { Input } from "~/components/common/Input";
 import { ImageIcon } from "~/components/icons/image";
@@ -6,14 +7,11 @@ import { cn } from "~/utils/cn";
 
 export const EbookFields = ({
   onChange,
+  asset,
 }: {
-  onChange?: (object: any) => void;
+  asset: Asset;
+  onChange: (name: string) => (value: string) => void;
 }) => {
-  const handleChange =
-    (name: string) => (ev: ChangeEvent<HTMLInputElement>) => {
-      const value = ev.currentTarget.value;
-      onChange?.({ [name]: value });
-    };
   return (
     <>
       <h2 className="text-2xl mb-3">Completa la información de tu libro</h2>
@@ -26,15 +24,32 @@ export const EbookFields = ({
       </section>
       <section>
         <Input
+          defaultValue={
+            asset.metadata?.numberOfPages
+              ? `${asset.metadata?.numberOfPages}`
+              : undefined
+          }
           type="number"
-          onChange={handleChange("numberOfPages") as any}
+          onChange={
+            ((ev: ChangeEvent<HTMLInputElement>) =>
+              onChange("numberOfPages")(ev.currentTarget.value)) as any
+          }
           label="Número de páginas"
           placeholder="120"
         />
         <Input
-          onChange={handleChange("freePages") as any}
+          defaultValue={
+            asset.metadata?.numberOfPages
+              ? `${asset.metadata?.freePages}`
+              : undefined
+          }
+          onChange={
+            ((ev: ChangeEvent<HTMLInputElement>) =>
+              onChange("freePages")(ev.currentTarget.value)) as any
+          }
           label="Páginas disponibles para previsualización gratuita"
           placeholder="12"
+          type="number"
         />
       </section>
     </>

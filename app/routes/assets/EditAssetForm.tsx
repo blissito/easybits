@@ -105,6 +105,13 @@ export const EditAssetForm = ({
   const handleChange = (name: string) => (value: string) =>
     setState({ [name]: value });
 
+  const handleMetadata = (name: string) => (value: string) => {
+    const update = {
+      [name]: value,
+    };
+    setState({ ...form, metadata: { ...form.metadata, ...update } });
+  };
+
   const formatErrors = (error?: ZodError) => {
     if (!error) return setErrors({});
     const errors = error.issues.reduce((acc, issue) => {
@@ -227,7 +234,7 @@ export const EditAssetForm = ({
 
           {asset.type === "EBOOK" && (
             <>
-              <EbookFields />
+              <EbookFields asset={asset} onChange={handleMetadata} />
             </>
           )}
 

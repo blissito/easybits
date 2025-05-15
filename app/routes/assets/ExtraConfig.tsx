@@ -5,6 +5,7 @@ type Extra = {
   stock: number; // 0 will be no limit
   showSold: boolean;
   showReviews: boolean;
+  showInMarketplace: boolean;
 };
 export const ExtraConfig = ({
   extra = { stock: 0, showSold: false, showReviews: true },
@@ -52,6 +53,11 @@ export const ExtraConfig = ({
         onChange={handleChange("showReviews")}
         value={state.showReviews}
         label="Mostrar reseñas"
+      />
+      <Switch
+        onChange={handleChange("showInMarketplace")}
+        value={state.showInMarketplace}
+        label="Mostrar en Comunidad EasyBits"
       />
     </section>
   );

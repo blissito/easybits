@@ -27,7 +27,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const host = url.hostname.split(".")[0]; // host
   const domain = url.hostname;
 
-  let asset: Asset;
+  let asset: Asset | null;
 
   if (!domain.includes("easybits")) {
     const user = await db.user.findFirst({
