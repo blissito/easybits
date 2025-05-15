@@ -5,7 +5,7 @@ import AddWallet from "/icons/add-wallet.svg";
 import Website from "/icons/website.svg";
 
 export const STRINGS = {
-  title: "¡Ya casi está listo tu website!",
+  title: "¡Tu website está casi listo!",
   subtitle: "Estás a unos pasos de empezar a vender tus productos digitales",
   anyQuestion: "¿Tienes alguna duda?",
   contactUs: "Escríbenos",

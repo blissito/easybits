@@ -6,14 +6,14 @@ import { cn } from "~/utils/cn";
 
 export const Pricing = () => {
   return (
-    <section className="pt-32 md:pt-[200px] mb-20  md:mb-40 text-center relative">
+    <section className="pt-32 md:pt-[200px] mb-20  md:mb-40 text-center relative px-4 md:px-[5%] xl:px-0">
       <img
-        className="absolute left-10 md:left-80 top-28 md:top-32"
+        className="absolute left-10 scale-75 md:scale-100 md:left-80 top-28 md:top-32"
         alt="star"
         src="/hero/star.svg"
       />
       <img
-        className="absolute right-20 top-16 md:top-40 md:right-80 w-16"
+        className="absolute right-20 scale-75 md:scale-100 top-16 md:top-40 md:right-80 w-16"
         alt="star"
         src="/hero/waves.svg"
       />
@@ -28,7 +28,7 @@ export const Pricing = () => {
           Planes flexibles para cada etapa de tu negocio creativo
         </p>
       </TextBlurEffect>
-      <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 md:mt-20 flex flex-wrap gap-12 justify-center">
+      <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 lg:mt-20 flex flex-wrap gap-12 justify-center">
         <PlanCard
           badge="/hero/foco.svg"
           planName="Starter"

@@ -12,7 +12,7 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
   return (
     <section
       className={cn(
-        "max-w-3xl h-fit md:h-72 border-black border-[2px] overflow-hidden md:rounded-t-full bg-coverSuscription   rounded-r-3xl rounded-t-3xl  md:rounded-r-full  bg-cover mx-auto p-6 md:p-8  justify-center relative",
+        "max-w-3xl h-fit md:h-72 border-black border-[2px] overflow-hidden md:rounded-t-full bg-coverSuscription   rounded-r-3xl rounded-t-3xl  md:rounded-r-full bg-center  bg-cover mx-auto p-6 md:p-8  justify-center relative",
         className
       )}
     >
@@ -47,7 +47,8 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
               name="intent"
               value="send_confirmation"
               type="submit"
-              containerClassName=" -mt-[2px] ml-[1px]"
+              containerClassName=" -mt-[2px] ml-[1px] w-full md:w-max"
+              className="w-full min-w-max"
               id="Suscripcion"
             >
               ¡Unirme y crear mi cuenta!
