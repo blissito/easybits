@@ -11,6 +11,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   // check you purchased the asset
+  // check you already left a review
   // get the asset
   const asset = await db.asset.findUnique({
     where: {
