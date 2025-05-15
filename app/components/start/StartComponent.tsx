@@ -34,7 +34,7 @@ export default function StartComponent({
 
   const handleShareClick = () => {
     saveShareFlag(1);
-    toast.success("El enlace a tu tienda se ha copiado al portapapeles ");
+    toast.success("El link a tu tienda se ha copiado al portapapeles ");
   };
 
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function StartComponent({
                       {tasks[key] ||
                       (key === 3 && landing) ||
                       (key === 4 && share) ? (
-                        <img src={StepCheck} className="w-[64px]" />
+                        <img src={StepCheck} className="w-[64px] ml-12" />
                       ) : (
                         <Link to={path}>
                           <BrutalButton

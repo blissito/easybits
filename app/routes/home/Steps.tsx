@@ -37,7 +37,7 @@ const StepCard = ({
     <div className="text-center flex flex-col justify-center items-center">
       <div className="h-fit  md:h-[322px]">
         <img
-          className="w-full h-auto "
+          className="w-3/4 mx-auto md:w-full h-auto "
           src={image ? image : "/hero/step1.webp"}
         />{" "}
       </div>
