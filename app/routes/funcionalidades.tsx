@@ -334,7 +334,7 @@ const FeaturesHeader = () => {
         src="/hero/diamonds.svg"
       />
       <img
-        className="absolute w-32 -left-16 bottom-0"
+        className="absolute w-32 -right-16 -bottom-10 scale-50 md:scale-100"
         alt="espiral"
         src="/hero/espiral.svg"
       />
