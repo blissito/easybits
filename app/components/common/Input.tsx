@@ -1,16 +1,10 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from "react";
+import { useState, type ChangeEvent, type ReactNode } from "react";
 import { FaCheck, FaRegCopy } from "react-icons/fa";
 import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
 
 interface InputProps {
-  type?: "textarea";
+  type?: "textarea" | "number";
   bgColor?: string;
   children?: ReactNode;
   onClick?: () => void;
@@ -67,6 +61,7 @@ export const Input = ({
             },
             inputClassName
           )}
+          type={type === "textarea" ? undefined : type}
           {...props}
           onChange={onChange}
         />

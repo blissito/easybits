@@ -16,9 +16,10 @@ enum AssetType {
 }
 
 type AssetExtraSettings {
-  stock       Int?
-  showSold    Boolean?
-  showReviews Boolean?
+  stock             String?
+  showSold          Boolean?
+  showReviews       Boolean?
+  showInMarketplace Boolean?
 }
 
 type AssetTemplateSettings {
@@ -29,8 +30,10 @@ type AssetTemplateSettings {
 }
 
 type AssetWebinarMetadata {
-  numberOfSessions Int?
+  numberOfSessions String?
   roomId           String?
+  freePages        String?
+  numberOfPages    String?
 }
 
 model Order {

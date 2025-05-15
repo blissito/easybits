@@ -11,6 +11,24 @@ export const FileDetailModal = ({
   file: File;
 }) => {
   // console.log("FILE: ", file);
+  if (file?.contentType.includes("pdf") && file.access !== "private") {
+    return (
+      <Modal
+        containerClassName="z-30"
+        isOpen={isOpen}
+        title={"Detalle de archivo"}
+        onClose={onClose}
+      >
+        <embed
+          src={file.url}
+          width="100%"
+          height="375"
+          type="application/pdf"
+          className="border"
+        ></embed>
+      </Modal>
+    );
+  }
   return (
     <Modal
       containerClassName="z-30"
