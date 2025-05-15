@@ -72,7 +72,9 @@ export const EditAssetForm = ({
   asset,
   assetFiles,
   files,
+  onUpdate,
 }: {
+  onUpdate?: (arg0: Partial<Asset>) => void;
   files?: File[];
   assetFiles?: File[];
   asset: Asset;
@@ -99,7 +101,9 @@ export const EditAssetForm = ({
       | Date
       | Record<string, string | number | boolean | Date>;
   }) => {
-    setForm((f) => ({ ...f, ...obj }));
+    const update = { ...form, ...obj };
+    setForm(update);
+    onUpdate?.(update);
   };
 
   const handleChange = (name: string) => (value: string) =>

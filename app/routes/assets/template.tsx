@@ -30,7 +30,7 @@ export const ContentTemplate = ({
   files?: File[];
   asset: Asset;
 }) => {
-  const { typography } = asset.user?.storeConfig;
+  const { typography } = asset?.user?.storeConfig || {};
   return (
     <section
       className={cn("border-b-0 border-black", "md:border-b-[2px]")}
@@ -68,7 +68,7 @@ export const ContentTemplate = ({
 };
 
 const Bragging = ({ asset = {} }: { asset: Asset }) => {
-  const { typography } = asset.user?.storeConfig;
+  const { typography } = asset.user?.storeConfig || {};
   const getTypeOfBrag = () => {
     switch (asset.type) {
       case "WEBINAR":
@@ -352,7 +352,13 @@ export const FooterTemplate = ({
   );
 };
 
-export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
+export const HeaderTemplate = ({
+  className,
+  asset,
+}: {
+  className?: string;
+  asset: Asset;
+}) => {
   const title = asset.title || "+20 Praga pack";
   const authorName = asset.user.displayName || "Sin nombre";
   const {
@@ -368,11 +374,11 @@ export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
     logoImage,
     socialNetworks,
   } = asset?.user?.storeConfig || {};
-  const authorPic = asset.user.picture || logoImage || "Sin nombre";
+  const authorPic = asset.user?.picture || logoImage || "Sin nombre";
 
   return (
     <section
-      className="border-b-[2px] border-black bg-[#CE95F9]"
+      className={cn("border-b-[2px] border-black bg-[#CE95F9]", className)}
       style={{ background: hexColor, fontFamily: typography }}
     >
       <div className="border-b-[2px] border-black h-16">

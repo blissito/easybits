@@ -3,8 +3,9 @@ import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
 import { db } from "~/.server/db";
-import { AssetPreview } from "./AssetPreview";
 import { redirect } from "react-router";
+import { ContentTemplate, HeaderTemplate } from "./template";
+import { useState } from "react";
 
 const PADDING_LAYOUT = `pl-4`;
 
@@ -15,6 +16,7 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
       id: params.assetId,
       userId: user.id,
     },
+    include: { user: true },
   });
   if (!asset) return redirect("/dash/assets");
   const files = await db.file.findMany({
@@ -31,7 +33,7 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
   const { host, asset, files } = loaderData;
-
+  const [prev, setPrev] = useState(asset);
   // return null;
   return (
     <article className="w-screen">
@@ -43,15 +45,26 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
       >
         {asset.title}
       </h1>
-      <main className={cn("flex md:pl-20")}>
+      <main className={cn("flex md:pl-20 items-start")}>
         <EditAssetForm
           files={files}
           assetFiles={files}
           host={host}
           asset={asset}
+          onUpdate={(form) => setPrev(form)}
         />
-        <AssetPreview host={host} asset={asset} />
+        {/* <AssetPreview host={host} asset={asset} /> */}
+        <Prev className="scale-[.5] origin-top" asset={prev} />
       </main>
     </article>
   );
 }
+
+const Prev = ({ asset, className }) => {
+  return (
+    <article className={className}>
+      <HeaderTemplate asset={asset} />
+      <ContentTemplate asset={asset} files={[]} />
+    </article>
+  );
+};
