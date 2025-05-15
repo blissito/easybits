@@ -139,7 +139,7 @@ export const Modal = ({
             className={cn(
               "bg-white",
               "border-2 border-black",
-              "p-6 md:p-8 rounded-3xl min-h-[472px] w-[360px]   relative",
+              "p-6 md:p-8 rounded-3xl min-h-[472px] min-w-[360px] relative",
               "flex flex-col",
               "max-w-[600px]  mx-auto  md:w-[600px] lg:min-w-[600px]",
               {
@@ -166,7 +166,7 @@ export const Modal = ({
             </h2>
             {children}
             {footer && (
-              <section className="mt-auto flex gap-6 justify-end">
+              <section className="mt-auto flex gap-6 justify-end pt-3">
                 {footer}
               </section>
             )}

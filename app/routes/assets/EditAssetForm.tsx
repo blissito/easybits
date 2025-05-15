@@ -16,6 +16,7 @@ import { useImageResize } from "~/hooks/useImageResize";
 import Spinner from "~/components/common/Spinner";
 import { useControlSave } from "~/hooks/useControlSave";
 import toast, { Toaster } from "react-hot-toast";
+import { EbookFields } from "./EbookFields";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -221,6 +222,12 @@ export const EditAssetForm = ({
           {asset.type === "DOWNLOADABLE" && (
             <>
               <FilesPicker assetFiles={assetFiles} asset={asset} />
+            </>
+          )}
+
+          {asset.type === "EBOOK" && (
+            <>
+              <EbookFields />
             </>
           )}
 

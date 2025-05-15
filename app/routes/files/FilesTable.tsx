@@ -4,6 +4,7 @@ import {
   FaChair,
   FaDog,
   FaHammer,
+  FaRegFilePdf,
   FaRegImage,
   FaVideo,
 } from "react-icons/fa";
@@ -166,7 +167,7 @@ export const FilesTable = ({
                     image: <FaRegImage />,
                     epub: <FaBook />,
 
-                    pdf: <FaDog />,
+                    pdf: <FaRegFilePdf />,
                     zip: <FaCat />,
                     audio: <FaHammer />,
                     other: <FaChair />,

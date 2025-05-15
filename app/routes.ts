@@ -77,6 +77,9 @@ export default [
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
   route("waitlist", "routes/waitlist.tsx"),
+  route("blissmo", "routes/blissmo.tsx"),
   // Plugin APIs
   route("/kit/*", "routes/api/v1/kit/kit_endpoint.tsx"),
+  // aws SES SNS enpoint (suscription)
+  route("/sns", "routes/api/v1/sns.tsx"),
 ] satisfies RouteConfig;
