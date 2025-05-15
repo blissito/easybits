@@ -18,19 +18,18 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
     >
       <div className="w-full  text-center relative">
         <h3 className="text-2xl md:text-3xl font-bold">
-          Suscríbete a nuestro newsletter
+          Suscríbete a nuestro newsletter creando una cuenta
         </h3>
-        <div className="text-base md:text-xl mt-2 md:mt-3 max-w-4xl mx-auto">
+        <div className="text-base md:text-xl mt-2 md:mt-3 max-w-3xl mx-auto">
           Recibe un resumen mensual de las mejores consejos de marketing y
-          business para creadores, o de las nuevas funcionalidades nuevas de
-          EasyBits.
+          business para creadores, o de las actualizaciones de EasyBits.
         </div>
         {!isSuccess && (
           <fetcher.Form
             action="/api/v1/utils"
             method="post"
             className={cn(
-              "flex gap-4 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center",
+              "flex gap-3 max-w-2xl mx-auto mt-10 flex-wrap md:flex-nowrap justify-center",
               {
                 "pointer-events-none": isDisabled,
               }
@@ -51,7 +50,7 @@ export const SuscriptionBox = ({ className }: { className?: string }) => {
               containerClassName=" -mt-[2px] ml-[1px]"
               id="Suscripcion"
             >
-              ¡Apuntarme!
+              ¡Unirme y crear mi cuenta!
             </BrutalButton>
             <Turnstile setIsDisabled={setIsDisabled} />
           </fetcher.Form>
