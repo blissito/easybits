@@ -28,7 +28,7 @@ export const purchase = ({
         <div
           style="
             background-image: url(https://i.imgur.com/vt00XNp.png);
-            padding: 4% 4% 16px 4%;
+            padding: 4% 4% 0px 4%;
           "
         >
           <img
@@ -41,7 +41,7 @@ export const purchase = ({
         <div style="padding: 0 4%">
           <img
             alt="logo"
-            style="width: 100%; margin-top: 0px"
+            style="width: 100%; margin-top: 16px"
             src="https://i.imgur.com/z2RnrdN.png"
           />
           <h2

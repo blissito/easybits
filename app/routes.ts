@@ -11,9 +11,11 @@ export default [
   // index("routes/tienda.tsx"),
   route("/inicio", "routes/home/home.tsx"),
   // public assetLanding
-  route("tienda/:assetSlug", "routes/assets/PublicCustomLanding.tsx"),
-  route("tienda/", "routes/assets/publicStore.tsx"),
-
+  ...prefix("tienda", [
+    index("routes/assets/publicStore.tsx"),
+    route(":assetSlug", "routes/assets/PublicCustomLanding.tsx"),
+    route(":assetSlug/review", "routes/assets/ReviewAsset.tsx"),
+  ]),
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login", "routes/login.tsx"),
   route("/logout", "routes/logout.tsx"),
@@ -40,10 +42,7 @@ export default [
       ]),
       route("tienda", "routes/store.tsx"),
 
-      ...prefix("ventas", [
-        index("routes/sales.tsx"),
-        route("stripe", "routes/stripe.tsx"), // why?
-      ]),
+      ...prefix("ventas", [index("routes/sales.tsx")]),
       route("clientes", "routes/clients.tsx"),
       route("compras/:assetId", "routes/purchase_detail.tsx"),
       route("compras", "routes/purchases.tsx"),
@@ -62,6 +61,7 @@ export default [
     route("conversion_webhook", "routes/api/v1/conversion_webhook.tsx"),
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
+    route("reviews", "routes/api/v1/reviews.tsx"),
     route("clients", "routes/api/v1/clients.tsx"),
     route("files", "routes/api/v1/files.tsx"),
     route("utils", "routes/api/v1/utils.tsx"),

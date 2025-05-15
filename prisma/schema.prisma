@@ -84,6 +84,7 @@ model Asset {
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
   Order       Order[]
+  Review      Review[]
 }
 
 type NewsLetter {
@@ -151,6 +152,7 @@ model User {
   updatedAt      DateTime       @updatedAt
   Order          Order[]
   storeConfig    StoreConfig?
+  Review         Review[]
 }
 
 enum FileStatus {
@@ -206,4 +208,17 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   // ^ auto-dates
+}
+
+model Review {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  userId  String @db.ObjectId
+  user    User   @relation(fields: [userId], references: [id])
+  assetId String @db.ObjectId
+  Asset   Asset  @relation(fields: [assetId], references: [id])
+  comment String
+  rating  Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

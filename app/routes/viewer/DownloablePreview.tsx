@@ -1,4 +1,5 @@
 import type { Asset, File } from "@prisma/client";
+import { Link } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const DownloablePreview = ({
@@ -61,12 +62,14 @@ export const DownloablePreview = ({
         </div>
         <div>
           <div className="border-t border-white py-3 px-4">
-            <BrutalButton
-              containerClassName="w-full"
-              className="min-w-full bg-yellow-500 w-full "
-            >
-              Agregar reseña
-            </BrutalButton>
+            <Link to={`/tienda/${asset.slug}/review`}>
+              <BrutalButton
+                containerClassName="w-full"
+                className="min-w-full bg-yellow-500 w-full "
+              >
+                Agregar reseña
+              </BrutalButton>
+            </Link>
           </div>
           <div className="border-t border-white py-3 px-4">
             <BrutalButton

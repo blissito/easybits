@@ -51,12 +51,13 @@ export default function StoreComponent({
     linkedin,
     tiktok,
     hexColor,
-    colorMode,
+    typography,
     logoImage,
     portadaImage,
     showProducts,
     socialNetworks,
   } = user?.storeConfig || {};
+  console.log({ user, assets });
 
   const handleModal = () => {
     setIsOpen(true);
@@ -72,6 +73,7 @@ export default function StoreComponent({
           " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0 ",
           LAYOUT_PADDING
         )}
+        style={{ fontFamily: typography }}
       >
         <div className="flex justify-between h-12 mb-8  w-full">
           <h2 className="text-3xl lg:text-4xl font-semibold my-auto">
@@ -115,7 +117,7 @@ export default function StoreComponent({
         <div className="overflow-hidden">
           <div
             className="w-full h-[200px] relative bg-brand-500"
-            style={{ backgroundColor: hexColor }}
+            style={{ backgroundColor: hexColor, fontFamily: typography }}
           >
             {portadaImage && (
               <img className="object-cover w-full h-full" src={portadaImage} />

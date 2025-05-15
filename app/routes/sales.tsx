@@ -11,7 +11,11 @@ import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-import { createAccount } from "~/.server/stripe";
+import {
+  createAccount,
+  fetchAccount,
+  getPublishableKey,
+} from "~/.server/stripe";
 import useStripeConnect from "~/hooks/useStripeConnect";
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import { useFetcher } from "react-router";
@@ -25,6 +29,7 @@ const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  const publishableKey = await getPublishableKey();
   const assets = await db.asset.findMany({
     where: {
       userId: user.id,
@@ -42,9 +47,16 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       asset: true,
     },
   });
+  // get all stripe account just in case
+  const stripeAccount = await fetchAccount({
+    accountId: user?.stripe?.id,
+  });
+
   return {
     orders,
     user,
+    publishableKey,
+    hasValidStripeAccount: stripeAccount?.id ? true : false,
   };
 };
 
@@ -68,11 +80,15 @@ export default function Sales({
   const fetcher = useFetcher();
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
-    loaderData?.user?.stripe?.id || actionData?.account?.id;
+    (loaderData.hasValidStripeAccount && loaderData?.user?.stripe?.id) ||
+    actionData?.account?.id;
+  // use the stripe account creation component
+
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
-    publishableKey: loaderData.user.publicKey || "",
+    publishableKey: loaderData.publishableKey || "",
   });
+
   const { orders } = loaderData;
   return (
     <>
@@ -91,6 +107,8 @@ export default function Sales({
             isStripeLoading={isStripeLoading}
             isModalOpen={isModalOpen}
             setIsModalOpen={setIsModalOpen}
+            hasValidStripeAccount={loaderData?.hasValidStripeAccount}
+            user={loaderData?.user}
           />
         )}
 
@@ -109,6 +127,8 @@ const EmptyPayment = ({
   isStripeLoading,
   isModalOpen,
   setIsModalOpen,
+  hasValidStripeAccount,
+  user,
 }: // @todo types
 any) => {
   const submit = useSubmit();
@@ -131,9 +151,11 @@ any) => {
           {!connectedAccountId ? (
             <BrutalButton
               className="bg-[#6772E5] flex gap-2 items-center"
-              onCick={handleSubmit}
+              onClick={handleSubmit}
             >
-              Conectar Stripe
+              {user?.stripe?.id && !hasValidStripeAccount
+                ? "Reconectar Stripe"
+                : "Conectar Stripe"}
               <BsStripe />
             </BrutalButton>
           ) : (
@@ -147,21 +169,23 @@ any) => {
           )}
           <Modal
             key="asset-payment"
-            containerClassName="z-50 text-black text-center "
+            containerClassName="z-50 text-black text-center"
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
           >
-            {stripeConnectInstance || isStripeLoading ? (
-              <ConnectComponentsProvider
-                connectInstance={stripeConnectInstance}
-              >
-                <ConnectAccountOnboarding
-                  onExit={() => setOnboardingExited(true)}
-                />
-              </ConnectComponentsProvider>
-            ) : (
-              <Spinner />
-            )}
+            <div className="h-full overflow-scroll px-3">
+              {stripeConnectInstance || isStripeLoading ? (
+                <ConnectComponentsProvider
+                  connectInstance={stripeConnectInstance}
+                >
+                  <ConnectAccountOnboarding
+                    onExit={() => setOnboardingExited(true)}
+                  />
+                </ConnectComponentsProvider>
+              ) : (
+                <Spinner />
+              )}
+            </div>
           </Modal>
         </div>
       }

@@ -30,8 +30,12 @@ export const ContentTemplate = ({
   files?: File[];
   asset: Asset;
 }) => {
+  const { typography } = asset.user?.storeConfig;
   return (
-    <section className={cn("border-b-0 border-black", "md:border-b-[2px]")}>
+    <section
+      className={cn("border-b-0 border-black", "md:border-b-[2px]")}
+      style={{ fontFamily: typography }}
+    >
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
         <ProductGallery
           className="bg-black"
@@ -64,6 +68,7 @@ export const ContentTemplate = ({
 };
 
 const Bragging = ({ asset = {} }: { asset: Asset }) => {
+  const { typography } = asset.user?.storeConfig;
   const getTypeOfBrag = () => {
     switch (asset.type) {
       case "WEBINAR":
@@ -73,7 +78,10 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
     }
   };
   return (
-    <main className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black">
+    <main
+      className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black"
+      style={{ fontFamily: typography }}
+    >
       {asset.tags.length === 0 ? null : (
         <>
           <section
@@ -184,7 +192,7 @@ const Info = ({
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
       ) : (
-        <Formats files={files} />
+        <Formats files={files} asset={asset} />
       )}
     </div>
   );
@@ -198,7 +206,7 @@ const Subscription = ({
   actionId?: string;
   asset: Asset;
 }) => {
-  const { hexColor } = asset?.user?.storeConfig || {};
+  const { hexColor, typography } = asset?.user?.storeConfig || {};
   const fetcher = useFetcher();
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -219,7 +227,10 @@ const Subscription = ({
 
   if (fetcher.data?.success) {
     return (
-      <section className="flex flex-col justify-center items-center text-xl h-[100px] pt-12">
+      <section
+        className="flex flex-col justify-center items-center text-xl h-[100px] pt-12"
+        style={{ fontFamily: typography }}
+      >
         <h2>¡Gracias por suscribirte!</h2>
         <br />
         <p>Ahora revisa tu correo. 📬</p>
@@ -249,7 +260,7 @@ const Subscription = ({
         className={cn(
           "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center disabled:text-gray-500 disabled:bg-gray-400/40"
         )}
-        style={{ background: hexColor }}
+        style={{ background: hexColor, fontFamily: typography }}
       >
         {text}
       </button>
@@ -258,6 +269,7 @@ const Subscription = ({
 };
 
 const WebinarDetails = ({ asset }: { asset: Asset }) => {
+  const { typography } = asset?.user?.storeConfig || {};
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString("es-MX", {
       year: "numeric",
@@ -268,7 +280,7 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
     });
   };
   return (
-    <section>
+    <section style={{ fontFamily: typography }}>
       <AttributeList
         textLeft="No. de sesiones"
         textRight={asset.metadata?.numberOfSessions}
@@ -293,20 +305,21 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
   );
 };
 
-const Formats = ({ files }: { files: File[] }) => {
+const Formats = ({ files, asset }: { files: File[]; asset: {} }) => {
   const getSizeInMB = () => {
     const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
     return (bytes / 1_000_000).toFixed(2) + " mb";
   };
+  const { typography } = asset?.user?.storeConfig || {};
   return (
-    <>
+    <div style={{ fontFamily: typography }}>
       <AttributeList textLeft="Número de archivos:" textRight={files.length} />
       <AttributeList
         textLeft="Formatos:"
         textRight={files.map((f) => `${f.name.split(".")[1]}, `)}
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
-    </>
+    </div>
   );
 };
 
@@ -351,7 +364,7 @@ export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
     linkedin,
     tiktok,
     hexColor,
-    colorMode,
+    typography,
     logoImage,
     socialNetworks,
   } = asset?.user?.storeConfig || {};
@@ -360,7 +373,7 @@ export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
   return (
     <section
       className="border-b-[2px] border-black bg-[#CE95F9]"
-      style={{ background: hexColor }}
+      style={{ background: hexColor, fontFamily: typography }}
     >
       <div className="border-b-[2px] border-black h-16">
         <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
@@ -432,7 +445,12 @@ export const HeaderTemplate = ({ asset }: { asset: Asset }) => {
           src="/hero/star.svg"
           alt="star"
         />
-        <h2 className="text-3xl md:text-4xl xl:text-5xl font-bold">{title}</h2>
+        <h2
+          className="text-3xl md:text-4xl xl:text-5xl font-bold"
+          style={{ fontFamily: typography }}
+        >
+          {title}
+        </h2>
       </div>
     </section>
   );

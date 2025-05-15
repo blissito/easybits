@@ -131,10 +131,10 @@ export default function LookAndFeel({ control }) {
               shadowClassName="bg-black"
               selectedShadowClassName="bg-black"
               options={[
-                { value: "Avenir", label: "Alejandro Sans" },
-                { value: "Arial", label: "Arial" },
-                { value: "Georgia", label: "Georgia" },
-                { value: "Tahoma", label: "Tahoma" },
+                { value: "Inter", label: "Inter, Satoshi" },
+                { value: "Raleway", label: "Open Sans, Raleway" },
+                { value: "Outfit", label: "Outfit, Satoshi" },
+                { value: "Barlow", label: "Playfair Display, Barlow" },
               ]}
               renderOption={(option, isSelected) => (
                 <div className="text-start">
@@ -149,7 +149,7 @@ export default function LookAndFeel({ control }) {
                     className="text-lg text-brand-gray mb-2"
                     style={{ fontFamily: option.value }}
                   >
-                    subtítulo
+                    Subtítulo
                   </p>
                   <p
                     className="text-md text-brand-gray"
