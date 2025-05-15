@@ -113,16 +113,17 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (data.template?.slug) {
       data.slug = data.template.slug; // testing
     }
-    // @todo no validation?
+    // @todo no validation? URGE
     return await db.asset.update({
       where: {
         id: data.id,
       },
       data: {
         ...data,
-        price: Number(data.price),
+        user: undefined,
         id: undefined,
         userId: user.id,
+        price: Number(data.price),
       }, // @todo remove id in parsing
     });
   }
