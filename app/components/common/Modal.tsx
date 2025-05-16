@@ -61,7 +61,7 @@ export const Modal = ({
       case "initial":
         return {
           y: 10,
-          filter: "blur(4px)",
+          filter: "blur(3px)",
           opacity: 0,
         };
       case "animate":

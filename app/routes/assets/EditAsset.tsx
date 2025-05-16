@@ -6,6 +6,7 @@ import { db } from "~/.server/db";
 import { redirect } from "react-router";
 import { ContentTemplate, HeaderTemplate } from "./template";
 import { useState } from "react";
+import { AssetPreview } from "./AssetPreview";
 
 const PADDING_LAYOUT = `pl-4`;
 
@@ -53,8 +54,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
           asset={asset}
           onUpdate={(form) => setPrev(form)}
         />
-        {/* <AssetPreview host={host} asset={asset} /> */}
-        <Prev className="scale-[.5] origin-top" asset={prev} />
+        <AssetPreview host={host} asset={prev} />
       </main>
     </article>
   );
