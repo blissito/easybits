@@ -29,19 +29,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
   if (intent === "delete_file") {
     const url = new URL(request.url);
-    // const serviceURL = new URL(`https://video-converter-hono.fly.dev`);
-    // // const storageKey = url.searchParams.get("storageKey")!;
-    // serviceURL.pathname = "/delete_all";
-    // serviceURL.searchParams.set(
-    //   "webhook",
-    //   "https://easybits.cloud/api/v1/conversion_webhook"
-    // );
     const storageKey = (url.searchParams.get("storageKey") ||
       formData.get("storageKey")) as string;
 
-    if (!storageKey) throw new Response("File not found", { status: 404 });
+    if (!storageKey)
+      throw new Response("No StorageKey present", { status: 404 });
 
-    await deleteObject(storageKey); //Revisit
+    await deleteObject(storageKey, "easybits-dev"); //Revisit Private only for now
     try {
       await db.file.delete({
         where: {
@@ -51,9 +45,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     } catch (e) {
       console.error(e);
     }
-    return null;
-    // }
-    // @todo delete actual file in webhook?
   }
 
   return null;

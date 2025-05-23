@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import toast from "react-hot-toast";
 
 export const useDropFiles = <T extends HTMLElement>(config?: {
   type?: string;
@@ -15,22 +16,22 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   };
 
   const addFiles = (files: File[]) => {
-    setFiles((fs) => [...fs, ...files]);
+    let fls = [];
+    if (type) {
+      fls = [...files].filter((f) => f.type.includes(type));
+      fls.length < files.length &&
+        toast.error("Selecciona el tipo de archivo correcto.");
+    } else {
+      fls = files;
+    }
+    setFiles((fs) => [...fs, ...fls]);
   };
 
   const handleDrop = (e: MouseEvent & any) => {
     e.preventDefault();
     if (e.dataTransfer.files.length < 1) return;
 
-    // images* only
-    if (type) {
-      const fls = [...e.dataTransfer.files].filter((f) =>
-        f.type.includes("image")
-      );
-      addFiles(fls);
-    } else {
-      addFiles([...e.dataTransfer.files]);
-    }
+    addFiles([...e.dataTransfer.files]);
   };
 
   const handleDragOver = (ev: DragEvent) => {

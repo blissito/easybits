@@ -84,7 +84,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     if (fileName !== "metaImage") {
       const arr = fileName.split(".");
-      fileName = `${nanoid()}.${arr[arr.length - 1]}`; // best for urlsearchparams
+      fileName = `${nanoid()}.${arr[arr.length - 1]}`; // keeps extension
     }
     const assetId = formData.get("assetId"); // + nanoid(3);
     const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;

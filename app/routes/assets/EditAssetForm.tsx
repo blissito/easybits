@@ -71,11 +71,11 @@ export const EditAssetForm = ({
   host,
   asset,
   assetFiles,
-  files,
+  files = [],
   onUpdate,
 }: {
   onUpdate?: (arg0: Partial<Asset>) => void;
-  files?: File[];
+  files: File[];
   assetFiles?: File[];
   asset: Asset;
   host: string;
@@ -238,7 +238,11 @@ export const EditAssetForm = ({
 
           {asset.type === "EBOOK" && (
             <>
-              <EbookFields asset={asset} onChange={handleMetadata} />
+              <EbookFields
+                files={files}
+                asset={asset}
+                onChange={handleMetadata}
+              />
             </>
           )}
 
