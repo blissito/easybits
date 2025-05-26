@@ -84,7 +84,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     if (fileName !== "metaImage") {
       const arr = fileName.split(".");
-      fileName = `${nanoid()}.${arr[arr.length - 1]}`; // best for urlsearchparams
+      fileName = `${nanoid()}.${arr[arr.length - 1]}`; // keeps extension
     }
     const assetId = formData.get("assetId"); // + nanoid(3);
     const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;
@@ -113,16 +113,17 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (data.template?.slug) {
       data.slug = data.template.slug; // testing
     }
-    // @todo no validation?
+    // @todo no validation? URGE
     return await db.asset.update({
       where: {
         id: data.id,
       },
       data: {
         ...data,
-        price: Number(data.price),
+        user: undefined,
         id: undefined,
         userId: user.id,
+        price: Number(data.price),
       }, // @todo remove id in parsing
     });
   }

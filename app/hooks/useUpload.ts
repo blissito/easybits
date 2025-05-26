@@ -1,43 +1,43 @@
 import { useState } from "react";
 import type { AssetCreationPayload } from "~/.server/assets";
 
-export const useUpload = (publicKey: string) => {
+export const useUpload = (config?: { assetId?: string }) => {
+  const { assetId } = config || {};
   const [isFetching, setIsFetching] = useState(false);
-  const [uploadData, setData] = useState<AssetCreationPayload>({
-    storageKey: "",
-    url: "",
-  });
 
-  const getUpload = async () => {
+  const getUpload = async (fileName: string) => {
     const response = await fetch("/api/v1/uploads", {
       method: "post",
-      headers: {
-        "content-type": "application/json",
-        authorization: publicKey,
-      },
+      body: new URLSearchParams({
+        intent: "get_upload_link",
+        fileName,
+      }),
     });
-    const d = await response.json();
-    setData(d);
-    return d as AssetCreationPayload;
+    return response.json();
   };
 
-  const putFile = async (blob: File | Blob) => {
+  const putFile = async (blob: File) => {
     setIsFetching(true);
-    const { url, storageKey } = await getUpload();
-    const response = await fetch(url, { method: "PUT", body: blob });
-    console.log("blob uploaded successfully", response.ok);
+    const { url, storageKey } = await getUpload(blob.name);
+    await fetch(url, {
+      method: "PUT",
+      body: blob,
+      headers: {
+        "content-type": blob.type,
+      },
+    });
     // the n update db
-    await fetch(`/api/v1/uploads/${storageKey}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        size: blob.size,
+    await fetch(`/api/v1/uploads`, {
+      method: "post",
+      body: new URLSearchParams({
+        intent: "create_uploaded_file",
         contentType: blob.type,
-        status: "uploaded",
+        name: blob.name,
+        size: `${blob.size}`,
+        assetId: assetId || "",
         storageKey,
       }),
-      headers: { "content-type": "application/json" },
     });
-    setIsFetching(false);
   };
 
   return { putFile, isFetching };

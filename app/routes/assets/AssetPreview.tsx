@@ -15,6 +15,7 @@ import { cn } from "~/utils/cn";
 import { Input } from "~/components/common/Input";
 import { useAnimate, motion } from "motion/react";
 import { SiGmail } from "react-icons/si";
+import { ContentTemplate, HeaderTemplate } from "./template";
 
 export const AssetPreview = ({
   asset,
@@ -41,7 +42,10 @@ export const AssetPreview = ({
   };
 
   return (
-    <aside className="md:block hidden w-[40%] h-screen bg-black px-8 pt-6 pb-8 text-white sticky top-0">
+    <aside
+      className="md:block hidden w-[40%] h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-y-scroll"
+      style={{ scrollbarWidth: "none" }}
+    >
       <nav className="flex items-center mb-8 gap-4">
         <h3 className="w-max text-xl mr-auto">Vista previa</h3>
         <button onClick={reloadIframe} className="text-xl active:text-gray-500">
@@ -68,20 +72,10 @@ export const AssetPreview = ({
         </button>
         <EnrolledUsers assetId={asset.id} />
       </nav>
-      <div className="bg-white h-[80%]">
-        <iframe
-          ref={iframeRef}
-          src={`https://${host}.easybits.cloud/tienda/${asset.slug}`} // should work locally?
-          style={{
-            width: "100%",
-            height: "100%",
-            overflow: "hidden",
-            zoom: 0.3,
-          }}
-          scrolling="no"
-          frameBorder="0"
-        ></iframe>
-      </div>
+      <section className="origin-top-left scale-[.5] w-[200%] text-black bg-white">
+        <HeaderTemplate asset={asset} />
+        <ContentTemplate asset={asset} files={[]} />
+      </section>
       <ShareLink
         onClose={handleClose}
         isOpen={isOpen}

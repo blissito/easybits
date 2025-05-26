@@ -1,6 +1,5 @@
 import { FaArrowLeftLong } from "react-icons/fa6";
 import { cn } from "~/utils/cn";
-import { DownloablePreview } from "./viewer/DownloablePreview";
 import { EventInfo, TransmisionBox } from "./viewer/viewerWebinar";
 import { UsersList } from "./viewer/viewerUsers";
 import { Chat, ChatMobile } from "./viewer/viewerChat";

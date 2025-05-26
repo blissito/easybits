@@ -49,6 +49,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     const hostExists = await db.user.findFirst({
       where: { host },
     });
+    console.log("HOST?", hostExists);
     if (!hostExists && host !== "localhost")
       throw new Response("User not found", { status: 404 });
 

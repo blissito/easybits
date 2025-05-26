@@ -71,9 +71,11 @@ export const EditAssetForm = ({
   host,
   asset,
   assetFiles,
-  files,
+  files = [],
+  onUpdate,
 }: {
-  files?: File[];
+  onUpdate?: (arg0: Partial<Asset>) => void;
+  files: File[];
   assetFiles?: File[];
   asset: Asset;
   host: string;
@@ -99,7 +101,9 @@ export const EditAssetForm = ({
       | Date
       | Record<string, string | number | boolean | Date>;
   }) => {
-    setForm((f) => ({ ...f, ...obj }));
+    const update = { ...form, ...obj };
+    setForm(update);
+    onUpdate?.(update);
   };
 
   const handleChange = (name: string) => (value: string) =>
@@ -234,7 +238,11 @@ export const EditAssetForm = ({
 
           {asset.type === "EBOOK" && (
             <>
-              <EbookFields asset={asset} onChange={handleMetadata} />
+              <EbookFields
+                files={files}
+                asset={asset}
+                onChange={handleMetadata}
+              />
             </>
           )}
 
