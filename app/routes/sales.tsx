@@ -56,7 +56,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     orders,
     user,
     publishableKey,
-    // hasValidStripeAccount: stripeAccount?.id ? true : false,
   };
 };
 
@@ -82,7 +81,6 @@ export default function Sales({
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
     loaderData?.user?.stripe?.id || actionData?.account?.id;
-  // use the stripe account creation component
 
   const stripeConnectInstance = useStripeConnect({
     connectedAccountId,
@@ -126,7 +124,6 @@ const EmptyPayment = ({
   isStripeLoading,
   isModalOpen,
   setIsModalOpen,
-  assetUserStripeId,
 }: any) => {
   const submit = useSubmit();
   const handleSubmit = () => {
