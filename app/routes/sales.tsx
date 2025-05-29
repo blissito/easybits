@@ -13,7 +13,7 @@ import {
 } from "@stripe/react-connect-js";
 import {
   createAccount,
-  fetchAccount,
+  // fetchAccount,
   getPublishableKey,
 } from "~/.server/stripe";
 import useStripeConnect from "~/hooks/useStripeConnect";
@@ -48,15 +48,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     },
   });
   // get all stripe account just in case
-  const stripeAccount = await fetchAccount({
-    accountId: user?.stripe?.id,
-  });
+  // const stripeAccount = await fetchAccount({
+  //   accountId: user?.stripe?.id,
+  // });
 
   return {
     orders,
     user,
     publishableKey,
-    hasValidStripeAccount: stripeAccount?.id ? true : false,
+    // hasValidStripeAccount: stripeAccount?.id ? true : false,
   };
 };
 
@@ -77,11 +77,11 @@ export default function Sales({
   actionData,
 }: Route.ComponentProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [onboardingExited, setOnboardingExited] = useState(false);
   const fetcher = useFetcher();
   const isStripeLoading = fetcher.state !== "idle";
   const connectedAccountId =
-    (loaderData.hasValidStripeAccount && loaderData?.user?.stripe?.id) ||
-    actionData?.account?.id;
+    loaderData?.user?.stripe?.id || actionData?.account?.id;
   // use the stripe account creation component
 
   const stripeConnectInstance = useStripeConnect({
@@ -103,11 +103,10 @@ export default function Sales({
           <EmptyPayment
             connectedAccountId={connectedAccountId}
             stripeConnectInstance={stripeConnectInstance}
-            // setOnboardingExited={setOnboardingExited} // not used?
+            setOnboardingExited={setOnboardingExited}
             isStripeLoading={isStripeLoading}
             isModalOpen={isModalOpen}
             setIsModalOpen={setIsModalOpen}
-            hasValidStripeAccount={loaderData?.hasValidStripeAccount}
             user={loaderData?.user}
           />
         )}
@@ -127,16 +126,14 @@ const EmptyPayment = ({
   isStripeLoading,
   isModalOpen,
   setIsModalOpen,
-  hasValidStripeAccount,
-  user,
-}: // @todo types
-any) => {
+  assetUserStripeId,
+}: any) => {
   const submit = useSubmit();
   const handleSubmit = () => {
     setIsModalOpen(true);
 
     const formData = new FormData();
-    // formData.append("stripeAccount", assetUserStripeId); // revisit?
+    formData.append("stripeAccount", connectedAccountId);
     submit(formData, {
       method: "post",
     });
@@ -144,7 +141,7 @@ any) => {
   return (
     <Empty
       illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
-      title="  Conecta una pasarela de pagos"
+      title="Conecta una pasarela de pagos"
       text={<span>Conectate a Stripe para ofrecerte pagos seguros.</span>}
       footer={
         <div className="flex gap-6 justify-center">
@@ -153,9 +150,7 @@ any) => {
               className="bg-[#6772E5] flex gap-2 items-center"
               onClick={handleSubmit}
             >
-              {user?.stripe?.id && !hasValidStripeAccount
-                ? "Reconectar Stripe"
-                : "Conectar Stripe"}
+              Conectar Stripe
               <BsStripe />
             </BrutalButton>
           ) : (
@@ -173,7 +168,7 @@ any) => {
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
           >
-            <div className="h-full overflow-scroll px-3">
+            <div className="h-full overflow-scroll px-9">
               {stripeConnectInstance || isStripeLoading ? (
                 <ConnectComponentsProvider
                   connectInstance={stripeConnectInstance}
