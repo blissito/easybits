@@ -123,7 +123,7 @@ export const FilesTable = ({
               className={cn(
                 "pl-4",
                 "hover:bg-gray-100 ",
-                "grid grid-cols-12 items-start py-3 border-b",
+                "grid grid-cols-12 items-center py-3 border-b",
                 {
                   "rounded-b-xl": files.length - 1 === i,
                 }
@@ -202,7 +202,11 @@ export const FilesTable = ({
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />
                   </button>
                 ) : (
-                  <Copy mode="ghost" className="inset-0" text={file.url} />
+                  <Copy
+                    mode="ghost"
+                    className="inset-0 -top-4"
+                    text={file.url}
+                  />
                 )}
               </span>
               <DotsMenu>

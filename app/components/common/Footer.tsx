@@ -24,7 +24,7 @@ export const Footer = () => {
               className="bg-brand-500 w-full h-full  text-3xl md:text-5xl lg:text-[80px] font-medium "
               id="EmpezarGratisHome"
             >
-              Empezar gratis
+              ¡Empezar gratis!
             </motion.button>
           </div>
         </Link>
@@ -110,7 +110,7 @@ export const Footer = () => {
             <h3 className="text-white mb-3">Sobre Easybits</h3>
             <Link to="/funcionalidades">
               <p className="text-white/50 hover:text-brand-500 transition-all">
-                Features
+                Funcionalidades
               </p>
             </Link>
             <Link to="/planes">
