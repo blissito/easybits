@@ -19,7 +19,7 @@ export const Invite = () => {
           </span>{" "}
           <span>mensuales en&nbsp;</span> <span> infraestructura&nbsp;</span>
           <span> y hazlo&nbsp;</span>
-          <span> todo fácil desde EasyBits.</span>
+          <span> todo fácil con EasyBits.</span>
         </h1>
       </div>
     </section>

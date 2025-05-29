@@ -26,7 +26,7 @@ const Content = () => {
         <h2 className=" text-4xl lg:text-6xl font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
           Aviso de Privacidad
         </h2>
-        <p className="mt-4">Última actualización: 21 de Abril 2025</p>{" "}
+        <p className="mt-4">Última actualización: 29 de Mayo 2025</p>{" "}
       </div>
       <div className="mt-10 lg:mt-20">
         <p>
@@ -56,10 +56,6 @@ const Content = () => {
           <li>&bull; Nombre completo</li>
           <li>&bull; Dirección de correo electrónico</li>
           <li>&bull; Empresa u organización</li>
-          <li>
-            &bull; Información de facturación (RFC, domicilio fiscal, etc.)
-          </li>
-          <li>&bull; Información técnica de conexión y navegación</li>
         </ul>
         <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
           3. Finalidades del tratamiento
@@ -92,7 +88,7 @@ const Content = () => {
             mercado.
           </li>
         </ul>
-        <p>
+        <p className="mt-4">
           Si no desea que sus datos se utilicen para finalidades secundarias,
           puede manifestarlo enviando un correo a: soporte@easybits.cloud.
         </p>
@@ -100,10 +96,10 @@ const Content = () => {
           4. Uso de cookies y tecnologías de rastreo
         </h3>
         <p className="my-4">
-          Nuestro Sitio utiliza cookies, web beacons y otras tecnologías
-          similares para monitorear su comportamiento como usuario de Internet y
-          brindarle un mejor servicio. Usted puede deshabilitar el uso de
-          cookies desde su navegador.
+          Nuestro Sitio no utiliza cookies, web beacons u otras tecnologías
+          similares para monitorear su comportamiento como usuario de Internet.
+          La única cookie que utilizamos es para verificar al usuario y mantener
+          su sesión abierta en el navegador.
         </p>
         <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
           5. Transferencias de datos
@@ -129,7 +125,7 @@ const Content = () => {
             &bull; Oponerse al tratamiento de los mismos para fines específicos.
           </li>
         </ul>
-        <p>
+        <p className="mt-4">
           Puede ejercer sus derechos ARCO enviando un correo electrónico a
           soporte@easybits.cloud, indicando su nombre completo, la relación que
           tiene con nosotros, el derecho que desea ejercer y una descripción

@@ -4,7 +4,7 @@ export const Assets = () => {
   return (
     <section className="max-w-7xl mx-auto py-20 md:py-40 px-4 md:px-[5%] xl:px-0">
       <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 md:mb-20">
-        Imagina todo lo que puedes vender en Easybits
+        Imagina todo lo que puedes vender en EasyBits
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-6 md:gap-y-12">
         <Card
@@ -38,7 +38,7 @@ export const Assets = () => {
         <Card
           img="/hero/micro.svg"
           title="Conferencias y Webinars"
-          description="Que tus conferencias o webinars no sean pasajeras, conviértelos en un asset permanente compartiendo tu conocimiento con tus seguidores."
+          description="Que tus conferencias o webinars no sean pasajeros, conviértelos en un asset permanente compartiendo tu conocimiento con tus seguidores."
           className="bg-[#E0AC6E]"
           tags={["Masterclass", "Webinars"]}
         />

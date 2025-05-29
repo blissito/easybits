@@ -53,8 +53,7 @@ export const BrutalButton = ({
             "bg-red-400/90": mode === "danger",
             "bg-gray-300 text-gray-400 cursor-not-allowed border-gray-400":
               isDisabled || isLoading,
-            "active:translate-x-0 active:translate-y-0":
-              !isDisabled && !isLoading,
+            "active:te-x-0 active:translate-y-0": !isDisabled && !isLoading,
             "hover:-translate-x-1 hover:-translate-y-1":
               !isDisabled && !isLoading,
           }
