@@ -21,6 +21,37 @@ const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
 const version = "2025-04-30.preview";
 
+export const createPaymentsSession = async (accountId: string) => {
+  const url = new URL(accountSessionsURL);
+  url.searchParams.set("account", accountId);
+  url.searchParams.set("components[payments][enabled]", "true");
+  url.searchParams.set("components[account_onboarding][enabled]", "true");
+  //   url.searchParams.set(
+  //     "components[payments][features][refund_management]",
+  //     "true"
+  //   );
+  //   url.searchParams.set(
+  //     "components[payments][features][dispute_management]",
+  //     "true"
+  //   );
+  //   url.searchParams.set(
+  //     "components[payments][features][capture_payments]",
+  //     "true"
+  //   );
+  //   url.searchParams.set(
+  //     "components[payments][features][destination_on_behalf_of_charge_management]",
+  //     "false"
+  //   );
+
+  const init = getInit(undefined, {
+    "content-type": "application/x-www-form-urlencoded",
+  });
+  const response = await fetch(url.toString(), init);
+  const data = await response.json();
+  //   console.log("Account session", data);
+  return data.client_secret;
+};
+
 export const createOnboarding = async (accountId: string): Promise<string> => {
   const url = new URL(accountSessionsURL);
   url.searchParams.set("account", accountId);

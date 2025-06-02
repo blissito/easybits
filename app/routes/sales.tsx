@@ -17,12 +17,13 @@ import type { Route } from "./+types/sales";
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
+  ConnectPayments,
 } from "@stripe/react-connect-js";
 import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
 } from "@stripe/connect-js";
-import { createOnboarding } from "~/.server/stripe_v2";
+import { createPaymentsSession } from "~/.server/stripe_v2";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -30,11 +31,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   let client_secret;
   if (user.stripe?.id) {
-    try {
-      client_secret = await createOnboarding(user.stripe.id);
-    } catch (e) {
-      console.log("ERR", e);
-    }
+    client_secret = await createPaymentsSession(user.stripe.id);
   }
 
   return { user, clientSecret: client_secret };
@@ -42,7 +39,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
   const { user, clientSecret } = loaderData;
-  console.log("CSECRET", clientSecret);
+
   const fetcher = useFetcher();
   const handleStripeConnect = () => {
     fetcher.submit(
@@ -55,24 +52,39 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
       }
     );
   };
-
+  const [cs, setClientSecret] = useState<string | null>(null);
+  const isLoading = fetcher.state !== "idle";
+  // @todo remove from here
   const publishableKey =
     "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
-  const isLoading = fetcher.state !== "idle";
-  const [cs, setClientSecret] = useState<string | null>(null);
 
-  const stripeConnectInstance: StripeConnectInstance | null = cs
-    ? loadConnectAndInitialize({
-        // This is your test publishable API key.
-        publishableKey: publishableKey,
-        fetchClientSecret: () => cs,
-      })
-    : null;
+  const [stripeConnectInstance, setSCI] =
+    useState<null | StripeConnectInstance>(null);
+
+  const createInstance = (secret: string) => {
+    const instance = loadConnectAndInitialize({
+      fetchClientSecret: async () => secret,
+      publishableKey,
+    });
+    setSCI(instance);
+  };
 
   useEffect(() => {
-    const csecret = clientSecret || fetcher.data?.clientSecret;
-    setClientSecret(csecret);
+    if (!cs) return;
+    createInstance(cs);
+  }, [cs]);
+
+  useEffect(() => {
+    setClientSecret(clientSecret);
   }, []);
+
+  const onboardingClientSecret = fetcher.data?.clientSecret;
+
+  useEffect(() => {
+    if (!onboardingClientSecret) return;
+
+    createInstance(onboardingClientSecret);
+  }, [onboardingClientSecret]);
 
   return (
     <>
@@ -83,20 +95,43 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
         )}
       >
         <Header title="Ventas" />
-        <EmptySales
-          cta={
-            <BrutalButton
-              isDisabled={user.stripe?.id}
-              isLoading={isLoading}
-              onClick={handleStripeConnect}
-            >
-              {user.stripe?.id
-                ? "Cuenta conectada: " + user.stripe.id
-                : "Conectar con stripe"}
-            </BrutalButton>
-          }
-        />
+        {!stripeConnectInstance && (
+          <EmptySales
+            cta={
+              <BrutalButton
+                isDisabled={user.stripe?.id}
+                isLoading={isLoading}
+                onClick={handleStripeConnect}
+              >
+                {user.stripe?.id
+                  ? "Cuenta conectada: " + user.stripe.id
+                  : "Conectar con stripe"}
+              </BrutalButton>
+            }
+          />
+        )}
 
+        {cs && stripeConnectInstance && (
+          <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
+            <ConnectPayments
+            // onExit={() => {
+            //   console.log("The account has exited onboarding");
+            // }}
+            // Optional: make sure to follow our policy instructions above
+            // fullTermsOfServiceUrl="{{URL}}"
+            // recipientTermsOfServiceUrl="{{URL}}"
+            // privacyPolicyUrl="{{URL}}"
+            // skipTermsOfServiceCollection={false}
+            // collectionOptions={{
+            //   fields: 'eventually_due',
+            //   futureRequirements: 'include',
+            // }}
+            // onStepChange={(stepChange) => {
+            //   console.log(`User entered: ${stepChange.step}`);
+            // }}
+            />
+          </ConnectComponentsProvider>
+        )}
         {stripeConnectInstance && (
           <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
             <ConnectAccountOnboarding
