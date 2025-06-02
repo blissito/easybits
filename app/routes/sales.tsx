@@ -7,18 +7,21 @@ import { Empty } from "./assets/Empty";
 
 import { useFetcher, useSubmit } from "react-router";
 import { type ReactNode } from "react";
+
+import { getUserOrRedirect } from "~/.server/getters";
+
+import Spinner from "~/components/common/Spinner";
+import { Modal } from "~/components/common/Modal";
+import type { Route } from "./+types/sales";
+
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-import { createAccount } from "~/.server/stripe";
-
-import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
-
-import { updateUser } from "~/.server/user";
-import Spinner from "~/components/common/Spinner";
-import { Modal } from "~/components/common/Modal";
-import type { Route } from "./+types/sales";
+import {
+  loadConnectAndInitialize,
+  type StripeConnectInstance,
+} from "@stripe/connect-js";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -56,17 +59,17 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // };
 };
 
-export const action = async ({ request }: Route.ClientActionArgs) => {
-  const account = await createAccount();
+// export const action = async ({ request }: Route.ClientActionArgs) => {
+//   const account = await createAccount();
 
-  const user = await getUserOrNull(request);
-  const updatedUser = await updateUser({
-    userId: user.id,
-    data: { stripe: account },
-  });
+//   const user = await getUserOrNull(request);
+//   const updatedUser = await updateUser({
+//     userId: user.id,
+//     data: { stripe: account },
+//   });
 
-  return { account, updatedUser };
-};
+//   return { account, updatedUser };
+// };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
   // const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,8 +99,19 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
       }
     );
   };
+
+  const publishableKey =
+    "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
   const isLoading = fetcher.state !== "idle";
-  console.log("Stripe Account", user.stripe);
+  const clientSecret = fetcher.data?.clientSecret;
+  console.log("SECRET? ", clientSecret);
+  const stripeConnectInstance: StripeConnectInstance | null = clientSecret
+    ? loadConnectAndInitialize({
+        // This is your test publishable API key.
+        publishableKey: publishableKey,
+        fetchClientSecret: () => clientSecret,
+      })
+    : null;
   return (
     <>
       <article
@@ -120,6 +134,29 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
             </BrutalButton>
           }
         />
+
+        {stripeConnectInstance && (
+          <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
+            <ConnectAccountOnboarding
+              onExit={() => {
+                console.log("The account has exited onboarding");
+              }}
+              // Optional: make sure to follow our policy instructions above
+              // fullTermsOfServiceUrl="{{URL}}"
+              // recipientTermsOfServiceUrl="{{URL}}"
+              // privacyPolicyUrl="{{URL}}"
+              // skipTermsOfServiceCollection={false}
+              // collectionOptions={{
+              //   fields: 'eventually_due',
+              //   futureRequirements: 'include',
+              // }}
+              // onStepChange={(stepChange) => {
+              //   console.log(`User entered: ${stepChange.step}`);
+              // }}
+            />
+          </ConnectComponentsProvider>
+        )}
+
         {/* {!connectedAccountId && (
           <EmptyPayment
             connectedAccountId={connectedAccountId}
