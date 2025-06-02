@@ -96,7 +96,7 @@ const Layout = ({
             <p>
               Usado: <strong>{used.toFixed(2)} GB</strong> de{" "}
               <strong>{plans[plan].max}</strong> GB (Plan {plan}){" "}
-              <Link to="/planes" className="text-xs underline text-brand-500º">
+              <Link to="/planes" className="text-xs underline text-brand-500">
                 Mejorar plan
               </Link>
             </p>

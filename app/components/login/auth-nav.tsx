@@ -1,5 +1,5 @@
 import TextLogo from "/icons/easybits-logo-text.svg";
-import Logo from "/icons/eyes-logo-purple.svg";
+import Logo from "/logo-purple.svg";
 import type { User } from "@prisma/client";
 import { Link } from "react-router";
 import { useEffect, useState } from "react";
@@ -12,7 +12,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
   const [isOpen, setIsOpen] = useState(false);
   const navItems = [
     {
-      title: "Features",
+      title: "Funcionalidades",
       path: "/funcionalidades",
     },
     {
@@ -58,7 +58,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
               <Link
                 key={key}
                 to={path}
-                className="w-28 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
+                className="w-32 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
               >
                 {title}
               </Link>

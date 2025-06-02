@@ -47,7 +47,7 @@ export const Copy = ({
     >
       {isActive ? (
         <span className="text-xl">
-          <FaCheck />
+          <FaCheck className="text-brand-grass" />
         </span>
       ) : (
         <CopyIcon />

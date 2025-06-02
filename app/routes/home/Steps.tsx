@@ -2,7 +2,7 @@ export const Steps = () => {
   return (
     <section className=" max-w-7xl mx-auto py-20 md:py-40 px-4 md:px-[5%] xl:px-0">
       <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 md:mb-20">
-        Empieza hoy mismo
+        ¡Empieza hoy mismo!
       </h2>
       <div className="w-full grid grid-col-1 md:grid-cols-3 gap-10 lg:gap-24">
         <StepCard
@@ -12,11 +12,11 @@ export const Steps = () => {
         <StepCard
           title="Personaliza tu website"
           image="/hero/step2.webp"
-          text="Que tu website combine contigo y con tu marca, completa tu información y personaliza la tipografía, los colores y el tema"
+          text="Que tu website combine contigo y con tu marca, completa tu información y personaliza la tipografía, los colores y el tema."
         />
         <StepCard
           title="Comparte y logra tu primera venta"
-          text="Tu website esta listo para su primera venta, ahora solo compartelo en tus redes sociales con tus seguidores o clientes "
+          text="¡Tu website esta listo para su primera venta! compártelo en tus redes sociales con tus seguidores o clientes. "
           image="/hero/step3.webp"
         />{" "}
       </div>

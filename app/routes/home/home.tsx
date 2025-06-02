@@ -69,7 +69,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           permite que tu comunidad, seguidores o clientes compren fácilmente.
         </p>
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y eso no es todo, llega a más personas siendo parte de la comunidad
+          Y eso no es todo, llega a más personas siendo parte de la Comunidad
           EasyBits.
         </p>
       </Bento>
