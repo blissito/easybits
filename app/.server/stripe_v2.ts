@@ -21,7 +21,7 @@ const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
 const version = "2025-04-30.preview";
 
-export const createOnboarding = async (accountId: string) => {
+export const createOnboarding = async (accountId: string): Promise<string> => {
   const url = new URL(accountSessionsURL);
   url.searchParams.set("account", accountId);
   url.searchParams.set("components[account_onboarding][enabled]", "true");
@@ -31,7 +31,7 @@ export const createOnboarding = async (accountId: string) => {
   const response = await fetch(url.toString(), init);
   const data = await response.json();
   //   console.log("Account session", data);
-  return data;
+  return data.client_secret;
 };
 
 export const createAccountV2 = async (

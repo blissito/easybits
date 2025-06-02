@@ -19,8 +19,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
       },
     });
     // generate onboarding url
-    const onboardingComponent = await createOnboarding(account.id);
-    return { clientSecret: onboardingComponent.client_secret };
+    const client_secret = await createOnboarding(account.id);
+    return { clientSecret: client_secret };
   }
 
   return null;

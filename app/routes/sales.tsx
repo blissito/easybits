@@ -6,7 +6,7 @@ import { cn } from "~/utils/cn";
 import { Empty } from "./assets/Empty";
 
 import { useFetcher, useSubmit } from "react-router";
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { getUserOrRedirect } from "~/.server/getters";
 
@@ -22,71 +22,27 @@ import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
 } from "@stripe/connect-js";
+import { createOnboarding } from "~/.server/stripe_v2";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  return { user };
-  // const publishableKey = await getPublishableKey();
-  // const assets = await db.asset.findMany({
-  //   where: {
-  //     userId: user.id,
-  //   },
-  // });
-  // const assetIds = assets.map((a) => a.id);
-  // const orders = await db.order.findMany({
-  //   where: {
-  //     assetId: {
-  //       in: assetIds,
-  //     },
-  //   },
-  //   include: {
-  //     user: true,
-  //     asset: true,
-  //   },
-  // });
-  // // get all stripe account just in case
-  // const stripeAccount = await fetchAccount({
-  //   accountId: user?.stripe?.id,
-  // });
+  let client_secret;
+  if (user.stripe?.id) {
+    try {
+      client_secret = await createOnboarding(user.stripe.id);
+    } catch (e) {
+      console.log("ERR", e);
+    }
+  }
 
-  // return {
-  //   orders,
-  //   user,
-  //   publishableKey,
-  //   hasValidStripeAccount: stripeAccount?.id ? true : false,
-  // };
+  return { user, clientSecret: client_secret };
 };
 
-// export const action = async ({ request }: Route.ClientActionArgs) => {
-//   const account = await createAccount();
-
-//   const user = await getUserOrNull(request);
-//   const updatedUser = await updateUser({
-//     userId: user.id,
-//     data: { stripe: account },
-//   });
-
-//   return { account, updatedUser };
-// };
-
 export default function Sales({ loaderData }: Route.ComponentProps) {
-  // const [isModalOpen, setIsModalOpen] = useState(false);
-  // const fetcher = useFetcher();
-  // const isStripeLoading = fetcher.state !== "idle";
-  // const connectedAccountId =
-  //   (loaderData.hasValidStripeAccount && loaderData?.user?.stripe?.id) ||
-  //   actionData?.account?.id;
-  // // use the stripe account creation component
-
-  // const stripeConnectInstance = useStripeConnect({
-  //   connectedAccountId,
-  //   publishableKey: loaderData.publishableKey || "",
-  // });
-
-  const { user } = loaderData;
-
+  const { user, clientSecret } = loaderData;
+  console.log("CSECRET", clientSecret);
   const fetcher = useFetcher();
   const handleStripeConnect = () => {
     fetcher.submit(
@@ -103,15 +59,21 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
   const publishableKey =
     "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
   const isLoading = fetcher.state !== "idle";
-  const clientSecret = fetcher.data?.clientSecret;
-  console.log("SECRET? ", clientSecret);
-  const stripeConnectInstance: StripeConnectInstance | null = clientSecret
+  const [cs, setClientSecret] = useState<string | null>(null);
+
+  const stripeConnectInstance: StripeConnectInstance | null = cs
     ? loadConnectAndInitialize({
         // This is your test publishable API key.
         publishableKey: publishableKey,
-        fetchClientSecret: () => clientSecret,
+        fetchClientSecret: () => cs,
       })
     : null;
+
+  useEffect(() => {
+    const csecret = clientSecret || fetcher.data?.clientSecret;
+    setClientSecret(csecret);
+  }, []);
+
   return (
     <>
       <article
