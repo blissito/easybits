@@ -11,17 +11,8 @@ import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-<<<<<<< HEAD
 import { createAccount } from "~/.server/stripe";
 
-=======
-import {
-  createAccount,
-  // fetchAccount,
-  getPublishableKey,
-} from "~/.server/stripe";
-import useStripeConnect from "~/hooks/useStripeConnect";
->>>>>>> 98f1d98571bd52e8829e1a58efe15466adb73fc5
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 
 import { updateUser } from "~/.server/user";
@@ -33,7 +24,6 @@ const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-<<<<<<< HEAD
   return { user };
   // const publishableKey = await getPublishableKey();
   // const assets = await db.asset.findMany({
@@ -54,45 +44,16 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   //   },
   // });
   // // get all stripe account just in case
-=======
-  const publishableKey = await getPublishableKey();
-  const assets = await db.asset.findMany({
-    where: {
-      userId: user.id,
-    },
-  });
-  const assetIds = assets.map((a) => a.id);
-  const orders = await db.order.findMany({
-    where: {
-      assetId: {
-        in: assetIds,
-      },
-    },
-    include: {
-      user: true,
-      asset: true,
-    },
-  });
-  // get all stripe account just in case
->>>>>>> 98f1d98571bd52e8829e1a58efe15466adb73fc5
   // const stripeAccount = await fetchAccount({
   //   accountId: user?.stripe?.id,
   // });
 
-<<<<<<< HEAD
   // return {
   //   orders,
   //   user,
   //   publishableKey,
   //   hasValidStripeAccount: stripeAccount?.id ? true : false,
   // };
-=======
-  return {
-    orders,
-    user,
-    publishableKey,
-  };
->>>>>>> 98f1d98571bd52e8829e1a58efe15466adb73fc5
 };
 
 export const action = async ({ request }: Route.ClientActionArgs) => {
@@ -107,7 +68,6 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
   return { account, updatedUser };
 };
 
-<<<<<<< HEAD
 export default function Sales({ loaderData }: Route.ComponentProps) {
   // const [isModalOpen, setIsModalOpen] = useState(false);
   // const fetcher = useFetcher();
@@ -138,25 +98,6 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
   };
   const isLoading = fetcher.state !== "idle";
   console.log("Stripe Account", user.stripe);
-=======
-export default function Sales({
-  loaderData,
-  actionData,
-}: Route.ComponentProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [onboardingExited, setOnboardingExited] = useState(false);
-  const fetcher = useFetcher();
-  const isStripeLoading = fetcher.state !== "idle";
-  const connectedAccountId =
-    loaderData?.user?.stripe?.id || actionData?.account?.id;
-
-  const stripeConnectInstance = useStripeConnect({
-    connectedAccountId,
-    publishableKey: loaderData.publishableKey || "",
-  });
-
-  const { orders } = loaderData;
->>>>>>> 98f1d98571bd52e8829e1a58efe15466adb73fc5
   return (
     <>
       <article
