@@ -1,5 +1,5 @@
+
 import { useState } from "react";
-import type { AssetCreationPayload } from "~/.server/assets";
 
 export const useUpload = (config?: { assetId?: string }) => {
   const { assetId } = config || {};

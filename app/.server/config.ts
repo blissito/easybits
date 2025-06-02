@@ -6,10 +6,10 @@ const environments={
     production:'https://www.easybits.cloud'
 }
 
-const baseUrl = environments[process.env.NODE_ENV||'development']
+const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3000':"https://www.easybits.cloud"
 
 export const config = {
     baseUrl,
-    isDev: process.env.NODE_ENV === 'development',
-    isProd: process.env.NODE_ENV === 'production'
+    isDev: process.env.NODE_ENV ==='development',
+    isProd: process.env.NODE_ENV !==  'development',
 }

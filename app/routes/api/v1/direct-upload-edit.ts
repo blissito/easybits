@@ -5,13 +5,6 @@ import { getUserOrRedirect } from "~/.server/getters";
 import slugify from "slugify";
 import { nanoid } from "nanoid";
 
-export type PatchUploadPayload = {
-  size?: number;
-  contentType?: string;
-  status?: "uploaded" | "waiting" | "error";
-  storageKey: string;
-};
-
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");

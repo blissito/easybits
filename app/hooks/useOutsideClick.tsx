@@ -22,12 +22,12 @@ export const useClickOutside = <T extends HTMLDivElement>({
 
   useEffect(() => {
     if (!isActive) return;
-    document.addEventListener("click", handleClick);
+    addEventListener("click", handleClick);
     if (includeEscape) {
       addEventListener("keydown", handleKey);
     }
     return () => {
-      document.removeEventListener("click", handleClick);
+      removeEventListener("click", handleClick);
       removeEventListener("keydown", handleKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

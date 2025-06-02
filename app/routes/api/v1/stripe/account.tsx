@@ -1,14 +1,24 @@
-// app/routes/api/account.ts
+import { getUserOrRedirect } from "~/.server/getters";
+import { createAccountV2 } from "~/.server/stripe_v2";
+import type { Route } from "./+types/account";
+import { db } from "~/.server/db";
 
-import Stripe from "stripe";
-import { createAccount } from "~/.server/stripe";
+export const action = async ({ request }: Route.ActionArgs) => {
+  const formData = await request.formData();
+  const intent = formData.get("intent");
 
-export const action = async ({ request }) => {
-  try {
-    const account = createAccount();
-
-    return { account };
-  } catch (error) {
-    return { error, status: 500 };
+  if (intent === "create_new_account") {
+    const user = await getUserOrRedirect(request);
+    const account = await createAccountV2(user);
+    await db.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        stripe: account,
+      },
+    });
   }
+
+  return null;
 };

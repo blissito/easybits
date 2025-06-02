@@ -18,7 +18,7 @@ export const Header = ({
   title?: string;
   className?: string;
   folded?: () => void;
-  isFolded: boolean;
+  isFolded?: boolean;
 }) => {
   return (
     <nav

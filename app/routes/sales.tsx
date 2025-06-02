@@ -2,62 +2,58 @@ import { BsStripe } from "react-icons/bs";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
-import { SalesTable } from "./sales/SalesTable";
+
 import { Empty } from "./assets/Empty";
-import { IoCopy } from "react-icons/io5";
-import { useSubmit } from "react-router";
-import { useState } from "react";
+
+import { useFetcher, useSubmit } from "react-router";
+import { type ReactNode } from "react";
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
 } from "@stripe/react-connect-js";
-import {
-  createAccount,
-  fetchAccount,
-  getPublishableKey,
-} from "~/.server/stripe";
-import useStripeConnect from "~/hooks/useStripeConnect";
+import { createAccount } from "~/.server/stripe";
+
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
-import { useFetcher } from "react-router";
+
 import { updateUser } from "~/.server/user";
 import Spinner from "~/components/common/Spinner";
 import { Modal } from "~/components/common/Modal";
 import type { Route } from "./+types/sales";
-import { db } from "~/.server/db";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  const publishableKey = await getPublishableKey();
-  const assets = await db.asset.findMany({
-    where: {
-      userId: user.id,
-    },
-  });
-  const assetIds = assets.map((a) => a.id);
-  const orders = await db.order.findMany({
-    where: {
-      assetId: {
-        in: assetIds,
-      },
-    },
-    include: {
-      user: true,
-      asset: true,
-    },
-  });
-  // get all stripe account just in case
-  const stripeAccount = await fetchAccount({
-    accountId: user?.stripe?.id,
-  });
+  return { user };
+  // const publishableKey = await getPublishableKey();
+  // const assets = await db.asset.findMany({
+  //   where: {
+  //     userId: user.id,
+  //   },
+  // });
+  // const assetIds = assets.map((a) => a.id);
+  // const orders = await db.order.findMany({
+  //   where: {
+  //     assetId: {
+  //       in: assetIds,
+  //     },
+  //   },
+  //   include: {
+  //     user: true,
+  //     asset: true,
+  //   },
+  // });
+  // // get all stripe account just in case
+  // const stripeAccount = await fetchAccount({
+  //   accountId: user?.stripe?.id,
+  // });
 
-  return {
-    orders,
-    user,
-    publishableKey,
-    hasValidStripeAccount: stripeAccount?.id ? true : false,
-  };
+  // return {
+  //   orders,
+  //   user,
+  //   publishableKey,
+  //   hasValidStripeAccount: stripeAccount?.id ? true : false,
+  // };
 };
 
 export const action = async ({ request }: Route.ClientActionArgs) => {
@@ -72,24 +68,36 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
   return { account, updatedUser };
 };
 
-export default function Sales({
-  loaderData,
-  actionData,
-}: Route.ComponentProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export default function Sales({ loaderData }: Route.ComponentProps) {
+  // const [isModalOpen, setIsModalOpen] = useState(false);
+  // const fetcher = useFetcher();
+  // const isStripeLoading = fetcher.state !== "idle";
+  // const connectedAccountId =
+  //   (loaderData.hasValidStripeAccount && loaderData?.user?.stripe?.id) ||
+  //   actionData?.account?.id;
+  // // use the stripe account creation component
+
+  // const stripeConnectInstance = useStripeConnect({
+  //   connectedAccountId,
+  //   publishableKey: loaderData.publishableKey || "",
+  // });
+
+  const { user } = loaderData;
+
   const fetcher = useFetcher();
-  const isStripeLoading = fetcher.state !== "idle";
-  const connectedAccountId =
-    (loaderData.hasValidStripeAccount && loaderData?.user?.stripe?.id) ||
-    actionData?.account?.id;
-  // use the stripe account creation component
-
-  const stripeConnectInstance = useStripeConnect({
-    connectedAccountId,
-    publishableKey: loaderData.publishableKey || "",
-  });
-
-  const { orders } = loaderData;
+  const handleStripeConnect = () => {
+    fetcher.submit(
+      {
+        intent: "create_new_account",
+      },
+      {
+        action: "/api/v1/stripe/account",
+        method: "post",
+      }
+    );
+  };
+  const isLoading = fetcher.state !== "idle";
+  console.log("Stripe Account", user.stripe);
   return (
     <>
       <article
@@ -99,7 +107,20 @@ export default function Sales({
         )}
       >
         <Header title="Ventas" />
-        {!connectedAccountId && (
+        <EmptySales
+          cta={
+            <BrutalButton
+              isDisabled={user.stripe?.id}
+              isLoading={isLoading}
+              onClick={handleStripeConnect}
+            >
+              {user.stripe?.id
+                ? "Cuenta conectada: " + user.stripe.id
+                : "Conectar con stripe"}
+            </BrutalButton>
+          }
+        />
+        {/* {!connectedAccountId && (
           <EmptyPayment
             connectedAccountId={connectedAccountId}
             stripeConnectInstance={stripeConnectInstance}
@@ -110,11 +131,11 @@ export default function Sales({
             hasValidStripeAccount={loaderData?.hasValidStripeAccount}
             user={loaderData?.user}
           />
-        )}
+        )} */}
 
         {/* // ya estas en stripe y no has vendido */}
-        {orders.length < 1 && <EmptySales />}
-        {orders.length > 0 && <SalesTable orders={orders} />}
+        {/* {orders.length < 1 && <EmptySales />}
+        {orders.length > 0 && <SalesTable orders={orders} />} */}
       </article>
     </>
   );
@@ -193,7 +214,7 @@ any) => {
   );
 };
 
-export const EmptySales = () => {
+export const EmptySales = ({ cta }: { cta: ReactNode }) => {
   return (
     <Empty
       illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
@@ -206,9 +227,7 @@ export const EmptySales = () => {
       }
       footer={
         <div className="flex gap-6 justify-center">
-          <BrutalButton className=" flex gap-2 items-center">
-            Copiar link <IoCopy />
-          </BrutalButton>
+          {cta || <BrutalButton>Conecta con Stripe</BrutalButton>}
         </div>
       }
     />
