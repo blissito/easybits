@@ -160,7 +160,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   return (
     <main className="bg-pattern bg-center w-full h-svh bg-cover bg-no-repeat flex items-center">
-      <NotFound />
+      <NotFound message={message} details={details} />
       {/* <h1>{message}</h1>
       <p>{details}</p>
       {stack && (
