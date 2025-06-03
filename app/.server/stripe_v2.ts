@@ -101,6 +101,7 @@ export const updateOrCreateProductAndPrice = async (
   }
 };
 
+// @todo can't be updated, we should archive and create new one...
 const updatePrice = async (
   priceId: string,
   options: {
