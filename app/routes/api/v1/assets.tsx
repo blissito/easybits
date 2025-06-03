@@ -7,6 +7,7 @@ import type { Route } from "./+types/assets";
 import type { Asset } from "@prisma/client";
 import { getPutFileUrl, deleteObject } from "react-hook-multipart";
 import type { Action } from "~/components/forms/NewsLetterForm";
+import { updateOrCreateProductAndPrice } from "~/.server/stripe_v2";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -111,10 +112,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
     if (data.template?.slug) {
-      data.slug = data.template.slug; // testing
+      data.slug = data.template.slug; // @todo should recive it directly?
     }
-    // @todo no validation? URGE
-    return await db.asset.update({
+    // @todo no validation?
+    const asset = await db.asset.update({
       where: {
         id: data.id,
       },
@@ -126,6 +127,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
         price: Number(data.price),
       }, // @todo remove id in parsing
     });
+    if (asset.id) {
+      // @todo try to update or create stripe product
+      await updateOrCreateProductAndPrice(asset, request);
+    }
+    return asset;
   }
 
   if (intent === "update_asset_gallery_links") {

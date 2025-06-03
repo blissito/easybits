@@ -60,31 +60,32 @@ model Asset {
   slug  String @unique
   title String
 
-  actions     Json[]
-  tags        String                 @default("")
-  note        String?
-  description String?
-  eventDate   DateTime?
-  roomId      String? // provisional
-  metadata    AssetWebinarMetadata? // used for type webinar, for example.
-  type        AssetType              @default(DOWNLOADABLE)
-  price       Float?                 @default(0)
-  currency    String                 @default("mxn")
-  gallery     String[]
-  template    AssetTemplateSettings?
-  published   Boolean                @default(false)
-  publicLink  String?
-  stripePrice String?
-  extra       AssetExtraSettings?
+  actions       Json[]
+  tags          String                 @default("")
+  note          String?
+  description   String?
+  eventDate     DateTime?
+  roomId        String? // provisional
+  metadata      AssetWebinarMetadata? // used for type webinar, for example.
+  type          AssetType              @default(DOWNLOADABLE)
+  price         Float?                 @default(0)
+  currency      String                 @default("mxn")
+  gallery       String[]
+  template      AssetTemplateSettings?
+  published     Boolean                @default(false)
+  publicLink    String?
+  stripePrice   String?
+  stripeProduct String?
+  extra         AssetExtraSettings?
   // ownership and metadata
-  userId      String                 @db.ObjectId
-  user        User                   @relation(fields: [userId], references: [id])
-  files       File[]
+  userId        String                 @db.ObjectId
+  user          User                   @relation(fields: [userId], references: [id])
+  files         File[]
   // dates
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  Order       Order[]
-  Review      Review[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  Order         Order[]
+  Review        Review[]
 }
 
 type NewsLetter {

@@ -1,4 +1,6 @@
-import type { User } from "@prisma/client";
+import type { Asset, User } from "@prisma/client";
+import { getUserOrNull } from "./getters";
+import { db } from "./db";
 
 type CreateAccountResponse = {
   id: string;
@@ -20,6 +22,29 @@ type Capabilities = {
   transfers: "inactive" | "active";
 };
 
+type StripeProduct = {
+  id: string;
+  object: "product";
+  active: true;
+  attributes: [];
+  created: number;
+  default_price: null;
+  description: null;
+  images: [];
+  livemode: false;
+  marketing_features: [];
+  metadata: {};
+  name: string;
+  package_dimensions: null;
+  shippable: null;
+  statement_descriptor: null;
+  tax_code: null;
+  type: "service";
+  unit_label: null;
+  updated: number;
+  url: null;
+};
+
 export type Payment = {
   id: string;
 };
@@ -29,8 +54,98 @@ const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const accountsURL = "https://api.stripe.com/v1/accounts";
 const paymentsURL = "https://api.stripe.com/v1/payment_intents";
+const productsURL = "https://api.stripe.com/v1/products";
+const pricesURL = "https://api.stripe.com/v1/prices";
 const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
 const version = "2025-04-30.preview";
+
+export const updateOrCreateProductAndPrice = async (
+  asset: Asset,
+  request: Request
+) => {
+  // @todo add description from "notas sobre el producto"
+  const user = await getUserOrNull(request);
+  if (!user) return;
+
+  const accountId = user.stripeId;
+  if (!accountId) return;
+
+  console.log("Aquí!", asset.stripeProduct && asset.stripePrice);
+  if (asset.stripeProduct && asset.stripePrice) {
+    // @todo
+    const price = await updatePrice(asset.stripePrice, {
+      accountId,
+      price: Number(asset.price),
+      currency: asset.currency,
+    });
+    console.info("::STRIPE_PRICE::UPDATED::", price);
+  } else {
+    // create everything & update asset
+    /**
+     * 1. create product & price
+     * 2. update asset
+     */
+
+    const product = await createProductAndPrice(
+      asset.slug,
+      Number(asset.price),
+      asset.currency,
+      accountId
+    ); // @todo iterate slug?
+    await db.asset.update({
+      where: {
+        id: asset.id,
+      },
+      data: { stripeProduct: product.id, stripePrice: product.default_price },
+    });
+  }
+};
+
+const updatePrice = async (
+  priceId: string,
+  options: {
+    accountId: string;
+    price: number;
+    currency: string;
+  }
+) => {
+  const { accountId, price, currency } = options || {};
+  const url = new URL(`${pricesURL}/${priceId}`);
+  // url.searchParams.set("currency", currency);
+  url.searchParams.set(`unit_amount`, String(price * 100)); // in cents
+  const headers = {
+    Authorization: apiKey,
+    "Stripe-Account": accountId,
+    "Stripe-Version": "2025-04-30.preview",
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  const data = fetch(url.toString(), { headers, method: "post" })
+    .then((r) => r.json())
+    .catch((e) => console.error("::STRIPE::ERROR::", e));
+  return data;
+};
+
+const createProductAndPrice = async (
+  name: string,
+  price: number,
+  currency: string,
+  accountId: string
+) => {
+  const url = new URL(productsURL);
+  url.searchParams.set("name", name);
+  url.searchParams.set("default_price_data[currency]", currency);
+  url.searchParams.set("default_price_data[unit_amount]", String(price * 100));
+  const headers = {
+    Authorization: apiKey,
+    "Stripe-Account": accountId,
+    "Stripe-Version": "2025-04-30.preview",
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  const data = fetch(url.toString(), { headers, method: "post" })
+    .then((r) => r.json())
+    .catch((e) => console.error("::STRIPE::ERROR::", e));
+  return data;
+};
 
 export const getAccountPayments = async (accountId: string) => {
   const url = new URL(paymentsURL);

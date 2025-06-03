@@ -18,7 +18,7 @@ export const SalesTable = ({ stripeId }: { stripeId?: string }) => {
   }, []);
   const paymentIntents: Payment[] = fetcher.data?.payments || [];
   const capabilities: Record<string, string> = fetcher.data?.capabilities || {};
-  if (capabilities.card_payments === "inactive") return null; // only if active account
+  if (capabilities.card_payments !== "active") return null; // only if active account
 
   return (
     <>
@@ -56,17 +56,17 @@ const Row = ({ payment }: { payment: Payment }) => {
     >
       {/* Email */}
       <section className={cn("col-span-3", "text-brand-gray flex flex-col")}>
-        <span className="text-black"> {order.user.email}</span>
-        <span className="block md:hidden"> {order.user.displayName}</span>
+        <span className="text-black"> {payment.user?.email}</span>
+        <span className="block md:hidden"> {payment.user?.displayName}</span>
       </section>
       {/* Asset title */}
       <section className={cn("col-span-2", "text-brand-gray")}>
-        <span> {order.asset.title}</span>
+        <span> {payment.asset?.title}</span>
       </section>
       {/* Fecha */}
       <section className={cn("col-span-3", "text-black md:col-span-2")}>
         <span>
-          {new Date(order.createdAt).toLocaleDateString("es-MX", {
+          {new Date(payment.createdAt).toLocaleDateString("es-MX", {
             year: "numeric",
             month: "long",
             day: "numeric",
@@ -76,7 +76,7 @@ const Row = ({ payment }: { payment: Payment }) => {
       {/* Precio */}
       <section className={cn("col-span-2", "items-center md:col-span-2 flex")}>
         <span>
-          $ {order.asset.price} {order.asset.currency}
+          $ {payment.asset?.price} {payment.asset?.currency}
         </span>
       </section>
       {/* Acciones */}
