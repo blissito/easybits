@@ -10,7 +10,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import Spinner from "~/components/common/Spinner";
 import { Modal } from "~/components/common/Modal";
 import type { Route } from "./+types/sales";
-
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
@@ -22,6 +21,9 @@ import {
 } from "@stripe/connect-js";
 import { SalesTable } from "./sales/SalesTable";
 
+// @todo remove from here
+const publishableKey =
+  "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const clientLoader = async () => {
@@ -32,13 +34,25 @@ export const clientLoader = async () => {
     }),
   });
   const user = await response.json();
-  const stripeId = user.stripe?.id;
+  const stripeId = user.stripeId;
   return { user, stripeId };
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
   const { user, stripeId } = loaderData;
   const fetcher = useFetcher();
+  // Stripe connect client instance
+  const [stripeConnectInstance, setSCI] =
+    useState<null | StripeConnectInstance>(null);
+  const createInstance = (secret: string) => {
+    const instance = loadConnectAndInitialize({
+      fetchClientSecret: async () => secret,
+      publishableKey,
+    });
+    setSCI(instance);
+  };
+  //
+
   const handleStripeConnect = () => {
     fetcher.submit(
       {
@@ -50,32 +64,15 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
       }
     );
   };
-  // const [cs, setClientSecret] = useState<string | null>(null);
   const isLoading = fetcher.state !== "idle";
-  // @todo remove from here
-  const publishableKey =
-    "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
-
-  const [stripeConnectInstance, setSCI] =
-    useState<null | StripeConnectInstance>(null);
-
-  const createInstance = (secret: string) => {
-    const instance = loadConnectAndInitialize({
-      fetchClientSecret: async () => secret,
-      publishableKey,
-    });
-    setSCI(instance);
-  };
+  const clientSecret = fetcher.data?.clientSecret;
 
   useEffect(() => {
     fetcher.submit(
-      { intent: "get_client_secret", accountId: user.stripe?.id },
+      { intent: "get_client_secret", accountId: user.stripeId },
       { method: "post", action: "/api/v1/stripe/account" }
     );
   }, []);
-
-  const clientSecret = fetcher.data?.clientSecret;
-
   useEffect(() => {
     if (!clientSecret) return;
 
@@ -95,12 +92,12 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
           <EmptySales
             cta={
               <BrutalButton
-                isDisabled={user.stripe?.id}
+                isDisabled={user.stripeId}
                 isLoading={isLoading}
                 onClick={handleStripeConnect}
               >
-                {user.stripe?.id
-                  ? "Cuenta conectada: " + user.stripe.id
+                {user.stripeId
+                  ? "Cuenta conectada: " + user.stripeId
                   : "Conectar con stripe"}
               </BrutalButton>
             }

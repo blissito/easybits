@@ -4,7 +4,7 @@ import {
   createClientSecret,
   createOnboarding,
   getAccountPayments,
-  getStripeCapabilities,
+  getAccountCapabilities,
 } from "~/.server/stripe_v2";
 import type { Route } from "./+types/account";
 import { db } from "~/.server/db";
@@ -14,14 +14,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const intent = formData.get("intent");
 
   if (intent === "get_account_payments") {
-    const accountId = formData.get("accountId") as string;
-    const payments = await getAccountPayments(accountId);
-    return { payments };
+    // @todo permissions
+    const stripeId = formData.get("stripeId") as string;
+    const payments = await getAccountPayments(stripeId);
+    const capabilities = await getAccountCapabilities(stripeId);
+    return { payments, capabilities };
   }
 
   if (intent === "get_client_secret") {
     const accountId = formData.get("accountId") as string;
-    const capabilities = await getStripeCapabilities(accountId);
+    const capabilities = await getAccountCapabilities(accountId);
     if (!capabilities) return { clientSecret: null };
 
     const clientSecret = await createClientSecret({
@@ -41,7 +43,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         id: user.id,
       },
       data: {
-        stripe: account,
+        stripeId: account.id,
       },
     });
     // generate onboarding url

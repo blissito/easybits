@@ -137,7 +137,7 @@ model User {
   phoneNumber    String?
   roles          String[]
   metadata       Metadata?
-  stripe         Json?
+  stripeId       String?
   // domain stuff
   host           String?        @unique
   dnsConfig      Json?

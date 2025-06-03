@@ -12,11 +12,14 @@ export const SalesTable = ({ stripeId }: { stripeId?: string }) => {
   const fetcher = useFetcher();
   useEffect(() => {
     fetcher.submit(
-      { intent: "get_account_payments", accountId: stripeId },
+      { intent: "get_account_payments", stripeId },
       { method: "post", action: "/api/v1/stripe/account" }
     );
   }, []);
   const paymentIntents: Payment[] = fetcher.data?.payments || [];
+  const capabilities: Record<string, string> = fetcher.data?.capabilities || {};
+  if (capabilities.card_payments === "inactive") return null; // only if active account
+
   return (
     <>
       <article className="bg-white border-[1px] rounded-xl border-black text-xs ">

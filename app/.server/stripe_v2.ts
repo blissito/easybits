@@ -69,7 +69,7 @@ export const createClientSecret = async ({
   return data.client_secret;
 };
 
-export const getStripeCapabilities = async (
+export const getAccountCapabilities = async (
   accountId?: string
 ): Promise<Capabilities | null> => {
   if (!accountId) return null;
