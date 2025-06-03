@@ -70,6 +70,13 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
     );
   }, []);
 
+  useEffect(() => {
+    fetcher.submit(
+      { intent: "get_account_payments", accountId: user.stripe?.id },
+      { method: "post", action: "/api/v1/stripe/account" }
+    );
+  }, []);
+
   const clientSecret = fetcher.data?.clientSecret;
 
   useEffect(() => {
@@ -134,6 +141,26 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
   );
 }
 
+export const EmptySales = ({ cta }: { cta: ReactNode }) => {
+  return (
+    <Empty
+      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
+      title="Administra tus ventas desde aquí"
+      text={
+        <span>
+          Tus clientes/seguidores te están conociendo. <br />
+          ¡Sigue compartiendo tu tienda!
+        </span>
+      }
+      footer={
+        <div className="flex gap-6 justify-center">
+          {cta || <BrutalButton>Conecta con Stripe</BrutalButton>}
+        </div>
+      }
+    />
+  );
+};
+
 const EmptyPayment = ({
   connectedAccountId,
   stripeConnectInstance,
@@ -196,26 +223,6 @@ const EmptyPayment = ({
               )}
             </div>
           </Modal>
-        </div>
-      }
-    />
-  );
-};
-
-export const EmptySales = ({ cta }: { cta: ReactNode }) => {
-  return (
-    <Empty
-      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
-      title="Administra tus ventas desde aquí"
-      text={
-        <span>
-          Tus clientes/seguidores te están conociendo. <br />
-          ¡Sigue compartiendo tu tienda!
-        </span>
-      }
-      footer={
-        <div className="flex gap-6 justify-center">
-          {cta || <BrutalButton>Conecta con Stripe</BrutalButton>}
         </div>
       }
     />

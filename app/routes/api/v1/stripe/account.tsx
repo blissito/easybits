@@ -3,6 +3,7 @@ import {
   createAccountV2,
   createClientSecret,
   createOnboarding,
+  getAccountPayments,
   getStripeCapabilities,
 } from "~/.server/stripe_v2";
 import type { Route } from "./+types/account";
@@ -11,6 +12,12 @@ import { db } from "~/.server/db";
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "get_account_payments") {
+    const accountId = formData.get("accountId") as string;
+    const payments = await getAccountPayments(accountId);
+    return { payments };
+  }
 
   if (intent === "get_client_secret") {
     const accountId = formData.get("accountId") as string;

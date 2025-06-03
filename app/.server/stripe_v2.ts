@@ -15,17 +15,31 @@ type CreateAccountResponse = {
   requirements: string | null;
   livemode: boolean;
 };
+type Capabilities = {
+  card_payments: "inactive" | "active";
+  transfers: "inactive" | "active";
+};
+//   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
 
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const accountsURL = "https://api.stripe.com/v1/accounts";
+const paymentsURL = "https://api.stripe.com/v1/payment_intents";
 const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
 const version = "2025-04-30.preview";
 
-//   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
-type Capabilities = {
-  card_payments: "inactive" | "active";
-  transfers: "inactive" | "active";
+export const getAccountPayments = async (accountId: string) => {
+  const url = new URL(paymentsURL);
+  const headers = {
+    Authorization: apiKey,
+    "content-type": "application/x-www-form-urlencoded",
+    "Stripe-Account": accountId,
+    "Stripe-Version": "2025-04-30.preview",
+  };
+  const response = await fetch(url.toString(), { headers });
+  const data = await response.json();
+  // console.log("CHARGES??", data);
+  return data.client_secret;
 };
 
 export const createClientSecret = async ({
