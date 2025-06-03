@@ -22,7 +22,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "get_client_secret") {
     const accountId = formData.get("accountId") as string;
     const capabilities = await getStripeCapabilities(accountId);
-    console.log("Capa?", capabilities);
     if (!capabilities) return { clientSecret: null };
 
     const clientSecret = await createClientSecret({

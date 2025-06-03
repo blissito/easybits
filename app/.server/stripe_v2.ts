@@ -19,6 +19,10 @@ type Capabilities = {
   card_payments: "inactive" | "active";
   transfers: "inactive" | "active";
 };
+
+export type Payment = {
+  id: string;
+};
 //   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
 
 const stripeURL = "https://api.stripe.com/v2/core/accounts";

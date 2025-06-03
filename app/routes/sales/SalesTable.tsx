@@ -1,13 +1,22 @@
-import type { Asset, File, Order, User } from "@prisma/client";
+import type { Asset, Order, User } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
-import { useState } from "react";
-import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
-import toast from "react-hot-toast";
+import { useEffect } from "react";
 import { DotsMenu } from "../files/DotsMenu";
+import type { Payment } from "~/.server/stripe_v2";
 
-export const SalesTable = ({ orders }: { orders: Order[] }) => {
+export const SalesTable = ({ stripeId }: { stripeId?: string }) => {
+  if (!stripeId) return null;
+
+  const fetcher = useFetcher();
+  useEffect(() => {
+    fetcher.submit(
+      { intent: "get_account_payments", accountId: stripeId },
+      { method: "post", action: "/api/v1/stripe/account" }
+    );
+  }, []);
+  const paymentIntents: Payment[] = fetcher.data?.payments || [];
   return (
     <>
       <article className="bg-white border-[1px] rounded-xl border-black text-xs ">
@@ -19,8 +28,8 @@ export const SalesTable = ({ orders }: { orders: Order[] }) => {
           <span className="col-span-2"></span>
         </section>
         <AnimatePresence>
-          {orders.map((o) => (
-            <Row order={o} key={o.id} />
+          {paymentIntents.map((payment) => (
+            <Row payment={payment} key={payment.id} />
           ))}
         </AnimatePresence>
       </article>
@@ -28,7 +37,7 @@ export const SalesTable = ({ orders }: { orders: Order[] }) => {
   );
 };
 
-const Row = ({ order }: { order: Order & { user: User; asset: Asset } }) => {
+const Row = ({ payment }: { payment: Payment }) => {
   return (
     <motion.section
       layout

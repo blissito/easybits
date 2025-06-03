@@ -7,9 +7,6 @@ import { Empty } from "./assets/Empty";
 
 import { useFetcher, useSubmit } from "react-router";
 import { useEffect, useState, type ReactNode } from "react";
-
-import { getUserOrRedirect } from "~/.server/getters";
-
 import Spinner from "~/components/common/Spinner";
 import { Modal } from "~/components/common/Modal";
 import type { Route } from "./+types/sales";
@@ -23,17 +20,24 @@ import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
 } from "@stripe/connect-js";
+import { SalesTable } from "./sales/SalesTable";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
-export const loader = async ({ request }: Route.LoaderArgs) => {
-  const user = await getUserOrRedirect(request);
-  return { user }; // @todo move to client?
+export const clientLoader = async () => {
+  const response = await fetch("/api/v1/user", {
+    method: "post",
+    body: new URLSearchParams({
+      intent: "self",
+    }),
+  });
+  const user = await response.json();
+  const stripeId = user.stripe?.id;
+  return { user, stripeId };
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
-
+  const { user, stripeId } = loaderData;
   const fetcher = useFetcher();
   const handleStripeConnect = () => {
     fetcher.submit(
@@ -70,13 +74,6 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
     );
   }, []);
 
-  useEffect(() => {
-    fetcher.submit(
-      { intent: "get_account_payments", accountId: user.stripe?.id },
-      { method: "post", action: "/api/v1/stripe/account" }
-    );
-  }, []);
-
   const clientSecret = fetcher.data?.clientSecret;
 
   useEffect(() => {
@@ -109,17 +106,12 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
             }
           />
         )}
-
-        {stripeConnectInstance && (
-          <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
-            <ConnectPayments />
-          </ConnectComponentsProvider>
-        )}
+        <SalesTable stripeId={stripeId} />
         {stripeConnectInstance && (
           <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
             <ConnectAccountOnboarding
               onExit={() => {
-                console.log("The account has exited onboarding");
+                console.log("The account has exited onboarding"); // @todo notify or save status?
               }}
               // Optional: make sure to follow our policy instructions above
               // fullTermsOfServiceUrl="{{URL}}"
