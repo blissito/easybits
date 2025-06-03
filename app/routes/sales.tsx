@@ -23,18 +23,30 @@ import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
 } from "@stripe/connect-js";
-import { createPaymentsSession } from "~/.server/stripe_v2";
+import { createClientSecret, getStripeCapabilities } from "~/.server/stripe_v2";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  const capabilities = await getStripeCapabilities(user.stripe?.id);
   let client_secret;
-  if (user.stripe?.id) {
-    client_secret = await createPaymentsSession(user.stripe.id);
+
+  if (capabilities?.card_payments === "inactive") {
+    client_secret = await createClientSecret({
+      accountId: user.stripe.id,
+      onboarding: true,
+    });
   }
 
-  return { user, clientSecret: client_secret };
+  if (capabilities?.card_payments !== "inactive") {
+    client_secret = await createClientSecret({
+      accountId: user.stripe.id,
+      payments: true,
+    });
+  }
+
+  return { user, clientSecret: client_secret, capabilities };
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {

@@ -18,31 +18,57 @@ type CreateAccountResponse = {
 
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
+const accountsURL = "https://api.stripe.com/v1/accounts";
 const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
 const version = "2025-04-30.preview";
 
-export const createPaymentsSession = async (accountId: string) => {
+//   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
+type Capabilities = {
+  card_payments: "inactive" | "active";
+  transfers: "inactive" | "active";
+};
+
+export const createClientSecret = async ({
+  accountId,
+  onboarding,
+  payments,
+}: {
+  accountId: string;
+  onboarding: boolean;
+  payments: boolean;
+}) => {
   const url = new URL(accountSessionsURL);
   url.searchParams.set("account", accountId);
-  url.searchParams.set("components[payments][enabled]", "true");
-  url.searchParams.set("components[account_onboarding][enabled]", "true");
-  //   url.searchParams.set(
-  //     "components[payments][features][refund_management]",
-  //     "true"
-  //   );
-  //   url.searchParams.set(
-  //     "components[payments][features][dispute_management]",
-  //     "true"
-  //   );
-  //   url.searchParams.set(
-  //     "components[payments][features][capture_payments]",
-  //     "true"
-  //   );
-  //   url.searchParams.set(
-  //     "components[payments][features][destination_on_behalf_of_charge_management]",
-  //     "false"
-  //   );
+  onboarding &&
+    url.searchParams.set("components[account_onboarding][enabled]", "true");
+  payments && url.searchParams.set("components[payments][enabled]", "true");
+  const init = getInit(undefined, {
+    "content-type": "application/x-www-form-urlencoded",
+  });
+  const response = await fetch(url.toString(), init);
+  const data = await response.json();
+  //   console.log("Account session", data);
+  return data.client_secret;
+};
 
+export const getStripeCapabilities = async (
+  accountId?: string
+): Promise<Capabilities | null> => {
+  if (!accountId) return null;
+
+  const account = await getStripeAccount(accountId);
+  return account.capabilities;
+};
+
+const getStripeAccount = async (accountId: string) => {
+  const url = new URL(accountsURL + `/${accountId}`);
+  const response = await fetch(url.toString(), getInit());
+  const data = await response.json();
+  return data;
+};
+
+export const createPaymentsSession = async (accountId: string) => {
+  const url = new URL(accountSessionsURL);
   const init = getInit(undefined, {
     "content-type": "application/x-www-form-urlencoded",
   });
