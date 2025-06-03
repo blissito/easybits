@@ -23,34 +23,16 @@ import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
 } from "@stripe/connect-js";
-import { createClientSecret, getStripeCapabilities } from "~/.server/stripe_v2";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  const capabilities = await getStripeCapabilities(user.stripe?.id);
-  let client_secret;
-
-  if (capabilities?.card_payments === "inactive") {
-    client_secret = await createClientSecret({
-      accountId: user.stripe.id,
-      onboarding: true,
-    });
-  }
-
-  if (capabilities?.card_payments !== "inactive") {
-    client_secret = await createClientSecret({
-      accountId: user.stripe.id,
-      payments: true,
-    });
-  }
-
-  return { user, clientSecret: client_secret, capabilities };
+  return { user }; // @todo move to client?
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
-  const { user, clientSecret } = loaderData;
+  const { user } = loaderData;
 
   const fetcher = useFetcher();
   const handleStripeConnect = () => {
@@ -64,7 +46,7 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
       }
     );
   };
-  const [cs, setClientSecret] = useState<string | null>(null);
+  // const [cs, setClientSecret] = useState<string | null>(null);
   const isLoading = fetcher.state !== "idle";
   // @todo remove from here
   const publishableKey =
@@ -82,21 +64,19 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
   };
 
   useEffect(() => {
-    if (!cs) return;
-    createInstance(cs);
-  }, [cs]);
-
-  useEffect(() => {
-    setClientSecret(clientSecret);
+    fetcher.submit(
+      { intent: "get_client_secret", accountId: user.stripe?.id },
+      { method: "post", action: "/api/v1/stripe/account" }
+    );
   }, []);
 
-  const onboardingClientSecret = fetcher.data?.clientSecret;
+  const clientSecret = fetcher.data?.clientSecret;
 
   useEffect(() => {
-    if (!onboardingClientSecret) return;
+    if (!clientSecret) return;
 
-    createInstance(onboardingClientSecret);
-  }, [onboardingClientSecret]);
+    createInstance(clientSecret);
+  }, [clientSecret]);
 
   return (
     <>
@@ -123,25 +103,9 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
           />
         )}
 
-        {cs && stripeConnectInstance && (
+        {stripeConnectInstance && (
           <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
-            <ConnectPayments
-            // onExit={() => {
-            //   console.log("The account has exited onboarding");
-            // }}
-            // Optional: make sure to follow our policy instructions above
-            // fullTermsOfServiceUrl="{{URL}}"
-            // recipientTermsOfServiceUrl="{{URL}}"
-            // privacyPolicyUrl="{{URL}}"
-            // skipTermsOfServiceCollection={false}
-            // collectionOptions={{
-            //   fields: 'eventually_due',
-            //   futureRequirements: 'include',
-            // }}
-            // onStepChange={(stepChange) => {
-            //   console.log(`User entered: ${stepChange.step}`);
-            // }}
-            />
+            <ConnectPayments />
           </ConnectComponentsProvider>
         )}
         {stripeConnectInstance && (
@@ -165,22 +129,6 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
             />
           </ConnectComponentsProvider>
         )}
-
-        {/* {!connectedAccountId && (
-          <EmptyPayment
-            connectedAccountId={connectedAccountId}
-            stripeConnectInstance={stripeConnectInstance}
-            setOnboardingExited={setOnboardingExited}
-            isStripeLoading={isStripeLoading}
-            isModalOpen={isModalOpen}
-            setIsModalOpen={setIsModalOpen}
-            user={loaderData?.user}
-          />
-        )} */}
-
-        {/* // ya estas en stripe y no has vendido */}
-        {/* {orders.length < 1 && <EmptySales />}
-        {orders.length > 0 && <SalesTable orders={orders} />} */}
       </article>
     </>
   );
