@@ -22,17 +22,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "get_client_secret") {
+    let clientSecret;
     const accountId = formData.get("accountId") as string;
     const capabilities = await getAccountCapabilities(accountId);
-    if (!capabilities) return { clientSecret: null };
-
-    const clientSecret = await createClientSecret({
-      accountId,
-      onboarding: capabilities?.card_payments === "inactive",
-      payments: capabilities?.card_payments !== "inactive",
-    });
+    if (!capabilities) {
+      clientSecret = await createClientSecret({
+        accountId,
+        onboarding: true,
+        payments: false,
+      });
+    } else {
+      clientSecret = await createClientSecret({
+        accountId,
+        onboarding: capabilities?.card_payments === "inactive",
+        payments: capabilities?.card_payments !== "inactive",
+      });
+    }
     return { clientSecret };
-    // return new Response(JSON.stringify({ client_secret }));
   }
 
   if (intent === "create_new_account") {

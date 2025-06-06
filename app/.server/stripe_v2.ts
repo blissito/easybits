@@ -190,8 +190,13 @@ export const getAccountCapabilities = async (
 ): Promise<Capabilities | null> => {
   if (!accountId) return null;
 
-  const account = await getStripeAccount(accountId);
-  return account.capabilities;
+  const url = new URL(accountsURL + `/${accountId}`);
+  // url.searchParams.append("include", "identity");
+  url.searchParams.append("include", "configuration.merchant");
+  const response = await fetch(url.toString(), getInit());
+  const data = await response.json();
+  console.log("ACCOUNT_FOUND::", data);
+  return data.configuration?.merchant?.capabilities;
 };
 
 export const findOrCreateStripeAccountV2 = async (email: string) => {
@@ -221,7 +226,7 @@ export const findOrCreateStripeAccountV2 = async (email: string) => {
 
 export const getStripeAccount = async (accountId: string) => {
   const url = new URL(accountsURL + `/${accountId}`);
-  // url.searchParams.set("include", "contact_email");
+  // url.searchParams.set("include", "capabilities");
   const response = await fetch(url.toString(), getInit());
   const data = await response.json();
   return data;
@@ -276,7 +281,7 @@ export const createAccountV2 = async (
       locales: ["es"],
     },
     configuration: {
-      customer: {},
+      // customer: {},
       //   recipient: {
       //     capabilities: {
       //       stripe_balance: {

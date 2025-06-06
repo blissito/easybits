@@ -79,6 +79,8 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
     createInstance(clientSecret);
   }, [clientSecret]);
 
+  console.log("CLIENTSECRET::", clientSecret);
+
   return (
     <>
       <article
