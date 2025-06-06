@@ -52,7 +52,7 @@ export type Payment = {
 
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
-const accountsURL = "https://api.stripe.com/v1/accounts";
+const accountsURL = "https://api.stripe.com/v2/core/accounts";
 const paymentsURL = "https://api.stripe.com/v1/payment_intents";
 const productsURL = "https://api.stripe.com/v1/products";
 const pricesURL = "https://api.stripe.com/v1/prices";
@@ -194,8 +194,34 @@ export const getAccountCapabilities = async (
   return account.capabilities;
 };
 
-const getStripeAccount = async (accountId: string) => {
+export const findOrCreateStripeAccountV2 = async (email: string) => {
+  let { stripeId } =
+    (await db.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        stripeId: true,
+      },
+    })) || {};
+
+  if (!stripeId) {
+    const { id: accountId } = await createAccountV2({ email } as User);
+    await db.user.upsert({
+      where: {
+        email,
+      },
+      create: { stripeId: accountId, email, confirmed: true },
+      update: { stripeId: accountId },
+    });
+    stripeId = accountId;
+  }
+  return getStripeAccount(stripeId);
+};
+
+export const getStripeAccount = async (accountId: string) => {
   const url = new URL(accountsURL + `/${accountId}`);
+  // url.searchParams.set("include", "contact_email");
   const response = await fetch(url.toString(), getInit());
   const data = await response.json();
   return data;

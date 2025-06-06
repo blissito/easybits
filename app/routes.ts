@@ -17,7 +17,7 @@ export default [
     route(":assetSlug/review", "routes/assets/ReviewAsset.tsx"),
   ]),
   route("/dominio-personalizado", "routes/domains.tsx"),
-  route("/login", "routes/login.tsx"),
+  route("/login/:success?", "routes/login.tsx"),
   route("/logout", "routes/logout.tsx"),
   route("/preview", "routes/preview.tsx"),
   route("/onboarding", "routes/onboarding/onboarding.tsx"),

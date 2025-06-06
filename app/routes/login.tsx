@@ -10,7 +10,7 @@ import {
   sendMagicLink,
 } from "~/.server/emails/sendNewsLetter";
 
-export const loader = async ({ request }: Route.LoaderArgs) => {
+export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const setRedirectCookie = async (request: Request, next: string) => {
     const cookieHeader = request.headers.get("Cookie");
     const cookie = (await redirectCookie.parse(cookieHeader)) || {};
@@ -40,22 +40,19 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
   // the pair to handle multiple
   let session;
-  if (code) {
-    switch (auth) {
-      case "stripe":
-        await createStripeSession(code, request); // @todo return session (like google)
-        break;
-      case "google":
-        session = await createGoogleSession(code, request);
-        // @todo update account?
-        sendConfrimation(session.get("email"), { validate: true });
-        break;
-      default:
-        return { error: "Error" };
-    }
+
+  // stripe returning with code (Stripe doesn't like param:auth=stripe)
+  if (code && params.success === "success") {
+    session = await createStripeSession(code, request);
   }
+
+  if (code && auth === "google") {
+    session = await createGoogleSession(code, request);
+    sendConfrimation(session.get("email"), { validate: true }); // @revisit
+  }
+
   if (session) {
-    cookie = await getRedirectCookie(request);
+    cookie = await getRedirectCookie(request); // @todo revisit all this, maybe not needed
     if (cookie["next"]) {
       const next = cookie["next"];
       cookie["next"] = undefined;
@@ -82,15 +79,10 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
     case "email_signup":
       const email = formData.get("email") as string;
       const displayName = formData.get("displayName") as string;
-      // const exists = await db.user.findUnique({ where: { email } });
-      // if (exists && exists.confirmed) { // @todo texperimenting
       const url = new URL(request.url);
       const next = url.searchParams.get("next");
-      await sendMagicLink(email, { displayName, next }); // @todo notify that can be avoided to user?
+      await sendMagicLink(email, { displayName, next });
       return { state: "success" };
-      // }
-      // await sendConfrimation(email, { displayName });
-      return { state: "confirmation_success" };
     default:
       return { error: "Error" };
   }
