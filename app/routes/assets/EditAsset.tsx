@@ -59,12 +59,3 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
     </article>
   );
 }
-
-const Prev = ({ asset, className }) => {
-  return (
-    <article className={className}>
-      <HeaderTemplate asset={asset} />
-      <ContentTemplate asset={asset} files={[]} />
-    </article>
-  );
-};

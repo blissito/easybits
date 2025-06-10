@@ -11,6 +11,7 @@ import {
   updateOrCreateProductAndPrice,
   updateProduct,
 } from "~/.server/stripe_v2";
+import { redirect } from "react-router";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -141,13 +142,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // }
     }
     // @todo always?
-    const r = await updateProduct({
+    await updateProduct({
       productId: asset.stripeProduct!,
       accountId: user.stripeId!,
       images: asset.gallery,
       description: asset.note!,
     });
-    return asset;
+    return redirect(`/dash/assets/${asset.id}/edit`);
   }
 
   if (intent === "update_asset_gallery_links") {

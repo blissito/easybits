@@ -17,6 +17,7 @@ import Spinner from "~/components/common/Spinner";
 import { useControlSave } from "~/hooks/useControlSave";
 import toast, { Toaster } from "react-hot-toast";
 import { EbookFields } from "./EbookFields";
+import { useUploader } from "~/hooks/useUploader";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -71,11 +72,11 @@ export const EditAssetForm = ({
   host,
   asset,
   assetFiles,
-  files = [],
+  // files = [],
   onUpdate,
 }: {
   onUpdate?: (arg0: Partial<Asset>) => void;
-  files: File[];
+  // files: File[];
   assetFiles?: File[];
   asset: Asset;
   host: string;
@@ -126,7 +127,7 @@ export const EditAssetForm = ({
   };
 
   const fetcher = useFetcher();
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const { error, success } = assetClientSchema.safeParse(form);
@@ -136,6 +137,8 @@ export const EditAssetForm = ({
       console.error(error);
       return;
     }
+
+    await updateGalleryAndForm(); // @todo raceCondition?
 
     fetcher.submit(
       {
@@ -167,6 +170,25 @@ export const EditAssetForm = ({
     toast.success("Tu Asset se ha guardado");
   });
 
+  //will mantain a copy of the files
+  const [files, setFiles] = useState([]);
+  const { upload, onRemove, links } = useUploader({
+    assetId: asset.id,
+    defaultLinks: asset.gallery,
+  });
+  const uploadGallery = async () => {
+    const promises = files.map((file) => upload(file, asset.id));
+    return Promise.all(promises);
+  };
+  const updateGalleryAndForm = async () => {
+    const links = (await uploadGallery()).filter((l) => l !== null);
+    console.log("Los links:", links);
+    setForm((fo) => ({ ...fo, gallery: links }));
+  };
+  const emptyFiles = () => {
+    setFiles([]);
+  };
+
   return (
     <article className="w-full px-4">
       <LayoutGroup>
@@ -194,7 +216,13 @@ export const EditAssetForm = ({
               error={errors.description}
             />
           </Suspense>
-          <GalleryUploader limit={3} asset={asset} host={host} />
+          <GalleryUploader
+            limit={3}
+            asset={asset}
+            host={host}
+            onChange={setFiles}
+            files={files}
+          />
           <HR />
           <PriceInput
             defaultPrice={asset.price}

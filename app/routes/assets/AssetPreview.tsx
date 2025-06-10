@@ -25,8 +25,6 @@ export const AssetPreview = ({
   host: string;
   asset: Asset;
 }) => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
   const reload = () => {
     location.reload();
   };

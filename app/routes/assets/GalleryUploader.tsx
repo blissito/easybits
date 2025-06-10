@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { LuImageUp } from "react-icons/lu";
 import { IoClose } from "react-icons/io5";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
-import { useFetcher } from "react-router";
 import { useUploader } from "~/hooks/useUploader";
 import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
@@ -12,14 +16,28 @@ import { useImageResize } from "~/hooks/useImageResize";
 export const GalleryUploader = ({
   limit = Infinity,
   asset,
+  onChange,
+  files: externalFiles,
 }: {
+  files: File[];
+  onChange?: (files: File[]) => void;
   limit?: number;
   host: string;
   asset: Asset;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<File[]>(externalFiles);
+
+  // external files change
+  useEffect(() => {
+    setFiles(externalFiles);
+  }, [externalFiles]);
+
+  // files change
+  useEffect(() => {
+    onChange?.(files);
+  }, [files]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -45,9 +63,13 @@ export const GalleryUploader = ({
   const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
     if (!ev.currentTarget.files) return;
 
-    const fls = [...ev.currentTarget.files];
-    // setFiles((fs) => [...fs, ...fls]);
-    setFiles(fls);
+    addFiles([...ev.currentTarget.files]);
+  };
+
+  const addFiles = (newFiles: File[]) => {
+    setFiles((currentFiles) => {
+      return [...currentFiles, ...newFiles];
+    });
   };
 
   const { upload, links, onRemove } = useUploader({
@@ -86,29 +108,24 @@ export const GalleryUploader = ({
     resize({ link });
   };
 
-  useEffect(() => {
-    if (files.length < 1) return;
+  const canUpload = limit > links.length + files.length;
 
-    const asyncUpload = async () => {
-      const promises = files.map((f) => upload(f, asset.id));
-      await Promise.all(promises);
-    };
-    asyncUpload();
-    uploadMetaImage();
-  }, [files]);
+  const elemsLength = files.length + links.length;
 
-  const canUpload = limit > links.length;
+  const handleRemoveFile = (index: number) => () => {
+    setFiles(files.filter((_, i) => i !== index));
+  };
 
   return (
     <article className="">
       <h2 className="mt-5 mb-2">Galería y miniatura principal</h2>
 
       <section
-        className="overflow-auto"
+        className="overflow-auto flex gap-3"
         onMouseEnter={() => setIsHovered("hover")}
         onMouseLeave={() => setIsHovered(null)}
       >
-        {links.length < 1 && canUpload && (
+        {elemsLength < 1 && canUpload && (
           <motion.button
             layoutId="upload_button"
             onClick={() => fileInputRef.current?.click()}
@@ -139,14 +156,28 @@ export const GalleryUploader = ({
             </p>
           </motion.button>
         )}
-        {links.length > 0 && (
+
+        {elemsLength > 0 && (
           <RowGalleryEditor
+            files={
+              <section className="flex gap-3">
+                {files.map((f, i) => (
+                  <Image
+                    onRemove={handleRemoveFile(i)}
+                    as="figure"
+                    key={i}
+                    src={URL.createObjectURL(f)}
+                  />
+                ))}
+              </section>
+            }
             canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
             links={links}
             onRemove={(url) => onRemove(url, asset.id)}
           />
         )}
+
         <input
           multiple
           accept="image/*"
@@ -165,7 +196,9 @@ const RowGalleryEditor = ({
   onClick,
   onRemove,
   canUpload,
+  files,
 }: {
+  files?: ReactNode;
   canUpload?: boolean;
   links?: string[];
   onRemove?: (arg0: string) => void;
@@ -179,7 +212,7 @@ const RowGalleryEditor = ({
             <Image onRemove={() => onRemove?.(l)} key={l} src={l} />
           ))}
         </AnimatePresence>
-
+        {files}
         {links.length < 10 && canUpload && (
           <motion.button
             whileHover={{ scale: 0.95 }}
@@ -198,13 +231,16 @@ const RowGalleryEditor = ({
 
 const Image = ({
   src,
+  as,
   onRemove,
 }: {
+  as?: string;
   src: string;
   onRemove?: () => void; // @todo remove file from s3
 }) => {
+  const C = as ? as : "motion.figure";
   return (
-    <motion.figure
+    <C
       layout
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
@@ -224,6 +260,6 @@ const Image = ({
         alt="preview"
         className="rounded-2xl object-cover w-full h-full"
       />
-    </motion.figure>
+    </C>
   );
 };
