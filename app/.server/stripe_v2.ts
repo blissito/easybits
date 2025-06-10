@@ -89,6 +89,7 @@ export const createCheckoutURL = async (assetId: string) => {
   url.searchParams.set("line_items[0][quantity]", "1");
   url.searchParams.set("line_items[0][price]", asset.stripePrice);
   url.searchParams.set("success_url", `${location}/api/v1/stripe/success`);
+  // url.searchParams.set("return_url", `${location}/api/v1/stripe/success`);
   return await fetch(url.toString(), {
     method: "post",
     headers: {

@@ -29,7 +29,12 @@ export default function Waitlist() {
               &#8702;
             </span>
           </Link>
-          <Link to="/logout">Cerrar sesión</Link>
+          <Link
+            className="py-2 px-6 font-bold border-2 rounded-2xl my-10"
+            to="/logout"
+          >
+            Cerrar sesión
+          </Link>
         </div>
       </section>
     </section>
