@@ -67,8 +67,7 @@ export const GalleryUploader = ({
         }),
       });
       const putURL = await response.text();
-      console.log("PUT:", putURL);
-      return;
+      // console.log("PUT:", putURL);
       // 2. upload
       await fetch(putURL, {
         method: "put",
