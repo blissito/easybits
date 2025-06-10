@@ -16,6 +16,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  if (intent === "enroll_user") {
+    const email = formData.get("email") as string;
+    await db.user.update({
+      where: { email },
+      data: { roles: { push: "Enrolled" } },
+    });
+    return null;
+  }
+
   // @todo NOT SECURE only for development propouses
   if (intent === "create_session") {
     const email = formData.get("email") as string;

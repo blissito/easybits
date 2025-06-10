@@ -8,7 +8,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "account_checkout") {
     const assetId = (await formData).get("assetId") as string;
     const url = await createCheckoutURL(assetId);
-    console.log("URL:", url);
     return redirect(url);
   }
   return null;
