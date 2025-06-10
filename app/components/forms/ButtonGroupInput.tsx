@@ -35,7 +35,7 @@ const ButtonGroupInput = ({
   };
 
   return (
-    <div className={`flex gap-3 ${className}`}>
+    <div className={`flex gap-4 ${className}`}>
       {options.map((option, key) => {
         const isSelected = option.value === value;
         return (
@@ -54,10 +54,10 @@ const ButtonGroupInput = ({
               key={option.value}
               onClick={() => handleClick(option.value)}
               className={cn(
-                "border border-black h-full min-h-10 relative rounded-xl group-hover:-translate-y-2 group-hover:-translate-x-2 bg-white p-4 transition-all text-center overflow-hidden",
+                "border border-black h-full min-h-10 relative rounded-xl group-hover:-translate-y-1 group-hover:-translate-x-1 bg-white p-4 transition-all text-center overflow-hidden",
                 buttonClassName,
                 {
-                  "-translate-y-2 -translate-x-2 ": isSelected,
+                  "-translate-y-1 -translate-x-1 ": isSelected,
                   [selectedButtonClassName]: isSelected,
                 }
               )}

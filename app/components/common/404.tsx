@@ -14,12 +14,12 @@ export const NotFound = ({
         <img src="/404-eb.webp" alt="404" />
       </div>
       <h2 className="text-2xl font-bold mt-4 mb-3">
-        {message ? message : "  ¡Vaya, vaya! Esta página no existe"}
+        {message === "404" ? "  ¡Vaya, vaya! Esta página no existe" : message}
       </h2>
       <p className="text-lg text-iron text-center mb-10">
-        {details
-          ? details
-          : " Esta página no está disponible o ha sido desactivada, pero no te desanimes, vuelve a la página principal o explora los assets en Comunidad EasyBits."}
+        {details === "The requested page could not be found."
+          ? " Esta página no está disponible o ha sido desactivada, pero no te desanimes, vuelve a la página principal o explora los assets en Comunidad EasyBits."
+          : details}
       </p>
       <div className="flex gap-6">
         <Link to="/inicio">

@@ -29,6 +29,7 @@ export default function Store({ loaderData }: Route.ComponentProps) {
     <div className=" w-full flex justify-center">
       <DNSModal onOpen={onOpen} onClose={onClose} user={user} isOpen={isOpen} />
       <StoreComponent
+        variant="slim"
         user={user}
         assets={assets}
         cta={

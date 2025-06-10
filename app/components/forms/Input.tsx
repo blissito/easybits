@@ -24,7 +24,7 @@ export const Input = ({
 }) => {
   return (
     <label className="relative">
-      <div className="mb-2 font-medium">{label}</div>
+      {label ? <div className="mb-2 font-medium">{label}</div> : null}
       <div className="relative">
         {prefix && (
           <div className="absolute inset-0 left-0 top-0 px-1 py-2 z-10 h-full w-[50px] flex items-center justify-center">
