@@ -16,6 +16,7 @@ import { Input } from "~/components/common/Input";
 import { useAnimate, motion } from "motion/react";
 import { SiGmail } from "react-icons/si";
 import { ContentTemplate, HeaderTemplate } from "./template";
+import { useSubmit } from "react-router";
 
 export const AssetPreview = ({
   asset,
@@ -26,10 +27,8 @@ export const AssetPreview = ({
 }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const reloadIframe = () => {
-    if (!iframeRef.current) return;
-
-    iframeRef.current.src = iframeRef.current.src;
+  const reload = () => {
+    location.reload();
   };
   const [isOpen, setIsOpen] = useState(false);
 
@@ -48,7 +47,7 @@ export const AssetPreview = ({
     >
       <nav className="flex items-center mb-8 gap-4">
         <h3 className="w-max text-xl mr-auto">Vista previa</h3>
-        <button onClick={reloadIframe} className="text-xl active:text-gray-500">
+        <button onClick={reload} className="text-xl active:text-gray-500">
           <LuRefreshCcw />
         </button>
         <button onClick={handleModal}>

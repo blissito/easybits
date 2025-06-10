@@ -125,11 +125,6 @@ export const GalleryUploader = ({
               }
             )}
           >
-            {/* <img
-              className={cn("w-8 aspect-square", {})}
-              src="/icons/image-upload.svg"
-              alt="upload illustration"
-            /> */}
             <ImageIcon
               className="w-8 h-"
               fill={isHovered ? "#9870ED" : " #6A6966"}
