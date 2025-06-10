@@ -22,21 +22,6 @@ export const Input = ({
   sufix?: ReactNode;
   [x: string]: unknown;
 }) => {
-  const {
-    instagram,
-    facebook,
-    x,
-    youtube,
-    website,
-    linkedin,
-    tiktok,
-    hexColor,
-    typography,
-    logoImage,
-    portadaImage,
-    showProducts,
-    socialNetworks,
-  } = user?.storeConfig || {};
   return (
     <label className="relative">
       {label ? <div className="mb-2 font-medium">{label}</div> : null}

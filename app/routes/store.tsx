@@ -28,18 +28,6 @@ export default function Store({ loaderData }: Route.ComponentProps) {
   return (
     <div className=" w-full flex justify-center">
       <DNSModal onOpen={onOpen} onClose={onClose} user={user} isOpen={isOpen} />
-      <StoreComponent
-        user={user}
-        assets={assets}
-        cta={
-          <button
-            onClick={onOpen}
-            className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px] active:"
-          >
-            <img className="w-full" src={GlobeIcon} />
-          </button>
-        }
-      />
     </div>
   );
 }

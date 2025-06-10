@@ -45,8 +45,8 @@ export const StoreTemplate = ({
     socialNetworks,
   } = user?.storeConfig || {};
   return (
-    <section>
-      <div className="overflow-hidden mb-20">
+    <section className="h-full">
+      <div className="overflow-hidden mb-20 ">
         <div
           className="w-full h-[224px] border-2 border-black relative bg-brand-500"
           style={{ backgroundColor: hexColor, fontFamily: typography }}
@@ -144,7 +144,7 @@ export const StoreTemplate = ({
 
 const StoreTemplateFooter = () => {
   return (
-    <div className="border-t-2 h-10 border-black flex gap-1 justify-center items-center">
+    <div className="border-t-2 h-10 border-black flex gap-1 justify-center items-center  w-full bg-white fixed bottom-0">
       <div className="flex gap-1 items-center">
         <img className="w-6" src="/logo-purple.svg" />
         <span className="text-xs">by</span>
