@@ -13,7 +13,7 @@ import type { Route } from "./+types/sales";
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
-  ConnectPayments,
+  // ConnectPayments,
 } from "@stripe/react-connect-js";
 import {
   loadConnectAndInitialize,
@@ -112,18 +112,6 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
               onExit={() => {
                 console.log("The account has exited onboarding"); // @todo notify or save status?
               }}
-              // Optional: make sure to follow our policy instructions above
-              // fullTermsOfServiceUrl="{{URL}}"
-              // recipientTermsOfServiceUrl="{{URL}}"
-              // privacyPolicyUrl="{{URL}}"
-              // skipTermsOfServiceCollection={false}
-              // collectionOptions={{
-              //   fields: 'eventually_due',
-              //   futureRequirements: 'include',
-              // }}
-              // onStepChange={(stepChange) => {
-              //   console.log(`User entered: ${stepChange.step}`);
-              // }}
             />
           </ConnectComponentsProvider>
         )}

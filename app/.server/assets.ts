@@ -12,6 +12,11 @@ export type AssetCreationPayload = {
   fileMetadata: any;
   publicLink?: string;
 };
+
+export const updateAsset = (assetId: string, data: any) => {
+  return db.asset.update({ where: { id: assetId }, data });
+};
+
 export const createAsset = async (data: AssetCreationPayload) => {
   const {
     fileMetadata,

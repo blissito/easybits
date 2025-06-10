@@ -4,11 +4,13 @@ import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
 import { loadStripe } from "@stripe/stripe-js";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
-import { useActionData } from "react-router";
+import { useActionData, useFetcher } from "react-router";
 import { useMemo } from "react";
 import { EmojiConfetti } from "~/components/Confetti";
 import { FooterSuscription } from "~/components/forms/FooterSubscription";
 import type { Asset } from "@prisma/client";
+import { Button } from "~/components/common/Button";
+import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const meta = ({
   data: {
@@ -49,7 +51,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     const hostExists = await db.user.findFirst({
       where: { host },
     });
-    console.log("HOST?", hostExists);
+
     if (!hostExists && host !== "localhost")
       throw new Response("User not found", { status: 404 });
 
@@ -64,6 +66,9 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     });
   }
   if (!asset) throw new Response("Asset not found", { status: 404 });
+
+  // Generating ActionButton
+  const OpenCheckout = <button className="bg-indigo-500">Pushale</button>;
 
   const publishableKey = await getPublishableKey();
   const searchParams = url.searchParams;
@@ -85,6 +90,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   });
 
   return {
+    OpenCheckout,
     files,
     asset,
     publishableKey,
@@ -123,7 +129,8 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { asset, publishableKey, files, successStripeId } = loaderData;
+  const { OpenCheckout, asset, publishableKey, files, successStripeId } =
+    loaderData;
   const actionData = useActionData();
   const assetUserStripeId = asset?.user?.stripe?.id;
   const stripePromise = useMemo(() => {
@@ -132,6 +139,23 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       stripeAccount: assetUserStripeId,
     });
   }, [publishableKey, assetUserStripeId]);
+
+  // Fetcher
+  const fetcher = useFetcher();
+  const isLoading = fetcher.state !== "idle";
+  // Stripe Checkout
+  const handleOpenCheckout = () => {
+    fetcher.submit(
+      {
+        intent: "account_checkout",
+        assetId: asset.id,
+      },
+      {
+        method: "post",
+        action: "/api/v1/stripe/checkout",
+      }
+    );
+  };
 
   return (
     <article>
@@ -142,6 +166,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         stripePromise={stripePromise}
         checkoutSession={actionData?.checkoutSession}
         files={files}
+        actionButton={
+          asset.price !== "0" && asset.price !== 0 ? (
+            <BrutalButton
+              isLoading={isLoading}
+              type="button"
+              onClick={handleOpenCheckout}
+              mode="landing"
+            >
+              {"Comprar"}
+            </BrutalButton>
+          ) : null
+        }
       />
 
       <FooterTemplate

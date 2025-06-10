@@ -18,25 +18,31 @@ export const SalesTable = ({ stripeId }: { stripeId?: string }) => {
   }, []);
   const paymentIntents: Payment[] = fetcher.data?.payments || [];
   const capabilities: Record<string, string> = fetcher.data?.capabilities || {};
-  if (capabilities.card_payments !== "active") return null; // only if active account
+  if (capabilities.card_payments?.status !== "active") return null; // only if active account
 
   return (
-    <>
-      <article className="bg-white border-[1px] rounded-xl border-black text-xs ">
-        <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
-          <span className="col-span-3">Email</span>
-          <span className="col-span-2">Asset</span>
-          <span className="col-span-3">Fecha </span>
-          <span className="col-span-2">Precio</span>
-          <span className="col-span-2"></span>
-        </section>
-        <AnimatePresence>
-          {paymentIntents.map((payment) => (
-            <Row payment={payment} key={payment.id} />
-          ))}
-        </AnimatePresence>
-      </article>
-    </>
+    <article className="bg-white border-[1px] rounded-xl border-black text-xs ">
+      <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
+        <span className="col-span-3">Email</span>
+        <span className="col-span-2">Asset</span>
+        <span className="col-span-3">Fecha </span>
+        <span className="col-span-2">Precio</span>
+        <span className="col-span-2"></span>
+      </section>
+      <AnimatePresence>
+        {paymentIntents.map((payment) => (
+          <Row payment={payment} key={payment.id} />
+        ))}
+        {paymentIntents.length < 1 && (
+          <motion.p
+            key="empty"
+            className="p-10 mx-auto text-center font-semibold"
+          >
+            Aún no tienes ventas 🥲
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </article>
   );
 };
 

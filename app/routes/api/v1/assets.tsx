@@ -129,7 +129,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
     if (asset.id) {
       // @todo try to update or create stripe product
-      await updateOrCreateProductAndPrice(asset, request);
+      // if (Number(asset.price) !== Number(data.price)) { // @revisit
+      const price = await updateOrCreateProductAndPrice(asset, request);
+      console.log("NEW_PRICE::", price);
+      // }
     }
     return asset;
   }
