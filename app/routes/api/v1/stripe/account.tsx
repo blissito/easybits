@@ -15,10 +15,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "get_account_payments") {
     // @todo permissions
-    const stripeId = formData.get("stripeId") as string;
-    const payments = await getAccountPayments(stripeId);
-    const capabilities = await getAccountCapabilities(stripeId);
-    return { payments, capabilities };
+    const accountId = formData.get("stripeId") as string;
+    const payments = await getAccountPayments(accountId);
+    const capabilities = await getAccountCapabilities(accountId);
+    return {
+      payments,
+      capabilities,
+    };
   }
 
   if (intent === "get_client_secret") {
@@ -34,8 +37,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
     } else {
       clientSecret = await createClientSecret({
         accountId,
-        onboarding: capabilities?.card_payments === "inactive",
-        payments: capabilities?.card_payments !== "inactive",
+        onboarding: capabilities.card_payments?.status !== "active",
+        payments: capabilities.card_payments?.status === "active",
       });
     }
     return { clientSecret };

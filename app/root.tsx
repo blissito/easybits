@@ -19,6 +19,7 @@ import { db } from "./.server/db";
 import StoreComponent from "./components/store/StoreComponent";
 import Page from "./routes/assets/PublicCustomLanding";
 import { NotFound } from "./components/common/404";
+import { DevAdmin } from "./components/experimental/DevAdmin";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -51,6 +52,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ScrollRestoration />
         <Scripts />
         <Toaster />
+        <DevAdmin />
       </body>
     </html>
   );
@@ -58,6 +60,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
+
+  let isDev = true;
 
   // localhost || inicio
   if (url.hostname === "localhost") {

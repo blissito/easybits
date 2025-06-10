@@ -10,7 +10,7 @@ interface BrutalButtonProps {
   isDisabled?: boolean;
   isLoading?: boolean;
   onClick?: () => void;
-  mode?: "ghost" | "brand" | "danger";
+  mode?: "ghost" | "brand" | "danger" | "landing" | "inverted";
   type?: "button" | "submit";
   [x: string]: unknown;
 }
@@ -33,6 +33,7 @@ export const BrutalButton = ({
       disabled={isDisabled || isLoading}
       className={cn("group rounded-xl h-12 bg-black", containerClassName, {
         "bg-black/70": isDisabled || isLoading,
+        "w-full": mode === "landing",
       })}
       type={type}
       {...props}
@@ -56,6 +57,10 @@ export const BrutalButton = ({
             "active:te-x-0 active:translate-y-0": !isDisabled && !isLoading,
             "hover:-translate-x-1 hover:-translate-y-1":
               !isDisabled && !isLoading,
+            "w-full rounded-none border-none hover:-translate-x-0 hover:-translate-y-0":
+              mode === "landing", // se usa para el checkout
+            "-translate-x-1 -translate-y-1 hover:-translate-x-0 hover:-translate-y-0":
+              mode === "inverted",
           }
         )}
       >

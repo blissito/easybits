@@ -74,6 +74,8 @@ export default [
       route("account_session", "routes/api/v1/stripe/account_session.tsx"),
       route("plans", "routes/api/v1/stripe/plans.tsx"),
       route("webhook", "routes/api/v1/stripe/webhook.tsx"),
+      route("checkout", "routes/api/v1/stripe/checkout.tsx"),
+      route("success", "routes/api/v1/stripe/success.tsx"),
     ]),
   ]),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),

@@ -26,7 +26,9 @@ export const ContentTemplate = ({
   stripePromise,
   checkoutSession,
   files = [],
+  actionButton,
 }: {
+  actionButton?: ReactNode;
   files?: File[];
   asset: Asset;
 }) => {
@@ -60,6 +62,7 @@ export const ContentTemplate = ({
             asset={asset}
             stripePromise={stripePromise}
             checkoutSession={checkoutSession}
+            actionButton={actionButton}
           />
         </div>
       </div>
@@ -149,7 +152,9 @@ const Info = ({
   asset,
   stripePromise,
   checkoutSession,
+  actionButton,
 }: {
+  actionButton?: ReactNode;
   asset: Asset;
   files?: File[];
 }) => {
@@ -185,6 +190,8 @@ const Info = ({
           text={text}
         />
       )}
+
+      {actionButton}
 
       <div className="h-fit p-6 border-b-[2px] border-black content-center">
         <Markdown>{asset.note}</Markdown>

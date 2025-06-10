@@ -7,7 +7,10 @@ import type { Route } from "./+types/assets";
 import type { Asset } from "@prisma/client";
 import { getPutFileUrl, deleteObject } from "react-hook-multipart";
 import type { Action } from "~/components/forms/NewsLetterForm";
-import { updateOrCreateProductAndPrice } from "~/.server/stripe_v2";
+import {
+  updateOrCreateProductAndPrice,
+  updateProduct,
+} from "~/.server/stripe_v2";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -114,8 +117,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (data.template?.slug) {
       data.slug = data.template.slug; // @todo should recive it directly?
     }
-    // @todo no validation?
-    const asset = await db.asset.update({
+    // @todo exists validation?
+    let asset = await db.asset.findUnique({ where: { id: data.id } });
+    if (!asset) throw new Response("Asset not found::", { status: 404 });
+
+    const old = asset.price;
+
+    asset = await db.asset.update({
       where: {
         id: data.id,
       },
@@ -127,10 +135,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
         price: Number(data.price),
       }, // @todo remove id in parsing
     });
-    if (asset.id) {
-      // @todo try to update or create stripe product
-      await updateOrCreateProductAndPrice(asset, request);
+    const nuevo = asset.price;
+    if (old !== nuevo) {
+      const price = await updateOrCreateProductAndPrice(asset, request);
+      // }
     }
+    // @todo always?
+    const r = await updateProduct({
+      productId: asset.stripeProduct!,
+      accountId: user.stripeId!,
+      images: asset.gallery,
+      description: asset.note!,
+    });
     return asset;
   }
 

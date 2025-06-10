@@ -9,10 +9,33 @@ import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 import { handleTurnstilePost } from "~/.server/turnstile";
 import { db } from "~/.server/db";
+import { commitSession, getSession } from "~/.server/sessions";
+import { redirect } from "react-router";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "enroll_user") {
+    const email = formData.get("email") as string;
+    await db.user.update({
+      where: { email },
+      data: { roles: { push: "Enrolled" } },
+    });
+    return null;
+  }
+
+  // @todo NOT SECURE only for development propouses
+  if (intent === "create_session") {
+    const email = formData.get("email") as string;
+    const session = await getSession(request.headers.get("Cookie"));
+    session.set("email", email);
+    return redirect("/dash/perfil", {
+      headers: {
+        "Set-Cookie": await commitSession(session),
+      },
+    });
+  }
 
   if (intent === "send_confirmation") {
     const email = formData.get("email") as string;

@@ -1,6 +1,7 @@
 import type { Asset, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { db } from "./db";
+import { updateAsset } from "./assets";
 
 type CreateAccountResponse = {
   id: string;
@@ -57,7 +58,51 @@ const paymentsURL = "https://api.stripe.com/v1/payment_intents";
 const productsURL = "https://api.stripe.com/v1/products";
 const pricesURL = "https://api.stripe.com/v1/prices";
 const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
+const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
+
+const location =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : "https://www.easybits.cloud";
+
+export const createCheckoutURL = async (assetId: string) => {
+  // get everything
+  const asset = await db.asset.findUnique({ where: { id: assetId } });
+  if (!asset) throw new Response("Asset not found", { status: 404 });
+
+  const user = await db.user.findUnique({
+    where: {
+      id: asset.userId,
+    },
+  });
+  if (!user || !user.stripeId)
+    throw new Response("User not found", { status: 404 });
+  if (!asset.stripePrice)
+    throw new Response("StripePrice not found", { status: 404 });
+
+  const accountId = user.stripeId;
+  //
+
+  const url = new URL(checkoutSessionsURL);
+  url.searchParams.set("mode", `payment`);
+  url.searchParams.set("line_items[0][quantity]", "1");
+  url.searchParams.set("line_items[0][price]", asset.stripePrice);
+  url.searchParams.set("success_url", `${location}/api/v1/stripe/success`);
+  // url.searchParams.set("return_url", `${location}/api/v1/stripe/success`);
+  return await fetch(url.toString(), {
+    method: "post",
+    headers: {
+      Authorization: apiKey,
+      "Stripe-Account": accountId,
+      "Stripe-Version": "2025-04-30.preview",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+  })
+    .then((r) => r.json())
+    .then((data) => data.url) // return url only
+    .catch((e) => console.error("::STRIPE::ERROR::", e));
+};
 
 export const updateOrCreateProductAndPrice = async (
   asset: Asset,
@@ -70,22 +115,24 @@ export const updateOrCreateProductAndPrice = async (
   const accountId = user.stripeId;
   if (!accountId) return;
 
-  console.log("Aquí!", asset.stripeProduct && asset.stripePrice);
-  if (asset.stripeProduct && asset.stripePrice) {
-    // @todo
-    const price = await updatePrice(asset.stripePrice, {
-      accountId,
-      price: Number(asset.price),
-      currency: asset.currency,
-    });
-    console.info("::STRIPE_PRICE::UPDATED::", price);
-  } else {
-    // create everything & update asset
-    /**
-     * 1. create product & price
-     * 2. update asset
-     */
+  console.log("About to create price");
 
+  if (asset.stripeProduct && asset.stripePrice) {
+    // @todo create price & assign new price to product
+    const price = await createNewPriceForProduct({
+      productId: asset.stripeProduct,
+      accountId,
+      currency: asset.currency as "mxn", // @todo: all others
+      unit_amount: Number(asset.price) * 100, // cents
+    });
+    console.info("::STRIPE_PRICE::NEW_PRICE::", price);
+    await updateProduct({
+      productId: asset.stripeProduct,
+      priceId: price.id,
+      accountId,
+    });
+    await updateAsset(asset.id, { stripePrice: price.id });
+  } else {
     const product = await createProductAndPrice(
       asset.slug,
       Number(asset.price),
@@ -101,29 +148,68 @@ export const updateOrCreateProductAndPrice = async (
   }
 };
 
+export const updateProduct = async ({
+  productId,
+  accountId,
+  priceId,
+  images = [],
+  description,
+}: {
+  accountId: string;
+  productId: string;
+  images: string[];
+  description?: string;
+  priceId?: string;
+}) => {
+  const url = new URL(`${productsURL}/${productId}`);
+  priceId && url.searchParams.set("default_price", priceId);
+  description && url.searchParams.set("description", description);
+  // array
+  images.length > 0 &&
+    images.forEach((link) => {
+      url.searchParams.append("images[]", link);
+    });
+
+  return await fetch(url.toString(), {
+    method: "post",
+    headers: {
+      Authorization: apiKey,
+      "Stripe-Account": accountId,
+      "Stripe-Version": "2025-04-30.preview",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+  })
+    .then((r) => r.json())
+    .catch((e) => console.error("::STRIPE::ERROR::", e));
+};
+
 // @todo can't be updated, we should archive and create new one...
-const updatePrice = async (
-  priceId: string,
-  options: {
-    accountId: string;
-    price: number;
-    currency: string;
-  }
-) => {
-  const { accountId, price, currency } = options || {};
-  const url = new URL(`${pricesURL}/${priceId}`);
+const createNewPriceForProduct = async ({
+  productId,
+  currency,
+  unit_amount,
+  accountId,
+}: {
+  productId: string;
+  currency: "mxn";
+  unit_amount: number;
+  accountId: string;
+}) => {
+  const url = new URL(pricesURL);
   // url.searchParams.set("currency", currency);
-  url.searchParams.set(`unit_amount`, String(price * 100)); // in cents
+  url.searchParams.set(`currency`, currency); // in cents
+  url.searchParams.set(`unit_amount`, String(unit_amount)); // in cents?
+  url.searchParams.set(`product`, productId); // in cents
   const headers = {
     Authorization: apiKey,
     "Stripe-Account": accountId,
     "Stripe-Version": "2025-04-30.preview",
     "content-type": "application/x-www-form-urlencoded",
   };
-  const data = fetch(url.toString(), { headers, method: "post" })
+  const price = fetch(url.toString(), { headers, method: "post" })
     .then((r) => r.json())
     .catch((e) => console.error("::STRIPE::ERROR::", e));
-  return data;
+  return price;
 };
 
 const createProductAndPrice = async (
@@ -157,9 +243,8 @@ export const getAccountPayments = async (accountId: string) => {
     "Stripe-Version": "2025-04-30.preview",
   };
   const response = await fetch(url.toString(), { headers });
-  const data = await response.json();
-  // console.log("CHARGES??", data);
-  return data.client_secret;
+  const json = await response.json();
+  return json.data;
 };
 
 export const createClientSecret = async ({
@@ -192,10 +277,11 @@ export const getAccountCapabilities = async (
 
   const url = new URL(accountsURL + `/${accountId}`);
   // url.searchParams.append("include", "identity");
-  url.searchParams.append("include", "configuration.merchant");
-  const response = await fetch(url.toString(), getInit());
+  url.searchParams.set("include", "configuration.merchant");
+  const response = await fetch(url.toString(), {
+    headers: { "Stripe-Version": version, Authorization: apiKey },
+  });
   const data = await response.json();
-  console.log("ACCOUNT_FOUND::", data);
   return data.configuration?.merchant?.capabilities;
 };
 
