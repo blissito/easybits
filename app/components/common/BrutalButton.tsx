@@ -10,14 +10,13 @@ interface BrutalButtonProps {
   isDisabled?: boolean;
   isLoading?: boolean;
   onClick?: () => void;
-  mode?: "ghost" | "brand" | "danger" | "landing";
+  mode?: "ghost" | "brand" | "danger" | "landing" | "inverted";
   type?: "button" | "submit";
   [x: string]: unknown;
 }
 
 export const BrutalButton = ({
   id,
-
   mode = "brand",
   children,
   onClick,
@@ -60,6 +59,8 @@ export const BrutalButton = ({
               !isDisabled && !isLoading,
             "w-full rounded-none border-none hover:-translate-x-0 hover:-translate-y-0":
               mode === "landing", // se usa para el checkout
+            "-translate-x-1 -translate-y-1 hover:-translate-x-0 hover:-translate-y-0":
+              mode === "inverted",
           }
         )}
       >
