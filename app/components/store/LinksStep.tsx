@@ -49,7 +49,7 @@ export default function LinksStep({ control, register }) {
             <span className="flex gap-1 items-center">
               <FaXTwitter />
 
-              <span className="font-light">X</span>
+              <span className="font-light">X (antes twitter)</span>
             </span>
           }
         />

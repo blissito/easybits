@@ -6,13 +6,6 @@ import { Tooltip } from "../common/Tooltip";
 import { useAnimate, motion } from "motion/react";
 
 export default function StatsComponent({ user, salesData, mostSoldProducts }) {
-  const [scope, animate] = useAnimate();
-  const handleMouseEnter = () => {
-    animate(scope.current, { y: 5, opacity: 1 }, { type: "spring" });
-  };
-  const handleMouseLeave = () => {
-    animate(scope.current, { y: 0, opacity: 0 }, { type: "spring" });
-  };
   //:TODO get these insights and format them
   return (
     <div className="min-h-screen lg:h-screen  px-4 md:pl-28 md:pr-8   2xl:px-0">
@@ -35,38 +28,8 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
           </div>
         </div>
         <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-6 w-full mt-6">
-          {STRINGS.stats.map(({ className, title, amount, tooltip }) => (
-            <div className="relative group col-span-3">
-              <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-1 group-hover:translate-y-1 opacity-0 group-hover:opacity-100" />
-              <div
-                className={cn(
-                  "rounded-xl z-10 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white",
-                  className
-                )}
-              >
-                <div className="p-4 lg:p-6 ">
-                  <div className="text-base text-start mb-2  flex items-center">
-                    <p>{title}</p>
-                    <div className="relative flex justify-center group p-1 ">
-                      <HiOutlineInformationCircle
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={handleMouseLeave}
-                      />
-                      <div
-                        ref={scope}
-                        className="absolute  opacity-0 top-5 bg-black text-white text-sm w-[132px] p-1 rounded"
-                      >
-                        <div className="arrow-up absolute -top-1 left-[62px]"></div>
-                        {tooltip}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-3xl lg:text-4xl font-bold mt-3">
-                    {amount}
-                  </p>
-                </div>
-              </div>
-            </div>
+          {STRINGS.stats.map((stat) => (
+            <StatsCard stat={stat} />
           ))}
         </div>
         <div className="w-full grid grid-cols-12 gap-6 py-6 md:py-10 h-full   ">
@@ -106,3 +69,52 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
     </div>
   );
 }
+
+const StatsCard = ({
+  stat,
+}: {
+  stat: { className: string; title: string; amount: string; tooltip: string };
+}) => {
+  const { className, title, amount, tooltip } = stat || {};
+  const [scope, animate] = useAnimate();
+  const handleMouseEnter = () => {
+    animate(scope.current, { y: 5, opacity: 1 }, { type: "spring" });
+  };
+  const handleMouseLeave = () => {
+    animate(scope.current, { y: 0, opacity: 0 }, { type: "spring" });
+  };
+  return (
+    <div className="relative group col-span-3">
+      <div className="absolute w-full inset-0 bg-black rounded-xl transition-transform duration-300 scale-100 group-hover:translate-x-1 group-hover:translate-y-1 opacity-0 group-hover:opacity-100" />
+      <div
+        className={cn(
+          "rounded-xl z-10 text-black text-lg w-full border-black border-2 cursor-pointer relative transition-transform duration-300 group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white",
+          className
+        )}
+      >
+        <div className="p-4 lg:p-6 ">
+          <div className="text-base text-start mb-2  flex items-center">
+            <p>{title}</p>
+            <div className="relative flex justify-center group p-1 ">
+              <HiOutlineInformationCircle
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+              />
+              <div
+                ref={scope}
+                className={cn(
+                  "absolute opacity-0 -top-14 bg-black text-white text-sm w-[132px] p-1 rounded",
+                  {}
+                )}
+              >
+                <div className="arrow-up absolute -bottom-1 left-[62px]"></div>
+                {tooltip}
+              </div>
+            </div>
+          </div>
+          <p className="text-3xl lg:text-4xl font-bold mt-3">{amount}</p>
+        </div>
+      </div>
+    </div>
+  );
+};

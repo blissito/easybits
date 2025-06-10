@@ -131,24 +131,20 @@ export default function LookAndFeel({ control }) {
               selectedShadowClassName="bg-black"
               options={[
                 {
-                  value: "Inter",
-                  valueText: "Satoshi",
-                  label: "Inter, Satoshi",
+                  value: "Cabin",
+                  label: "Cabin",
+                },
+                {
+                  value: "Satoshi",
+                  label: "Satoshi",
                 },
                 {
                   value: "Raleway",
-                  valueText: "Raleway",
-                  label: "Open Sans, Raleway",
+                  label: "Raleway",
                 },
                 {
                   value: "Outfit",
-                  valueText: "Satoshi",
-                  label: "Outfit, Satoshi",
-                },
-                {
-                  value: "Barlow",
-                  valueText: "Barlow",
-                  label: "Playfair Display, Barlow",
+                  label: "Outfit",
                 },
               ]}
               renderOption={(option, isSelected) => (
@@ -162,7 +158,7 @@ export default function LookAndFeel({ control }) {
                   </h2>
                   <p
                     className="text text-brand-gray mb-2"
-                    style={{ fontFamily: option.valueText }}
+                    style={{ fontFamily: option.value }}
                   >
                     Texto
                   </p>

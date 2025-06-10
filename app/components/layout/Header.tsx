@@ -23,7 +23,7 @@ export const Header = ({
   return (
     <nav
       className={cn(
-        "flex justify-between flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-10  ",
+        "flex justify-between flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-8  ",
         className
       )}
     >

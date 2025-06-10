@@ -18,14 +18,14 @@ import { cn } from "~/utils/cn";
 
 export const StoreTemplate = ({
   assets = [],
-  cta,
   user: rootUser,
   isPublic,
+  variant = "full",
 }: {
   isPublic?: boolean;
   user?: User; // this component is used in SEO public views (no user present)
   assets: Asset[];
-  cta?: ReactNode;
+  variant?: string;
 }) => {
   const [currentFilter, setCurrentFilter] = useState();
   const user = rootUser || assets?.[0]?.user || {};
@@ -46,7 +46,7 @@ export const StoreTemplate = ({
   } = user?.storeConfig || {};
   return (
     <section className="h-full">
-      <div className="overflow-hidden mb-20 ">
+      <div className="overflow-hidden mb-32 ">
         <div
           className="w-full h-[224px] border-2 border-black relative bg-brand-500"
           style={{ backgroundColor: hexColor, fontFamily: typography }}
@@ -67,44 +67,49 @@ export const StoreTemplate = ({
         </div>
         <div className="mt-4 text-2xl flex justify-center mb-6">
           <div>
-            <p className="font-semibold text-center mb-3">{user.displayName}</p>
+            <p
+              style={{ fontFamily: typography }}
+              className="font-semibold text-center mb-3"
+            >
+              {user.displayName}
+            </p>
             {socialNetworks && (
-              <div className="flex justify-center gap-3">
+              <div className="flex justify-center gap-3 text-lg">
                 {/* check if RRSS and display them */}
                 {instagram && (
-                  <Link to={instagram}>
+                  <a href={instagram} target="_blank" rel="noopener">
                     <FaInstagram />
-                  </Link>
+                  </a>
                 )}
                 {facebook && (
-                  <Link to={facebook}>
+                  <a href={facebook} target="_blank" rel="noopener">
                     <FaFacebookF />
-                  </Link>
+                  </a>
                 )}
                 {x && (
-                  <Link to={x}>
+                  <a href={x} target="_blank" rel="noopener">
                     <FaXTwitter />
-                  </Link>
+                  </a>
                 )}
                 {youtube && (
-                  <Link to={youtube}>
+                  <a href={youtube} target="_blank" rel="noopener">
                     <FaYoutube />
-                  </Link>
+                  </a>
                 )}
                 {tiktok && (
-                  <Link to={tiktok}>
+                  <a href={tiktok} target="_blank" rel="noopener">
                     <FaTiktok />
-                  </Link>
+                  </a>
                 )}
                 {linkedin && (
-                  <Link to={linkedin}>
+                  <a href={linkedin} target="_blank" rel="noopener">
                     <FaLinkedin />
-                  </Link>
+                  </a>
                 )}
                 {website && (
-                  <Link to={website}>
+                  <a href={website} target="_blank" rel="noopener">
                     <FaLink />
-                  </Link>
+                  </a>
                 )}
               </div>
             )}
@@ -128,7 +133,10 @@ export const StoreTemplate = ({
           ))}
         </div>
         {showProducts && (
-          <div className=" max-w-7xl mx-auto">
+          <div
+            style={{ fontFamily: typography }}
+            className=" max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0"
+          >
             <AssetList isPublic={isPublic} assets={assets}>
               {assets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} />
@@ -137,7 +145,7 @@ export const StoreTemplate = ({
           </div>
         )}
       </div>
-      <StoreTemplateFooter />
+      {variant === "slim" ? null : <StoreTemplateFooter />}
     </section>
   );
 };
