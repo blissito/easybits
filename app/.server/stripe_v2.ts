@@ -126,7 +126,11 @@ export const updateOrCreateProductAndPrice = async (
       unit_amount: Number(asset.price) * 100, // cents
     });
     console.info("::STRIPE_PRICE::NEW_PRICE::", price);
-    await updateProduct(asset.stripeProduct, price.id, accountId);
+    await updateProduct({
+      productId: asset.stripeProduct,
+      priceId: price.id,
+      accountId,
+    });
     await updateAsset(asset.id, { stripePrice: price.id });
   } else {
     const product = await createProductAndPrice(
@@ -144,14 +148,30 @@ export const updateOrCreateProductAndPrice = async (
   }
 };
 
-const updateProduct = async (
-  productId: string,
-  priceId: string,
-  accountId: string
-) => {
+export const updateProduct = async ({
+  productId,
+  accountId,
+  priceId,
+  images = [],
+  description,
+}: {
+  accountId: string;
+  productId: string;
+  images: string[];
+  description?: string;
+  priceId?: string;
+}) => {
   const url = new URL(`${productsURL}/${productId}`);
-  url.searchParams.set("default_price", priceId);
+  priceId && url.searchParams.set("default_price", priceId);
+  description && url.searchParams.set("description", description);
+  // array
+  images.length > 0 &&
+    images.forEach((link) => {
+      url.searchParams.append("images[]", link);
+    });
+
   return await fetch(url.toString(), {
+    method: "post",
     headers: {
       Authorization: apiKey,
       "Stripe-Account": accountId,
