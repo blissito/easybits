@@ -3,8 +3,16 @@ import { HiOutlineInformationCircle } from "react-icons/hi";
 import LineChart from "../charts/LineChart";
 import { cn } from "~/utils/cn";
 import { Tooltip } from "../common/Tooltip";
+import { useAnimate, motion } from "motion/react";
 
 export default function StatsComponent({ user, salesData, mostSoldProducts }) {
+  const [scope, animate] = useAnimate();
+  const handleMouseEnter = () => {
+    animate(scope.current, { y: 5, opacity: 1 }, { type: "spring" });
+  };
+  const handleMouseLeave = () => {
+    animate(scope.current, { y: 0, opacity: 0 }, { type: "spring" });
+  };
   //:TODO get these insights and format them
   return (
     <div className="min-h-screen lg:h-screen  px-4 md:pl-28 md:pr-8   2xl:px-0">
@@ -37,10 +45,20 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
                 )}
               >
                 <div className="p-4 lg:p-6 ">
-                  <div className="text-base text-start mb-2 gap-1 flex items-center">
+                  <div className="text-base text-start mb-2  flex items-center">
                     <p>{title}</p>
-                    <div className="relative flex justify-center group ">
-                      <HiOutlineInformationCircle />
+                    <div className="relative flex justify-center group p-1 ">
+                      <HiOutlineInformationCircle
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                      />
+                      <div
+                        ref={scope}
+                        className="absolute  opacity-0 top-5 bg-black text-white text-sm w-[132px] p-1 rounded"
+                      >
+                        <div className="arrow-up absolute -top-1 left-[62px]"></div>
+                        {tooltip}
+                      </div>
                     </div>
                   </div>
                   <p className="text-3xl lg:text-4xl font-bold mt-3">

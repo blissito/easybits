@@ -59,6 +59,14 @@ body {
   }
 }
 
+.arrow-up {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid black;
+}
+
 /* Markdown para el blog */
 .markdown p {
   color: var(--brand-100);

@@ -9,7 +9,7 @@ export default function LookAndFeel({ control }) {
   return (
     <>
       {/* logo y portada */}
-      <p className="text-lg my-2 font-semibold">Logo y Portada</p>
+      <p className=" my-2 font-semibold">Logo y Portada</p>
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-4">
           <FileInput
@@ -17,9 +17,8 @@ export default function LookAndFeel({ control }) {
             actionId={1}
             files={[]}
             placeholder="Arrastra o selecciona tu logo"
-            placeholderClassName="text-black"
             svgClassName="text-black"
-            buttonClassName="flex-col p-0 py-4 min-h-[150px] border-black border-2 m-0 gap-2"
+            buttonClassName="flex-col p-0 py-4 min-h-[142px] m-0 gap-2"
           />
         </div>
         <div className="col-span-8">
@@ -28,16 +27,15 @@ export default function LookAndFeel({ control }) {
             actionId={2}
             files={[]}
             placeholder="Arrastra o selecciona tu foto de portada"
-            placeholderClassName="text-black"
             svgClassName="text-black"
-            buttonClassName="flex-col p-0 py-4 min-h-[150px] border-black border-2 m-0 gap-2"
+            buttonClassName="flex-col p-0 py-4 min-h-[142px]  m-0 gap-2"
           />
         </div>
       </div>
 
       {/* colores */}
-      <p className="text-lg my-2 font-semibold">Colores</p>
-      <p className="text-lg text-brand-gray mb-2">Elige el tema de tu sitio</p>
+      <p className="mt-8 mb-2 font-semibold">Colores</p>
+      {/* <p className=" text-marengo mt-3 mb-2">Elige el tema de tu sitio</p>
       <div className="grid grid-cols-2">
         <Controller
           name="colorMode"
@@ -61,23 +59,24 @@ export default function LookAndFeel({ control }) {
             />
           )}
         />
-      </div>
-      <p className="text-lg text-brand-gray mt-4 mb-2">
+      </div> */}
+      <p className=" text-marengo mt-0 mb-2">
         Ingresa o elige el color principal
       </p>
       <Controller
         name="hexColor"
         control={control}
         render={({ field }) => (
-          <div className="grid grid-cols-12 items-center gap-4">
+          <div className="grid grid-cols-12 items-start gap-4">
             <div className="col-span-4">
               <Input
                 type="text"
                 maxLength={7}
+                className="h-10 "
                 prefix={
                   <div
                     style={{ backgroundColor: field.value }}
-                    className={cn("h-6 w-10 rounded-md  border")}
+                    className={cn("h-6 w-10 ml-1 rounded-md  border")}
                   />
                 }
                 value={field.value}
@@ -92,9 +91,9 @@ export default function LookAndFeel({ control }) {
             <div className="col-span-8">
               <ButtonGroupInput
                 className="gap-4"
-                shadowClassName="bg-black"
+                shadowClassName="bg-black rounded-lg"
                 selectedShadowClassName="bg-black"
-                buttonClassName="p-0"
+                buttonClassName="p-0 rounded-lg"
                 options={[
                   { value: "#9870ED", label: "purple" },
                   { value: "#E5A000", label: "orange" },
@@ -117,7 +116,7 @@ export default function LookAndFeel({ control }) {
       />
 
       {/* tipografía */}
-      <p className="text-lg my-2 font-semibold">Tipografía</p>
+      <p className=" my-2 font-semibold">Tipografía</p>
       <div>
         <Controller
           name="typography"
@@ -131,10 +130,26 @@ export default function LookAndFeel({ control }) {
               shadowClassName="bg-black"
               selectedShadowClassName="bg-black"
               options={[
-                { value: "Inter", label: "Inter, Satoshi" },
-                { value: "Raleway", label: "Open Sans, Raleway" },
-                { value: "Outfit", label: "Outfit, Satoshi" },
-                { value: "Barlow", label: "Playfair Display, Barlow" },
+                {
+                  value: "Inter",
+                  valueText: "Satoshi",
+                  label: "Inter, Satoshi",
+                },
+                {
+                  value: "Raleway",
+                  valueText: "Raleway",
+                  label: "Open Sans, Raleway",
+                },
+                {
+                  value: "Outfit",
+                  valueText: "Satoshi",
+                  label: "Outfit, Satoshi",
+                },
+                {
+                  value: "Barlow",
+                  valueText: "Barlow",
+                  label: "Playfair Display, Barlow",
+                },
               ]}
               renderOption={(option, isSelected) => (
                 <div className="text-start">
@@ -146,10 +161,10 @@ export default function LookAndFeel({ control }) {
                     Título
                   </h2>
                   <p
-                    className="text-lg text-brand-gray mb-2"
-                    style={{ fontFamily: option.value }}
+                    className="text text-brand-gray mb-2"
+                    style={{ fontFamily: option.valueText }}
                   >
-                    Subtítulo
+                    Texto
                   </p>
                   <p
                     className="text-md text-brand-gray"
