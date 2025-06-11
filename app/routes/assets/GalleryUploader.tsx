@@ -19,7 +19,11 @@ export const GalleryUploader = ({
   onAddFiles,
   srcset = [],
   onRemove,
+  onRemoveLink,
+  gallery = [],
 }: {
+  gallery: string[];
+  onRemoveLink?: (arg0: string) => void;
   onRemove?: (index: number) => void;
   srcset: string[];
   onAddFiles: (arg0: File[]) => void;
@@ -68,10 +72,10 @@ export const GalleryUploader = ({
     onAddFiles([...ev.currentTarget.files]);
   };
 
-  const { links, onRemove: removeFromS3 } = useUploader({
-    assetId: asset.id,
-    defaultLinks: asset.gallery,
-  });
+  // const { links, onRemove: removeFromS3 } = useUploader({
+  //   assetId: asset.id,
+  //   defaultLinks: asset.gallery,
+  // });
 
   const { resize } = useImageResize({
     async callback(blob) {
@@ -104,9 +108,9 @@ export const GalleryUploader = ({
     resize({ link });
   };
 
-  const canUpload = limit > links.length + srcset.length;
+  const canUpload = limit > gallery.length + srcset.length;
 
-  const elemsLength = srcset.length + links.length;
+  const elemsLength = srcset.length + gallery.length;
 
   const handleRemoveFile = (index: number) => () => onRemove?.(index);
 
@@ -167,8 +171,8 @@ export const GalleryUploader = ({
             }
             canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
-            links={links}
-            onRemove={(url) => removeFromS3(url, asset.id)} // @todo change name
+            links={gallery}
+            onRemoveLink={onRemoveLink} // @todo change name
           />
         )}
 
@@ -188,14 +192,14 @@ export const GalleryUploader = ({
 const RowGalleryEditor = ({
   links = [],
   onClick,
-  onRemove,
+  onRemoveLink,
   canUpload,
   files,
 }: {
   files?: ReactNode;
   canUpload?: boolean;
   links?: string[];
-  onRemove?: (arg0: string) => void;
+  onRemoveLink?: (arg0: string) => void;
   onClick: () => void;
 }) => {
   return (
@@ -203,7 +207,7 @@ const RowGalleryEditor = ({
       <LayoutGroup>
         <AnimatePresence>
           {links.map((l) => (
-            <Image onRemove={() => onRemove?.(l)} key={l} src={l} />
+            <Image onRemove={() => onRemoveLink?.(l)} key={l} src={l} />
           ))}
         </AnimatePresence>
         {files}

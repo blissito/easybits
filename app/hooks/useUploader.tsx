@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
 
-export const useUploader = (config: {
+export const useUploader = (config?: {
   defaultLinks?: string[];
   onLinksUpdated?: (arg0: string[]) => void;
   assetId: string;

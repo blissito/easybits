@@ -148,8 +148,8 @@ export const EditAssetForm = ({
       console.error(error);
       return;
     }
-    console.log("TF", filesRef.current);
     await updateGalleryAndForm(); // @todo raceCondition?
+    await removeLinks();
     setForceSpinner(false);
     return;
     await fetcher.submit(
@@ -215,6 +215,21 @@ export const EditAssetForm = ({
     setSrcset(links);
   };
 
+  // links
+  const [gallery, setGallery] = useState(asset.gallery);
+  const removeListRef = useRef<any[]>([]);
+  const handleAddLinkToRemove = (link: string) => {
+    setGallery((l) => [...l.filter((li) => li !== link)]);
+    removeListRef.current = [...removeListRef.current, link];
+  };
+
+  const { onRemove: removeFromS3 } = useUploader();
+  const removeLinks = async () => {
+    for await (let link of removeListRef.current) {
+      removeFromS3(link, asset.id);
+    }
+  };
+
   return (
     <article className="w-full px-4">
       <LayoutGroup>
@@ -245,8 +260,10 @@ export const EditAssetForm = ({
           <GalleryUploader
             limit={3}
             asset={asset}
+            gallery={gallery}
             host={host}
             onAddFiles={handleAddFiles}
+            onRemoveLink={handleAddLinkToRemove}
             onRemove={removeFile}
             srcset={srcset}
           />
