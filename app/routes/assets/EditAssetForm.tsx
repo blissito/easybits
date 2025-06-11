@@ -151,7 +151,7 @@ export const EditAssetForm = ({
     await updateGalleryAndForm(); // @todo raceCondition?
     await removeLinks();
     setForceSpinner(false);
-    return;
+    // return;
     await fetcher.submit(
       {
         data: JSON.stringify({ ...form, slug: asset.slug, id: asset.id }),
@@ -203,7 +203,8 @@ export const EditAssetForm = ({
   };
   const updateGalleryAndForm = async () => {
     const uploaded = await uploadGallery();
-    console.log("::FILES::UPLOADED::", uploaded);
+    if (uploaded.length < 1) return;
+
     const links = uploaded.filter((l) => l !== null); // revisit
     setForm((fo) => ({ ...fo, gallery: [...fo.gallery, ...links] }));
     filesRef.current = [];
