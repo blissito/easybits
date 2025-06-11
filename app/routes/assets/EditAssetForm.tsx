@@ -129,6 +129,7 @@ export const EditAssetForm = ({
   };
 
   const removeFilePreviews = () => {
+    removeListRef.current = []; // removed
     filesRef.current = []; // clear files after upload
     updateSrcset();
   };
@@ -150,18 +151,17 @@ export const EditAssetForm = ({
     // gallery update
     const uploaded = await getUploadedLinks();
     await removeBucketObjects();
-    const gallery = [...form.gallery, ...uploaded].filter(
+    const gall = [...gallery, ...uploaded].filter(
       (link) => !removeListRef.current.includes(link)
     );
-    console.info("GALLERY_RESULT", gallery);
     //
-
+    // return;
     setForceSpinner(false);
     fetcher.submit(
       {
         data: JSON.stringify({
           ...form,
-          gallery,
+          gallery: gall,
           id: asset.id,
           slug: asset.slug,
         }),
@@ -209,10 +209,10 @@ export const EditAssetForm = ({
 
   const removeFile = (index: number) => {
     const list = [...filesRef.current];
-    console.log("LIST:", list);
+
     list.splice(index, 1);
     filesRef.current = list;
-    console.log("ora?", index, filesRef.current);
+
     updateSrcset();
   };
   const { upload } = useUploader({
@@ -227,7 +227,7 @@ export const EditAssetForm = ({
   };
   const getUploadedLinks = async () => {
     const uploaded = await uploadGallery();
-    console.log("UPLOADED::", uploaded);
+
     if (!uploaded || uploaded.length < 1) return [];
 
     // filesRef.current = []; // clear files after upload
@@ -263,9 +263,9 @@ export const EditAssetForm = ({
   };
 
   useEffect(() => {
-    setGallery(asset.gallery);
     removeFilePreviews();
-  }, [asset.gallery]);
+    setGallery(asset.gallery);
+  }, [asset]);
 
   return (
     <article className="w-full px-4">

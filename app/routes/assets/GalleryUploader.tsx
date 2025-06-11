@@ -1,15 +1,8 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from "react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { IoClose } from "react-icons/io5";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
-import { useUploader } from "~/hooks/useUploader";
 import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
 
