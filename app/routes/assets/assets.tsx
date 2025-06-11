@@ -64,12 +64,14 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
         <AssetList isFolded={isFolded}>
           <AnimatePresence>
             {isFolded ? (
-              <div className="grid grid-cols-12 gap-6 px-4 font-semibold">
-                <div className="col-span-3 col-start-2">Nombre</div>
-                <div className="col-span-2">Estatus</div>
-                <div className="col-span-2">Precio</div>
-                <div className="col-span-1">Ventas</div>
-                <div className="col-span-2">Ingresos</div>
+              <div className="grid grid-cols-12  gap-6 px-4 font-semibold">
+                <div className="col-span-3 md:col-span-4 col-start-1 md:col-start-2 ">
+                  Nombre
+                </div>
+                <div className="col-span-2 hidden md:block">Estatus</div>
+                <div className="col-span-3 md:col-span-2">Precio</div>
+                <div className="col-span-2 md:col-span-1">Ventas</div>
+                <div className="col-span-3 md:col-span-1">Ingresos</div>
                 <div className="col-span-1"></div>
               </div>
             ) : null}

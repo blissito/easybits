@@ -12,8 +12,8 @@ export default function StoreConfigForm({
   onClose,
   storeConfig,
 }: {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }) {
   // const action = "";
   // const files = [];

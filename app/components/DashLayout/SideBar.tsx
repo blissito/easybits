@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from "react-router";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
-import Logo from "/icons/eyes-logo-purple.svg";
+import Logo from "/logo-purple.svg";
 
 interface MenuItemProps {
   path?: string;
@@ -95,7 +95,7 @@ const SideBarItem = ({
           onMouseLeave={handleMouseLeave}
         >
           {isLogo ? (
-            <img className="w-14 mx-auto" src={Logo} />
+            <img className="w-14 mx-auto py-4" src={Logo} />
           ) : (
             <motion.div
               className={cn(

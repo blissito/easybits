@@ -16,6 +16,7 @@ export default [
     route(":assetSlug", "routes/assets/PublicCustomLanding.tsx"),
     route(":assetSlug/review", "routes/assets/ReviewAsset.tsx"),
   ]),
+
   route("/dominio-personalizado", "routes/domains.tsx"),
   route("/login/:success?", "routes/login.tsx"),
   route("/logout", "routes/logout.tsx"),
@@ -51,6 +52,7 @@ export default [
       route("websites", "routes/dash/websites.tsx"),
     ]),
   ]),
+  route("/edicion", "routes/store/storeEdition.tsx"),
   // multipar upload
   route("api/upload", "routes/api/v1/upload.ts"),
   // v1

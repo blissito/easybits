@@ -86,35 +86,37 @@ export const CollapsedAssetCard = ({
           "min-h-[94px] w-full",
           "group-hover:-translate-x-2 group-hover:-translate-y-2 ", // brutalism
           "group bg-white p-4 rounded-xl transition-all",
-          "grid grid-cols-12 gap-6 ",
+          "grid grid-cols-12 gap-2 md:gap-6 ",
           "border-2 border-black rounded-2xl",
           "overflow-hidden"
         )}
       >
         <Link
           to={to || `/dash/assets/${asset.id}/edit`}
-          className="flex gap-6 col-span-4 items-center"
+          className="flex gap-6 col-span-3 md:col-span-5 items-center"
         >
           <img
-            className="h-16 w-20 object-cover rounded-xl flex-grow-0"
+            className="h-16 w-20 object-cover rounded-xl flex-grow-0 hidden md:block"
             src={asset.gallery?.[0] || "/images/easybits-default.webp"}
             alt="cover"
           />
           <div>
-            <h3 className="font-bold text-lg ">
+            <h3 className="font-bold text-base md:text-lg ">
               {asset.title || asset.slug || asset.template?.slug}
             </h3>
-            <p>{usePublicLink(asset, host)} </p>
+            <p className="hidden md:block">{usePublicLink(asset, host)} </p>
           </div>
         </Link>
-        <div className="col-span-2 place-content-center">
+        <div className="col-span-2 place-content-center hidden md:block">
           <StatusTag published={asset.published} />
         </div>
-        <div className="col-span-2 place-content-center">
+        <div className="col-span-3 md:col-span-2 place-content-center">
           ${asset.price || 0} mxn
         </div>
-        <div className="col-span-1 place-content-center">{orderCount}</div>
-        <div className="col-span-2 place-content-center">
+        <div className="col-span-2 md:col-span-1 place-content-center">
+          {orderCount}
+        </div>
+        <div className="col-span-3 md:col-span-1 place-content-center">
           ${salesAmount} mxn
         </div>
         <div className="col-span-1 place-content-center">
