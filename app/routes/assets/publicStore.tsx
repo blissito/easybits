@@ -46,6 +46,5 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { assets } = loaderData;
-  console.log(assets, "checale");
   return <StoreTemplate assets={assets} />;
 }
