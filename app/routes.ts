@@ -9,7 +9,7 @@ import {
 export default [
   // public tienda
   // index("routes/tienda.tsx"),
-  route("/inicio", "routes/home/home.tsx"),
+  route("/inicio?", "routes/home/home.tsx"), // this is gold ⭐️
   // public assetLanding
   ...prefix("tienda", [
     index("routes/assets/publicStore.tsx"),

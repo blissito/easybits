@@ -7,6 +7,7 @@ import type { Asset } from "@prisma/client";
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const host = url.hostname.split(".")[0]; // host
+  console.info("::STORE::HOST::", host);
   const hostExists = await db.user.findFirst({
     where: { host },
   });

@@ -1,7 +1,7 @@
 import type { Asset } from "@prisma/client";
 import toast from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { EnrolledUsers } from "~/components/fullstack/EnrolledUsers";
 import { MdContentCopy } from "react-icons/md";
 import { IoShareSocialOutline } from "react-icons/io5";
@@ -16,7 +16,7 @@ import { Input } from "~/components/common/Input";
 import { useAnimate, motion } from "motion/react";
 import { SiGmail } from "react-icons/si";
 import { ContentTemplate, HeaderTemplate } from "./template";
-import { useSubmit } from "react-router";
+import { useOpenLink } from "~/hooks/useOpenLink";
 
 export const AssetPreview = ({
   asset,
@@ -38,6 +38,10 @@ export const AssetPreview = ({
     setIsOpen(false);
   };
 
+  const copyAndOpenLink = useOpenLink({
+    localLink: `http://${host}.localhost:3000/tienda/${asset.slug}`,
+    publicLink: `https://${host}.easybits.cloud/tienda/${asset.slug}`,
+  });
   return (
     <aside
       className="md:block hidden w-[40%] h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-y-scroll"
@@ -51,20 +55,7 @@ export const AssetPreview = ({
         <button onClick={handleModal}>
           <IoShareSocialOutline className="text-2xl" />
         </button>
-        <button
-          onClick={() => {
-            const uri = location.hostname.includes("localhost")
-              ? `http://localhost:3000/tienda/${asset.slug}`
-              : `https://${host}.easybits.cloud/tienda/${asset.slug}`;
-            navigator.clipboard.writeText(uri);
-            toast("Link copiado ✅", { position: "top-right" });
-            const a = document.createElement("a");
-            a.target = "_blank";
-            a.href = uri;
-            a.click();
-          }}
-          className="text-xl"
-        >
+        <button onClick={copyAndOpenLink} className="text-xl">
           <MdContentCopy />
         </button>
         <EnrolledUsers assetId={asset.id} />

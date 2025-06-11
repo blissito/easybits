@@ -26,7 +26,7 @@ export const DevAdmin = () => {
   return host.includes("localhost") ? (
     <article
       ref={ref}
-      className="fixed bottom-20 border-2 rounded-2xl left-[25%] bg-white border-black py-3 px-6 flex items-center gap-3"
+      className="fixed bottom-20 border-2 rounded-2xl left-[25%] bg-white border-black py-3 px-6 flex items-center gap-3 z-50"
     >
       <button
         onClick={remove}
@@ -79,7 +79,7 @@ const Access = ({ onClose, onClick, isActive }) => {
       </button>
 
       {isActive && (
-        <section className="bg-white border border-black rounded-2xl absolute w-max px-6 py-4 top-[-330%] left-0 flex flex-col">
+        <section className="bg-white border-2 border-black rounded-2xl absolute w-max px-6 py-4 top-[-330%] left-0 flex flex-col">
           <h2 className="font-bold mb-4">Acceso a usuarios</h2>
           <Input
             className="mb-2"

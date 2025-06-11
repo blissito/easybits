@@ -60,67 +60,61 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const url = new URL(request.url);
+  /**
+   * host: subdomain including easybits
+   * domain/hostname: double dot hostname
+   * FIRST: LOCALHOST
+   * . / => /inicio
+   * SECOND: CUSTOM DOMAIN
+   * . domain is present THEN / => /tienda
+   * THIRD: IF EASYBITS HOST
+   * . host is present THEN / => /tienda, /login => /tienda
+   */
 
-  let isDev = true;
-
-  // localhost || inicio
+  // localhost => inicio
+  console.info("::HOSTNAME::", url.hostname);
   if (url.hostname === "localhost") {
     if (url.pathname === "/") {
-      console.info("::working_on_localhost:: redirecting to /inicio");
       return redirect("/inicio");
     } else {
       return null;
     }
   }
-
-  // custom_domain & no_home => render Store
-  if (!url.hostname.includes("easybits") && url.pathname !== "/inicio") {
-    if (
-      url.pathname === "/dash" ||
-      url.pathname === "/dash/" ||
-      url.pathname === "/login"
-    ) {
-      return null;
-    }
-    // look for store
-    const user = await db.user.findFirst({
-      where: {
-        domain: url.hostname,
-      },
-    });
-    // no user, redirect or dev.
-    if (!user) {
-      return url.hostname.includes("localhost") ? null : redirect("/inicio");
-    }
-    const assets = await db.asset.findMany({
-      where: {
-        userId: user.id,
-      },
-      include: {
-        user: true,
-      },
-    });
-    // if is asset public detail
-    if (params.assetSlug) {
-      const asset = await db.asset.findUnique({
-        where: {
-          userId: {
-            equals: user.id,
-          },
-          slug: params.assetSlug,
-        },
-        include: { user: true },
-      });
-      return { asset, user, screen: "public_detail", files: [] };
-    }
-    return { assets, user, screen: "public_store" }; // data to render
+  // domain
+  const domainExists = await db.user.findFirst({
+    where: {
+      domain: url.hostname,
+    },
+  });
+  if (domainExists && url.pathname === "/") {
+    return redirect("/tienda");
   }
 
-  // easybits & home
-  if (url.hostname.includes("easybits") && url.pathname === "/") {
-    return redirect("/inicio");
+  // host
+  const hostExist = await db.user.findFirst({
+    where: {
+      host: url.host.split(".")[0],
+    },
+  });
+  if (
+    (url.pathname === "/" || url.pathname === "/login") &&
+    hostExist &&
+    (url.hostname.includes("easybits") || url.hostname.includes("localhost"))
+  ) {
+    return redirect("/tienda");
   }
-  return null; // render normaly inside easybits
+
+  // www & /tienda
+  if (
+    url.hostname.includes("easybits") &&
+    url.hostname.includes("www") &&
+    url.pathname.includes("tienda") &&
+    !url.pathname.includes("dash")
+  ) {
+    return redirect("/"); // @revisit login?
+  }
+
+  return null;
 };
 
 export default function App({ loaderData }) {
