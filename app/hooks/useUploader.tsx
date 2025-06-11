@@ -23,12 +23,12 @@ export const useUploader = (config?: {
     urls.splice(index, 1);
     setLinks(urls);
 
-    fetcher.submit(
+    return fetcher.submit(
       {
         index,
         url,
         assetId,
-        intent: "remove_gallery_image_and_update_gallery",
+        intent: "remove_gallery_image",
       },
       {
         method: "post",

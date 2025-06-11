@@ -236,10 +236,10 @@ const Image = ({
   src: string;
   onRemove?: () => void; // click on X
 }) => {
-  const C = as ? as : "motion.figure"; // revisit
+  // const C = as ? as : "motion.figure"; // revisit
   return (
-    <C
-      layout={C === "motion.figure" || undefined}
+    <motion.figure
+      layout
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
@@ -258,6 +258,6 @@ const Image = ({
         alt="preview"
         className="rounded-2xl object-cover w-full h-full"
       />
-    </C>
+    </motion.figure>
   );
 };

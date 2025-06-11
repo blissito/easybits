@@ -7,7 +7,7 @@ import { ExtraConfig } from "./ExtraConfig";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { Suspense, useRef, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
@@ -129,6 +129,7 @@ export const EditAssetForm = ({
   };
 
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
+  // const revalidator = useRevalidator();
   const fetcher = useFetcher();
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -143,26 +144,20 @@ export const EditAssetForm = ({
     }
     // gallery update
     const uploaded = await getUploadedLinks();
-    console.log("Are three? ", uploaded);
-    let gallery = [...form.gallery, ...uploaded];
-    const removedLinks = (await removeFromList()) || [];
-    console.log("REMOVED?", removedLinks);
-    gallery = [...gallery.filter((la) => !removedLinks.includes(la))];
-    // gallery update
+    await removeBucketObjects();
+    const gallery = [...form.gallery, ...uploaded].filter(
+      (link) => !removeListRef.current.includes(link)
+    );
+    //
 
     setForceSpinner(false);
-
-    console.info("WTF", gallery);
-
-    // return;
-
-    await fetcher.submit(
+    fetcher.submit(
       {
         data: JSON.stringify({
           ...form,
           gallery,
-          slug: asset.slug,
           id: asset.id,
+          slug: asset.slug,
         }),
         intent: "update_asset",
       },
@@ -173,6 +168,7 @@ export const EditAssetForm = ({
     );
     setForceSpinner(false);
     toast.success("Tu Asset se ha guardado");
+    // revalidator.revalidate();
   };
 
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: ::
@@ -213,10 +209,12 @@ export const EditAssetForm = ({
   };
   const getUploadedLinks = async () => {
     const uploaded = await uploadGallery();
+    console.log("UPLOADED::", uploaded);
     if (!uploaded || uploaded.length < 1) return [];
 
     filesRef.current = []; // clear files after upload
-    return uploaded.filter((f) => f !== null);
+    updateSrcset();
+    return uploaded;
   };
 
   const handleAddFiles = (newFiles: any[]) => {
@@ -234,18 +232,21 @@ export const EditAssetForm = ({
   const removeListRef = useRef<any[]>([]);
   const handleAddLinkToRemove = (link: string) => {
     setGallery((l) => [...l.filter((li) => li !== link)]); // removed from preview
-    removeListRef.current = [...removeListRef.current, link]; // added to remove list
+    removeListRef.current.push(link); // added to remove list
   };
 
   const { onRemove: removeFromS3 } = useUploader();
-  const removeFromList = async () => {
-    for await (let link of removeListRef.current) {
-      removeFromS3(link, asset.id);
-    }
+  const removeBucketObjects = async () => {
+    const promises = removeListRef.current.map((link) =>
+      removeFromS3(link, asset.id)
+    );
+    await Promise.all(promises);
     return removeListRef.current;
   };
 
-  // console.log("::ASSET::GALLERY::", asset.gallery);
+  useEffect(() => {
+    setGallery(asset.gallery);
+  }, [asset.gallery]);
 
   return (
     <article className="w-full px-4">
