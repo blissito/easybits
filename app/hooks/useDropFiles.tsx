@@ -20,7 +20,13 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     if (type) {
       fls = [...files].filter((f) => f.type.includes(type));
       fls.length < files.length &&
-        toast.error("Selecciona el tipo de archivo correcto.");
+        toast.error("Selecciona el tipo de archivo correcto.", {
+          style: {
+            border: "2px solid #000000",
+            padding: "16px",
+            color: "#000000",
+          },
+        });
     } else {
       fls = files;
     }

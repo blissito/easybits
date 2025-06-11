@@ -97,10 +97,10 @@ export default function LoginComponent({ state }: { state?: string }) {
                 noName
                 onSubmit={handleSubmit}
                 SELECTED_STRINGS={{
-                  title: "perro",
-                  formTitle: "Te enviaremos una llave 🔑", // @todo fix not standard naming
-                  formSubmit: "Solicitar link mágico",
-                  formAction: "Iniciar sesión una red social.",
+                  title: "email",
+                  formTitle: "Te enviaremos un magic link 🪄",
+                  formSubmit: "Solicitar link ",
+                  formAction: "Iniciar sesión con una red social.",
                 }}
                 isLoading={isLoading}
                 onAction={() => {
@@ -129,18 +129,24 @@ export default function LoginComponent({ state }: { state?: string }) {
                 </p>
                 <p className="text-white text-2xl text-center max-w-4xl mt-4">
                   {" "}
-                  ¡A veces el mail acabar en SPAM! Esperamos que no sea así pero
+                  ¡A veces el mail acaba en SPAM! Esperamos que no sea así pero
                   si no llega en uno o tres minutos, ya sabes donde encontrarlo.
                 </p>
               </>
             )}
 
             {fetcher.data?.state === "success" && (
-              <p className="text-white text-2xl text-center">
-                Te hemos enviado un correo con tu magic link. 🗝️
-                <br />
-                Solo entra a tu correo y da clic al enlace. ✅
-              </p>
+              <>
+                <p className="text-white text-2xl text-center max-w-2xl">
+                  Te hemos enviado un correo con tu magic link. 🪄
+                </p>
+                <p className="text-marengo mt-4 text-xl text-center max-w-2xl">
+                  {" "}
+                  Solo entra a tu correo y da clic al enlace. ¡A veces el mail
+                  acaba en SPAM! Esperamos que no sea así pero si no llega en
+                  uno o tres minutos, ya sabes donde encontrarlo.
+                </p>
+              </>
             )}
           </AnimatePresence>
         </div>
@@ -202,9 +208,9 @@ const SocialButtons = ({
           Iniciar con Email
         </Button>
       </div>
-      <p className="text-center text-white">
+      {/* <p className="text-center text-white">
         {SELECTED_STRINGS.actionQuestion} {cta}
-      </p>
+      </p> */}
     </motion.div>
   );
 };

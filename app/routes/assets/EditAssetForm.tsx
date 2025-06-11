@@ -167,7 +167,17 @@ export const EditAssetForm = ({
 
   useControlSave(() => {
     handleSubmit({ preventDefault: () => {} });
-    toast.success("Tu Asset se ha guardado");
+    toast.success("Tu Asset se ha guardado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
   });
 
   //will mantain a copy of the files

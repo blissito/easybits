@@ -3,6 +3,7 @@ import ItemsList from "/icons/items-list.svg";
 import ShoppingShare from "/icons/shopping-share.svg";
 import AddWallet from "/icons/add-wallet.svg";
 import Website from "/icons/website.svg";
+import { useOpenLink } from "~/hooks/useOpenLink";
 
 export const STRINGS = {
   title: "¡Tu website está casi listo!",

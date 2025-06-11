@@ -81,6 +81,11 @@ export const FilesTable = ({
     console.log("INFO::", machineInfo);
 
     toast("Esto tomará algún tiempo, puedes olvidarte, yo me encargo. 🤖", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
       position: "bottom-center",
       icon: "⏲️",
       duration: 20000,
