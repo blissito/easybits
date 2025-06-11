@@ -141,13 +141,29 @@ export const EditAssetForm = ({
       console.error(error);
       return;
     }
-    await updateGalleryAndForm(); // @todo raceCondition?
-    await removeLinks();
+    // gallery update
+    const uploaded = await getUploadedLinks();
+    console.log("Are three? ", uploaded);
+    let gallery = [...form.gallery, ...uploaded];
+    const removedLinks = (await removeFromList()) || [];
+    console.log("REMOVED?", removedLinks);
+    gallery = [...gallery.filter((la) => !removedLinks.includes(la))];
+    // gallery update
+
     setForceSpinner(false);
+
+    console.info("WTF", gallery);
+
     // return;
+
     await fetcher.submit(
       {
-        data: JSON.stringify({ ...form, slug: asset.slug, id: asset.id }),
+        data: JSON.stringify({
+          ...form,
+          gallery,
+          slug: asset.slug,
+          id: asset.id,
+        }),
         intent: "update_asset",
       },
       {
@@ -190,16 +206,17 @@ export const EditAssetForm = ({
     defaultLinks: asset.gallery,
   });
   const uploadGallery = async (): Promise<(string | null)[]> => {
+    // console.log("ABOUT_TO_UPLOAD::", filesRef.current);
+    // return;
     const promises = filesRef.current.map((file) => upload(file, asset.id));
     return Promise.all(promises);
   };
-  const updateGalleryAndForm = async () => {
+  const getUploadedLinks = async () => {
     const uploaded = await uploadGallery();
-    if (uploaded.length < 1) return;
+    if (!uploaded || uploaded.length < 1) return [];
 
-    const links = uploaded.filter((l) => l !== null); // revisit
-    setForm((fo) => ({ ...fo, gallery: [...fo.gallery, ...links] }));
-    filesRef.current = [];
+    filesRef.current = []; // clear files after upload
+    return uploaded.filter((f) => f !== null);
   };
 
   const handleAddFiles = (newFiles: any[]) => {
@@ -216,16 +233,19 @@ export const EditAssetForm = ({
   const [gallery, setGallery] = useState(asset.gallery);
   const removeListRef = useRef<any[]>([]);
   const handleAddLinkToRemove = (link: string) => {
-    setGallery((l) => [...l.filter((li) => li !== link)]);
-    removeListRef.current = [...removeListRef.current, link];
+    setGallery((l) => [...l.filter((li) => li !== link)]); // removed from preview
+    removeListRef.current = [...removeListRef.current, link]; // added to remove list
   };
 
   const { onRemove: removeFromS3 } = useUploader();
-  const removeLinks = async () => {
+  const removeFromList = async () => {
     for await (let link of removeListRef.current) {
       removeFromS3(link, asset.id);
     }
+    return removeListRef.current;
   };
+
+  // console.log("::ASSET::GALLERY::", asset.gallery);
 
   return (
     <article className="w-full px-4">

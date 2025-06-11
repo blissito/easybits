@@ -234,12 +234,12 @@ const Image = ({
 }: {
   as?: string;
   src: string;
-  onRemove?: () => void; // @todo remove file from s3
+  onRemove?: () => void; // click on X
 }) => {
-  const C = as ? as : "motion.figure";
+  const C = as ? as : "motion.figure"; // revisit
   return (
     <C
-      layout
+      layout={C === "motion.figure" || undefined}
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
