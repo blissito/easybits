@@ -128,6 +128,11 @@ export const EditAssetForm = ({
     setErrors(errors);
   };
 
+  const removeFilePreviews = () => {
+    filesRef.current = []; // clear files after upload
+    updateSrcset();
+  };
+
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
   // const revalidator = useRevalidator();
   const fetcher = useFetcher();
@@ -148,6 +153,7 @@ export const EditAssetForm = ({
     const gallery = [...form.gallery, ...uploaded].filter(
       (link) => !removeListRef.current.includes(link)
     );
+    console.info("GALLERY_RESULT", gallery);
     //
 
     setForceSpinner(false);
@@ -167,7 +173,17 @@ export const EditAssetForm = ({
       }
     );
     setForceSpinner(false);
-    toast.success("Tu Asset se ha guardado");
+    toast.success("Tu Asset se ha guardado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
     // revalidator.revalidate();
   };
 
@@ -189,17 +205,6 @@ export const EditAssetForm = ({
 
   useControlSave(() => {
     handleSubmit({ preventDefault: () => {} });
-    toast.success("Tu Asset se ha guardado", {
-      style: {
-        border: "2px solid #000000",
-        padding: "16px",
-        color: "#000000",
-      },
-      iconTheme: {
-        primary: "#8BB236",
-        secondary: "#FFFAEE",
-      },
-    });
   });
 
   const removeFile = (index: number) => {
@@ -225,8 +230,8 @@ export const EditAssetForm = ({
     console.log("UPLOADED::", uploaded);
     if (!uploaded || uploaded.length < 1) return [];
 
-    filesRef.current = []; // clear files after upload
-    updateSrcset();
+    // filesRef.current = []; // clear files after upload
+    // updateSrcset();
     return uploaded;
   };
 
@@ -259,6 +264,7 @@ export const EditAssetForm = ({
 
   useEffect(() => {
     setGallery(asset.gallery);
+    removeFilePreviews();
   }, [asset.gallery]);
 
   return (
