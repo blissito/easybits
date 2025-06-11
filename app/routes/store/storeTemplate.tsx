@@ -1,13 +1,11 @@
 import type { Asset, User } from "@prisma/client";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { AssetList } from "../assets/AssetList";
 import { AssetCard } from "../assets/AssetCard";
 import { Link } from "react-router";
 import { DEFAULT_PIC } from "~/routes/profile/profileComponents";
-
 import {
   FaFacebookF,
-  FaInstagram,
   FaLink,
   FaLinkedin,
   FaTiktok,
@@ -15,6 +13,7 @@ import {
   FaYoutube,
 } from "react-icons/fa6";
 import { cn } from "~/utils/cn";
+import { AiFillInstagram } from "react-icons/ai";
 
 export const StoreTemplate = ({
   assets = [],
@@ -78,7 +77,7 @@ export const StoreTemplate = ({
                 {/* check if RRSS and display them */}
                 {instagram && (
                   <a href={instagram} target="_blank" rel="noopener">
-                    <FaInstagram />
+                    <AiFillInstagram />
                   </a>
                 )}
                 {facebook && (
