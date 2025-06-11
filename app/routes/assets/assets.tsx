@@ -45,7 +45,7 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
   const [isFolded, setIsFolded] = useState(false);
 
   return (
-    <section className="max-w-7xl w-full mx-auto h-svh  box-border pt-16 pb-6 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0">
+    <section className="max-w-7xl w-full mx-auto min-h-svh  box-border pt-16 pb-10 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0">
       <article className={cn("flex-1 items-center  ")}>
         <Header
           cta={

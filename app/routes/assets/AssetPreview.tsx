@@ -115,8 +115,17 @@ export const Sharing = ({ link }: { link: string }) => {
       <SocialMedia
         onClick={() => {
           navigator.clipboard.writeText(link);
-
-          toast("Link copiado ✅", { position: "top-right" });
+          toast.success("Link copiado", {
+            style: {
+              border: "2px solid #000000",
+              padding: "16px",
+              color: "#000000",
+            },
+            iconTheme: {
+              primary: "#8BB236",
+              secondary: "#FFFAEE",
+            },
+          });
         }}
         name="Link"
         className="bg-munsell"

@@ -187,7 +187,20 @@ export const EditAssetForm = ({
     setState({ metadata: { numberOfSessions } });
   };
 
-  useControlSave(() => handleSubmit({ preventDefault: () => {} }));
+  useControlSave(() => {
+    handleSubmit({ preventDefault: () => {} });
+    toast.success("Tu Asset se ha guardado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
+  });
 
   const removeFile = (index: number) => {
     const list = [...filesRef.current];

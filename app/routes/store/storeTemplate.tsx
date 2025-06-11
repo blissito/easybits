@@ -1,13 +1,11 @@
 import type { Asset, User } from "@prisma/client";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { AssetList } from "../assets/AssetList";
 import { AssetCard } from "../assets/AssetCard";
 import { Link } from "react-router";
 import { DEFAULT_PIC } from "~/routes/profile/profileComponents";
-
 import {
   FaFacebookF,
-  FaInstagram,
   FaLink,
   FaLinkedin,
   FaTiktok,
@@ -15,6 +13,7 @@ import {
   FaYoutube,
 } from "react-icons/fa6";
 import { cn } from "~/utils/cn";
+import { AiFillInstagram } from "react-icons/ai";
 
 export const StoreTemplate = ({
   assets = [],
@@ -78,7 +77,7 @@ export const StoreTemplate = ({
                 {/* check if RRSS and display them */}
                 {instagram && (
                   <a href={instagram} target="_blank" rel="noopener">
-                    <FaInstagram />
+                    <AiFillInstagram />
                   </a>
                 )}
                 {facebook && (
@@ -154,9 +153,11 @@ const StoreTemplateFooter = () => {
   return (
     <div className="border-t-2 h-10 border-black flex gap-1 justify-center items-center  w-full bg-white fixed bottom-0">
       <div className="flex gap-1 items-center">
-        <img className="w-6" src="/logo-purple.svg" />
-        <span className="text-xs">by</span>
-        <span className="font-jersey text-xl">EasyBits</span>
+        <span className="text-sm">Powered by</span>
+        <img alt="isotipo easybits" className="w-6" src="/logo-purple.svg" />
+        <Link to="/" className="mt-1">
+          <img alt="isotipo easybits" src="/logo-eb.svg" />{" "}
+        </Link>
       </div>
     </div>
   );
