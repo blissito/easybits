@@ -154,9 +154,11 @@ const StoreTemplateFooter = () => {
   return (
     <div className="border-t-2 h-10 border-black flex gap-1 justify-center items-center  w-full bg-white fixed bottom-0">
       <div className="flex gap-1 items-center">
-        <img className="w-6" src="/logo-purple.svg" />
-        <span className="text-xs">by</span>
-        <span className="font-jersey text-xl">EasyBits</span>
+        <span className="text-sm">Powered by</span>
+        <img alt="isotipo easybits" className="w-6" src="/logo-purple.svg" />
+        <Link to="/" className="mt-1">
+          <img alt="isotipo easybits" src="/logo-eb.svg" />{" "}
+        </Link>
       </div>
     </div>
   );

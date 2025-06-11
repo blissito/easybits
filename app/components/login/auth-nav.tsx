@@ -64,7 +64,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
               </Link>
             ))}
           </div>
-          {!noCTA && !user && (
+          {!noCTA && !user?.id && (
             <div className="flex h-full items-center">
               <Link
                 to="/login"
@@ -85,7 +85,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
               </Link>
             </div>
           )}
-          {user && (
+          {user?.id && (
             <div className="flex h-full items-center border-r-[1px] border-white/30">
               <Link
                 to="/dash/assets"

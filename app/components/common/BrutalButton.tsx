@@ -57,7 +57,7 @@ export const BrutalButton = ({
             "active:te-x-0 active:translate-y-0": !isDisabled && !isLoading,
             "hover:-translate-x-1 hover:-translate-y-1":
               !isDisabled && !isLoading,
-            "w-full rounded-none border-none hover:-translate-x-0 hover:-translate-y-0":
+            "w-full rounded-none border-b-2 border-x-0  hover:-translate-x-0 hover:-translate-y-0":
               mode === "landing", // se usa para el checkout
             "-translate-x-1 -translate-y-1 hover:-translate-x-0 hover:-translate-y-0":
               mode === "inverted",

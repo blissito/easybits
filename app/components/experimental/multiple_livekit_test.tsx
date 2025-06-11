@@ -67,7 +67,17 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
     navigator.clipboard.writeText(
       `https://www.easybits.cloud/experiment?roomId=${roomId}`
     );
-    toast("Link copiado al portapapeles");
+    toast.success("Link copiado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
   };
   return (
     <>

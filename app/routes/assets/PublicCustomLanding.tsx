@@ -173,6 +173,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               type="button"
               onClick={handleOpenCheckout}
               mode="landing"
+              className="h-16"
+              containerClassName="h-16  border-none rounded-none"
             >
               {"Comprar"}
             </BrutalButton>

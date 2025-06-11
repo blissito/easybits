@@ -11,7 +11,18 @@ export const useOpenLink = ({
     const isDev = location.hostname.includes("localhost");
     const uri = isDev ? localLink : publicLink;
     navigator.clipboard.writeText(uri);
-    toast("Link copiado ✅", { position: "top-right" });
+    toast.success("Link copiado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+      position: "top-right",
+    });
     const a = document.createElement("a");
     a.target = "_blank";
     a.href = uri;

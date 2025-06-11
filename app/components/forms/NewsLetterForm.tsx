@@ -100,7 +100,17 @@ const TestEmailForm = ({
       action: "/api/v1/utils",
     });
     onSubmit?.();
-    toast.success("Se ha enviado el correo de prueba");
+    toast.success("Se ha enviado el correo de prueba", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
   };
   return (
     <section className=" bg-blue-400/20 p-12 rounded-3xl border-2 border-blue-500 my-4">

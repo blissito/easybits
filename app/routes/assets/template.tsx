@@ -20,6 +20,8 @@ import { Input } from "~/components/common/Input";
 import { EmojiConfetti } from "~/components/Confetti";
 import { useFetcherSubmit } from "~/hooks/useFetcherSubmit";
 import PaymentModal from "./PaymentModal";
+import { usePublicLink } from "~/hooks/usePublicLink";
+import { useOpenLink } from "~/hooks/useOpenLink";
 
 export const ContentTemplate = ({
   asset,
@@ -38,9 +40,9 @@ export const ContentTemplate = ({
       className={cn("border-b-0 border-black", "md:border-b-[2px]")}
       style={{ fontFamily: typography }}
     >
-      <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black">
+      <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black bg-white">
         <ProductGallery
-          className="bg-black"
+          className="bg-white"
           items={asset.gallery.map((src) => ({
             src,
           }))}
@@ -54,12 +56,13 @@ export const ContentTemplate = ({
           >
             <Bragging asset={asset} />
             <div className={cn("h-fit p-4", "md:p-6")}>
-              <Markdown>{asset.description}</Markdown>
+              <Markdown typography={typography}>{asset.description}</Markdown>
             </div>
           </div>
           <Info
             files={files}
             asset={asset}
+            typography={typography}
             stripePromise={stripePromise}
             checkoutSession={checkoutSession}
             actionButton={actionButton}
@@ -153,10 +156,12 @@ const Info = ({
   stripePromise,
   checkoutSession,
   actionButton,
+  typography,
 }: {
   actionButton?: ReactNode;
   asset: Asset;
   files?: File[];
+  typography: string;
 }) => {
   const text = asset.template?.ctaText
     ? asset.template.ctaText
@@ -167,6 +172,7 @@ const Info = ({
   const getPriceString = () => `$${asset.price} ${asset.currency}`;
   return (
     <div
+      style={{ fontFamily: typography }}
       className={cn(
         "col-span-8 border-t-[2px] border-black",
         "md:col-span-3 md:border-t-0"
@@ -174,11 +180,11 @@ const Info = ({
     >
       <div
         className={cn(
-          "h-16 border-b-[2px] bg-black border-black  place-content-center hidden",
+          "h-[62px] border-y-[0px] bg-black border-black  place-content-center hidden",
           "md:grid"
         )}
       >
-        <h3 className="text-2xl font-bold text-white">{getPriceString()}</h3>
+        <h3 className="text-2xl font-bold text-white">{getPriceString()} </h3>
       </div>
       {asset.price <= 0 && <Subscription asset={asset} text={text} />}
 
@@ -190,11 +196,10 @@ const Info = ({
           text={text}
         />
       )}
-
       {actionButton}
 
-      <div className="h-fit p-6 border-b-[2px] border-black content-center">
-        <Markdown>{asset.note}</Markdown>
+      <div className="h-fit p-3 border-b-[2px] border-black content-center">
+        {asset.note}
       </div>
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
@@ -348,8 +353,8 @@ export const FooterTemplate = ({
           " md:h-10 md:pb-0 "
         )}
       >
-        <img alt="isotipo easybits" src="/isotipo-eb.svg" />
-        <span>Powered by</span>
+        <span className="text-sm">Powered by</span>
+        <img alt="isotipo easybits" className="w-6" src="/logo-purple.svg" />
         <Link to="/" className="mt-1">
           <img alt="isotipo easybits" src="/logo-eb.svg" />{" "}
         </Link>
@@ -382,7 +387,12 @@ export const HeaderTemplate = ({
     socialNetworks,
   } = asset?.user?.storeConfig || {};
   const authorPic = asset.user?.picture || logoImage || "Sin nombre";
+  // const storeLink = {`${user?.host}.easybits.cloud/tienda`}
 
+  const copyAndOpenLink = useOpenLink({
+    localLink: `http://${asset.user.host}.localhost:3000/tienda/`,
+    publicLink: `https://${asset.user.host}.easybits.cloud/tienda/`,
+  });
   return (
     <section
       className={cn("border-b-[2px] border-black bg-[#CE95F9]", className)}
@@ -390,47 +400,48 @@ export const HeaderTemplate = ({
     >
       <div className="border-b-[2px] border-black h-16">
         <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
-          <div className="flex gap-2 items-center h-full">
-            <Avatar src={authorPic} />{" "}
-            <h3 className="underline">{authorName}</h3>
-          </div>
+          <button onClick={copyAndOpenLink}>
+            <div className="flex gap-2 items-center h-full">
+              <Avatar src={authorPic} />{" "}
+              <h3 className="underline font-bold">{authorName}</h3>
+            </div>{" "}
+          </button>
 
           {socialNetworks && (
             <div className="flex items-center gap-3">
-              {/* check if RRSS and display them */}
               {instagram && (
                 <Link to={instagram}>
-                  <FaInstagram className="text-black text-lg" />
+                  <AiFillInstagram className="text-black text-xl hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
               {facebook && (
                 <Link to={facebook}>
-                  <FaFacebookF className="text-black text-lg" />
+                  <FaFacebookF className="text-black text-lg hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
               {x && (
                 <Link to={x}>
-                  <FaXTwitter className="text-black text-lg" />
+                  <FaXTwitter className="text-black text-lg hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
               {youtube && (
                 <Link to={youtube}>
-                  <FaYoutube className="text-black text-lg" />
+                  <FaYoutube className="text-black text-xl hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
               {tiktok && (
                 <Link to={tiktok}>
-                  <FaTiktok className="text-black text-lg" />
+                  <FaTiktok className="text-black text-lg hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
               {linkedin && (
                 <Link to={linkedin}>
-                  <FaLinkedin className="text-black text-lg" />
+                  <FaLinkedin className="text-black text-lg hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
               {website && (
                 <Link to={website}>
-                  <FaLink className="text-black text-lg" />
+                  <FaLink className="text-black text-lg hover:scale-90 cursor-pointer transition-all" />
                 </Link>
               )}
             </div>

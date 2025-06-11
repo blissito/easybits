@@ -42,7 +42,15 @@ export const FileInput = ({
             const match = f.name === af.metadata.name;
             match ? (notFound = false) : undefined;
             match ? removeFile(i) : undefined;
-            match ? toast("Un archivo ya existe") : undefined;
+            match
+              ? toast.error("Un archivo ya existe", {
+                  style: {
+                    border: "2px solid #000000",
+                    padding: "16px",
+                    color: "#000000",
+                  },
+                })
+              : undefined;
           });
           return notFound;
         })
