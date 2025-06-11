@@ -63,12 +63,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "remove_gallery_image_and_update_gallery") {
     const link = formData.get("url") as string;
     const assetId = formData.get("assetId") as string;
+    const index = formData.get("index") as string;
     const url = new URL(link);
     const key = url.pathname.substring(1);
     console.log("::DELETING:: ", key);
     await deleteObject(key, "easybits-public");
     await deleteObject(key, "easybits-public");
-    await deleteObject(key, "easybits-public"); // 😅
+    await deleteObject(key, "easybits-public"); // revisit 😅
     const asset = await db.asset.findUnique({
       where: {
         id: assetId,
@@ -76,10 +77,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
     if (!asset) throw new Response(null, { status: 404 });
 
-    const links = asset.gallery.filter((l) => l !== link);
+    const update = [...asset.gallery];
+    update.splice(Number(index), 1);
     return await db.asset.update({
       where: { id: asset.id },
-      data: { gallery: links },
+      data: { gallery: update },
     });
   }
 
@@ -116,9 +118,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
     if (data.template?.slug) {
-      data.slug = data.template.slug; // @todo should recive it directly?
+      data.slug = data.template.slug; // @todo! should recive it directly?
     }
-    // @todo exists validation?
+    // @todo validation?
     let asset = await db.asset.findUnique({ where: { id: data.id } });
     if (!asset) throw new Response("Asset not found::", { status: 404 });
 
@@ -138,17 +140,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
     const nuevo = asset.price;
     if (old !== nuevo) {
-      const price = await updateOrCreateProductAndPrice(asset, request);
+      const price = await updateOrCreateProductAndPrice(asset, request); // stripe stuff
       // }
     }
-    // @todo always?
-    await updateProduct({
+    // @todo errors?
+    return await updateProduct({
       productId: asset.stripeProduct!,
       accountId: user.stripeId!,
       images: asset.gallery,
       description: asset.note!,
     });
-    return redirect(`/dash/assets/${asset.id}/edit`);
   }
 
   if (intent === "update_asset_gallery_links") {

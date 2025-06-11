@@ -19,10 +19,10 @@ export const EbookFields = ({
   asset: Asset;
   onChange: (name: string) => (value: string) => void;
 }) => {
-  const epub = files.find((f) => f.contentType.includes("epub"));
-  const pdf = files.find((f) => f.contentType.includes("pdf"));
-  const mobi = files.find((f) => f.contentType.includes("mobi"));
-  const txt = files.find((f) => f.contentType.includes("text/plain"));
+  const epub = files.find((f) => f.contentType?.includes("epub"));
+  const pdf = files.find((f) => f.contentType?.includes("pdf"));
+  const mobi = files.find((f) => f.contentType?.includes("mobi"));
+  const txt = files.find((f) => f.contentType?.includes("text/plain"));
   return (
     <>
       <h2 className="text-2xl mb-3">Completa la información de tu libro</h2>

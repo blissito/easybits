@@ -16,28 +16,34 @@ import { useImageResize } from "~/hooks/useImageResize";
 export const GalleryUploader = ({
   limit = Infinity,
   asset,
-  onChange,
-  files: externalFiles,
+  onAddFiles,
+  srcset = [],
+  onRemoveFile,
+  onRemoveLink,
+  gallery = [],
 }: {
-  files: File[];
-  onChange?: (files: File[]) => void;
+  gallery: string[];
+  onRemoveLink?: (arg0: string) => void;
+  onRemoveFile?: (index: number) => void;
+  srcset: string[];
+  onAddFiles: (arg0: File[]) => void;
   limit?: number;
   host: string;
   asset: Asset;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
-  const [files, setFiles] = useState<File[]>(externalFiles);
+  // const [files, setFiles] = useState<File[]>(externalFiles);
 
   // external files change
-  useEffect(() => {
-    setFiles(externalFiles);
-  }, [externalFiles]);
+  // useEffect(() => {
+  //   setFiles(externalFiles);
+  // }, [externalFiles]);
 
   // files change
-  useEffect(() => {
-    onChange?.(files);
-  }, [files]);
+  // useEffect(() => {
+  //   onChange?.(files);
+  // }, [files]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -48,7 +54,7 @@ export const GalleryUploader = ({
       f.type.includes("image")
     );
 
-    setFiles(fls);
+    addFiles(fls);
   };
 
   const handleDragOver = (ev: DragEvent) => {
@@ -61,21 +67,15 @@ export const GalleryUploader = ({
   };
 
   const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
-    if (!ev.currentTarget.files) return;
-
-    addFiles([...ev.currentTarget.files]);
+    if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
+    console.log("FILEs found?", ev.currentTarget.files.length);
+    onAddFiles([...ev.currentTarget.files]);
   };
 
-  const addFiles = (newFiles: File[]) => {
-    setFiles((currentFiles) => {
-      return [...currentFiles, ...newFiles];
-    });
-  };
-
-  const { upload, links, onRemove } = useUploader({
-    assetId: asset.id,
-    defaultLinks: asset.gallery,
-  });
+  // const { links, onRemove: removeFromS3 } = useUploader({
+  //   assetId: asset.id,
+  //   defaultLinks: asset.gallery,
+  // });
 
   const { resize } = useImageResize({
     async callback(blob) {
@@ -108,13 +108,11 @@ export const GalleryUploader = ({
     resize({ link });
   };
 
-  const canUpload = limit > links.length + files.length;
+  const canUpload = limit > gallery.length + srcset.length;
 
-  const elemsLength = files.length + links.length;
+  const elemsLength = srcset.length + gallery.length;
 
-  const handleRemoveFile = (index: number) => () => {
-    setFiles(files.filter((_, i) => i !== index));
-  };
+  const handleRemoveFile = (index: number) => () => onRemoveFile?.(index);
 
   return (
     <article className="">
@@ -161,20 +159,20 @@ export const GalleryUploader = ({
           <RowGalleryEditor
             files={
               <section className="flex gap-3">
-                {files.map((f, i) => (
+                {srcset.map((src, i) => (
                   <Image
                     onRemove={handleRemoveFile(i)}
                     as="figure"
                     key={i}
-                    src={URL.createObjectURL(f)}
+                    src={src}
                   />
                 ))}
               </section>
             }
             canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
-            links={links}
-            onRemove={(url) => onRemove(url, asset.id)}
+            links={gallery}
+            onRemoveLink={onRemoveLink} // @todo change name
           />
         )}
 
@@ -194,14 +192,14 @@ export const GalleryUploader = ({
 const RowGalleryEditor = ({
   links = [],
   onClick,
-  onRemove,
+  onRemoveLink,
   canUpload,
   files,
 }: {
   files?: ReactNode;
   canUpload?: boolean;
   links?: string[];
-  onRemove?: (arg0: string) => void;
+  onRemoveLink?: (arg0: string) => void;
   onClick: () => void;
 }) => {
   return (
@@ -209,7 +207,7 @@ const RowGalleryEditor = ({
       <LayoutGroup>
         <AnimatePresence>
           {links.map((l) => (
-            <Image onRemove={() => onRemove?.(l)} key={l} src={l} />
+            <Image onRemove={() => onRemoveLink?.(l)} key={l} src={l} />
           ))}
         </AnimatePresence>
         {files}
@@ -236,12 +234,12 @@ const Image = ({
 }: {
   as?: string;
   src: string;
-  onRemove?: () => void; // @todo remove file from s3
+  onRemove?: () => void; // click on X
 }) => {
-  const C = as ? as : "motion.figure";
+  const C = as ? as : "motion.figure"; // revisit
   return (
     <C
-      layout
+      layout={C === "motion.figure" || undefined}
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}

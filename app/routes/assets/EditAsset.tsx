@@ -4,7 +4,6 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
 import { db } from "~/.server/db";
 import { redirect } from "react-router";
-import { ContentTemplate, HeaderTemplate } from "./template";
 import { useState } from "react";
 import { AssetPreview } from "./AssetPreview";
 
@@ -48,7 +47,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
       </h1>
       <main className={cn("flex md:pl-20 items-start")}>
         <EditAssetForm
-          files={files}
+          // files={files}
           assetFiles={files}
           host={host}
           asset={asset}

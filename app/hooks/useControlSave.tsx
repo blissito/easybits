@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export const useControlSave = (cb?: () => void) => {
+export const useControlSave = (cb?: () => Promise<any>) => {
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
