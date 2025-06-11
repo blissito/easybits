@@ -8,7 +8,14 @@ import { MarkEditor } from "./MarkEditor.client";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { Suspense, useState, type FormEvent } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
@@ -76,11 +83,13 @@ export const EditAssetForm = ({
   onUpdate,
 }: {
   onUpdate?: (arg0: Partial<Asset>) => void;
-  // files: File[];
   assetFiles?: File[];
   asset: Asset;
   host: string;
 }) => {
+  const [srcset, setSrcset] = useState<string[]>([]);
+  const filesRef = useRef<any[]>([]);
+  const [forceSpinner, setForceSpinner] = useState(false);
   const [form, setForm] = useState<Asset>(asset);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -126,9 +135,11 @@ export const EditAssetForm = ({
     setErrors(errors);
   };
 
+  // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
   const fetcher = useFetcher();
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setForceSpinner(true);
 
     const { error, success } = assetClientSchema.safeParse(form);
     formatErrors(error);
@@ -137,10 +148,11 @@ export const EditAssetForm = ({
       console.error(error);
       return;
     }
-
+    console.log("TF", filesRef.current);
     await updateGalleryAndForm(); // @todo raceCondition?
-
-    fetcher.submit(
+    setForceSpinner(false);
+    return;
+    await fetcher.submit(
       {
         data: JSON.stringify({ ...form, slug: asset.slug, id: asset.id }),
         intent: "update_asset",
@@ -150,8 +162,13 @@ export const EditAssetForm = ({
         action: "/api/v1/assets",
       }
     );
+    setForceSpinner(false);
+    toast.success("Tu Asset se ha guardado");
   };
-  const isLoading = fetcher.state !== "idle";
+
+  // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: ::
+
+  const isLoading = forceSpinner || fetcher.state !== "idle";
 
   const handleEventChange = (eventDate: Date) => {
     setState({ eventDate });
@@ -165,28 +182,37 @@ export const EditAssetForm = ({
     setState({ metadata: { numberOfSessions } });
   };
 
-  useControlSave(() => {
-    handleSubmit({ preventDefault: () => {} });
+  useControlSave(async () => {
+    await handleSubmit({ preventDefault: () => {} });
     toast.success("Tu Asset se ha guardado");
   });
 
-  //will mantain a copy of the files
-  const [files, setFiles] = useState([]);
-  const { upload, onRemove, links } = useUploader({
+  const removeFile = (index: number) => {
+    const list = [...filesRef.current];
+    list.splice(index, 1);
+    filesRef.current = list;
+    console.log("ora?", filesRef.current);
+  };
+  const { upload } = useUploader({
     assetId: asset.id,
     defaultLinks: asset.gallery,
   });
-  const uploadGallery = async () => {
-    const promises = files.map((file) => upload(file, asset.id));
+  const uploadGallery = async (): Promise<(string | null)[]> => {
+    const promises = filesRef.current.map((file) => upload(file, asset.id));
     return Promise.all(promises);
   };
   const updateGalleryAndForm = async () => {
-    const links = (await uploadGallery()).filter((l) => l !== null);
-    console.log("Los links:", links);
-    setForm((fo) => ({ ...fo, gallery: links }));
+    const uploaded = await uploadGallery();
+    console.log("::FILES::UPLOADED::", uploaded);
+    const links = uploaded.filter((l) => l !== null); // revisit
+    setForm((fo) => ({ ...fo, gallery: [...fo.gallery, ...links] }));
+    filesRef.current = [];
   };
-  const emptyFiles = () => {
-    setFiles([]);
+
+  const handleAddFiles = (newFiles: any[]) => {
+    filesRef.current = [...filesRef.current, ...newFiles];
+    const links = filesRef.current.map((file) => URL.createObjectURL(file));
+    setSrcset(links);
   };
 
   return (
@@ -202,26 +228,27 @@ export const EditAssetForm = ({
             className="mb-6"
           />
 
-          <Input
+          {/* <Input
             defaultValue={asset.tags}
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
             label="Tags"
             placeholder="curso, programación"
             className="mb-3"
-          />
-          <Suspense fallback={<Spinner />}>
+          /> */}
+          {/* <Suspense fallback={<Spinner />}>
             <MarkEditor
               defaultValue={asset.description}
               onChange={handleChange("description")}
               error={errors.description}
             />
-          </Suspense>
+          </Suspense> */}
           <GalleryUploader
             limit={3}
             asset={asset}
             host={host}
-            onChange={setFiles}
-            files={files}
+            onAddFiles={handleAddFiles}
+            onRemove={removeFile}
+            srcset={srcset}
           />
           <HR />
           <PriceInput
@@ -246,7 +273,7 @@ export const EditAssetForm = ({
               onTypeChange={(type) => {
                 setState({ type });
               }}
-              files={files}
+              files={filesRef.current}
               onChangeEventDate={handleEventChange}
               defaultEventDate={asset.eventDate}
               type={asset.type}
@@ -267,7 +294,7 @@ export const EditAssetForm = ({
           {asset.type === "EBOOK" && (
             <>
               <EbookFields
-                files={files}
+                files={filesRef.current}
                 asset={asset}
                 onChange={handleMetadata}
               />

@@ -16,28 +16,30 @@ import { useImageResize } from "~/hooks/useImageResize";
 export const GalleryUploader = ({
   limit = Infinity,
   asset,
-  onChange,
-  files: externalFiles,
+  onAddFiles,
+  srcset = [],
+  onRemove,
 }: {
-  files: File[];
-  onChange?: (files: File[]) => void;
+  onRemove?: (index: number) => void;
+  srcset: string[];
+  onAddFiles: (arg0: File[]) => void;
   limit?: number;
   host: string;
   asset: Asset;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
-  const [files, setFiles] = useState<File[]>(externalFiles);
+  // const [files, setFiles] = useState<File[]>(externalFiles);
 
   // external files change
-  useEffect(() => {
-    setFiles(externalFiles);
-  }, [externalFiles]);
+  // useEffect(() => {
+  //   setFiles(externalFiles);
+  // }, [externalFiles]);
 
   // files change
-  useEffect(() => {
-    onChange?.(files);
-  }, [files]);
+  // useEffect(() => {
+  //   onChange?.(files);
+  // }, [files]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -48,7 +50,7 @@ export const GalleryUploader = ({
       f.type.includes("image")
     );
 
-    setFiles(fls);
+    addFiles(fls);
   };
 
   const handleDragOver = (ev: DragEvent) => {
@@ -61,18 +63,12 @@ export const GalleryUploader = ({
   };
 
   const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
-    if (!ev.currentTarget.files) return;
-
-    addFiles([...ev.currentTarget.files]);
+    if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
+    console.log("FILEs found?", ev.currentTarget.files.length);
+    onAddFiles([...ev.currentTarget.files]);
   };
 
-  const addFiles = (newFiles: File[]) => {
-    setFiles((currentFiles) => {
-      return [...currentFiles, ...newFiles];
-    });
-  };
-
-  const { upload, links, onRemove } = useUploader({
+  const { links, onRemove: removeFromS3 } = useUploader({
     assetId: asset.id,
     defaultLinks: asset.gallery,
   });
@@ -108,13 +104,11 @@ export const GalleryUploader = ({
     resize({ link });
   };
 
-  const canUpload = limit > links.length + files.length;
+  const canUpload = limit > links.length + srcset.length;
 
-  const elemsLength = files.length + links.length;
+  const elemsLength = srcset.length + links.length;
 
-  const handleRemoveFile = (index: number) => () => {
-    setFiles(files.filter((_, i) => i !== index));
-  };
+  const handleRemoveFile = (index: number) => () => onRemove?.(index);
 
   return (
     <article className="">
@@ -161,12 +155,12 @@ export const GalleryUploader = ({
           <RowGalleryEditor
             files={
               <section className="flex gap-3">
-                {files.map((f, i) => (
+                {srcset.map((src, i) => (
                   <Image
                     onRemove={handleRemoveFile(i)}
                     as="figure"
                     key={i}
-                    src={URL.createObjectURL(f)}
+                    src={src}
                   />
                 ))}
               </section>
@@ -174,7 +168,7 @@ export const GalleryUploader = ({
             canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
             links={links}
-            onRemove={(url) => onRemove(url, asset.id)}
+            onRemove={(url) => removeFromS3(url, asset.id)} // @todo change name
           />
         )}
 

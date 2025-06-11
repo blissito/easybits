@@ -72,14 +72,10 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
    */
 
   // localhost => inicio
-  console.info("::HOSTNAME::", url.hostname);
   if (url.hostname === "localhost") {
-    if (url.pathname === "/") {
-      return redirect("/inicio");
-    } else {
-      return null;
-    }
+    return null;
   }
+  console.info("::HOSTNAME::", url.hostname);
   // domain
   const domainExists = await db.user.findFirst({
     where: {

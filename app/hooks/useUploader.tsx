@@ -16,12 +16,16 @@ export const useUploader = (config: {
     // fetcher.submit({intent:'list_objects', })
   }, []);
 
-  // @todo listObjects directly to generate links list
+  // @todo need to support cancel
   const onRemove = (url: string, assetId: string) => {
-    const filtered = [...links].filter((l) => l !== url);
-    setLinks(filtered);
+    const urls = [...links];
+    const index = urls.findIndex((string) => string === url);
+    urls.splice(index, 1);
+    setLinks(urls);
+
     fetcher.submit(
       {
+        index,
         url,
         assetId,
         intent: "remove_gallery_image_and_update_gallery",
