@@ -86,7 +86,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
       domain: url.hostname,
     },
   });
-  if (domainExists && url.pathname === "/") {
+  if (domainExists && (url.pathname === "/" || url.pathname === "/login")) {
     return redirect("/tienda");
   }
 
