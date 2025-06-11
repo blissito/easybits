@@ -4,27 +4,20 @@ import { LiveOrFiles } from "./LiveOrFiles";
 import { Plantilla } from "./Plantilla";
 import { GalleryUploader } from "./GalleryUploader";
 import { ExtraConfig } from "./ExtraConfig";
-import { MarkEditor } from "./MarkEditor.client";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { Suspense, useRef, useState, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
 import { useImageResize } from "~/hooks/useImageResize";
-import Spinner from "~/components/common/Spinner";
 import { useControlSave } from "~/hooks/useControlSave";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 import { EbookFields } from "./EbookFields";
 import { useUploader } from "~/hooks/useUploader";
+import { MarkEditor } from "./MarkEditor.client";
+import Spinner from "~/components/common/Spinner";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -182,16 +175,15 @@ export const EditAssetForm = ({
     setState({ metadata: { numberOfSessions } });
   };
 
-  useControlSave(async () => {
-    await handleSubmit({ preventDefault: () => {} });
-    toast.success("Tu Asset se ha guardado");
-  });
+  useControlSave(() => handleSubmit({ preventDefault: () => {} }));
 
   const removeFile = (index: number) => {
     const list = [...filesRef.current];
+    console.log("LIST:", list);
     list.splice(index, 1);
     filesRef.current = list;
-    console.log("ora?", filesRef.current);
+    console.log("ora?", index, filesRef.current);
+    updateSrcset();
   };
   const { upload } = useUploader({
     assetId: asset.id,
@@ -212,6 +204,10 @@ export const EditAssetForm = ({
 
   const handleAddFiles = (newFiles: any[]) => {
     filesRef.current = [...filesRef.current, ...newFiles];
+    updateSrcset();
+  };
+
+  const updateSrcset = () => {
     const links = filesRef.current.map((file) => URL.createObjectURL(file));
     setSrcset(links);
   };
@@ -244,20 +240,20 @@ export const EditAssetForm = ({
             className="mb-6"
           />
 
-          {/* <Input
+          <Input
             defaultValue={asset.tags}
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
             label="Tags"
             placeholder="curso, programación"
             className="mb-3"
-          /> */}
-          {/* <Suspense fallback={<Spinner />}>
+          />
+          <Suspense fallback={<Spinner />}>
             <MarkEditor
               defaultValue={asset.description}
               onChange={handleChange("description")}
               error={errors.description}
             />
-          </Suspense> */}
+          </Suspense>
           <GalleryUploader
             limit={3}
             asset={asset}
@@ -265,7 +261,7 @@ export const EditAssetForm = ({
             host={host}
             onAddFiles={handleAddFiles}
             onRemoveLink={handleAddLinkToRemove}
-            onRemove={removeFile}
+            onRemoveFile={removeFile}
             srcset={srcset}
           />
           <HR />

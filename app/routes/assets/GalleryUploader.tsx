@@ -18,13 +18,13 @@ export const GalleryUploader = ({
   asset,
   onAddFiles,
   srcset = [],
-  onRemove,
+  onRemoveFile,
   onRemoveLink,
   gallery = [],
 }: {
   gallery: string[];
   onRemoveLink?: (arg0: string) => void;
-  onRemove?: (index: number) => void;
+  onRemoveFile?: (index: number) => void;
   srcset: string[];
   onAddFiles: (arg0: File[]) => void;
   limit?: number;
@@ -112,7 +112,7 @@ export const GalleryUploader = ({
 
   const elemsLength = srcset.length + gallery.length;
 
-  const handleRemoveFile = (index: number) => () => onRemove?.(index);
+  const handleRemoveFile = (index: number) => () => onRemoveFile?.(index);
 
   return (
     <article className="">
