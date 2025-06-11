@@ -120,7 +120,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 export default function App({ loaderData }) {
   // @todo This coould be moved into a second app (just for custom domains)
   const {
-    screen,
+    screen, // @todo revisit. Not used
     assets,
     user,
     asset,
@@ -129,6 +129,7 @@ export default function App({ loaderData }) {
     successStripeId,
   } = loaderData || {};
   if (screen === "public_store") {
+    // @todo make this componente fetch data from client
     return <StoreComponent assets={assets} user={user} />;
   }
   if (screen === "public_detail") {

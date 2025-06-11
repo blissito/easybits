@@ -12,6 +12,7 @@ import { Modal } from "../common/Modal";
 import { Input } from "../common/Input";
 import StoreConfigForm from "./StoreConfigForm";
 import { StoreTemplate } from "~/routes/store/storeTemplate";
+import { useOpenLink } from "~/hooks/useOpenLink";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -39,6 +40,11 @@ export default function StoreComponent({
   const handleClose = () => {
     setIsOpen(false);
   };
+  // @todo if domain? This always work, with domains it could be malconfig
+  const copyAndOpenLink = useOpenLink({
+    localLink: `http://${user.host}.localhost:3000/tienda`,
+    publicLink: `https://${user.host}.easybits.cloud/tienda`,
+  });
   return (
     <>
       <div
@@ -77,17 +83,13 @@ export default function StoreComponent({
                 <img className="w-full" src={ShareIcon} />
               </div>
             </HeaderIconButton>
-            <a
-              href={`https://${user.host}.easybits.cloud/tienda`}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <button onClick={copyAndOpenLink}>
               <HeaderIconButton>
                 <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
                   <img className="w-full" src={OpenIcon} />
                 </div>
               </HeaderIconButton>
-            </a>
+            </button>
           </div>
         </div>
         <StoreTemplate user={user} assets={assets} variant="slim" />
