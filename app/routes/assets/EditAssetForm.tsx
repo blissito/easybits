@@ -89,7 +89,7 @@ export const EditAssetForm = ({
   host: string;
 }) => {
   const [gallery, setGallery] = useState(asset.gallery);
-  const galleryRef = useRef<(string | null)[]>([]);
+  const galleryRef = useRef<(string | null)[]>(asset.gallery);
   const [srcset, setSrcset] = useState<string[]>([]);
   const filesRef = useRef<any[]>([]);
   const [forceSpinner, setForceSpinner] = useState(false);
@@ -145,76 +145,54 @@ export const EditAssetForm = ({
   };
 
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
-  // const revalidator = useRevalidator();
   const fetcher = useFetcher();
-  // const assetGallery = useMemo(() => asset.gallery, [asset]);
-  const handleSubmit = useCallback(
-    async (e: FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      setForceSpinner(true);
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setForceSpinner(true);
 
-      const { error, success } = assetClientSchema.safeParse(form);
-      formatErrors(error);
+    const { error, success } = assetClientSchema.safeParse(form);
+    formatErrors(error);
 
-      if (!success) {
-        console.error(error);
-        return;
+    if (!success) {
+      console.error(error);
+      return;
+    }
+    // gallery update
+    const removedList = await removeBucketObjects();
+    const uploaded = await getUploadedLinks();
+    const updatedGallery = [...galleryRef.current, ...uploaded].filter(
+      (link) => !removedList.includes(link)
+    ) as string[];
+    //
+    setForceSpinner(false);
+    fetcher.submit(
+      {
+        data: JSON.stringify({
+          ...form,
+          gallery: updatedGallery,
+          id: asset.id,
+          slug: asset.slug,
+        }),
+        intent: "update_asset",
+      },
+      {
+        method: "POST",
+        action: "/api/v1/assets",
       }
-      // gallery update
-      const removedList = await removeBucketObjects();
-      const uploaded = await getUploadedLinks();
-      console.log("FUCKING_GALLERY", gallery);
-      // return;
-      let g = [];
-      // @todo async state mess
-      // setGallery((galery) => {
-      //   g = galery;
-      //   return galery;
-      // });
-      const gall = [...galleryRef.current, ...uploaded].filter(
-        (link) => !removedList.includes(link)
-      ) as string[];
-      // setGallery(gall);
-      //
-      // return;
-      console.info("SENT::", gall);
-
-      console.info("GAlleryREF::", galleryRef.current);
-      console.info("Uploaded::", uploaded);
-      console.info("removed::", removedList);
-      setForceSpinner(false);
-      fetcher.submit(
-        {
-          data: JSON.stringify({
-            ...form,
-            gallery: gall,
-            id: asset.id,
-            slug: asset.slug,
-          }),
-          intent: "update_asset",
-        },
-        {
-          method: "POST",
-          action: "/api/v1/assets",
-        }
-      );
-      setForceSpinner(false);
-      toast.success("Tu Asset se ha guardado", {
-        style: {
-          border: "2px solid #000000",
-          padding: "16px",
-          color: "#000000",
-        },
-        iconTheme: {
-          primary: "#8BB236",
-          secondary: "#FFFAEE",
-        },
-      });
-      // revalidator.revalidate();
-    },
-    [gallery]
-  );
-
+    );
+    setForceSpinner(false);
+    toast.success("Tu Asset se ha guardado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
+  };
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: ::
 
   const isLoading = forceSpinner || fetcher.state !== "idle";
@@ -258,8 +236,6 @@ export const EditAssetForm = ({
 
     if (!uploaded || uploaded.length < 1) return [];
 
-    // filesRef.current = []; // clear files after upload
-    // updateSrcset();
     return uploaded;
   };
 
