@@ -7,7 +7,15 @@ import { ExtraConfig } from "./ExtraConfig";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { Suspense, useRef, useState, type FormEvent } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
@@ -80,6 +88,8 @@ export const EditAssetForm = ({
   asset: Asset;
   host: string;
 }) => {
+  const [gallery, setGallery] = useState(asset.gallery);
+  const galleryRef = useRef<(string | null)[]>(asset.gallery);
   const [srcset, setSrcset] = useState<string[]>([]);
   const filesRef = useRef<any[]>([]);
   const [forceSpinner, setForceSpinner] = useState(false);
@@ -128,6 +138,12 @@ export const EditAssetForm = ({
     setErrors(errors);
   };
 
+  const removeFilePreviews = () => {
+    removeListRef.current = []; // removed
+    filesRef.current = []; // clear files after upload
+    updateSrcset();
+  };
+
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
   const fetcher = useFetcher();
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -142,27 +158,20 @@ export const EditAssetForm = ({
       return;
     }
     // gallery update
+    const removedList = await removeBucketObjects();
     const uploaded = await getUploadedLinks();
-    console.log("Are three? ", uploaded);
-    let gallery = [...form.gallery, ...uploaded];
-    const removedLinks = (await removeFromList()) || [];
-    console.log("REMOVED?", removedLinks);
-    gallery = [...gallery.filter((la) => !removedLinks.includes(la))];
-    // gallery update
-
+    const updatedGallery = [...galleryRef.current, ...uploaded].filter(
+      (link) => !removedList.includes(link)
+    ) as string[];
+    //
     setForceSpinner(false);
-
-    console.info("WTF", gallery);
-
-    // return;
-
-    await fetcher.submit(
+    fetcher.submit(
       {
         data: JSON.stringify({
           ...form,
-          gallery,
-          slug: asset.slug,
+          gallery: updatedGallery,
           id: asset.id,
+          slug: asset.slug,
         }),
         intent: "update_asset",
       },
@@ -172,9 +181,18 @@ export const EditAssetForm = ({
       }
     );
     setForceSpinner(false);
-    toast.success("Tu Asset se ha guardado");
+    toast.success("Tu Asset se ha guardado", {
+      style: {
+        border: "2px solid #000000",
+        padding: "16px",
+        color: "#000000",
+      },
+      iconTheme: {
+        primary: "#8BB236",
+        secondary: "#FFFAEE",
+      },
+    });
   };
-
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: ::
 
   const isLoading = forceSpinner || fetcher.state !== "idle";
@@ -193,25 +211,14 @@ export const EditAssetForm = ({
 
   useControlSave(() => {
     handleSubmit({ preventDefault: () => {} });
-    toast.success("Tu Asset se ha guardado", {
-      style: {
-        border: "2px solid #000000",
-        padding: "16px",
-        color: "#000000",
-      },
-      iconTheme: {
-        primary: "#8BB236",
-        secondary: "#FFFAEE",
-      },
-    });
   });
 
   const removeFile = (index: number) => {
     const list = [...filesRef.current];
-    console.log("LIST:", list);
+
     list.splice(index, 1);
     filesRef.current = list;
-    console.log("ora?", index, filesRef.current);
+
     updateSrcset();
   };
   const { upload } = useUploader({
@@ -226,10 +233,10 @@ export const EditAssetForm = ({
   };
   const getUploadedLinks = async () => {
     const uploaded = await uploadGallery();
+
     if (!uploaded || uploaded.length < 1) return [];
 
-    filesRef.current = []; // clear files after upload
-    return uploaded.filter((f) => f !== null);
+    return uploaded;
   };
 
   const handleAddFiles = (newFiles: any[]) => {
@@ -243,22 +250,27 @@ export const EditAssetForm = ({
   };
 
   // links
-  const [gallery, setGallery] = useState(asset.gallery);
+
   const removeListRef = useRef<any[]>([]);
   const handleAddLinkToRemove = (link: string) => {
     setGallery((l) => [...l.filter((li) => li !== link)]); // removed from preview
-    removeListRef.current = [...removeListRef.current, link]; // added to remove list
+    removeListRef.current.push(link); // added to remove list
   };
 
   const { onRemove: removeFromS3 } = useUploader();
-  const removeFromList = async () => {
-    for await (let link of removeListRef.current) {
-      removeFromS3(link, asset.id);
-    }
-    return removeListRef.current;
+  const removeBucketObjects = async () => {
+    const promises = removeListRef.current.map((link) =>
+      removeFromS3(link, asset.id)
+    );
+    await Promise.all(promises);
+    return [...removeListRef.current];
   };
 
-  // console.log("::ASSET::GALLERY::", asset.gallery);
+  useEffect(() => {
+    galleryRef.current = asset.gallery;
+    removeFilePreviews();
+    setGallery(asset.gallery);
+  }, [asset]);
 
   return (
     <article className="w-full px-4">

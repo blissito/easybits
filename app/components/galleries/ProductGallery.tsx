@@ -35,7 +35,7 @@ export const ProductGallery = ({
 
   useEffect(() => {
     start();
-  }, []);
+  }, [items]);
 
   return (
     <section

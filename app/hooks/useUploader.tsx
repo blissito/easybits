@@ -17,24 +17,34 @@ export const useUploader = (config?: {
   }, []);
 
   // @todo need to support cancel
-  const onRemove = (url: string, assetId: string) => {
+  const onRemove = async (url: string, assetId: string) => {
     const urls = [...links];
     const index = urls.findIndex((string) => string === url);
     urls.splice(index, 1);
     setLinks(urls);
 
-    fetcher.submit(
-      {
-        index,
+    await fetch("/api/v1/assets", {
+      method: "post",
+      body: new URLSearchParams({
+        index: String(index),
         url,
         assetId,
-        intent: "remove_gallery_image_and_update_gallery",
-      },
-      {
-        method: "post",
-        action: "/api/v1/assets",
-      }
-    );
+        intent: "remove_gallery_image",
+      }),
+    });
+
+    // return fetcher.submit(
+    //   {
+    //     index,
+    //     url,
+    //     assetId,
+    //     intent: "remove_gallery_image",
+    //   },
+    //   {
+    //     method: "post",
+    //     action: "/api/v1/assets",
+    //   }
+    // );
   };
 
   const getPublicPutUrl = async (fileName: string, assetId: string) => {
@@ -64,16 +74,17 @@ export const useUploader = (config?: {
       setLinks((lks) => [...lks, uri]); // update
     }
     // update db ==> revisit
-    fetcher.submit(
-      {
-        intent: "update_asset_gallery_links",
-        data: JSON.stringify({
-          gallery: [...new Set([...links, uri])],
-          id: assetId,
-        }),
-      },
-      { method: "post", action: "/api/v1/assets" }
-    );
+    // fetcher.submit(
+    //   {
+    //     intent: "update_asset_gallery_links",
+    //     data: JSON.stringify({
+    //       gallery: [...new Set([...links, uri])],
+    //       id: assetId,
+    //     }),
+    //   },
+    //   { method: "post", action: "/api/v1/assets" }
+    // );
+
     return ok ? uri : null;
   };
 

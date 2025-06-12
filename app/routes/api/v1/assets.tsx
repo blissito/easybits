@@ -60,29 +60,30 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
   }
 
-  if (intent === "remove_gallery_image_and_update_gallery") {
+  if (intent === "remove_gallery_image") {
     const link = formData.get("url") as string;
-    const assetId = formData.get("assetId") as string;
-    const index = formData.get("index") as string;
+    // const assetId = formData.get("assetId") as string;
+    // const index = formData.get("index") as string;
     const url = new URL(link);
     const key = url.pathname.substring(1);
-    console.log("::DELETING:: ", key);
     await deleteObject(key, "easybits-public");
     await deleteObject(key, "easybits-public");
     await deleteObject(key, "easybits-public"); // revisit 😅
-    const asset = await db.asset.findUnique({
-      where: {
-        id: assetId,
-      },
-    });
-    if (!asset) throw new Response(null, { status: 404 });
+    console.log("::DELETED: ", key);
+    return null;
+    // const asset = await db.asset.findUnique({
+    //   where: {
+    //     id: assetId,
+    //   },
+    // });
+    // if (!asset) throw new Response(null, { status: 404 });
 
-    const update = [...asset.gallery];
-    update.splice(Number(index), 1);
-    return await db.asset.update({
-      where: { id: asset.id },
-      data: { gallery: update },
-    });
+    // const update = [...asset.gallery];
+    // update.splice(Number(index), 1);
+    // return await db.asset.update({
+    //   where: { id: asset.id },
+    //   data: { gallery: update },
+    // });
   }
 
   if (intent === "get_put_file_url") {
@@ -125,7 +126,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (!asset) throw new Response("Asset not found::", { status: 404 });
 
     const old = asset.price;
-
     asset = await db.asset.update({
       where: {
         id: data.id,
@@ -136,20 +136,21 @@ export const action = async ({ request }: Route.ActionArgs) => {
         id: undefined,
         userId: user.id,
         price: Number(data.price),
-      }, // @todo remove id in parsing
+      }, // @todo remove id in parsing?
     });
     const nuevo = asset.price;
     if (old !== nuevo) {
-      const price = await updateOrCreateProductAndPrice(asset, request); // stripe stuff
+      await updateOrCreateProductAndPrice(asset, request); // stripe stuff
       // }
     }
     // @todo errors?
-    return await updateProduct({
+    await updateProduct({
       productId: asset.stripeProduct!,
       accountId: user.stripeId!,
       images: asset.gallery,
       description: asset.note!,
     });
+    // return null
   }
 
   if (intent === "update_asset_gallery_links") {

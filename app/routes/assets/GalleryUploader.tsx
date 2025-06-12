@@ -1,15 +1,8 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from "react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { IoClose } from "react-icons/io5";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
-import { useUploader } from "~/hooks/useUploader";
 import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
 
@@ -236,10 +229,10 @@ const Image = ({
   src: string;
   onRemove?: () => void; // click on X
 }) => {
-  const C = as ? as : "motion.figure"; // revisit
+  // const C = as ? as : "motion.figure"; // revisit
   return (
-    <C
-      layout={C === "motion.figure" || undefined}
+    <motion.figure
+      layout
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
@@ -258,6 +251,6 @@ const Image = ({
         alt="preview"
         className="rounded-2xl object-cover w-full h-full"
       />
-    </C>
+    </motion.figure>
   );
 };

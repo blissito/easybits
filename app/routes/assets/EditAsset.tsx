@@ -4,7 +4,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
 import { db } from "~/.server/db";
 import { redirect } from "react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
 
 const PADDING_LAYOUT = `pl-4`;
@@ -34,6 +34,9 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
   const { host, asset, files } = loaderData;
   const [prev, setPrev] = useState(asset);
+  useEffect(() => {
+    setPrev(asset);
+  }, [asset]);
   // return null;
   return (
     <article className="w-screen">
