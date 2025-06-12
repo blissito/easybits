@@ -26,7 +26,7 @@ export const useUploader = (config?: {
     await fetch("/api/v1/assets", {
       method: "post",
       body: new URLSearchParams({
-        index,
+        index: String(index),
         url,
         assetId,
         intent: "remove_gallery_image",
