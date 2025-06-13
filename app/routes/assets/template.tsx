@@ -323,7 +323,7 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
 const Formats = ({
   files,
   asset,
-  reviews,
+  reviews = {},
 }: {
   files: File[];
   asset: {};
@@ -346,7 +346,7 @@ const Formats = ({
 
       <div className="border-b-[2px] border-black p-3">
         <p className="mb-4">Evaluaciones:</p>
-        {Object.keys(reviews?.byRating)
+        {Object.keys(reviews?.byRating || {})
           .sort((a, b) => b - a)
           .map((n) => {
             const percentage = (reviews.byRating[n] * 100) / reviews.total;

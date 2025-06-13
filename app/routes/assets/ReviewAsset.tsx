@@ -3,7 +3,7 @@ import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
 import { Modal } from "~/components/common/Modal";
 import { db } from "~/.server/db";
-import { useFetcher, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData } from "react-router";
 import { FaStar, FaRegStar, FaArrowLeft } from "react-icons/fa6";
 import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -68,14 +68,22 @@ export default function ReviewAsset({}) {
             <p className="text-3xl">¡Gracias por tu comentario! 🎊</p>
             <p className="font-normal">
               Agradecemos que compartas tu experiencia, tus comentarios ayudan a
-              que más personas conozcan lo increíble que es {asset?.title}
+              que más personas conozcan lo increíble que es{" "}
+              <Link className="" to={`/tienda/${asset.slug}`}>
+                {asset?.title}
+              </Link>
             </p>
           </div>
         </div>
       )}
       {isSuccess && <BrendisConfetti />}
       <Modal
-        title={`Qué tal estuvo ${asset?.title}?`}
+        title={
+          <>
+            Qué tal estuvo{" "}
+            <Link to={`/tienda/${asset.slug}`}>{asset?.title}</Link>
+          </>
+        }
         isOpen={!isSuccess}
         onClose={() => {}}
         // mode="naked"
