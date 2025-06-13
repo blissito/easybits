@@ -69,6 +69,7 @@ export default [
     route("utils", "routes/api/v1/utils.tsx"),
     route("downloads", "routes/api/v1/downloads.tsx"),
     route("uploads", "routes/api/v1/direct-upload-edit.ts"),
+    route("reviews", "routes/api/v1/reviews.tsx"),
     ...prefix("stripe", [
       route("account", "routes/api/v1/stripe/account.tsx"),
       route("account_session", "routes/api/v1/stripe/account_session.tsx"),
