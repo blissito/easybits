@@ -1,7 +1,7 @@
 import toast from "react-hot-toast";
 
 export const useBrutalToast = () => {
-  const brutalToast = (text: string) => {
+  return (text: string) =>
     toast.success(text, {
       style: {
         border: "2px solid #000000",
@@ -13,6 +13,4 @@ export const useBrutalToast = () => {
         secondary: "#FFFAEE",
       },
     });
-  };
-  return brutalToast;
 };
