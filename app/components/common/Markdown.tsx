@@ -5,6 +5,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   duotoneDark,
   a11yDark,
+  darcula,
+  nord,
   dracula,
 } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import rangeParser from "parse-numeric-range";
@@ -36,13 +38,11 @@ const SyntaxHighlight: object = {
 
     return !inline && match ? (
       <SyntaxHighlighter
-        // style={colorMode === 'dark' ? duotoneDark : a11yDark}
-        // style={theme === "dark" ? dracula : duotoneDark}
-        style={dracula}
+        style={nord}
         language={match[1]}
         PreTag="div"
         className="codeStyle"
-        // showLineNumbers={true}
+        showLineNumbers={true}
         wrapLines={true}
         useunlinestyles={"true"}
         lineProps={applyHighlights}
