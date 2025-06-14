@@ -1,6 +1,7 @@
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Route } from "./+types/success";
 import { useNavigate } from "react-router";
+import { BrendisConfetti, EmojiConfetti } from "~/components/Confetti";
 
 export const loader = async () => {
   return {
@@ -8,11 +9,13 @@ export const loader = async () => {
       <article className="pt-20 px-20 text-center ">
         <img
           className="mx-auto mb-10"
-          src="/images/turbo.svg"
+          src="/images/success.svg"
           alt="turbo charged radio"
         />
         <h1 className="text-2xl">¡Gracias por tu compra! 🥳</h1>
-        <p className="text-lg text-gray-700">Tu Asset esta esperándote.</p>
+        <p className="text-lg text-iron">
+          Tu asset <strong>«UI Design»</strong> está esperándote.
+        </p>
       </article>
     ),
   };
@@ -22,15 +25,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
   const handleClick = () => navigate("/dash/perfil");
   return (
-    <article>
+    <article className="h-svh w-full grid bg-center place-content-center bg-coverSuccessMobile lg:bg-coverSuccess bg-cover overflow-hidden relative">
       {component}
       <BrutalButton
-        mode="inverted"
         containerClassName="mx-auto block my-10"
         onClick={handleClick}
       >
         Ver contenido
       </BrutalButton>
+      <BrendisConfetti />
     </article>
   );
 }
