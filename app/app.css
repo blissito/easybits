@@ -94,7 +94,8 @@ body {
   border-radius: 9px;
   padding: 4px 4px;
   margin-top: 40px;
-  font-size: 16px;
+  font-size: 14px;
+  background-color: #e3effd;
 }
 
 .markdown blockquote {
