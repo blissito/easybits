@@ -63,12 +63,12 @@ export default [
     route("conversion_webhook", "routes/api/v1/conversion_webhook.tsx"),
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
-    route("reviews", "routes/api/v1/reviews.tsx"),
     route("clients", "routes/api/v1/clients.tsx"),
     route("files", "routes/api/v1/files.tsx"),
     route("utils", "routes/api/v1/utils.tsx"),
     route("downloads", "routes/api/v1/downloads.tsx"),
     route("uploads", "routes/api/v1/direct-upload-edit.ts"),
+    route("reviews", "routes/api/v1/reviews.tsx"),
     ...prefix("stripe", [
       route("account", "routes/api/v1/stripe/account.tsx"),
       route("account_session", "routes/api/v1/stripe/account_session.tsx"),

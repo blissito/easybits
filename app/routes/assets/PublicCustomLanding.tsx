@@ -11,6 +11,7 @@ import { FooterSuscription } from "~/components/forms/FooterSubscription";
 import type { Asset } from "@prisma/client";
 import { Button } from "~/components/common/Button";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { getReviews } from "~/.server/reviews";
 
 export const meta = ({
   data: {
@@ -67,6 +68,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     });
   }
   if (!asset) throw new Response("Asset not found", { status: 404 });
+  const assetReviews = await getReviews(asset.id);
 
   // Generating ActionButton
   const OpenCheckout = <button className="bg-indigo-500">Pushale</button>;
@@ -96,6 +98,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     asset,
     publishableKey,
     successStripeId,
+    assetReviews,
   };
 };
 
@@ -130,8 +133,14 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { OpenCheckout, asset, publishableKey, files, successStripeId } =
-    loaderData;
+  const {
+    OpenCheckout,
+    asset,
+    publishableKey,
+    files,
+    successStripeId,
+    assetReviews,
+  } = loaderData;
   const actionData = useActionData();
   const assetUserStripeId = asset?.user?.stripe?.id;
   const stripePromise = useMemo(() => {
@@ -157,6 +166,20 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       }
     );
   };
+  const defaultRatings = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  const reviewsByRating = assetReviews?.reduce((acc, review) => {
+    const rating = review.rating;
+    if (!acc[rating]) {
+      acc[rating] = 0;
+    }
+    acc[rating] += 1;
+    return acc;
+  }, defaultRatings);
+
+  const reviews = {
+    total: assetReviews.length || 0,
+    byRating: reviewsByRating || defaultRatings,
+  };
 
   return (
     <article>
@@ -181,6 +204,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             </BrutalButton>
           ) : null
         }
+        reviews={reviews}
       />
 
       <FooterTemplate

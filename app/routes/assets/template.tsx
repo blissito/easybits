@@ -29,6 +29,7 @@ export const ContentTemplate = ({
   checkoutSession,
   files = [],
   actionButton,
+  reviews,
 }: {
   actionButton?: ReactNode;
   files?: File[];
@@ -56,7 +57,7 @@ export const ContentTemplate = ({
           >
             <Bragging asset={asset} />
             <div className={cn("h-fit p-4", "md:p-6")}>
-              <Markdown typography={typography}>{asset.description}</Markdown>
+              <Markdown>{asset.description}</Markdown>
             </div>
           </div>
           <Info
@@ -66,6 +67,7 @@ export const ContentTemplate = ({
             stripePromise={stripePromise}
             checkoutSession={checkoutSession}
             actionButton={actionButton}
+            reviews={reviews}
           />
         </div>
       </div>
@@ -157,6 +159,7 @@ const Info = ({
   checkoutSession,
   actionButton,
   typography,
+  reviews,
 }: {
   actionButton?: ReactNode;
   asset: Asset;
@@ -204,7 +207,7 @@ const Info = ({
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
       ) : (
-        <Formats files={files} asset={asset} />
+        <Formats files={files} asset={asset} reviews={reviews} />
       )}
     </div>
   );
@@ -317,12 +320,21 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
   );
 };
 
-const Formats = ({ files, asset }: { files: File[]; asset: {} }) => {
+const Formats = ({
+  files,
+  asset,
+  reviews = {},
+}: {
+  files: File[];
+  asset: {};
+  reviews: {};
+}) => {
   const getSizeInMB = () => {
     const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
     return (bytes / 1_000_000).toFixed(2) + " mb";
   };
   const { typography } = asset?.user?.storeConfig || {};
+
   return (
     <div style={{ fontFamily: typography }}>
       <AttributeList textLeft="Número de archivos:" textRight={files.length} />
@@ -331,6 +343,30 @@ const Formats = ({ files, asset }: { files: File[]; asset: {} }) => {
         textRight={files.map((f) => `${f.name.split(".")[1]}, `)}
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
+
+      <div className="border-b-[2px] border-black p-3">
+        <p className="mb-4">Evaluaciones:</p>
+        {Object.keys(reviews?.byRating || {})
+          .sort((a, b) => b - a)
+          .map((n) => {
+            const percentage = (reviews.byRating[n] * 100) / reviews.total;
+
+            return (
+              <div className="grid gap-3 grid-cols-12 mb-3 items-center">
+                <div className="col-span-3">{n} Estrellas</div>
+                <div className="col-span-9">
+                  <div className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
+                    <div
+                      className="bg-black h-full rounded-lg"
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <div />
+                </div>
+              </div>
+            );
+          })}
+      </div>
     </div>
   );
 };

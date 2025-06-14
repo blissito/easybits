@@ -45,7 +45,11 @@ export const StoreTemplate = ({
   } = user?.storeConfig || {};
   return (
     <section className="h-full">
-      <div className="overflow-hidden mb-32 ">
+      <div
+        className={cn("overflow-hidden mb-32 ", {
+          "mb-0": variant === "slim",
+        })}
+      >
         <div
           className="w-full h-[224px] border-2 border-black relative bg-brand-500"
           style={{ backgroundColor: hexColor, fontFamily: typography }}

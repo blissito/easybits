@@ -36,7 +36,14 @@ export const getReviews = async (assetId: string) => {
       assetId,
     },
     include: {
-      user: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          picture: true,
+          displayName: true,
+        },
+      },
     },
   });
 };
