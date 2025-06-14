@@ -3,9 +3,10 @@ import { useState } from "react";
 type Link = { link: string };
 
 export const useImageResize = (options?: {
+  quality?: number;
   callback?: (blob: Blob, success: boolean) => Promise<void>;
 }) => {
-  const { callback } = options || {};
+  const { callback, quality = 0.7 } = options || {};
   const [blob, setBlob] = useState<Blob | null>(null);
 
   const getDimensions = (
@@ -33,8 +34,8 @@ export const useImageResize = (options?: {
   ) => {
     let {
       maxDimensions = {
-        width: 300,
-        height: 200,
+        width: 600,
+        height: 315,
       },
     } = options || {};
     const imageNode = document.createElement("img");
@@ -66,7 +67,7 @@ export const useImageResize = (options?: {
       ctx.drawImage(imageNode, 0, 0, width, height);
       // @todo only if blob support
       // canvas.toBlob((blob) => callback?.(blob!, true), file.type); // @todo make it optional
-      const du = canvas.toDataURL("image/webp", 0.4); // low quality
+      const du = canvas.toDataURL("image/webp", quality); // low quality
       // DataURL to blob conversion hack using fetch:
       fetch(du)
         .then((r) => r.blob())

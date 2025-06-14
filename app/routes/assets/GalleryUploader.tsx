@@ -97,7 +97,7 @@ export const GalleryUploader = ({
           "content-type": blob.type,
         },
       });
-      console.log("RESPONSEOK::", res2.ok);
+      console.log("::META_IMAGE::UPLOADED::", res2.ok);
       // 3. Update model? No need, because of name conventions.
     },
   });
