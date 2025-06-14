@@ -3,8 +3,9 @@ import toast from "react-hot-toast";
 
 export const useDropFiles = <T extends HTMLElement>(config?: {
   type?: string;
+  onDrop?: (files: File[]) => void;
 }) => {
-  const { type } = config || {};
+  const { type, onDrop } = config || {};
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
   const ref = useRef<T>(null);
@@ -36,8 +37,9 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   const handleDrop = (e: MouseEvent & any) => {
     e.preventDefault();
     if (e.dataTransfer.files.length < 1) return;
-
-    addFiles([...e.dataTransfer.files]);
+    const files = [...e.dataTransfer.files];
+    addFiles(files);
+    onDrop?.(files);
   };
 
   const handleDragOver = (ev: DragEvent) => {

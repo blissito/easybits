@@ -11,6 +11,7 @@ import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
+import { useDropFiles } from "~/hooks/useDropFiles";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -67,7 +68,6 @@ export const GalleryUploader = ({
 
   const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
     if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
-    console.log("FILEs found?", ev.currentTarget.files.length);
     onAddFiles([...ev.currentTarget.files]);
   };
 
@@ -161,7 +161,7 @@ export const GalleryUploader = ({
 
         {elemsLength > 0 && (
           <RowGalleryEditor
-            files={
+            previews={
               <section className="flex gap-3">
                 {srcset.map((src, i) => (
                   <Image
@@ -175,6 +175,7 @@ export const GalleryUploader = ({
             }
             canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
+            onDrop={onAddFiles}
             links={gallery}
             onRemoveLink={onRemoveLink} // @todo change name
           />
@@ -198,14 +199,17 @@ const RowGalleryEditor = ({
   onClick,
   onRemoveLink,
   canUpload,
-  files,
+  previews,
+  onDrop,
 }: {
-  files?: ReactNode;
+  onDrop?: (arg0: File[]) => void;
+  previews?: ReactNode;
   canUpload?: boolean;
   links?: string[];
   onRemoveLink?: (arg0: string) => void;
   onClick: () => void;
 }) => {
+  const { ref } = useDropFiles<HTMLButtonElement>({ onDrop });
   return (
     <div className={cn("flex items-center gap-3")}>
       <LayoutGroup>
@@ -214,9 +218,10 @@ const RowGalleryEditor = ({
             <Image onRemove={() => onRemoveLink?.(l)} key={l} src={l} />
           ))}
         </AnimatePresence>
-        {files}
+        {previews}
         {links.length < 10 && canUpload && (
           <motion.button
+            ref={ref}
             whileHover={{ scale: 0.95 }}
             onClick={onClick}
             layoutId="upload_button"
