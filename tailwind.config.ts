@@ -38,6 +38,8 @@ export default {
         patternDark: "url('/pattern-dark.svg')",
         coverSuscription: "url('/hero/cover-yellow.svg')",
         coverInfo: "url('/hero/info.svg')",
+        coverSuccess: "url('/images/cover-success.svg')",
+        coverSuccessMobile: "url('/images/cover-success-mobile.svg')",
       },
       fontFamily: {
         jersey: ["Jersey 10"], // not working, you can remove
