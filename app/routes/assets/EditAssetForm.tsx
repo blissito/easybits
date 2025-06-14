@@ -164,7 +164,6 @@ export const EditAssetForm = ({
       (link) => !removedList.includes(link)
     ) as string[];
     //
-    setForceSpinner(false);
     fetcher.submit(
       {
         data: JSON.stringify({
