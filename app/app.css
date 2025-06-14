@@ -89,11 +89,13 @@ body {
   overflow-x: scroll;
 }
 .markdown code {
-  color: white;
+  color: black;
+  font-weight: bold;
   border-radius: 9px;
   padding: 4px 4px;
   margin-top: 40px;
   font-size: 14px;
+  background-color: #e3effd;
 }
 
 .markdown blockquote {
@@ -175,6 +177,5 @@ h6 {
 
 .markdown img {
   border-radius: 4px;
-  box-shadow: 4px 4px 3px gray;
   margin: 24px 0;
 }
