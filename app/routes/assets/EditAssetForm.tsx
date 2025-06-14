@@ -7,25 +7,17 @@ import { ExtraConfig } from "./ExtraConfig";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
 import { useImageResize } from "~/hooks/useImageResize";
 import { useControlSave } from "~/hooks/useControlSave";
-import toast from "react-hot-toast";
 import { EbookFields } from "./EbookFields";
 import { useUploader } from "~/hooks/useUploader";
 import { MarkEditor } from "./MarkEditor.client";
 import Spinner from "~/components/common/Spinner";
+import { useBrutalToast } from "~/hooks/useBrutalToast";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -145,6 +137,7 @@ export const EditAssetForm = ({
   };
 
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
+  const brutalToast = useBrutalToast();
   const fetcher = useFetcher();
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -180,17 +173,7 @@ export const EditAssetForm = ({
       }
     );
     setForceSpinner(false);
-    toast.success("Tu Asset se ha guardado", {
-      style: {
-        border: "2px solid #000000",
-        padding: "16px",
-        color: "#000000",
-      },
-      iconTheme: {
-        primary: "#8BB236",
-        secondary: "#FFFAEE",
-      },
-    });
+    brutalToast("Tu Asset se ha guardado");
   };
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: ::
 
