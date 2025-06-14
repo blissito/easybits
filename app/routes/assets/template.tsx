@@ -57,7 +57,7 @@ export const ContentTemplate = ({
           >
             <Bragging asset={asset} />
             <div className={cn("h-fit p-4", "md:p-6")}>
-              <Markdown typography={typography}>{asset.description}</Markdown>
+              <Markdown>{asset.description}</Markdown>
             </div>
           </div>
           <Info
