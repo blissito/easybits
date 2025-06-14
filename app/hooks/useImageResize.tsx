@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+type Link = { link: string };
+
 export const useImageResize = (options?: {
   callback?: (blob: Blob, success: boolean) => Promise<void>;
 }) => {
@@ -23,13 +25,12 @@ export const useImageResize = (options?: {
   };
 
   const resize = async (
-    file: File | Blob,
+    file: File | Blob | Link,
     options?: {
       maxDimensions?: { width: number; height: number };
       // callback?: (file: Blob, success: boolean) => void;
     }
   ) => {
-    if (file.type?.includes("gif")) return; // avoid @todo: convert
     let {
       maxDimensions = {
         width: 300,
@@ -37,16 +38,21 @@ export const useImageResize = (options?: {
       },
     } = options || {};
     const imageNode = document.createElement("img");
+    // specific for easybits
     if (Object.keys(file).includes("link")) {
-      // specific for this program
-      const blob = await fetch(file.link).then((r) => r.blob());
+      const blob = await fetch((file as Link).link).then((r) => r.blob());
       const url = URL.createObjectURL(blob);
       imageNode.src = url;
-    } else if (file.type) {
-      if (!file.type.match(/image.*/) || file.type.match(/image\/gif/))
-        return callback?.(file, false);
+    } else if ((file as Blob).type) {
+      if (
+        !(file as Blob).type.match(/image.*/) ||
+        (file as Blob).type.match(/image\/gif/)
+      ) {
+        return callback?.(file as Blob, false);
+      }
       // TODO: use https://github.com/antimatter15/whammy to convert gif to webm
-      imageNode.src = URL.createObjectURL(file);
+      imageNode.src = URL.createObjectURL(file as Blob);
+      // program continues inside imageNode.onload
     }
 
     imageNode.onload = () => {
@@ -58,14 +64,15 @@ export const useImageResize = (options?: {
       });
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(imageNode, 0, 0, width, height);
-      // only if blob support
-      // canvas.toBlob((blob) => callback?.(blob!, true), file.type); // @todo optional
-      const du = canvas.toDataURL("image/webp", 0.5); // mid quality
+      // @todo only if blob support
+      // canvas.toBlob((blob) => callback?.(blob!, true), file.type); // @todo make it optional
+      const du = canvas.toDataURL("image/webp", 0.4); // low quality
+      // DataURL to blob conversion hack using fetch:
       fetch(du)
         .then((r) => r.blob())
         .then((b) => {
           setBlob(b);
-          callback?.(b, true);
+          callback?.(b, true); // send the resulting blob
         });
     };
   };

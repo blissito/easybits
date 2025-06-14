@@ -14,13 +14,14 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const meta = ({
   data: {
-    asset: { title, description, user, id },
+    asset: { title, description, userId, id },
   },
 }: Route.MetaArgs) => {
   return getBasicMetaTags({
     title,
     description: description?.slice(0, 80).replace("#", "") + "...",
-    image: `https://easybits-public.fly.storage.tigris.dev/${user.id}/gallery/${id}/metaImage`,
+    // @todo get this from config?
+    image: `https://easybits-public.fly.storage.tigris.dev/${userId}/gallery/${id}/metaImage`,
   });
 };
 

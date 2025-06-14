@@ -266,6 +266,7 @@ export const EditAssetForm = ({
     return [...removeListRef.current];
   };
 
+  // when save finishes
   useEffect(() => {
     galleryRef.current = asset.gallery;
     removeFilePreviews();
