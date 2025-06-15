@@ -86,6 +86,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // });
   }
 
+  // injects gallery file path
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);
     let fileName = formData.get("fileName") as string;
@@ -98,7 +99,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;
     const url = await getPutFileUrl(storageKey, 900, {
       Bucket: "easybits-public", // all galleries are public
-      ACL: "public-read", // not working
+      ACL: "public-read", // not working, @todo revisit
     });
     return new Response(url, { status: 201 });
   }

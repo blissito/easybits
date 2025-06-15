@@ -1,10 +1,17 @@
-import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { IoClose } from "react-icons/io5";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
+import { useDropFiles } from "~/hooks/useDropFiles";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -61,7 +68,6 @@ export const GalleryUploader = ({
 
   const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
     if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
-    console.log("FILEs found?", ev.currentTarget.files.length);
     onAddFiles([...ev.currentTarget.files]);
   };
 
@@ -72,32 +78,33 @@ export const GalleryUploader = ({
 
   const { resize } = useImageResize({
     async callback(blob) {
-      // 1. get put url & update model?
+      // 1. get put url
       const response = await fetch("/api/v1/assets", {
         method: "post",
         body: new URLSearchParams({
           intent: "get_put_file_url",
           fileName: "metaImage",
-          assetId: asset.id,
+          assetId: asset.id, // used for file path
         }),
       });
       const putURL = await response.text();
       // console.log("PUT:", putURL);
       // 2. upload
-      await fetch(putURL, {
+      const res2 = await fetch(putURL, {
         method: "put",
         body: blob,
         headers: {
           "content-type": blob.type,
         },
       });
-      // console.info("metaImage updated");
-      // 3. update model... no need... because of name conventions
+      console.log("::META_IMAGE::UPLOADED::", res2.ok);
+      // 3. Update model? No need, because of name conventions.
     },
   });
-  const uploadMetaImage = async () => {
-    const link = links[0];
+  const uploadMetaImage = async (linksArray: string[]) => {
+    const link = linksArray[0];
     if (!link) return;
+
     resize({ link });
   };
 
@@ -106,6 +113,10 @@ export const GalleryUploader = ({
   const elemsLength = srcset.length + gallery.length;
 
   const handleRemoveFile = (index: number) => () => onRemoveFile?.(index);
+
+  useEffect(() => {
+    uploadMetaImage(gallery); // @todo index:0
+  }, [gallery]);
 
   return (
     <article className="">
@@ -150,7 +161,7 @@ export const GalleryUploader = ({
 
         {elemsLength > 0 && (
           <RowGalleryEditor
-            files={
+            previews={
               <section className="flex gap-3">
                 {srcset.map((src, i) => (
                   <Image
@@ -164,6 +175,7 @@ export const GalleryUploader = ({
             }
             canUpload={canUpload}
             onClick={() => fileInputRef.current?.click()}
+            onDrop={onAddFiles}
             links={gallery}
             onRemoveLink={onRemoveLink} // @todo change name
           />
@@ -187,14 +199,17 @@ const RowGalleryEditor = ({
   onClick,
   onRemoveLink,
   canUpload,
-  files,
+  previews,
+  onDrop,
 }: {
-  files?: ReactNode;
+  onDrop?: (arg0: File[]) => void;
+  previews?: ReactNode;
   canUpload?: boolean;
   links?: string[];
   onRemoveLink?: (arg0: string) => void;
   onClick: () => void;
 }) => {
+  const { ref } = useDropFiles<HTMLButtonElement>({ onDrop });
   return (
     <div className={cn("flex items-center gap-3")}>
       <LayoutGroup>
@@ -203,9 +218,10 @@ const RowGalleryEditor = ({
             <Image onRemove={() => onRemoveLink?.(l)} key={l} src={l} />
           ))}
         </AnimatePresence>
-        {files}
+        {previews}
         {links.length < 10 && canUpload && (
           <motion.button
+            ref={ref}
             whileHover={{ scale: 0.95 }}
             onClick={onClick}
             layoutId="upload_button"
