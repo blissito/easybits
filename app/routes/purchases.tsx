@@ -22,6 +22,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       user: false, // @fix this
     },
   });
+  console.log(user.assetIds, user, "checale");
+
   return { assets };
 };
 
