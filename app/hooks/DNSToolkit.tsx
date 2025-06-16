@@ -54,6 +54,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const error = fetcher.data?.error;
   const isLoading = fetcher.state !== "idle";
+
   const onSubmit = async () => {
     await fetcher.submit(
       {
@@ -126,7 +127,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               error={error}
             />
 
-            {user.domain && (
+            {!!user.domain && (
               <DNSInput
                 isDisabled
                 label="Tu dominio propio "
@@ -160,6 +161,15 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
               />
             )}
           </>
+        )}
+
+        {!isConfigOpen && !user.domain && (
+          <BrutalButton
+            containerClassName="ml-auto"
+            onClick={() => setIsConfigOpen(true)}
+          >
+            Agrega tu propio dominio
+          </BrutalButton>
         )}
 
         {isConfigOpen ? (
@@ -243,7 +253,7 @@ const Footer = ({
         <FaArrowLeft />
       </BrutalButton>
       {isDomain && (
-        <BrutalButton onClick={onClick}>Agregar dominio</BrutalButton>
+        <BrutalButton onClick={onClick}>Editar dominio</BrutalButton>
       )}
     </nav>
   );
