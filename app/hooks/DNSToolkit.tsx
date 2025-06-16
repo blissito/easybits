@@ -11,10 +11,10 @@ import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrutalButtonClose } from "~/components/common/BrutalButtonClose";
 import { CopyButton } from "~/components/common/CopyButton";
-import { useClickOutside } from "./useOutsideClick";
 import { cn } from "~/utils/cn";
 import { IoWarningOutline } from "react-icons/io5";
 import { FaArrowLeft, FaCheck } from "react-icons/fa";
+import { DNSInput } from "./dns_toolkit/DNSInput";
 
 const statuses = ["Awaiting configuration", "Awaiting certificates"];
 
@@ -110,7 +110,6 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
             <DNSInput
               submitNode={
                 // @todo inject props for disable?
-
                 <BrutalButton
                   type="button"
                   isLoading={isLoading}
@@ -138,7 +137,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
                     type="button"
                     isLoading={isLoading}
                     onClick={onSubmit}
-                    containerClassName="ml-auto mr-2 h-9"
+                    containerClassName="h-9"
                     className="h-9 bg-white"
                   >
                     Actualizar
@@ -345,113 +344,7 @@ const DNSConfig = ({ user }: { user: User }) => {
   );
 };
 
-const DNSInput = ({
-  defaultValue,
-  isDisabled,
-  onChange,
-  copyButton,
-  mode,
-  error,
-  value,
-  submitNode,
-  label = "Tu subdominio actual",
-  editingLabel = "Edita tu subdominio o da clic afuera para cancelar",
-  editButton,
-}: {
-  defaultValue?: string;
-  isDisabled?: boolean;
-  copyButton?: ReactNode;
-  editButton?: ReactNode;
-  mode?: "domain";
-  label?: string;
-  editingLabel?: string;
-  error?: string;
-  submitNode?: ReactNode;
-  onChange?: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  value: string;
-}) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const isOpen = useRef(false);
-  // const [isOpen, setIsOpen] = useState(false);
-
-  const l =
-    mode === "domain"
-      ? `https://${value}`
-      : `https://${defaultValue}.easybits.cloud/tienda`;
-
-  const handleClickEdit = () => {
-    console.log("Click", isEditing);
-    setIsEditing(true);
-    // isOpen.current = true;
-  };
-
-  return (
-    <article className="w-full">
-      {isEditing ? (
-        <p className="mb-2">{editingLabel}</p>
-      ) : (
-        <p className="mb-2">{label} </p>
-      )}
-
-      <section className="flex gap-3  h-12 items-center rounded-xl border border-black">
-        {!isEditing && (
-          <span className="text-md p-1 border-brand-500 rounded-lg border ml-1">
-            {l}
-          </span>
-        )}
-
-        {!isEditing && (
-          <>
-            {copyButton ? (
-              copyButton
-            ) : (
-              <CopyButton text={l} className="ml-auto" />
-            )}
-            {editButton ? (
-              editButton
-            ) : (
-              <EditButton isDisabled={isDisabled} onClick={handleClickEdit} />
-            )}
-          </>
-        )}
-
-        {isEditing && (
-          <div className="p-1 flex items-baseline gap-1">
-            {mode !== "domain" && <p>https://</p>}
-            <input
-              autoFocus
-              value={value}
-              onChange={onChange}
-              // onBlur={toggleIsEditing}
-              type="text"
-              className="rounded-xl border-brand-500 h-10 focus:border-brand-500 focus:ring-brand-500"
-            />
-            {mode !== "domain" && <p>.easybits.cloud</p>}
-          </div>
-        )}
-
-        {isEditing && (
-          <div className="flex w-full justify-end gap-2">
-            <BrutalButton
-              type="button"
-              // isDisabled={isLoading}
-              onClick={() => setIsEditing(false)}
-              mode="ghost"
-              containerClassName="h-9"
-              className="h-9 bg-brand-500 text-black"
-            >
-              Cerrar
-            </BrutalButton>
-            {submitNode}
-          </div>
-        )}
-      </section>
-      {isEditing && error && <p className="text-xs text-red-500">{error}</p>}
-    </article>
-  );
-};
-
-const EditButton = ({ isDisabled, onClick }) => {
+export const EditButton = ({ isDisabled, onClick }) => {
   return (
     <button
       disabled={isDisabled}
