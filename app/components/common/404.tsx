@@ -11,7 +11,7 @@ export const NotFound = ({
   return (
     <section className="z-10 relative grid max-w-2xl mx-auto place-content-center place-items-center min-h-[60vh] md:min-h-[80vh] ">
       <div className="w-48 mx-auto md:w-80 flex justify-center">
-        <img src="/404-eb.webp" alt="404" />
+        <img src="/empty-states/404-eb.webp" alt="404" />
       </div>
       <h2 className="text-2xl font-bold mt-4 mb-3">
         {message === "404" ? "  ¡Vaya, vaya! Esta página no existe" : message}

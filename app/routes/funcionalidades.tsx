@@ -69,37 +69,37 @@ const FeaturesScroll = () => {
         <img
           className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
           alt="star"
-          src="/hero/star.svg"
+          src="/home/star.svg"
         />
         <img
           className="absolute w-8 md:w-auto right-40 -bottom-20"
           alt="star"
-          src="/hero/star.svg"
+          src="/home/star.svg"
         />
         <img
           className="absolute right-20 top-16 md:top-32 md:right-80 w-10 md:w-16"
           alt="waves"
-          src="/hero/waves.svg"
+          src="/home/waves.svg"
         />
         <img
           className="absolute w-8 left-[660px] bottom-10 hidden md:block"
           alt="asterisk"
-          src="/hero/asterisk.svg"
+          src="/home/asterisk.svg"
         />
         <img
           className="absolute w-12 right-12 bottom-40 md:top-96"
           alt="diamonds"
-          src="/hero/diamonds.svg"
+          src="/home/diamonds.svg"
         />
         <img
           className="absolute w-32 -left-16 bottom-0"
           alt="espiral"
-          src="/hero/espiral.svg"
+          src="/home/espiral.svg"
         />
         <div className="z-10 relative">
           <img
             className="w-40 md:w-48 mx-auto mb-10"
-            src="/hero/logo-glasses.svg"
+            src="/home/logo-glasses.svg"
           />
           <h2 className="text-5xl xl:text-9xl font-bold leading-snug mb-6 md:mb-12 text-center w-full text-black ">
             ¿Qué puedes hacer
@@ -311,37 +311,37 @@ const FeaturesHeader = () => {
       <img
         className="absolute left-6 top-16 md:left-80  md:top-32 w-8 md:w-auto"
         alt="star"
-        src="/hero/star.svg"
+        src="/home/star.svg"
       />
       <img
         className="absolute w-8 md:w-auto right-40 -bottom-20"
         alt="star"
-        src="/hero/star.svg"
+        src="/home/star.svg"
       />
       <img
         className="absolute right-20 top-16 md:top-32 md:right-80 w-10 md:w-16"
         alt="waves"
-        src="/hero/waves.svg"
+        src="/home/waves.svg"
       />
       <img
         className="absolute w-8 left-[660px] bottom-10"
         alt="asterisk"
-        src="/hero/asterisk.svg"
+        src="/home/asterisk.svg"
       />
       <img
         className="absolute w-8 right-12 bottom-64 md:top-96"
         alt="diamonds"
-        src="/hero/diamonds.svg"
+        src="/home/diamonds.svg"
       />
       <img
         className="absolute w-32 -right-16 -bottom-10 scale-50 md:scale-100"
         alt="espiral"
-        src="/hero/espiral.svg"
+        src="/home/espiral.svg"
       />
       <img
         className="absolute w-10 left-72 -bottom-52 hidden md:block"
         alt="circles"
-        src="/hero/circles.svg"
+        src="/home/circles.svg"
       />
       <article className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap justify-between items-center mt-0 md:mt-20 gap-10 md:gap-20">
         <div className="md:text-left w-full md:w-[55%] text-center">
@@ -359,7 +359,7 @@ const FeaturesHeader = () => {
         <div className="w-full md:w-[45%]">
           <img
             className="w-[90%] mx-auto md:w-full"
-            src="/features-easybits.webp"
+            src="/home/features-easybits.webp"
             alt="laptop con la pagina de easybits"
           />
         </div>

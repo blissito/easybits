@@ -7,6 +7,10 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { AssetCard } from "./assets/AssetCard";
 import { BiLinkExternal } from "react-icons/bi";
+import { Avatar } from "~/components/common/Avatar";
+import { IoOpenOutline } from "react-icons/io5";
+import { Link } from "react-router";
+import { useOpenLink } from "~/hooks/useOpenLink";
 
 const LAYOUT_PADDING = "py-16 md:py-10";
 
@@ -19,11 +23,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       },
     },
     include: {
-      user: false, // @fix this
+      user: {
+        select: {
+          displayName: true,
+          picture: true,
+          host: true,
+        },
+      }, // @fix this
     },
   });
-  console.log(user.assetIds, user, "checale");
-
   return { assets };
 };
 
@@ -39,17 +47,31 @@ export default function Purchases({ loaderData }: Route.ComponentProps) {
       >
         <Header title="Mis compras" />
         {assets.length < 1 && <EmptyPurchases />}
-        <section className="flex gap-4 flex-wrap">
+        <section
+          className={cn(
+            " max-w-7xl mx-auto px-4 grid gap-8 grid-cols-1",
+            " md:px-[5%] xl:px-0  md:grid-cols-2 lg:grid-cols-4"
+          )}
+        >
           {assets.map((asset) => (
             <AssetCard
               to={`/dash/compras/${asset.id}`}
               key={asset.id}
               asset={asset}
-              left={<p className="h-10" />}
+              left={
+                <div className=" flex gap-1 items-center pl-3 pb-3 mt-1">
+                  <Avatar className="h-6 w-6 " src={asset.user?.picture} />
+                  <Link to={`http://${asset.user.host}.localhost:3000/tienda/`}>
+                    <p className="text-sm underline">
+                      {asset.user.displayName}
+                    </p>
+                  </Link>
+                </div>
+              }
               right={
-                <a className="text-2xl">
-                  <BiLinkExternal />
-                </a>
+                <Link className="text-2xl" to={`/dash/compras/${asset.id}`}>
+                  <IoOpenOutline />
+                </Link>
               }
             />
           ))}
@@ -63,7 +85,10 @@ const EmptyPurchases = () => {
   return (
     <Empty
       illustration={
-        <img className="w-44 mx-auto " src="/purchases-empty.webp" />
+        <img
+          className="w-44 mx-auto "
+          src="/empty-states/purchases-empty.webp"
+        />
       }
       title=" ¡Vaya, vaya! Ningún asset por aquí"
       text={<span>Explora el catálogo y compra tu primer asset</span>}

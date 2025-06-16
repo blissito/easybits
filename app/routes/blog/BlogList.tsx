@@ -25,7 +25,7 @@ export const BlogContent = () => {
               placeholder="¿Qué quieres saber hoy?"
             />
             <button className="w-12 lg:w-[72px] border-none h-full bg-black grid place-content-center">
-              <img alt="lupa" src="/search.svg" />
+              <img alt="lupa" src="/blog/search.svg" />
             </button>
           </div>
         </div>
@@ -125,17 +125,17 @@ export const BlogHeader = () => {
       <img
         className="absolute left-96 md:left-20 lg:left-80 top-28 md:top-32 w-8 md:w-auto"
         alt="star"
-        src="/hero/star.svg"
+        src="/home/star.svg"
       />
       <img
         className="absolute  right-96 md:right-24 top-16 md:top-40 lg:right-80 w-12 md:w-16"
         alt="waves"
-        src="/hero/waves.svg"
+        src="/home/waves.svg"
       />
       <img
         className="absolute hidden md:block w-8 left-[480px] top-80 lg:top-96 xl:top-80"
         alt="asterisk"
-        src="/hero/asterisk.svg"
+        src="/home/asterisk.svg"
       />
       <div className="max-w-5xl mx-auto  px-4 md:px-[5%] xl:px-0">
         <h2 className="text-4xl lg:text-6xl font-bold">Blog</h2>

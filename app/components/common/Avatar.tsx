@@ -1,6 +1,6 @@
 import { cn } from "~/utils/cn";
 
-const DEFAULT_PIC = "/logo-white.svg";
+const DEFAULT_PIC = "/images/avatar_default.svg";
 export const Avatar = ({
   className,
   src,

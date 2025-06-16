@@ -502,7 +502,7 @@ export const HeaderTemplate = ({
         />
         <img
           className="w-6 md:w-10 absolute right-[10%] bottom-10"
-          src="/hero/star.svg"
+          src="/home/star.svg"
           alt="star"
         />
         <h2
