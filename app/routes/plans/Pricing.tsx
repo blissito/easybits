@@ -10,17 +10,17 @@ export const Pricing = () => {
       <img
         className="absolute left-10 scale-75 md:scale-100 md:left-80 top-28 md:top-32"
         alt="star"
-        src="/hero/star.svg"
+        src="/home/star.svg"
       />
       <img
         className="absolute right-20 scale-75 md:scale-100 top-16 md:top-40 md:right-80 w-16"
         alt="star"
-        src="/hero/waves.svg"
+        src="/home/waves.svg"
       />
       <img
         className="absolute w-8 left-[480px] top-80"
         alt="star"
-        src="/hero/asterisk.svg"
+        src="/home/asterisk.svg"
       />
       <TextBlurEffect>
         <h2 className="text-4xl lg:text-6xl font-bold">Elige tu plan</h2>
@@ -30,7 +30,7 @@ export const Pricing = () => {
       </TextBlurEffect>
       <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 lg:mt-20 flex flex-wrap gap-12 justify-center">
         <PlanCard
-          badge="/hero/foco.svg"
+          badge="/home/foco.svg"
           planName="Starter"
           classNameButton="bg-[#F6DB7F] w-full"
           perks={[
@@ -43,7 +43,7 @@ export const Pricing = () => {
         />
         <div className="mt-0 xl:-mt-6">
           <PlanCard
-            badge="/hero/rocket.svg"
+            badge="/home/rocket.svg"
             planName="Creative"
             price={199}
             classNameButton="bg-[#A1CCE5] w-full"
@@ -66,7 +66,7 @@ export const Pricing = () => {
         </div>
         <PlanCard
           classNameButton="w-full"
-          badge="/hero/coder.svg"
+          badge="/home/coder.svg"
           planName="Expert"
           price={299}
           perks={[
@@ -162,7 +162,7 @@ export const PlanCard = ({
 export const PerkItem = ({ perk }: { perk?: string }) => {
   return (
     <div className="flex w-full gap-2 my-2">
-      <img alt="bullet" src="/hero/bullet.svg" />
+      <img alt="bullet" src="/home/bullet.svg" />
       <span>{perk}</span>
     </div>
   );

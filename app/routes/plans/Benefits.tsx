@@ -30,22 +30,22 @@ export const Benefits = () => {
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
         <BenefitCard
-          image="/hero/easy.svg"
+          image="/home/easy.svg"
           title="Fácil de usar"
           description="No necesitas ser un pro de la tecnología, agregar y vender tus productos es fácil y solo te tomará un par de minutos. Y si tienes preguntas, siempre estaremos para ayduarte."
         />
         <BenefitCard
-          image="/hero/support.svg"
+          image="/home/support.svg"
           title="Servicio de soporte"
           description="Nuestro equipo disponible para responder tus preguntas y ayudarte en lo que necesites. E incluso tomarán notas de lo que te gustaría agregar a EasyBits. "
         />
         <BenefitCard
-          image="/hero/custom.svg"
+          image="/home/custom.svg"
           title="Personalización"
           description="En EasyBits puedes personalizar cada landing page de tus assets, agregar tus colores, mostrar la información que tu quieres y agregar tu propio dominio."
         />
         <BenefitCard
-          image="/hero/cancel.svg"
+          image="/home/cancel.svg"
           title="Cancelación "
           description="Nada de plazos forzosos. Puedes cancelar en el momento que tu quieres, sin letras chiquitas y sin trabas, tú tienes control sobre tu suscripción. "
         />

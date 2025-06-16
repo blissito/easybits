@@ -26,7 +26,7 @@ export const AssetCard = ({
     >
       <div
         className={cn(
-          "min-h-full",
+          "min-h-[264px]",
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
           "group bg-white rounded-xl transition-all",
           "flex flex-col",

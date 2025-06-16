@@ -23,7 +23,7 @@ export const RadioGroup = ({
         name="type"
         value="DOWNLOADABLE"
         label="Descargable"
-        icon="/hero/art.svg"
+        icon="/home/art.svg"
       />
       <RadioInput
         isSelected={selected === "WEBINAR"}
@@ -32,7 +32,7 @@ export const RadioGroup = ({
         name="type"
         value="WEBINAR"
         label="Webinar"
-        icon="/hero/micro.svg"
+        icon="/home/micro.svg"
       />
       <RadioInput
         isSelected={selected === "VOD_COURSE"}
@@ -41,7 +41,7 @@ export const RadioGroup = ({
         name="type"
         value="VOD_COURSE"
         label="Curso"
-        icon="/hero/course.svg"
+        icon="/home/course.svg"
       />
     </section>
   );
@@ -86,7 +86,7 @@ export const RadioInput = ({
         {isSelected ? (
           <img
             className="w-5 top-3 right-3 absolute"
-            src="/hero/chec.svg"
+            src="/home/chec.svg"
             alt="check"
           />
         ) : null}

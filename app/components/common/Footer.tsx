@@ -46,7 +46,7 @@ export const Footer = () => {
               className="flex gap-4 items-center justify-center bg-transparent text-white border-[1px]  h-full  text-2xl font-light "
             >
               {" "}
-              <img src="/demo.svg" className="w-12 md:w-16" alt="demo" />
+              <img src="/home/demo.svg" className="w-12 md:w-16" alt="demo" />
               <div className="text-left flex flex-col gap-0">
                 <p className="mb-0 text-lg md:text-2xl">Agendar demo</p>
                 <span className="text-white/60  text-sm font-light underline">
@@ -63,7 +63,11 @@ export const Footer = () => {
               transition={{ type: "tween" }}
               className=" flex gap-4 items-center group justify-center bg-transparent text-white w-full border-[1px] border-white/20 h-full text-2xl font-light "
             >
-              <img src="/plans.svg" className="w-12 md:w-16" alt="planes" />
+              <img
+                src="/home/plans.svg"
+                className="w-12 md:w-16"
+                alt="planes"
+              />
               <div className="text-left flex flex-col gap-0">
                 <p className="mb-0 text-lg md:text-2xl">Escoge tu plan</p>
                 <span className="text-white/60  text-sm font-light underline">
@@ -85,11 +89,6 @@ export const Footer = () => {
               <span> para recibir consejos&nbsp;</span>
               <span> de marketing &nbsp;</span> <span> y negocios &nbsp;</span>{" "}
               <span> para creadores</span>
-              <img
-                className="w-10 ml-3"
-                src="/logo-white.svg"
-                alt="logo blanco"
-              />
             </h2>
             {/* <div className="max-w-[500px] -pt-10 h-[134px]  overflow-y-hidden">
               <div className="-ml-4">

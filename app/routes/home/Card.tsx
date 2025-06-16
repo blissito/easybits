@@ -27,7 +27,7 @@ export const Card = ({
         <img
           className="mb-1 w-16"
           alt="book"
-          src={img ? img : "/default.svg"}
+          src={img ? img : "/home/default.webp"}
         />
         <h3 className="text-xl font-bold">{title}</h3>
         <p className="text-iron text-base mb-4 min-h-[72px]">{description}</p>
