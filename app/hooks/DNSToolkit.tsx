@@ -1,5 +1,11 @@
 import type { User } from "@prisma/client";
-import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { BiEditAlt } from "react-icons/bi";
 import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -8,7 +14,7 @@ import { CopyButton } from "~/components/common/CopyButton";
 import { useClickOutside } from "./useOutsideClick";
 import { cn } from "~/utils/cn";
 import { IoWarningOutline } from "react-icons/io5";
-import { FaArrowLeft, FaBackward, FaCheck } from "react-icons/fa";
+import { FaArrowLeft, FaCheck } from "react-icons/fa";
 
 const statuses = ["Awaiting configuration", "Awaiting certificates"];
 
@@ -25,7 +31,7 @@ const formatHost = (e: ChangeType) => {
   return f;
 };
 
-export const useHostEditor = ({ user }: { user: User }) => {
+export const useDisclosure = ({ user }: { user: User }) => {
   const [open, setOpen] = useState(false);
   const onOpen = () => {
     setOpen(true);
@@ -45,6 +51,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
   const [localHost, setLocalHost] = useState(user.host);
   const [domain, setDomain] = useState<string>(user.domain || "");
   const fetcher = useFetcher();
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const error = fetcher.data?.error;
   const isLoading = fetcher.state !== "idle";
   const onSubmit = async () => {
@@ -85,7 +92,6 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
     );
   };
 
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const openDomainConfig = () => {
     setIsConfigOpen(true);
   };
@@ -104,11 +110,12 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
             <DNSInput
               submitNode={
                 // @todo inject props for disable?
+
                 <BrutalButton
                   type="button"
                   isLoading={isLoading}
                   onClick={onSubmit}
-                  containerClassName="ml-auto mr-1 h-9"
+                  containerClassName="h-9"
                   className="h-9 bg-brand-500 text-black"
                 >
                   Actualizar
@@ -211,19 +218,35 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
             </nav>
           </>
         ) : (
-          <nav className="flex justify-between w-full mt-6">
-            <BrutalButton onClick={onClose} className="bg-white min-w-10">
-              <FaArrowLeft />
-            </BrutalButton>
-            {!user.domain && (
-              <BrutalButton onClick={openDomainConfig}>
-                Agregar dominio
-              </BrutalButton>
-            )}
-          </nav>
+          <Footer
+            onClose={onClose}
+            isDomain={!!user.domain}
+            onClick={openDomainConfig}
+          />
         )}
       </Modal>
     </>
+  );
+};
+
+const Footer = ({
+  isDomain,
+  onClose,
+  onClick,
+}: {
+  isDomain?: boolean;
+  onClose?: () => void;
+  onClick?: () => void;
+}) => {
+  return (
+    <nav className="flex justify-between w-full mt-6">
+      <BrutalButton onClick={onClose} className="bg-white min-w-10">
+        <FaArrowLeft />
+      </BrutalButton>
+      {isDomain && (
+        <BrutalButton onClick={onClick}>Agregar dominio</BrutalButton>
+      )}
+    </nav>
   );
 };
 
@@ -348,21 +371,22 @@ const DNSInput = ({
   value: string;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const ref = useClickOutside({
-    isActive: isEditing,
-    onOutsideClick() {
-      setIsEditing(false);
-      onChange?.({ currentTarget: { value: defaultValue } });
-      // fetcher.data = null; // to remove errors
-    },
-  });
+  const isOpen = useRef(false);
+  // const [isOpen, setIsOpen] = useState(false);
+
   const l =
     mode === "domain"
       ? `https://${value}`
       : `https://${defaultValue}.easybits.cloud/tienda`;
 
+  const handleClickEdit = () => {
+    console.log("Click", isEditing);
+    setIsEditing(true);
+    // isOpen.current = true;
+  };
+
   return (
-    <article ref={ref} className="w-full ">
+    <article className="w-full">
       {isEditing ? (
         <p className="mb-2">{editingLabel}</p>
       ) : (
@@ -386,16 +410,7 @@ const DNSInput = ({
             {editButton ? (
               editButton
             ) : (
-              <button
-                disabled={isDisabled}
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className={cn(
-                  "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l border-black"
-                )}
-              >
-                <BiEditAlt />
-              </button>
+              <EditButton isDisabled={isDisabled} onClick={handleClickEdit} />
             )}
           </>
         )}
@@ -415,10 +430,39 @@ const DNSInput = ({
           </div>
         )}
 
-        {isEditing && submitNode}
+        {isEditing && (
+          <div className="flex w-full justify-end gap-2">
+            <BrutalButton
+              type="button"
+              // isDisabled={isLoading}
+              onClick={() => setIsEditing(false)}
+              mode="ghost"
+              containerClassName="h-9"
+              className="h-9 bg-brand-500 text-black"
+            >
+              Cerrar
+            </BrutalButton>
+            {submitNode}
+          </div>
+        )}
       </section>
       {isEditing && error && <p className="text-xs text-red-500">{error}</p>}
     </article>
+  );
+};
+
+const EditButton = ({ isDisabled, onClick }) => {
+  return (
+    <button
+      disabled={isDisabled}
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "active:bg-black active:text-white rounded-r-lg h-full p-3 text-xl border-l border-black disabled:bg-gray-300 disabled:text-gray-400"
+      )}
+    >
+      <BiEditAlt />
+    </button>
   );
 };
 
@@ -460,7 +504,7 @@ const Modal = ({
 
   if (!open) return null;
   return (
-    <article className="fixed inset-0 z-20 grid place-content-center">
+    <article className="z-40 fixed inset-0 grid place-content-center">
       <section className="absolute inset-0 bg-black/50 backdrop-blur"></section>
       <section className="relative max-w-[800px]  mx-auto border-2 border-black bg-white p-8 rounded-2xl flex flex-col items-start gap-6">
         <nav className="flex justify-between items-start gap-4 w-full ">

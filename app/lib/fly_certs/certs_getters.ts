@@ -21,6 +21,7 @@ export async function removeHost(hostname: string) {
   let result;
   try {
     result = await getClient().request(query, variables);
+    console.info("::CERT_DELETEION_SUCCESS::", hostname);
   } catch (e: unknown) {
     if (e instanceof Error)
       console.error("::ERROR_ON_CERT_DELETION::", e.message);
@@ -94,6 +95,7 @@ mutation($appId: ID!, $hostname: String!) {
   let result;
   try {
     result = await getClient().request(query, variables);
+    console.info("::CERT_CREATION_SUCCESS::", hostname);
   } catch (e: unknown) {
     if (e instanceof Error)
       console.error("::ERROR_ON_CERT_CREATION::", e.message);

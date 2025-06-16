@@ -12,7 +12,7 @@ export const useClickOutside = <T extends HTMLDivElement>({
   const ref = useRef<T>(null);
 
   const handleClick = (e: MouseEvent) =>
-    !ref.current?.contains(e.target as Node) && onOutsideClick?.(e);
+    ref.current?.contains(e.target as Node) ? undefined : onOutsideClick?.(e);
 
   const handleKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
