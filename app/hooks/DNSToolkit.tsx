@@ -412,7 +412,7 @@ const Modal = ({
       <section className="relative max-w-[800px]  mx-auto border-2 border-black bg-white p-8 rounded-2xl flex flex-col items-start gap-6">
         <nav className="flex justify-between items-start gap-4 w-full ">
           <h1 className="text-2xl md:text-3xl font-semibold">
-            Usa tu subdominio EasyBits o ¡Agrega tu propio dominio! 🔥
+            Usa tu subdominio EasyBits <br /> o ¡Agrega tu propio dominio! 🔥
           </h1>
           <BrutalButtonClose onClick={onClose} />
         </nav>
