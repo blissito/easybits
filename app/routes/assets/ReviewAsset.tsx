@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { cn } from "~/utils/cn";
+import { motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
 import { Modal } from "~/components/common/Modal";
 import { db } from "~/.server/db";
@@ -9,6 +9,7 @@ import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Controller, useForm } from "react-hook-form";
 import { BrendisConfetti } from "~/components/Confetti";
+import { AnimatePresence } from "motion/react";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -164,23 +165,47 @@ export default function ReviewAsset({}) {
                   name="rating"
                   control={control}
                   render={({ field }) => (
-                    <div className="mt-6 mb-10 flex gap-3" value={field.value}>
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            field.onChange(i + 1);
-                            setStars(i + 1);
-                          }}
-                          className="text-5xl"
-                        >
-                          {i < stars ? (
-                            <FaStar className="text-black" />
-                          ) : (
-                            <FaRegStar className="text-gray-400" />
-                          )}
-                        </button>
-                      ))}
+                    <div className="mt-6 mb-10 flex gap-3">
+                      <AnimatePresence>
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              field.onChange(i + 1);
+                              setStars(i + 1);
+                            }}
+                            className="text-5xl"
+                          >
+                            {i < stars ? (
+                              <motion.div
+                                key={`filled-${i}`}
+                                initial={{ scale: 1 }}
+                                animate={{ scale: 1.2 }}
+                                transition={{
+                                  type: "spring",
+                                  stiffness: 300,
+                                  damping: 10,
+                                }}
+                              >
+                                <FaStar className="text-black" />
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key={`empty-${i}`}
+                                initial={{ scale: 1.2 }}
+                                animate={{ scale: 1 }}
+                                transition={{
+                                  type: "spring",
+                                  stiffness: 300,
+                                  damping: 10,
+                                }}
+                              >
+                                <FaRegStar className="text-gray-400" />
+                              </motion.div>
+                            )}
+                          </button>
+                        ))}
+                      </AnimatePresence>
                     </div>
                   )}
                 />
