@@ -218,7 +218,7 @@ model Review {
   assetId String @db.ObjectId
   Asset   Asset  @relation(fields: [assetId], references: [id])
   comment String
-  rating  Int    @default(0)
+  rating  Int    @default(5)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -10,6 +10,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Controller, useForm } from "react-hook-form";
 import { BrendisConfetti } from "~/components/Confetti";
 import { AnimatePresence } from "motion/react";
+import { CiStar } from "react-icons/ci";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -30,6 +31,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
 export default function ReviewAsset({}) {
   const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState("");
   const loaderData = useLoaderData();
   const fetcher = useFetcher();
   const { asset, user } = loaderData;
@@ -54,9 +56,13 @@ export default function ReviewAsset({}) {
     );
   };
 
+  const isCommentNotSet = comment.length < 12;
+  const isRankNotSet = stars < 1;
+  const isDisabled = isCommentNotSet || isRankNotSet;
+
   return (
-    <article className="relative bg-brand-500 h-screen">
-      <div className="relative">
+    <article className="relative overflow-hidden bg-brand-500 min-h-[640px] h-screen px-4 md:px-[5%] xl:px-0 ">
+      <div className="relative z-10">
         {/* big lombrices (icons) */}
         <img
           className="fixed left-[117px] top-[266px]"
@@ -110,124 +116,160 @@ export default function ReviewAsset({}) {
           src="/images/lombriz14.svg"
         />
       </div>
-      <Link className="" to={`/tienda/${asset.slug}`}>
-        <div className="absolute top-0 left-0 flex justify-center items-center p-4 gap-3 cursor-pointer">
-          <FaArrowLeft /> Volver
-        </div>
-      </Link>
+
       {isSuccess && (
-        <div className="text-xl font-bold flex justify-center items-center h-screen">
+        <div className="relative z-20 text-xl font-bold flex justify-center items-center h-screen px-4 md:px-[5%] xl:px-0">
           <div className="flex flex-col items-center gap-4 text-center">
-            <img
+            <motion.img
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2 }}
               alt="Thank You"
-              className="w-48 h-48"
+              className="w-48 h-48 relative z-30 opacity-0"
               src="/images/star-comments.png"
             />
-            <p className="text-3xl">¡Gracias por tu comentario!</p>
-            <p className="font-normal w-[408px]">
+            <motion.p
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="text-3xl"
+            >
+              ¡Gracias por tu comentario!
+            </motion.p>
+            <motion.p
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="font-normal max-w-2xl mb-8"
+            >
               Agradecemos que compartas tu experiencia, tus comentarios ayudan a
               que más personas conozcan lo increíble que es{" "}
-              <Link className="" to={`/tienda/${asset.slug}`}>
-                {asset?.title}
+              <Link className="font-bold" to={`/tienda/${asset.slug}`}>
+                «{asset?.title}»
               </Link>
               .
-            </p>
-            <button
-              className="mt-4 px-6 py-2 text-black rounded-lg hover:bg-yellow-600 transition-colors"
-              onClick={() => window.location.reload()}
+            </motion.p>
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.2 }}
             >
-              Volver
-            </button>
+              <Link to={`/compras/${asset.id}/`}>
+                <BrutalButton
+                  className="bg-white"
+                  // onClick={() => window.location.reload()}
+                >
+                  Volver
+                </BrutalButton>
+              </Link>
+            </motion.div>
           </div>
         </div>
       )}
       {isSuccess && <BrendisConfetti />}
       {!isSuccess && (
-        <div className="flex justify-center items-center h-screen">
-          <div className="w-[488px] p-6 md:p-8 rounded-xl border-2 border-black bg-white relative">
-            <img
-              className="mx-3 w-20 absolute right-[13px] top-[-40px]"
-              src="/images/logo-glasses-y.png"
-            />
-            <h2 className="text-2xl md:text-3xl font-semibold mb-6">
-              Qué tal estuvo{" "}
-              <Link
-                className="text-brand-500 underline underline-offset-4"
-                to={`/tienda/${asset.slug}`}
-              >
-                {asset?.title}
-              </Link>
-              ?
-            </h2>
-            <fetcher.Form onSubmit={handleSubmit(submit)}>
-              <div>
-                <Controller
-                  name="rating"
-                  control={control}
-                  render={({ field }) => (
-                    <div className="mt-6 mb-10 flex gap-3">
-                      <AnimatePresence>
-                        {Array.from({ length: 5 }, (_, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              field.onChange(i + 1);
-                              setStars(i + 1);
-                            }}
-                            className="text-5xl"
-                          >
-                            {i < stars ? (
-                              <motion.div
-                                key={`filled-${i}`}
-                                initial={{ scale: 1 }}
-                                animate={{ scale: 1.2 }}
-                                transition={{
-                                  type: "spring",
-                                  stiffness: 300,
-                                  damping: 10,
-                                }}
-                              >
-                                <FaStar className="text-black" />
-                              </motion.div>
-                            ) : (
-                              <motion.div
-                                key={`empty-${i}`}
-                                initial={{ scale: 1.2 }}
-                                animate={{ scale: 1 }}
-                                transition={{
-                                  type: "spring",
-                                  stiffness: 300,
-                                  damping: 10,
-                                }}
-                              >
-                                <FaRegStar className="text-gray-400" />
-                              </motion.div>
-                            )}
-                          </button>
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                />
+        <>
+          <Link to={`/compras/${asset.id}/`}>
+            <div className="absolute top-4 left-20  flex justify-center items-center p-3 gap-3 cursor-pointer">
+              <FaArrowLeft /> Volver
+            </div>
+          </Link>
+          <div className="flex justify-center h-full items-center ">
+            <div className="w-[488px] p-6 md:p-8 rounded-xl border-2 border-black bg-white relative">
+              <img
+                className="mx-3 w-20 absolute right-[13px] top-[-40px]"
+                src="/images/logo-glasses-y.png"
+              />
+              <h2 className="text-2xl md:text-2xl font-semibold mb-6">
+                ¿Qué tal estuvo{" "}
+                <span className="text-brand-500 ">{asset?.title}</span>?
+              </h2>
+              <fetcher.Form onSubmit={handleSubmit(submit)}>
+                <div>
+                  <Controller
+                    name="rating"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="mt-6 mb-8 flex gap-3 ">
+                        <AnimatePresence>
+                          {Array.from({ length: 5 }, (_, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                field.onChange(i + 1);
+                                setStars(i + 1);
+                              }}
+                              className="text-5xl"
+                            >
+                              {i < stars ? (
+                                <motion.div
+                                  key={`filled-${i}`}
+                                  whileTap={{ scale: 1.1, opacity: 1 }}
+                                  whileHover={{ scale: 1.1 }}
+                                  transition={{
+                                    type: "spring",
+                                    stiffness: 300,
+                                    damping: 10,
+                                  }}
+                                >
+                                  <img
+                                    className="h-12 w-12 pointer-events-none"
+                                    src="/icons/star.svg"
+                                  />
+                                </motion.div>
+                              ) : (
+                                <motion.div
+                                  key={`empty-${i}`}
+                                  initial={{ scale: 0.5, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  whileHover={{ scale: 1.1 }}
+                                  transition={{
+                                    type: "spring",
+                                    stiffness: 300,
+                                    damping: 10,
+                                    repeat: 0,
+                                  }}
+                                >
+                                  <img
+                                    className="h-12 w-12 pointer-events-none"
+                                    src="/icons/star-empty.svg"
+                                  />
+                                </motion.div>
+                              )}
+                            </button>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  />
 
-                <Input
-                  type="textarea"
-                  className="mb-14 h-[182px]"
-                  inputClassName="h-full"
-                  {...register("comment", { required: true })}
-                />
-                <BrutalButton
-                  containerClassName="w-full"
-                  className="min-w-full bg-yellow-500 w-full "
-                  type="submit"
-                  isLoading={isLoading}
-                >
-                  Compartir comentarios
-                </BrutalButton>
-              </div>
-            </fetcher.Form>
+                  <Input
+                    type="textarea"
+                    placeholder="Déjale un comentario al creador"
+                    className="mb-14 h-[182px]"
+                    inputClassName="h-full"
+                    {...register("comment", {
+                      required: true,
+                      onChange(e) {
+                        setComment(e.currentTarget.value);
+                      },
+                    })}
+                  />
+                  <BrutalButton
+                    containerClassName="w-full"
+                    className="min-w-full bg-yellow-500 w-full "
+                    type="submit"
+                    isLoading={isLoading}
+                    isDisabled={isDisabled}
+                  >
+                    Enviar comentarios
+                  </BrutalButton>
+                </div>
+              </fetcher.Form>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </article>
   );
