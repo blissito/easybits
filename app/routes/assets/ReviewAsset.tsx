@@ -74,7 +74,7 @@ export default function ReviewAsset({}) {
         <img className="fixed right-0 top-[706px]" src="/images/lombriz5.svg" />
         {/* small lombrices (icons) */}
         <img
-          className="fixed left-[250px] top-[494px]"
+          className="fixed left-[320px] top-[491px]"
           src="/images/lombriz6.svg"
         />
         <img
@@ -98,7 +98,7 @@ export default function ReviewAsset({}) {
           src="/images/lombriz10.svg"
         />
         <img
-          className="fixed right-[250px] top-[360px]"
+          className="fixed right-[340px] top-[360px]"
           src="/images/lombriz11.svg"
         />
         <img
@@ -133,7 +133,7 @@ export default function ReviewAsset({}) {
               .
             </p>
             <button
-              className="mt-4 px-6 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-600 transition-colors"
+              className="mt-4 px-6 py-2 text-black rounded-lg hover:bg-yellow-600 transition-colors"
               onClick={() => window.location.reload()}
             >
               Volver
