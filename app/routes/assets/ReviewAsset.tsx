@@ -54,86 +54,145 @@ export default function ReviewAsset({}) {
   };
 
   return (
-    <article className="relative">
-      <div className="absolute top-0 left-0 flex justify-center items-center p-4 gap-3">
-        <FaArrowLeft /> Volver
+    <article className="relative bg-brand-500 h-screen">
+      <div className="relative">
+        {/* big lombrices (icons) */}
+        <img
+          className="fixed left-[117px] top-[266px]"
+          src="/images/lombriz1.svg"
+        />
+        <img
+          className="fixed left-[428px] top-[44px]"
+          src="/images/lombriz2.svg"
+        />
+        <img className="fixed left-0 top-[841px]" src="/images/lombriz4.svg" />
+        <img
+          className="fixed right-[113px] top-[23px]"
+          src="/images/lombriz3.svg"
+        />
+        <img className="fixed right-0 top-[706px]" src="/images/lombriz5.svg" />
+        {/* small lombrices (icons) */}
+        <img
+          className="fixed left-[250px] top-[494px]"
+          src="/images/lombriz6.svg"
+        />
+        <img
+          className="fixed left-[212px] top-[681px]"
+          src="/images/lombriz7.svg"
+        />
+        <img
+          className="fixed right-[64px] top-[454px]"
+          src="/images/lombriz7.svg"
+        />
+        <img
+          className="fixed left-[417px] bottom-[117px]"
+          src="/images/lombriz8.svg"
+        />
+        <img
+          className="fixed right-[537px] top-[91px]"
+          src="/images/lombriz9.svg"
+        />
+        <img
+          className="fixed right-[232px] top-[228px]"
+          src="/images/lombriz10.svg"
+        />
+        <img
+          className="fixed right-[250px] top-[360px]"
+          src="/images/lombriz11.svg"
+        />
+        <img
+          className="fixed left-[731px] bottom-[31px]"
+          src="/images/lombriz13.svg"
+        />
+        <img
+          className="fixed right-[136px] bottom-[37px]"
+          src="/images/lombriz14.svg"
+        />
       </div>
+      <Link className="" to={`/tienda/${asset.slug}`}>
+        <div className="absolute top-0 left-0 flex justify-center items-center p-4 gap-3 cursor-pointer">
+          <FaArrowLeft /> Volver
+        </div>
+      </Link>
       {isSuccess && (
-        <div className="text-xl mt-2 md:mt-4 font-bold flex justify-center items-center h-screen">
+        <div className="text-xl font-bold flex justify-center items-center h-screen">
           <div className="flex flex-col items-center gap-4 text-center">
-            {/* <img              
+            <img
               alt="Thank You"
-              className="w-24 h-24"
-            /> */}
-            <p className="text-3xl">¡Gracias por tu comentario! 🎊</p>
-            <p className="font-normal">
+              className="w-48 h-48"
+              src="/images/star-comments.png"
+            />
+            <p className="text-3xl">¡Gracias por tu comentario!</p>
+            <p className="font-normal w-[408px]">
               Agradecemos que compartas tu experiencia, tus comentarios ayudan a
               que más personas conozcan lo increíble que es{" "}
               <Link className="" to={`/tienda/${asset.slug}`}>
                 {asset?.title}
               </Link>
+              .
             </p>
+            <button
+              className="mt-4 px-6 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-600 transition-colors"
+              onClick={() => window.location.reload()}
+            >
+              Volver
+            </button>
           </div>
         </div>
       )}
       {isSuccess && <BrendisConfetti />}
-      <Modal
-        title={
-          <>
-            Qué tal estuvo{" "}
-            <Link to={`/tienda/${asset.slug}`}>{asset?.title}</Link>
-          </>
-        }
-        isOpen={!isSuccess}
-        onClose={() => {}}
-        // mode="naked"
-        block={false}
-        noCloseButton
-      >
-        <fetcher.Form onSubmit={handleSubmit(submit)}>
-          <div>
-            <Controller
-              name="rating"
-              control={control}
-              render={({ field }) => (
-                <div className="mt-6 mb-10 flex gap-3" value={field.value}>
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        field.onChange(i + 1);
-                        setStars(i + 1);
-                      }}
-                      className="text-5xl"
-                    >
-                      {i < stars ? (
-                        <FaStar className="text-black" />
-                      ) : (
-                        <FaRegStar className="text-gray-400" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            />
+      {!isSuccess && (
+        <div className="flex justify-center items-center h-screen">
+          <div className="w-full max-w-3xl mx-auto p-6 md:p-8 rounded-xl border-2 border-black bg-white">
+            <h2 className="text-2xl md:text-3xl font-semibold mb-6">
+              Qué tal estuvo {asset?.title}?
+            </h2>
+            <fetcher.Form onSubmit={handleSubmit(submit)}>
+              <div>
+                <Controller
+                  name="rating"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="mt-6 mb-10 flex gap-3" value={field.value}>
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            field.onChange(i + 1);
+                            setStars(i + 1);
+                          }}
+                          className="text-5xl"
+                        >
+                          {i < stars ? (
+                            <FaStar className="text-black" />
+                          ) : (
+                            <FaRegStar className="text-gray-400" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                />
 
-            <Input
-              type="textarea"
-              className="mb-14 h-[182px]"
-              inputClassName="h-full"
-              {...register("comment", { required: true })}
-            />
-            <BrutalButton
-              containerClassName="w-full"
-              className="min-w-full bg-yellow-500 w-full "
-              type="submit"
-              isLoading={isLoading}
-            >
-              Compartir comentarios
-            </BrutalButton>
+                <Input
+                  type="textarea"
+                  className="mb-14 h-[182px]"
+                  inputClassName="h-full"
+                  {...register("comment", { required: true })}
+                />
+                <BrutalButton
+                  containerClassName="w-full"
+                  className="min-w-full bg-yellow-500 w-full "
+                  type="submit"
+                  isLoading={isLoading}
+                >
+                  Compartir comentarios
+                </BrutalButton>
+              </div>
+            </fetcher.Form>
           </div>
-        </fetcher.Form>
-      </Modal>
+        </div>
+      )}
     </article>
   );
 }
