@@ -41,7 +41,7 @@ export default function StoreComponent({
     setIsOpen(false);
   };
   // @todo if domain? This always work, with domains it could be malconfig
-  const copyAndOpenLink = useOpenLink({
+  const { handleOpenLink } = useOpenLink({
     localLink: `http://${user.host}.localhost:3000/tienda`,
     publicLink: `https://${user.host}.easybits.cloud/tienda`,
   });
@@ -83,7 +83,7 @@ export default function StoreComponent({
                 <img className="w-full" src={ShareIcon} />
               </div>
             </HeaderIconButton>
-            <button onClick={copyAndOpenLink}>
+            <button onClick={handleOpenLink}>
               <HeaderIconButton>
                 <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
                   <img className="w-full" src={OpenIcon} />

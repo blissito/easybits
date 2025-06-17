@@ -53,7 +53,7 @@ export const Input = ({
           autoFocus
           defaultValue={defaultValue}
           className={cn(
-            "rounded-xl p-4 text-lg h-12 w-full placeholder:text-tale placeholder:font-light border border-black  bg-white text-black",
+            "rounded-xl p-4 text-lg h-12 w-full placeholder:text-tale placeholder:font-light  border border-black  bg-white text-black",
             "focus:border-brand-500 focus:outline-none focus:ring-brand-500",
             {
               "pr-24": !!copy,

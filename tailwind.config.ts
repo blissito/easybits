@@ -32,6 +32,10 @@ export default {
         sea: "#83D0E4",
         emerald: "#9ADDAA",
         maya: "#75BAF9",
+        status: {
+          success: "#3B4730",
+          "success-overlay": "#DAE8CF",
+        },
       },
       backgroundImage: {
         pattern: "url('/dash/pattern.svg')",

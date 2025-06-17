@@ -22,6 +22,7 @@ export const Avatar = ({
       )}
     >
       <img
+        alt="user"
         onError={({ currentTarget }) => {
           currentTarget.onerror = null;
           currentTarget.src = DEFAULT_PIC;

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 export const useOpenLink = ({
@@ -7,10 +8,14 @@ export const useOpenLink = ({
   localLink: string;
   publicLink: string;
 }) => {
-  return () => {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
     const isDev = location.hostname.includes("localhost");
     const uri = isDev ? localLink : publicLink;
-    navigator.clipboard.writeText(uri);
+    setUrl(uri);
+  }, []);
+  const handleOpenLink = () => {
+    navigator.clipboard.writeText(url);
     toast.success("Link copiado", {
       style: {
         border: "2px solid #000000",
@@ -25,7 +30,11 @@ export const useOpenLink = ({
     });
     const a = document.createElement("a");
     a.target = "_blank";
-    a.href = uri;
+    a.href = url;
     a.click();
+  };
+  return {
+    url,
+    handleOpenLink,
   };
 };

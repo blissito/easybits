@@ -38,7 +38,7 @@ export const AssetPreview = ({
     setIsOpen(false);
   };
 
-  const copyAndOpenLink = useOpenLink({
+  const { handleOpenLink } = useOpenLink({
     localLink: `http://${host}.localhost:3000/tienda/${asset.slug}`,
     publicLink: `https://${host}.easybits.cloud/tienda/${asset.slug}`,
   });
@@ -55,7 +55,7 @@ export const AssetPreview = ({
         <button onClick={handleModal}>
           <IoShareSocialOutline className="text-2xl" />
         </button>
-        <button onClick={copyAndOpenLink} className="text-xl">
+        <button onClick={handleOpenLink} className="text-xl">
           <MdContentCopy />
         </button>
         <EnrolledUsers assetId={asset.id} />
