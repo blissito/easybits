@@ -6,7 +6,7 @@ import { db } from "~/.server/db";
 import { getFilesForAssetId, getUserOrRedirect } from "~/.server/getters";
 import { DownloablePreview } from "./viewer/DownloablePreview";
 
-const LAYOUT_PADDING = "pt-10 px-20";
+const LAYOUT_PADDING = "p-4  md:px-20";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -40,7 +40,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <article className={cn("text-white bg-black", "w-full", LAYOUT_PADDING)}>
+    <article
+      className={cn(
+        "text-white bg-black min-h-svh h-full bg-patternDark",
+        "w-full",
+        LAYOUT_PADDING
+      )}
+    >
       <Link
         prefetch="intent"
         to="/dash/compras"
@@ -51,7 +57,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </span>
         <span>Ir al dashboard</span>
       </Link>
-      <section className="my-12">{viewer}</section>
+      <section className="mt-6 md:my-24">{viewer}</section>
     </article>
   );
 }

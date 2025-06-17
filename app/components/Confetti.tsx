@@ -42,7 +42,7 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
     "bg-purple-400",
     "purple",
     "purple",
-    "purple",
+    "yellow",
     "purple",
     "purple",
     "purple",
