@@ -143,9 +143,20 @@ export default function ReviewAsset({}) {
       {isSuccess && <BrendisConfetti />}
       {!isSuccess && (
         <div className="flex justify-center items-center h-screen">
-          <div className="w-full max-w-3xl mx-auto p-6 md:p-8 rounded-xl border-2 border-black bg-white">
+          <div className="w-[488px] p-6 md:p-8 rounded-xl border-2 border-black bg-white relative">
+            <img
+              className="mx-3 w-20 absolute right-[13px] top-[-40px]"
+              src="/images/logo-glasses-y.png"
+            />
             <h2 className="text-2xl md:text-3xl font-semibold mb-6">
-              Qué tal estuvo {asset?.title}?
+              Qué tal estuvo{" "}
+              <Link
+                className="text-brand-500 underline underline-offset-4"
+                to={`/tienda/${asset.slug}`}
+              >
+                {asset?.title}
+              </Link>
+              ?
             </h2>
             <fetcher.Form onSubmit={handleSubmit(submit)}>
               <div>
