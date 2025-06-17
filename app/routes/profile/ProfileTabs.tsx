@@ -8,6 +8,7 @@ import {
 import type { User } from "@prisma/client";
 import type { Customer } from "aws-sdk/clients/connect";
 import { cn } from "~/utils/cn";
+import { Providers } from "./Providers";
 
 export const ProfileTabs = ({
   user,
@@ -77,7 +78,9 @@ export const ProfileTabs = ({
         <TabPanel>
           <Notifications user={user} />{" "}
         </TabPanel>
-        <TabPanel>Content 3</TabPanel>
+        <TabPanel>
+          <Providers />
+        </TabPanel>
       </TabPanels>
     </TabGroup>
   );
