@@ -295,9 +295,6 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
     return new Date(date).toLocaleDateString("es-MX", {
       year: "numeric",
       month: "long",
-      day: "numeric",
-      hour: "numeric",
-      minute: "numeric",
     });
   };
   return (
@@ -327,6 +324,13 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
 };
 
 const ReviewCard = ({ review }: { review: any }) => {
+  const formatDate = (date: Date | string) => {
+    return new Date(date).toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "long",
+    });
+  };
+
   return (
     <div className=" py-4  flex flex-col gap-3">
       <div className="text-sm">
@@ -339,6 +343,11 @@ const ReviewCard = ({ review }: { review: any }) => {
               className="w-4 h-4"
             />
           ))}
+              {review.createdAt && (
+        <div className="text-xs text-metal ml-1">
+          {formatDate(review.createdAt)}
+        </div>
+      )}
         </div> 
         <p className="text-base mt-1">  
           {review.comment}
@@ -350,6 +359,7 @@ const ReviewCard = ({ review }: { review: any }) => {
           {review.user?.displayName || review.user?.email || "Anónimo"}
         </span>
       </div>
+  
     </div>
   );
 };
