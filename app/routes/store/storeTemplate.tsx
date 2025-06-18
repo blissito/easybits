@@ -46,7 +46,7 @@ export const StoreTemplate = ({
     socialNetworks,
   } = user?.storeConfig || {};
   return (
-    <section className="h-full">
+    <section className="h-full" style={{ fontFamily: typography }}>
       <div
         className={cn("overflow-hidden mb-32 ", {
           "mb-0 overflow-visible": variant === "slim",
@@ -125,6 +125,7 @@ export const StoreTemplate = ({
           {["Todos", "Nuevos", "Assets", "Libros"].map((f, i) => (
             <button
               key={i}
+              style={{ fontFamily: typography }}
               className={cn(
                 "rounded-full p-3 border border-black cursor-pointer",
                 {
@@ -160,7 +161,13 @@ const PublicCardBox = ({ user, asset }: { user: User; asset: Asset }) => {
     localLink: `http://${user.host}.localhost:3000/tienda/${asset.slug}`,
     publicLink: `https://${user.host}.easybits.cloud/tienda/${asset.slug}`,
   });
-  return <AssetCard to={url} key={asset.id} asset={asset} right={<></>} />;
+  const { typography } = user?.storeConfig || {};
+  
+  return (
+    <div style={{ fontFamily: typography }}>
+      <AssetCard to={url} key={asset.id} asset={asset} right={<></>} />
+    </div>
+  );
 };
 
 const StoreTemplateFooter = () => {
