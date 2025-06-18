@@ -37,17 +37,23 @@ export async function constructStripeEvent(request: Request) {
 // Función auxiliar para obtener metadata de un evento
 export function getMetadataFromEvent(event: any) {
   const object = event.data.object;
-  // Si el objeto tiene metadata, usarlo
-  if (object.metadata?.assetId && object.metadata?.email) {
+  // Si el objeto tiene assetId en metadata, usarlo
+  if (object.metadata?.assetId) {
     return object.metadata;
   }
   // Si no, buscar en el payment_intent asociado
-  if (
-    object.payment_intent?.metadata?.assetId &&
-    object.payment_intent?.metadata?.email
-  ) {
+  if (object.payment_intent?.metadata?.assetId) {
     return object.payment_intent.metadata;
   }
+  return null;
+}
+
+// Función auxiliar para obtener el email de un evento de Stripe
+export function getEmailFromEvent(event: any) {
+  const object = event.data.object;
+  if (object.customer_email) return object.customer_email;
+  if (object.receipt_email) return object.receipt_email;
+  if (object.billing_details?.email) return object.billing_details.email;
   return null;
 }
 

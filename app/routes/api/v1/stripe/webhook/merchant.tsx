@@ -5,6 +5,7 @@ import {
   getMetadataFromEvent,
   assignAssetToUserByEmail,
   removeAssetFromUserByEmail,
+  getEmailFromEvent,
 } from "~/.server/webhookUtils";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -61,34 +62,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     case "charge.succeeded": {
       const metadata = getMetadataFromEvent(event);
-      if (!metadata) {
-        return new Response("Missing required metadata", { status: 400 });
+      const email = getEmailFromEvent(event);
+      if (!metadata || !metadata.assetId || !email) {
+        return new Response("Missing required metadata or email", {
+          status: 400,
+        });
       }
-      return assignAssetToUserByEmail(metadata);
+      return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
     }
 
     case "payment_intent.succeeded":
     case "payment_intent.created": {
       const metadata = getMetadataFromEvent(event);
-      if (!metadata) {
-        return new Response("Missing required metadata", { status: 400 });
+      const email = getEmailFromEvent(event);
+      if (!metadata || !metadata.assetId || !email) {
+        return new Response("Missing required metadata or email", {
+          status: 400,
+        });
       }
-      return assignAssetToUserByEmail(metadata);
+      return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
     }
 
     case "charge.updated": {
       const charge = event.data.object;
       const metadata = getMetadataFromEvent(event);
-      if (!metadata) {
-        return new Response("Missing required metadata", { status: 400 });
+      const email = getEmailFromEvent(event);
+      if (!metadata || !metadata.assetId || !email) {
+        return new Response("Missing required metadata or email", {
+          status: 400,
+        });
       }
       // Si el cargo es exitoso, asignamos el asset
       if (charge.status === "succeeded") {
-        return assignAssetToUserByEmail(metadata);
+        return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
       }
       // Si el cargo falló o fue reembolsado, removemos el asset
       else if (charge.status === "failed" || charge.status === "refunded") {
-        return removeAssetFromUserByEmail(metadata);
+        return removeAssetFromUserByEmail({ assetId: metadata.assetId, email });
       }
     }
 

@@ -220,9 +220,9 @@ describe.only("Stripe Connect Webhook", () => {
             id: "pi_123",
             metadata: {
               assetId: testAssetId,
-              email: testEmail,
             },
           },
+          billing_details: { email: testEmail },
         },
       },
     }));
@@ -267,8 +267,8 @@ describe.only("Stripe Connect Webhook", () => {
           status: "succeeded",
           metadata: {
             assetId: testAssetId,
-            email: testEmail,
           },
+          receipt_email: testEmail,
         },
       },
     }));
@@ -315,9 +315,9 @@ describe.only("Stripe Connect Webhook", () => {
             id: "pi_123",
             metadata: {
               assetId: testAssetId,
-              email: testEmail,
             },
           },
+          billing_details: { email: testEmail },
         },
       },
     }));
@@ -364,9 +364,9 @@ describe.only("Stripe Connect Webhook", () => {
             id: "pi_123",
             metadata: {
               assetId: testAssetId,
-              email: testEmail,
             },
           },
+          billing_details: { email: testEmail },
         },
       },
     }));
@@ -426,8 +426,8 @@ describe.only("Stripe Connect Webhook", () => {
             status: "succeeded",
             metadata: {
               assetId: "test_asset_123",
-              email: "test@example.com",
             },
+            billing_details: { email: "test@example.com" },
           },
         },
       };
@@ -476,8 +476,8 @@ describe.only("Stripe Connect Webhook", () => {
             status: "failed",
             metadata: {
               assetId: "test_asset_123",
-              email: "test@example.com",
             },
+            billing_details: { email: "test@example.com" },
           },
         },
       };
@@ -526,8 +526,8 @@ describe.only("Stripe Connect Webhook", () => {
             status: "refunded",
             metadata: {
               assetId: "test_asset_123",
-              email: "test@example.com",
             },
+            billing_details: { email: "test@example.com" },
           },
         },
       };
@@ -595,7 +595,7 @@ describe.only("Stripe Connect Webhook", () => {
       });
 
       expect(response.status).toBe(400);
-      expect(await response.text()).toBe("Missing required metadata");
+      expect(await response.text()).toBe("Missing required metadata or email");
     });
 
     it("should return 404 if user is not found", async () => {
@@ -606,8 +606,8 @@ describe.only("Stripe Connect Webhook", () => {
             status: "succeeded",
             metadata: {
               assetId: "test_asset_123",
-              email: "nonexistent@example.com",
             },
+            billing_details: { email: "nonexistent@example.com" },
           },
         },
       };
