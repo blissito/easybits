@@ -12,6 +12,7 @@ interface BrutalButtonProps {
   onClick?: () => void;
   mode?: "ghost" | "brand" | "danger" | "landing" | "inverted";
   type?: "button" | "submit";
+  style?: React.CSSProperties;
   [x: string]: unknown;
 }
 
@@ -25,6 +26,7 @@ export const BrutalButton = ({
   isLoading,
   isDisabled,
   type = "button",
+  style,
   ...props
 }: BrutalButtonProps) => {
   return (
@@ -63,6 +65,7 @@ export const BrutalButton = ({
               mode === "inverted",
           }
         )}
+        style={style}
       >
         {isLoading ? <Spinner /> : children}
       </span>
