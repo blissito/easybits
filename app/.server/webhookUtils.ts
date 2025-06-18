@@ -38,14 +38,38 @@ export async function constructStripeEvent(request: Request) {
 export function getMetadataFromEvent(event: any) {
   const object = event.data.object;
 
-  // Para payment_intent.succeeded
-  if (object.metadata?.assetId) {
+  // 1. Objeto principal
+  if (object.metadata && Object.keys(object.metadata).length > 0) {
     return object.metadata;
   }
 
-  // Para charge.succeeded
-  if (object.payment_intent?.metadata?.assetId) {
+  // 2. PaymentIntent expandido
+  if (
+    object.payment_intent &&
+    typeof object.payment_intent === "object" &&
+    object.payment_intent.metadata &&
+    Object.keys(object.payment_intent.metadata).length > 0
+  ) {
     return object.payment_intent.metadata;
+  }
+
+  // 3. Charge expandido
+  if (
+    object.charge &&
+    typeof object.charge === "object" &&
+    object.charge.metadata &&
+    Object.keys(object.charge.metadata).length > 0
+  ) {
+    return object.charge.metadata;
+  }
+
+  // 4. Invoice lines (ejemplo: invoice.paid)
+  if (object.lines && Array.isArray(object.lines.data)) {
+    for (const line of object.lines.data) {
+      if (line.metadata && Object.keys(line.metadata).length > 0) {
+        return line.metadata;
+      }
+    }
   }
 
   console.error(

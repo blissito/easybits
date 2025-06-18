@@ -165,6 +165,7 @@ export const createCheckoutSession = async ({ stripeAccount, asset }) => {
       mode: "payment",
       ui_mode: "embedded",
       return_url: `${config.baseUrl}/p/${slug}?session_id={CHECKOUT_SESSION_ID}`,
+      expand: ["payment_intent"],
     },
     {
       stripeAccount,
