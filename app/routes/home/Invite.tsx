@@ -7,7 +7,7 @@ export const Invite = () => {
           <span> digital?</span>
           <span>
             {" "}
-            <img className="mx-3 w-20" src="/hero/logo-glasses.svg" />{" "}
+            <img className="mx-3 w-20" src="/home/logo-glasses.svg" />{" "}
           </span>
           <span> Empieza a</span> &nbsp; <span> vender&nbsp;</span>{" "}
           <span>tu&nbsp;</span>

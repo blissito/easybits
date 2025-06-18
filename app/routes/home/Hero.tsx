@@ -28,21 +28,21 @@ export const Hero = () => {
         </Link>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">
-        <img className="absolute" alt="star" src="/hero/star.svg" />
+        <img className="absolute" alt="star" src="/home/star.svg" />
         <img
           className="absolute -left-[800px] w-16"
           alt="star"
-          src="/hero/waves.svg"
+          src="/home/waves.svg"
         />
         <img
           className="absolute -left-[600px] bottom-0"
           alt="star"
-          src="/hero/star.svg"
+          src="/home/star.svg"
         />
         <img
           className="absolute bottom-0 -left-8 -rotate-12"
           alt="line"
-          src="/hero/line.svg"
+          src="/home/line.svg"
         />
 
         <div className="absolute -left-10 bottom-40">
@@ -50,7 +50,7 @@ export const Hero = () => {
             <BrutalElement className="w-32 lg:w-48 ">
               <img
                 className="  w-full  "
-                src="/hero/example2.png"
+                src="/home/example2.webp"
                 alt="avatar"
               />{" "}
             </BrutalElement>{" "}
@@ -62,7 +62,7 @@ export const Hero = () => {
             <BrutalElement className="w-24  lg:w-48  ">
               <img
                 className="  w-full "
-                src="/hero/example1.png"
+                src="/home/example1.webp"
                 alt="page example"
               />{" "}
             </BrutalElement>
@@ -73,7 +73,7 @@ export const Hero = () => {
             <BrutalElement className="w-32 md:w-48  ">
               <img
                 className="  w-full "
-                src="/hero/example3.png"
+                src="/home/example3.webp"
                 alt="share screen"
               />{" "}
             </BrutalElement>
@@ -82,7 +82,7 @@ export const Hero = () => {
         <img
           className="w-[65%] md:w-full mx-auto -mt-12 "
           alt="platform features"
-          src="/hero-img.png"
+          src="/home/hero-img.webp"
         />
       </div>
     </section>

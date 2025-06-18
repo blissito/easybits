@@ -26,7 +26,7 @@ export const AssetCard = ({
     >
       <div
         className={cn(
-          "min-h-full",
+          "min-h-[264px]",
           "group-hover:-translate-x-2 group-hover:-translate-y-2", // brutalism
           "group bg-white rounded-xl transition-all",
           "flex flex-col",
@@ -40,15 +40,15 @@ export const AssetCard = ({
             src={asset.gallery?.[0] || "/images/easybits-default.webp"}
             alt="cover"
           />
-          <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3 h-full">
+          <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3 h-full line-clamp-1">
             {asset.title || asset.slug || asset.template?.slug}
           </h3>
         </Link>
-        <nav className="flex justify-between pr-4 mt-auto">
+        <nav className="flex justify-between pr-4 ">
           {left ? (
             left
           ) : (
-            <p className="text-brand-gray px-3 py-2">${asset.price || 0} mxn</p>
+            <p className="text-brand-gray px-3 py-1">${asset.price || 0} mxn</p>
           )}
           {right ? (
             right
@@ -101,7 +101,7 @@ export const CollapsedAssetCard = ({
             alt="cover"
           />
           <div>
-            <h3 className="font-bold text-base md:text-lg ">
+            <h3 className="font-bold text-base md:text-lg  ">
               {asset.title || asset.slug || asset.template?.slug}
             </h3>
             <p className="hidden md:block">{usePublicLink(asset, host)} </p>
@@ -132,13 +132,13 @@ const StatusTag = ({ published }: { published: boolean }) => {
   return (
     <div
       className={cn(
-        "h-7 rounded-full w-fit px-4 bg-emerald text-center text-black border border-black",
+        "h-7 rounded-full w-fit px-4 bg-emerald text-center flex items-center text-black border border-black",
         {
           "bg-maya": !published,
         }
       )}
     >
-      {published ? "Publicado" : "Borrador"}
+      <span> {published ? "Publicado" : "Oculto"}</span>
     </div>
   );
 };

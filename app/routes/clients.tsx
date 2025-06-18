@@ -84,7 +84,9 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
 const EmptyClients = () => {
   return (
     <Empty
-      illustration={<img className="w-44 mx-auto " src="/clients-empty.webp" />}
+      illustration={
+        <img className="w-44 mx-auto " src="/empty-states/clients-empty.webp" />
+      }
       title=" ¡Vaya! Aún no hay clientes en tu lista"
       text={<span>Comparte tu tienda y consigue tu primera venta.</span>}
       footer={

@@ -8,7 +8,7 @@ export const UsersList = () => {
         "md:flex md:w-20"
       )}
     >
-      <img className="w-10" src="/logo-white.svg" alt="television" />
+      <img className="w-10" src="/logo-purple.svg" alt="television" />
       <Avatar />
       <Avatar />
       <Avatar />

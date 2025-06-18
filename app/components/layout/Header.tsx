@@ -12,6 +12,7 @@ export const Header = ({
   cta,
   folded,
   isFolded,
+  searcher = true,
 }: {
   cta?: ReactNode;
   noButtons?: boolean;
@@ -19,6 +20,7 @@ export const Header = ({
   className?: string;
   folded?: () => void;
   isFolded?: boolean;
+  searcher?: boolean;
 }) => {
   return (
     <nav
@@ -31,9 +33,11 @@ export const Header = ({
       <div className="flex gap-3">
         {!noButtons && (
           <>
-            <HeaderIconButton>
-              <LupaIcon />
-            </HeaderIconButton>
+            {searcher ? (
+              <HeaderIconButton>
+                <LupaIcon />
+              </HeaderIconButton>
+            ) : null}
             <HeaderIconButton onClick={folded}>
               {isFolded ? <ListIcon /> : <LayoutIcon />}
             </HeaderIconButton>

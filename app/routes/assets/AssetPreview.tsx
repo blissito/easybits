@@ -38,13 +38,13 @@ export const AssetPreview = ({
     setIsOpen(false);
   };
 
-  const copyAndOpenLink = useOpenLink({
+  const { handleOpenLink } = useOpenLink({
     localLink: `http://${host}.localhost:3000/tienda/${asset.slug}`,
     publicLink: `https://${host}.easybits.cloud/tienda/${asset.slug}`,
   });
   return (
     <aside
-      className="md:block hidden w-[40%] h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-y-scroll"
+      className="md:block hidden w-[40%] h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-hidden "
       style={{ scrollbarWidth: "none" }}
     >
       <nav className="flex items-center mb-8 gap-4">
@@ -55,7 +55,7 @@ export const AssetPreview = ({
         <button onClick={handleModal}>
           <IoShareSocialOutline className="text-2xl" />
         </button>
-        <button onClick={copyAndOpenLink} className="text-xl">
+        <button onClick={handleOpenLink} className="text-xl">
           <MdContentCopy />
         </button>
         <EnrolledUsers assetId={asset.id} />

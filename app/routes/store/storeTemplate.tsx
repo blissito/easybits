@@ -14,6 +14,8 @@ import {
 } from "react-icons/fa6";
 import { cn } from "~/utils/cn";
 import { AiFillInstagram } from "react-icons/ai";
+import { useOpenLink } from "~/hooks/useOpenLink";
+import { IoOpenOutline } from "react-icons/io5";
 
 export const StoreTemplate = ({
   assets = [],
@@ -47,7 +49,7 @@ export const StoreTemplate = ({
     <section className="h-full">
       <div
         className={cn("overflow-hidden mb-32 ", {
-          "mb-0": variant === "slim",
+          "mb-0 overflow-visible": variant === "slim",
         })}
       >
         <div
@@ -142,7 +144,7 @@ export const StoreTemplate = ({
           >
             <AssetList isPublic={isPublic} assets={assets}>
               {assets.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} />
+                <PublicCardBox key={asset.id} asset={asset} user={user} />
               ))}
             </AssetList>
           </div>
@@ -151,6 +153,14 @@ export const StoreTemplate = ({
       {variant === "slim" ? null : <StoreTemplateFooter />}
     </section>
   );
+};
+
+const PublicCardBox = ({ user, asset }: { user: User; asset: Asset }) => {
+  const { url } = useOpenLink({
+    localLink: `http://${user.host}.localhost:3000/tienda/${asset.slug}`,
+    publicLink: `https://${user.host}.easybits.cloud/tienda/${asset.slug}`,
+  });
+  return <AssetCard to={url} key={asset.id} asset={asset} right={<></>} />;
 };
 
 const StoreTemplateFooter = () => {

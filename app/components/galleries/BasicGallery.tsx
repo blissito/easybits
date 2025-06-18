@@ -43,10 +43,14 @@ export const BasicGallery = ({
         className
       )}
     >
-      <img className="absolute left-72 top-12" src="/star.png" alt="star" />
+      <img
+        className="absolute left-72 top-12"
+        src="/home/star.svg"
+        alt="star"
+      />
       <img
         className="absolute right-8 md:right-20 bottom-6 md:bottom-12"
-        src="/circle.svg"
+        src="/home/circle.svg"
         alt="circle"
       />
       <div className="max-w-7xl mx-auto items-center">

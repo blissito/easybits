@@ -123,7 +123,9 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
 export const EmptySales = ({ cta }: { cta: ReactNode }) => {
   return (
     <Empty
-      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
+      illustration={
+        <img className="w-44 mx-auto " src="/empty-states/sales-empty.webp" />
+      }
       title="Administra tus ventas desde aquí"
       text={
         <span>

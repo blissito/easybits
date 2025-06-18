@@ -140,23 +140,23 @@ body {
 }
 
 .markdown h1 {
-  font-size: 48px;
+  font-size: 40px;
   line-height: 1.2;
-  margin: 54px 0px 24px 0px;
+  margin: 48px 0px 24px 0px;
   font-weight: bold !important;
 }
 
 .markdown h2 {
-  font-size: 32px;
+  font-size: 28px;
   line-height: 1.2;
-  margin: 48px 0px 24px 0;
+  margin: 36px 0px 24px 0;
   font-weight: bold !important;
 }
 
 .markdown h3 {
   font-size: 24px;
   line-height: 1.2;
-  margin: 36px 0px 16px 0;
+  margin: 32px 0px 16px 0;
   font-weight: bold !important;
 }
 

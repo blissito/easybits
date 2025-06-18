@@ -425,7 +425,7 @@ export const HeaderTemplate = ({
   const authorPic = asset.user?.picture || logoImage || "Sin nombre";
   // const storeLink = {`${user?.host}.easybits.cloud/tienda`}
 
-  const copyAndOpenLink = useOpenLink({
+  const { handleOpenLink } = useOpenLink({
     localLink: `http://${asset.user.host}.localhost:3000/tienda/`,
     publicLink: `https://${asset.user.host}.easybits.cloud/tienda/`,
   });
@@ -436,7 +436,7 @@ export const HeaderTemplate = ({
     >
       <div className="border-b-[2px] border-black h-16">
         <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
-          <button onClick={copyAndOpenLink}>
+          <button onClick={handleOpenLink}>
             <div className="flex gap-2 items-center h-full">
               <Avatar src={authorPic} />{" "}
               <h3 className="underline font-bold">{authorName}</h3>
@@ -502,7 +502,7 @@ export const HeaderTemplate = ({
         />
         <img
           className="w-6 md:w-10 absolute right-[10%] bottom-10"
-          src="/hero/star.svg"
+          src="/home/star.svg"
           alt="star"
         />
         <h2

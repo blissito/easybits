@@ -119,7 +119,7 @@ export const Steper = ({ user }: { user: User }) => {
         );
     }
   };
-  const images = ["/hero/onboarding-1.webp", "/hero/onboarding-2.webp"];
+  const images = ["/home/onboarding-1.webp", "/home/onboarding-2.webp"];
   return (
     <section className="flex w-full h-svh  overflow-x-hidden">
       <AnimatePresence>{getStep()}</AnimatePresence>
@@ -225,42 +225,42 @@ export const StepThree = ({
           <SmallRadioCard
             onClick={toggle("fotografía")}
             isSelected={selected.includes("fotografía")}
-            img="/hero/camera.svg"
+            img="/home/camera.svg"
             title="Fotografía"
             description="Fotos de stock de cualquier tema."
           />
           <SmallRadioCard
             onClick={toggle("cursos")}
             isSelected={selected.includes("cursos")}
-            img="/hero/course.svg"
+            img="/home/course.svg"
             title="Cursos"
             description="Idiomas, finanzas, cocina, pintura y más."
           />
           <SmallRadioCard
             onClick={toggle("webinars")}
             isSelected={selected.includes("webinars")}
-            img="/hero/micro.svg"
+            img="/home/micro.svg"
             title=" Webinars"
             description="En vivo o pre-grabados de cualquier tema."
           />
           <SmallRadioCard
             onClick={toggle("audio")}
             isSelected={selected.includes("audio")}
-            img="/hero/audio.svg"
+            img="/home/audio.svg"
             title="Audio y Música"
             description="Tonos, canciones,  tracks o historias de miedo. "
           />
           <SmallRadioCard
             onClick={toggle("software")}
             isSelected={selected.includes("software")}
-            img="/hero/code.svg"
+            img="/home/code.svg"
             title="Software"
             description="Proyectos, componentes, templates o librerías."
           />
           <SmallRadioCard
             onClick={toggle("cuentos")}
             isSelected={selected.includes("cuentos")}
-            img="/hero/cloud.svg"
+            img="/home/cloud.svg"
             title="Cuentos e historias"
             description="Historias, cuentos, poemas, ensayos o reflexiones. "
           />
@@ -269,26 +269,26 @@ export const StepThree = ({
             isSelected={selected.includes("clases")}
             title="Master Class"
             description="Clases únicas de temas específicos."
-            img="/hero/class.svg"
+            img="/home/class.svg"
           />
           <SmallRadioCard
             onClick={toggle("libros")}
             isSelected={selected.includes("libros")}
-            img="/hero/book.svg"
+            img="/home/book.svg"
             title="Libros"
             description="De cocina, ciencia ficción, romance o comedia. "
           />
           <SmallRadioCard
             onClick={toggle("ui")}
             isSelected={selected.includes("ui")}
-            img="/default.svg"
+            img="/home/default.webp"
             title="Diseño UI"
             description="Mockups, templates o sistemas de diseño."
           />
           <SmallRadioCard
             onClick={toggle("plantillas")}
             isSelected={selected.includes("plantillas")}
-            img="/hero/template.svg"
+            img="/home/template.svg"
             title="Plantillas"
             description="Para Excel, Canva, Powe-Point, Figma, etc."
           />
@@ -297,7 +297,7 @@ export const StepThree = ({
             isSelected={selected.includes("pappers")}
             title="Pappers"
             description="Pappers de investigación o divulgación científica."
-            img="/hero/science.svg"
+            img="/home/science.svg"
           />
         </div>
       </div>
@@ -330,7 +330,7 @@ const SmallRadioCard = ({
   description: string;
   onChange?: (arg0: string) => void;
   isSelected?: boolean;
-  value: string;
+  value?: string;
 }) => {
   const ref = useRef(null);
 
@@ -353,11 +353,11 @@ const SmallRadioCard = ({
         {isSelected ? (
           <img
             className="w-5 top-3 right-3 absolute"
-            src="/hero/chec.svg"
+            src="/home/chec.svg"
             alt="check"
           />
         ) : null}
-        <img className="w-8" src={img ? img : "/hero/art.svg"} />
+        <img className="w-8" src={img ? img : "/home/art.svg"} />
         <h3 className="font-bold">{title}</h3>
         <p className="text-xs text-iron">{description}</p>
         <input

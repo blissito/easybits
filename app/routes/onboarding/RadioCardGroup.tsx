@@ -23,7 +23,7 @@ export const RadioCardGroup = ({
         name="type"
         value="BEGINNER"
         label="Creador Revelación"
-        icon="/hero/option0.svg"
+        icon="/home/option0.svg"
       />
       <RadioCard
         isSelected={selected === "INDIE"}
@@ -32,7 +32,7 @@ export const RadioCardGroup = ({
         name="type"
         value="INDIE"
         label="Creador Indie"
-        icon="/hero/option1.svg"
+        icon="/home/option1.svg"
       />
       <RadioCard
         isSelected={selected === "PROFESIONAL"}
@@ -41,7 +41,7 @@ export const RadioCardGroup = ({
         name="type"
         value="PROFESIONAL"
         label="Creador Profesional"
-        icon="/hero/option2.svg"
+        icon="/home/option2.svg"
       />
     </section>
   );
@@ -86,7 +86,7 @@ export const RadioCard = ({
         {isSelected ? (
           <img
             className="w-5 top-3 right-3 absolute"
-            src="/hero/chec.svg"
+            src="/home/chec.svg"
             alt="check"
           />
         ) : null}

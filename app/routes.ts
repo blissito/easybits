@@ -32,6 +32,7 @@ export default [
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // embed share
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
+  route("compras/:assetId", "routes/purchase_detail.tsx"),
   // user dash
   ...prefix("dash", [
     layout("components/DashLayout/DashLayout.tsx", [
@@ -45,7 +46,7 @@ export default [
 
       ...prefix("ventas", [index("routes/sales.tsx")]),
       route("clientes", "routes/clients.tsx"),
-      route("compras/:assetId", "routes/purchase_detail.tsx"),
+
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),

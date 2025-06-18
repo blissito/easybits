@@ -11,13 +11,13 @@ export const Steps = () => {
         />
         <StepCard
           title="Personaliza tu website"
-          image="/hero/step2.webp"
+          image="/home/step2.webp"
           text="Que tu website combine contigo y con tu marca, completa tu información y personaliza la tipografía, los colores y el tema."
         />
         <StepCard
           title="Comparte y logra tu primera venta"
           text="¡Tu website esta listo para su primera venta! compártelo en tus redes sociales con tus seguidores o clientes. "
-          image="/hero/step3.webp"
+          image="/home/step3.webp"
         />{" "}
       </div>
     </section>
@@ -38,7 +38,7 @@ const StepCard = ({
       <div className="h-fit  md:h-[322px]">
         <img
           className="w-3/4 mx-auto md:w-full h-auto "
-          src={image ? image : "/hero/step1.webp"}
+          src={image ? image : "/home/step1.webp"}
         />{" "}
       </div>
       <h2 className="text-2xl font-bold mt-6 md:mt-14">{title}</h2>
