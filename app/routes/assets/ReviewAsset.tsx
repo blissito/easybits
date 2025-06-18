@@ -35,7 +35,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
 
   if (existingReview) {
-    return redirect(`/compras/${assetData.id}`)
+    // return redirect(`/compras/${assetData.id}`) // FUTURE: redirect to purchase detail
   }
 
   return {
@@ -178,7 +178,6 @@ export default function ReviewAsset({}) {
                 <BrutalButton
                 type="button"
                   className="bg-white"
-                  // onClick={() => window.location.reload()}
                 >
                   Volver
                 </BrutalButton>
