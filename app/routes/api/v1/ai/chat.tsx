@@ -23,8 +23,6 @@ export const action = async ({ request }: { request: Request }) => {
       });
     }
 
-    console.log("GOOGLE_AI_API_KEY::", process.env.GOOGLE_AI_API_KEY);
-
     if (!process.env.GOOGLE_AI_API_KEY) {
       console.error("GOOGLE_AI_API_KEY no está configurada");
       return new Response(

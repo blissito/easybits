@@ -142,7 +142,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     assetReviews,
   } = loaderData;
   const actionData = useActionData();
-  const assetUserStripeId = asset?.user?.stripe?.id;
+  const assetUserStripeId = (asset as any)?.user?.stripe?.id;
   const stripePromise = useMemo(() => {
     if (!publishableKey) return null;
     return loadStripe(publishableKey, {
@@ -180,6 +180,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     total: assetReviews.length || 0,
     byRating: reviewsByRating || defaultRatings,
   };
+  const text = asset.template?.ctaText
+  ? asset.template.ctaText
+  : asset.price || 0 <= 0
+  ? "Suscribirse gratis"
+  : "Comprar";
 
   return (
     <article>
@@ -199,12 +204,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               mode="landing"
               className="h-16"
               containerClassName="h-16  border-none rounded-none"
+              style={{ 
+                backgroundColor: (asset as any)?.user?.storeConfig?.hexColor || "red" 
+              }}
             >
-              {"Comprar"}
+              {text}
             </BrutalButton>
           ) : null
         }
         reviews={reviews}
+        assetReviews={assetReviews}
       />
 
       <FooterTemplate
