@@ -11,33 +11,39 @@ import {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const event = await constructStripeEvent(request);
   if (event instanceof Response) return event;
-  const accountId = event.data.object.id;
+  const email = getEmailFromEvent(event);
 
+  console.info("::STRIPE_EVENT_TYPE::", event.type);
   switch (event.type) {
     case "account.updated": {
-      const account = event.data.object;
       const user = await db.user.findFirst({
-        where: { stripeId: accountId },
+        where: { email },
       });
 
       if (!user) {
         return new Response("User not found", { status: 404 });
       }
 
-      // Actualizar rol merchant basado en el estado de la cuenta
-      await db.user.update({
-        where: { id: user.id },
-        data: {
-          roles: { push: "merchant" },
-        },
-      });
+      const account = event.data.object;
+      const hasMerchant = user.roles?.includes("merchant");
+      // Solo si alguno está deshabilitado, removemos el rol merchant
+      if (!account.charges_enabled || !account.payouts_enabled) {
+        if (hasMerchant) {
+          await db.user.update({
+            where: { id: user.id },
+            data: {
+              roles: user.roles.filter((r: string) => r !== "merchant"),
+            },
+          });
+        }
+      }
 
       return new Response(null, { status: 200 });
     }
 
     case "account.application.deauthorized": {
       const user = await db.user.findFirst({
-        where: { stripeId: accountId },
+        where: { email },
       });
 
       if (!user) {
@@ -46,9 +52,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Remove merchant role //@todo this removes everything! correct this
       await db.user.update({
-        where: { id: user.id },
+        where: { email },
         data: {
-          roles: [],
+          roles: [], // @todo this removes everything! correct this
         },
       });
 
@@ -62,7 +68,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     case "charge.succeeded": {
       const metadata = getMetadataFromEvent(event);
-      const email = getEmailFromEvent(event);
+
       if (!metadata || !metadata.assetId || !email) {
         return new Response("Missing required metadata or email", {
           status: 400,

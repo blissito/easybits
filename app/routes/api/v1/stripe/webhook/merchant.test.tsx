@@ -632,4 +632,43 @@ describe.only("Stripe Connect Webhook", () => {
       expect(await response.text()).toBe("User not found");
     });
   });
+
+  it("should remove merchant role if charges_enabled or payouts_enabled is false on account.updated", async () => {
+    const stripeMock = getStripe();
+    const mockUser = {
+      id: "user_123",
+      email: "test@example.com",
+      roles: ["merchant", "admin"],
+    };
+    const mockEvent = {
+      type: "account.updated",
+      data: {
+        object: {
+          charges_enabled: false,
+          payouts_enabled: true,
+        },
+      },
+    };
+    vi.mocked(stripeMock.webhooks.constructEvent).mockImplementation(
+      () => mockEvent as any
+    );
+    vi.mocked(db.user.findFirst).mockResolvedValueOnce(mockUser as any);
+    vi.mocked(db.user.update).mockResolvedValueOnce({
+      ...mockUser,
+      roles: ["admin"],
+    } as any);
+    const request = new Request("http://localhost", {
+      method: "POST",
+      headers: {
+        "stripe-signature": "test_signature",
+      },
+      body: JSON.stringify(mockEvent),
+    });
+    const response = await action({ request } as any);
+    expect(response.status).toBe(200);
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: mockUser.id },
+      data: { roles: ["admin"] },
+    });
+  });
 });
