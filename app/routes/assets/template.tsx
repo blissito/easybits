@@ -366,13 +366,19 @@ const ReviewCard = ({ review }: { review: any }) => {
 
 const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; assetReviews?: any[]; asset: any }) => {
   const [open, setOpen] = useState(false);
+  
   if (!reviews?.total || reviews.total === 0 || !asset?.extra?.showReviews) {
     return null;
   }
 
   // Handler to open modal
-  const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
+  const handleOpen = () => {
+    setOpen(true);
+  };
+  
+  const handleClose = () => {
+    setOpen(false);
+  };
 
   return (
     <>

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useCallback, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 import { BrutalButtonClose } from "./BrutalButtonClose";
@@ -26,29 +26,26 @@ export const Modal = ({
   children?: ReactNode;
   title?: ReactNode;
 }) => {
-  const keyDownHandler = (event: KeyboardEvent) => {
+  const keyDownHandler = useCallback((event: KeyboardEvent) => {
     if (event.key === "Escape") {
       onClose?.();
     }
-  };
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen && block) {
       document.body.style.overflow = "hidden";
-      addEventListener("keydown", keyDownHandler);
+      document.addEventListener("keydown", keyDownHandler);
     } else {
-      document.body.style.overflow = "inherit";
-      removeEventListener("keydown", keyDownHandler);
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", keyDownHandler);
     }
-    // if(mode==='naked'){
-    //   document.body.style.overflow = "inherit";
-    //   removeEventListener("keydown", keyDownHandler);
-    // }
+    
     return () => {
-      document.body.style.overflow = "inherit";
-      removeEventListener("keydown", keyDownHandler);
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", keyDownHandler);
     };
-  }, [isOpen]);
+  }, [isOpen, block, keyDownHandler]);
 
   const getForModal = (type: string) => {
     switch (type) {
@@ -106,7 +103,9 @@ export const Modal = ({
   };
 
   return (
-    <AnimatePresence mode="popLayout">
+    <AnimatePresence mode="wait" onExitComplete={() => {
+      document.body.style.overflow = "";
+    }}>
       {isOpen ? (
         <article
           className={cn(
@@ -129,6 +128,7 @@ export const Modal = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             />
           ) : null}
           <motion.section
@@ -136,6 +136,7 @@ export const Modal = ({
             exit={getProps("exit")}
             initial={getProps("initial")}
             animate={getProps("animate")}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
             className={cn(
               "bg-white",
               "border-2 border-black",

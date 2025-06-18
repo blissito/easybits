@@ -18,7 +18,7 @@ export const FooterSuscription = ({
   return (
     <Form
       onSubmit={onSubmit}
-      className="md:hidden border-t-[2px] border-x-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center"
+      className="md:hidden border-t-[2px]  border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center"
     >
       <p className="text-white font-bold whitespace-pre px-4">
         {getPriceString()}
@@ -29,15 +29,13 @@ export const FooterSuscription = ({
           required
           placeholder="Escribe tu email"
           name="email"
-          className="min-h-full m-0"
-          inputClassName="border-0 border-b-2 rounded-none"
+        inputClassName="h-10 "
         />
       )}
       <BrutalButton
         isLoading={isLoading}
         type="submit"
-        containerClassName="rounded-lg"
-        className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium mx-4"
+        className="h-10 min-h-10 max-h-10  min-w-28 text-base  font-medium mx-4 border-none "
         style={{ 
           background: hexColor
         }}
