@@ -36,9 +36,15 @@ export const action = async ({
         );
       } else {
         console.error("No se encontró orden para email:", email);
+        return new Response("no order found", {
+          status: 404,
+        });
       }
     } else {
       console.error("No se pudo determinar el email en el evento");
+      return new Response("Missing required email", {
+        status: 400,
+      });
     }
   }
   // listener para activar o desactivar acceso al asset
