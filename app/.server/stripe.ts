@@ -138,7 +138,8 @@ export const fetchAccount = async ({ accountId }: { accountId: string }) => {
  */
 
 export const createCheckoutSession = async ({ stripeAccount, asset }) => {
-  const { slug, price, title, currency } = asset;
+  const { slug, price, title, currency, id, user } = asset;
+  const email = user?.email;
   const applicationFee = price * 0.5 * 100;
   const session = await getStripe().checkout.sessions.create(
     {
@@ -156,10 +157,15 @@ export const createCheckoutSession = async ({ stripeAccount, asset }) => {
       ],
       payment_intent_data: {
         application_fee_amount: applicationFee,
+        metadata: {
+          assetId: id,
+          email: email || undefined,
+        },
       },
       mode: "payment",
       ui_mode: "embedded",
       return_url: `${config.baseUrl}/p/${slug}?session_id={CHECKOUT_SESSION_ID}`,
+      expand: ["payment_intent"],
     },
     {
       stripeAccount,
