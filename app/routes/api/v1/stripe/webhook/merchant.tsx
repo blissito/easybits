@@ -1,88 +1,99 @@
 import { type ActionFunctionArgs } from "react-router";
-import { getStripe } from "~/.server/stripe";
 import { db } from "~/.server/db";
+import {
+  constructStripeEvent,
+  getMetadataFromEvent,
+  assignAssetToUserByEmail,
+  removeAssetFromUserByEmail,
+} from "~/.server/webhookUtils";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
+  const event = await constructStripeEvent(request);
+  if (event instanceof Response) return event;
+  const accountId = event.data.object.id;
 
-  const signature = request.headers.get("stripe-signature");
-  if (!signature) {
-    return new Response("No signature provided", { status: 400 });
-  }
+  switch (event.type) {
+    case "account.updated": {
+      const account = event.data.object;
+      const user = await db.user.findFirst({
+        where: { stripeId: accountId },
+      });
 
-  try {
-    const stripe = getStripe();
-    const body = await request.text();
-    const event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_SIGN!
-    );
-
-    const accountId = event.data.object.id;
-
-    switch (event.type) {
-      case "account.updated": {
-        const account = event.data.object;
-        const user = await db.user.findFirst({
-          where: { stripeId: accountId },
-        });
-
-        if (!user) {
-          return new Response("User not found", { status: 404 });
-        }
-
-        // Actualizar rol merchant basado en el estado de la cuenta
-        const roles =
-          account.charges_enabled && account.payouts_enabled
-            ? ["merchant"]
-            : [];
-
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            roles,
-          },
-        });
-
-        return new Response(null, { status: 200 });
+      if (!user) {
+        return new Response("User not found", { status: 404 });
       }
 
-      case "account.application.deauthorized": {
-        const user = await db.user.findFirst({
-          where: { stripeId: accountId },
-        });
+      // Actualizar rol merchant basado en el estado de la cuenta
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          roles: { push: "merchant" },
+        },
+      });
 
-        if (!user) {
-          return new Response("User not found", { status: 404 });
-        }
-
-        // Remove merchant role
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            roles: [],
-          },
-        });
-
-        return new Response(null, { status: 200 });
-      }
-
-      case "payout.paid":
-      case "transfer.created":
-      case "charge.succeeded":
-      case "charge.failed":
-        // Handle these events if needed
-        return new Response(null, { status: 204 });
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
-        return new Response("Event type not handled", { status: 404 });
+      return new Response(null, { status: 200 });
     }
-  } catch (err) {
-    console.error("Webhook error:", err);
-    return new Response("Webhook error", { status: 400 });
+
+    case "account.application.deauthorized": {
+      const user = await db.user.findFirst({
+        where: { stripeId: accountId },
+      });
+
+      if (!user) {
+        return new Response("User not found", { status: 404 });
+      }
+
+      // Remove merchant role //@todo this removes everything! correct this
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          roles: [],
+        },
+      });
+
+      return new Response(null, { status: 200 });
+    }
+
+    case "payout.paid":
+    case "transfer.created":
+      // Handle these events if needed
+      return new Response(null, { status: 204 });
+
+    case "charge.succeeded": {
+      const metadata = getMetadataFromEvent(event);
+      if (!metadata) {
+        return new Response("Missing required metadata", { status: 400 });
+      }
+      return assignAssetToUserByEmail(metadata);
+    }
+
+    case "payment_intent.succeeded":
+    case "payment_intent.created": {
+      const metadata = getMetadataFromEvent(event);
+      if (!metadata) {
+        return new Response("Missing required metadata", { status: 400 });
+      }
+      return assignAssetToUserByEmail(metadata);
+    }
+
+    case "charge.updated": {
+      const charge = event.data.object;
+      const metadata = getMetadataFromEvent(event);
+      if (!metadata) {
+        return new Response("Missing required metadata", { status: 400 });
+      }
+      // Si el cargo es exitoso, asignamos el asset
+      if (charge.status === "succeeded") {
+        return assignAssetToUserByEmail(metadata);
+      }
+      // Si el cargo falló o fue reembolsado, removemos el asset
+      else if (charge.status === "failed" || charge.status === "refunded") {
+        return removeAssetFromUserByEmail(metadata);
+      }
+    }
+
+    default:
+      console.log(`Unhandled event type: ${event.type}`);
+      return new Response("Event type not handled", { status: 404 });
   }
 };
