@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode } from "react";
 import { Link } from "react-router";
 import { CopyButton } from "~/components/common/CopyButton";
+import { FaExternalLinkAlt } from "react-icons/fa";
 import { usePublicLink } from "~/hooks/usePublicLink";
 import { cn } from "~/utils/cn";
 
@@ -53,7 +54,14 @@ export const AssetCard = ({
           {right ? (
             right
           ) : (
-            <CopyButton className="" text={usePublicLink(asset as any)} />
+            <a
+              href={usePublicLink(asset as any) || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-gray"
+            >
+              <FaExternalLinkAlt className="w-3 h-3" />
+            </a>
           )}
         </nav>
       </div>

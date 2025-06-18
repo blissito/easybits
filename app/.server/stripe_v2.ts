@@ -2,6 +2,45 @@ import type { Asset, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { db } from "./db";
 import { updateAsset } from "./assets";
+import { getStripe } from "~/.server/stripe";
+
+const stripe = getStripe();
+
+export async function configureMerchantWebhook(userId: string) {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { stripeId: true },
+    });
+
+    if (!user?.stripeId) {
+      throw new Error("User doesn't have a Stripe account");
+    }
+
+    const webhookEndpoint = `${stripeWebhook}/merchant`;
+
+    // Create or update the webhook endpoint
+    const webhook = await stripe.webhooks.endpoints.create({
+      url: webhookEndpoint,
+      enabled_events: [
+        'account.updated',
+        'charge.succeeded',
+        'charge.failed',
+        'payment_intent.succeeded',
+        'payment_intent.payment_failed',
+        'payment_intent.canceled',
+        'payment_intent.processing',
+      ],
+      stripe_account: user.stripeId,
+      expand: ['metadata'] // Expandir la metadata en el webhook
+    });
+
+    return webhook;
+  } catch (error) {
+    console.error("Error configuring merchant webhook:", error);
+    throw error;
+  }
+}
 
 type CreateAccountResponse = {
   id: string;
@@ -51,6 +90,7 @@ export type Payment = {
 };
 //   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
 
+const webhookEndpoint = 'http://localhost:3000/api/stripe/webhook/merchant';
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const accountsURL = "https://api.stripe.com/v2/core/accounts";
@@ -132,6 +172,8 @@ export const updateOrCreateProductAndPrice = async (
       accountId,
     });
     await updateAsset(asset.id, { stripePrice: price.id });
+    // Configurar webhook después de crear el price
+    await configureMerchantWebhook(user.id);
   } else {
     const product = await createProductAndPrice(
       asset.slug,
@@ -145,6 +187,8 @@ export const updateOrCreateProductAndPrice = async (
       },
       data: { stripeProduct: product.id, stripePrice: product.default_price },
     });
+    // Configurar webhook después de crear el price
+    await configureMerchantWebhook(user.id);
   }
 };
 

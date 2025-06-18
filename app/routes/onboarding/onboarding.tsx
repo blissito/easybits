@@ -20,6 +20,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 export default function Onboarding({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
+
   return (
     <section
       className={cn(

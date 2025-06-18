@@ -14,7 +14,6 @@ import {
 } from "~/lib/fly_certs/certs_getters";
 import { redirect } from "react-router";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
-import type { Asset, User } from "@prisma/client";
 import { sendPurchase } from "~/.server/emails/sendPurchase";
 // @TODO: recaptcha (cloudflare?)
 // @todo try use transactions

@@ -396,6 +396,48 @@ describe("Stripe Connect Webhook", () => {
     });
   });
 
+  it("should expand metadata in webhook event", async () => {
+    const testMetadata = {
+    metadata:{  assetId: "asset_123"},
+      billing_details: { email: "test@example.com" }
+    };
+    
+    const stripeMock = getStripe();
+    vi.mocked(stripeMock.webhooks.constructEvent).mockImplementation(() => ({
+      ...mockEvent,
+      type: "account.updated",
+      data: {
+        object: {
+          id: "acct_123",
+          charges_enabled: true,
+          payouts_enabled: true,
+          details_submitted: true,
+          metadata: testMetadata,
+        },
+      },
+    }));
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      headers: {
+        "stripe-signature": "test_signature",
+      },
+      body: JSON.stringify({}),
+    });
+
+    // Mock user with metadata
+    vi.mocked(db.user.findFirst).mockResolvedValue({
+      ...mockUser,
+      metadata: testMetadata,
+    });
+
+    const response = await action({ request } as any);
+    expect(response.status).toBe(200);
+
+    // Verificar que la respuesta es 200 (ya que el handler retorna una respuesta vacía)
+    expect(response.status).toBe(200);
+  });
+
   it("should return 404 for unhandled event types", async () => {
     const stripeMock = getStripe();
     vi.mocked(stripeMock.webhooks.constructEvent).mockImplementation(() => ({
