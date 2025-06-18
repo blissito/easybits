@@ -36,6 +36,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             },
           });
         }
+      } else if (!hasMerchant) {
+        // Si ambos están habilitados y no tiene el rol, lo agregamos
+        await db.user.update({
+          where: { id: user.id },
+          data: {
+            roles: { push: "merchant" },
+          },
+        });
       }
 
       return new Response(null, { status: 200 });
