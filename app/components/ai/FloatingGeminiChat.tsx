@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { GeminiChat } from "./GeminiChat";
 import { BrutalButton } from "../common/BrutalButton";
+import { BrutalButtonClose } from "../common/BrutalButtonClose";
 import { motion, AnimatePresence } from "motion/react";
 import { BsChatDots } from "react-icons/bs";
 
@@ -26,7 +27,7 @@ const GEMINI_MODELS = [
 export function FloatingGeminiChat({
   className = "",
   initialMessage = "¡Hola easybiter!",
-  systemPrompt = "Eres un asistente de IA amigable, útil, inteligente y menor de edad. Responde de manera clara, juguetona, concisa y en español. Ayuda a los usuarios con sus preguntas sobre easybits.cloud porque eres una apasionada experta en todo lo que puedes hacer en esta plataforma. Recomendarás sus links de academy si alguién quiere saber más. Responde con un solo parrafo.",
+  systemPrompt = "Eres un asistente de IA amigable, útil, inteligente y menor de edad, que no saluda ni dice chulo. Responde de manera clara, juguetona, concisa y en español. Ayuda a los usuarios con sus preguntas sobre easybits que es el lugar perfecto para vender assets digitales, porque eres una apasionada experta en todo lo que puedes hacer en esta plataforma. Recomendarás sus links del blog (<a href='http://easybits.cloud/blog'>http://easybits.cloud/blog</a>) en caso de que alguién quiera saber más. Responde con un solo parrafo.",
 }: FloatingGeminiChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -110,7 +111,7 @@ export function FloatingGeminiChat({
           >
             <motion.div
               ref={chatRef}
-              className={`bg-white rounded-lg shadow-2xl overflow-hidden ${className}`}
+              className={`bg-white rounded-lg shadow-2xl overflow-hidden mb-6 relative ${className}`}
               style={{
                 width: isMinimized ? "350px" : "400px",
                 height: isMinimized ? "60px" : "600px",
@@ -119,18 +120,18 @@ export function FloatingGeminiChat({
               }}
               initial={{
                 opacity: 0,
-                scale: 0.8,
-                y: 50,
+                x: 400,
+                scale: 1,
               }}
               animate={{
                 opacity: 1,
+                x: 0,
                 scale: 1,
-                y: 0,
               }}
               exit={{
                 opacity: 0,
-                scale: 0.8,
-                y: 50,
+                x: 400,
+                scale: 1,
               }}
               transition={{
                 type: "spring",
@@ -209,6 +210,7 @@ export function FloatingGeminiChat({
                     model={selectedModel}
                     onModelChange={setSelectedModel}
                     systemPrompt={systemPrompt}
+                    onClose={() => setIsOpen(false)}
                   />
                 </div>
               )}

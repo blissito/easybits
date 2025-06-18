@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "../common/Button";
 import { Input } from "../common/Input";
+import { BrutalButtonClose } from "../common/BrutalButtonClose";
+import { BrutalButton } from "../common/BrutalButton";
 import Spinner from "../common/Spinner";
 
 interface Message {
@@ -31,6 +33,7 @@ interface GeminiChatProps {
   model?: string;
   onModelChange?: (model: string) => void;
   systemPrompt?: string;
+  onClose?: () => void;
 }
 
 export function GeminiChat({
@@ -40,6 +43,7 @@ export function GeminiChat({
   model = "gemini-1.5-flash",
   onModelChange,
   systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
+  onClose,
 }: GeminiChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -61,6 +65,45 @@ export function GeminiChat({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Función para parsear links en el texto
+  const parseLinks = (text: string) => {
+    const linkRegex = /<a\s+href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = linkRegex.exec(text)) !== null) {
+      // Agregar texto antes del link
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      // Agregar el link
+      const href = match[1];
+      const linkText = match[2];
+      parts.push(
+        <a
+          key={`link-${match.index}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 underline"
+        >
+          {linkText}
+        </a>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Agregar texto restante
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,16 +238,30 @@ export function GeminiChat({
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-bold">AI</span>
+        <div className="flex items-center space-x-3 w-full">
+          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+            <span className="text-white text-sm font-bold w-10 text-center">
+              AI
+            </span>
           </div>
-          <div className="flex items-center space-x-2">
-            <h3 className="font-semibold text-gray-900">Chatea con</h3>
+          <div className="flex items-center justify-between w-full">
+            <h3 className="font-semibold text-gray-900 md:hidden">
+              EasyBits Chat
+            </h3>
+            <h3 className="font-semibold text-gray-900 hidden md:block mr-4">
+              Chatea con
+            </h3>
+            <div className="block md:hidden ml-auto">
+              <BrutalButtonClose
+                onClick={onClose}
+                className="w-6 h-6 rounded-full flex items-center justify-center"
+              />
+            </div>
+
             <select
               value={model}
               onChange={(e) => onModelChange?.(e.target.value)}
-              className="bg-gray-100 text-gray-900 text-sm rounded-lg px-2 py-1 pr-6 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-200 transition-all duration-200 appearance-none relative"
+              className="bg-gray-100 text-gray-900 text-sm rounded-lg px-2 py-1 pr-6 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-200 transition-all duration-200 appearance-none relative hidden md:block"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
                 backgroundPosition: "right 4px center",
@@ -218,6 +275,26 @@ export function GeminiChat({
                 </option>
               ))}
             </select>
+            <div className="hidden md:block lg:hidden ml-auto">
+              <button
+                onClick={() => window.open(window.location.href, "_blank")}
+                className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
+              >
+                <svg
+                  className="w-5 h-5 text-black"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -239,6 +316,15 @@ export function GeminiChat({
               message.role === "user" ? "justify-end" : "justify-start"
             }`}
           >
+            {message.role === "assistant" && (
+              <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
+                <img
+                  src="/logo-purple.svg"
+                  alt="EasyBits AI"
+                  className="w-5 h-5"
+                />
+              </div>
+            )}
             <div
               className={`max-w-[80%] rounded-lg px-4 py-2 ${
                 message.role === "user"
@@ -247,7 +333,7 @@ export function GeminiChat({
               }`}
             >
               <p className="text-sm whitespace-pre-wrap">
-                {message.content}
+                {parseLinks(message.content)}
                 {message.isStreaming && (
                   <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
                 )}
@@ -274,7 +360,7 @@ export function GeminiChat({
           />
           <Button
             type="submit"
-            disabled={!inputValue.trim() || isLoading}
+            isDisabled={!inputValue.trim() || isLoading}
             className="px-4 py-2"
           >
             {isLoading ? <Spinner size="sm" /> : "Enviar"}
