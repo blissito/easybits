@@ -78,6 +78,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const metadata = getMetadataFromEvent(event);
 
       if (!metadata || !metadata.assetId || !email) {
+        console.error("MISSING::DATA::", metadata, "==>", email);
         return new Response("Missing required metadata or email", {
           status: 400,
         });
@@ -94,6 +95,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const metadata = getMetadataFromEvent(event);
       const email = getEmailFromEvent(event);
       if (!metadata || !metadata.assetId || !email) {
+        console.error("MISSING::DATA::", metadata, "==>", email);
         return new Response("Missing required metadata or email", {
           status: 400,
         });

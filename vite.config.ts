@@ -18,6 +18,14 @@ export default defineConfig({
     tsconfigPaths(),
     //  externalizeDeps()
   ],
+  build: {
+    // Habilitar compresión
+    minify: "terser",
+    // Reducir el tamaño de los assets
+    assetsInlineLimit: 4096,
+    // Habilitar source maps solo en desarrollo
+    sourcemap: process.env.NODE_ENV === "development",
+  },
   // build: {
   //   rollupOptions: {
   //     // make sure to externalize deps that shouldn't be bundled

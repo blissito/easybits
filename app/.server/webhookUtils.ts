@@ -37,14 +37,35 @@ export async function constructStripeEvent(request: Request) {
 // Función auxiliar para obtener metadata de un evento
 export function getMetadataFromEvent(event: any) {
   const object = event.data.object;
-  // Si el objeto tiene assetId en metadata, usarlo
+
+  // Buscar en el objeto principal
   if (object.metadata?.assetId) {
     return object.metadata;
   }
-  // Si no, buscar en el payment_intent asociado
+
+  // Buscar en el payment_intent
   if (object.payment_intent?.metadata?.assetId) {
     return object.payment_intent.metadata;
   }
+
+  // Buscar en el objeto payment_intent si existe
+  if (object.payment_intent && typeof object.payment_intent === "object") {
+    if (object.payment_intent.metadata?.assetId) {
+      return object.payment_intent.metadata;
+    }
+  }
+
+  // Buscar en el objeto charge si existe
+  if (object.charge && typeof object.charge === "object") {
+    if (object.charge.metadata?.assetId) {
+      return object.charge.metadata;
+    }
+  }
+
+  console.error(
+    "Metadata not found in event:",
+    JSON.stringify(object, null, 2)
+  );
   return null;
 }
 
