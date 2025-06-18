@@ -1,5 +1,6 @@
 import { db } from "~/.server/db";
 import { getStripe } from "~/.server/stripe";
+import Stripe from "stripe";
 
 // Función para validar y construir el evento de Stripe
 export async function constructStripeEvent(request: Request) {
@@ -27,56 +28,15 @@ export async function constructStripeEvent(request: Request) {
       process.env.STRIPE_SIGN
     );
 
+    event.data.object.metadata = {
+      ...(event.data.object.metadata || {}),
+    };
+
     return event;
   } catch (err) {
     console.error("Webhook error:", err);
     return new Response("Webhook error", { status: 400 });
   }
-}
-
-// Función auxiliar para obtener metadata de un evento
-export function getMetadataFromEvent(event: any) {
-  const object = event.data.object;
-
-  // 1. Objeto principal
-  if (object.metadata && Object.keys(object.metadata).length > 0) {
-    return object.metadata;
-  }
-
-  // 2. PaymentIntent expandido
-  if (
-    object.payment_intent &&
-    typeof object.payment_intent === "object" &&
-    object.payment_intent.metadata &&
-    Object.keys(object.payment_intent.metadata).length > 0
-  ) {
-    return object.payment_intent.metadata;
-  }
-
-  // 3. Charge expandido
-  if (
-    object.charge &&
-    typeof object.charge === "object" &&
-    object.charge.metadata &&
-    Object.keys(object.charge.metadata).length > 0
-  ) {
-    return object.charge.metadata;
-  }
-
-  // 4. Invoice lines (ejemplo: invoice.paid)
-  if (object.lines && Array.isArray(object.lines.data)) {
-    for (const line of object.lines.data) {
-      if (line.metadata && Object.keys(line.metadata).length > 0) {
-        return line.metadata;
-      }
-    }
-  }
-
-  console.error(
-    "Metadata not found in event:",
-    JSON.stringify(object, null, 2)
-  );
-  return null;
 }
 
 // Función auxiliar para obtener el email de un evento de Stripe
@@ -107,7 +67,7 @@ export async function assignAssetToUserByEmail(metadata: {
       assetIds: { push: assetId },
     },
   });
-  console.info("::USER UPDATED::", user.assetIds);
+  console.info("::USER UPDATED::", assetId + "=>" + user.id);
   return new Response(null, { status: 200 });
 }
 
@@ -135,4 +95,33 @@ export async function removeAssetFromUserByEmail(metadata: {
     },
   });
   return new Response(null, { status: 200 });
+}
+
+// Utilidad para obtener la metadata de un PaymentIntent usando la API REST de Stripe
+export async function getPaymentIntentMetadata(
+  paymentIntentId: string,
+  stripeAccount: string
+): Promise<any> {
+  const url = `https://api.stripe.com/v1/payment_intents/${paymentIntentId}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+      "Stripe-Account": stripeAccount,
+      "Stripe-Version": "2023-08-16",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Stripe API error: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.metadata || {};
+}
+
+// FIXME: Esta función es un workaround temporal. Se debe refactorizar y hacer un spike de Stripe para un flujo robusto.
+export async function getLastPendingOrder() {
+  return db.order.findFirst({
+    where: { status: "pending" },
+    orderBy: { createdAt: "desc" },
+  });
 }

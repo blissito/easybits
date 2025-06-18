@@ -1,54 +1,72 @@
-import { type ActionFunctionArgs } from "react-router";
 import { db } from "~/.server/db";
 import {
-  constructStripeEvent,
-  getMetadataFromEvent,
   assignAssetToUserByEmail,
   removeAssetFromUserByEmail,
+  constructStripeEvent,
+  getLastPendingOrder,
   getEmailFromEvent,
 } from "~/.server/webhookUtils";
 
-export const action = async ({ request }: ActionFunctionArgs) => {
+export const action = async ({
+  request,
+}: {
+  request: Request;
+  params: { assetId: string };
+}) => {
   const event = await constructStripeEvent(request);
   if (event instanceof Response) return event;
   const email = getEmailFromEvent(event);
 
-  console.info("::STRIPE_EVENT_TYPE::", event.type);
-  switch (event.type) {
-    case "account.updated": {
-      const user = await db.user.findFirst({
-        where: { email },
-      });
-
-      if (!user) {
-        return new Response("User not found", { status: 404 });
-      }
-
-      const account = event.data.object;
-      const hasMerchant = user.roles?.includes("merchant");
-      // Solo si alguno está deshabilitado, removemos el rol merchant
-      if (!account.charges_enabled || !account.payouts_enabled) {
-        if (hasMerchant) {
-          await db.user.update({
-            where: { id: user.id },
-            data: {
-              roles: user.roles.filter((r: string) => r !== "merchant"),
-            },
-          });
-        }
-      } else if (!hasMerchant) {
-        // Si ambos están habilitados y no tiene el rol, lo agregamos
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            roles: { push: "merchant" },
-          },
+  // Manejo de éxitos
+  if (
+    event.type === "payment_intent.succeeded" ||
+    event.type === "charge.succeeded"
+  ) {
+    if (email) {
+      // FIXME: this is flaky: change.
+      const order = await getLastPendingOrder();
+      if (order) {
+        await assignAssetToUserByEmail({ assetId: order.assetId, email });
+        await db.order.update({
+          where: { id: order.id },
+          data: { status: "paid" },
         });
+        console.log("Asset asignado por orden y email");
+      } else {
+        console.error("No se encontró orden para email:", email);
       }
-
-      return new Response(null, { status: 200 });
+    } else {
+      console.error("No se pudo determinar el email en el evento");
     }
+  }
+  // listener para activar o desactivar acceso al asset
+  if (event.type === "charge.updated") {
+    if (email) {
+      const order = await getLastPendingOrder();
+      if (order) {
+        const charge = event.data.object;
+        if (charge.status === "failed" || charge.status === "refunded") {
+          await removeAssetFromUserByEmail({ assetId: order.assetId, email });
+          await db.order.update({
+            where: { id: order.id },
+            data: { status: "refunded" },
+          });
+          return new Response("Asset removed", { status: 200 });
+        }
+      } else {
+        console.error("No se encontró orden pendiente para email:", email);
+      }
+      return new Response(null, { status: 200 });
+    } else {
+      console.error("No email en charge.updated");
+      return new Response("Missing required metadata or email", {
+        status: 400,
+      });
+    }
+  }
 
+  // resto y no soportadas
+  switch (event.type) {
     case "account.application.deauthorized": {
       const user = await db.user.findFirst({
         where: { email },
@@ -74,57 +92,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Handle these events if needed
       return new Response(null, { status: 204 });
 
-    case "charge.succeeded": {
-      const metadata = getMetadataFromEvent(event);
-
-      if (!metadata || !metadata.assetId || !email) {
-        console.error("MISSING::DATA::", metadata, "==>", email);
-        return new Response("Missing required metadata or email", {
-          status: 400,
-        });
-      }
-      return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
-    }
-
     case "payment_intent.created": {
       console.info("payment_intent.created");
       return new Response(null, { status: 200 });
-    }
-
-    case "payment_intent.succeeded": {
-      console.log(
-        "Full event data:",
-        JSON.stringify(event.data.object, null, 2)
-      );
-      const metadata = getMetadataFromEvent(event);
-      const email = getEmailFromEvent(event);
-      if (!metadata || !metadata.assetId || !email) {
-        console.error("MISSING::DATA::", metadata, "==>", email);
-        return new Response("Missing required metadata or email", {
-          status: 400,
-        });
-      }
-      console.info("TENEMOS_AMBOS?::", metadata, email);
-      return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
-    }
-
-    case "charge.updated": {
-      const charge = event.data.object;
-      const metadata = getMetadataFromEvent(event);
-      const email = getEmailFromEvent(event);
-      if (!metadata || !metadata.assetId || !email) {
-        return new Response("Missing required metadata or email", {
-          status: 400,
-        });
-      }
-      // Si el cargo es exitoso, asignamos el asset
-      if (charge.status === "succeeded") {
-        return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
-      }
-      // Si el cargo falló o fue reembolsado, removemos el asset
-      else if (charge.status === "failed" || charge.status === "refunded") {
-        return removeAssetFromUserByEmail({ assetId: metadata.assetId, email });
-      }
     }
 
     default:

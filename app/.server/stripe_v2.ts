@@ -6,42 +6,6 @@ import { getStripe } from "~/.server/stripe";
 
 const stripe = getStripe();
 
-export async function configureMerchantWebhook(userId: string) {
-  try {
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { stripeId: true },
-    });
-
-    if (!user?.stripeId) {
-      throw new Error("User doesn't have a Stripe account");
-    }
-
-    const webhookEndpoint = `${stripeWebhook}/merchant`;
-
-    // Create or update the webhook endpoint
-    const webhook = await stripe.webhooks.endpoints.create({
-      url: webhookEndpoint,
-      enabled_events: [
-        'account.updated',
-        'charge.succeeded',
-        'charge.failed',
-        'payment_intent.succeeded',
-        'payment_intent.payment_failed',
-        'payment_intent.canceled',
-        'payment_intent.processing',
-      ],
-      stripe_account: user.stripeId,
-      expand: ['metadata'] // Expandir la metadata en el webhook
-    });
-
-    return webhook;
-  } catch (error) {
-    console.error("Error configuring merchant webhook:", error);
-    throw error;
-  }
-}
-
 type CreateAccountResponse = {
   id: string;
   object: "v2.core.account";
@@ -62,35 +26,17 @@ type Capabilities = {
   transfers: "inactive" | "active";
 };
 
-type StripeProduct = {
-  id: string;
-  object: "product";
-  active: true;
-  attributes: [];
-  created: number;
-  default_price: null;
-  description: null;
-  images: [];
-  livemode: false;
-  marketing_features: [];
-  metadata: {};
-  name: string;
-  package_dimensions: null;
-  shippable: null;
-  statement_descriptor: null;
-  tax_code: null;
-  type: "service";
-  unit_label: null;
-  updated: number;
-  url: null;
-};
-
 export type Payment = {
   id: string;
 };
 //   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
 
-const webhookEndpoint = 'http://localhost:3000/api/stripe/webhook/merchant';
+const location =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : "https://www.easybits.cloud";
+
+const webhookUrl = `${location}/api/stripe/webhook/merchant/{assetId}`;
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const accountsURL = "https://api.stripe.com/v2/core/accounts";
@@ -101,36 +47,59 @@ const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
 const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
 
-const location =
-  process.env.NODE_ENV === "development"
-    ? "http://localhost:3000"
-    : "https://www.easybits.cloud";
+export async function configureMerchantWebhook(
+  userId: string,
+  assetId: string
+) {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { stripeId: true },
+    });
 
-export const createCheckoutURL = async (assetId: string) => {
-  // get everything
+    if (!user?.stripeId) {
+      throw new Error("User doesn't have a Stripe account");
+    }
+
+    // Create or update the webhook endpoint
+    const webhook = await stripe.webhooks.endpoints.create({
+      url: webhookUrl.replace("{assetId}", assetId),
+      enabled_events: [
+        "account.updated",
+        "charge.succeeded",
+        "charge.failed",
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "payment_intent.canceled",
+        "payment_intent.processing",
+      ],
+      stripe_account: user.stripeId,
+      connect: true, // Required for Connect accounts
+      expand: ["metadata"],
+    });
+
+    return webhook;
+  } catch (error) {
+    console.error("Error configuring merchant webhook:", error);
+    throw error;
+  }
+}
+
+export const createCheckoutURL = async (assetId: string, accountId: string) => {
   const asset = await db.asset.findUnique({ where: { id: assetId } });
   if (!asset) throw new Response("Asset not found", { status: 404 });
 
-  const user = await db.user.findUnique({
-    where: {
-      id: asset.userId,
-    },
-  });
-  if (!user || !user.stripeId)
-    throw new Response("User not found", { status: 404 });
   if (!asset.stripePrice)
     throw new Response("StripePrice not found", { status: 404 });
 
-  const accountId = user.stripeId;
-  //
-
+  // Crear la sesión de checkout
   const url = new URL(checkoutSessionsURL);
   url.searchParams.set("mode", `payment`);
   url.searchParams.set("line_items[0][quantity]", "1");
   url.searchParams.set("line_items[0][price]", asset.stripePrice);
   url.searchParams.set("success_url", `${location}/api/v1/stripe/success`);
-  // url.searchParams.set("return_url", `${location}/api/v1/stripe/success`);
-  return await fetch(url.toString(), {
+
+  const sessionRes = await fetch(url.toString(), {
     method: "post",
     headers: {
       Authorization: apiKey,
@@ -138,10 +107,28 @@ export const createCheckoutURL = async (assetId: string) => {
       "Stripe-Version": "2025-04-30.preview",
       "content-type": "application/x-www-form-urlencoded",
     },
-  })
-    .then((r) => r.json())
-    .then((data) => data.url) // return url only
-    .catch((e) => console.error("::STRIPE::ERROR::", e));
+  });
+  const sessionData = await sessionRes.json();
+
+  // Actualizar metadata del PaymentIntent con checkout_session y assetId
+  if (sessionData.payment_intent && sessionData.id) {
+    const piUrl = `https://api.stripe.com/v1/payment_intents/${sessionData.payment_intent}`;
+    const params = new URLSearchParams();
+    params.set("metadata[checkout_session]", sessionData.id);
+    params.set("metadata[assetId]", assetId);
+    await fetch(piUrl, {
+      method: "post",
+      headers: {
+        Authorization: apiKey,
+        "Stripe-Account": accountId,
+        "Stripe-Version": "2025-04-30.preview",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+  }
+
+  return sessionData.url;
 };
 
 export const updateOrCreateProductAndPrice = async (
@@ -173,7 +160,7 @@ export const updateOrCreateProductAndPrice = async (
     });
     await updateAsset(asset.id, { stripePrice: price.id });
     // Configurar webhook después de crear el price
-    await configureMerchantWebhook(user.id);
+    await configureMerchantWebhook(user.id, asset.id);
   } else {
     const product = await createProductAndPrice(
       asset.slug,
@@ -188,7 +175,7 @@ export const updateOrCreateProductAndPrice = async (
       data: { stripeProduct: product.id, stripePrice: product.default_price },
     });
     // Configurar webhook después de crear el price
-    await configureMerchantWebhook(user.id);
+    await configureMerchantWebhook(user.id, asset.id);
   }
 };
 

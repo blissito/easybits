@@ -39,20 +39,21 @@ type AssetWebinarMetadata {
 model Order {
   id String @id @default(auto()) @map("_id") @db.ObjectId
 
-  customer_email  String
-  assetId         String   @db.ObjectId
-  customerId      String?
-  userId          String?  @db.ObjectId
-  stripePriceId   String?
-  stripeInvoiceId String?
-  pricePaid       String? // `$ 1024.50 MXN`
-  note            String?
+  assetId              String   @db.ObjectId
+  customer_email       String?
+  customerId           String?
+  userId               String?  @db.ObjectId
+  stripePriceId        String?
+  stripePriceProductId String?
+  total                String? // `$ 1024.50 MXN`
+  note                 String?
+  status               String?
   //
-  user            User?    @relation(fields: [userId], references: [id])
-  asset           Asset?   @relation(fields: [assetId], references: [id])
+  user                 User?    @relation(fields: [userId], references: [id])
+  asset                Asset?   @relation(fields: [assetId], references: [id])
   // dates
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model Asset {

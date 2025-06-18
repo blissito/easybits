@@ -6,7 +6,6 @@ import {
   assignAssetToUserByEmail,
   removeAssetFromUserByEmail,
   constructStripeEvent,
-  getMetadataFromEvent,
   getEmailFromEvent,
 } from "~/.server/webhookUtils";
 
@@ -66,9 +65,6 @@ vi.mock("~/.server/webhookUtils", () => ({
 
       return new Response("Invalid Stripe event", { status: 400 });
     }),
-  getMetadataFromEvent: vi
-    .fn()
-    .mockReturnValue({ assetId: "test_asset_123", email: "test@example.com" }),
   getEmailFromEvent: vi.fn().mockReturnValue("test@example.com"),
 }));
 
