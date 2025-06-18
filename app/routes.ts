@@ -14,7 +14,6 @@ export default [
   ...prefix("tienda", [
     index("routes/assets/publicStore.tsx"),
     route(":assetSlug", "routes/assets/PublicCustomLanding.tsx"),
-
   ]),
 
   route("/dominio-personalizado", "routes/domains.tsx"),
@@ -32,6 +31,8 @@ export default [
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // embed share
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
+  // AI Chat
+  route("/ai-chat", "routes/ai-chat.tsx"),
 
   // user dash
   ...prefix("dash", [
@@ -49,7 +50,6 @@ export default [
       route("ventas", "routes/sales.tsx"),
       route("clientes", "routes/clients.tsx"),
 
-   
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
@@ -73,6 +73,7 @@ export default [
     route("downloads", "routes/api/v1/downloads.tsx"),
     route("uploads", "routes/api/v1/direct-upload-edit.ts"),
     route("reviews", "routes/api/v1/reviews.tsx"),
+    ...prefix("ai", [route("chat", "routes/api/v1/ai/chat.tsx")]),
     ...prefix("stripe", [
       route("account", "routes/api/v1/stripe/account.tsx"),
       route("account_session", "routes/api/v1/stripe/account_session.tsx"),

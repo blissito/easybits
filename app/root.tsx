@@ -19,7 +19,8 @@ import { db } from "./.server/db";
 import StoreComponent from "./components/store/StoreComponent";
 import Page from "./routes/assets/PublicCustomLanding";
 import { NotFound } from "./components/common/404";
-import { DevAdmin } from "./components/experimental/DevAdmin";
+// import { DevAdmin } from "./components/experimental/DevAdmin";
+import { FloatingGeminiChat } from "./components/ai/FloatingGeminiChat";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -52,7 +53,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ScrollRestoration />
         <Scripts />
         <Toaster />
-        <DevAdmin />
+        {/* <DevAdmin /> */}
+        <FloatingGeminiChat />
       </body>
     </html>
   );

@@ -2,6 +2,7 @@ import { Banners, Robot } from "~/components/common/Banner";
 import { Footer } from "~/components/common/Footer";
 import { BasicGallery } from "~/components/galleries/BasicGallery";
 import { AuthNav } from "~/components/login/auth-nav";
+import { FloatingGeminiChat } from "~/components/ai/FloatingGeminiChat";
 import { Hero } from "./Hero";
 import { Bento } from "./Bento";
 import { ItemList } from "./ItemList";
@@ -123,6 +124,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <Assets />
       <Invite />
       <Footer />
+      <FloatingGeminiChat />
     </section>
   );
 }
