@@ -31,7 +31,9 @@ export const action = async ({
           where: { id: order.id },
           data: { status: "paid" },
         });
-        console.log("Asset asignado por orden y email");
+        console.info(
+          `::ASSET_ID::${order.assetId}::ASSIGNADO_AL_USER::${email}`
+        );
       } else {
         console.error("No se encontró orden para email:", email);
       }

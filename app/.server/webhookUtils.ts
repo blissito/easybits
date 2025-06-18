@@ -61,10 +61,12 @@ export async function assignAssetToUserByEmail(metadata: {
   if (!user) {
     return new Response("User not found", { status: 404 });
   }
+  // Evitar assetIds repetidos
+  const assetIds = Array.from(new Set([...(user.assetIds || []), assetId]));
   await db.user.update({
     where: { email },
     data: {
-      assetIds: { push: assetId },
+      assetIds,
     },
   });
   console.info("::USER UPDATED::", assetId + "=>" + user.id);
