@@ -27,6 +27,7 @@ export const action = async ({
       const order = await getLastPendingOrder();
       if (order) {
         await assignAssetToUserByEmail({ assetId: order.assetId, email });
+        // FUTURO: conservar la orden y solo cambiar su estado a 'paid' en vez de eliminarla
         await db.order.delete({ where: { id: order.id } });
         console.info(
           `::ASSET_ID::${order.assetId}::ASSIGNADO_AL_USER::${email}`
@@ -52,6 +53,7 @@ export const action = async ({
         const charge = event.data.object;
         if (charge.status === "failed" || charge.status === "refunded") {
           await removeAssetFromUserByEmail({ assetId: order.assetId, email });
+          // FUTURO: conservar la orden y solo cambiar su estado a 'refunded' en vez de eliminarla
           await db.order.delete({ where: { id: order.id } });
           return new Response("Asset removed", { status: 200 });
         }
