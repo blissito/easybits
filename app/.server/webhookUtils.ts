@@ -76,6 +76,7 @@ export async function assignAssetToUserByEmail(metadata: {
       assetIds: { push: assetId },
     },
   });
+  console.info("::USER UPDATED::", user.assetIds);
   return new Response(null, { status: 200 });
 }
 

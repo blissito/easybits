@@ -85,8 +85,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
     }
 
-    case "payment_intent.succeeded":
     case "payment_intent.created": {
+      console.info("payment_intent.created");
+      return new Response(null, { status: 200 });
+    }
+
+    case "payment_intent.succeeded": {
       const metadata = getMetadataFromEvent(event);
       const email = getEmailFromEvent(event);
       if (!metadata || !metadata.assetId || !email) {
@@ -94,6 +98,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           status: 400,
         });
       }
+      console.info("TENEMOS_AMBOS?::", metadata, email);
       return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
     }
 

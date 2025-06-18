@@ -24,7 +24,7 @@ vi.mock("~/.server/stripe", () => ({
   })),
 }));
 
-describe.only("Stripe Connect Webhook", () => {
+describe("Stripe Connect Webhook", () => {
   beforeEach(() => {
     // Mock STRIPE_SIGN environment variable
     process.env.STRIPE_SIGN = "test_webhook_signing_secret";
