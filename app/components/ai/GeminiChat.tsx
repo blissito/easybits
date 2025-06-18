@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "../common/Button";
 import { Input } from "../common/Input";
 import { BrutalButtonClose } from "../common/BrutalButtonClose";
@@ -252,19 +253,38 @@ export function GeminiChat({
 
   return (
     <>
-      {isFullscreen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsFullscreen(false)}
-        />
-      )}
-      <div
-        className={`flex flex-col bg-white rounded-lg border border-gray-200 ${
-          isFullscreen
-            ? "fixed inset-4 z-50 h-[calc(100vh-32px)]"
-            : "h-full max-h-[600px]"
-        } ${className}`}
+      <AnimatePresence>
+        {isFullscreen && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setIsFullscreen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          />
+        )}
+      </AnimatePresence>
+      <motion.div
+        className={`flex flex-col bg-white rounded-lg border border-gray-200 ${className}`}
         onClick={(e) => e.stopPropagation()}
+        layout
+        transition={{
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+          duration: 0.3,
+        }}
+        style={{
+          position: isFullscreen ? "fixed" : "relative",
+          top: isFullscreen ? "16px" : "auto",
+          left: isFullscreen ? "16px" : "auto",
+          right: isFullscreen ? "16px" : "auto",
+          bottom: isFullscreen ? "16px" : "auto",
+          height: isFullscreen ? "calc(100vh - 32px)" : "100%",
+          maxHeight: isFullscreen ? "none" : "600px",
+          zIndex: isFullscreen ? 50 : "auto",
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -306,15 +326,20 @@ export function GeminiChat({
                 ))}
               </select>
               <div className="hidden md:block lg:hidden ml-auto">
-                <button
+                <motion.button
                   onClick={() => setIsFullscreen(!isFullscreen)}
                   className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.1 }}
                 >
-                  <svg
+                  <motion.svg
                     className="w-5 h-5 text-black"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    animate={{ rotate: isFullscreen ? 180 : 0 }}
+                    transition={{ duration: 0.3 }}
                   >
                     {isFullscreen ? (
                       <path
@@ -331,8 +356,8 @@ export function GeminiChat({
                         d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
                       />
                     )}
-                  </svg>
-                </button>
+                  </motion.svg>
+                </motion.button>
               </div>
             </div>
           </div>
@@ -406,7 +431,7 @@ export function GeminiChat({
             </Button>
           </div>
         </form>
-      </div>
+      </motion.div>
     </>
   );
 }
