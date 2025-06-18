@@ -9,37 +9,39 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Controller, useForm } from "react-hook-form";
 import { BrendisConfetti } from "~/components/Confetti";
 import { AnimatePresence } from "motion/react";
-import type { Route } from "../tienda/+types/review";
+import type { Route } from "../../routes/+types/review";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   
   // Obtener el asset
-  const assetData = await db.asset.findUnique({
+  const asset = await db.asset.findUnique({
     where: {
       slug: params.assetSlug,
     },
   });
 
-  if (!assetData) {
+  if (!asset) {
     throw new Response("Asset no encontrado", { status: 404 });
   }
 
   // Verificar si el usuario ya dejó una review para este asset
-  const existingReview = await db.review.findFirst({
-    where: {
-      userId: user.id,
-      assetId: assetData.id,
-    },
-  });
+  // const existingReview = await db.review.findFirst({
+  //   where: {
+  //     userId: user.id,
+  //     assetId: asset.id,
+  //   },
+  // });
 
 
-  if (existingReview) {
-    // return redirect(`/compras/${assetData.id}`) // FUTURE: redirect to purchase detail
-  }
+  // if (existingReview) {
+  //   // return redirect(`/compras/${asset.id}`) // FUTURE: redirect to purchase detail
+  // }
 
+  console.log("LOADED::",asset.slug, )
+  console.log("USER::",user.email, )
   return {
-    asset: assetData,
+    asset,
     user,
   };
 };
@@ -49,12 +51,12 @@ interface ReviewFormValues {
   comment: string;
 }
 
-export default function ReviewAsset({}) {
+// @todo edit review?
+export default function ReviewAsset({loaderData}: Route.ComponentProps) {
+  const { asset, user } = loaderData;
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState("");
-  const loaderData = useLoaderData();
   const fetcher = useFetcher();
-  const { asset, user } = loaderData;
   const isLoading = fetcher.state !== "idle";
   const isSuccess = fetcher.data?.id;
   const { handleSubmit, control, register } = useForm<ReviewFormValues>();
@@ -174,7 +176,7 @@ export default function ReviewAsset({}) {
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.2 }}
             >
-              <Link to={`/compras/${asset.id}/`}>
+              <Link prefetch="render" to={`/dash/compras/${asset.id}/`}>
                 <BrutalButton
                 type="button"
                   className="bg-white"
@@ -189,7 +191,7 @@ export default function ReviewAsset({}) {
       )}
       {!isSuccess && (
         <>
-          <Link to={`/compras/${asset.id}/`}>
+          <Link to={`/dash/compras/${asset.id}/`}>
             <div className="absolute top-4 left-20  flex justify-center items-center p-3 gap-3 cursor-pointer">
               <FaArrowLeft /> Volver
             </div>
@@ -207,7 +209,7 @@ export default function ReviewAsset({}) {
               <fetcher.Form onSubmit={handleSubmit(submit)}>
                 <div>
                   <Controller
-                    name="rating"
+                    name="stars"
                     control={control}
                     render={({ field }) => (
                       <div className="mt-6 mb-8 flex gap-3 ">

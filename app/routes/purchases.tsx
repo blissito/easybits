@@ -73,7 +73,7 @@ const PurchaseCardBox = ({ asset }: { asset: AssetWithUser }) => {
   });
   return (
     <AssetCard
-      to={`/compras/${asset.id}`}
+      to={`/dash/compras/${asset.id}`}
       key={asset.id}
       asset={asset}
       left={

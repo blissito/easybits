@@ -72,7 +72,7 @@ export const DownloablePreview = ({
         </div>
         <div>
            <div className="border-t border-white py-3 px-4">
-            <Link to={`/tienda/${asset.slug}/review`}>
+            <Link prefetch="render" to={`/dash/compras/${asset.slug}/review`}>
               <BrutalButton
                 containerClassName="w-full"
                 className="min-w-full bg-yellow-500 text-black w-full "

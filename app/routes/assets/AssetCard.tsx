@@ -35,7 +35,7 @@ export const AssetCard = ({
           "overflow-hidden"
         )}
       >
-        <Link to={to || `/dash/assets/${asset.id}/edit`} className="">
+        <Link prefetch="render" to={to || `/dash/assets/${asset.id}/edit`} className="">
           <img
             className="h-[180px] object-cover w-full flex-grow-0"
             src={asset.gallery?.[0] || "/images/easybits-default.webp"}

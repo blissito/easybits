@@ -19,6 +19,7 @@
     "@headlessui/react": "^2.2.2",
     "@livekit/components-react": "^2.8.1",
     "@livekit/components-styles": "^1.1.4",
+    "@mistralai/mistralai": "^1.7.2",
     "@prisma/client": "^6.1.0",
     "@react-router/node": "^7.1.1",
     "@react-router/serve": "^7.1.1",

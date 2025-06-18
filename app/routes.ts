@@ -14,7 +14,7 @@ export default [
   ...prefix("tienda", [
     index("routes/assets/publicStore.tsx"),
     route(":assetSlug", "routes/assets/PublicCustomLanding.tsx"),
-    route(":assetSlug/review", "routes/assets/ReviewAsset.tsx"),
+
   ]),
 
   route("/dominio-personalizado", "routes/domains.tsx"),
@@ -32,9 +32,11 @@ export default [
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // embed share
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
-  route("compras/:assetId", "routes/purchase_detail.tsx"),
+
   // user dash
   ...prefix("dash", [
+    route("compras/:assetId", "routes/purchase_detail.tsx"),
+    route("compras/:assetSlug/review", "routes/assets/ReviewAsset.tsx"),
     layout("components/DashLayout/DashLayout.tsx", [
       index("routes/start.tsx"),
       route("estadisticas", "routes/stats.tsx"),
@@ -44,9 +46,10 @@ export default [
       ]),
       route("tienda", "routes/store.tsx"),
 
-      ...prefix("ventas", [index("routes/sales.tsx")]),
+      route("ventas", "routes/sales.tsx"),
       route("clientes", "routes/clients.tsx"),
 
+   
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
