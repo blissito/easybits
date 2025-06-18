@@ -13,6 +13,8 @@ export const FooterSuscription = ({
   isLoading?: boolean;
 }) => {
   const getPriceString = () => `$${asset.price} ${asset.currency}`;
+  const { hexColor } = (asset as any)?.user?.storeConfig || {};
+  
   return (
     <Form
       onSubmit={onSubmit}
@@ -22,18 +24,23 @@ export const FooterSuscription = ({
         {getPriceString()}
       </p>
       <input type="hidden" name="assetId" value={asset.id} />
-      <Input
-        required
-        placeholder="Escribe tu email"
-        name="email"
-        className="min-h-full m-0"
-        inputClassName="border-0 border-b-2 rounded-none"
-      />
+      {(asset.price || 0) <= 0 && (
+        <Input
+          required
+          placeholder="Escribe tu email"
+          name="email"
+          className="min-h-full m-0"
+          inputClassName="border-0 border-b-2 rounded-none"
+        />
+      )}
       <BrutalButton
         isLoading={isLoading}
         type="submit"
         containerClassName="rounded-lg"
         className="h-10 min-h-10 max-h-10 rounded-lg min-w-28 text-base  font-medium mx-4"
+        style={{ 
+          background: hexColor
+        }}
       >
         {asset.template?.ctaText
           ? asset.template.ctaText

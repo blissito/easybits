@@ -53,6 +53,11 @@ body {
   );
 }
 
+.scrollbar-hide-reviews {
+  scrollbar-color: #cccccc #F9F9F9;
+  scrollbar-width: thin;
+}
+
 @media (max-width: 1024px) {
   .chatHight {
     padding-bottom: 10px;

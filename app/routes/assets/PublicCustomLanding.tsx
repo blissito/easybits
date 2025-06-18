@@ -180,6 +180,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     total: assetReviews.length || 0,
     byRating: reviewsByRating || defaultRatings,
   };
+  const text = asset.template?.ctaText
+  ? asset.template.ctaText
+  : asset.price || 0 <= 0
+  ? "Suscribirse gratis"
+  : "Comprar";
 
   return (
     <article>
@@ -203,11 +208,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 backgroundColor: (asset as any)?.user?.storeConfig?.hexColor || "red" 
               }}
             >
-              {"Comprar"}
+              {text}
             </BrutalButton>
           ) : null
         }
         reviews={reviews}
+        assetReviews={assetReviews}
       />
 
       <FooterTemplate

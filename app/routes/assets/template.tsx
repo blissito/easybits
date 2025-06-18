@@ -22,6 +22,10 @@ import { useFetcherSubmit } from "~/hooks/useFetcherSubmit";
 import PaymentModal from "./PaymentModal";
 import { usePublicLink } from "~/hooks/usePublicLink";
 import { useOpenLink } from "~/hooks/useOpenLink";
+import { motion } from "motion/react";
+import { useState } from "react";
+import { Modal } from "~/components/common/Modal";
+
 
 export const ContentTemplate = ({
   asset,
@@ -30,10 +34,13 @@ export const ContentTemplate = ({
   files = [],
   actionButton,
   reviews,
+  assetReviews = [],
 }: {
   actionButton?: ReactNode;
   files?: File[];
   asset: Asset;
+  reviews: any;
+  assetReviews?: any[];
 }) => {
   const { typography } = asset?.user?.storeConfig || {};
   return (
@@ -56,7 +63,7 @@ export const ContentTemplate = ({
             )}
           >
             <Bragging asset={asset} />
-            <div className={cn("h-fit p-4", "md:p-6")}>
+            <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
               <Markdown>{asset.description}</Markdown>
             </div>
           </div>
@@ -68,6 +75,7 @@ export const ContentTemplate = ({
             checkoutSession={checkoutSession}
             actionButton={actionButton}
             reviews={reviews}
+            assetReviews={assetReviews}
           />
         </div>
       </div>
@@ -160,11 +168,14 @@ const Info = ({
   actionButton,
   typography,
   reviews,
+  assetReviews = [],
 }: {
   actionButton?: ReactNode;
   asset: Asset;
   files?: File[];
   typography: string;
+  reviews: any;
+  assetReviews?: any[];
 }) => {
   const text = asset.template?.ctaText
     ? asset.template.ctaText
@@ -190,24 +201,19 @@ const Info = ({
         <h3 className="text-2xl font-bold text-white">{getPriceString()} </h3>
       </div>
       {asset.price <= 0 && <Subscription asset={asset} text={text} />}
-
-      {asset.price > 0 && (
-        <PaymentModal
-          stripePromise={stripePromise}
-          asset={asset}
-          checkoutSession={checkoutSession}
-          text={text}
-        />
-      )}
-      {actionButton}
-
-      <div className="h-fit p-3 border-b-[2px] border-black content-center">
-        {asset.note}
+      <div className="hidden md:block">
+        {actionButton}
       </div>
+      {/* Only show note if asset.note exists */}
+      {asset.note && (
+        <div className="h-fit p-3 border-b-[2px] border-black content-center">
+          {asset.note}
+        </div>
+      )}
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
       ) : (
-        <Formats files={files} asset={asset} reviews={reviews} />
+        <Formats files={files} asset={asset} reviews={reviews} assetReviews={assetReviews} />
       )}
     </div>
   );
@@ -254,20 +260,20 @@ const Subscription = ({
     );
   }
 
+  // hidden on mobile
   return (
-    // hidden on mobile
     <fetcher.Form onSubmit={handleSubmit} className="hidden md:block">
       <Input
         placeholder="Escribe tu nombre"
         name="displayName"
-        inputClassName="border-0 border-b-2 rounded-none"
+        inputClassName="border-0 border-t-2 border-b-2 h-14 rounded-none"
       />
       <Input
         required
         placeholder="Escribe tu email"
         name="email"
         className="min-h-full m-0"
-        inputClassName="border-0 border-b-2 rounded-none"
+        inputClassName="border-0 border-b-2 h-14 rounded-none"
       />
       <button
         disabled={isLoading}
@@ -320,14 +326,100 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
   );
 };
 
+const ReviewCard = ({ review }: { review: any }) => {
+  return (
+    <div className=" py-4  flex flex-col gap-3">
+      <div className="text-sm">
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }, (_, index) => (
+            <img 
+              key={index} 
+              src={index < review.rating ? "/icons/star.png" : "/icons/star-empty.svg"} 
+              alt="star" 
+              className="w-4 h-4"
+            />
+          ))}
+        </div> 
+        <p className="text-base mt-1">  
+          {review.comment}
+        </p>
+       </div>
+       <div className="flex items-center justify-start gap-0">
+        <img src={review.user?.picture} className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full"/>
+        <span className="text-xs text-gray-500 ml-1">
+          {review.user?.displayName || review.user?.email || "Anónimo"}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; assetReviews?: any[]; asset: any }) => {
+  const [open, setOpen] = useState(false);
+  if (!reviews?.total || reviews.total === 0 || !asset?.extra?.showReviews) {
+    return null;
+  }
+
+  // Handler to open modal
+  const handleOpen = () => setOpen(true);
+  const handleClose = () => setOpen(false);
+
+  return (
+    <>
+      <div className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
+        <p className="mb-4">Qué opinan nuestros clientes:</p>
+        {Object.keys(reviews?.byRating || {})
+          .sort((a, b) => b - a)
+          .map((n, index) => {
+            const percentage = (reviews.byRating[n] * 100) / reviews.total;
+
+            return (
+              <div key={n} className="grid gap-6  grid-cols-9 mb-3 items-center">
+                <div className="col-span-1 flex gap-1 items-center"> <img src="/icons/star.png" alt="star" className="w-4 h-4"/>{n}</div>
+                <div className="col-span-8">
+                  <div className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
+                    <motion.div
+                      className="bg-black h-full rounded"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${percentage}%` }}
+                      transition={{ 
+                        duration: 0.8, 
+                        delay: 0.3 + (index * 0.05),
+                      }}
+                    />
+                  </div>
+                  <div />
+                </div>
+              </div>
+            );
+          })}
+      </div>
+      <Modal isOpen={open} onClose={handleClose} title="Comentarios de otros clientes">
+        <div className="space-y-0 max-h-[60vh] overflow-y-auto mt-2 scrollbar-hide-reviews">
+          {(assetReviews || [])
+            .slice()
+            .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+            .map((review, idx, array) => (
+              <div key={idx} className={idx === array.length - 1 ? "" : "border-b border-black"}>
+                <ReviewCard review={review} />
+              </div>
+            ))}
+        </div>
+      </Modal>
+    </>
+  );
+};
+
 const Formats = ({
   files,
   asset,
   reviews = {},
+  assetReviews = [],
 }: {
   files: File[];
   asset: {};
   reviews: {};
+  assetReviews?: any[];
 }) => {
   const getSizeInMB = () => {
     const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
@@ -344,29 +436,7 @@ const Formats = ({
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
 
-      <div className="border-b-[2px] border-black p-3">
-        <p className="mb-4">Evaluaciones:</p>
-        {Object.keys(reviews?.byRating || {})
-          .sort((a, b) => b - a)
-          .map((n) => {
-            const percentage = (reviews.byRating[n] * 100) / reviews.total;
-
-            return (
-              <div className="grid gap-3 grid-cols-12 mb-3 items-center">
-                <div className="col-span-3">{n} Estrellas</div>
-                <div className="col-span-9">
-                  <div className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
-                    <div
-                      className="bg-black h-full rounded-lg"
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                  <div />
-                </div>
-              </div>
-            );
-          })}
-      </div>
+      <ReviewsSection reviews={reviews} asset={asset} assetReviews={assetReviews} />
     </div>
   );
 };

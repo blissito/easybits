@@ -111,7 +111,7 @@ export const Modal = ({
         <article
           className={cn(
             "z-[90] relative", // try to not go further than 30
-            "grid place-content-center ",
+            "grid place-content-center px-4 md:px-[5%] xl:px-0",
             "fixed overflow-hidden",
 
             {
