@@ -19,14 +19,22 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   if (!asset || !user.assetIds.includes(asset.id))
     throw new Response(null, { status: 404 });
 
+  const reviewExists = await db.review.findFirst({
+    where: {
+      assetId: asset.id,
+      userId: user.id,
+    },
+  });
+
   return {
     asset,
     files: await getFilesForAssetId(asset.id),
+    reviewExists,
   };
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { asset, files } = loaderData;
+  const { asset, files ,reviewExists} = loaderData;
 
   let viewer;
   // VOD_COURSE
@@ -36,7 +44,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   // DOWNLOADABLE
   switch (asset.type) {
     case "DOWNLOADABLE":
-      viewer = <DownloablePreview asset={asset} files={files} />;
+      viewer = <DownloablePreview asset={asset} files={files} reviewExists={reviewExists} />;
   }
 
   return (

@@ -6,7 +6,9 @@ import { useOpenLink } from "~/hooks/useOpenLink";
 export const DownloablePreview = ({
   asset,
   files = [],
+  reviewExists
 }: {
+  reviewExists?:boolean
   asset: Asset;
   files: File[];
 }) => {
@@ -69,7 +71,7 @@ export const DownloablePreview = ({
           </a>
         </div>
         <div>
-          <div className="border-t border-white py-3 px-4">
+          {!reviewExists && <div className="border-t border-white py-3 px-4">
             <Link to={`/tienda/${asset.slug}/review`}>
               <BrutalButton
                 containerClassName="w-full"
@@ -78,7 +80,7 @@ export const DownloablePreview = ({
                 Agregar comentarios
               </BrutalButton>
             </Link>
-          </div>
+          </div>}
           <div className="border-t border-white py-3 px-4">
             <BrutalButton
               onClick={handleDownload}

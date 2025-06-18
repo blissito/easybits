@@ -1,33 +1,53 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
-import { Modal } from "~/components/common/Modal";
 import { db } from "~/.server/db";
-import { Link, useFetcher, useLoaderData } from "react-router";
-import { FaStar, FaRegStar, FaArrowLeft } from "react-icons/fa6";
+import { Link, redirect, useFetcher, useLoaderData } from "react-router";
+import {FaArrowLeft } from "react-icons/fa6";
 import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Controller, useForm } from "react-hook-form";
 import { BrendisConfetti } from "~/components/Confetti";
 import { AnimatePresence } from "motion/react";
-import { CiStar } from "react-icons/ci";
+import type { Route } from "../tienda/+types/review";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  // check you purchased the asset
-  // check you already left a review
-  // get the asset
-  const asset = await db.asset.findUnique({
+  
+  // Obtener el asset
+  const assetData = await db.asset.findUnique({
     where: {
       slug: params.assetSlug,
     },
   });
 
+  if (!assetData) {
+    throw new Response("Asset no encontrado", { status: 404 });
+  }
+
+  // Verificar si el usuario ya dejó una review para este asset
+  const existingReview = await db.review.findFirst({
+    where: {
+      userId: user.id,
+      assetId: assetData.id,
+    },
+  });
+
+
+  if (existingReview) {
+    return redirect(`/compras/${assetData.id}`)
+  }
+
   return {
-    asset,
+    asset: assetData,
     user,
   };
 };
+
+interface ReviewFormValues {
+  stars: number;
+  comment: string;
+}
 
 export default function ReviewAsset({}) {
   const [stars, setStars] = useState(0);
@@ -37,9 +57,9 @@ export default function ReviewAsset({}) {
   const { asset, user } = loaderData;
   const isLoading = fetcher.state !== "idle";
   const isSuccess = fetcher.data?.id;
-  const { handleSubmit, control, register, watch } = useForm({});
+  const { handleSubmit, control, register } = useForm<ReviewFormValues>();
 
-  const submit = (values) => {
+  const submit = (values: ReviewFormValues) => {
     fetcher.submit(
       {
         intent: "create_review",
@@ -156,6 +176,7 @@ export default function ReviewAsset({}) {
             >
               <Link to={`/compras/${asset.id}/`}>
                 <BrutalButton
+                type="button"
                   className="bg-white"
                   // onClick={() => window.location.reload()}
                 >
@@ -164,9 +185,9 @@ export default function ReviewAsset({}) {
               </Link>
             </motion.div>
           </div>
+          <BrendisConfetti />
         </div>
       )}
-      {isSuccess && <BrendisConfetti />}
       {!isSuccess && (
         <>
           <Link to={`/compras/${asset.id}/`}>
