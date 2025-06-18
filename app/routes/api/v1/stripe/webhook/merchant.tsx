@@ -74,17 +74,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Handle these events if needed
       return new Response(null, { status: 204 });
 
-    case "charge.succeeded": {
-      const metadata = getMetadataFromEvent(event);
+    // case "charge.succeeded": {
+    //   const metadata = getMetadataFromEvent(event);
 
-      if (!metadata || !metadata.assetId || !email) {
-        console.error("MISSING::DATA::", metadata, "==>", email);
-        return new Response("Missing required metadata or email", {
-          status: 400,
-        });
-      }
-      return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
-    }
+    //   if (!metadata || !metadata.assetId || !email) {
+    //     console.error("MISSING::DATA::", metadata, "==>", email);
+    //     return new Response("Missing required metadata or email", {
+    //       status: 400,
+    //     });
+    //   }
+    //   return assignAssetToUserByEmail({ assetId: metadata.assetId, email });
+    // }
 
     case "payment_intent.created": {
       console.info("payment_intent.created");
@@ -92,6 +92,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     case "payment_intent.succeeded": {
+      console.log(
+        "Full event data:",
+        JSON.stringify(event.data.object, null, 2)
+      );
       const metadata = getMetadataFromEvent(event);
       const email = getEmailFromEvent(event);
       if (!metadata || !metadata.assetId || !email) {

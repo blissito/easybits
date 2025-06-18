@@ -162,10 +162,6 @@ export const createCheckoutSession = async ({ stripeAccount, asset }) => {
           email: email || undefined,
         },
       },
-      metadata: {
-        assetId: id,
-        email: email || undefined,
-      },
       mode: "payment",
       ui_mode: "embedded",
       return_url: `${config.baseUrl}/p/${slug}?session_id={CHECKOUT_SESSION_ID}`,
