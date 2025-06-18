@@ -55,6 +55,7 @@ export function GeminiChat({
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +66,23 @@ export function GeminiChat({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Cerrar modo pantalla completa con ESC
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFullscreen]);
 
   // Función para parsear links en el texto
   const parseLinks = (text: string) => {
@@ -233,140 +251,162 @@ export function GeminiChat({
   };
 
   return (
-    <div
-      className={`flex flex-col h-full max-h-[600px] bg-white rounded-lg border border-gray-200 ${className}`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-3 w-full">
-          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-bold w-10 text-center">
-              AI
-            </span>
-          </div>
-          <div className="flex items-center justify-between w-full">
-            <h3 className="font-semibold text-gray-900 md:hidden">
-              EasyBits Chat
-            </h3>
-            <h3 className="font-semibold text-gray-900 hidden md:block mr-4">
-              Chatea con
-            </h3>
-            <div className="block md:hidden ml-auto">
-              <BrutalButtonClose
-                onClick={onClose}
-                className="w-6 h-6 rounded-full flex items-center justify-center"
-              />
+    <>
+      {isFullscreen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={() => setIsFullscreen(false)}
+        />
+      )}
+      <div
+        className={`flex flex-col bg-white rounded-lg border border-gray-200 ${
+          isFullscreen
+            ? "fixed inset-4 z-50 h-[calc(100vh-32px)]"
+            : "h-full max-h-[600px]"
+        } ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center space-x-3 w-full">
+            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold w-10 text-center">
+                AI
+              </span>
             </div>
-
-            <select
-              value={model}
-              onChange={(e) => onModelChange?.(e.target.value)}
-              className="bg-gray-100 text-gray-900 text-sm rounded-lg px-2 py-1 pr-6 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-200 transition-all duration-200 appearance-none relative hidden md:block"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                backgroundPosition: "right 4px center",
-                backgroundRepeat: "no-repeat",
-                backgroundSize: "16px 16px",
-              }}
-            >
-              {GEMINI_MODELS.map((modelOption) => (
-                <option key={modelOption.value} value={modelOption.value}>
-                  {modelOption.label}
-                </option>
-              ))}
-            </select>
-            <div className="hidden md:block lg:hidden ml-auto">
-              <button
-                onClick={() => window.open(window.location.href, "_blank")}
-                className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
-              >
-                <svg
-                  className="w-5 h-5 text-black"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          {isLoading && (
-            <div className="flex items-center space-x-1 text-sm text-gray-500">
-              <Spinner size="sm" />
-              <span>Pensando...</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${
-              message.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            {message.role === "assistant" && (
-              <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
-                <img
-                  src="/logo-purple.svg"
-                  alt="EasyBits AI"
-                  className="w-5 h-5"
+            <div className="flex items-center justify-between w-full">
+              <h3 className="font-semibold text-gray-900 md:hidden">
+                EasyBits Chat
+              </h3>
+              <h3 className="font-semibold text-gray-900 hidden md:block mr-4">
+                Chatea con
+              </h3>
+              <div className="block md:hidden ml-auto">
+                <BrutalButtonClose
+                  onClick={onClose}
+                  className="w-6 h-6 rounded-full flex items-center justify-center"
                 />
               </div>
-            )}
-            <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                message.role === "user"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-900"
-              }`}
-            >
-              <p className="text-sm whitespace-pre-wrap">
-                {parseLinks(message.content)}
-                {message.isStreaming && (
-                  <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
-                )}
-              </p>
-              <p className="text-xs opacity-70 mt-1">
-                {message.timestamp.toLocaleTimeString()}
-              </p>
+
+              <select
+                value={model}
+                onChange={(e) => onModelChange?.(e.target.value)}
+                className="bg-gray-100 text-gray-900 text-sm rounded-lg px-2 py-1 pr-6 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-200 transition-all duration-200 appearance-none relative hidden md:block"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                  backgroundPosition: "right 4px center",
+                  backgroundRepeat: "no-repeat",
+                  backgroundSize: "16px 16px",
+                }}
+              >
+                {GEMINI_MODELS.map((modelOption) => (
+                  <option key={modelOption.value} value={modelOption.value}>
+                    {modelOption.label}
+                  </option>
+                ))}
+              </select>
+              <div className="hidden md:block lg:hidden ml-auto">
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
+                >
+                  <svg
+                    className="w-5 h-5 text-black"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    {isFullscreen ? (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0V8m0 6l7-7"
+                      />
+                    ) : (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                      />
+                    )}
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
-        <div className="flex space-x-2">
-          <Input
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder={placeholder}
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button
-            type="submit"
-            isDisabled={!inputValue.trim() || isLoading}
-            className="px-4 py-2"
-          >
-            {isLoading ? <Spinner size="sm" /> : "Enviar"}
-          </Button>
+          <div className="flex items-center space-x-2">
+            {isLoading && (
+              <div className="flex items-center space-x-1 text-sm text-gray-500">
+                <Spinner size="sm" />
+                <span>Pensando...</span>
+              </div>
+            )}
+          </div>
         </div>
-      </form>
-    </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${
+                message.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              {message.role === "assistant" && (
+                <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
+                  <img
+                    src="/logo-purple.svg"
+                    alt="EasyBits AI"
+                    className="w-5 h-5"
+                  />
+                </div>
+              )}
+              <div
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  message.role === "user"
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-900"
+                }`}
+              >
+                <p className="text-sm whitespace-pre-wrap">
+                  {parseLinks(message.content)}
+                  {message.isStreaming && (
+                    <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
+                  )}
+                </p>
+                <p className="text-xs opacity-70 mt-1">
+                  {message.timestamp.toLocaleTimeString()}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
+          <div className="flex space-x-2">
+            <Input
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={placeholder}
+              disabled={isLoading}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              isDisabled={!inputValue.trim() || isLoading}
+              className="px-4 py-2"
+            >
+              {isLoading ? <Spinner size="sm" /> : "Enviar"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }
