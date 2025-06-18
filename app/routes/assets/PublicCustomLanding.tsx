@@ -142,7 +142,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     assetReviews,
   } = loaderData;
   const actionData = useActionData();
-  const assetUserStripeId = asset?.user?.stripe?.id;
+  const assetUserStripeId = (asset as any)?.user?.stripe?.id;
   const stripePromise = useMemo(() => {
     if (!publishableKey) return null;
     return loadStripe(publishableKey, {
@@ -199,6 +199,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               mode="landing"
               className="h-16"
               containerClassName="h-16  border-none rounded-none"
+              style={{ 
+                backgroundColor: (asset as any)?.user?.storeConfig?.hexColor || "red" 
+              }}
             >
               {"Comprar"}
             </BrutalButton>
