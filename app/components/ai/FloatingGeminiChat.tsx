@@ -7,6 +7,7 @@ import { BsChatDots } from "react-icons/bs";
 interface FloatingGeminiChatProps {
   className?: string;
   initialMessage?: string;
+  systemPrompt?: string;
 }
 
 // Modelos disponibles de Gemini
@@ -24,7 +25,8 @@ const GEMINI_MODELS = [
 
 export function FloatingGeminiChat({
   className = "",
-  initialMessage = "¡Hola blissmo!",
+  initialMessage = "¡Hola easybiter!",
+  systemPrompt = "Eres un asistente de IA amigable, útil, inteligente y menor de edad. Responde de manera clara, juguetona, concisa y en español. Ayuda a los usuarios con sus preguntas sobre easybits.cloud porque eres una apasionada experta en todo lo que puedes hacer en esta plataforma. Recomendarás sus links de academy si alguién quiere saber más. Responde con un solo parrafo.",
 }: FloatingGeminiChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -82,7 +84,7 @@ export function FloatingGeminiChat({
     <>
       {/* Botón flotante */}
       <motion.div
-        className="fixed bottom-6 right-6 z-50"
+        className="fixed bottom-10 right-6 z-50"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
@@ -206,6 +208,7 @@ export function FloatingGeminiChat({
                     initialMessage={initialMessage}
                     model={selectedModel}
                     onModelChange={setSelectedModel}
+                    systemPrompt={systemPrompt}
                   />
                 </div>
               )}

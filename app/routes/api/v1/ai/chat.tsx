@@ -14,6 +14,7 @@ export const action = async ({ request }: { request: Request }) => {
       message,
       history = [],
       model = "gemini-1.5-flash",
+      systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
     } = await request.json();
 
     if (!message || typeof message !== "string") {
@@ -64,8 +65,11 @@ export const action = async ({ request }: { request: Request }) => {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Enviar el mensaje y obtener stream de respuesta
-          const result = await chat.sendMessageStream(message);
+          // Enviar el mensaje con system prompt y obtener stream de respuesta
+          const result = await chat.sendMessageStream([
+            { text: systemPrompt },
+            { text: message },
+          ]);
 
           // Enviar evento de inicio
           controller.enqueue(`data: ${JSON.stringify({ type: "start" })}\n\n`);

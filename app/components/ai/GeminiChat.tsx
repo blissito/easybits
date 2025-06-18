@@ -30,6 +30,7 @@ interface GeminiChatProps {
   initialMessage?: string;
   model?: string;
   onModelChange?: (model: string) => void;
+  systemPrompt?: string;
 }
 
 export function GeminiChat({
@@ -38,6 +39,7 @@ export function GeminiChat({
   initialMessage = "¡Hola blissmo!",
   model = "gemini-1.5-flash",
   onModelChange,
+  systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
 }: GeminiChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -100,6 +102,7 @@ export function GeminiChat({
             content: msg.content,
           })),
           model,
+          systemPrompt,
         }),
       });
 
