@@ -8,6 +8,8 @@ RUN npm ci
 
 # Copiar archivos necesarios y hacer build
 COPY . .
+# Generar Prisma en la etapa de build
+RUN npx prisma generate
 RUN npm run build
 
 # Production stage
@@ -18,10 +20,6 @@ WORKDIR /app
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
-
-# Generar Prisma en la imagen final
-COPY prisma ./prisma
-RUN npx prisma generate
 
 # Limpiar caché de npm
 RUN npm cache clean --force
