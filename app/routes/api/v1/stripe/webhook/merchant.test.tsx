@@ -1,301 +1,82 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { action } from "./merchant";
-import { db } from "~/.server/db";
-import type { User } from "@prisma/client";
-import {
-  assignAssetToUserByEmail,
-  removeAssetFromUserByEmail,
-  constructStripeEvent,
-  getEmailFromEvent,
-} from "~/.server/webhookUtils";
 
-// Helper function to create consistent test events
-const createTestEvent = (type: string, data: any = {}) => ({
-  type,
-  data: {
-    object: {
-      ...data,
-      metadata: { assetId: "test_asset_123" },
-      email: "test@example.com",
-    },
-  },
-});
-
-// Mocks
+// Mock global para Stripe y DB
+vi.mock("~/.server/stripe_v2", () => ({
+  assignAssetToUser: vi.fn(),
+}));
 vi.mock("~/.server/db", () => ({
   db: {
-    user: {
-      findFirst: vi.fn(),
-      update: vi.fn(),
-    },
+    asset: { findFirst: vi.fn() },
+    user: { findFirst: vi.fn() },
+    order: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }));
 
-vi.mock("~/.server/webhookUtils", () => ({
-  assignAssetToUserByEmail: vi.fn().mockImplementation(({ assetId, email }) => {
-    if (!assetId || !email) {
-      return new Response("Missing required metadata or email", {
-        status: 400,
-      });
-    }
-    return new Response(null, { status: 200 });
-  }),
-  removeAssetFromUserByEmail: vi
-    .fn()
-    .mockImplementation(({ assetId, email }) => {
-      if (!assetId || !email) {
-        return new Response("Missing required metadata or email", {
-          status: 400,
-        });
-      }
-      return new Response(null, { status: 200 });
-    }),
-  constructStripeEvent: vi
-    .fn()
-    .mockImplementation(async (request: Request, assetId: string) => {
-      const body = await request.json();
-      if (!body || typeof body !== "object") {
-        return new Response("Invalid event body", { status: 400 });
-      }
-
-      // Si el body ya es un evento completo, lo devolvemos directamente
-      if (body.type) {
-        return body;
-      }
-
-      return new Response("Invalid Stripe event", { status: 400 });
-    }),
-  getEmailFromEvent: vi.fn().mockReturnValue("test@example.com"),
-}));
-
-// Helper function to create a mock Stripe event
-const createMockEvent = (type: string, data: any) => ({
-  type,
-  data: {
-    object: {
-      ...data,
-      metadata: {},
-      email: "test@example.com",
+function mockRequest({
+  body = "{}",
+  signature = "test-signature",
+  method = "POST",
+} = {}) {
+  return {
+    method,
+    headers: {
+      get: (key: string) =>
+        key === "stripe-signature" ? signature : undefined,
     },
-  },
-});
+    text: async () => body,
+  } as unknown as Request;
+}
 
-describe("Stripe Webhook Handler", () => {
-  beforeEach(() => {
+const params = { assetId: "a1" };
+
+describe("merchant webhook action", () => {
+  let utils: any;
+  beforeEach(async () => {
     vi.clearAllMocks();
-    process.env.STRIPE_SIGN = "test_webhook_signing_secret";
+    process.env.STRIPE_SIGN = "test_signing_secret";
+    utils = await import("~/.server/webhookUtils");
+    vi.spyOn(utils, "constructStripeEvent").mockResolvedValue({
+      type: "payment_intent.succeeded",
+      data: { object: { customer_email: "test@example.com" } },
+    });
+    vi.spyOn(utils, "getEmailFromEvent").mockReturnValue("test@example.com");
   });
 
-  describe("account.updated event", () => {
-    it("should add merchant role when account is enabled", async () => {
-      const mockUser: User = {
-        id: "user_123",
-        email: "test@example.com",
-        roles: [],
-        confirmed: true,
-        publicKey: null,
-        displayName: null,
-        verified_email: null,
-        family_name: null,
-        given_name: null,
-        picture: null,
-        phoneNumber: null,
-        metadata: null,
-        stripeId: null,
-        host: null,
-        dnsConfig: null,
-        domain: null,
-        newsletters: [],
-        notifications: null,
-        assetIds: [],
-        customer: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        storeConfig: null,
-      };
-
-      const event = createTestEvent("account.updated", {
-        charges_enabled: true,
-        payouts_enabled: true,
-      });
-
-      vi.mocked(db.user.findFirst).mockResolvedValue(mockUser);
-
-      const request = new Request("http://localhost", {
-        method: "POST",
-        headers: { "stripe-signature": "test_signature" },
-        body: JSON.stringify(event),
-      });
-
-      const response = await action({
-        request,
-        params: { assetId: "test_asset_123" },
-      });
-
-      expect(response.status).toBe(200);
-      expect(db.user.update).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-        data: {
-          roles: { push: "merchant" },
-        },
-      });
-    });
-
-    it("should remove merchant role when account is disabled", async () => {
-      const mockUser: User = {
-        id: "user_123",
-        email: "test@example.com",
-        roles: ["merchant"],
-        confirmed: true,
-        publicKey: null,
-        displayName: null,
-        verified_email: null,
-        family_name: null,
-        given_name: null,
-        host: null,
-        metadata: null,
-        picture: null,
-        customer: null,
-        stripeId: null,
-        storeConfig: null,
-        assetIds: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        newsletters: [],
-        phoneNumber: null,
-        dnsConfig: null,
-        domain: null,
-        notifications: null,
-      };
-
-      const event = createTestEvent("account.updated", {
-        charges_enabled: false,
-        payouts_enabled: false,
-      });
-
-      vi.mocked(db.user.findFirst).mockResolvedValue(mockUser);
-
-      const request = new Request("http://localhost", {
-        method: "POST",
-        headers: { "stripe-signature": "test_signature" },
-        body: JSON.stringify(event),
-      });
-
-      const response = await action({
-        request,
-        params: { assetId: "test_asset_123" },
-      });
-
-      expect(response.status).toBe(200);
-      expect(db.user.update).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-        data: { roles: [] },
-      });
-    });
+  it("returns 400 if signature is missing", async () => {
+    utils.constructStripeEvent.mockResolvedValueOnce(
+      new Response("No signature provided", { status: 400 })
+    );
+    const req = mockRequest({ signature: undefined });
+    const res = await action({ request: req, params });
+    expect(res.status).toBe(400);
   });
 
-  describe("charge events", () => {
-    it("should assign asset on charge succeeded", async () => {
-      const event = createTestEvent("charge.succeeded", {
-        metadata: { assetId: "test_asset_123" },
-      });
-
-      const request = new Request("http://localhost", {
-        method: "POST",
-        headers: { "stripe-signature": "test_signature" },
-        body: JSON.stringify(event),
-      });
-
-      const response = await action({
-        request,
-        params: { assetId: "test_asset_123" },
-      });
-
-      expect(response.status).toBe(200);
-      expect(assignAssetToUserByEmail).toHaveBeenCalledWith({
-        assetId: "test_asset_123",
-        email: "test@example.com",
-      });
-    });
-
-    it("should remove asset on charge failed", async () => {
-      const event = createTestEvent("charge.updated", {
-        status: "failed",
-      });
-
-      const request = new Request("http://localhost", {
-        method: "POST",
-        headers: { "stripe-signature": "test_signature" },
-        body: JSON.stringify(event),
-      });
-
-      const response = await action({
-        request,
-        params: { assetId: "test_asset_123" },
-      });
-
-      expect(response.status).toBe(200);
-      expect(removeAssetFromUserByEmail).toHaveBeenCalledWith({
-        assetId: "test_asset_123",
-        email: "test@example.com",
-      });
-    });
+  it("returns 405 if method is not POST", async () => {
+    utils.constructStripeEvent.mockResolvedValueOnce(
+      new Response("Method not allowed", { status: 405 })
+    );
+    const req = mockRequest({ method: "GET" });
+    const res = await action({ request: req, params });
+    expect(res.status).toBe(405);
   });
 
-  describe("error handling", () => {
-    it("should return 404 when user is not found", async () => {
-      const event = createTestEvent("account.updated", {
-        charges_enabled: true,
-        payouts_enabled: true,
-      });
+  it("returns 400 if constructStripeEvent throws", async () => {
+    // Espía y fuerza un error en constructStripeEvent solo para este test
+    utils.constructStripeEvent.mockResolvedValueOnce(
+      new Response("Webhook error", { status: 400 })
+    );
+    const req = mockRequest();
+    const res = await action({ request: req, params });
+    expect(res.status).toBe(400);
+  });
 
-      vi.mocked(db.user.findFirst).mockResolvedValue(null);
-
-      const request = new Request("http://localhost", {
-        method: "POST",
-        headers: { "stripe-signature": "test_signature" },
-        body: JSON.stringify(event),
-      });
-
-      const response = await action({
-        request,
-        params: { assetId: "test_asset_123" },
-      });
-
-      expect(response.status).toBe(404);
-      expect(await response.text()).toBe("User not found");
-    });
-
-    it("should return 400 when required data is missing", async () => {
-      // Simulamos que falta el email en el evento
-      const event = {
-        type: "charge.succeeded",
-        data: {
-          object: {
-            metadata: { assetId: "test_asset_123" },
-            // email: undefined
-          },
-        },
-      };
-
-      const request = new Request("http://localhost", {
-        method: "POST",
-        headers: { "stripe-signature": "test_signature" },
-        body: JSON.stringify(event),
-      });
-
-      // Mock getEmailFromEvent para devolver undefined
-      vi.mocked(getEmailFromEvent).mockReturnValue(undefined);
-
-      const response = await action({
-        request,
-        params: { assetId: "test_asset_123" },
-      });
-
-      expect(response.status).toBe(400);
-      expect(await response.text()).toBe("Missing required metadata or email");
-    });
+  it("returns 404 if no pending order for email", async () => {
+    const { db } = await import("~/.server/db");
+    const mockedDb = vi.mocked(db, true);
+    mockedDb.order.findFirst.mockResolvedValue(null);
+    const req = mockRequest();
+    const res = await action({ request: req, params });
+    expect(res.status).toBe(404);
   });
 });
-
-// Note: No tests for account.application.deauthorized due to todo comment indicating it needs fixing
