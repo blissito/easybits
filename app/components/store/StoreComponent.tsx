@@ -2,9 +2,10 @@ import { HeaderIconButton } from "../common/HeaderIconButton";
 import GlobeIcon from "/icons/globe.svg";
 import EditIcon from "/icons/edit.svg";
 import OpenIcon from "/icons/open.svg";
+import SeoIcon from "/icons/seo.svg";
 import ShareIcon from "/icons/share.svg";
 import { Link } from "react-router";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useRef, type ChangeEvent } from "react";
 import { cn } from "~/utils/cn";
 import type { Asset, User } from "@prisma/client";
 import { Sharing } from "~/routes/assets/AssetPreview";
@@ -13,6 +14,9 @@ import { Input } from "../common/Input";
 import StoreConfigForm from "./StoreConfigForm";
 import { StoreTemplate } from "~/routes/store/storeTemplate";
 import { useOpenLink } from "~/hooks/useOpenLink";
+import { ImageIcon } from "~/components/icons/image";
+import { IoClose } from "react-icons/io5";
+import { BrutalButton } from "../common/BrutalButton";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -33,6 +37,8 @@ export default function StoreComponent({
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isSeoOpen, setIsSeoOpen] = useState(false);
+  
   const handleModal = () => {
     setIsOpen(true);
   };
@@ -40,6 +46,15 @@ export default function StoreComponent({
   const handleClose = () => {
     setIsOpen(false);
   };
+
+  const handleSeoOpen = () => {
+    setIsSeoOpen(true);
+  };
+
+  const handleSeoClose = () => {
+    setIsSeoOpen(false);
+  };
+
   // @todo if domain? This always work, with domains it could be malconfig
   const { handleOpenLink } = useOpenLink({
     localLink: `http://${user.host}.localhost:3000/tienda`,
@@ -58,6 +73,14 @@ export default function StoreComponent({
             Mi tienda
           </h2>
           <div className="flex gap-3">
+          <HeaderIconButton>
+              <div
+                className="bg-white border-[2px] border-black grid place-content-center rounded-xl p-1 w-[48px] h-[48px] cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={handleSeoOpen}
+              >
+                <img className="w-full" src={SeoIcon} />
+              </div>
+            </HeaderIconButton>
             <HeaderIconButton>
               {cta ? (
                 cta
@@ -105,6 +128,12 @@ export default function StoreComponent({
         onClose={() => setIsConfigOpen(false)}
         storeConfig={user?.storeConfig}
       />
+
+      <SeoDrawer
+        isOpen={isSeoOpen}
+        onClose={handleSeoClose}
+        user={user}
+      />
     </>
   );
 }
@@ -138,5 +167,159 @@ const ShareStoreLink = ({
         </div>
       </Modal>
     </>
+  );
+};
+//Hecho por cursor, ahi que revisarlo
+const SingleImageUploader = ({
+  onImageChange,
+  currentImage,
+}: {
+  onImageChange: (file: File | null) => void;
+  currentImage?: string;
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length < 1) return;
+
+    const file = e.dataTransfer.files[0];
+    if (file.type.includes("image")) {
+      onImageChange(file);
+    }
+  };
+
+  const handleDragOver = (ev: React.DragEvent) => {
+    ev.preventDefault();
+  };
+
+  const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
+    if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
+    onImageChange(ev.currentTarget.files[0]);
+  };
+
+  return (
+    <div className="space-y-3">
+      <span >Imagen de portada para redes sociales</span>
+      
+      {!currentImage ? (
+        <div
+          className={cn(
+            "w-full border border-dashed border-black rounded-lg p-6 text-center cursor-pointer transition-colors",
+            {
+              "border-brand-500 bg-brand-50": isHovered,
+            }
+          )}
+          onClick={() => fileInputRef.current?.click()}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onDragEnter={() => setIsHovered(true)}
+          onDragLeave={() => setIsHovered(false)}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <ImageIcon
+            className="w-8 h-8 mx-auto mb-2"
+            fill={isHovered ? "#9870ED" : "#6A6966"}
+          />        
+          <p className={cn("text-sm text-marengo", {
+            "text-brand-500": isHovered,
+          })}>
+            Arrastra una imagen o haz clic para seleccionar
+          </p>
+          <p className={cn("text-sm text-marengo mt-1",   { "text-brand-500": isHovered})}>
+            La imagen debe ser de 1200x630px y menos de 5mb.
+          </p>
+        </div>
+      ) : (
+        <div className="relative">
+          <img 
+            src={currentImage} 
+            alt="Preview" 
+            className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
+          />
+          <button
+            onClick={() => onImageChange(null)}
+            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+          >
+            <IoClose className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleInputFileChange}
+        className="hidden"
+      />
+    </div>
+  );
+};
+
+const SeoDrawer = ({
+  isOpen,
+  onClose,
+  user,
+}: {
+  isOpen: boolean;
+  onClose?: () => void;
+  user: any;
+}) => {
+  const [metaImage, setMetaImage] = useState<File | null>(null);
+
+  const handleImageChange = (file: File | null) => {
+    setMetaImage(file);
+  };
+
+  return (
+    <Modal
+      mode="drawer"
+      key="seo-drawer"
+      containerClassName="z-50 text-black"
+      isOpen={isOpen}
+      className="w-full max-w-md h-full overflow-y-auto"
+      title="Configura el SEO de tu tienda"
+      onClose={onClose}
+    >
+      <div className="flex flex-col justify-between h-full 0 min-h-[700px]">
+        <div className="flex flex-col gap-8 mb-8">
+          
+          <Input 
+            label="Escribe el título para tu tienda"
+            placeholder="Weteros: las mejores ilustraciones de la web"
+            defaultValue={user?.host || ""}
+          />
+         
+          <Input 
+            type="textarea"
+            label="Agrega una descripción (máximo 70 caracteres)"
+            placeholder="Descripción que aparecerá en Google y todas las redes sociales"
+            className="h-40"
+            inputClassName="h-40"
+            defaultValue={user?.storeConfig?.metaDescription || ""}
+          />
+          <Input 
+            label="Incluye algunas palabras clave "
+            className="mt-8"
+            placeholder="libros, arte, historia"
+            defaultValue={user?.storeConfig?.keywords || ""}
+          />
+            <SingleImageUploader 
+          
+            onImageChange={handleImageChange}
+            currentImage={metaImage ? URL.createObjectURL(metaImage) : undefined}
+          />
+       
+        </div>
+        <div className="mt-auto">
+         <BrutalButton className="w-full" containerClassName="w-full">
+         Actualizar
+         </BrutalButton>
+        </div>
+      </div>
+    </Modal>
   );
 };

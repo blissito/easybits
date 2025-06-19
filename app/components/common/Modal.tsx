@@ -130,6 +130,15 @@ export const Modal = ({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             />
+          ) : mode === "drawer" ? (
+            <motion.article
+              onClick={onClose}
+              className="absolute inset-0 bg-black bg-opacity-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            />
           ) : null}
           <motion.section
             onClick={(e) => e.stopPropagation()}
@@ -145,7 +154,7 @@ export const Modal = ({
               "max-w-[600px]  mx-auto  md:w-[600px] lg:min-w-[600px]",
               {
                 "min-h-[0px] max-w-[300px]": mode === "naked",
-                "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute":
+                "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute border-l-2 border-y-0 border-r-0":
                   mode === "drawer",
               },
               className

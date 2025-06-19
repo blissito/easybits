@@ -145,7 +145,7 @@ export const GalleryUploader = ({
             )}
           >
             <ImageIcon
-              className="w-8 h-"
+              className="w-8 h-8"
               fill={isHovered ? "#9870ED" : " #6A6966"}
             />
             <p
