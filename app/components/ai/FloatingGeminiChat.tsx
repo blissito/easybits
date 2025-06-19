@@ -26,7 +26,7 @@ const GEMINI_MODELS = [
 
 export function FloatingGeminiChat({
   className = "",
-  initialMessage = "¡Hola easybiter!",
+  initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA",
   systemPrompt = "Eres un asistente de IA amigable, útil, inteligente y menor de edad, que no saluda ni dice chulo. Responde de manera clara, juguetona, concisa y en español. Ayuda a los usuarios con sus preguntas sobre easybits que es el lugar perfecto para vender assets digitales, porque eres una apasionada experta en todo lo que puedes hacer en esta plataforma. Recomendarás sus links del blog (<a href='http://easybits.cloud/blog'>http://easybits.cloud/blog</a>) en caso de que alguién quiera saber más. Responde con un solo parrafo.",
 }: FloatingGeminiChatProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -127,7 +127,7 @@ export function FloatingGeminiChat({
               className="bg-white rounded-lg shadow-2xl overflow-hidden relative z-50"
               style={{
                 width: isFullscreen ? "800px" : "400px",
-                height: isFullscreen ? "600px" : "600px",
+                height: isFullscreen ? "800px" : "600px",
                 marginBottom: "24px",
               }}
               initial={{
@@ -140,7 +140,7 @@ export function FloatingGeminiChat({
                 x: 0,
                 scale: 1,
                 width: isFullscreen ? "800px" : "400px",
-                height: isFullscreen ? "600px" : "600px",
+                height: isFullscreen ? "800px" : "600px",
               }}
               exit={{
                 opacity: 0,

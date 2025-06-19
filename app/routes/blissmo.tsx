@@ -1,8 +1,5 @@
-export default function Page() {
-  return (
-    <article>
-      <h1>Hola blissmo</h1>
+import VideoViewer from "../components/VideoViewer";
 
-    </article>
-  );
+export default function Page() {
+  return <VideoViewer />;
 }
