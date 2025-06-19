@@ -8,8 +8,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const prompt = formData.get("prompt") as string;
     const ollamaResponse = await fetchInternalOllama(prompt);
     console.info("THE_GREAT_OLLAMA_RESPONSE", ollamaResponse);
-    const json = await ollamaResponse.json();
-    console.info("DATA?", json);
+    if (ollamaResponse.ok) {
+      const json = await ollamaResponse.json();
+      console.info("DATA?", json);
+    }
   }
   return null;
 };
