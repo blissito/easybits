@@ -31,15 +31,13 @@ export async function action({ request }) {
         // metaImage,
       };
 
+      const storeConfig = {...user.storeConfig}
+      storeConfig.metadata = metadata
+
       const m = await db.user.update({
         where: { id: user.id },
-        data: {
-          storeConfig:{
-            metadata
-          }
-        }
+        data: {storeConfig}
       });
-    console.log(m, "result");
       return ({ success: true, metadata });
     }
 
