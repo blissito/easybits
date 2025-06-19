@@ -31,16 +31,39 @@ export default function LinksStep({ control, register }) {
           )}
         />
       </div>
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="wait">
         {
           showSocialNetworks ? (
             <motion.div
-              key="box"
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0 }}
+              key="social-networks"
+              initial={{ opacity: 0, height: 0, y: -20 }}
+              animate={{ 
+                opacity: 1, 
+                height: "auto", 
+                y: 0,
+                transition: {
+                  duration: 0.4,
+                  ease: "easeOut",
+                  staggerChildren: 0.1
+                }
+              }}
+              exit={{ 
+                opacity: 0, 
+                height: 0, 
+                y: -20,
+                transition: {
+                  duration: 0.3,
+                  ease: "easeIn"
+                }
+              }}
+              className="overflow-hidden"
             >
-              <div className="mt-2">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1, duration: 0.3 }}
+                className="mt-2"
+              >
                 <Input
                   {...register("instagram")}
                   placeholder="https://www.instagram.com/Bitor"
@@ -51,8 +74,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2, duration: 0.3 }}
+              >
                 <Input
                   {...register("x")}
                   placeholder="https://www.x.com/Bitor"
@@ -64,8 +91,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+              >
                 <Input
                   {...register("facebook")}
                   placeholder="https://www.facebook.com/Bitor"
@@ -76,8 +107,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4, duration: 0.3 }}
+              >
                 <Input
                   {...register("tiktok")}
                   placeholder="https://www.tiktok.com/Bitor"
@@ -88,8 +123,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5, duration: 0.3 }}
+              >
                 <Input
                   {...register("youtube")}
                   placeholder="https://www.youtube.com/Bitor"
@@ -100,8 +139,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6, duration: 0.3 }}
+              >
                 <Input
                   {...register("linkedin")}
                   placeholder="https://www.linkedin.com/Bitor"
@@ -112,8 +155,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.7, duration: 0.3 }}
+              >
                 <Input
                   {...register("website")}
                   placeholder="https://www.bitor.com"
@@ -124,12 +171,12 @@ export default function LinksStep({ control, register }) {
                     </span>
                   }
                 />
-              </div>
+              </motion.div>
             </motion.div>
           ) : null
         }
       </AnimatePresence>
-      <div className="mt-2">
+      <div className="mt-6">
         <Controller
           name="showProducts"
           control={control}
