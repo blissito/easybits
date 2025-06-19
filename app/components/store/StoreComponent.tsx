@@ -5,7 +5,7 @@ import OpenIcon from "/icons/open.svg";
 import SeoIcon from "/icons/seo.svg";
 import ShareIcon from "/icons/share.svg";
 import { Link } from "react-router";
-import { useState, type ReactNode, useRef, type ChangeEvent } from "react";
+import { useState, type ReactNode, useRef, type ChangeEvent, useEffect } from "react";
 import { cn } from "~/utils/cn";
 import type { Asset, User } from "@prisma/client";
 import { Sharing } from "~/routes/assets/AssetPreview";
@@ -18,6 +18,7 @@ import { ImageIcon } from "~/components/icons/image";
 import { IoClose } from "react-icons/io5";
 import { BrutalButton } from "../common/BrutalButton";
 import { useFetcher } from "react-router";
+import React from "react";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -272,6 +273,7 @@ const SeoDrawer = ({
   const fetcher = useFetcher();
   const formRef = useRef<HTMLFormElement>(null);
   const [descriptionLength, setDescriptionLength] = useState(0);
+  const wasSubmitted = useRef(false);
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -282,6 +284,7 @@ const SeoDrawer = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    wasSubmitted.current = true;
     const formData = new FormData(formRef.current!);
     formData.append("intent", "update_seo_metadata");
 
@@ -292,6 +295,14 @@ const SeoDrawer = ({
   };
 
   const isLoading = fetcher.state === "submitting";
+
+  // Close modal when update is successful
+  useEffect(() => {
+    if (wasSubmitted.current && fetcher.state === "idle" && fetcher.data?.success) {
+      wasSubmitted.current = false;
+      onClose?.();
+    }
+  }, [fetcher.state, fetcher.data, onClose]);
 
   return (
     <Modal
