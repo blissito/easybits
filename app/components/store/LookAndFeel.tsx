@@ -1,34 +1,41 @@
-import { FileInput } from "../forms/FileInput";
 import { Input } from "../forms/Input";
 import { LuMoonStar, LuSun } from "react-icons/lu";
 import ButtonGroupInput from "../forms/ButtonGroupInput";
 import { cn } from "~/utils/cn";
-import { Controller } from "react-hook-form";
+import { Controller, type Control } from "react-hook-form";
+import InputImage from '../common/InputImage';
 
-export default function LookAndFeel({ control }) {
+interface LookAndFeelProps {
+  control: Control;
+  onCoverFileChange: (file: File) => void;
+  onLogoFileChange: (file: File) => void;
+}
+
+export default function LookAndFeel({
+  control,
+  onCoverFileChange,
+  onLogoFileChange,
+}: LookAndFeelProps) {
   return (
     <>
       {/* logo y portada */}
       <p className=" my-2 font-semibold">Logo y Portada</p>
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-4">
-          <FileInput
-            assetId=""
-            actionId={1}
-            files={[]}
+          <InputImage
+            buttonClassName="min-h-[125px] max-h-[125px] min-w-[144px] max-w-[144px]"
             placeholder="Arrastra o selecciona tu logo"
-            svgClassName="text-black"
-            buttonClassName="flex-col p-0 py-4 min-h-[142px] m-0 gap-2"
+            allowPreview
+            onChange={(files) => onLogoFileChange(files?.[0])}
           />
         </div>
         <div className="col-span-8">
-          <FileInput
-            assetId=""
-            actionId={2}
-            files={[]}
-            placeholder="Arrastra o selecciona tu foto de portada"
-            svgClassName="text-black"
-            buttonClassName="flex-col p-0 py-4 min-h-[142px]  m-0 gap-2"
+          <InputImage
+            buttonClassName="w-full min-h-[125px] max-h-[125px] min-w-[144px]"
+            placeholderClassName="max-w-[180px]"
+            placeholder={'Arrastra o selecciona tu foto de portada'}
+            allowPreview
+            onChange={(files) => onCoverFileChange(files?.[0])}
           />
         </div>
       </div>

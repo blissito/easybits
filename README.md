@@ -4,6 +4,16 @@
 
 > made by fixter.org
 
+## Inicio
+Antes de iniciar el proyecto asegurate de ejecutar:
+```
+npx prisma generate
+```
+Inicia el proyecto ejecutando:
+````
+npm dev
+````
+
 ## En relación a los tipos de curso
 
 EasyBits soporta la publicación de tres tipos de curso:

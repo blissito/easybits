@@ -41,7 +41,7 @@ export const StoreTemplate = ({
     hexColor,
     typography,
     logoImage,
-    portadaImage,
+    coverImage,
     showProducts,
     socialNetworks,
   } = user?.storeConfig || {};
@@ -56,8 +56,8 @@ export const StoreTemplate = ({
           className="w-full h-[224px] border-2 border-black relative bg-brand-500"
           style={{ backgroundColor: hexColor, fontFamily: typography }}
         >
-          {portadaImage && (
-            <img className="object-cover w-full h-full" src={portadaImage} />
+          {coverImage && (
+            <img className="object-cover w-full h-full" src={coverImage} />
           )}
         </div>
         <div className="w-44 h-44 bg-black rounded-full mx-auto -mt-20 z-10 relative">
@@ -67,7 +67,7 @@ export const StoreTemplate = ({
               e.currentTarget.src = DEFAULT_PIC;
             }}
             className="object-cover rounded-full w-full h-full -translate-y-1 -translate-x-1 bg-white border-2 border-black"
-            src={user.picture || logoImage || DEFAULT_PIC}
+            src={logoImage || user.picture || DEFAULT_PIC}
           />
         </div>
         <div className="mt-4 text-2xl flex justify-center mb-6">
