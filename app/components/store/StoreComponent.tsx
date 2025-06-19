@@ -271,8 +271,14 @@ const SeoDrawer = ({
 }) => {
   const fetcher = useFetcher();
   const formRef = useRef<HTMLFormElement>(null);
+  const [descriptionLength, setDescriptionLength] = useState(0);
 
-
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= 155) {
+      setDescriptionLength(value.length);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,19 +311,25 @@ const SeoDrawer = ({
             placeholder="Weteros: las mejores ilustraciones de la web"
             defaultValue={user?.storeConfig?.metadata?.metaTitle || user?.host || ""}
           />
-          <Input 
-            name="metaDescription"
-            type="textarea"
-            label="Agrega una descripción (máximo 70 caracteres)"
-            placeholder="Descripción que aparecerá en Google y todas las redes sociales"
-            className="h-40"
-            inputClassName="h-40"
-            defaultValue={user?.storeConfig?.metadata?.metaDescription || ""}
-          />
+          <div className="space-y-0 relative">
+            <Input 
+              name="metaDescription"
+              type="textarea"
+              label="Agrega una descripción (máximo 155 caracteres)"
+              placeholder="Descripción que aparecerá en Google y todas las redes sociales"
+              className="h-fit"
+              inputClassName="h-32"
+              defaultValue={user?.storeConfig?.metadata?.metaDescription || ""}
+              onChange={handleDescriptionChange}
+              maxLength={155}
+            />
+            <div className="text-sm text-gray-500 text-right absolute bottom-3 right-2">
+              {descriptionLength}/155 caracteres
+            </div>
+          </div>
           <Input 
             name="keywords"
             label="Incluye algunas palabras clave "
-            className="mt-8"
             placeholder="libros, arte, historia"
             defaultValue={user?.storeConfig?.metadata?.keywords || ""}
           />
@@ -332,7 +344,7 @@ const SeoDrawer = ({
             type="submit"
             className="w-full" 
             containerClassName="w-full"
-            disabled={isLoading}
+            isLoading={isLoading}
           >
             {isLoading ? "Guardando..." : "Actualizar"}
           </BrutalButton>
