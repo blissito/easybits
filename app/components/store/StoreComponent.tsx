@@ -17,6 +17,7 @@ import { useOpenLink } from "~/hooks/useOpenLink";
 import { ImageIcon } from "~/components/icons/image";
 import { IoClose } from "react-icons/io5";
 import { BrutalButton } from "../common/BrutalButton";
+import { useFetcher } from "react-router";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -268,11 +269,23 @@ const SeoDrawer = ({
   onClose?: () => void;
   user: any;
 }) => {
-  const [metaImage, setMetaImage] = useState<File | null>(null);
+  const fetcher = useFetcher();
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const handleImageChange = (file: File | null) => {
-    setMetaImage(file);
+
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(formRef.current!);
+    formData.append("intent", "update_seo_metadata");
+
+    fetcher.submit(formData, {
+      method: "post",
+      action: "/api/v1/store-config"
+    });
   };
+
+  const isLoading = fetcher.state === "submitting";
 
   return (
     <Modal
@@ -284,42 +297,47 @@ const SeoDrawer = ({
       title="Configura el SEO de tu tienda"
       onClose={onClose}
     >
-      <div className="flex flex-col justify-between h-full 0 min-h-[700px]">
+      <fetcher.Form ref={formRef} onSubmit={handleSubmit} className="flex flex-col justify-between h-full min-h-[700px]">
         <div className="flex flex-col gap-8 mb-8">
-          
           <Input 
+            name="metaTitle"
             label="Escribe el título para tu tienda"
             placeholder="Weteros: las mejores ilustraciones de la web"
-            defaultValue={user?.host || ""}
+            defaultValue={user?.storeConfig?.metadata?.metaTitle || user?.host || ""}
           />
-         
           <Input 
+            name="metaDescription"
             type="textarea"
             label="Agrega una descripción (máximo 70 caracteres)"
             placeholder="Descripción que aparecerá en Google y todas las redes sociales"
             className="h-40"
             inputClassName="h-40"
-            defaultValue={user?.storeConfig?.metaDescription || ""}
+            defaultValue={user?.storeConfig?.metadata?.metaDescription || ""}
           />
           <Input 
+            name="keywords"
             label="Incluye algunas palabras clave "
             className="mt-8"
             placeholder="libros, arte, historia"
-            defaultValue={user?.storeConfig?.keywords || ""}
+            defaultValue={user?.storeConfig?.metadata?.keywords || ""}
           />
-            <SingleImageUploader 
           
+          {/* <SingleImageUploader 
             onImageChange={handleImageChange}
-            currentImage={metaImage ? URL.createObjectURL(metaImage) : undefined}
-          />
-       
+            currentImage={metaImage ? URL.createObjectURL(metaImage) : user?.storeConfig?.metadata?.metaImage}
+          /> */}
         </div>
         <div className="mt-auto">
-         <BrutalButton className="w-full" containerClassName="w-full">
-         Actualizar
-         </BrutalButton>
+          <BrutalButton 
+            type="submit"
+            className="w-full" 
+            containerClassName="w-full"
+            disabled={isLoading}
+          >
+            {isLoading ? "Guardando..." : "Actualizar"}
+          </BrutalButton>
         </div>
-      </div>
+      </fetcher.Form>
     </Modal>
   );
 };

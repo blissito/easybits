@@ -118,6 +118,7 @@ type StoreConfig {
   linkedin       String  @default("")
   x              String  @default("")
   website        String  @default("")
+  metadata       Json?
 }
 
 model User {
