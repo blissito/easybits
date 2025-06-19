@@ -171,6 +171,41 @@ export function FloatingGeminiChat({
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
+                  {/* Botón expandir para tablets */}
+                  <div className="hidden md:block lg:hidden">
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
+                      title={
+                        isFullscreen
+                          ? "Salir de pantalla completa"
+                          : "Pantalla completa"
+                      }
+                    >
+                      <svg
+                        className="w-5 h-5 text-black"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        {isFullscreen ? (
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0V8m0 6l7-7"
+                          />
+                        ) : (
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                          />
+                        )}
+                      </svg>
+                    </button>
+                  </div>
                   <button
                     onClick={() => setIsMinimized(!isMinimized)}
                     className="w-8 h-8 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center"
@@ -195,38 +230,6 @@ export function FloatingGeminiChat({
                           strokeLinejoin="round"
                           strokeWidth={2}
                           d="M19 9l-7 7-7-7"
-                        />
-                      )}
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="w-8 h-8 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center"
-                    title={
-                      isFullscreen
-                        ? "Salir de pantalla completa"
-                        : "Pantalla completa"
-                    }
-                  >
-                    <svg
-                      className="w-4 h-4 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      {isFullscreen ? (
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0V8m0 6l7-7"
-                        />
-                      ) : (
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
                         />
                       )}
                     </svg>
