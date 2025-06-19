@@ -253,7 +253,7 @@ export function GeminiChat({
 
   return (
     <>
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isFullscreen && (
           <motion.div
             className="fixed inset-0 bg-black bg-opacity-50 z-40"
@@ -261,7 +261,7 @@ export function GeminiChat({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
           />
         )}
       </AnimatePresence>
@@ -269,11 +269,16 @@ export function GeminiChat({
         className={`flex flex-col bg-white rounded-lg border border-gray-200 ${className}`}
         onClick={(e) => e.stopPropagation()}
         layout
+        initial={{ scale: 1 }}
+        animate={{
+          scale: 1,
+          opacity: 1,
+        }}
         transition={{
           type: "spring",
-          stiffness: 300,
-          damping: 30,
-          duration: 0.3,
+          stiffness: 200,
+          damping: 25,
+          duration: 0.4,
         }}
         style={{
           position: isFullscreen ? "fixed" : "relative",
@@ -339,7 +344,7 @@ export function GeminiChat({
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                     animate={{ rotate: isFullscreen ? 180 : 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.4, ease: "easeInOut" }}
                   >
                     {isFullscreen ? (
                       <path
