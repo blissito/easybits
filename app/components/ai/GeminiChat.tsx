@@ -35,7 +35,6 @@ interface GeminiChatProps {
   onModelChange?: (model: string) => void;
   systemPrompt?: string;
   onClose?: () => void;
-  isFullscreen?: boolean;
 }
 
 export function GeminiChat({
@@ -46,7 +45,6 @@ export function GeminiChat({
   onModelChange,
   systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
   onClose,
-  isFullscreen = false,
 }: GeminiChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -62,29 +60,12 @@ export function GeminiChat({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); // @todo convert in hook
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Cerrar modo pantalla completa con ESC
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isFullscreen) {
-        onClose?.();
-      }
-    };
-
-    if (isFullscreen) {
-      document.addEventListener("keydown", handleKeyDown);
-    }
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isFullscreen, onClose]);
 
   // Función para parsear links en el texto
   const parseLinks = (text: string) => {
@@ -173,7 +154,7 @@ export function GeminiChat({
         throw new Error("Error en la respuesta del servidor");
       }
 
-      // Procesar el stream de respuesta
+      // Procesar el stream de respuesta @todo move to a hook
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -259,8 +240,8 @@ export function GeminiChat({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex items-center space-x-3 w-full">
+        <div className="flex items-center p-4 border-b border-gray-200">
+          <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold w-10 text-center">
                 AI
@@ -273,12 +254,6 @@ export function GeminiChat({
               <h3 className="font-semibold text-gray-900 hidden md:block mr-4">
                 Chatea con
               </h3>
-              <div className="block md:hidden ml-auto">
-                <BrutalButtonClose
-                  onClick={onClose}
-                  className="w-6 h-6 rounded-full flex items-center justify-center"
-                />
-              </div>
 
               <select
                 value={model}

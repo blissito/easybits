@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { GeminiChat } from "./GeminiChat";
 import { BrutalButton } from "../common/BrutalButton";
-import { BrutalButtonClose } from "../common/BrutalButtonClose";
 import { motion, AnimatePresence } from "motion/react";
 import { BsChatDots } from "react-icons/bs";
+import { BrutalButtonClose } from "../common/BrutalButtonClose";
 
 interface FloatingGeminiChatProps {
   className?: string;
@@ -30,10 +30,14 @@ export function FloatingGeminiChat({
   systemPrompt = "Eres un asistente de IA amigable, útil, inteligente y menor de edad, que no saluda ni dice chulo. Responde de manera clara, juguetona, concisa y en español. Ayuda a los usuarios con sus preguntas sobre easybits que es el lugar perfecto para vender assets digitales, porque eres una apasionada experta en todo lo que puedes hacer en esta plataforma. Recomendarás sus links del blog (<a href='http://easybits.cloud/blog'>http://easybits.cloud/blog</a>) en caso de que alguién quiera saber más. Responde con un solo parrafo.",
 }: FloatingGeminiChatProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedModel, setSelectedModel] = useState(GEMINI_MODELS[0].value);
   const chatRef = useRef<HTMLDivElement>(null);
+
+  // Debug logs
+  console.log("FloatingGeminiChat state:", { isOpen, isFullscreen });
+
+  const close = () => setIsOpen(false);
 
   // Cerrar chat al hacer clic fuera
   useEffect(() => {
@@ -90,7 +94,7 @@ export function FloatingGeminiChat({
     <>
       {/* Botón flotante */}
       <motion.div
-        className="fixed bottom-10 right-6 z-50"
+        className="fixed bottom-10 right-6 z-30"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
@@ -108,35 +112,23 @@ export function FloatingGeminiChat({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-end p-4 bg-black bg-opacity-50"
+            className="fixed inset-0 z-40 flex items-end justify-end p-4 bg-black bg-opacity-50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
+            style={{
+              paddingBottom: "20px",
+              paddingRight: "24px",
+            }}
           >
             <motion.div
               ref={chatRef}
-              className={`bg-white rounded-lg shadow-2xl overflow-hidden relative ${className}`}
+              className="bg-white rounded-lg shadow-2xl overflow-hidden relative z-50"
               style={{
-                position: isFullscreen ? "fixed" : "relative",
-                top: isFullscreen ? "16px" : "auto",
-                left: isFullscreen ? "16px" : "auto",
-                right: isFullscreen ? "16px" : "auto",
-                bottom: isFullscreen ? "16px" : "auto",
-                width: isFullscreen
-                  ? "calc(100vw - 32px)"
-                  : isMinimized
-                  ? "350px"
-                  : "400px",
-                height: isFullscreen
-                  ? "calc(100vh - 32px)"
-                  : isMinimized
-                  ? "60px"
-                  : "600px",
-                maxHeight: isFullscreen ? "none" : "90vh",
-                maxWidth: isFullscreen ? "none" : "90vw",
-                marginBottom: isFullscreen ? "0" : "24px",
-                zIndex: isFullscreen ? 60 : "auto",
+                width: isFullscreen ? "800px" : "400px",
+                height: isFullscreen ? "600px" : "600px",
+                marginBottom: "24px",
               }}
               initial={{
                 opacity: 0,
@@ -147,6 +139,8 @@ export function FloatingGeminiChat({
                 opacity: 1,
                 x: 0,
                 scale: 1,
+                width: isFullscreen ? "800px" : "400px",
+                height: isFullscreen ? "600px" : "600px",
               }}
               exit={{
                 opacity: 0,
@@ -155,158 +149,57 @@ export function FloatingGeminiChat({
               }}
               transition={{
                 type: "spring",
-                stiffness: 300,
-                damping: 30,
+                stiffness: 150,
+                damping: 20,
+                duration: 0.6,
               }}
             >
-              {/* Header del chat flotante */}
-              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white relative">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">AI</span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Chat IA</h3>
-                    <p className="text-xs opacity-90">IA • En línea</p>
-                  </div>
-                </div>
-
-                {/* Botón expandir centrado */}
-                <div className="absolute left-1/2 transform -translate-x-1/2">
-                  <button
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
-                    title={
-                      isFullscreen
-                        ? "Salir de pantalla completa"
-                        : "Pantalla completa"
-                    }
-                  >
-                    <svg
-                      className="w-5 h-5 text-black"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      {isFullscreen ? (
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0V8m0 6l7-7"
-                        />
-                      ) : (
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                        />
-                      )}
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {/* Botón expandir para tablets */}
-                  <div className="hidden md:block lg:hidden">
-                    <button
-                      onClick={() => setIsFullscreen(!isFullscreen)}
-                      className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
-                      title={
-                        isFullscreen
-                          ? "Salir de pantalla completa"
-                          : "Pantalla completa"
-                      }
-                    >
-                      <svg
-                        className="w-5 h-5 text-black"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        {isFullscreen ? (
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0V8m0 6l7-7"
-                          />
-                        ) : (
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                          />
-                        )}
-                      </svg>
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setIsMinimized(!isMinimized)}
-                    className="w-8 h-8 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center"
-                    title="Minimizar"
-                  >
-                    <svg
-                      className="w-4 h-4 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      {isMinimized ? (
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 15l7-7 7 7"
-                        />
-                      ) : (
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 9l-7 7-7-7"
-                        />
-                      )}
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="w-8 h-8 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center"
-                    title="Cerrar (ESC)"
-                  >
-                    <svg
-                      className="w-4 h-4 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
               {/* Contenido del chat */}
-              {!isMinimized && (
-                <div className="h-full">
-                  <GeminiChat
-                    className="h-full border-0 rounded-none"
-                    initialMessage={initialMessage}
-                    model={selectedModel}
-                    onModelChange={setSelectedModel}
-                    systemPrompt={systemPrompt}
-                    onClose={() => setIsOpen(false)}
-                    isFullscreen={isFullscreen}
+              <div className="h-full relative">
+                <div className="absolute top-5 right-4 md:hidden">
+                  <BrutalButtonClose
+                    onClick={close}
+                    className="w-6 h-6 rounded-full flex items-center justify-center"
                   />
                 </div>
-              )}
+
+                <motion.button
+                  id="expand"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="border-2 border-black z-50 w-10 h-10 items-center justify-center rounded-full absolute top-3 right-3 bg-white hidden md:flex"
+                  whileHover={{
+                    scale: 1.05,
+                    backgroundColor: "#f3f4f6",
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{
+                    duration: 0.2,
+                    ease: "easeInOut",
+                  }}
+                >
+                  <svg
+                    className="w-5 h-5 text-black"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                    />
+                  </svg>
+                </motion.button>
+                <GeminiChat
+                  className="h-full border-0 rounded-none"
+                  initialMessage={initialMessage}
+                  model={selectedModel}
+                  onModelChange={setSelectedModel}
+                  systemPrompt={systemPrompt}
+                  onClose={() => setIsOpen(false)}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}
