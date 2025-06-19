@@ -329,9 +329,11 @@ const SeoDrawer = ({
           </div>
           <Input 
             name="keywords"
-            label="Incluye algunas palabras clave "
+            label="Incluye algunas palabras clave separadas por comas"
             placeholder="libros, arte, historia"
-            defaultValue={user?.storeConfig?.metadata?.keywords || ""}
+            defaultValue={Array.isArray(user?.storeConfig?.metadata?.keywords) 
+              ? user?.storeConfig?.metadata?.keywords?.join(', ') 
+              : user?.storeConfig?.metadata?.keywords || ""}
           />
           
           {/* <SingleImageUploader 

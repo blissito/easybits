@@ -15,8 +15,14 @@ export async function action({ request }) {
     if (intent === "update_seo_metadata") {
       const metaTitle = formData.get("metaTitle") as string;
       const metaDescription = formData.get("metaDescription") as string;
-      const keywords = formData.get("keywords") as string;
+      const keywordsInput = formData.get("keywords") as string;
     //   const metaImage = formData.get("metaImage") as string;
+
+      // Process keywords: split by comma and trim whitespace
+      const keywords = keywordsInput
+        .split(',')
+        .map(keyword => keyword.trim())
+        .filter(keyword => keyword.length > 0);
 
       const metadata = {
         metaTitle,
