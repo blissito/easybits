@@ -19,8 +19,6 @@ import Markdown from "~/components/common/Markdown";
 import { Input } from "~/components/common/Input";
 import { EmojiConfetti } from "~/components/Confetti";
 import { useFetcherSubmit } from "~/hooks/useFetcherSubmit";
-import PaymentModal from "./PaymentModal";
-import { usePublicLink } from "~/hooks/usePublicLink";
 import { useOpenLink } from "~/hooks/useOpenLink";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -62,7 +60,7 @@ export const ContentTemplate = ({
               "md:border-r-[2px]"
             )}
           >
-            <Bragging asset={asset} />
+            <Bragging asset={asset} reviews={reviews} assetReviews={assetReviews} />
             <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
               <Markdown>{asset.description}</Markdown>
             </div>
@@ -83,8 +81,27 @@ export const ContentTemplate = ({
   );
 };
 
-const Bragging = ({ asset = {} }: { asset: Asset }) => {
+const ReviewsModal = ({ isOpen, onClose, assetReviews = [] }: { isOpen: boolean; onClose: () => void; assetReviews?: any[] }) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Comentarios de otros clientes">
+      <div className="space-y-0 max-h-[60vh] overflow-y-auto mt-2 scrollbar-hide-reviews">
+        {(assetReviews || [])
+          .slice()
+          .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+          .map((review, idx, array) => (
+            <div key={idx} className={idx === array.length - 1 ? "" : "border-b border-black"}>
+              <ReviewCard review={review} />
+            </div>
+          ))}
+      </div>
+    </Modal>
+  );
+};
+
+const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; reviews?: any; assetReviews?: any[] }) => {
   const { typography } = asset.user?.storeConfig || {};
+  const [open, setOpen] = useState(false);
+  
   const getTypeOfBrag = () => {
     switch (asset.type) {
       case "WEBINAR":
@@ -93,70 +110,92 @@ const Bragging = ({ asset = {} }: { asset: Asset }) => {
         return "descargas";
     }
   };
-  return (
-    <main
-      className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black"
-      style={{ fontFamily: typography }}
-    >
-      {asset.tags.length === 0 ? null : (
-        <>
-          <section
-            style={{
-              scrollbarWidth: "none",
-            }}
-            className={cn(
-              "overflow-scroll",
-              "flex items-center px-4 gap-2 text-left h-10 border-b-2 border-black md:border-none ",
-              "col-span-10 md:col-span-7 md:px-6 md:h-full md:border-transparent"
-            )}
-          >
-            {asset.tags
-              .trim()
-              .split(",")
-              .map((tag, i) => (
-                <Tag
-                  className="h-6 md:h-8"
-                  variant="outline"
-                  label={tag}
-                  key={i}
-                />
-              ))}
-          </section>
-        </>
-      )}
 
-      <section
-        className={cn(
-          "min-w-max",
-          "h-10  px-3 flex items-center  gap-2",
-          "md:h-full border-l-2 border-black col-span-5 md:col-span-2",
-          {
-            "border-l-0": asset.tags.length === 0,
-          }
-        )}
+  const calculateAverageRating = (reviews: any) => {
+    if (!reviews?.total || !reviews?.byRating) return 0;
+    
+    const totalRating = Object.entries(reviews.byRating).reduce((acc, [rating, count]) => {
+      return acc + (parseInt(rating) * (count as number));
+    }, 0);
+    
+    return (totalRating / reviews.total).toFixed(1);
+  };
+
+  const handleOpen = () => {
+    setOpen(true);
+  };
+  
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <main
+        className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black"
+        style={{ fontFamily: typography }}
       >
-        {
-          <p>
-            {asset.extra?.showSold ? asset.extra?.sold : 0} {getTypeOfBrag()}
-          </p>
-        }
-        <img src="/icons/download.svg" alt="download" />
-      </section>
-      {asset.extra?.showReviews && (
+        {asset.tags.length === 0 ? null : (
+          <>
+            <section
+              style={{
+                scrollbarWidth: "none",
+              }}
+              className={cn(
+                "overflow-scroll",
+                "flex items-center px-4 gap-2 text-left h-10 border-b-2 border-black md:border-none ",
+                "col-span-10 md:col-span-7 md:px-6 md:h-full md:border-transparent"
+              )}
+            >
+              {asset.tags
+                .trim()
+                .split(",")
+                .map((tag, i) => (
+                  <Tag
+                    className="h-6 md:h-8"
+                    variant="outline"
+                    label={tag}
+                    key={i}
+                  />
+                ))}
+            </section>
+          </>
+        )}
+
         <section
           className={cn(
-            "min-w-max px-3 col-span-5 md:col-span-1 flex border-l-2 border-black items-center gap-2"
+            "min-w-max",
+            "h-10  px-3 flex items-center  gap-2",
+            "md:h-full border-l-2 border-black col-span-5 md:col-span-2",
+            {
+              "border-l-0": asset.tags.length === 0,
+            }
           )}
         >
-          <p className="underline">
-            {/* @todo map reviews */}
-            {asset.extra?.reviews || 4.7}
-          </p>
-          {/* @todo This should be a svg */}
-          <img className="w-6" src="/icons/star.png" alt="star" />
+          {
+            <p>
+              {asset.extra?.showSold ? asset.extra?.sold : 0} {getTypeOfBrag()}
+            </p>
+          }
+          <img src="/icons/download.svg" alt="download" />
         </section>
-      )}
-    </main>
+        {asset.extra?.showReviews && (
+          <section
+            className={cn(
+              "min-w-max px-3 col-span-5 md:col-span-1 flex border-l-2 border-black items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+            )}
+            onClick={handleOpen}
+          >
+            <p className="underline underline-offset-4">
+              {calculateAverageRating(reviews)}
+            </p>
+            {/* @todo This should be a svg */}
+            <img className="w-6" src="/icons/star.png" alt="star" />
+          </section>
+        )}
+      </main>
+      <ReviewsModal isOpen={open} onClose={handleClose} assetReviews={assetReviews} />
+    </>
   );
 };
 
@@ -410,18 +449,7 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
             );
           })}
       </div>
-      <Modal isOpen={open} onClose={handleClose} title="Comentarios de otros clientes">
-        <div className="space-y-0 max-h-[60vh] overflow-y-auto mt-2 scrollbar-hide-reviews">
-          {(assetReviews || [])
-            .slice()
-            .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-            .map((review, idx, array) => (
-              <div key={idx} className={idx === array.length - 1 ? "" : "border-b border-black"}>
-                <ReviewCard review={review} />
-              </div>
-            ))}
-        </div>
-      </Modal>
+      <ReviewsModal isOpen={open} onClose={handleClose} assetReviews={assetReviews} />
     </>
   );
 };
