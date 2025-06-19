@@ -20,10 +20,10 @@ export default function LookAndFeel({
     <>
       {/* logo y portada */}
       <p className=" my-2 font-semibold">Logo y Portada</p>
-      <div className="grid grid-cols-12 gap-3">
+      <div className="grid grid-cols-12 gap-4">
         <div className="col-span-4">
           <InputImage
-            buttonClassName="min-h-[125px] max-h-[125px] min-w-[144px] max-w-[144px]"
+            buttonClassName="min-h-[125px] max-h-[125px] w-full"
             placeholder="Arrastra o selecciona tu logo"
             allowPreview
             onChange={(files) => onLogoFileChange(files?.[0])}
