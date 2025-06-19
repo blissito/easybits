@@ -35,6 +35,7 @@ interface GeminiChatProps {
   onModelChange?: (model: string) => void;
   systemPrompt?: string;
   onClose?: () => void;
+  isFullscreen?: boolean;
 }
 
 export function GeminiChat({
@@ -45,6 +46,7 @@ export function GeminiChat({
   onModelChange,
   systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
   onClose,
+  isFullscreen = false,
 }: GeminiChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -56,7 +58,6 @@ export function GeminiChat({
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -72,7 +73,7 @@ export function GeminiChat({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isFullscreen) {
-        setIsFullscreen(false);
+        onClose?.();
       }
     };
 
@@ -83,7 +84,7 @@ export function GeminiChat({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isFullscreen]);
+  }, [isFullscreen, onClose]);
 
   // Función para parsear links en el texto
   const parseLinks = (text: string) => {
@@ -253,38 +254,9 @@ export function GeminiChat({
 
   return (
     <>
-      <AnimatePresence>
-        {isFullscreen && (
-          <motion.div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
-            onClick={() => setIsFullscreen(false)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-          />
-        )}
-      </AnimatePresence>
-      <motion.div
+      <div
         className={`flex flex-col bg-white rounded-lg border border-gray-200 ${className}`}
         onClick={(e) => e.stopPropagation()}
-        layout
-        transition={{
-          type: "spring",
-          stiffness: 200,
-          damping: 25,
-          duration: 0.4,
-        }}
-        style={{
-          position: isFullscreen ? "fixed" : "relative",
-          top: isFullscreen ? "16px" : "auto",
-          left: isFullscreen ? "16px" : "auto",
-          right: isFullscreen ? "16px" : "auto",
-          bottom: isFullscreen ? "16px" : "auto",
-          height: isFullscreen ? "calc(100vh - 32px)" : "100%",
-          maxHeight: isFullscreen ? "none" : "600px",
-          zIndex: isFullscreen ? 50 : "auto",
-        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -325,40 +297,6 @@ export function GeminiChat({
                   </option>
                 ))}
               </select>
-              <div className="hidden md:block lg:hidden ml-auto">
-                <motion.button
-                  onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ duration: 0.1 }}
-                >
-                  <motion.svg
-                    className="w-5 h-5 text-black"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    animate={{ rotate: isFullscreen ? 180 : 0 }}
-                    transition={{ duration: 0.4, ease: "easeInOut" }}
-                  >
-                    {isFullscreen ? (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0V8m0 6l7-7"
-                      />
-                    ) : (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                      />
-                    )}
-                  </motion.svg>
-                </motion.button>
-              </div>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -431,7 +369,7 @@ export function GeminiChat({
             </Button>
           </div>
         </form>
-      </motion.div>
+      </div>
     </>
   );
 }
