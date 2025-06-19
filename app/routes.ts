@@ -61,6 +61,8 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // v1
   ...prefix("api/v1", [
+    // AI & LLMs
+    ...prefix("llms", [route("devstral", "routes/api/llms/devstral.ts")]), // LLMs communication Jun25
     route(":fileId/main.m3u8", "routes/api/v1/mainm3u8.tsx"), // experiment
     // route("tokens", "routes/api/v1/tokens.tsx"),
     route("tokens/:token?", "routes/api/v1/tokens.tsx"),
@@ -84,6 +86,7 @@ export default [
       route("success", "routes/api/v1/stripe/success.tsx"),
     ]),
   ]),
+
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
   route("waitlist", "routes/waitlist.tsx"),
