@@ -12,6 +12,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
     case "create_review":
       return createReview({
         ...data,
+        stars:undefined,
+        rating:data.stars
       });
     case "update_review":
       return updateReview(reviewId, {

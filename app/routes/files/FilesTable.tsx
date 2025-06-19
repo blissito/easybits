@@ -1,9 +1,7 @@
 import type { File } from "@prisma/client";
 import {
-  FaCat,
-  FaChair,
-  FaDog,
-  FaHammer,
+
+  FaMusic,
   FaRegFilePdf,
   FaRegImage,
   FaVideo,
@@ -21,6 +19,8 @@ import { ConfirmModal } from "./ConfirmModal";
 import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
 import toast, { Toaster } from "react-hot-toast";
 import Spinner from "~/components/common/Spinner";
+import { MdFolderZip } from "react-icons/md";
+import { GiMagicLamp } from "react-icons/gi";
 
 const toMB = (bytes: number) => (bytes / 1000000).toFixed(2) + " mb";
 
@@ -171,11 +171,10 @@ export const FilesTable = ({
                     video: <FaVideo />,
                     image: <FaRegImage />,
                     epub: <FaBook />,
-
                     pdf: <FaRegFilePdf />,
-                    zip: <FaCat />,
-                    audio: <FaHammer />,
-                    other: <FaChair />,
+                    zip: <MdFolderZip />,
+                    audio: <FaMusic />,
+                    other: <GiMagicLamp />                    ,
                   }}
                 />
               </span>
