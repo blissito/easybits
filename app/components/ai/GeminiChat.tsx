@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { motion, useAnimate } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "../common/Button";
 import { Input } from "../common/Input";
 import { BrutalButtonClose } from "../common/BrutalButtonClose";
@@ -59,9 +59,6 @@ export function GeminiChat({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [overlayRef, overlayAnimate] = useAnimate();
-  const [chatRef, chatAnimate] = useAnimate();
-  const [buttonRef, buttonAnimate] = useAnimate();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -87,61 +84,6 @@ export function GeminiChat({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isFullscreen]);
-
-  // Manejar animaciones de pantalla completa
-  useEffect(() => {
-    if (isFullscreen) {
-      // Animar entrada a pantalla completa
-      overlayAnimate(
-        overlayRef.current,
-        { opacity: [0, 1] },
-        { duration: 0.3, ease: "easeInOut" }
-      );
-      chatAnimate(
-        chatRef.current,
-        {
-          scale: [1, 1],
-          opacity: [1, 1],
-        },
-        {
-          type: "spring",
-          stiffness: 200,
-          damping: 25,
-          duration: 0.4,
-        }
-      );
-      buttonAnimate(
-        buttonRef.current,
-        { rotate: [0, 180] },
-        { duration: 0.4, ease: "easeInOut" }
-      );
-    } else {
-      // Animar salida de pantalla completa
-      overlayAnimate(
-        overlayRef.current,
-        { opacity: [1, 0] },
-        { duration: 0.3, ease: "easeInOut" }
-      );
-      chatAnimate(
-        chatRef.current,
-        {
-          scale: [1, 1],
-          opacity: [1, 1],
-        },
-        {
-          type: "spring",
-          stiffness: 200,
-          damping: 25,
-          duration: 0.4,
-        }
-      );
-      buttonAnimate(
-        buttonRef.current,
-        { rotate: [180, 0] },
-        { duration: 0.4, ease: "easeInOut" }
-      );
-    }
-  }, [isFullscreen, overlayAnimate, chatAnimate, buttonAnimate]);
 
   // Función para parsear links en el texto
   const parseLinks = (text: string) => {
@@ -311,16 +253,19 @@ export function GeminiChat({
 
   return (
     <>
-      {isFullscreen && (
-        <div
-          ref={overlayRef}
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsFullscreen(false)}
-          style={{ opacity: 0 }}
-        />
-      )}
+      <AnimatePresence>
+        {isFullscreen && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setIsFullscreen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          />
+        )}
+      </AnimatePresence>
       <motion.div
-        ref={chatRef}
         className={`flex flex-col bg-white rounded-lg border border-gray-200 ${className}`}
         onClick={(e) => e.stopPropagation()}
         layout
@@ -382,18 +327,19 @@ export function GeminiChat({
               </select>
               <div className="hidden md:block lg:hidden ml-auto">
                 <motion.button
-                  ref={buttonRef}
                   onClick={() => setIsFullscreen(!isFullscreen)}
                   className="w-10 h-10 bg-white border-2 border-black rounded-full flex items-center justify-center"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   transition={{ duration: 0.1 }}
                 >
-                  <svg
+                  <motion.svg
                     className="w-5 h-5 text-black"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    animate={{ rotate: isFullscreen ? 180 : 0 }}
+                    transition={{ duration: 0.4, ease: "easeInOut" }}
                   >
                     {isFullscreen ? (
                       <path
@@ -410,7 +356,7 @@ export function GeminiChat({
                         d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
                       />
                     )}
-                  </svg>
+                  </motion.svg>
                 </motion.button>
               </div>
             </div>
