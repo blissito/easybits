@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "../common/Button";
 import { Input } from "../common/Input";
+import { BrutalButtonClose } from "../common/BrutalButtonClose";
+import { BrutalButton } from "../common/BrutalButton";
 import Spinner from "../common/Spinner";
 
 interface Message {
@@ -31,6 +34,8 @@ interface GeminiChatProps {
   model?: string;
   onModelChange?: (model: string) => void;
   systemPrompt?: string;
+  onClose?: () => void;
+  isFullscreen?: boolean;
 }
 
 export function GeminiChat({
@@ -40,6 +45,8 @@ export function GeminiChat({
   model = "gemini-1.5-flash",
   onModelChange,
   systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
+  onClose,
+  isFullscreen = false,
 }: GeminiChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -61,6 +68,62 @@ export function GeminiChat({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Cerrar modo pantalla completa con ESC
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isFullscreen) {
+        onClose?.();
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFullscreen, onClose]);
+
+  // Función para parsear links en el texto
+  const parseLinks = (text: string) => {
+    const linkRegex = /<a\s+href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = linkRegex.exec(text)) !== null) {
+      // Agregar texto antes del link
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      // Agregar el link
+      const href = match[1];
+      const linkText = match[2];
+      parts.push(
+        <a
+          key={`link-${match.index}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 underline"
+        >
+          {linkText}
+        </a>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Agregar texto restante
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,97 +253,123 @@ export function GeminiChat({
   };
 
   return (
-    <div
-      className={`flex flex-col h-full max-h-[600px] bg-white rounded-lg border border-gray-200 ${className}`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-bold">AI</span>
+    <>
+      <div
+        className={`flex flex-col bg-white rounded-lg border border-gray-200 ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center space-x-3 w-full">
+            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold w-10 text-center">
+                AI
+              </span>
+            </div>
+            <div className="flex items-center justify-between w-full">
+              <h3 className="font-semibold text-gray-900 md:hidden">
+                EasyBits Chat
+              </h3>
+              <h3 className="font-semibold text-gray-900 hidden md:block mr-4">
+                Chatea con
+              </h3>
+              <div className="block md:hidden ml-auto">
+                <BrutalButtonClose
+                  onClick={onClose}
+                  className="w-6 h-6 rounded-full flex items-center justify-center"
+                />
+              </div>
+
+              <select
+                value={model}
+                onChange={(e) => onModelChange?.(e.target.value)}
+                className="bg-gray-100 text-gray-900 text-sm rounded-lg px-2 py-1 pr-6 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-200 transition-all duration-200 appearance-none relative hidden md:block"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                  backgroundPosition: "right 4px center",
+                  backgroundRepeat: "no-repeat",
+                  backgroundSize: "16px 16px",
+                }}
+              >
+                {GEMINI_MODELS.map((modelOption) => (
+                  <option key={modelOption.value} value={modelOption.value}>
+                    {modelOption.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
-            <h3 className="font-semibold text-gray-900">Chatea con</h3>
-            <select
-              value={model}
-              onChange={(e) => onModelChange?.(e.target.value)}
-              className="bg-gray-100 text-gray-900 text-sm rounded-lg px-2 py-1 pr-6 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-200 transition-all duration-200 appearance-none relative"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                backgroundPosition: "right 4px center",
-                backgroundRepeat: "no-repeat",
-                backgroundSize: "16px 16px",
-              }}
-            >
-              {GEMINI_MODELS.map((modelOption) => (
-                <option key={modelOption.value} value={modelOption.value}>
-                  {modelOption.label}
-                </option>
-              ))}
-            </select>
+            {isLoading && (
+              <div className="flex items-center space-x-1 text-sm text-gray-500">
+                <Spinner size="sm" />
+                <span>Pensando...</span>
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          {isLoading && (
-            <div className="flex items-center space-x-1 text-sm text-gray-500">
-              <Spinner size="sm" />
-              <span>Pensando...</span>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${
-              message.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message) => (
             <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                message.role === "user"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-900"
+              key={message.id}
+              className={`flex ${
+                message.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">
-                {message.content}
-                {message.isStreaming && (
-                  <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
-                )}
-              </p>
-              <p className="text-xs opacity-70 mt-1">
-                {message.timestamp.toLocaleTimeString()}
-              </p>
+              {message.role === "assistant" && (
+                <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
+                  <img
+                    src="/logo-purple.svg"
+                    alt="EasyBits AI"
+                    className="w-5 h-5"
+                  />
+                </div>
+              )}
+              <div
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  message.role === "user"
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-900"
+                }`}
+              >
+                <p className="text-sm whitespace-pre-wrap">
+                  {parseLinks(message.content)}
+                  {message.isStreaming && (
+                    <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
+                  )}
+                </p>
+                <p className="text-xs opacity-70 mt-1">
+                  {message.timestamp.toLocaleTimeString()}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
-        <div className="flex space-x-2">
-          <Input
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder={placeholder}
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button
-            type="submit"
-            disabled={!inputValue.trim() || isLoading}
-            className="px-4 py-2"
-          >
-            {isLoading ? <Spinner size="sm" /> : "Enviar"}
-          </Button>
+          ))}
+          <div ref={messagesEndRef} />
         </div>
-      </form>
-    </div>
+
+        {/* Input */}
+        <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
+          <div className="flex space-x-2">
+            <Input
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={placeholder}
+              disabled={isLoading}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              isDisabled={!inputValue.trim() || isLoading}
+              className="px-4 py-2"
+            >
+              {isLoading ? <Spinner size="sm" /> : "Enviar"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }
