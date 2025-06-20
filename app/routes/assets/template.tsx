@@ -107,7 +107,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
       case "WEBINAR":
         return "inscritos";
       default:
-        return "descargas";
+        return "desc.";
     }
   };
 
@@ -122,7 +122,11 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
   };
 
   const handleOpen = () => {
-    setOpen(true);
+    // Only open modal if there are reviews available
+    const hasReviews = (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0);
+    if (hasReviews) {
+      setOpen(true);
+    }
   };
   
   const handleClose = () => {
@@ -132,7 +136,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
   return (
     <>
       <main
-        className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black"
+        className="grid grid-cols-12 h-fit md:h-16 border-b-[2px] border-black"
         style={{ fontFamily: typography }}
       >
         {asset.tags.length === 0 ? null : (
@@ -144,7 +148,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
               className={cn(
                 "overflow-scroll",
                 "flex items-center px-4 gap-2 text-left h-10 border-b-2 border-black md:border-none ",
-                "col-span-10 md:col-span-7 md:px-6 md:h-full md:border-transparent"
+                "col-span-10 md:col-span-8 md:px-6 md:h-full md:border-transparent"
               )}
             >
               {asset.tags
@@ -164,8 +168,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
 
         <section
           className={cn(
-            "min-w-max",
-            "h-10  px-3 flex items-center  gap-2",
+            "h-10  px-3 flex items-center  gap-2 overflow-hidden ",
             "md:h-full border-l-2 border-black col-span-5 md:col-span-2",
             {
               "border-l-0": asset.tags.length === 0,
@@ -182,7 +185,10 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         {asset.extra?.showReviews && (
           <section
             className={cn(
-              "min-w-max px-3 col-span-5 md:col-span-1 flex border-l-2 border-black items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+              " overflow-hidden px-3 col-span-5 md:col-span-2 flex border-l-2 border-black items-center gap-2",
+              {
+                "cursor-pointer hover:bg-gray-100 transition-colors": (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0)
+              }
             )}
             onClick={handleOpen}
           >
