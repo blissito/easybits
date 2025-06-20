@@ -34,9 +34,6 @@ export function FloatingGeminiChat({
   const [selectedModel, setSelectedModel] = useState(GEMINI_MODELS[0].value);
   const chatRef = useRef<HTMLDivElement>(null);
 
-  // Debug logs
-  console.log("FloatingGeminiChat state:", { isOpen, isFullscreen });
-
   const close = () => setIsOpen(false);
 
   // Cerrar chat al hacer clic fuera

@@ -6,21 +6,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const intent = formData.get("intent");
   if (intent === "call_ollama") {
     const prompt = formData.get("prompt") as string;
+    console.info("::EL_PROMPT::", prompt);
     const ollamaResponse = await fetchInternalOllama(prompt);
-    console.info("THE_GREAT_OLLAMA_RESPONSE", ollamaResponse);
+    console.info("THE_GREAT_OLLAMA_RESPONSE", ollamaResponse.status);
     if (ollamaResponse.ok) {
       const json = await ollamaResponse.json();
-      console.info("DATA?", json);
+      console.info("::EVAL::", json.prompt_eval_count);
+      return json.response;
     }
   }
   return null;
 };
 
-// model: "devstral:24b-small-2505-q8_0",
-// // prompt: "talk me about how to manage access to a ollama server on fly.io.",
-// stream: false,
-
 export const loader = () =>
   new Response(
-    JSON.stringify({ message: "made by curiosity::Blissmo t(*_*t)" })
+    JSON.stringify({ message: "made whith curiosity::by::Blissmo t(*_*t)" })
   );

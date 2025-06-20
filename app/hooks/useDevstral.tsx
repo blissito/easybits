@@ -1,4 +1,4 @@
-export const useDevstral = <T extends { text: string }>() => {
+export const useDevstral = <T extends string>() => {
   const queryLLM = async (prompt: string) => {
     const action = "/api/v1/llms/devstral"; // action
     let resp: Partial<Response> = { ok: false, json: async () => {} };
@@ -13,7 +13,7 @@ export const useDevstral = <T extends { text: string }>() => {
     }
     return {
       ok: resp.ok,
-      data: (resp as Response).json() as Promise<T>, // promise
+      data: (resp as Response).text() as Promise<T>, // promise
     };
   };
 
