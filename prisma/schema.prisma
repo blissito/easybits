@@ -118,9 +118,8 @@ type StoreConfig {
   linkedin       String  @default("")
   x              String  @default("")
   website        String  @default("")
-  metadata       Json?
    logoImage      String  @default("")
-  coverImage     String  @default("")
+     coverImage     String  @default("")
 }
 
 model User {
