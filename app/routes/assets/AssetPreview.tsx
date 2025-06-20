@@ -56,7 +56,7 @@ export const AssetPreview = ({
           <IoShareSocialOutline className="text-2xl" />
         </button>
         <button onClick={handleOpenLink} className="text-xl">
-          <MdContentCopy />
+        <img alt="external link" src="/icons/opentab-white.svg" className="w-6 h-6" />
         </button>
         <EnrolledUsers assetId={asset.id} />
       </nav>

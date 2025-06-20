@@ -83,7 +83,7 @@ export const ContentTemplate = ({
 
 const ReviewsModal = ({ isOpen, onClose, assetReviews = [] }: { isOpen: boolean; onClose: () => void; assetReviews?: any[] }) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Comentarios de otros clientes">
+    <Modal isOpen={isOpen} onClose={onClose} title="Echa un vistazo a los comentarios">
       <div className="space-y-0 max-h-[60vh] overflow-y-auto mt-2 scrollbar-hide-reviews">
         {(assetReviews || [])
           .slice()
@@ -148,7 +148,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
               className={cn(
                 "overflow-scroll",
                 "flex items-center px-4 gap-2 text-left h-10 border-b-2 border-black md:border-none ",
-                "col-span-10 md:col-span-8 md:px-6 md:h-full md:border-transparent"
+                "col-span-12 md:col-span-8 md:px-6 md:h-full md:border-transparent"
               )}
             >
               {asset.tags
@@ -169,7 +169,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         <section
           className={cn(
             "h-10  px-3 flex items-center  gap-2 overflow-hidden ",
-            "md:h-full border-l-2 border-black col-span-5 md:col-span-2",
+            "md:h-full border-l-2 border-black col-span-6 md:col-span-2",
             {
               "border-l-0": asset.tags.length === 0,
             }
@@ -185,7 +185,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         {asset.extra?.showReviews && (
           <section
             className={cn(
-              " overflow-hidden px-3 col-span-5 md:col-span-2 flex border-l-2 border-black items-center gap-2",
+              " overflow-hidden px-3 col-span-6 md:col-span-2 flex border-l-2 border-black items-center gap-2",
               {
                 "cursor-pointer hover:bg-gray-100 transition-colors": (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0)
               }
@@ -428,7 +428,7 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
   return (
     <>
       <div className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
-        <p className="mb-4">Qué opinan nuestros clientes:</p>
+        <p className="mb-4">Qué opinan la comunidad:</p>
         {Object.keys(reviews?.byRating || {})
           .sort((a, b) => b - a)
           .map((n, index) => {
