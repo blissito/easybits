@@ -124,7 +124,7 @@ export const EmptySales = ({ cta }: { cta: ReactNode }) => {
   return (
     <Empty
       illustration={
-        <img className="w-44 mx-auto " src="/empty-states/sales-empty.webp" />
+        <img className="w-44 mx-auto " src="/empty-states/sales-empty.webp" alt="No hay ventas registradas" />
       }
       title="Administra tus ventas desde aquí"
       text={
@@ -162,7 +162,7 @@ const EmptyPayment = ({
   };
   return (
     <Empty
-      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" />}
+      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" alt="No hay ventas registradas" />}
       title="Conecta una pasarela de pagos"
       text={<span>Conectate a Stripe para ofrecerte pagos seguros.</span>}
       footer={

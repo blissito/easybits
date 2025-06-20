@@ -95,7 +95,7 @@ const SideBarItem = ({
           onMouseLeave={handleMouseLeave}
         >
           {isLogo ? (
-            <img className="w-14 mx-auto py-4" src={Logo} />
+            <img className="w-14 mx-auto py-4" src={Logo} alt="EasyBits Logo" />
           ) : (
             <motion.div
               className={cn(

@@ -85,7 +85,7 @@ const EmptyClients = () => {
   return (
     <Empty
       illustration={
-        <img className="w-44 mx-auto " src="/empty-states/clients-empty.webp" />
+        <img className="w-44 mx-auto " src="/empty-states/clients-empty.webp" alt="No hay clientes registrados" />
       }
       title=" ¡Vaya! Aún no hay clientes en tu lista"
       text={<span>Comparte tu tienda y consigue tu primera venta.</span>}

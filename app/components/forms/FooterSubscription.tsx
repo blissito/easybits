@@ -2,6 +2,7 @@ import { Form } from "react-router";
 import { Input } from "../common/Input";
 import { BrutalButton } from "../common/BrutalButton";
 import type { Asset } from "@prisma/client";
+import { cn } from "~/utils/cn";
 
 export const FooterSuscription = ({
   isLoading,
@@ -18,7 +19,7 @@ export const FooterSuscription = ({
   return (
     <Form
       onSubmit={onSubmit}
-      className="md:hidden border-t-[2px]  border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center"
+      className={cn("border-t-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center","md:hidden")}
     >
       <p className="text-white font-bold whitespace-pre px-4">
         {getPriceString()}
@@ -29,13 +30,13 @@ export const FooterSuscription = ({
           required
           placeholder="Escribe tu email"
           name="email"
-        inputClassName="h-10 "
+        inputClassName="h-10 rounded-md "
         />
       )}
       <BrutalButton
         isLoading={isLoading}
         type="submit"
-        className="h-10 min-h-10 max-h-10  min-w-28 text-base  font-medium mx-4 border-none "
+        className="h-10 min-h-10 max-h-10  min-w-28 text-base rounded-md  font-medium mx-4 border-none "
         style={{ 
           background: hexColor
         }}

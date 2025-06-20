@@ -61,9 +61,9 @@ export const ContentTemplate = ({
             )}
           >
             <Bragging asset={asset} reviews={reviews} assetReviews={assetReviews} />
-            <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
+           {asset.description ?  <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6 bg-pink-500")}>
               <Markdown>{asset.description}</Markdown>
-            </div>
+            </div> : null}
           </div>
           <Info
             files={files}
@@ -233,7 +233,7 @@ const Info = ({
     <div
       style={{ fontFamily: typography }}
       className={cn(
-        "col-span-8 border-t-[2px] border-black",
+        "col-span-8 ",
         "md:col-span-3 md:border-t-0"
       )}
     >
@@ -399,7 +399,7 @@ const ReviewCard = ({ review }: { review: any }) => {
         </p>
        </div>
        <div className="flex items-center justify-start gap-0">
-        <img src={review.user?.picture} className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full"/>
+        <img src={review.user?.picture} className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full" alt="avatar"/>
         <span className="text-xs text-gray-500 ml-1">
           {review.user?.displayName || review.user?.email || "Anónimo"}
         </span>
