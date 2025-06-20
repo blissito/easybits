@@ -5,8 +5,9 @@ import Spinner from "~/components/common/Spinner";
 import { useDevstral } from "~/hooks/useDevstral";
 
 export default function Page() {
-  const { getAnswer } = useDevstral<string>();
+  const { getAnswer, queryLLMStream } = useDevstral<string>();
   const [responses, setResponses] = useState("");
+  const [currentResponse, setCurrentResponse] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -20,22 +21,25 @@ export default function Page() {
     if (inputRef.current) {
       inputRef.current.value = "";
     }
-  }, [responses]);
+  }, [responses, currentResponse]);
   //
 
   const handleSubmit = async (ev: FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
     setIsLoading(true);
+    setCurrentResponse("");
     const formData = new FormData(ev.currentTarget);
     const prompt = formData.get("prompt") as string;
-    const answer = await getAnswer(prompt);
-    // console.log("RESPUESTA:: ", answer);
-    // @todo REVISIT for right key
-    if (answer) {
-      setResponses((resp) => resp + "\n" + answer); // @todo streams
+
+    const success = await queryLLMStream(prompt, (chunk) => {
+      setCurrentResponse((prev) => prev + chunk);
+    });
+
+    if (success && currentResponse) {
+      setResponses((prev) => prev + "\n" + currentResponse);
+      setCurrentResponse("");
     }
     setIsLoading(false);
-    // @todo loading states and toasts?
   };
 
   return (
@@ -50,7 +54,11 @@ export default function Page() {
       <section>
         <h3 className="font-semibold text-lg">Respuesta:</h3>
         <main className="border h-[60vh] border-black grid overflow-y-auto">
-          {<Markdown>{responses}</Markdown>}
+          {
+            <Markdown>
+              {responses + (currentResponse ? "\n" + currentResponse : "")}
+            </Markdown>
+          }
           <div ref={responsesEndRef} />
         </main>
       </section>

@@ -10,9 +10,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const ollamaResponse = await fetchInternalOllama(prompt);
     console.info("THE_GREAT_OLLAMA_RESPONSE", ollamaResponse.status);
     if (ollamaResponse.ok) {
-      const json = await ollamaResponse.json();
-      console.info("::EVAL::", json.prompt_eval_count);
-      return json.response;
+      return new Response(ollamaResponse.body, {
+        headers: {
+          "Content-Type": "text/plain",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
     }
   }
   return null;
