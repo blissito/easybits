@@ -53,9 +53,13 @@ export default function Page() {
         Probando a devstral:24b-small-2505-q8_0 (LLM)
       </h1>
       <p>
-        El LLM con el que estás ahora conversando, ha sido montado por mi
-        (blissito) y es sabio en programación. Puedes pedirle snipets e incluso
-        preguntarle qué más puedes pedirle.
+        El LLM con el que estás ahora conversando, es sabio en programación. Yo
+        lo monté (
+        <a target="_blank" rel="noreferrer" href="https://www.hectorbliss.com">
+          blissito
+        </a>
+        ). Puedes pedirle snipets de código e incluso pedirle que te explique
+        cómo funciona un fragmento de código.
         <br />
         También estoy probando a Gemma3:4b y otros modelos para ver con cuál no
         me quedo pobre pero me ayuda de verdad. 💸 🤖 ¿Qué esperas? pídele un
