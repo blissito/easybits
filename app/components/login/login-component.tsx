@@ -70,7 +70,7 @@ export default function LoginComponent({ state }: { state?: string }) {
       <main className="w-full">
         <div className="flex flex-col min-w-full items-center justify-center">
           {/* hover animation can improve... just like everything in this F** world*/}
-          <img src={logoPurple} className="w-[95px]" />
+          <img src={logoPurple} className="w-[95px]" alt="EasyBits Logo" />
           <AnimatePresence mode="popLayout">
             {screen === "social" && (
               <SocialButtons

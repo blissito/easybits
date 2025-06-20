@@ -116,7 +116,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
                   isLoading={isLoading}
                   onClick={onSubmit}
                   containerClassName="h-9"
-                  className="h-9 bg-brand-500 text-black"
+                  className="h-9 bg-brand-500  text-black"
                 >
                   Actualizar
                 </BrutalButton>
@@ -165,7 +165,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
 
         {!isConfigOpen && !user.domain && (
           <BrutalButton
-            containerClassName="ml-auto"
+            containerClassName="ml-auto mt-auto "
             onClick={() => setIsConfigOpen(true)}
           >
             Agrega tu propio dominio
@@ -252,6 +252,7 @@ const Footer = ({
       <BrutalButton onClick={onClose} className="bg-white min-w-10">
         <FaArrowLeft />
       </BrutalButton>
+      
       {isDomain && (
         <BrutalButton onClick={onClick}>Editar dominio</BrutalButton>
       )}
@@ -409,10 +410,10 @@ const Modal = ({
   return (
     <article className="z-40 fixed inset-0 grid place-content-center">
       <section className="absolute inset-0 bg-black/50 backdrop-blur"></section>
-      <section className="relative max-w-[800px]  mx-auto border-2 border-black bg-white p-8 rounded-2xl flex flex-col items-start gap-6">
+      <section className="relative max-w-[800px] w-full md:w-[756px]  mx-auto border-2 border-black bg-white p-8 rounded-2xl flex flex-col items-start gap-6">
         <nav className="flex justify-between items-start gap-4 w-full ">
           <h1 className="text-2xl md:text-3xl font-semibold">
-            Usa tu subdominio EasyBits <br /> o ¡Agrega tu propio dominio! 🔥
+            Usa tu subdominio EasyBits o ¡Agrega el tuyo! 🔥
           </h1>
           <BrutalButtonClose onClick={onClose} />
         </nav>

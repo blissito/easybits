@@ -53,7 +53,7 @@ export const ProductGallery = ({
             src="/images/easybits-default.webp"
           />
         ) : items.length == 1 ? (
-          <img className="object-cover h-full w-full" src={items[0].src} />
+          <img className="object-cover h-full w-full" src={items[0].src} alt="Imagen del producto" />
         ) : items.length >= 2 ? (
           <ImageItem
             items={items.map((i) => i.name)} // esto se puede evitar

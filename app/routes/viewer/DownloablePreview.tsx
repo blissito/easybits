@@ -74,7 +74,7 @@ export const DownloablePreview = ({
           ))}
         </div>
         <div className="flex gap-2 items-center h-fit px-4 md:px-6 py-4">
-          <img className="w-10 h-10 rounded-full" src={asset.user?.picture} />
+          <img className="w-10 h-10 rounded-full" src={asset.user?.picture} alt="avatar" />
           <a href={url} target="_blank">
             <p className="text-tale font-light underline">
               {asset.user?.displayName}

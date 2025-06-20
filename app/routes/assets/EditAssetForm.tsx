@@ -256,7 +256,7 @@ export const EditAssetForm = ({
   }, [asset]);
 
   return (
-    <article className="w-full px-4">
+    <article className="w-full px-4 col-span-12 md:col-span-8">
       <LayoutGroup>
         <Form onSubmit={handleSubmit} className="bg-white w-full">
           <h2 className="text-2xl mt-6 mb-4 font-bold">Detalles de tu Asset</h2>
@@ -283,7 +283,7 @@ export const EditAssetForm = ({
             />
           </Suspense>
           <GalleryUploader
-            limit={3}
+            limit={12}
             asset={asset}
             gallery={gallery}
             host={host}

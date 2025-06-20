@@ -72,7 +72,7 @@ export const FileInput = ({
           buttonClassName
         )}
       >
-        <img className="w-8 h-8" src="/icons/image-upload.svg" />
+        <img className="w-8 h-8" src="/icons/image-upload.svg" alt="Subir imagen" />
         <p
           className={cn(
             "hover:text-brand-500 px-4 text-sm text-marengo",

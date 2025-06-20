@@ -45,7 +45,7 @@ export const AssetCard = ({
             {asset.title || asset.slug || asset.template?.slug}
           </h3>
         </Link>
-        <nav className="flex justify-between pr-4 ">
+        <nav className="flex justify-between items-center pr-4 ">
           {left ? (
             left
           ) : (
@@ -60,7 +60,7 @@ export const AssetCard = ({
               rel="noopener noreferrer"
               className="text-brand-gray"
             >
-              <FaExternalLinkAlt className="w-3 h-3" />
+              <img alt="external link" src="/icons/opentab.svg" className="w-6 h-6" />
             </a>
           )}
         </nav>

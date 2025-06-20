@@ -59,6 +59,7 @@ export const ExtraConfig = ({
         value={state.showInMarketplace}
         label="Mostrar en Comunidad EasyBits"
       />
+ 
     </section>
   );
 };
