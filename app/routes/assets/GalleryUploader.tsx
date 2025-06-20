@@ -146,7 +146,7 @@ export const GalleryUploader = ({
           >
             <ImageIcon
               className="w-8 h-8"
-              fill={isHovered ? "#9870ED" : " #6A6966"}
+              fill={isHovered ? "#9870ED" : "#6A6966"}
             />
             <p
               className={cn("max-w-md text-brand-gray text-left text-sm", {
@@ -162,7 +162,7 @@ export const GalleryUploader = ({
         {elemsLength > 0 && (
           <RowGalleryEditor
             previews={
-              <section className="flex gap-3">
+              <section className="flex gap-3 ">
                 {srcset.map((src, i) => (
                   <Image
                     onRemove={handleRemoveFile(i)}
@@ -188,6 +188,7 @@ export const GalleryUploader = ({
           ref={fileInputRef}
           className="hidden"
           type="file"
+     
         />
       </section>
     </article>

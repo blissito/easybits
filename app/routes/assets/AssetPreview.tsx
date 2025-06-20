@@ -44,7 +44,7 @@ export const AssetPreview = ({
   });
   return (
     <aside
-      className="md:block hidden w-[40%] h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-hidden "
+      className="col-span-4 md:block hidden  h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-hidden "
       style={{ scrollbarWidth: "none" }}
     >
       <nav className="flex items-center mb-8 gap-4">

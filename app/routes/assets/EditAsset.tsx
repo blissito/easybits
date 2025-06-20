@@ -48,7 +48,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
       >
         {asset.title}
       </h1>
-      <main className={cn("flex md:pl-20 items-start")}>
+      <main className={cn("grid grid-cols-12 md:pl-20 items-start ")}>
         <EditAssetForm
           // files={files}
           assetFiles={files}
