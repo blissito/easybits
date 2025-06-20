@@ -6,17 +6,22 @@ import { useForm } from "react-hook-form";
 import { useStep } from "~/hooks/useSteps";
 import LookAndFeel from "./LookAndFeel";
 import LinksStep from "./LinksStep";
+import { useRef } from 'react';
+import { useUploader } from '~/hooks/useUploader';
 
 export default function StoreConfigForm({
   isOpen,
   onClose,
   storeConfig,
+  assetId,
 }: {
   isOpen?: boolean;
   onClose?: () => void;
+  assetId: string;
 }) {
   // const action = "";
-  // const files = [];
+  const coverFile = useRef<File>(null);
+  const logoFile = useRef<File>(null);
   const fetcher = useFetcher();
 
   const defaultValues = {
@@ -39,18 +44,40 @@ export default function StoreConfigForm({
     defaultValues,
   });
 
-  const steps = [LookAndFeel, LinksStep];
+  const steps = [
+    <LookAndFeel
+      control={control}
+      onCoverFileChange={(file) => coverFile.current = file}
+      onLogoFileChange={(file) => logoFile.current = file}
+    />,
+    <LinksStep control={control} register={register} />
+  ];
 
   const { stepIndex, isFirst, isLast, next, previous, goTo } = useStep({
     initialStep: 0,
     steps,
   });
-  const StepComponent = steps[stepIndex];
+  const stepComponent = steps[stepIndex];
 
-  const submit = (values) => {
+  const { upload } = useUploader({ assetId });
+
+  const processAndUploadImages = async (file: File) => {
+    if (!file) return null;
+    const uploaded = await upload(file, assetId);
+    return uploaded;
+  }
+
+  const submit = async (values) => {
     if (isLast) {
       goTo(0);
       onClose?.();
+
+      const logoUrl = await processAndUploadImages(logoFile.current!);
+      const coverUrl = await processAndUploadImages(coverFile.current!);
+      
+      if (logoUrl) values.logoImage = logoUrl;
+      if (coverUrl) values.coverImage = coverUrl;
+
       fetcher.submit(
         {
           intent: "update_profile",
@@ -80,7 +107,7 @@ export default function StoreConfigForm({
           className="w-full h-max flex flex-col"
         >
           <div>
-            <StepComponent control={control} register={register} />
+            { stepComponent }
           </div>
           <div className="flex justify-between gap-2 mt-4 fixed bottom-0 w-full left-0 p-6 md:p-8">
             <BrutalButton
@@ -93,7 +120,7 @@ export default function StoreConfigForm({
               <FaArrowLeft />
             </BrutalButton>
             <BrutalButton isLoading={fetcher.state !== "idle"} type="submit">
-              Continuar
+              { isLast ? 'Guardar' : 'Continuar' }
             </BrutalButton>
           </div>
         </fetcher.Form>
