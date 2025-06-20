@@ -118,6 +118,8 @@ type StoreConfig {
   linkedin       String  @default("")
   x              String  @default("")
   website        String  @default("")
+  logoImage      String  @default("")
+  coverImage     String  @default("")
 }
 
 model User {

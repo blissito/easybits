@@ -4,8 +4,9 @@ import toast from "react-hot-toast";
 export const useDropFiles = <T extends HTMLElement>(config?: {
   type?: string;
   onDrop?: (files: File[]) => void;
+  onChange?: (files: File[]) => void;
 }) => {
-  const { type, onDrop } = config || {};
+  const { type, onDrop, onChange } = config || {};
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
   const ref = useRef<T>(null);
@@ -52,6 +53,7 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   };
 
   const handleClick = () => {
+    console.log('::::click::::');
     const input = Object.assign(document.createElement("input"), {
       type: "file",
       hidden: true,
@@ -61,6 +63,7 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     input.click();
     input.onchange = (ev: ChangeEvent<HTMLInputElement>) => {
       if (!ev.currentTarget?.files || ev.currentTarget.files.length < 1) {
+        console.log(':::[if]')
         return;
       }
       addFiles([...ev.currentTarget.files]);
@@ -88,6 +91,7 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
 
     return () => {
       if (!ref.current) return;
+      console.log(':::elimina::::')
 
       ref.current.removeEventListener("click", handleClick);
       ref.current.removeEventListener("mouseenter", handleMouseEnter);
@@ -97,6 +101,10 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
       ref.current.removeEventListener("drop", handleDrop);
     };
   }, []);
+
+  useEffect(() => {
+    onChange?.(files);
+  }, [files.length]);
 
   return { isHovered, ref, files, removeFile };
 };

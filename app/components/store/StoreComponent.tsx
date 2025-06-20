@@ -30,6 +30,7 @@ export default function StoreComponent({
   variant: string;
 }) {
   const [currentFilter, setCurrentFilter] = useState();
+  const assetId = assets?.[0]?.id;
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -45,6 +46,7 @@ export default function StoreComponent({
     localLink: `http://${user.host}.localhost:3000/tienda`,
     publicLink: `https://${user.host}.easybits.cloud/tienda`,
   });
+
   return (
     <>
       <div
@@ -104,6 +106,7 @@ export default function StoreComponent({
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
         storeConfig={user?.storeConfig}
+        assetId={assetId}
       />
     </>
   );
