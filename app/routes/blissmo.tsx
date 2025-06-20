@@ -39,10 +39,14 @@ export default function Page() {
   };
 
   return (
-    <article className="px-6 w-full max-w-5xl py-20">
-      <h1 className="text-2xl font-bold mb-6">
-        Probando a Devstral (CodingLLM)
-      </h1>
+    <article className="px-6 w-full max-w-5xl py-20 mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Probando a Gemma3:4b (LLM)</h1>
+      <p>
+        El LLM con el que estás ahora conversando, ha sido montado por mi
+        (blissito) y es multimodelo pues estoy probando a
+        devstral:24b-small-2505-q8_0 también, por su sabiduría al programar.
+        Pero, por ahora ¡Gemma es muy divertida! 🤖 ¿Qué esperas? Dile hola. 👋🏼
+      </p>
       <section>
         <h3 className="font-semibold text-lg">Respuesta:</h3>
         <main className="border h-[60vh] border-black grid overflow-y-auto">
