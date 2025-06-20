@@ -77,14 +77,7 @@ export default function StoreComponent({
             Mi tienda
           </h2>
           <div className="flex gap-3">
-          <HeaderIconButton>
-              <div
-                className="bg-white border-[2px] border-black grid place-content-center rounded-xl p-1 w-[48px] h-[48px] cursor-pointer hover:bg-gray-50 transition-colors"
-                onClick={handleSeoOpen}
-              >
-                <img className="w-full" src={SeoIcon} />
-              </div>
-            </HeaderIconButton>
+      
             <HeaderIconButton>
               {cta ? (
                 cta
@@ -93,6 +86,14 @@ export default function StoreComponent({
                   <img className="w-full" src={GlobeIcon} />
                 </div>
               )}
+            </HeaderIconButton>
+            <HeaderIconButton>
+              <div
+                className="bg-white border-[2px] border-black grid place-content-center rounded-xl p-1 w-[48px] h-[48px] cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={handleSeoOpen}
+              >
+                <img className="w-full" src={SeoIcon} />
+              </div>
             </HeaderIconButton>
             <HeaderIconButton>
               <div
@@ -126,14 +127,12 @@ export default function StoreComponent({
         isOpen={isOpen}
         link={`https://${user.host}.easybits.cloud/tienda`}
       />
-
       <StoreConfigForm
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
         storeConfig={user?.storeConfig}
         assetId={assetId}
       />
-
       <SeoDrawer
         isOpen={isSeoOpen}
         onClose={handleSeoClose}
@@ -200,6 +199,7 @@ const SeoDrawer = ({
     wasSubmitted.current = true;
     const formData = new FormData(formRef.current!);
     formData.append("intent", "update_seo_metadata");
+
 
     fetcher.submit(formData, {
       method: "post",
