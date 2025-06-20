@@ -58,11 +58,16 @@ export default function Page() {
         preguntarle qué más puedes pedirle.
         <br />
         También estoy probando a Gemma3:4b y otros modelos para ver con cuál no
-        me quedo pobre pero me ayuda de verdad. 💸 Pero, por ahora ¡Gemma es muy
-        divertida! 🤖 ¿Qué esperas? Dile hola. 👋🏼
+        me quedo pobre pero me ayuda de verdad. 💸 🤖 ¿Qué esperas? pídele un
+        componente o un webhook. 👋🏼
       </p>
       <section>
-        <h3 className="font-semibold text-lg">Respuesta:</h3>
+        <h3 className="font-semibold text-lg mt-6 mb-2">Respuesta:</h3>
+        <p className="text-xs text-gray-500">
+          {" "}
+          Toma en cuenta que mi servidor a pesar de que me sale caro, es muy
+          básico y algunas veces le toma algo de tiempo responder. 🕰️
+        </p>
         <main className="border h-[60vh] border-black grid overflow-y-auto">
           {
             <Markdown>
