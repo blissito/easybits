@@ -61,7 +61,7 @@ export const ContentTemplate = ({
             )}
           >
             <Bragging asset={asset} reviews={reviews} assetReviews={assetReviews} />
-           {asset.description ?  <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6 bg-pink-500")}>
+           {asset.description ?  <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
               <Markdown>{asset.description}</Markdown>
             </div> : null}
           </div>
@@ -355,7 +355,7 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
           <div className="flex gap-2 items-center">
             {" "}
             <div className="relative w-3 h-3">
-              <div className="bg-pink-500 rounded-full absolute inset-0 blur-sm animate-pulse" />
+              <div className=" rounded-full absolute inset-0 blur-sm animate-pulse" />
               <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
             </div>
             En vivo

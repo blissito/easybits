@@ -8,7 +8,6 @@ export async function action({ request }) {
     return new Response(null, { status: 405 });
   }
 
-  try {
     const formData = await request.formData();
     const intent = formData.get("intent") as string;
 
@@ -42,8 +41,4 @@ export async function action({ request }) {
     }
 
     return new Response(null, { status: 400 });
-  } catch (error) {
-    console.error("Error updating SEO metadata:", error);
-    return new Response(null, { status: 500 });
   }
-} 

@@ -174,96 +174,6 @@ const ShareStoreLink = ({
     </>
   );
 };
-//Hecho por cursor, ahi que revisarlo
-const SingleImageUploader = ({
-  onImageChange,
-  currentImage,
-}: {
-  onImageChange: (file: File | null) => void;
-  currentImage?: string;
-}) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files.length < 1) return;
-
-    const file = e.dataTransfer.files[0];
-    if (file.type.includes("image")) {
-      onImageChange(file);
-    }
-  };
-
-  const handleDragOver = (ev: React.DragEvent) => {
-    ev.preventDefault();
-  };
-
-  const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
-    if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
-    onImageChange(ev.currentTarget.files[0]);
-  };
-
-  return (
-    <div className="space-y-3">
-      <span >Imagen de portada para redes sociales</span>
-      
-      {!currentImage ? (
-        <div
-          className={cn(
-            "w-full border border-dashed border-black rounded-lg p-6 text-center cursor-pointer transition-colors",
-            {
-              "border-brand-500 bg-brand-50": isHovered,
-            }
-          )}
-          onClick={() => fileInputRef.current?.click()}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          onDragEnter={() => setIsHovered(true)}
-          onDragLeave={() => setIsHovered(false)}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          <ImageIcon
-            className="w-8 h-8 mx-auto mb-2"
-            fill={isHovered ? "#9870ED" : "#6A6966"}
-          />        
-          <p className={cn("text-sm text-marengo", {
-            "text-brand-500": isHovered,
-          })}>
-            Arrastra una imagen o haz clic para seleccionar
-          </p>
-          <p className={cn("text-sm text-marengo mt-1",   { "text-brand-500": isHovered})}>
-            La imagen debe ser de 1200x630px y menos de 5mb.
-          </p>
-        </div>
-      ) : (
-        <div className="relative">
-          <img 
-            src={currentImage} 
-            alt="Preview" 
-            className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
-          />
-          <button
-            onClick={() => onImageChange(null)}
-            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
-          >
-            <IoClose className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-      
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleInputFileChange}
-        className="hidden"
-      />
-    </div>
-  );
-};
-
 const SeoDrawer = ({
   isOpen,
   onClose,
@@ -350,10 +260,7 @@ const SeoDrawer = ({
               : user?.storeConfig?.metadata?.keywords || ""}
           />
           
-          {/* <SingleImageUploader 
-            onImageChange={handleImageChange}
-            currentImage={metaImage ? URL.createObjectURL(metaImage) : user?.storeConfig?.metadata?.metaImage}
-          /> */}
+    
         </div>
         <div className="mt-auto">
           <BrutalButton 
