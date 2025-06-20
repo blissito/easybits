@@ -27,8 +27,6 @@ export default function Store({ loaderData }: Route.ComponentProps) {
   return (
     <div className=" w-full flex justify-center">
       <DNSModal onOpen={onOpen} onClose={onClose} user={user} isOpen={isOpen} />
-      {/* @todo StoreComponent should be two components, the template (display) one and the config one with the edit buttons, something like:
-    <> <StoreEditor /> <StoreDisplay /> </> */}
       <StoreComponent
         variant="slim"
         user={user}

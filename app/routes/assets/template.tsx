@@ -61,9 +61,9 @@ export const ContentTemplate = ({
             )}
           >
             <Bragging asset={asset} reviews={reviews} assetReviews={assetReviews} />
-            <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
+           {asset.description ?  <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
               <Markdown>{asset.description}</Markdown>
-            </div>
+            </div> : null}
           </div>
           <Info
             files={files}
@@ -83,7 +83,7 @@ export const ContentTemplate = ({
 
 const ReviewsModal = ({ isOpen, onClose, assetReviews = [] }: { isOpen: boolean; onClose: () => void; assetReviews?: any[] }) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Comentarios de otros clientes">
+    <Modal isOpen={isOpen} onClose={onClose} title="Echa un vistazo a los comentarios">
       <div className="space-y-0 max-h-[60vh] overflow-y-auto mt-2 scrollbar-hide-reviews">
         {(assetReviews || [])
           .slice()
@@ -107,7 +107,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
       case "WEBINAR":
         return "inscritos";
       default:
-        return "descargas";
+        return "desc.";
     }
   };
 
@@ -122,7 +122,11 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
   };
 
   const handleOpen = () => {
-    setOpen(true);
+    // Only open modal if there are reviews available
+    const hasReviews = (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0);
+    if (hasReviews) {
+      setOpen(true);
+    }
   };
   
   const handleClose = () => {
@@ -132,7 +136,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
   return (
     <>
       <main
-        className="grid grid-cols-10 h-fit md:h-16 border-b-[2px] border-black"
+        className="grid grid-cols-12 h-fit md:h-16 border-b-[2px] border-black"
         style={{ fontFamily: typography }}
       >
         {asset.tags.length === 0 ? null : (
@@ -144,7 +148,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
               className={cn(
                 "overflow-scroll",
                 "flex items-center px-4 gap-2 text-left h-10 border-b-2 border-black md:border-none ",
-                "col-span-10 md:col-span-7 md:px-6 md:h-full md:border-transparent"
+                "col-span-12 md:col-span-8 md:px-6 md:h-full md:border-transparent"
               )}
             >
               {asset.tags
@@ -164,9 +168,8 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
 
         <section
           className={cn(
-            "min-w-max",
-            "h-10  px-3 flex items-center  gap-2",
-            "md:h-full border-l-2 border-black col-span-5 md:col-span-2",
+            "h-10  px-3 flex items-center  gap-2 overflow-hidden ",
+            "md:h-full border-l-2 border-black col-span-6 md:col-span-2",
             {
               "border-l-0": asset.tags.length === 0,
             }
@@ -182,7 +185,10 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         {asset.extra?.showReviews && (
           <section
             className={cn(
-              "min-w-max px-3 col-span-5 md:col-span-1 flex border-l-2 border-black items-center gap-2 cursor-pointer hover:bg-gray-100 transition-colors"
+              " overflow-hidden px-3 col-span-6 md:col-span-2 flex border-l-2 border-black items-center gap-2",
+              {
+                "cursor-pointer hover:bg-gray-100 transition-colors": (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0)
+              }
             )}
             onClick={handleOpen}
           >
@@ -227,7 +233,7 @@ const Info = ({
     <div
       style={{ fontFamily: typography }}
       className={cn(
-        "col-span-8 border-t-[2px] border-black",
+        "col-span-8 ",
         "md:col-span-3 md:border-t-0"
       )}
     >
@@ -349,7 +355,7 @@ const WebinarDetails = ({ asset }: { asset: Asset }) => {
           <div className="flex gap-2 items-center">
             {" "}
             <div className="relative w-3 h-3">
-              <div className="bg-pink-500 rounded-full absolute inset-0 blur-sm animate-pulse" />
+              <div className=" rounded-full absolute inset-0 blur-sm animate-pulse" />
               <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
             </div>
             En vivo
@@ -393,7 +399,7 @@ const ReviewCard = ({ review }: { review: any }) => {
         </p>
        </div>
        <div className="flex items-center justify-start gap-0">
-        <img src={review.user?.picture} className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full"/>
+        <img src={review.user?.picture} className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full" alt="avatar"/>
         <span className="text-xs text-gray-500 ml-1">
           {review.user?.displayName || review.user?.email || "Anónimo"}
         </span>
@@ -422,7 +428,7 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
   return (
     <>
       <div className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
-        <p className="mb-4">Qué opinan nuestros clientes:</p>
+        <p className="mb-4">Qué opinan la comunidad:</p>
         {Object.keys(reviews?.byRating || {})
           .sort((a, b) => b - a)
           .map((n, index) => {

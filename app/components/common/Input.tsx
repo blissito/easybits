@@ -58,6 +58,7 @@ export const Input = ({
             {
               "pr-24": !!copy,
               "ring-2 ring-red-500 transition-all border-none": isError,
+              "px-4 pt-2" : type === "textarea"
             },
             inputClassName
           )}

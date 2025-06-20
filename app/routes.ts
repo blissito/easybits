@@ -75,6 +75,7 @@ export default [
     route("downloads", "routes/api/v1/downloads.tsx"),
     route("uploads", "routes/api/v1/direct-upload-edit.ts"),
     route("reviews", "routes/api/v1/reviews.tsx"),
+    route("store-config", "routes/api/v1/store-config.tsx"),
     ...prefix("ai", [route("chat", "routes/api/v1/ai/chat.tsx")]),
     ...prefix("stripe", [
       route("account", "routes/api/v1/stripe/account.tsx"),

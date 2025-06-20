@@ -25,7 +25,7 @@ export const FilesDropper = ({
         }
       )}
     >
-      <img className="w-8 h-8" src="/icons/image-upload.svg" />
+      <img className="w-8 h-8" src="/icons/image-upload.svg" alt="Subir archivos" />
       <p
         className={cn(
           "text-left",
