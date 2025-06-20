@@ -31,12 +31,17 @@ export default function Page() {
     const formData = new FormData(ev.currentTarget);
     const prompt = formData.get("prompt") as string;
 
+    let finalResponse = "";
     const success = await queryLLMStream(prompt, (chunk) => {
-      setCurrentResponse((prev) => prev + chunk);
+      setCurrentResponse((prev) => {
+        const newResponse = prev + chunk;
+        finalResponse = newResponse; // Capturar la respuesta final
+        return newResponse;
+      });
     });
 
-    if (success && currentResponse) {
-      setResponses((prev) => prev + "\n" + currentResponse);
+    if (success && finalResponse) {
+      setResponses((prev) => prev + "\n" + finalResponse);
       setCurrentResponse("");
     }
     setIsLoading(false);
