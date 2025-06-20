@@ -119,6 +119,8 @@ type StoreConfig {
   x              String  @default("")
   website        String  @default("")
   metadata       Json?
+   logoImage      String  @default("")
+  coverImage     String  @default("")
 }
 
 model User {
