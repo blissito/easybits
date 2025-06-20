@@ -17,7 +17,9 @@ export default function Page() {
   };
   useEffect(() => {
     scrollToBottom();
-    inputRef.current?.value = "";
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
   }, [responses]);
   //
 
