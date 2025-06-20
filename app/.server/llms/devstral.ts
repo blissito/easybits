@@ -4,8 +4,8 @@ export const fetchInternalOllama = (prompt: string) => {
     body: JSON.stringify({
       prompt,
       stream: true,
-      // model: "devstral:24b-small-2505-q8_0",
-      model: "gemma3:4b",
+      model: "devstral:24b-small-2505-q8_0",
+      // model: "gemma3:4b",
     }),
   });
 };
