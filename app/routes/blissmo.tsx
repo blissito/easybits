@@ -63,7 +63,7 @@ export default function Page() {
         <br />
         También estoy probando a Gemma3:4b y otros modelos para ver con cuál no
         me quedo pobre pero me ayuda de verdad. 💸 🤖 ¿Qué esperas? pídele un
-        componente o un webhook. 👋🏼
+        componente o un webhook. 🛰️
       </p>
       <section>
         <h3 className="font-semibold text-lg mt-6 mb-2">Respuesta:</h3>
