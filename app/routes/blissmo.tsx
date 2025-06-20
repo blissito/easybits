@@ -72,7 +72,7 @@ export default function Page() {
           Toma en cuenta que mi servidor a pesar de que me sale caro, es muy
           básico y algunas veces le toma algo de tiempo responder. 🕰️
         </p>
-        <main className="border h-[60vh] border-black grid overflow-y-auto">
+        <main className="border h-[60vh] border-black grid overflow-y-auto px-2">
           {
             <Markdown>
               {responses + (currentResponse ? "\n" + currentResponse : "")}
