@@ -80,12 +80,12 @@ export default function StoreConfigForm({
 
       fetcher.submit(
         {
-          intent: "update_profile",
-          data: JSON.stringify({ storeConfig: values }),
+          intent: "update_store_config",
+          data: JSON.stringify(values),
         },
         {
           method: "post",
-          action: "/api/v1/user",
+          action: "/api/v1/store-config",
         }
       );
       return;
