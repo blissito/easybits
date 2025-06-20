@@ -1,4 +1,4 @@
-import { motion, LayoutGroup, AnimatePresence } from 'motion/react';
+import { motion, type HTMLMotionProps } from 'motion/react';
 import { ImageIcon } from '../icons/image';
 import { cn } from '~/utils/cn';
 import { useDropFiles } from '~/hooks/useDropFiles';
@@ -6,29 +6,40 @@ import { IoClose } from 'react-icons/io5';
 
 interface InputImageProps {
   align?: 'center' | 'left' | 'right' | 'none';
+  alignText?: 'center' | 'left' | 'right';
   allowPreview?: boolean;
   buttonClassName?: string;
+  buttonProps?: HTMLMotionProps<"button">;
+  closable?: boolean;
   isHorizontal?: boolean;
+  onChange?: (file: File[]) => void;
+  onDrop?: (files: File[]) => void;
+  persistFiles?: boolean;
   placeholder?: string;
   placeholderClassName?: string;
-  onDrop?: (files: File[]) => void;
-  onChange?: (file: File[]) => void;
-  closable?: boolean;
 }
 
 function InputImage({
   align = 'center',
+  alignText = 'center',
   allowPreview,
   buttonClassName,
+  buttonProps,
+  closable,
   isHorizontal,
+  onChange,
+  onDrop,
+  persistFiles = true,
   placeholder,
   placeholderClassName,
-  onDrop,
-  onChange,
-  closable,
 }: InputImageProps) {
 
-  const { ref, files, removeFile } = useDropFiles<HTMLButtonElement>({ onDrop, onChange });
+  const {
+    ref,
+    files,
+    removeFile,
+    isHovered,
+  } = useDropFiles<HTMLButtonElement>({ onDrop, onChange, persistFiles });
 
   return (
       <>
@@ -47,7 +58,7 @@ function InputImage({
           type='button'
           whileHover={{ scale: 0.95 }}
           className={cn(
-            "group flex justify-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square",
+            "group flex justify-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square my-2",
             buttonClassName,
             {
               'flex-row': isHorizontal,
@@ -55,15 +66,18 @@ function InputImage({
               'place-items-left': align === 'left',
               'place-items-center': align === 'center',
               'place-items-right': align === 'right',
-              'hidden': files.length && allowPreview
+              'hidden': files.length && allowPreview,
+              'border-brand-500': isHovered === 'dropping',
             }
           )}
+          {...buttonProps}
         >
           <ImageIcon
             className={cn(
-              'w-8 fill-[#6A6966] group-hover:fill-[#9870ED]',
+              'w-8 fill-[#6A6966] group-hover:fill-brand-500',
               {
                 'ml-[15px]': isHorizontal,
+                'fill-brand-500': isHovered === 'dropping',
               }
             )}
             unforceFill
@@ -71,12 +85,13 @@ function InputImage({
           {
             placeholder && (
               <p className={cn(
-                'max-w-md mx-[12px] text-brand-gray text-sm group-hover:text-[#9870ED]',
+                'max-w-md mx-[12px] text-brand-gray text-sm group-hover:text-brand-500',
                 {
-                  'text-left': align === 'left',
-                  'text-center': align === 'center',
-                  'text-right': align === 'right',
+                  'text-left': alignText === 'left',
+                  'text-center': alignText === 'center',
+                  'text-right': alignText === 'right',
                   'my-[12px]': isHorizontal,
+                  'text-brand-500': isHovered === 'dropping',
                 },
                 placeholderClassName,
               )}>
@@ -114,7 +129,7 @@ function Preview({
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
       className={cn(
-        'aspect-square relative group',
+        'aspect-square relative group border rounded-2xl my-2',
         previewClassName,
       )}
     >
