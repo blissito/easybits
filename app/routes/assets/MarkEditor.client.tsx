@@ -25,36 +25,58 @@ export const MarkEditor = ({
     setContent(v);
   };
 
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null);
+
   const handleGenerateDescription = async () => {
     setIsLoading(true);
+    // Si ya está cargando, aborta la petición
+    if (isLoading && abortController) {
+      abortController.abort();
+      setIsLoading(false);
+      setAbortController(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setAbortController(controller);
     const chat = [
       {
         role: "user", // @todo try with system
         content: `Genera una descripción para el siguiente asset: ${assetTitle}, con estas características: ${
           inputRef.current!.value
-        }, en formato markdown`,
+        }, en formato markdown directamente sin el bloque de markdown`,
       },
     ];
-    const response = await fetch("/api/v1/ai/sugestions", {
-      method: "POST",
-      body: new URLSearchParams({
-        intent: "generate_sugestion",
-        chat: JSON.stringify(chat),
-      }),
-    });
-    if (response.ok) {
-      setContent("");
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const text = JSON.parse(chunk).response.replace(null, "");
-        setContent((v) => v + text);
+
+    try {
+      const response = await fetch("/api/v1/ai/sugestions", {
+        method: "POST",
+        body: new URLSearchParams({
+          intent: "generate_sugestion",
+          chat: JSON.stringify(chat),
+        }),
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        setContent("");
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) return;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const text = JSON.parse(chunk).response.replace(null, "");
+          setContent((v) => v + text);
+        }
+        setIsLoading(false);
       }
+    } catch (error) {
+      console.error("Error al generar la descripción:", error);
+    } finally {
       setIsLoading(false);
+      setAbortController(null);
     }
   };
 

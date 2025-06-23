@@ -5,7 +5,8 @@ type Conversation = ChatStructure[];
 
 const queryLLMStream = async (
   chat: Conversation,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  signal?: AbortSignal
 ) => {
   const action = "/api/v1/ai/sugestions";
   try {
@@ -15,6 +16,7 @@ const queryLLMStream = async (
         intent: "generate_sugestion",
         chat: JSON.stringify(chat),
       }),
+      signal,
     });
 
     if (!resp.ok) return false;

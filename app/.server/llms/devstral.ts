@@ -13,7 +13,7 @@ export const fetchInternalOllama = (
     "with::",
     prompt,
     "and::",
-    isDev ? "gemma3:4b" : "phi4:14b"
+    isDev ? "llama3.2:3b" : "phi4:14b"
   );
 
   return fetch(url, {
