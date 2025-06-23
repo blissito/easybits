@@ -50,7 +50,7 @@ export default function Page() {
   return (
     <article className="px-6 w-full max-w-5xl py-20 mx-auto">
       <h1 className="text-2xl font-bold mb-6">
-        Probando a devstral:24b-small-2505-q8_0 (LLM)
+        Probando a Phi4:14b (State-of-the-art Open LLM from Microsoft)
       </h1>
       <p>
         El LLM con el que estás ahora conversando, es sabio en programación. Yo
@@ -58,12 +58,12 @@ export default function Page() {
         <a target="_blank" rel="noreferrer" href="https://www.hectorbliss.com">
           blissito
         </a>
-        ). Puedes pedirle snipets de código e incluso pedirle que te explique
-        cómo funciona un fragmento de código.
+        ). Gracias a sus synthetic datasets que contienen información filtrada
+        de dominios públicos e incluye libros académicos y datasets Q&A.
         <br />
         También estoy probando a Gemma3:4b y otros modelos para ver con cuál no
-        me quedo pobre pero me ayuda de verdad. 💸 🤖 ¿Qué esperas? pídele un
-        componente o un webhook. 🛰️
+        me quedo pobre pero me ayuda de verdad. 💸 🤖 ¿Qué esperas? Pregunta
+        algo profesional. 🛰️
       </p>
       <section>
         <h3 className="font-semibold text-lg mt-6 mb-2">Respuesta:</h3>

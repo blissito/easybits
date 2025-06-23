@@ -12,6 +12,7 @@ import {
   updateProduct,
 } from "~/.server/stripe_v2";
 import { redirect } from "react-router";
+import { generateDescription } from "~/.server/llms/tools/generators/getAssetDescription";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -185,6 +186,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // @todo delete file from S3
 
     return await db.asset.update({ where: { id: assetId }, data: { actions } });
+  }
+
+  if (intent === "generate_asset_description") {
+    const assetId = formData.get("assetId") as string;
+    const asset = await db.asset.findUnique({ where: { id: assetId } });
+    const prompt = String(formData.get("prompt"));
+    if (!asset) throw new Response("Asset not found", { status: 404 });
+    const description = await generateDescription(asset, prompt);
+    return description;
   }
 
   return null;

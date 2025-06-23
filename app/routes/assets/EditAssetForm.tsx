@@ -277,6 +277,7 @@ export const EditAssetForm = ({
           />
           <Suspense fallback={<Spinner />}>
             <MarkEditor
+              assetTitle={asset.title}
               defaultValue={asset.description}
               onChange={handleChange("description")}
               error={errors.description}

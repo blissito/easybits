@@ -1,11 +1,33 @@
-export const fetchInternalOllama = (prompt: string) => {
-  return fetch("http://ollama-old.flycast/api/generate", {
-    method: "post",
+export const fetchInternalOllama = (
+  prompt: string,
+  stream: boolean = false
+) => {
+  const isDev = process.env.NODE_ENV === "development";
+  const url = isDev
+    ? "http://localhost:11434/api/generate"
+    : "http://ollama-old.flycast/api/generate";
+
+  console.log(
+    "ABout to:",
+    url,
+    "with::",
+    prompt,
+    "and::",
+    isDev ? "gemma3:4b" : "phi4:14b"
+  );
+
+  return fetch(url, {
     body: JSON.stringify({
       prompt,
-      stream: true,
-      model: "devstral:24b-small-2505-q8_0",
-      // model: "gemma3:4b",
+      stream,
+      model: isDev ? "llama3.2:3b" : "phi4:14b",
     }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "post",
   });
 };
+
+// @todo for chat
+export const fetchInternalOllamaChat = (chat: string) => {};
