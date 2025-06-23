@@ -1,5 +1,6 @@
 import { fetchInternalOllama } from "~/.server/llms/devstral";
 import type { ChatStructure } from "~/hooks/useDevstral";
+import { buildPromptFromHistory } from "~/hooks/useDevstral";
 
 export const action = async ({ request }: { request: Request }) => {
   const formData = await request.formData();
@@ -7,8 +8,11 @@ export const action = async ({ request }: { request: Request }) => {
   const intent = formData.get("intent") as string;
 
   if (intent === "generate_sugestion") {
-    const ollamaResponse = await fetchInternalOllama(chat[0].content, true);
-    console.info("THE_SECOND_GREAT_OLLAMA_RESPONSE", ollamaResponse.status);
+    // Construir prompt contextual con historial
+    const prompt = buildPromptFromHistory(chat);
+    console.log("PROMPT CONTEXTUAL::\n", prompt);
+    const ollamaResponse = await fetchInternalOllama(prompt, true);
+    console.info("OLLAMA_RESPONSE::\n", ollamaResponse.status);
     // streams
     if (ollamaResponse.ok) {
       return new Response(ollamaResponse.body, {

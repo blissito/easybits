@@ -119,3 +119,23 @@ const useLLM = () => {
     handleSubmit,
   };
 };
+
+// Construye el prompt para Ollama usando el historial de mensajes
+export function buildPromptFromHistory(
+  history: { role: string; content: string }[]
+) {
+  return (
+    history
+      .map(
+        (msg) =>
+          `${
+            msg.role === "system"
+              ? "System:"
+              : msg.role === "user"
+              ? "Usuario"
+              : "Asistente"
+          }: ${msg.content}`
+      )
+      .join("\n") + "\nAsistente:"
+  );
+}

@@ -44,7 +44,7 @@ export const AssetPreview = ({
   });
   return (
     <aside
-      className="col-span-4 md:block hidden h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-hidden "
+      className="col-span-4 md:block hidden h-svh bg-black px-8 pt-6 pb-8 text-white sticky top-0 overflow-auto "
       style={{ scrollbarWidth: "none" }}
     >
       <nav className="flex items-center mb-8 gap-4">
@@ -56,7 +56,11 @@ export const AssetPreview = ({
           <IoShareSocialOutline className="text-2xl" />
         </button>
         <button onClick={handleOpenLink} className="text-xl">
-        <img alt="external link" src="/icons/opentab-white.svg" className="w-6 h-6" />
+          <img
+            alt="external link"
+            src="/icons/opentab-white.svg"
+            className="w-6 h-6"
+          />
         </button>
         <EnrolledUsers assetId={asset.id} />
       </nav>

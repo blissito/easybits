@@ -20,6 +20,7 @@ export const MarkEditor = ({
   const [content, setContent] = useState(defaultValue);
   const [showAISuggestion, setShowAISuggestion] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [lastPrompt, setLastPrompt] = useState<string>("");
   const handleChange = (v = "") => {
     onChange?.(v);
     setContent(v);
@@ -30,7 +31,6 @@ export const MarkEditor = ({
 
   const handleGenerateDescription = async () => {
     setIsLoading(true);
-    // Si ya está cargando, aborta la petición
     if (isLoading && abortController) {
       abortController.abort();
       setIsLoading(false);
@@ -40,14 +40,23 @@ export const MarkEditor = ({
 
     const controller = new AbortController();
     setAbortController(controller);
+
+    const promptText = `${inputRef.current!.value}`;
+    setLastPrompt(promptText);
     const chat = [
       {
-        role: "user", // @todo try with system
-        content: `Genera una descripción para el siguiente asset: ${assetTitle}, con estas características: ${
-          inputRef.current!.value
-        }, en formato markdown directamente sin el bloque de markdown`,
+        role: "system",
+        content: `Descripción actual: ${String(
+          content ?? "(vacía)"
+        )}, Titulo del asset: ${assetTitle}, Refina la descripción para el asset segun las instrucciones del usuario y devolviendo siempre markdown directamente sin el bloque de markdown y sin comentarios`,
+      },
+      {
+        role: "user",
+        content: promptText,
       },
     ];
+
+    console.log("PROMPT ENVIADO A OLLAMA:\n", chat);
 
     try {
       const response = await fetch("/api/v1/ai/sugestions", {
@@ -70,13 +79,13 @@ export const MarkEditor = ({
           const text = JSON.parse(chunk).response.replace(null, "");
           setContent((v) => v + text);
         }
-        setIsLoading(false);
       }
     } catch (error) {
       console.error("Error al generar la descripción:", error);
     } finally {
       setIsLoading(false);
       setAbortController(null);
+      inputRef.current!.value = "";
     }
   };
 
@@ -154,11 +163,13 @@ export const MarkEditor = ({
         <div
           id="ai-suggestion-content"
           className={`overflow-hidden transition-all duration-300 ${
-            showAISuggestion ? "max-h-40 opacity-100 mt-3" : "max-h-0 opacity-0"
+            showAISuggestion
+              ? "h-[200px] opacity-100 mt-3"
+              : "max-h-0 opacity-0"
           } bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 shadow-sm`}
           style={{ pointerEvents: showAISuggestion ? "auto" : "none" }}
         >
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 h-full">
             <div className="flex items-start gap-3">
               {/* Icono IA sin círculo */}
               <svg
@@ -192,28 +203,68 @@ export const MarkEditor = ({
               </svg>
               <div className="text-sm text-brand-500">
                 Describe tu asset de forma <strong>clara y atractiva</strong>.{" "}
-                Puedes pedirle ayuda a la IA para generar una descripción
-                llamativa, por ejemplo:{" "}
+                <strong>
+                  Nuestro asistente AI recuerda toda la conversación.
+                </strong>
+                <br />
+                Puedes pedirle generar o refinar las secciones en tu
+                descripción:{" "}
                 <span className="italic">
                   "Genera una descripción creativa para un libro de
                   ilustraciones digitales"
+                </span>{" "}
+                <br />
+                para después pedirle:{" "}
+                <span className="italic">
+                  "deja la sección de beneficios pero quita los bullets"
                 </span>
                 .
               </div>
             </div>
+            {/* Contenedor animado para el último mensaje enviado */}
+            <div
+              className={`transition-all duration-300 overflow-hidden ${
+                lastPrompt ? "max-h-[200px] mb-2" : "max-h-0 mb-0"
+              }`}
+            >
+              {lastPrompt && (
+                <div className="flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-2 text-xs text-brand-700 font-medium shadow-sm">
+                  <svg
+                    width="16"
+                    height="16"
+                    fill="none"
+                    viewBox="0 0 20 20"
+                    className="flex-shrink-0"
+                  >
+                    <path
+                      d="M3 17l1.5-4.5M3 17l4.5-1.5M3 17l10-10a2.121 2.121 0 013 3l-10 10z"
+                      stroke="#9870ED"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="italic">Último mensaje enviado:</span>
+                  <span className="ml-1 text-brand-500/90 font-normal">
+                    {lastPrompt}
+                  </span>
+                </div>
+              )}
+            </div>
             {/* Input moderno para prompt AI */}
-            <section className="flex items-center gap-2 mt-2">
+            <section className="flex items-center gap-2 mt-auto">
               <input
+                disabled={isLoading}
                 ref={inputRef}
                 type="text"
-                className="flex-1 rounded-lg border border-brand-500/30 bg-white px-3 py-2 text-sm text-brand-500 placeholder-brand-500/60 focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                className="flex-1 rounded-lg border border-brand-500/30 bg-white px-3 py-2 text-sm text-brand-500 placeholder-brand-500/60 focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder="Escribe aquí tu prompt para la IA..."
                 aria-label="Prompt para IA"
               />
               <button
                 onClick={handleGenerateDescription}
                 type="button"
-                className="inline-flex items-center justify-center bg-brand-500 hover:bg-brand-700 text-white rounded-lg p-2 transition-colors"
+                className="inline-flex items-center justify-center bg-brand-500 hover:bg-brand-700 text-white rounded-lg p-2 transition-colors "
                 title="Enviar a IA"
               >
                 {isLoading ? (
