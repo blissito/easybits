@@ -1,17 +1,9 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from "react";
-import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { IoClose } from "react-icons/io5";
+import { useEffect, type ReactNode } from "react";
+import { AnimatePresence, LayoutGroup } from "motion/react";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
-import { ImageIcon } from "~/components/icons/image";
 import { useImageResize } from "~/hooks/useImageResize";
-import { useDropFiles } from "~/hooks/useDropFiles";
+import InputImage from '~/components/common/InputImage';
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -31,51 +23,6 @@ export const GalleryUploader = ({
   host: string;
   asset: Asset;
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
-  // const [files, setFiles] = useState<File[]>(externalFiles);
-
-  // external files change
-  // useEffect(() => {
-  //   setFiles(externalFiles);
-  // }, [externalFiles]);
-
-  // files change
-  // useEffect(() => {
-  //   onChange?.(files);
-  // }, [files]);
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    if (e.dataTransfer.files.length < 1) return;
-
-    // images only
-    const fls = [...e.dataTransfer.files].filter((f) =>
-      f.type.includes("image")
-    );
-
-    addFiles(fls);
-  };
-
-  const handleDragOver = (ev: DragEvent) => {
-    ev.preventDefault();
-    setIsHovered("dropping");
-  };
-
-  const handleDragEnter = () => {
-    setIsHovered("dropping");
-  };
-
-  const handleInputFileChange = (ev: ChangeEvent<HTMLInputElement>) => {
-    if (!ev.currentTarget.files || ev.currentTarget.files?.length < 1) return;
-    onAddFiles([...ev.currentTarget.files]);
-  };
-
-  // const { links, onRemove: removeFromS3 } = useUploader({
-  //   assetId: asset.id,
-  //   defaultLinks: asset.gallery,
-  // });
-
   const { resize } = useImageResize({
     async callback(blob) {
       // 1. get put url
@@ -118,78 +65,42 @@ export const GalleryUploader = ({
     uploadMetaImage(gallery); // @todo index:0
   }, [gallery]);
 
+
   return (
     <article className="">
       <h2 className="mt-5 mb-2">Galería y miniatura principal</h2>
-
-      <section
-        className="overflow-auto flex gap-3"
-        onMouseEnter={() => setIsHovered("hover")}
-        onMouseLeave={() => setIsHovered(null)}
-      >
+      <section className="overflow-auto">
         {elemsLength < 1 && canUpload && (
-          <motion.button
-            layoutId="upload_button"
-            onClick={() => fileInputRef.current?.click()}
-            onDragEnter={handleDragEnter}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            type="button"
-            className={cn(
-              "w-full",
-              "flex gap-3 border-dashed border-[1px] p-4 hover:border-brand-500 rounded-2xl py-11 justify-center items-center border-iron",
-              {
-                "border-iron": isHovered === "hover",
-                "border-brand-500": isHovered === "dropping",
-              }
-            )}
-          >
-            <ImageIcon
-              className="w-8 h-8"
-              fill={isHovered ? "#9870ED" : "#6A6966"}
-            />
-            <p
-              className={cn("max-w-md text-brand-gray text-left text-sm", {
-                "text-brand-500": isHovered === "hover",
-              })}
-            >
-              Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o
-              sube hasta 50 archivos con un peso máximo de 250 mb en total.
-            </p>
-          </motion.button>
+          <InputImage
+            alignText="left"
+            buttonClassName="max-h-[144px] w-full"
+            placeholder="Arrastra o sube los archivos. Sube un archivo comprimido (.zip) o sube hasta 50 archivos con un peso máximo de 250 mb en total."
+            isHorizontal
+            onChange={onAddFiles}
+            persistFiles={false}
+          />
         )}
 
         {elemsLength > 0 && (
           <RowGalleryEditor
             previews={
-              <section className="flex gap-3 ">
+              <section className="flex gap-3">
                 {srcset.map((src, i) => (
-                  <Image
-                    onRemove={handleRemoveFile(i)}
-                    as="figure"
+                  <InputImage.Preview
                     key={i}
+                    onClose={handleRemoveFile(i)}
                     src={src}
+                    previewClassName="max-w-[144px] min-w-[144px]"
                   />
                 ))}
               </section>
             }
             canUpload={canUpload}
-            onClick={() => fileInputRef.current?.click()}
-            onDrop={onAddFiles}
+            onChange={onAddFiles}
             links={gallery}
             onRemoveLink={onRemoveLink} // @todo change name
           />
         )}
-
-        <input
-          multiple
-          accept="image/*"
-          onChange={handleInputFileChange}
-          ref={fileInputRef}
-          className="hidden"
-          type="file"
-     
-        />
       </section>
     </article>
   );
@@ -197,77 +108,42 @@ export const GalleryUploader = ({
 
 const RowGalleryEditor = ({
   links = [],
-  onClick,
+  onChange,
   onRemoveLink,
   canUpload,
   previews,
-  onDrop,
 }: {
   onDrop?: (arg0: File[]) => void;
   previews?: ReactNode;
   canUpload?: boolean;
   links?: string[];
   onRemoveLink?: (arg0: string) => void;
-  onClick: () => void;
+  onChange: (files: File[]) => void;
 }) => {
-  const { ref } = useDropFiles<HTMLButtonElement>({ onDrop });
   return (
     <div className={cn("flex items-center gap-3")}>
       <LayoutGroup>
         <AnimatePresence>
           {links.map((l) => (
-            <Image onRemove={() => onRemoveLink?.(l)} key={l} src={l} />
+            <InputImage.Preview
+              key={l}
+              onClose={() => onRemoveLink?.(l)}
+              src={l}
+              previewClassName="max-w-[144px] min-w-[144px]"
+            />
           ))}
         </AnimatePresence>
         {previews}
         {links.length < 10 && canUpload && (
-          <motion.button
-            ref={ref}
-            whileHover={{ scale: 0.95 }}
-            onClick={onClick}
-            layoutId="upload_button"
-            type="button"
-            className="grid place-items-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square  max-w-[144px] min-w-[144px]"
-          >
-            <img className="w-8 h-8" src="/icons/image-upload.svg" />
-          </motion.button>
+          <InputImage
+            buttonClassName="max-w-[144px] min-w-[144px]"
+            onChange={onChange}
+            persistFiles={false}
+            buttonProps={{ layoutId: 'upload_button' }}
+          />
         )}
       </LayoutGroup>
     </div>
   );
 };
 
-const Image = ({
-  src,
-  as,
-  onRemove,
-}: {
-  as?: string;
-  src: string;
-  onRemove?: () => void; // click on X
-}) => {
-  // const C = as ? as : "motion.figure"; // revisit
-  return (
-    <motion.figure
-      layout
-      initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
-      exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
-      animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
-      key={src}
-      className="aspect-square max-w-[144px] min-w-[144px] relative group border rounded-2xl my-2"
-    >
-      <button
-        type="button"
-        onClick={onRemove}
-        className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2"
-      >
-        <IoClose />
-      </button>
-      <img
-        src={src}
-        alt="preview"
-        className="rounded-2xl object-cover w-full h-full"
-      />
-    </motion.figure>
-  );
-};
