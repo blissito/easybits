@@ -126,12 +126,12 @@ export const MarkEditor = ({
       });
       // @todo make this a hook
       if (response.ok) {
-        setContent("");
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
         if (!reader) return;
 
         let buffer = "";
+        setContent("");
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
