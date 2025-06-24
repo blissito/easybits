@@ -105,7 +105,7 @@ export const MarkEditor = ({
         role: "system",
         content: `Descripción actual: ${String(
           content ?? "(vacía)"
-        )}, toma en cuenta el titulo del asset que es: ${assetTitle}. Refina la descripción para el asset según las instrucciones del usuario y devolviendo siempre markdown directamente sin el bloque de markdown y sin comentarios. Para los títulos usa siempre # o ## y para los subtitulos usa ###. Usa algunas citas relacionadas también.`,
+        )}, toma en cuenta el titulo del asset que es: ${assetTitle}. Refina la descripción para el asset según las instrucciones del usuario y devolviendo siempre markdown directamente sin el bloque de markdown y sin comentarios. Para los títulos usa siempre # o ## y para los subtitulos usa ###. Usa algunas citas relacionadas también y siempre response en español mexicano.`,
       },
       {
         role: "user",
