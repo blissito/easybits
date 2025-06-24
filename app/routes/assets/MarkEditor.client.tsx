@@ -1,6 +1,5 @@
 import MDEditor from "@uiw/react-md-editor";
 import { useEffect, useRef, useState } from "react";
-import { set } from "react-hook-form";
 import { useFetcher } from "react-router";
 import Spinner from "~/components/common/Spinner";
 import { cn } from "~/utils/cn";
@@ -17,21 +16,78 @@ export const MarkEditor = ({
   defaultValue?: string | null;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const fetcher = useFetcher();
   const [content, setContent] = useState(defaultValue);
   const [showAISuggestion, setShowAISuggestion] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [lastPrompt, setLastPrompt] = useState<string>("");
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+  const lastScrollTopRef = useRef(0);
+
   const handleChange = (v = "") => {
     onChange?.(v);
     setContent(v);
   };
+
+  // Función para hacer scroll automático
+  const scrollToBottom = () => {
+    if (editorRef.current && autoScrollEnabled) {
+      const editorContent = editorRef.current.querySelector(
+        ".w-md-editor-content"
+      );
+      if (editorContent) {
+        // Verificar si el usuario está cerca del final antes de hacer auto-scroll
+        const currentScrollTop = editorContent.scrollTop;
+        const scrollHeight = editorContent.scrollHeight;
+        const clientHeight = editorContent.clientHeight;
+
+        // Solo hacer auto-scroll si está cerca del final
+        if (currentScrollTop + clientHeight >= scrollHeight - 50) {
+          editorContent.scrollTop = editorContent.scrollHeight;
+          lastScrollTopRef.current = editorContent.scrollTop;
+        }
+      }
+    }
+  };
+
+  // Detectar scroll manual del usuario
+  useEffect(() => {
+    if (!editorRef.current || !isLoading) return;
+
+    const editorContent = editorRef.current.querySelector(
+      ".w-md-editor-content"
+    );
+    if (!editorContent) return;
+
+    const handleScroll = () => {
+      const currentScrollTop = editorContent.scrollTop;
+      const scrollHeight = editorContent.scrollHeight;
+      const clientHeight = editorContent.clientHeight;
+
+      // Si el usuario hace scroll hacia arriba (scrollTop disminuye)
+      if (currentScrollTop < lastScrollTopRef.current) {
+        setAutoScrollEnabled(false);
+      }
+
+      // Si el usuario hace scroll hasta el final, reactivar auto-scroll
+      if (currentScrollTop + clientHeight >= scrollHeight - 10) {
+        setAutoScrollEnabled(true);
+      }
+
+      lastScrollTopRef.current = currentScrollTop;
+    };
+
+    editorContent.addEventListener("scroll", handleScroll);
+    return () => editorContent.removeEventListener("scroll", handleScroll);
+  }, [isLoading]);
 
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
 
   const handleGenerateDescription = async () => {
     setIsLoading(true);
+    setAutoScrollEnabled(true); // Reactivar auto-scroll al iniciar
     if (isLoading && abortController) {
       abortController.abort();
       setIsLoading(false);
@@ -49,7 +105,7 @@ export const MarkEditor = ({
         role: "system",
         content: `Descripción actual: ${String(
           content ?? "(vacía)"
-        )}, Titulo del asset: ${assetTitle}, Refina la descripción para el asset segun las instrucciones del usuario y devolviendo siempre markdown directamente sin el bloque de markdown y sin comentarios. Para los título usa siempre # o ## y para los subtitulo usa ###`,
+        )}, toma en cuenta el titulo del asset que es: ${assetTitle}. Refina la descripción para el asset según las instrucciones del usuario y devolviendo siempre markdown directamente sin el bloque de markdown y sin comentarios. Para los títulos usa siempre # o ## y para los subtitulos usa ###. Usa algunas citas relacionadas también.`,
       },
       {
         role: "user",
@@ -68,17 +124,39 @@ export const MarkEditor = ({
         }),
         signal: controller.signal,
       });
+      // @todo make this a hook
       if (response.ok) {
         setContent("");
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
         if (!reader) return;
+
+        let buffer = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value);
-          const text = JSON.parse(chunk).response.replace(null, "");
-          setContent((v) => v + text);
+
+          buffer += decoder.decode(value);
+          const lines = buffer.split("\n");
+
+          // Mantén la última línea en el buffer por si está incompleta
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.trim() && line.startsWith("{")) {
+              try {
+                const data = JSON.parse(line);
+                if (data.response) {
+                  setContent((v) => v + data.response);
+                  // Hacer scroll después de cada actualización del contenido
+                  requestAnimationFrame(scrollToBottom);
+                }
+              } catch (e) {
+                // Ignora errores de parsing de líneas no válidas
+                console.warn("Línea JSON no válida:", line);
+              }
+            }
+          }
         }
       }
     } catch (error) {
@@ -90,8 +168,11 @@ export const MarkEditor = ({
     }
   };
 
+  // Llamar onChange cuando cambie el contenido
   useEffect(() => {
-    onChange?.(content);
+    if (content !== undefined) {
+      onChange?.(content || "");
+    }
   }, [content]);
 
   return (
@@ -266,10 +347,10 @@ export const MarkEditor = ({
             </div>
           </section>
         </article>
-        <section className="w-full">
+        <section className="w-full" ref={editorRef}>
           <MDEditor
             preview="edit"
-            value={content!}
+            value={content || ""}
             onChange={handleChange}
             height={500}
           />
@@ -285,13 +366,19 @@ const PromptInput = ({
   isLoading,
   onClick,
 }: {
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   isLoading: boolean;
   onClick: () => void;
 }) => {
-  return (
-    <section className="flex items-center gap-2 mt-auto">
+  const form = (
+    <article className="flex items-center gap-2 mt-auto">
       <input
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onClick?.();
+          }
+        }}
         disabled={isLoading}
         ref={inputRef}
         type="text"
@@ -316,6 +403,8 @@ const PromptInput = ({
           </svg>
         )}
       </button>
-    </section>
+    </article>
   );
+  // const portal = usePortal(<>{form}</>);
+  return form;
 };
