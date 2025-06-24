@@ -1,8 +1,12 @@
 // const MODEL = "qwen3:8b";
 // const MODEL = "phi4:14b";
-const MODEL = "deepseek-coder-v2:16b";
+// const MODEL = "gemma3:1b";
+const MODEL = "mistral-small3.2:24b";
+const DEV_MODEL = "llama3.2:3b";
+// const MODEL = "llama3.2:3b";
+// const DEV_MODEL = "gemma3:4b";
+// const MODEL = "deepseek-coder-v2:16b";
 // const MODEL = "deepseek-r1:8b";
-// const MODEL = "llama3.2:3b"
 
 export const fetchInternalOllama = (
   prompt: string,
@@ -19,7 +23,7 @@ export const fetchInternalOllama = (
     body: JSON.stringify({
       prompt,
       stream,
-      model: MODEL,
+      model: isDev ? DEV_MODEL : MODEL,
       // model: isDev ? MODEL : "phi4:14b",
       think: false, // quen3:8b puede pensar
     }),

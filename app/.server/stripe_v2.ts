@@ -61,8 +61,9 @@ export async function configureMerchantWebhook(
       throw new Error("User doesn't have a Stripe account");
     }
 
-    // Create or update the webhook endpoint
-    const webhook = await stripe.webhooks.endpoints.create({
+    // Usar la API REST en lugar del SDK
+    const stripeWebhookApiUrl = "https://api.stripe.com/v1/webhook_endpoints";
+    const params = new URLSearchParams({
       url: webhookUrl.replace("{assetId}", assetId),
       enabled_events: [
         "account.updated",
@@ -72,12 +73,22 @@ export async function configureMerchantWebhook(
         "payment_intent.payment_failed",
         "payment_intent.canceled",
         "payment_intent.processing",
-      ],
+      ].join(","),
       stripe_account: user.stripeId,
-      connect: true, // Required for Connect accounts
-      expand: ["metadata"],
+      connect: "true",
     });
 
+    const response = await fetch(stripeWebhookApiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Stripe-Version": "2025-04-30.preview",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    const webhook = await response.json();
     return webhook;
   } catch (error) {
     console.error("Error configuring merchant webhook:", error);
@@ -157,6 +168,7 @@ export const updateOrCreateProductAndPrice = async (
       productId: asset.stripeProduct,
       priceId: price.id,
       accountId,
+      images: [],
     });
     await updateAsset(asset.id, { stripePrice: price.id });
     // Configurar webhook después de crear el price

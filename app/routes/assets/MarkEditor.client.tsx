@@ -17,7 +17,6 @@ export const MarkEditor = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const fetcher = useFetcher();
   const [content, setContent] = useState(defaultValue);
   const [showAISuggestion, setShowAISuggestion] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,95 +24,94 @@ export const MarkEditor = ({
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const lastScrollTopRef = useRef(0);
 
+  // replace the entire content
   const handleChange = (v = "") => {
-    onChange?.(v);
     setContent(v);
   };
+  // Llamar onChange cuando cambie el contenido
+  useEffect(() => {
+    onChange?.(content || "");
+  }, [content]);
 
   // Función para hacer scroll automático
   const scrollToBottom = () => {
     if (editorRef.current && autoScrollEnabled) {
-      const editorContent = editorRef.current.querySelector(
-        ".w-md-editor-content"
-      );
+      // const editorContent = editorRef.current.querySelector(
+      //   ".w-md-editor-content"
+      // );
+      const editorContent =
+        editorRef.current.querySelector(".w-md-editor-area");
       if (editorContent) {
-        // Verificar si el usuario está cerca del final antes de hacer auto-scroll
-        const currentScrollTop = editorContent.scrollTop;
-        const scrollHeight = editorContent.scrollHeight;
-        const clientHeight = editorContent.clientHeight;
+        // Esperar al siguiente frame y luego un pequeño delay para asegurar que el DOM esté actualizado
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            const currentScrollTop = editorContent.scrollTop;
+            const scrollHeight = editorContent.scrollHeight;
+            const clientHeight = editorContent.clientHeight;
 
-        // Solo hacer auto-scroll si está cerca del final
-        if (currentScrollTop + clientHeight >= scrollHeight - 50) {
-          editorContent.scrollTop = editorContent.scrollHeight;
-          lastScrollTopRef.current = editorContent.scrollTop;
-        }
+            // Solo hacer auto-scroll si está cerca del final
+            if (currentScrollTop + clientHeight >= scrollHeight - 50) {
+              editorContent.scrollTop = editorContent.scrollHeight;
+              lastScrollTopRef.current = editorContent.scrollTop;
+            }
+          }, 10);
+        });
       }
     }
   };
 
   // Detectar scroll manual del usuario
   useEffect(() => {
-    if (!editorRef.current || !isLoading) return;
-
+    if (!editorRef.current) return;
     const editorContent = editorRef.current.querySelector(
       ".w-md-editor-content"
     );
     if (!editorContent) return;
-
     const handleScroll = () => {
       const currentScrollTop = editorContent.scrollTop;
       const scrollHeight = editorContent.scrollHeight;
       const clientHeight = editorContent.clientHeight;
-
-      // Si el usuario hace scroll hacia arriba (scrollTop disminuye)
-      if (currentScrollTop < lastScrollTopRef.current) {
+      if (currentScrollTop < lastScrollTopRef.current)
         setAutoScrollEnabled(false);
-      }
-
-      // Si el usuario hace scroll hasta el final, reactivar auto-scroll
-      if (currentScrollTop + clientHeight >= scrollHeight - 10) {
+      if (currentScrollTop + clientHeight >= scrollHeight - 10)
         setAutoScrollEnabled(true);
-      }
-
       lastScrollTopRef.current = currentScrollTop;
     };
-
     editorContent.addEventListener("scroll", handleScroll);
     return () => editorContent.removeEventListener("scroll", handleScroll);
-  }, [isLoading]);
+  }, [showAISuggestion]);
 
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
 
   const handleGenerateDescription = async () => {
-    setIsLoading(true);
     setAutoScrollEnabled(true); // Reactivar auto-scroll al iniciar
     if (isLoading && abortController) {
       abortController.abort();
-      setIsLoading(false);
-      setAbortController(null);
-      return;
+      // setIsLoading(false); // allow multiple requests
+      // setAbortController(null);
+      // return; // allow multiple requests
     }
-
+    setIsLoading(true);
     const controller = new AbortController();
     setAbortController(controller);
 
+    // save and reset the input
     const promptText = `${inputRef.current!.value}`;
     setLastPrompt(promptText);
+    inputRef.current!.value = "";
     const chat = [
       {
         role: "system",
         content: `Descripción actual: ${String(
           content ?? "(vacía)"
-        )}, toma en cuenta el titulo del asset que es: ${assetTitle}. Refina la descripción para el asset según las instrucciones del usuario y devolviendo siempre markdown directamente sin el bloque de markdown y sin comentarios. Para los títulos usa siempre # o ## y para los subtitulos usa ###. Usa algunas citas relacionadas también y siempre response en español mexicano.`,
+        )}, toma en cuenta el titulo del asset que es: ${assetTitle}. Refina la descripción para el asset según las instrucciones del usuario. Para los títulos usa siempre # o ## y para los subtitulos usa: ###. Usa algunas citas relacionadas también y siempre, quiero decir, siempre, response en español mexicano y no añadas ni tus comentarios ni instrucciones. Devuelve siempre: markdown directamente, sin el bloque de markdown`,
       },
       {
         role: "user",
         content: promptText,
       },
     ];
-
-    console.log("PROMPT ENVIADO A OLLAMA:\n", chat);
 
     try {
       const response = await fetch("/api/v1/ai/sugestions", {
@@ -149,8 +147,9 @@ export const MarkEditor = ({
                 if (data.response) {
                   setContent((v) => v + data.response);
                   // Hacer scroll después de cada actualización del contenido
-                  requestAnimationFrame(scrollToBottom);
                 }
+                requestAnimationFrame(scrollToBottom);
+                // scrollToBottom();
               } catch (e) {
                 // Ignora errores de parsing de líneas no válidas
                 console.warn("Línea JSON no válida:", line);
@@ -158,28 +157,29 @@ export const MarkEditor = ({
             }
           }
         }
+        setIsLoading(false);
       }
     } catch (error) {
       console.error("Error al generar la descripción:", error);
     } finally {
-      setIsLoading(false);
       setAbortController(null);
-      inputRef.current!.value = "";
     }
   };
-
-  // Llamar onChange cuando cambie el contenido
-  useEffect(() => {
-    if (content !== undefined) {
-      onChange?.(content || "");
-    }
-  }, [content]);
 
   return (
     <section className="mb-3" data-color-mode="light">
       <p className="pt-3">Descripción</p>
       <p className="text-xs pb-3">Puedes usar markdown</p>
       <main className="flex gap-4 flex-col lg:flex-row">
+        <section className="w-full" ref={editorRef}>
+          <MDEditor
+            preview="edit"
+            value={content || ""}
+            onChange={handleChange}
+            height={500}
+          />
+          <input type="hidden" name="perro" value={content} />
+        </section>
         <article
           id="sugerencia_AI"
           className={cn("mb-4", {
@@ -291,12 +291,9 @@ export const MarkEditor = ({
                 </svg>
                 <div className="text-sm text-brand-500">
                   Describe tu asset de forma <strong>clara y atractiva</strong>.{" "}
-                  <strong>
-                    Nuestro asistente AI recuerda toda la conversación.
-                  </strong>
                   <br />
-                  Puedes pedirle generar o refinar las secciones en tu
-                  descripción:{" "}
+                  Puedes pedirle generar <strong>o refinar</strong> las
+                  secciones en tu descripción:{" "}
                   <span className="italic">
                     "Genera una descripción creativa para un libro de
                     ilustraciones digitales"
@@ -340,6 +337,11 @@ export const MarkEditor = ({
                 )}
               </div>
               <PromptInput
+                onCancel={() => {
+                  abortController?.abort();
+                  setIsLoading(false);
+                  setAbortController(null);
+                }}
                 inputRef={inputRef}
                 isLoading={isLoading}
                 onClick={handleGenerateDescription}
@@ -347,14 +349,6 @@ export const MarkEditor = ({
             </div>
           </section>
         </article>
-        <section className="w-full" ref={editorRef}>
-          <MDEditor
-            preview="edit"
-            value={content || ""}
-            onChange={handleChange}
-            height={500}
-          />
-        </section>
       </main>
       {error && <p className="text-red-500 text-xs">{error}</p>}
     </section>
@@ -365,7 +359,9 @@ const PromptInput = ({
   inputRef,
   isLoading,
   onClick,
+  onCancel,
 }: {
+  onCancel?: () => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
   isLoading: boolean;
   onClick: () => void;
@@ -383,7 +379,7 @@ const PromptInput = ({
             }, 0);
           }
         }}
-        disabled={isLoading}
+        // disabled={isLoading}
         ref={inputRef}
         type="text"
         className="flex-1 rounded-lg border border-brand-500/30 bg-white px-3 py-2 text-sm text-brand-500 placeholder-brand-500/60 focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -391,13 +387,19 @@ const PromptInput = ({
         aria-label="Prompt para IA"
       />
       <button
-        onClick={onClick}
+        // disabled={isLoading}
+        onClick={isLoading ? onCancel : onClick}
         type="button"
-        className="inline-flex items-center justify-center bg-brand-500 hover:bg-brand-700 text-white rounded-lg p-2 transition-colors "
+        className={cn(
+          "inline-flex items-center justify-center hover:bg-brand-700 text-white rounded-lg p-2 transition-colors bg-brand-500",
+          {
+            "bg-white": isLoading,
+          }
+        )}
         title="Enviar a IA"
       >
         {isLoading ? (
-          <Spinner className="w-4 h-4" />
+          <img className="w-6" src="/thinking_bot.gif" alt="thinking robot" />
         ) : (
           <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
             <path

@@ -111,8 +111,14 @@ export const EditAssetForm = ({
     onUpdate?.(update);
   };
 
-  const handleChange = (name: string) => (value: string) =>
+  const descriptionRef = useRef("");
+  const handleChange = (name: string) => (value: string) => {
+    // console.log("handleChange", name, value);
+    if (name === "description") {
+      descriptionRef.current = value;
+    }
     setState({ [name]: value });
+  };
 
   const handleMetadata = (name: string) => (value: string) => {
     const update = {
@@ -161,6 +167,7 @@ export const EditAssetForm = ({
       {
         data: JSON.stringify({
           ...form,
+          description: descriptionRef.current, // ensure description is always updated
           gallery: updatedGallery,
           id: asset.id,
           slug: asset.slug,
