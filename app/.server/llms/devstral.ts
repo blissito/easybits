@@ -1,3 +1,9 @@
+// const MODEL = "qwen3:8b";
+// const MODEL = "phi4:14b";
+const MODEL = "deepseek-coder-v2:16b";
+// const MODEL = "deepseek-r1:8b";
+// const MODEL = "llama3.2:3b"
+
 export const fetchInternalOllama = (
   prompt: string,
   stream: boolean = false
@@ -7,20 +13,15 @@ export const fetchInternalOllama = (
     ? "http://localhost:11434/api/generate"
     : "http://ollama-old.flycast/api/generate";
 
-  console.log(
-    "ABout to:",
-    url,
-    "with::",
-    prompt,
-    "and::",
-    isDev ? "llama3.2:3b" : "phi4:14b"
-  );
+  console.log("ABout to:", url, "with::", prompt, "and::", MODEL);
 
   return fetch(url, {
     body: JSON.stringify({
       prompt,
       stream,
-      model: isDev ? "llama3.2:3b" : "phi4:14b",
+      model: MODEL,
+      // model: isDev ? MODEL : "phi4:14b",
+      think: false, // quen3:8b puede pensar
     }),
     headers: {
       "Content-Type": "application/json",

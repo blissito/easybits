@@ -10,9 +10,13 @@ export const action = async ({ request }: { request: Request }) => {
   if (intent === "generate_sugestion") {
     // Construir prompt contextual con historial
     const prompt = buildPromptFromHistory(chat);
-    console.log("PROMPT CONTEXTUAL::\n", prompt);
+
     const ollamaResponse = await fetchInternalOllama(prompt, true);
     console.info("OLLAMA_RESPONSE::\n", ollamaResponse.status);
+    if (ollamaResponse.status > 399) {
+      const d = await ollamaResponse.json();
+      console.error("OLLAMA_ERROR::\n", d);
+    }
     // streams
     if (ollamaResponse.ok) {
       return new Response(ollamaResponse.body, {

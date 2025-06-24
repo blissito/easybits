@@ -377,6 +377,10 @@ const PromptInput = ({
           if (e.key === "Enter") {
             e.preventDefault();
             onClick?.();
+            // Recuperar el focus después de enviar
+            setTimeout(() => {
+              inputRef.current?.focus();
+            }, 0);
           }
         }}
         disabled={isLoading}
