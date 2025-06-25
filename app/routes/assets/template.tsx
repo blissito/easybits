@@ -257,9 +257,12 @@ const Info = ({
       )}
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
+      ) : asset.type === "EBOOK" ? (
+        <EbookDetails asset={asset} files={files} />
       ) : (
         <Formats files={files} asset={asset} reviews={reviews} assetReviews={assetReviews} />
       )}
+       <ReviewsSection reviews={reviews} asset={asset} assetReviews={assetReviews} />
     </div>
   );
 };
@@ -311,14 +314,15 @@ const Subscription = ({
       <Input
         placeholder="Escribe tu nombre"
         name="displayName"
-        inputClassName="border-0 border-t-2 border-b-2 h-14 rounded-none"
+        inputClassName="border-0 border-t-2 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black" 
+
       />
       <Input
         required
         placeholder="Escribe tu email"
         name="email"
         className="min-h-full m-0"
-        inputClassName="border-0 border-b-2 h-14 rounded-none"
+        inputClassName="border-0 border-b-2 h-16 rounded-none"
       />
       <button
         disabled={isLoading}
@@ -331,6 +335,24 @@ const Subscription = ({
         {text}
       </button>
     </fetcher.Form>
+  );
+};
+
+const EbookDetails = ({ asset, files }: { asset: Asset, files: File[] }) => {
+  const getSizeInMB = () => {
+    const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
+    return (bytes / 1_000_000).toFixed(2) + " mb";
+  };
+  const { typography } = asset?.user?.storeConfig || {};
+  return (
+    <section style={{ fontFamily: typography }}>
+      <AttributeList textLeft="Número de páginas" textRight={asset.metadata?.numberOfPages} />
+      <AttributeList
+        textLeft="Formatos:"
+        textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
+      />
+      <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
+    </section>
   );
 };
 
@@ -482,11 +504,9 @@ const Formats = ({
       <AttributeList textLeft="Número de archivos:" textRight={files.length} />
       <AttributeList
         textLeft="Formatos:"
-        textRight={files.map((f) => `${f.name.split(".")[1]}, `)}
+        textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
-
-      <ReviewsSection reviews={reviews} asset={asset} assetReviews={assetReviews} />
     </div>
   );
 };
