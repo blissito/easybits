@@ -26,18 +26,18 @@ export const RadioGroup = ({
         icon="/home/art.svg"
       />
       <RadioInput
-        isSelected={selected === "WEBINAR"}
+        isSelected={selected === "EBOOK"}
         onChange={(value) => setSelected(value)}
-        description="Webinars o conferencias en vivo"
+        description="Libros, artículos, comics, etc. (PDF, EPUB)"
         name="type"
-        value="WEBINAR"
-        label="Webinar"
-        icon="/home/micro.svg"
+        value="EBOOK"
+        label="Ebook"
+        icon="/home/book.svg"
       />
       <RadioInput
         isSelected={selected === "VOD_COURSE"}
         onChange={(value) => setSelected(value)}
-        description="Cursos pre-grabados o en vivo"
+        description="Cursos pre-grabados o en vivo."
         name="type"
         value="VOD_COURSE"
         label="Curso"
