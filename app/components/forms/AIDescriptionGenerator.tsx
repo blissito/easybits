@@ -101,7 +101,7 @@ ${
 REGLAS ESTRICTAS PARA REFINAMIENTO:
 1. SIEMPRE mantén el contenido existente
 2. SOLO agrega información nueva o mejora secciones específicas
-3. NO elimines párrafos, secciones o información existente
+3. NO elimines párrafos, secciones o información existente a menos que el usuario lo indique
 4. Si el usuario pide "agregar" algo, INTÉGRALO en el contenido existente
 5. Si el usuario pide "quitar" algo específico, solo elimina esa parte específica
 6. Mantén la estructura y formato original
@@ -211,11 +211,18 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
       ]);
       setIsLoading(false);
     } catch (error) {
-      console.error("Error al generar la descripción:", error);
+      console.error("Error en generación:", error);
+
+      // No mostrar error si fue cancelado intencionalmente
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Petición cancelada intencionalmente");
+        return;
+      }
+
+      // Mostrar otros errores
       const errorMessage =
         error instanceof Error ? error.message : "Error desconocido";
       setAiError(errorMessage);
-      setIsLoading(false);
     } finally {
       setAbortController(null);
     }
