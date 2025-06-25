@@ -315,14 +315,13 @@ const Subscription = ({
         placeholder="Escribe tu nombre"
         name="displayName"
         inputClassName="border-0 border-t-2 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black" 
-
       />
       <Input
         required
         placeholder="Escribe tu email"
         name="email"
         className="min-h-full m-0"
-        inputClassName="border-0 border-b-2 h-16 rounded-none"
+        inputClassName="border-0 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black"
       />
       <button
         disabled={isLoading}
