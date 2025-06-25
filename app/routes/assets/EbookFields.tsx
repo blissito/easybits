@@ -25,8 +25,8 @@ export const EbookFields = ({
   const txt = files.find((f) => f.contentType?.includes("text/plain"));
   return (
     <>
-      <h2 className="text-2xl mb-3">Completa la información de tu libro</h2>
-      <p className="mb-2">Agrega tu libro en los formatos disponibles</p>
+      <h2 className="text-2xl mb-3 font-bold">Completa la información de tu Ebook</h2>
+      <p >Agrega tu ebook en uno o varios de los formatos disponibles</p>
       <section className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-4 mb-3">
         <UploadBox file={epub} assetId={asset.id} />
         <UploadBox assetId={asset.id} type="pdf" file={pdf} />
@@ -59,6 +59,7 @@ export const EbookFields = ({
               onChange("freePages")(ev.currentTarget.value)) as any
           }
           label="Páginas disponibles para previsualización gratuita"
+          className="mt-5"
           placeholder="12"
           type="number"
         />
@@ -112,7 +113,7 @@ export const UploadBox = ({
     const isLoading = fetcher.state !== "idle";
 
     return (
-      <div className="text-center py-6 flex flex-col items-center gap-4 select-none border-brand-gray border-2 rounded-2xl relative group px-4 overflow-hidden">
+      <div className="text-center py-6 flex flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden">
         {isFromDB && (
           <button
             onClick={handleDelete}
@@ -136,14 +137,19 @@ export const UploadBox = ({
     <div
       ref={ref}
       className={cn(
-        "border-brand-gray border-2 border-dashed rounded-xl py-8 my-2 flex items-center justify-center flex-col",
-        "hover:scale-105",
+        "border-black border border-dashed rounded-xl py-8 my-2 flex items-center justify-center flex-col",
+        "hover:scale-95 transition-all hover:border-brand-500",
         "cursor-pointer",
         "group"
       )}
     >
-      <ImageIcon className="w-8 group-hover:scale-90 transition-all" />
-      <span className="text-brand-gray text-xs font-thin">
+       <ImageIcon
+            className={cn(
+              'w-8 fill-[#6A6966] group-hover:fill-brand-500',
+            )}
+            unforceFill
+          />
+      <span className="text-brand-gray group-hover:text-brand-500 text-xs font-thin ">
         Arrastra o sube el{" "}
         <strong className="font-semibold uppercase">
           {type === "text/plain" ? "TXT" : type}
