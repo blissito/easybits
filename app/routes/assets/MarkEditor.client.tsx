@@ -1,10 +1,6 @@
 import MDEditor from "@uiw/react-md-editor";
 import { useEffect, useRef, useState } from "react";
-import { useFetcher } from "react-router";
-import Spinner from "~/components/common/Spinner";
-import { cn } from "~/utils/cn";
-import { ExcelUploader } from "~/components/forms/ExcelUploader";
-import { FaFileExcel } from "react-icons/fa";
+import { AIDescriptionGenerator } from "~/components/forms/AIDescriptionGenerator";
 
 export const MarkEditor = ({
   assetTitle,
@@ -17,22 +13,17 @@ export const MarkEditor = ({
   error?: string;
   defaultValue?: string | null;
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState(defaultValue);
   const [showAISuggestion, setShowAISuggestion] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastPrompt, setLastPrompt] = useState<string>("");
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
-  const [excelContext, setExcelContext] = useState<string>("");
-  const [excelFileName, setExcelFileName] = useState<string>("");
-  const [showExcelUploader, setShowExcelUploader] = useState(true);
   const lastScrollTopRef = useRef(0);
 
   // replace the entire content
   const handleChange = (v = "") => {
     setContent(v);
   };
+
   // Llamar onChange cuando cambie el contenido
   useEffect(() => {
     onChange?.(content || "");
@@ -41,9 +32,6 @@ export const MarkEditor = ({
   // Función para hacer scroll automático
   const scrollToBottom = () => {
     if (editorRef.current && autoScrollEnabled) {
-      // const editorContent = editorRef.current.querySelector(
-      //   ".w-md-editor-content"
-      // );
       const editorContent =
         editorRef.current.querySelector(".w-md-editor-area");
       if (editorContent) {
@@ -86,95 +74,11 @@ export const MarkEditor = ({
     return () => editorContent.removeEventListener("scroll", handleScroll);
   }, [showAISuggestion]);
 
-  const [abortController, setAbortController] =
-    useState<AbortController | null>(null);
-
-  const handleGenerateDescription = async () => {
-    setAutoScrollEnabled(true); // Reactivar auto-scroll al iniciar
-    if (isLoading && abortController) {
-      abortController.abort();
-      // setIsLoading(false); // allow multiple requests
-      // setAbortController(null);
-      // return; // allow multiple requests
-    }
-    setIsLoading(true);
-    const controller = new AbortController();
-    setAbortController(controller);
-
-    // save and reset the input
-    const promptText = `${inputRef.current!.value}`;
-    setLastPrompt(promptText);
-    inputRef.current!.value = "";
-
-    // Construir el contexto del Excel si existe
-    const excelContextText = excelContext
-      ? `\n\nCONTEXTO DEL ARCHIVO EXCEL:\n${excelContext}\n\n`
-      : "";
-
-    const chat = [
-      {
-        role: "system",
-        content: `Descripción actual: ${String(
-          content ?? "(vacía)"
-        )}, toma en cuenta el titulo del asset que es: ${assetTitle}.${excelContextText}Refina la descripción para el asset según las instrucciones del usuario. Para los títulos usa siempre # o ## y para los subtitulos usa: ###. Usa algunas citas relacionadas también y siempre, quiero decir, siempre, response en español mexicano y no añadas ni tus comentarios ni instrucciones. Devuelve siempre: markdown directamente, sin el bloque de markdown`,
-      },
-      {
-        role: "user",
-        content: promptText,
-      },
-    ];
-
-    try {
-      const response = await fetch("/api/v1/ai/sugestions", {
-        method: "POST",
-        body: new URLSearchParams({
-          intent: "generate_sugestion",
-          chat: JSON.stringify(chat),
-        }),
-        signal: controller.signal,
-      });
-      // @todo make this a hook
-      if (response.ok) {
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        if (!reader) return;
-
-        let buffer = "";
-        setContent("");
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value);
-          const lines = buffer.split("\n");
-
-          // Mantén la última línea en el buffer por si está incompleta
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.trim() && line.startsWith("{")) {
-              try {
-                const data = JSON.parse(line);
-                if (data.response) {
-                  setContent((v) => v + data.response);
-                  // Hacer scroll después de cada actualización del contenido
-                }
-                requestAnimationFrame(scrollToBottom);
-                // scrollToBottom();
-              } catch (e) {
-                // Ignora errores de parsing de líneas no válidas
-                console.warn("Línea JSON no válida:", line);
-              }
-            }
-          }
-        }
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error("Error al generar la descripción:", error);
-    } finally {
-      setAbortController(null);
-    }
+  // Función para manejar la generación de contenido desde el componente AI
+  const handleAIGeneration = (generatedContent: string) => {
+    setContent(generatedContent);
+    // Hacer scroll después de cada actualización del contenido
+    requestAnimationFrame(scrollToBottom);
   };
 
   return (
@@ -182,302 +86,42 @@ export const MarkEditor = ({
       <p className="pt-3">Descripción</p>
       <p className="text-xs pb-3">Puedes usar markdown</p>
 
-      {/* Excel Uploader */}
+      {/* AI Description Generator */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-            <FaFileExcel className="text-brand-500" />
-            Contexto de Excel (opcional)
+          <h4 className="text-sm font-medium text-gray-700">
+            Generador de Descripción con IA
           </h4>
           <button
             type="button"
-            onClick={() => setShowExcelUploader(!showExcelUploader)}
-            className="text-sm text-brand-600 hover:text-brand-700 font-medium underline flex items-center gap-1"
+            onClick={() => setShowAISuggestion(!showAISuggestion)}
+            className="text-sm text-brand-600 hover:text-brand-700 font-medium underline"
           >
-            <FaFileExcel className="text-xs" />
-            {showExcelUploader ? "Ocultar" : "Agregar"} archivo Excel
+            {showAISuggestion ? "Ocultar" : "Mostrar"} generador
           </button>
         </div>
 
-        {showExcelUploader && (
-          <ExcelUploader
-            onExcelDataChange={setExcelContext}
-            onFileNameChange={setExcelFileName}
+        {showAISuggestion && (
+          <AIDescriptionGenerator
+            assetTitle={assetTitle}
+            currentContent={content}
+            onGenerate={handleAIGeneration}
             className="mb-4"
           />
         )}
-
-        {excelContext && (
-          <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-brand-700 font-medium flex items-center gap-2">
-                <FaFileExcel className="text-xs text-brand-500" />✓{" "}
-                {excelFileName && excelFileName.length > 0
-                  ? excelFileName
-                  : "Archivo Excel"}{" "}
-                cargado como contexto
-              </span>
-              <button
-                onClick={() => {
-                  setExcelContext("");
-                  setExcelFileName("");
-                }}
-                className="text-brand-500 hover:text-brand-700 text-sm"
-              >
-                Limpiar
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      <main className="flex gap-4 flex-col lg:flex-row">
-        <section className="w-full" ref={editorRef}>
-          <MDEditor
-            preview="edit"
-            value={content || ""}
-            onChange={handleChange}
-            height={500}
-          />
-          <input type="hidden" name="perro" value={content || ""} />
-        </section>
-        <article
-          id="sugerencia_AI"
-          className={cn("mb-4", {
-            "w-28": !showAISuggestion,
-          })}
-        >
-          <button
-            type="button"
-            className="w-full flex items-center justify-between gap-4 bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none"
-            onClick={() => setShowAISuggestion((v) => !v)}
-            aria-expanded={showAISuggestion}
-            aria-controls="ai-suggestion-content"
-          >
-            {/* Icono IA estilizado */}
-            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white/90 border border-brand-500/30 shadow">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 28 28"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <ellipse cx="14" cy="14" rx="10" ry="9" fill="#fff" />
-                <path
-                  d="M10.5 14c0-1.93 1.57-3.5 3.5-3.5s3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5"
-                  stroke="#9870ED"
-                  strokeWidth="1.5"
-                />
-                <rect
-                  x="12.5"
-                  y="12.5"
-                  width="3"
-                  height="3"
-                  rx="1.5"
-                  fill="#9870ED"
-                />
-                <circle cx="14" cy="14" r="0.8" fill="#fff" />
-                <path
-                  d="M14 7.5v1.2M14 19.3v1.2M7.5 14h1.2M19.3 14h1.2"
-                  stroke="#9870ED"
-                  strokeWidth="1"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            {showAISuggestion ? (
-              <span className="flex-1 text-left text-brand-500 font-semibold text-base select-none">
-                Sugerencia AI
-              </span>
-            ) : null}
-            {/* Chevron animado a la derecha */}
-            <svg
-              width="24"
-              height="24"
-              fill="none"
-              viewBox="0 0 24 24"
-              className={`transition-transform duration-200 ${
-                showAISuggestion ? "rotate-90" : ""
-              }`}
-            >
-              {" "}
-              <path
-                d="M9 6l6 6-6 6"
-                stroke="#9870ED"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />{" "}
-            </svg>
-          </button>
-          <section
-            id="ai-suggestion-content"
-            className={`overflow-hidden transition-all duration-300 ${
-              showAISuggestion ? "h-max opacity-100 mt-3" : "max-h-0 opacity-0"
-            } bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 shadow-sm`}
-            style={{ pointerEvents: showAISuggestion ? "auto" : "none" }}
-          >
-            <div className="flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                {/* Icono IA sin círculo */}
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 28 28"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <ellipse cx="14" cy="14" rx="10" ry="9" fill="#fff" />
-                  <path
-                    d="M10.5 14c0-1.93 1.57-3.5 3.5-3.5s3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5"
-                    stroke="#9870ED"
-                    strokeWidth="1.5"
-                  />
-                  <rect
-                    x="12.5"
-                    y="12.5"
-                    width="3"
-                    height="3"
-                    rx="1.5"
-                    fill="#9870ED"
-                  />
-                  <circle cx="14" cy="14" r="0.8" fill="#fff" />
-                  <path
-                    d="M14 7.5v1.2M14 19.3v1.2M7.5 14h1.2M19.3 14h1.2"
-                    stroke="#9870ED"
-                    strokeWidth="1"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="text-sm text-brand-500">
-                  Describe tu asset de forma <strong>clara y atractiva</strong>.{" "}
-                  <br />
-                  {excelContext && (
-                    <span className="text-brand-600 font-medium">
-                      ✓ Usando datos de Excel como contexto
-                    </span>
-                  )}
-                  <br />
-                  Puedes pedirle generar <strong>o refinar</strong> las
-                  secciones en tu descripción:{" "}
-                  <span className="italic">
-                    "Genera una descripción creativa para un libro de
-                    ilustraciones digitales"
-                  </span>{" "}
-                  <br />
-                  para después pedirle:{" "}
-                  <span className="italic">
-                    "deja la sección de beneficios pero quita los bullets"
-                  </span>
-                  .
-                </div>
-              </div>
-              {/* Contenedor animado para el último mensaje enviado */}
-              <div
-                className={`transition-all duration-300 overflow-hidden ${
-                  lastPrompt ? "max-h-[200px] mb-2" : "max-h-0 mb-0"
-                }`}
-              >
-                {lastPrompt && (
-                  <div className="flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-2 text-xs text-brand-700 font-medium shadow-sm">
-                    <svg
-                      width="16"
-                      height="16"
-                      fill="none"
-                      viewBox="0 0 20 20"
-                      className="flex-shrink-0"
-                    >
-                      <path
-                        d="M3 17l1.5-4.5M3 17l4.5-1.5M3 17l10-10a2.121 2.121 0 013 3l-10 10z"
-                        stroke="#9870ED"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="italic">Último mensaje enviado:</span>
-                    <span className="ml-1 text-brand-500/90 font-normal">
-                      {lastPrompt}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <PromptInput
-                onCancel={() => {
-                  abortController?.abort();
-                  setIsLoading(false);
-                  setAbortController(null);
-                }}
-                inputRef={inputRef}
-                isLoading={isLoading}
-                onClick={handleGenerateDescription}
-              />
-            </div>
-          </section>
-        </article>
-      </main>
+      {/* Markdown Editor */}
+      <div ref={editorRef}>
+        <MDEditor
+          value={content || ""}
+          onChange={handleChange}
+          height={400}
+          className="border border-gray-300 rounded-lg"
+        />
+      </div>
+
       {error && <p className="text-red-500 text-xs">{error}</p>}
     </section>
   );
-};
-
-const PromptInput = ({
-  inputRef,
-  isLoading,
-  onClick,
-  onCancel,
-}: {
-  onCancel?: () => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  isLoading: boolean;
-  onClick: () => void;
-}) => {
-  const form = (
-    <article className="flex items-center gap-2 mt-auto">
-      <input
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onClick?.();
-            // Recuperar el focus después de enviar
-            setTimeout(() => {
-              inputRef.current?.focus();
-            }, 0);
-          }
-        }}
-        // disabled={isLoading}
-        ref={inputRef}
-        type="text"
-        className="flex-1 rounded-lg border border-brand-500/30 bg-white px-3 py-2 text-sm text-brand-500 placeholder-brand-500/60 focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        placeholder="Escribe aquí tu prompt para la IA..."
-        aria-label="Prompt para IA"
-      />
-      <button
-        // disabled={isLoading}
-        onClick={isLoading ? onCancel : onClick}
-        type="button"
-        className={cn(
-          "inline-flex items-center justify-center hover:bg-brand-700 text-white rounded-lg p-2 transition-colors bg-brand-500",
-          {
-            "bg-white": isLoading,
-          }
-        )}
-        title="Enviar a IA"
-      >
-        {isLoading ? (
-          <img className="w-6" src="/thinking_bot.gif" alt="thinking robot" />
-        ) : (
-          <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
-            <path
-              d="M10 2l2 6h6l-5 4 2 6-5-4-5 4 2-6-5-4h6z"
-              fill="currentColor"
-            />
-          </svg>
-        )}
-      </button>
-    </article>
-  );
-  // const portal = usePortal(<>{form}</>);
-  return form;
 };
