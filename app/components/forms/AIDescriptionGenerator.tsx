@@ -26,6 +26,7 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
   const [conversationHistory, setConversationHistory] = useState<
     Array<{ role: string; content: string }>
   >([]);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Excel handling
   const {
@@ -52,6 +53,7 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
     const promptText = `${inputRef.current!.value}`;
     setLastPrompt(promptText);
     inputRef.current!.value = "";
+    setAiError(null); // Limpiar errores previos
 
     // Construir el contexto del Excel si existe
     const excelContextText = excelContext
@@ -112,49 +114,66 @@ Ahora genera o refina la descripción según las instrucciones del usuario y el 
         signal: controller.signal,
       });
 
-      if (response.ok) {
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        if (!reader) return;
+      console.log("Response status:", response.status);
+      console.log("Response ok:", response.ok);
 
-        let buffer = "";
-        let generatedContent = "";
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error:", response.status, errorText);
+        throw new Error(
+          `Error del servidor (${response.status}): ${
+            errorText || "Error desconocido"
+          }`
+        );
+      }
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) {
+        throw new Error("No se pudo leer la respuesta del servidor");
+      }
 
-          buffer += decoder.decode(value);
-          const lines = buffer.split("\n");
+      let buffer = "";
+      let generatedContent = "";
 
-          // Mantén la última línea en el buffer por si está incompleta
-          buffer = lines.pop() || "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          for (const line of lines) {
-            if (line.trim() && line.startsWith("{")) {
-              try {
-                const data = JSON.parse(line);
-                if (data.response) {
-                  generatedContent += data.response;
-                  // Notificar progreso en tiempo real
-                  onGenerate(generatedContent);
-                }
-              } catch (e) {
-                console.warn("Línea JSON no válida:", line);
+        buffer += decoder.decode(value);
+        const lines = buffer.split("\n");
+
+        // Mantén la última línea en el buffer por si está incompleta
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.trim() && line.startsWith("{")) {
+            try {
+              const data = JSON.parse(line);
+              if (data.response) {
+                generatedContent += data.response;
+                // Notificar progreso en tiempo real
+                onGenerate(generatedContent);
               }
+            } catch (e) {
+              console.warn("Línea JSON no válida:", line);
             }
           }
         }
-
-        // Agregar la respuesta del asistente al historial
-        setConversationHistory((prev) => [
-          ...prev,
-          { role: "assistant", content: generatedContent },
-        ]);
-        setIsLoading(false);
       }
+
+      // Agregar la respuesta del asistente al historial
+      setConversationHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: generatedContent },
+      ]);
+      setIsLoading(false);
     } catch (error) {
       console.error("Error al generar la descripción:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Error desconocido";
+      setAiError(errorMessage);
+      setIsLoading(false);
     } finally {
       setAbortController(null);
     }
@@ -260,6 +279,12 @@ Ahora genera o refina la descripción según las instrucciones del usuario y el 
           {excelError && (
             <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
               Error: {excelError}
+            </div>
+          )}
+
+          {aiError && (
+            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+              <strong>Error de IA:</strong> {aiError}
             </div>
           )}
         </div>
