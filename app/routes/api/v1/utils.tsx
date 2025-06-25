@@ -18,10 +18,17 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "enroll_user") {
     const email = formData.get("email") as string;
-    await db.user.update({
-      where: { email },
-      data: { roles: { push: "Enrolled" } },
-    });
+    const exists = await db.user.findUnique({ where: { email } });
+    if (exists) {
+      await db.user.update({
+        where: { email },
+        data: { roles: { push: "Enrolled" } },
+      });
+    } else {
+      await db.user.create({
+        data: { email, roles: ["Enrolled"] },
+      });
+    }
     return null;
   }
 

@@ -28,5 +28,25 @@ export const action = async ({ request }: { request: Request }) => {
       });
     }
   }
+  if (intent === "generate_image_dslx") {
+    // Construir prompt contextual con historial
+    const prompt = buildPromptFromHistory(chat);
+    const payload = {
+      data: [prompt, 30, 1024, 1024, 7.5],
+    };
+    const dslxResponse = await fetch(
+      "https://stable-diffusion-xl.fly.dev/api/predict",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    const dslxJson = await dslxResponse.json();
+    const url = dslxJson.url;
+    return new Response(JSON.stringify({ url }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   return null;
 };
