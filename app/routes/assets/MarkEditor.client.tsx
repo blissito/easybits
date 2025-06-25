@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import Spinner from "~/components/common/Spinner";
 import { cn } from "~/utils/cn";
+import { ExcelUploader } from "~/components/forms/ExcelUploader";
 
 export const MarkEditor = ({
   assetTitle,
@@ -22,6 +23,8 @@ export const MarkEditor = ({
   const [isLoading, setIsLoading] = useState(false);
   const [lastPrompt, setLastPrompt] = useState<string>("");
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+  const [excelContext, setExcelContext] = useState<string>("");
+  const [showExcelUploader, setShowExcelUploader] = useState(false);
   const lastScrollTopRef = useRef(0);
 
   // replace the entire content
@@ -100,12 +103,18 @@ export const MarkEditor = ({
     const promptText = `${inputRef.current!.value}`;
     setLastPrompt(promptText);
     inputRef.current!.value = "";
+
+    // Construir el contexto del Excel si existe
+    const excelContextText = excelContext
+      ? `\n\nCONTEXTO DEL ARCHIVO EXCEL:\n${excelContext}\n\n`
+      : "";
+
     const chat = [
       {
         role: "system",
         content: `Descripción actual: ${String(
           content ?? "(vacía)"
-        )}, toma en cuenta el titulo del asset que es: ${assetTitle}. Refina la descripción para el asset según las instrucciones del usuario. Para los títulos usa siempre # o ## y para los subtitulos usa: ###. Usa algunas citas relacionadas también y siempre, quiero decir, siempre, response en español mexicano y no añadas ni tus comentarios ni instrucciones. Devuelve siempre: markdown directamente, sin el bloque de markdown`,
+        )}, toma en cuenta el titulo del asset que es: ${assetTitle}.${excelContextText}Refina la descripción para el asset según las instrucciones del usuario. Para los títulos usa siempre # o ## y para los subtitulos usa: ###. Usa algunas citas relacionadas también y siempre, quiero decir, siempre, response en español mexicano y no añadas ni tus comentarios ni instrucciones. Devuelve siempre: markdown directamente, sin el bloque de markdown`,
       },
       {
         role: "user",
@@ -170,6 +179,42 @@ export const MarkEditor = ({
     <section className="mb-3" data-color-mode="light">
       <p className="pt-3">Descripción</p>
       <p className="text-xs pb-3">Puedes usar markdown</p>
+
+      {/* Excel Uploader */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-gray-700">
+            Contexto de Excel (opcional)
+          </h4>
+          <button
+            onClick={() => setShowExcelUploader(!showExcelUploader)}
+            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+          >
+            {showExcelUploader ? "Ocultar" : "Agregar"} archivo Excel
+          </button>
+        </div>
+
+        {showExcelUploader && (
+          <ExcelUploader onExcelDataChange={setExcelContext} className="mb-4" />
+        )}
+
+        {excelContext && (
+          <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-brand-700 font-medium">
+                ✓ Archivo Excel cargado como contexto
+              </span>
+              <button
+                onClick={() => setExcelContext("")}
+                className="text-brand-500 hover:text-brand-700 text-sm"
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <main className="flex gap-4 flex-col lg:flex-row">
         <section className="w-full" ref={editorRef}>
           <MDEditor
@@ -178,7 +223,7 @@ export const MarkEditor = ({
             onChange={handleChange}
             height={500}
           />
-          <input type="hidden" name="perro" value={content} />
+          <input type="hidden" name="perro" value={content || ""} />
         </section>
         <article
           id="sugerencia_AI"
@@ -291,6 +336,12 @@ export const MarkEditor = ({
                 </svg>
                 <div className="text-sm text-brand-500">
                   Describe tu asset de forma <strong>clara y atractiva</strong>.{" "}
+                  <br />
+                  {excelContext && (
+                    <span className="text-brand-600 font-medium">
+                      ✓ Usando datos de Excel como contexto
+                    </span>
+                  )}
                   <br />
                   Puedes pedirle generar <strong>o refinar</strong> las
                   secciones en tu descripción:{" "}

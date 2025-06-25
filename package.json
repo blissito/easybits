@@ -28,6 +28,7 @@
     "@stripe/react-stripe-js": "^3.6.0",
     "@stripe/stripe-js": "^7.0.0",
     "@stripe/ui-extension-sdk": "^8.10.0",
+    "@types/lru-cache": "^7.10.9",
     "@uiw/react-md-editor": "^4.0.5",
     "agenda": "^5.0.0",
     "aws-sdk": "^2.1692.0",
@@ -43,6 +44,7 @@
     "jsonwebtoken": "^9.0.2",
     "livekit-client": "^2.9.5",
     "livekit-server-sdk": "^2.10.2",
+    "lru-cache": "^11.1.0",
     "marked": "^15.0.7",
     "motion": "^12.4.7",
     "nanoid": "^5.1.5",
@@ -65,6 +67,7 @@
     "stripe": "^13.11.0",
     "tailwind-merge": "^2.6.0",
     "vite-node": "^3.0.6",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

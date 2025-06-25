@@ -1,9 +1,16 @@
 import { data, type ActionFunctionArgs } from "react-router";
 import { db } from "~/.server/db";
 import { getStripe } from "~/.server/stripe";
+import { applyRateLimit } from "~/.server/rateLimiter";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") return;
+
+  // Aplicar rate limiting general (solo una vez)
+  const rateLimitResponse = await applyRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
 
   const webhookSecret = process.env.STRIPE_SIGN as string;
   const webhookStripeSignatureHeader = request.headers.get(
@@ -21,6 +28,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.error(`Stripe construct event error: ${error}`);
     return data(error, { status: 500 });
   }
+
   const session = event.data.object;
   const plan = session.metadata.plan;
 
