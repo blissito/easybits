@@ -32,7 +32,7 @@ export const action = async ({ request }: { request: Request }) => {
     // Construir prompt contextual con historial
     const prompt = buildPromptFromHistory(chat);
     const payload = {
-      data: [prompt, 30, 512, 512, 7.5],
+      data: [prompt, 10, 512, 512, 7.5],
       fn_index: 0,
     };
     const dslxResponse = await fetch(
