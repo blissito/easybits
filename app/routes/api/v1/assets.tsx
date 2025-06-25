@@ -4,7 +4,7 @@ import slugify from "slugify";
 import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
-import type { Asset } from "@prisma/client";
+import type { Asset, AssetType } from "@prisma/client";
 import { getPutFileUrl, deleteObject } from "react-hook-multipart";
 import type { Action } from "~/components/forms/NewsLetterForm";
 import {
@@ -13,6 +13,42 @@ import {
 } from "~/.server/stripe_v2";
 import { redirect } from "react-router";
 import { generateDescription } from "~/.server/llms/tools/generators/getAssetDescription";
+
+// Función de validación de precios
+const validatePriceUpdate = (oldPrice: number, newPrice: number): void => {
+  // Validar que el precio no sea negativo
+  if (newPrice < 0) {
+    throw new Error("El precio no puede ser negativo");
+  }
+
+  // Validar que el precio no sea demasiado alto (más de 999,999)
+  if (newPrice > 999999) {
+    throw new Error("El precio es demasiado alto. Máximo permitido: $999,999");
+  }
+
+  // Validar que el precio no sea NaN o infinito
+  if (!Number.isFinite(newPrice)) {
+    throw new Error("El precio debe ser un número válido");
+  }
+
+  // Si hay un precio anterior, validar cambios muy pequeños que podrían ser errores
+  if (oldPrice > 0) {
+    const changePercent = Math.abs((newPrice - oldPrice) / oldPrice);
+    if (changePercent < 0.01) {
+      // Menos del 1% de cambio
+      console.warn(
+        `Cambio de precio muy pequeño detectado: ${oldPrice} -> ${newPrice} (${(
+          changePercent * 100
+        ).toFixed(2)}%)`
+      );
+    }
+  }
+
+  // Validar que el precio tenga máximo 2 decimales
+  if (newPrice !== Math.round(newPrice * 100) / 100) {
+    throw new Error("El precio debe tener máximo 2 decimales");
+  }
+};
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -127,7 +163,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
     let asset = await db.asset.findUnique({ where: { id: data.id } });
     if (!asset) throw new Response("Asset not found::", { status: 404 });
 
-    const old = asset.price;
+    const oldPrice = asset.price || 0;
+    const newPrice = Number(data.price);
+
+    // Validar el cambio de precio antes de proceder
+    try {
+      validatePriceUpdate(oldPrice, newPrice);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Error de validación de precio";
+      return new Response(errorMessage, { status: 400 });
+    }
+
     asset = await db.asset.update({
       where: {
         id: data.id,
@@ -137,11 +186,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
         user: undefined,
         id: undefined,
         userId: user.id,
-        price: Number(data.price),
+        price: newPrice,
       }, // @todo remove id in parsing?
     });
     const nuevo = asset.price;
-    if (old !== nuevo) {
+    if (oldPrice !== nuevo) {
       await updateOrCreateProductAndPrice(asset, request); // stripe stuff
       // }
     }

@@ -142,10 +142,10 @@ const RowGalleryEditor = ({
               persistFiles={false}
               buttonProps={{ layoutId: "upload_button" }}
             />
-            <FloatingImageGenAssistant
+            {/* <FloatingImageGenAssistant
               imageUrl="https://placekitten.com/400/400"
               prompt="gato con sombrero"
-            />
+            /> */}
           </>
         )}
       </LayoutGroup>

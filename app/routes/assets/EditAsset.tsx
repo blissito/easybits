@@ -59,10 +59,6 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
         />
         <AssetPreview host={host} asset={prev} />
       </main>
-      <FloatingImageGenAssistant
-        imageUrl="https://placekitten.com/400/400"
-        prompt="gato con sombrero"
-      />
     </article>
   );
 }
