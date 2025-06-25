@@ -88,7 +88,7 @@ export const MarkEditor = ({
       <p className="text-xs pb-3">Puedes usar markdown</p>
 
       <main className="flex gap-4 flex-col lg:flex-row">
-        <section className="w-full" ref={editorRef}>
+        <section className="w-full lg:w-2/3" ref={editorRef}>
           <MDEditor
             preview="edit"
             value={content || ""}
@@ -100,7 +100,7 @@ export const MarkEditor = ({
 
         <article
           id="sugerencia_AI"
-          className={cn("mb-4", {
+          className={cn("mb-4 lg:w-1/3", {
             "w-28": !showAISuggestion,
           })}
         >
