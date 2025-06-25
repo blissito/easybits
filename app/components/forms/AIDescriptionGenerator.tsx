@@ -60,14 +60,21 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
       ? `\n\n=== CONTEXTO DEL ARCHIVO EXCEL ===\n${excelContext}\n=== FIN DEL CONTEXTO EXCEL ===\n\n`
       : "";
 
+    // Determinar si es el primer prompt (sin historial)
+    const isFirstPrompt = conversationHistory.length === 0;
+
     // Prompt del sistema mejorado
     const systemPrompt = `Eres un experto en marketing digital y copywriting especializado en crear descripciones atractivas para productos digitales.
 
 INSTRUCCIONES IMPORTANTES:
 - Título del asset: "${assetTitle}"
-- Descripción actual: ${
-      currentContent ? `"${currentContent}"` : "(sin descripción previa)"
-    }
+${
+  isFirstPrompt && currentContent
+    ? `- DESCRIPCIÓN ACTUAL A REFINAR:\n"""\n${currentContent}\n"""\n`
+    : `- Descripción actual: ${
+        currentContent ? `"${currentContent}"` : "(sin descripción previa)"
+      }`
+}
 - Responde SIEMPRE en español mexicano
 - Usa formato markdown con títulos (# ## ###)
 - Incluye citas relevantes cuando sea apropiado
@@ -77,11 +84,19 @@ INSTRUCCIONES IMPORTANTES:
 
 ${excelContextText}${
       excelContext
-        ? "IMPORTANTE: Usa la información del archivo Excel como contexto para enriquecer la descripción. Incorpora datos relevantes del Excel de manera natural en el texto."
+        ? `IMPORTANTE: Usa la información del archivo Excel como contexto para enriquecer la descripción, pero da prioridad a la descripción actual; pero sobre todo, sigue las instrucciones del usuario sin perder de vista el objetivo que es: describir adecuadamente: ${assetTitle}. Incorpora datos relevantes del Excel de manera natural en el texto.`
         : ""
     }
 
-Ahora genera o refina la descripción según las instrucciones del usuario y el historial de conversación:`;
+${
+  isFirstPrompt
+    ? `OBJETIVO: ${
+        currentContent
+          ? "Refinar y mejorar la descripción existente"
+          : "Crear una nueva descripción"
+      } para "${assetTitle}" según las instrucciones del usuario.`
+    : "Continúa refinando la descripción según las instrucciones del usuario y el historial de conversación."
+}`;
 
     // Construir el chat con historial
     const newUserMessage = { role: "user", content: promptText };
@@ -100,6 +115,13 @@ Ahora genera o refina la descripción según las instrucciones del usuario y el 
     console.log("=== CHAT ENVIADO A LA IA ===");
     console.log("Excel Context:", excelContext ? "PRESENTE" : "AUSENTE");
     console.log("Excel Content:", excelContext?.substring(0, 200) + "...");
+    console.log("Is First Prompt:", isFirstPrompt);
+    console.log("Current Content Present:", !!currentContent);
+    console.log("Current Content Length:", currentContent?.length || 0);
+    console.log(
+      "Current Content Preview:",
+      currentContent?.substring(0, 100) + "..."
+    );
     console.log("System Prompt:", systemPrompt.substring(0, 300) + "...");
     console.log("User Message:", promptText);
     console.log("Chat History Length:", updatedHistory.length);
