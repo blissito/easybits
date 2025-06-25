@@ -326,14 +326,15 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
         <input
           ref={inputRef}
           type="text"
-          className="flex-1 rounded-lg border border-brand-300 bg-white px-3 py-2 text-sm text-brand-600 placeholder-brand-400 focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-          placeholder="Escribe aquí tu prompt para la IA..."
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
               handleGenerateDescription();
             }
           }}
+          className="flex-1 rounded-lg border border-brand-500/30 bg-white px-3 py-2 text-sm text-brand-500 placeholder-brand-500/60 focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          placeholder="Escribe aquí tu prompt para la IA..."
+          aria-label="Prompt para IA"
         />
         <button
           onClick={
@@ -341,21 +342,17 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
               ? () => abortController?.abort()
               : handleGenerateDescription
           }
+          type="button"
           className={cn(
-            "inline-flex items-center justify-center text-white rounded-lg p-2 transition-colors",
+            "inline-flex items-center justify-center hover:bg-brand-700 text-white rounded-lg p-2 transition-colors bg-brand-500",
             {
-              "bg-brand-500 hover:bg-brand-600": !isLoading,
-              "bg-red-500 hover:bg-red-600": isLoading,
+              "bg-white": isLoading,
             }
           )}
-          title={isLoading ? "Cancelar" : "Generar descripción"}
+          title="Enviar a IA"
         >
           {isLoading ? (
-            <img
-              className="w-5 h-5"
-              src="/thinking_bot.gif"
-              alt="thinking robot"
-            />
+            <img className="w-6" src="/thinking_bot.gif" alt="thinking robot" />
           ) : (
             <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
               <path
