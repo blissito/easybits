@@ -54,7 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ScrollRestoration />
         <Scripts />
         <Toaster />
-        <DevAdmin />
+        {/* <DevAdmin /> */}
         <FloatingGeminiChat />
       </body>
     </html>
