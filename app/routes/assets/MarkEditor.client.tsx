@@ -83,10 +83,8 @@ export const MarkEditor = ({
   };
 
   return (
-    <section className="mb-3" data-color-mode="light">
-      <p className="pt-3">Descripción</p>
-      <p className="text-xs pb-3">Puedes usar markdown</p>
-
+    <section className="mt-5 mb-3" data-color-mode="light">
+      <p className=" mb-2">Descripción <span className="text-xs ">(Usa markdown )</span> </p>
       <main className="flex gap-4 flex-col lg:flex-row">
         <section className="w-full" ref={editorRef}>
           <MDEditor

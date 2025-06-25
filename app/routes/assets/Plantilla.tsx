@@ -49,12 +49,11 @@ export const Plantilla = ({
         placeholder="Compar ahora"
         isError={!!error}
       />
-      <p className="pt-3 pb-2">Personaliza el link de tu Asset</p>
+      <p className="pt-5 pb-1">Personaliza el link de tu Asset</p>
       <div className="relative flex items-center gap-1">
-        <p className="border border-brand-500 rounded-lg p-2 pointer-events-none min-w-max">
+        <p className="border border-brand-500 rounded-xl p-2 pointer-events-none min-w-max  grid place-items-center h-12">
           https://{state.host}.easybits.cloud/tienda/
         </p>
-
         <Input
           value={state.slug}
           placeholder="super_curso"
@@ -64,7 +63,7 @@ export const Plantilla = ({
         />
         <CopyButton
           text={`https://${state.host}.easybits.cloud/tienda/${state.slug}`}
-          className="absolute right-2 top-2 border rounded-lg p-1 hover:shadow h-8 w-8 flex justify-center items-center"
+          className="absolute right-2 top-2 border rounded-xl p-1 hover:shadow h-8 w-8 flex justify-center items-center"
         />
       </div>
       {error && (

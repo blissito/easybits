@@ -265,21 +265,20 @@ export const EditAssetForm = ({
   return (
     <article className="w-full px-4 col-span-12 md:col-span-8">
       <LayoutGroup>
-        <Form onSubmit={handleSubmit} className="bg-white w-full">
-          <h2 className="text-2xl mt-6 mb-4 font-bold">Detalles de tu Asset</h2>
+        <Form onSubmit={handleSubmit} className="bg-white w-full mt-6">
           <Input
             defaultValue={asset.title}
             onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
             label="Título"
             name="title"
-            className="mb-6"
+            className="mb-5"
           />
 
           <Input
             defaultValue={asset.tags}
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
             label="Tags"
-            placeholder="curso, programación"
+            placeholder="curso, inglés, profesional,"
             className="mb-3"
           />
           <Suspense fallback={<Spinner />}>
