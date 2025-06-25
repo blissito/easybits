@@ -311,12 +311,6 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           {/* Excel Context Display */}
           {excelContext && (
             <div className="mt-2 bg-white border border-brand-500/20 rounded-lg p-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-brand-600 font-medium flex items-center gap-1">
-                  <FaFileExcel className="text-xs text-brand-500" />✓{" "}
-                  {file?.name} cargado
-                </span>
-              </div>
               <div className="text-xs text-brand-500/80 max-h-20 overflow-y-auto bg-brand-500/5 border border-brand-500/10 rounded p-1 font-mono">
                 <pre className="whitespace-pre-wrap text-xs">
                   {excelContext}
