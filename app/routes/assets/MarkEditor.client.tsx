@@ -114,9 +114,10 @@ export const MarkEditor = ({
       {/* Markdown Editor */}
       <div ref={editorRef}>
         <MDEditor
+          preview="edit"
           value={content || ""}
           onChange={handleChange}
-          height={400}
+          height={500}
           className="border border-gray-300 rounded-lg"
         />
       </div>
