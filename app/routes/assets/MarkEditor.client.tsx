@@ -25,6 +25,7 @@ export const MarkEditor = ({
   const [lastPrompt, setLastPrompt] = useState<string>("");
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const [excelContext, setExcelContext] = useState<string>("");
+  const [excelFileName, setExcelFileName] = useState<string>("");
   const [showExcelUploader, setShowExcelUploader] = useState(true);
   const lastScrollTopRef = useRef(0);
 
@@ -189,6 +190,7 @@ export const MarkEditor = ({
             Contexto de Excel (opcional)
           </h4>
           <button
+            type="button"
             onClick={() => setShowExcelUploader(!showExcelUploader)}
             className="text-sm text-brand-600 hover:text-brand-700 font-medium underline flex items-center gap-1"
           >
@@ -198,17 +200,28 @@ export const MarkEditor = ({
         </div>
 
         {showExcelUploader && (
-          <ExcelUploader onExcelDataChange={setExcelContext} className="mb-4" />
+          <ExcelUploader
+            onExcelDataChange={setExcelContext}
+            onFileNameChange={setExcelFileName}
+            className="mb-4"
+          />
         )}
 
         {excelContext && (
           <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 mb-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-brand-700 font-medium">
-                ✓ Archivo Excel cargado como contexto
+              <span className="text-sm text-brand-700 font-medium flex items-center gap-2">
+                <FaFileExcel className="text-xs text-brand-500" />✓{" "}
+                {excelFileName && excelFileName.length > 0
+                  ? excelFileName
+                  : "Archivo Excel"}{" "}
+                cargado como contexto
               </span>
               <button
-                onClick={() => setExcelContext("")}
+                onClick={() => {
+                  setExcelContext("");
+                  setExcelFileName("");
+                }}
                 className="text-brand-500 hover:text-brand-700 text-sm"
               >
                 Limpiar

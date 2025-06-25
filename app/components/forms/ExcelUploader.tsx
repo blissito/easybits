@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useExcelToText } from "~/hooks/useXLSX";
 import { cn } from "~/utils/cn";
 import Spinner from "~/components/common/Spinner";
@@ -6,12 +6,14 @@ import { IoClose, IoDocumentText } from "react-icons/io5";
 import { FaFileExcel } from "react-icons/fa";
 
 interface ExcelUploaderProps {
-  onExcelDataChange?: (data: string) => void;
+  onExcelDataChange?: (data: string, fileName?: string) => void;
+  onFileNameChange?: (fileName: string) => void;
   className?: string;
 }
 
 export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
   onExcelDataChange,
+  onFileNameChange,
   className = "",
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,12 +32,15 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
     isSupportedFile,
   } = useExcelToText();
 
-  // Notificar cambios en los datos del Excel
-  React.useEffect(() => {
+  // Efecto para notificar cambios en los datos
+  useEffect(() => {
     if (output && onExcelDataChange) {
-      onExcelDataChange(output);
+      onExcelDataChange(output, file?.name);
     }
-  }, [output, onExcelDataChange]);
+    if (file?.name && onFileNameChange) {
+      onFileNameChange(file.name);
+    }
+  }, [output, onExcelDataChange, file, onFileNameChange]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
