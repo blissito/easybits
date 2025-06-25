@@ -6,6 +6,7 @@ import { db } from "~/.server/db";
 import { redirect } from "react-router";
 import { useEffect, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
+import { FloatingImageGenAssistant } from "~/components/ai/FloatingImageGenAssistant";
 
 const PADDING_LAYOUT = `pl-4`;
 
@@ -58,6 +59,10 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
         />
         <AssetPreview host={host} asset={prev} />
       </main>
+      <FloatingImageGenAssistant
+        imageUrl="https://placekitten.com/400/400"
+        prompt="gato con sombrero"
+      />
     </article>
   );
 }
