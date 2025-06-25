@@ -23,6 +23,9 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
   const [showExcelUploader, setShowExcelUploader] = useState(true);
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<
+    Array<{ role: string; content: string }>
+  >([]);
 
   // Excel handling
   const {
@@ -52,21 +55,52 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
 
     // Construir el contexto del Excel si existe
     const excelContextText = excelContext
-      ? `\n\nCONTEXTO DEL ARCHIVO EXCEL:\n${excelContext}\n\n`
+      ? `\n\n=== CONTEXTO DEL ARCHIVO EXCEL ===\n${excelContext}\n=== FIN DEL CONTEXTO EXCEL ===\n\n`
       : "";
+
+    // Prompt del sistema mejorado
+    const systemPrompt = `Eres un experto en marketing digital y copywriting especializado en crear descripciones atractivas para productos digitales.
+
+INSTRUCCIONES IMPORTANTES:
+- Título del asset: "${assetTitle}"
+- Descripción actual: ${
+      currentContent ? `"${currentContent}"` : "(sin descripción previa)"
+    }
+- Responde SIEMPRE en español mexicano
+- Usa formato markdown con títulos (# ## ###)
+- Incluye citas relevantes cuando sea apropiado
+- Sé creativo pero profesional
+- NO agregues comentarios explicativos, solo el markdown
+- NO uses bloques de código markdown, solo el contenido directo
+
+${excelContextText}${
+      excelContext
+        ? "IMPORTANTE: Usa la información del archivo Excel como contexto para enriquecer la descripción. Incorpora datos relevantes del Excel de manera natural en el texto."
+        : ""
+    }
+
+Ahora genera la descripción según las instrucciones del usuario:`;
+
+    // Construir el chat con historial
+    const newUserMessage = { role: "user", content: promptText };
+    const updatedHistory = [...conversationHistory, newUserMessage];
+    setConversationHistory(updatedHistory);
 
     const chat = [
       {
         role: "system",
-        content: `Descripción actual: ${String(
-          currentContent ?? "(vacía)"
-        )}, toma en cuenta el titulo del asset que es: ${assetTitle}.${excelContextText}Refina la descripción para el asset según las instrucciones del usuario. Para los títulos usa siempre # o ## y para los subtitulos usa: ###. Usa algunas citas relacionadas también y siempre, quiero decir, siempre, response en español mexicano y no añadas ni tus comentarios ni instrucciones. Devuelve siempre: markdown directamente, sin el bloque de markdown`,
+        content: systemPrompt,
       },
-      {
-        role: "user",
-        content: promptText,
-      },
+      ...updatedHistory,
     ];
+
+    // Debug: Log del chat que se envía
+    console.log("=== CHAT ENVIADO A LA IA ===");
+    console.log("Excel Context:", excelContext ? "PRESENTE" : "AUSENTE");
+    console.log("Excel Content:", excelContext?.substring(0, 200) + "...");
+    console.log("System Prompt:", systemPrompt.substring(0, 300) + "...");
+    console.log("User Message:", promptText);
+    console.log("Chat History Length:", updatedHistory.length);
 
     try {
       const response = await fetch("/api/v1/ai/sugestions", {
@@ -111,6 +145,12 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
             }
           }
         }
+
+        // Agregar la respuesta del asistente al historial
+        setConversationHistory((prev) => [
+          ...prev,
+          { role: "assistant", content: generatedContent },
+        ]);
         setIsLoading(false);
       }
     } catch (error) {
@@ -235,6 +275,21 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
             <p className="text-brand-600 font-medium mb-2">
               ✓ Usando datos de Excel como contexto
             </p>
+          )}
+          {conversationHistory.length > 0 && (
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-brand-600 font-medium">
+                ✓ Historial de conversación: {conversationHistory.length}{" "}
+                mensajes
+              </p>
+              <button
+                onClick={() => setConversationHistory([])}
+                className="text-xs text-brand-400 hover:text-brand-600 underline"
+                type="button"
+              >
+                Limpiar historial
+              </button>
+            </div>
           )}
           <p className="mb-2">
             Puedes pedirle generar <strong>o refinar</strong> las secciones en
