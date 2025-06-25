@@ -79,7 +79,7 @@ ${excelContextText}${
         : ""
     }
 
-Ahora genera la descripción según las instrucciones del usuario:`;
+Ahora genera o refina la descripción según las instrucciones del usuario y el historial de conversación:`;
 
     // Construir el chat con historial
     const newUserMessage = { role: "user", content: promptText };
