@@ -133,62 +133,13 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
   };
 
   return (
-    <div
-      className={cn(
-        "bg-brand-50 border border-brand-200 rounded-xl p-4",
-        className
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-brand-700 flex items-center gap-2">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 28 28"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <ellipse cx="14" cy="14" rx="10" ry="9" fill="#fff" />
-            <path
-              d="M10.5 14c0-1.93 1.57-3.5 3.5-3.5s3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5"
-              stroke="#9870ED"
-              strokeWidth="1.5"
-            />
-            <rect
-              x="12.5"
-              y="12.5"
-              width="3"
-              height="3"
-              rx="1.5"
-              fill="#9870ED"
-            />
-            <circle cx="14" cy="14" r="0.8" fill="#fff" />
-            <path
-              d="M14 7.5v1.2M14 19.3v1.2M7.5 14h1.2M19.3 14h1.2"
-              stroke="#9870ED"
-              strokeWidth="1"
-              strokeLinecap="round"
-            />
-          </svg>
-          Generador de Descripción con IA
-        </h3>
-        <button
-          type="button"
-          onClick={() => setShowExcelUploader(!showExcelUploader)}
-          className="text-sm text-brand-600 hover:text-brand-700 font-medium underline flex items-center gap-1"
-        >
-          <FaFileExcel className="text-xs" />
-          {showExcelUploader ? "Ocultar" : "Agregar"} Excel
-        </button>
-      </div>
-
+    <div className={cn("", className)}>
       {/* Excel Uploader Section */}
       {showExcelUploader && (
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
             <FaFileExcel className="text-brand-500" />
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-brand-500">
               Contexto de Excel (opcional)
             </span>
           </div>
@@ -196,10 +147,10 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
           {/* Excel Upload Area */}
           <div
             className={cn(
-              "border-2 border-dashed rounded-lg p-4 text-center transition-colors",
+              "border-2 border-dashed rounded-lg p-3 text-center transition-colors",
               {
-                "border-brand-300 bg-brand-50": !file,
-                "border-brand-500 bg-brand-100": file,
+                "border-brand-500/30 bg-brand-500/5": !file,
+                "border-brand-500/50 bg-brand-500/10": file,
               }
             )}
             onDragOver={handleDragOver}
@@ -207,9 +158,9 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
           >
             {!file ? (
               <div>
-                <FaFileExcel className="mx-auto text-3xl text-brand-400 mb-2" />
-                <p className="text-sm text-gray-600 mb-2">
-                  Arrastra un archivo Excel aquí o haz clic para seleccionar
+                <FaFileExcel className="mx-auto text-2xl text-brand-400 mb-2" />
+                <p className="text-xs text-brand-500/70 mb-2">
+                  Arrastra un archivo Excel aquí
                 </p>
                 <input
                   type="file"
@@ -220,30 +171,30 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
                 />
                 <label
                   htmlFor="excel-upload"
-                  className="inline-flex items-center px-3 py-1 bg-brand-500 text-white text-sm rounded-md hover:bg-brand-600 cursor-pointer transition-colors"
+                  className="inline-flex items-center px-2 py-1 bg-brand-500 text-white text-xs rounded-md hover:bg-brand-600 cursor-pointer transition-colors"
                 >
-                  Seleccionar archivo
+                  Seleccionar
                 </label>
               </div>
             ) : (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FaFileExcel className="text-brand-500" />
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-xs font-medium text-brand-500">
                     {file.name}
                   </span>
                   {excelLoading && (
                     <div className="flex items-center gap-1 text-xs text-brand-600">
-                      <div className="w-3 h-3 border border-brand-300 border-t-brand-600 rounded-full animate-spin"></div>
+                      <div className="w-2 h-2 border border-brand-300 border-t-brand-600 rounded-full animate-spin"></div>
                       Procesando...
                     </div>
                   )}
                 </div>
                 <button
                   onClick={clearData}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-brand-400 hover:text-brand-600"
                 >
-                  <IoClose className="w-4 h-4" />
+                  <IoClose className="w-3 h-3" />
                 </button>
               </div>
             )}
@@ -251,14 +202,14 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
 
           {/* Excel Context Display */}
           {excelContext && (
-            <div className="mt-3 bg-white border border-brand-200 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-brand-700 font-medium flex items-center gap-2">
+            <div className="mt-2 bg-white border border-brand-500/20 rounded-lg p-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-brand-600 font-medium flex items-center gap-1">
                   <FaFileExcel className="text-xs text-brand-500" />✓{" "}
-                  {file?.name} cargado como contexto
+                  {file?.name} cargado
                 </span>
               </div>
-              <div className="text-xs text-gray-600 max-h-32 overflow-y-auto bg-gray-50 border border-gray-200 rounded p-2 font-mono">
+              <div className="text-xs text-brand-500/80 max-h-20 overflow-y-auto bg-brand-500/5 border border-brand-500/10 rounded p-1 font-mono">
                 <pre className="whitespace-pre-wrap text-xs">
                   {excelContext}
                 </pre>
@@ -267,7 +218,7 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
           )}
 
           {excelError && (
-            <div className="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
               Error: {excelError}
             </div>
           )}
@@ -275,13 +226,13 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
       )}
 
       {/* AI Instructions */}
-      <div className="mb-4 p-3 bg-white border border-brand-200 rounded-lg">
-        <div className="text-sm text-brand-600">
+      <div className="mb-4">
+        <div className="text-sm text-brand-500">
           <p className="mb-2">
             Describe tu asset de forma <strong>clara y atractiva</strong>.
           </p>
           {excelContext && (
-            <p className="text-brand-700 font-medium mb-2">
+            <p className="text-brand-600 font-medium mb-2">
               ✓ Usando datos de Excel como contexto
             </p>
           )}
@@ -302,7 +253,7 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
 
       {/* Last Prompt Display */}
       {lastPrompt && (
-        <div className="mb-3 flex items-center gap-2 bg-brand-100 border border-brand-200 rounded-lg px-3 py-2 text-xs text-brand-700 font-medium">
+        <div className="mb-3 flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-2 text-xs text-brand-700 font-medium">
           <svg
             width="16"
             height="16"
@@ -319,7 +270,9 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
             />
           </svg>
           <span className="italic">Último mensaje:</span>
-          <span className="ml-1 text-brand-600 font-normal">{lastPrompt}</span>
+          <span className="ml-1 text-brand-500/90 font-normal">
+            {lastPrompt}
+          </span>
         </div>
       )}
 
