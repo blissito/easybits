@@ -66,11 +66,11 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
     // Prompt del sistema mejorado
     const systemPrompt = `Eres un experto en marketing digital y copywriting especializado en crear descripciones atractivas para productos digitales.
 
-INSTRUCCIONES IMPORTANTES:
+INSTRUCCIONES CRÍTICAS:
 - Título del asset: "${assetTitle}"
 ${
   isFirstPrompt && currentContent
-    ? `- DESCRIPCIÓN ACTUAL A REFINAR:\n"""\n${currentContent}\n"""\n`
+    ? `- DESCRIPCIÓN ACTUAL A REFINAR (NO ELIMINAR, SOLO MEJORAR):\n"""\n${currentContent}\n"""\n`
     : `- Descripción actual: ${
         currentContent ? `"${currentContent}"` : "(sin descripción previa)"
       }`
@@ -92,14 +92,34 @@ ${
   isFirstPrompt
     ? `OBJETIVO: ${
         currentContent
-          ? "Refinar y mejorar la descripción existente"
+          ? "REFINAR Y MEJORAR la descripción existente (NO reemplazar, NO eliminar contenido previo). Mantén toda la estructura y contenido existente, solo agrega o mejora según las instrucciones del usuario."
           : "Crear una nueva descripción"
       } para "${assetTitle}" según las instrucciones del usuario.`
-    : "Continúa refinando la descripción según las instrucciones del usuario y el historial de conversación."
-}`;
+    : "REFINAR la descripción existente. Mantén todo el contenido previo y solo agrega o mejora según las instrucciones específicas del usuario. NO elimines contenido existente."
+}
+
+REGLAS ESTRICTAS PARA REFINAMIENTO:
+1. SIEMPRE mantén el contenido existente
+2. SOLO agrega información nueva o mejora secciones específicas
+3. NO elimines párrafos, secciones o información existente
+4. Si el usuario pide "agregar" algo, INTÉGRALO en el contenido existente
+5. Si el usuario pide "quitar" algo específico, solo elimina esa parte específica
+6. Mantén la estructura y formato original
+
+EJEMPLO DE REFINAMIENTO CORRECTO:
+Si tienes: "Este es un curso de programación. Incluye ejercicios prácticos."
+Y el usuario pide: "agrega información sobre precios"
+RESPUESTA CORRECTA: "Este es un curso de programación. Incluye ejercicios prácticos. El curso tiene un precio de $99 USD y está disponible en diferentes monedas según tu país."
+RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en diferentes monedas según tu país."`;
 
     // Construir el chat con historial
-    const newUserMessage = { role: "user", content: promptText };
+    const newUserMessage = {
+      role: "user",
+      content:
+        isFirstPrompt && currentContent
+          ? `CONTENIDO ACTUAL A REFINAR:\n"""\n${currentContent}\n"""\n\nINSTRUCCIÓN DEL USUARIO: ${promptText}`
+          : promptText,
+    };
     const updatedHistory = [...conversationHistory, newUserMessage];
     setConversationHistory(updatedHistory);
 
