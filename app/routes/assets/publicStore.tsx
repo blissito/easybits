@@ -56,8 +56,8 @@ export const meta = ({
   const user = data?.user;
   
   return getBasicMetaTags({
-    title: (user as any)?.storeConfig?.metadata?.title || user?.displayName || "Creador EasyBits",
-    description: (user as any)?.storeConfig?.metadata?.description || 
+    title: (user as any)?.storeConfig?.metadata?.metaTitle || user?.displayName || "Creador EasyBits",
+    description: (user as any)?.storeConfig?.metadata?.metaDescription || 
       `Descubre increíbles assets digitales en la tienda de ${user?.displayName || "este creador"} 🚀`,
     // @todo get this from config?
     image: (user as any)?.storeConfig?.metadata?.image || user?.storeConfig?.coverImage|| user?.storeConfig?.logoImage || `/metaImage-tienda.webp`,
