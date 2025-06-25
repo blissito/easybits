@@ -4,6 +4,7 @@ import { useFetcher } from "react-router";
 import Spinner from "~/components/common/Spinner";
 import { cn } from "~/utils/cn";
 import { ExcelUploader } from "~/components/forms/ExcelUploader";
+import { FaFileExcel } from "react-icons/fa";
 
 export const MarkEditor = ({
   assetTitle,
@@ -24,7 +25,7 @@ export const MarkEditor = ({
   const [lastPrompt, setLastPrompt] = useState<string>("");
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const [excelContext, setExcelContext] = useState<string>("");
-  const [showExcelUploader, setShowExcelUploader] = useState(false);
+  const [showExcelUploader, setShowExcelUploader] = useState(true);
   const lastScrollTopRef = useRef(0);
 
   // replace the entire content
@@ -183,13 +184,15 @@ export const MarkEditor = ({
       {/* Excel Uploader */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-700">
+          <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <FaFileExcel className="text-brand-500" />
             Contexto de Excel (opcional)
           </h4>
           <button
             onClick={() => setShowExcelUploader(!showExcelUploader)}
-            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+            className="text-sm text-brand-600 hover:text-brand-700 font-medium underline flex items-center gap-1"
           >
+            <FaFileExcel className="text-xs" />
             {showExcelUploader ? "Ocultar" : "Agregar"} archivo Excel
           </button>
         </div>
