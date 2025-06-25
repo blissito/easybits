@@ -258,8 +258,10 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
                   {file?.name} cargado como contexto
                 </span>
               </div>
-              <div className="text-xs text-gray-600 max-h-20 overflow-y-auto">
-                {excelContext.substring(0, 200)}...
+              <div className="text-xs text-gray-600 max-h-32 overflow-y-auto bg-gray-50 border border-gray-200 rounded p-2 font-mono">
+                <pre className="whitespace-pre-wrap text-xs">
+                  {excelContext}
+                </pre>
               </div>
             </div>
           )}
