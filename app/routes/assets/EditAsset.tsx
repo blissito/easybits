@@ -43,7 +43,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
     <article className="w-screen">
       <h1
         className={cn(
-          "text-3xl md:text-4xl font-bold  md:pt-4 pt-16 pb-4 border-b border-black md:pl-24",
+          "text-3xl md:text-4xl font-bold  md:pt-4 pt-16 pb-4 border-b border-black md:pl-24 ",
           PADDING_LAYOUT
         )}
       >

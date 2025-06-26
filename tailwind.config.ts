@@ -44,6 +44,7 @@ export default {
         coverInfo: "url('/home/info.svg')",
         coverSuccess: "url('/images/cover-success.svg')",
         coverSuccessMobile: "url('/images/cover-success-mobile.svg')",
+        aiCover: "url('/ai-cover.svg')",
       },
       fontFamily: {
         jersey: ["Jersey 10"], // not working, you can remove

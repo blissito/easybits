@@ -113,7 +113,7 @@ export const UploadBox = ({
     const isLoading = fetcher.state !== "idle";
 
     return (
-      <div className="text-center py-6 flex flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden">
+      <div className="text-center py-6 h-[130px] bg-gray-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden">
         {isFromDB && (
           <button
             onClick={handleDelete}
@@ -122,7 +122,7 @@ export const UploadBox = ({
             {isLoading ? <Spinner /> : <IoClose />}
           </button>
         )}
-        <span className="text-xl">
+        <span className="text-xl ">
           <FaBook />
         </span>
         <p className="text-xs truncate w-full"> {localFile.name}</p>
