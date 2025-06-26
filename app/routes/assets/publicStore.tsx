@@ -60,7 +60,7 @@ export const meta = ({
     description: (user as any)?.storeConfig?.metadata?.metaDescription || 
       `Descubre increíbles assets digitales en la tienda de ${user?.displayName || "este creador"} 🚀`,
     // @todo get this from config?
-    image: (user as any)?.storeConfig?.metadata?.image || user?.storeConfig?.coverImage|| user?.storeConfig?.logoImage || `/metaImage-tienda.webp`,
+    image: (user as any)?.storeConfig?.metadata?.metaImage || user?.storeConfig?.coverImage|| user?.storeConfig?.logoImage || `/metaImage-tienda.webp`,
   });
 };
 
