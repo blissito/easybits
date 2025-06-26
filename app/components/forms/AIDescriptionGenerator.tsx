@@ -24,6 +24,10 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
   const [showExcelUploader, setShowExcelUploader] = useState(true);
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<
+    Array<{ role: string; content: string }>
+  >([]);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Excel handling
   const {
@@ -50,24 +54,98 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
     const promptText = `${inputRef.current!.value}`;
     setLastPrompt(promptText);
     inputRef.current!.value = "";
+    setAiError(null); // Limpiar errores previos
 
     // Construir el contexto del Excel si existe
     const excelContextText = excelContext
-      ? `\n\nCONTEXTO DEL ARCHIVO EXCEL:\n${excelContext}\n\n`
+      ? `\n\n=== CONTEXTO DEL ARCHIVO EXCEL ===\n${excelContext}\n=== FIN DEL CONTEXTO EXCEL ===\n\n`
       : "";
+
+    // Determinar si es el primer prompt (sin historial)
+    const isFirstPrompt = conversationHistory.length === 0;
+
+    // Prompt del sistema mejorado
+    const systemPrompt = `Eres un experto en marketing digital y copywriting especializado en crear descripciones atractivas para productos digitales.
+
+INSTRUCCIONES CRÍTICAS:
+- Título del asset: "${assetTitle}"
+${
+  isFirstPrompt && currentContent
+    ? `- DESCRIPCIÓN ACTUAL A REFINAR (NO ELIMINAR, SOLO MEJORAR):\n"""\n${currentContent}\n"""\n`
+    : `- Descripción actual: ${
+        currentContent ? `"${currentContent}"` : "(sin descripción previa)"
+      }`
+}
+- Responde SIEMPRE en español mexicano
+- Usa formato markdown con títulos (# ## ###)
+- Incluye citas relevantes cuando sea apropiado
+- Sé creativo pero profesional
+- NO agregues comentarios explicativos, solo el markdown
+- NO uses bloques de código markdown, solo el contenido directo
+
+${excelContextText}${
+      excelContext
+        ? `IMPORTANTE: Usa la información del archivo Excel como contexto para enriquecer la descripción, pero da prioridad a la descripción actual; pero sobre todo, sigue las instrucciones del usuario sin perder de vista el objetivo que es: describir adecuadamente: ${assetTitle}. Incorpora datos relevantes del Excel de manera natural en el texto.`
+        : ""
+    }
+
+${
+  isFirstPrompt
+    ? `OBJETIVO: ${
+        currentContent
+          ? "REFINAR Y MEJORAR la descripción existente (NO reemplazar, NO eliminar contenido previo). Mantén toda la estructura y contenido existente, solo agrega o mejora según las instrucciones del usuario."
+          : "Crear una nueva descripción"
+      } para "${assetTitle}" según las instrucciones del usuario.`
+    : "REFINAR la descripción existente. Mantén todo el contenido previo y solo agrega o mejora según las instrucciones específicas del usuario. NO elimines contenido existente."
+}
+
+REGLAS ESTRICTAS PARA REFINAMIENTO:
+1. SIEMPRE mantén el contenido existente
+2. SOLO agrega información nueva o mejora secciones específicas
+3. NO elimines párrafos, secciones o información existente a menos que el usuario lo indique
+4. Si el usuario pide "agregar" algo, INTÉGRALO en el contenido existente
+5. Si el usuario pide "quitar" algo específico, solo elimina esa parte específica
+6. Mantén la estructura y formato original
+
+EJEMPLO DE REFINAMIENTO CORRECTO:
+Si tienes: "Este es un curso de programación. Incluye ejercicios prácticos."
+Y el usuario pide: "agrega información sobre precios"
+RESPUESTA CORRECTA: "Este es un curso de programación. Incluye ejercicios prácticos. El curso tiene un precio de $99 USD y está disponible en diferentes monedas según tu país."
+RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en diferentes monedas según tu país."`;
+
+    // Construir el chat con historial
+    const newUserMessage = {
+      role: "user",
+      content:
+        isFirstPrompt && currentContent
+          ? `CONTENIDO ACTUAL A REFINAR:\n"""\n${currentContent}\n"""\n\nINSTRUCCIÓN DEL USUARIO: ${promptText}`
+          : promptText,
+    };
+    const updatedHistory = [...conversationHistory, newUserMessage];
+    setConversationHistory(updatedHistory);
 
     const chat = [
       {
         role: "system",
-        content: `Descripción actual: ${String(
-          currentContent ?? "(vacía)"
-        )}, toma en cuenta el titulo del asset que es: ${assetTitle}.${excelContextText}Refina la descripción para el asset según las instrucciones del usuario. Para los títulos usa siempre # o ## y para los subtitulos usa: ###. Usa algunas citas relacionadas también y siempre, quiero decir, siempre, response en español mexicano y no añadas ni tus comentarios ni instrucciones. Devuelve siempre: markdown directamente, sin el bloque de markdown`,
+        content: systemPrompt,
       },
-      {
-        role: "user",
-        content: promptText,
-      },
+      ...updatedHistory,
     ];
+
+    // Debug: Log del chat que se envía
+    console.log("=== CHAT ENVIADO A LA IA ===");
+    console.log("Excel Context:", excelContext ? "PRESENTE" : "AUSENTE");
+    console.log("Excel Content:", excelContext?.substring(0, 200) + "...");
+    console.log("Is First Prompt:", isFirstPrompt);
+    console.log("Current Content Present:", !!currentContent);
+    console.log("Current Content Length:", currentContent?.length || 0);
+    console.log(
+      "Current Content Preview:",
+      currentContent?.substring(0, 100) + "..."
+    );
+    console.log("System Prompt:", systemPrompt.substring(0, 300) + "...");
+    console.log("User Message:", promptText);
+    console.log("Chat History Length:", updatedHistory.length);
 
     try {
       const response = await fetch("/api/v1/ai/sugestions", {
@@ -79,43 +157,73 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
         signal: controller.signal,
       });
 
-      if (response.ok) {
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        if (!reader) return;
+      console.log("Response status:", response.status);
+      console.log("Response ok:", response.ok);
 
-        let buffer = "";
-        let generatedContent = "";
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error:", response.status, errorText);
+        throw new Error(
+          `Error del servidor (${response.status}): ${
+            errorText || "Error desconocido"
+          }`
+        );
+      }
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) {
+        throw new Error("No se pudo leer la respuesta del servidor");
+      }
 
-          buffer += decoder.decode(value);
-          const lines = buffer.split("\n");
+      let buffer = "";
+      let generatedContent = "";
 
-          // Mantén la última línea en el buffer por si está incompleta
-          buffer = lines.pop() || "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          for (const line of lines) {
-            if (line.trim() && line.startsWith("{")) {
-              try {
-                const data = JSON.parse(line);
-                if (data.response) {
-                  generatedContent += data.response;
-                  // Notificar progreso en tiempo real
-                  onGenerate(generatedContent);
-                }
-              } catch (e) {
-                console.warn("Línea JSON no válida:", line);
+        buffer += decoder.decode(value);
+        const lines = buffer.split("\n");
+
+        // Mantén la última línea en el buffer por si está incompleta
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.trim() && line.startsWith("{")) {
+            try {
+              const data = JSON.parse(line);
+              if (data.response) {
+                generatedContent += data.response;
+                // Notificar progreso en tiempo real
+                onGenerate(generatedContent);
               }
+            } catch (e) {
+              console.warn("Línea JSON no válida:", line);
             }
           }
         }
-        setIsLoading(false);
       }
+
+      // Agregar la respuesta del asistente al historial
+      setConversationHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: generatedContent },
+      ]);
+      setIsLoading(false);
     } catch (error) {
-      console.error("Error al generar la descripción:", error);
+      console.error("Error en generación:", error);
+
+      // No mostrar error si fue cancelado intencionalmente
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Petición cancelada intencionalmente");
+        return;
+      }
+
+      // Mostrar otros errores
+      const errorMessage =
+        error instanceof Error ? error.message : "Error desconocido";
+      setAiError(errorMessage);
     } finally {
       setAbortController(null);
     }
@@ -212,10 +320,17 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
               </div>
             </div>
           )}
+          {/* Removed Excel preview section */}
 
           {excelError && (
             <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
               Error: {excelError}
+            </div>
+          )}
+
+          {aiError && (
+            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+              <strong>Error de IA:</strong> {aiError}
             </div>
           )}
         </div>
@@ -228,6 +343,21 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
       {/* AI Instructions */}
       <div className="mb-4">
         <div className="text-sm text-black">
+          {conversationHistory.length > 0 && (
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-brand-600 font-medium">
+                ✓ Historial de conversación: {conversationHistory.length}{" "}
+                mensajes
+              </p>
+              <button
+                onClick={() => setConversationHistory([])}
+                className="text-xs text-brand-400 hover:text-brand-600 underline"
+                type="button"
+              >
+                Limpiar historial
+              </button>
+            </div>
+          )}
           <p className="mb-2">
             Describe tu asset de forma <strong>clara y atractiva</strong>.   
           </p>
