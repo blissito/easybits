@@ -77,18 +77,14 @@ const PurchaseCardBox = ({ asset }: { asset: AssetWithUser }) => {
       key={asset.id}
       asset={asset}
       left={
-        <div className=" flex gap-1 items-center pl-3 pb-3 mt-1">
+        <div className=" flex gap-1 items-center pl-3 ">
           <Avatar className="h-6 w-6 " src={asset.user?.picture} />
           <Link to={url}>
             <p className="text-sm underline">{asset.user.displayName}</p>
           </Link>
         </div>
       }
-      right={
-        <Link className="text-2xl" to={`/dash/compras/${asset.id}`}>
-          <IoOpenOutline />
-        </Link>
-      }
+      right={" "}
     />
   );
 };

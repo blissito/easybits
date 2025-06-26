@@ -84,94 +84,71 @@ export const MarkEditor = ({
 
   return (
     <section className="mt-5 mb-3" data-color-mode="light">
-      <p className=" mb-2">Descripción <span className="text-xs ">(Usa markdown )</span> </p>
-      <main className="flex gap-4 flex-col lg:flex-row">
-        <section className="w-full lg:w-2/3" ref={editorRef}>
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <div >
+        <p className=" -mb-1">Descripción </p>
+        <span className="text-xs ">(Usa markdown )</span> 
+        </div>
+              <button
+            type="button"
+            className={cn("group w-10 h-10 border border-black flex items-center justify-center bg-brand-500/10  rounded-full  shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none", {"": showAISuggestion})}
+            onClick={() => setShowAISuggestion((v) => !v)}
+            aria-expanded={showAISuggestion}
+            aria-controls="ai-suggestion-content"
+          >
+            {/* Icono IA estilizado */}
+            {!showAISuggestion ? (
+             <img 
+               src="/icons/ai.svg" 
+               alt="AI" 
+               className="w-8 h-8 ml-1 animate-pulse hover:animate-none transition-all duration-300 hover:scale-110 hover:brightness-110" 
+               style={{
+                 animation: 'ai-pulse 2s ease-in-out infinite',
+               }}
+             />
+            ) : <svg
+            width="24"
+            height="24"
+            fill="none"
+            viewBox="0 0 24 24"
+            className={`transition-transform duration-200 ${
+              showAISuggestion ? "-rotate-90" : ""
+            }`}
+          >
+            <path
+              d="M9 6l6 6-6 6"
+              stroke="#9870ED"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>}
+          </button>
+      </div>
+      <main className={cn("flex  flex-col-reverse lg:flex-row h-fit lg:h-[544px]", {"gap-4": showAISuggestion})}>
+        <section className="w-full overflow-hidden rounded-xl" ref={editorRef}>
           <MDEditor
             preview="edit"
             value={content || ""}
             onChange={handleChange}
-            height={500}
+            height={540}
           />
           <input type="hidden" name="perro" value={content || ""} />
         </section>
 
         <article
           id="sugerencia_AI"
-          className={cn("mb-4 lg:w-1/3", {
-            "w-28": !showAISuggestion,
-          })}
         >
-          <button
-            type="button"
-            className="w-full flex items-center justify-between gap-4 bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none"
-            onClick={() => setShowAISuggestion((v) => !v)}
-            aria-expanded={showAISuggestion}
-            aria-controls="ai-suggestion-content"
-          >
-            {/* Icono IA estilizado */}
-            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white/90 border border-brand-500/30 shadow">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 28 28"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <ellipse cx="14" cy="14" rx="10" ry="9" fill="#fff" />
-                <path
-                  d="M10.5 14c0-1.93 1.57-3.5 3.5-3.5s3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5"
-                  stroke="#9870ED"
-                  strokeWidth="1.5"
-                />
-                <rect
-                  x="12.5"
-                  y="12.5"
-                  width="3"
-                  height="3"
-                  rx="1.5"
-                  fill="#9870ED"
-                />
-                <circle cx="14" cy="14" r="0.8" fill="#fff" />
-                <path
-                  d="M14 7.5v1.2M14 19.3v1.2M7.5 14h1.2M19.3 14h1.2"
-                  stroke="#9870ED"
-                  strokeWidth="1"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            {showAISuggestion ? (
-              <span className="flex-1 text-left text-brand-500 font-semibold text-base select-none">
-                Sugerencia AI
-              </span>
-            ) : null}
-            {/* Chevron animado a la derecha */}
-            <svg
-              width="24"
-              height="24"
-              fill="none"
-              viewBox="0 0 24 24"
-              className={`transition-transform duration-200 ${
-                showAISuggestion ? "rotate-90" : ""
-              }`}
-            >
-              <path
-                d="M9 6l6 6-6 6"
-                stroke="#9870ED"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-
           <section
             id="ai-suggestion-content"
-            className={`overflow-hidden transition-all duration-300 ${
-              showAISuggestion ? "h-max opacity-100 mt-3" : "max-h-0 opacity-0"
-            } bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 shadow-sm`}
-            style={{ pointerEvents: showAISuggestion ? "auto" : "none" }}
+            className={`overflow-hidden transition-all duration-300 ease-in-out transform ${
+              showAISuggestion 
+                ? "max-h-[800px] w-full lg:w-[300px] opacity-100 scale-100 p-4" 
+                : "max-h-0 w-0 opacity-0 scale-95"
+            } bg-brand-500/10 border border-black rounded-xl  shadow-sm`}
+            style={{ 
+              pointerEvents: showAISuggestion ? "auto" : "none"
+            }}
           >
             <AIDescriptionGenerator
               assetTitle={assetTitle}

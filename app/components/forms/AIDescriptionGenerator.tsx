@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useExcelToText } from "~/hooks/useXLSX";
 import { cn } from "~/utils/cn";
-import { FaFileExcel } from "react-icons/fa";
+import { FaFileExcel, FaFileWord } from "react-icons/fa";
 import { IoClose } from "react-icons/io5";
+import { GiMagicBroom } from "react-icons/gi";
 
 interface AIDescriptionGeneratorProps {
   assetTitle: string;
@@ -245,19 +246,19 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
       {/* Excel Uploader Section */}
       {showExcelUploader && (
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <FaFileExcel className="text-brand-500" />
-            <span className="text-sm font-medium text-brand-500">
-              Contexto de Excel (opcional)
+          <div className="flex items-center gap-2 mb-4  " >
+          <img src="/icons/ai.svg" alt="AI" className="w-5 h-5" />
+            <span className="text-sm font-medium text-black">
+              Bittor te ayuda a describir tu asset
             </span>
           </div>
 
           {/* Excel Upload Area */}
           <div
             className={cn(
-              "border-2 border-dashed rounded-lg p-3 text-center transition-colors",
+              "border border-dashed border-black cursor-pointer rounded-lg p-3 text-center transition-colors grid place-content-center",
               {
-                "border-brand-500/30 bg-brand-500/5": !file,
+                "border-brand-500 bg-brand-500/5": !file,
                 "border-brand-500/50 bg-brand-500/10": file,
               }
             )}
@@ -265,10 +266,10 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
             onDrop={handleDrop}
           >
             {!file ? (
-              <div>
-                <FaFileExcel className="mx-auto text-2xl text-brand-400 mb-2" />
-                <p className="text-xs text-brand-500/70 mb-2">
-                  Arrastra un archivo Excel aquí
+              <label  className="cursor-pointer">
+                <FaFileWord className="mx-auto text-lg text-brand-500 mb-2  " />
+                <p className="text-xs text-brand-500">
+                  Arrastra  o selecciona un archivo (opcional)
                 </p>
                 <input
                   type="file"
@@ -277,13 +278,8 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
                   className="hidden"
                   id="excel-upload"
                 />
-                <label
-                  htmlFor="excel-upload"
-                  className="inline-flex items-center px-2 py-1 bg-brand-500 text-white text-xs rounded-md hover:bg-brand-600 cursor-pointer transition-colors"
-                >
-                  Seleccionar
-                </label>
-              </div>
+             
+              </label>
             ) : (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -309,6 +305,21 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           </div>
 
           {/* Excel Context Display */}
+          {excelContext && (
+            <div className="mt-2 bg-white border border-brand-500/20 rounded-lg p-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-brand-600 font-medium flex items-center gap-1">
+                  <FaFileExcel className="text-xs text-brand-500" />✓{" "}
+                  {file?.name} cargado
+                </span>
+              </div>
+              <div className="text-xs text-brand-500/80 max-h-14 overflow-y-auto bg-brand-500/5 border border-brand-500/10 rounded p-1 font-mono">
+                <pre className="whitespace-pre-wrap text-xs">
+                  {excelContext}
+                </pre>
+              </div>
+            </div>
+          )}
           {/* Removed Excel preview section */}
 
           {excelError && (
@@ -324,18 +335,14 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           )}
         </div>
       )}
-
-      {/* AI Instructions */}
-      <div className="mb-4">
-        <div className="text-sm text-brand-500">
-          <p className="mb-2">
-            Describe tu asset de forma <strong>clara y atractiva</strong>.
-          </p>
-          {excelContext && (
-            <p className="text-brand-600 font-medium mb-2">
+   {excelContext && (
+            <p className="text-brand-600 font-medium text-xs mb-2">
               ✓ Usando datos de Excel como contexto
             </p>
           )}
+      {/* AI Instructions */}
+      <div className="mb-4">
+        <div className="text-sm text-black">
           {conversationHistory.length > 0 && (
             <div className="flex items-center justify-between mb-2">
               <p className="text-brand-600 font-medium">
@@ -352,15 +359,18 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
             </div>
           )}
           <p className="mb-2">
-            Puedes pedirle generar <strong>o refinar</strong> las secciones en
-            tu descripción:
+            Describe tu asset de forma <strong>clara y atractiva</strong>.   
           </p>
-          <p className="italic text-xs mb-1">
+     
+       
+          <p className=" text-sm text-black mb-2">Puedes pedirle generar <strong>o refinar</strong> las secciones en
+               tu descripción:</p>
+          <p className="italic text-iron text-xs mb-2">
             "Genera una descripción creativa para un libro de ilustraciones
             digitales"
           </p>
-          <p className="mb-1">para después pedirle:</p>
-          <p className="italic text-xs">
+          <p className="mb-2">para después pedirle:</p>
+          <p className="italic text-xs text-iron mb-6">
             "deja la sección de beneficios pero quita los bullets"
           </p>
         </div>
@@ -369,21 +379,8 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
       {/* Last Prompt Display */}
       {lastPrompt && (
         <div className="mb-3 flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-2 text-xs text-brand-700 font-medium">
-          <svg
-            width="16"
-            height="16"
-            fill="none"
-            viewBox="0 0 20 20"
-            className="flex-shrink-0"
-          >
-            <path
-              d="M3 17l1.5-4.5M3 17l4.5-1.5M3 17l10-10a2.121 2.121 0 013 3l-10 10z"
-              stroke="#9870ED"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        <GiMagicBroom />
+
           <span className="italic">Último mensaje:</span>
           <span className="ml-1 text-brand-500/90 font-normal">
             {lastPrompt}
@@ -402,7 +399,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
               handleGenerateDescription();
             }
           }}
-          className="flex-1 rounded-lg border border-brand-500/30 bg-white px-3 py-2 text-sm text-brand-500 placeholder-brand-500/60 focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg border border-black bg-white px-3 py-2 text-sm text-brand-500  focus:ring-1 focus:border-brand-500 focus:ring-brand-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           placeholder="Escribe aquí tu prompt para la IA..."
           aria-label="Prompt para IA"
         />
@@ -414,15 +411,15 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           }
           type="button"
           className={cn(
-            "inline-flex items-center justify-center hover:bg-brand-700 text-white rounded-lg p-2 transition-colors bg-brand-500",
+            "inline-flex items-center border border-black justify-center hover:bg-brand-700 text-white rounded-lg h-10 w-10 transition-colors bg-brand-500",
             {
-              "bg-white": isLoading,
+              "bg-brand-500": isLoading,
             }
           )}
           title="Enviar a IA"
         >
           {isLoading ? (
-            <img className="w-6" src="/thinking_bot.gif" alt="thinking robot" />
+            <img className="w-8" src="/ai.gif" alt="thinking robot" />
           ) : (
             <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
               <path
