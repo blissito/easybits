@@ -4,7 +4,11 @@ type Link = { link: string };
 
 export const useImageResize = (options?: {
   quality?: number;
-  callback?: (blob: Blob, success: boolean) => Promise<void>;
+  callback?: (
+    blob: Blob,
+    success: boolean,
+    meta?: { name: File['name'], type: File['type']}
+  ) => Promise<void>;
 }) => {
   const { callback, quality = 0.7 } = options || {};
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -73,7 +77,11 @@ export const useImageResize = (options?: {
         .then((r) => r.blob())
         .then((b) => {
           setBlob(b);
-          callback?.(b, true); // send the resulting blob
+          callback?.(
+            b,
+            true,
+            { name: (file as File)?.name, type: (file as File)?.type },
+          ); // send the resulting blob
         });
     };
   };
