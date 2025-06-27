@@ -64,7 +64,7 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
         LAYOUT_PADDING
       )}
     >
-      <Header title="Clientes" searcher={false} />
+      <Header title="Clientes" searcher={false} layout={false} />
       {/* Aquí está el crud 👇🏼 */}
       {clients.length > 0 ? (
         <ClientsTable

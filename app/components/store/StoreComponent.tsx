@@ -19,6 +19,7 @@ import { IoClose } from "react-icons/io5";
 import { BrutalButton } from "../common/BrutalButton";
 import { useFetcher } from "react-router";
 import React from "react";
+import { useBrutalToast } from "~/hooks/useBrutalToast";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -208,12 +209,13 @@ const SeoDrawer = ({
   };
 
   const isLoading = fetcher.state === "submitting";
-
+  const brutalToast = useBrutalToast();
   // Close modal when update is successful
   useEffect(() => {
     if (wasSubmitted.current && fetcher.state === "idle" && fetcher.data?.success) {
       wasSubmitted.current = false;
       onClose?.();
+      brutalToast("El SEO se ha actualizado correctamente");
     }
   }, [fetcher.state, fetcher.data, onClose]);
 

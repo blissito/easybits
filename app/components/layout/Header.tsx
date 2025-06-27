@@ -12,6 +12,7 @@ export const Header = ({
   cta,
   folded,
   isFolded,
+  layout = true,
   searcher = true,
 }: {
   cta?: ReactNode;
@@ -21,11 +22,12 @@ export const Header = ({
   folded?: () => void;
   isFolded?: boolean;
   searcher?: boolean;
+  layout?: boolean;
 }) => {
   return (
     <nav
       className={cn(
-        "flex justify-between flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-8  ",
+        "flex justify-between min-h-12 flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-8  ",
         className
       )}
     >
@@ -38,9 +40,11 @@ export const Header = ({
                 <LupaIcon />
               </HeaderIconButton>
             ) : null}
-            <HeaderIconButton onClick={folded}>
-              {isFolded ? <ListIcon /> : <LayoutIcon />}
-            </HeaderIconButton>
+            {
+              layout ?( <HeaderIconButton onClick={folded}>
+                {isFolded ? <ListIcon /> : <LayoutIcon />}
+              </HeaderIconButton>) : null
+            }
             {cta}
           </>
         )}
