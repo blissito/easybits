@@ -49,7 +49,7 @@ export default function Purchases({ loaderData }: Route.ComponentProps) {
           LAYOUT_PADDING
         )}
       >
-        <Header title="Mis compras" />
+        <Header title="Mis compras" searcher={false} layout={false}/>
         {assets.length < 1 && <EmptyPurchases />}
         <section
           className={cn(

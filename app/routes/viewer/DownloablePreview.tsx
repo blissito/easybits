@@ -42,7 +42,8 @@ export const DownloablePreview = ({
     publicLink: `https://${asset.user.host}.easybits.cloud/tienda`,
   });
   return (
-    <section className="border my-0 md:mt-0 border-white bg-black max-w-3xl rounded-2xl mx-auto flex flex-wrap md:flex-nowrap h-fit md:h-[600px] overflow-hidden ">
+    <section className="min-h-svh h-full w-full grid place-content-center">
+      <div className="border  border-white bg-black max-w-3xl rounded-2xl mx-auto flex flex-wrap md:flex-nowrap h-fit md:h-[600px] overflow-hidden ">
       <div className="w-full md:w-[50%] h-[280px] md:h-full bg-slate-600">
         <img
           className="h-full w-full object-cover"
@@ -104,6 +105,7 @@ export const DownloablePreview = ({
           </div>
         </div>
       </div>
+            </div>
     </section>
   );
 };
