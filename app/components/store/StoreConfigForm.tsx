@@ -74,9 +74,10 @@ export default function StoreConfigForm({
       goTo(0);
       onClose?.();
       brutalToast("El look de tu sitio se ha actualizado");
+
       const logoUrl = await processAndUploadImages(logoFile.current!);
       const coverUrl = await processAndUploadImages(coverFile.current!);
-      
+  
       if (logoUrl) values.logoImage = logoUrl;
       if (coverUrl) values.coverImage = coverUrl;
 

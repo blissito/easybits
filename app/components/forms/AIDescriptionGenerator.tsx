@@ -390,7 +390,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
               handleGenerateDescription();
             }
           }}
-          className="flex-1 rounded-lg border border-black bg-white px-3 py-2 text-sm text-brand-500  focus:ring-1 focus:border-munsell focus:ring-munsell outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"          placeholder="Escribe aquí tu prompt para la IA..."
+          className="flex-1 rounded-lg border border-black bg-white px-3 py-2 text-sm text-brand-500  focus:ring-1 focus:border-munsell focus:ring-munsell outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"          placeholder="Escribe aquí tu prompt para la IA"
           aria-label="Prompt para IA"
         />
         <button
