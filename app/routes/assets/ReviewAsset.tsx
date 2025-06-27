@@ -227,6 +227,8 @@ export default function ReviewAsset({loaderData}: Route.ComponentProps) {
                               {i < stars ? (
                                 <motion.div
                                   key={`filled-${i}`}
+                                  initial={{ scale: 0.5, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
                                   whileTap={{ scale: 1.1, opacity: 1 }}
                                   whileHover={{ scale: 1.1 }}
                                   transition={{
@@ -285,7 +287,7 @@ export default function ReviewAsset({loaderData}: Route.ComponentProps) {
                     isLoading={isLoading}
                     isDisabled={isDisabled}
                   >
-                    Enviar comentarios
+                    Publicar comentarios
                   </BrutalButton>
                 </div>
               </fetcher.Form>

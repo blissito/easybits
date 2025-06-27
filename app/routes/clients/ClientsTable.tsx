@@ -46,7 +46,7 @@ export const ClientsTable = ({
     }
   }, []);
   return (
-    <article className="bg-white border-[2px] border-black text-xs">
+    <article className="bg-white border-2 overflow-hidden rounded-xl border-black text-xs">
       <Header />
       <AnimatePresence>
         {clients.map((client) => (
@@ -132,12 +132,12 @@ const Row = ({
       </Cell>
       <Cell>
         <img
-          className="h-10 w-10 rounded-full"
+       className="h-10 w-10 rounded-full bg-[#FEFEFE]"
           src={client.picture}
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src =
-              "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
+              "/logo-default.svg";
           }}
           alt="user"
         />

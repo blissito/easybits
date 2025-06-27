@@ -48,7 +48,7 @@ export const Button = ({
             "w-full h-12": mode === "large",
             "px-4": mode === "default",
             "bg-brand-500 h-12 px-4": mode === "primary",
-            "opacity-50 cursor-not-allowed bg-gray-200 border-gray-300 text-gray-500":
+            "opacity-50 cursor-not-allowed !bg-gray-400 border-gray-300 text-gray-500":
               isDisabled,
             "cursor-pointer group-hover:-translate-x-1 group-hover:-translate-y-1":
               !isDisabled,

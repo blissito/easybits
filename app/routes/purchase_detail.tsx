@@ -5,8 +5,8 @@ import type { Route } from "./+types/purchase_detail";
 import { db } from "~/.server/db";
 import { getFilesForAssetId, getUserOrRedirect } from "~/.server/getters";
 import { DownloablePreview } from "./viewer/DownloablePreview";
+import { BookPreview } from "./viewer/BookPreview";
 
-const LAYOUT_PADDING = "p-4  md:px-20";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -45,27 +45,30 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   switch (asset.type) {
     case "DOWNLOADABLE":
       viewer = <DownloablePreview asset={asset} files={files} reviewExists={reviewExists} />;
+      break;
+    case "EBOOK":
+      viewer = <BookPreview asset={asset} files={files} reviewExists={reviewExists} />;
+      break;
   }
 
   return (
     <article
       className={cn(
-        "text-white bg-black min-h-svh h-full bg-patternDark",
+        "text-white bg-black min-h-svh h-full bg-patternDark relative",
         "w-full",
-        LAYOUT_PADDING
       )}
     >
       <Link
         prefetch="intent"
         to="/dash/compras"
-        className="inline-flex gap-3 p-3"
+        className="inline-flex gap-3 p-3 absolute top-6 left-32"
       >
         <span className="flex items-center gap-2">
           <FaArrowLeft />
         </span>
         <span>Ir al dashboard</span>
       </Link>
-      <section className="mt-6 md:my-24">{viewer}</section>
+      <section className="">{viewer}</section>
     </article>
   );
 }

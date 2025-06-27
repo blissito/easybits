@@ -100,7 +100,7 @@ export default function StartComponent({
                                 ? handleShareClick
                                 : undefined
                             }
-                            containerClassName="h-8 rounded-xl text-base font-medium"
+                            containerClassName="h-8 rounded-lg text-base font-medium"
                             className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
                           >
                             {cta}
