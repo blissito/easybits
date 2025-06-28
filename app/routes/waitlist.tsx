@@ -15,11 +15,11 @@ export default function Waitlist() {
           <h2 className="text-3xl xl:text-5xl font-bold text-center leading-tight mb-4">
             Ya estás en la lista de espera de Easybits! 🚀
           </h2>
-          <p className="text-xl xl:text-3xl font-light text-center text-iron leading-tight mb-4">
+          <p className="text-xl xl:text-2xl font-light text-center text-iron leading-tight mb-4">
             Nos emociona que estés aquí porque estamos construyendo algo épico
             para creadores como tú.
           </p>
-          <p className="text-xl xl:text-3xl font-light text-center text-iron leading-tight mb-4">
+          <p className="text-xl xl:text-2xl font-light text-center text-iron leading-tight mb-4">
             Muy pronto te daremos acceso para que puedas probarlo antes que
             nadie.
           </p>
@@ -64,7 +64,6 @@ export default function Waitlist() {
             </div>
           </div>
           <Link
-            className="py-2 px-6 font-bold border-2 border-black rounded-2xl my-10"
             to="/logout"
           >
             <BrutalButton className="bg-white text-black">
