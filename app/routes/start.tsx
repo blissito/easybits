@@ -11,6 +11,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     },
   });
   return {
+    user,
     tasks: {
       0: true,
       1: assetsCount > 0,
@@ -22,6 +23,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { tasks } = loaderData;
-  return <StartComponent tasks={tasks} />;
+  const { tasks, user } = loaderData;
+  return <StartComponent tasks={tasks} user={user} />;
 }

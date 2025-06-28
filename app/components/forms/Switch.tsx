@@ -32,7 +32,7 @@ export const Switch = ({
 
   return (
     <button
-      className={cn("text-left flex gap-4 h-6", className)}
+      className={cn("text-left flex gap-4 h-6 ", className)}
       type="button"
       onClick={handleChange}
     >

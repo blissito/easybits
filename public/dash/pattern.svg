@@ -1,6 +1,5 @@
 <svg width="1440" height="1024" viewBox="0 0 1440 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g clip-path="url(#clip0_1982_1158)">
-<rect width="1440" height="1024" fill="white"/>
+<g clip-path="url(#clip0_2435_401)">
 <path d="M0 387H1440" stroke="#6A6966"/>
 <path d="M0 432H1440" stroke="#6A6966"/>
 <path d="M0 478H1440" stroke="#6A6966"/>
@@ -15,7 +14,6 @@
 <path d="M0 885H1440" stroke="#6A6966"/>
 <path d="M0 931H1440" stroke="#6A6966"/>
 <path d="M0 976H1440" stroke="#6A6966"/>
-<path d="M0 1022H1440" stroke="url(#paint0_linear_1982_1158)" stroke-opacity="0.1"/>
 <path d="M0 70H1440" stroke="#6A6966"/>
 <path d="M0 116H1440" stroke="#6A6966"/>
 <path d="M0 161H1440" stroke="#6A6966"/>
@@ -55,19 +53,14 @@
 <path d="M1303 1024V0" stroke="#6A6966"/>
 <path d="M1348 1024V0" stroke="#6A6966"/>
 <path d="M1392 1024V0" stroke="#6A6966"/>
-<rect width="1440" height="1024" fill="url(#paint1_radial_1982_1158)"/>
+<rect width="1440" height="1024" fill="url(#paint0_radial_2435_401)"/>
 </g>
 <defs>
-<linearGradient id="paint0_linear_1982_1158" x1="0" y1="1022.5" x2="1440" y2="1022.5" gradientUnits="userSpaceOnUse">
-<stop stop-color="#CCCCCC" stop-opacity="0"/>
-<stop offset="0.515" stop-color="#CCCCCC"/>
-<stop offset="1" stop-color="#CCCCCC" stop-opacity="0"/>
-</linearGradient>
-<radialGradient id="paint1_radial_1982_1158" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(708.25 591.75) rotate(0.489363) scale(731.777 1029.06)">
-<stop stop-color="#F9F9F9" stop-opacity="0.85"/>
-<stop offset="1" stop-color="#F9F9F9"/>
+<radialGradient id="paint0_radial_2435_401" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(708.25 591.75) rotate(-90.2663) scale(591.756 832.157)">
+<stop stop-color="white" stop-opacity="0.9"/>
+<stop offset="0.947115" stop-color="white"/>
 </radialGradient>
-<clipPath id="clip0_1982_1158">
+<clipPath id="clip0_2435_401">
 <rect width="1440" height="1024" fill="white"/>
 </clipPath>
 </defs>

@@ -5,13 +5,13 @@ export default function Waitlist() {
   return (
     <section className="overflow-hidden">
       <AuthNav noCTA />
-      <section className="border-b-[2px] border-b-black min-h-[100vh] grid place-content-center md:px-20">
-        <div className="max-w-7xl mx-auto -mt-20 flex flex-col items-center px-4 md:px-[5%] xl:px-0">
+      <section className="border-b-[2px] border-b-black min-h-svh grid place-content-center ">
+        <div className="max-w-7xl mx-auto flex flex-col items-center px-4 md:px-[5%] xl:px-0">
           <img src="/logo-purple.svg" className="mx-auto mb-6" alt="logo" />
-          <h2 className="text-3xl md:text-4xl xl:text-6xl font-bold text-center leading-tight mb-4">
+          <h2 className="text-3xl xl:text-5xl font-bold text-center leading-tight mb-4">
             Ya estás en la lista de espera de Easybits! 🚀
           </h2>
-          <p className="text-2xl md:text-3xl xl:text-5xl font-semibold text-center leading-tight mb-4">
+          <p className="text-xl xl:text-3xl font-semibold text-center leading-tight mb-4">
             Nos emociona que estés aquí porque estamos construyendo algo épico
             para creadores como tú.
           </p>

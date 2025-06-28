@@ -146,7 +146,7 @@ const StatusTag = ({ published }: { published: boolean }) => {
         }
       )}
     >
-      <span> {published ? "Publicado" : "Oculto"}</span>
+      <span> {published ? "Publicado" : "Sin publicar"}</span>
     </div>
   );
 };
