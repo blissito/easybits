@@ -22,6 +22,7 @@
   font-display: swap;
 }
 
+
 * {
   box-sizing: border-box;
 }
@@ -31,6 +32,10 @@ body {
   font-family: "Cabin", serif;
   margin: 0px;
   padding: 0px;
+}
+
+body::selection {
+  background: #f4edfd;
 }
 .font-jersey {
   font-family: "Jersey 10", serif;
