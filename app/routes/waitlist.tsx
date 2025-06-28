@@ -4,26 +4,27 @@ import { Link } from "react-router";
 import { FaFacebook, FaLinkedinIn, FaYoutube } from "react-icons/fa";
 import { RiTwitterXFill } from "react-icons/ri";
 import { AiFillInstagram } from "react-icons/ai";
+import { BrutalButton } from "~/components/common/BrutalButton";
 export default function Waitlist() {
   return (
     <section className="overflow-hidden">
       <AuthNav noCTA />
       <section className="border-b-[2px] border-b-black min-h-svh grid place-content-center ">
-        <div className="max-w-7xl mx-auto flex flex-col items-center px-4 md:px-[5%] xl:px-0">
+        <div className="max-w-5xl mx-auto flex flex-col items-center px-4 md:px-[5%] xl:px-0">
           <img src="/images/logo-animation.gif" className="w-52 mx-auto mb-6" alt="logo" />
           <h2 className="text-3xl xl:text-5xl font-bold text-center leading-tight mb-4">
             Ya estás en la lista de espera de Easybits! 🚀
           </h2>
-          <p className="text-xl xl:text-3xl font-semibold text-center text-iron leading-tight mb-4">
+          <p className="text-xl xl:text-3xl font-light text-center text-iron leading-tight mb-4">
             Nos emociona que estés aquí porque estamos construyendo algo épico
             para creadores como tú.
           </p>
-          <p className="text-xl xl:text-3xl font-semibold text-center text-iron leading-tight mb-4">
+          <p className="text-xl xl:text-3xl font-light text-center text-iron leading-tight mb-4">
             Muy pronto te daremos acceso para que puedas probarlo antes que
             nadie.
           </p>
           <div>
-            Síguenos
+           <p className="text-base text-center text-iron leading-tight mb-4"> Síguenos</p>
             <div className="flex gap-3 flex-wrap">
               <a
                 href="https://www.facebook.com/profile.php?id=61574014173527"
@@ -63,10 +64,12 @@ export default function Waitlist() {
             </div>
           </div>
           <Link
-            className="py-2 px-6 font-bold border-2 rounded-2xl my-10"
+            className="py-2 px-6 font-bold border-2 border-black rounded-2xl my-10"
             to="/logout"
           >
-            Cerrar sesión
+            <BrutalButton className="bg-white text-black">
+           <span> Cerrar sesión</span>
+            </BrutalButton>
           </Link>
         </div>
       </section>
