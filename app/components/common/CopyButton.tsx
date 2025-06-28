@@ -3,6 +3,7 @@ import { FaCheck, FaRegCopy } from "react-icons/fa";
 import { useTimeout } from "~/hooks/useTimeout";
 import { cn } from "~/utils/cn";
 import { CopyIcon } from "../illustrations/CopyIcon";
+import { useBrutalToast } from "~/hooks/useBrutalToast";
 
 export const CopyButton = ({
   className,
@@ -15,11 +16,13 @@ export const CopyButton = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const { placeTimeout } = useTimeout();
+  const brutalToast = useBrutalToast();
 
   const handleCopyToClipboard = (text: string) => (ev: MouseEvent) => {
     ev.stopPropagation();
     navigator.clipboard.writeText(text);
     setCopied(true);
+    brutalToast("Link copiado ");
     placeTimeout(() => setCopied(false));
   };
 

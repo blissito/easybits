@@ -11,6 +11,8 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { AssetCard, CollapsedAssetCard } from "./AssetCard";
 import { usePublicLink } from "~/hooks/usePublicLink";
 import { AnimatePresence } from "motion/react";
+import { CopyButton } from "~/components/common/CopyButton";
+import { Copy } from "~/components/common/Copy";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -79,12 +81,12 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
 
             {assets?.map((asset) =>
               !isFolded ? (
-                <AssetCard key={asset.id} asset={asset} />
+                <AssetCard key={asset.id} asset={asset}  right={<CopyButton text={`https://${host}.easybits.cloud/tienda/${asset.slug}`}/> }/>
               ) : (
                 <CollapsedAssetCard
                   key={asset.id}
                   asset={asset}
-                  host={host}
+             
                   orderCount={
                     orders.filter((order, i) => asset.id === order.assetId)
                       .length
