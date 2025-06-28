@@ -12,10 +12,10 @@ export default function Waitlist() {
       <section className="border-b-[2px] border-b-black min-h-svh grid place-content-center ">
         <div className="max-w-5xl mx-auto flex flex-col items-center px-4 md:px-[5%] xl:px-0">
           <img src="/images/logo-animation.gif" className="w-52 mx-auto mb-6" alt="logo" />
-          <h2 className="text-3xl xl:text-5xl font-bold text-center leading-tight mb-4">
+          <h2 className="text-3xl xl:text-5xl font-bold text-center leading-tight mb-6">
             Ya estás en la lista de espera de Easybits! 🚀
           </h2>
-          <p className="text-xl xl:text-2xl font-light text-center text-iron leading-tight mb-4">
+          <p className="text-xl xl:text-2xl font-light text-center text-iron leading-tight mb-2">
             Nos emociona que estés aquí porque estamos construyendo algo épico
             para creadores como tú.
           </p>
@@ -23,7 +23,7 @@ export default function Waitlist() {
             Muy pronto te daremos acceso para que puedas probarlo antes que
             nadie.
           </p>
-          <div>
+          <div className="mb-10">
            <p className="text-base text-center text-iron leading-tight mb-4"> Síguenos</p>
             <div className="flex gap-3 flex-wrap">
               <a
