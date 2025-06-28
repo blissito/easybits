@@ -58,7 +58,9 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
               <Link
                 key={key}
                 to={path}
-                className="w-32 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all "
+                className={cn
+                  ("w-fit px-10 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all ", key === 0 && "px-3")
+                }
               >
                 {title}
               </Link>
@@ -126,11 +128,11 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
               </Link>
             ))}
           </ul>{" "}
-          <Link to="/" key="comunidad">
+          {/* <Link to="/" key="comunidad">
             <p className="h-16 grid place-content-center text-white text-xl">
               Comunidad
             </p>
-          </Link>
+          </Link> */}
           {!noCTA && !user && (
             <>
               <Link to="/login" key="account">
