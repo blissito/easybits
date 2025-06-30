@@ -35,10 +35,10 @@ export const Pricing = () => {
           classNameButton="bg-[#F6DB7F] w-full"
           perks={[
             "1 asset en venta",
-            "Dashboard de administración",
             "Landing page personalizable para tu asset",
-            "Sistema de venta en línea con integración Stripe o Paypal",
-            "1 GB de almacenamiento",
+            "Website propio personalizable ",
+            "Sistema de venta en línea con integración Stripe ",
+            "500 mb de almacenamiento",
           ]}
         />
         <div className="mt-0 xl:-mt-6">
@@ -49,11 +49,13 @@ export const Pricing = () => {
             classNameButton="bg-[#A1CCE5] w-full"
             perks={[
               "Assets ilimitados",
-              "Dashboard de administración",
               "Landing page personalizable para cada uno de tus assets",
-              "Sistema de venta en línea con integración Stripe o Paypal",
+              "Landing page personalizable para tu asset",
+              "Website propio personalizable ",
+              "Sistema de venta en línea con integración Stripe ",
               "Configuración de tu propio dominio ",
               "50 GB de almacenamiento ",
+              "AI Features",
             ]}
             cta={
               <PlanForm
@@ -71,10 +73,10 @@ export const Pricing = () => {
           price={299}
           perks={[
             "Todo lo del plan Creative",
-            "200 GB extra de almacenamiento",
+            "+150 GB de almacenamiento (200 GB en total)",
             "API para subida/visualización de archivos ",
             "Iframes PRO de video y audio para la visualización del contenido en tu web",
-            "Optimización del contenido",
+            "Optimización del contenido (HSL / webp)",
           ]}
           cta={<PlanForm id="expert_plan" intent="expert_plan" />}
         />
@@ -135,7 +137,7 @@ export const PlanCard = ({
     </BrutalButton>
   );
   return (
-    <section className="bg-black max-w-[340px] rounded-xl group ">
+    <section className="bg-black h-full max-w-[340px] rounded-xl group ">
       <div className="bg-white border-2 border-black rounded-xl py-6 text-left group-hover:-translate-x-2 group-hover:-translate-y-2 transition-all">
         <div className="px-6 border-b-2 border-black pb-4">
           <img alt="foco" src={badge} />
@@ -152,7 +154,8 @@ export const PlanCard = ({
               <PerkItem perk={perk} key={index} />
             ))}
           </div>
-          {button}
+          <div className="mt-6">
+          {button}   </div>
         </div>
       </div>
     </section>
@@ -161,8 +164,8 @@ export const PlanCard = ({
 
 export const PerkItem = ({ perk }: { perk?: string }) => {
   return (
-    <div className="flex w-full gap-2 my-2">
-      <img alt="bullet" src="/home/bullet.svg" />
+    <div className="flex w-full items-start gap-2 my-2">
+      <img alt="bullet" src="/home/bullet.svg" className="mt-[2px]" />
       <span>{perk}</span>
     </div>
   );

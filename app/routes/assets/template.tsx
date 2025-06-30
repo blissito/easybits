@@ -184,6 +184,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         </section>
         {asset.extra?.showReviews && (
           <section
+          id="reviewsRank-open-button"
             className={cn(
               " overflow-hidden px-3 col-span-6 md:col-span-2 flex border-l-2 border-black items-center gap-2",
               {
@@ -257,9 +258,12 @@ const Info = ({
       )}
       {asset.type === "WEBINAR" ? (
         <WebinarDetails asset={asset} />
+      ) : asset.type === "EBOOK" ? (
+        <EbookDetails asset={asset} files={files} />
       ) : (
         <Formats files={files} asset={asset} reviews={reviews} assetReviews={assetReviews} />
       )}
+       <ReviewsSection reviews={reviews} asset={asset} assetReviews={assetReviews} />
     </div>
   );
 };
@@ -311,14 +315,14 @@ const Subscription = ({
       <Input
         placeholder="Escribe tu nombre"
         name="displayName"
-        inputClassName="border-0 border-t-2 border-b-2 h-14 rounded-none"
+        inputClassName="border-0 border-t-2 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black" 
       />
       <Input
         required
         placeholder="Escribe tu email"
         name="email"
         className="min-h-full m-0"
-        inputClassName="border-0 border-b-2 h-14 rounded-none"
+        inputClassName="border-0 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black"
       />
       <button
         disabled={isLoading}
@@ -331,6 +335,24 @@ const Subscription = ({
         {text}
       </button>
     </fetcher.Form>
+  );
+};
+
+const EbookDetails = ({ asset, files }: { asset: Asset, files: File[] }) => {
+  const getSizeInMB = () => {
+    const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
+    return (bytes / 1_000_000).toFixed(2) + " mb";
+  };
+  const { typography } = asset?.user?.storeConfig || {};
+  return (
+    <section style={{ fontFamily: typography }}>
+      <AttributeList textLeft="Número de páginas" textRight={asset.metadata?.numberOfPages} />
+      <AttributeList
+        textLeft="Formatos:"
+        textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
+      />
+      <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
+    </section>
   );
 };
 
@@ -427,7 +449,7 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
 
   return (
     <>
-      <div className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
+      <div id="reviews-open-button" className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
         <p className="mb-4">Qué opinan la comunidad:</p>
         {Object.keys(reviews?.byRating || {})
           .sort((a, b) => b - a)
@@ -482,11 +504,9 @@ const Formats = ({
       <AttributeList textLeft="Número de archivos:" textRight={files.length} />
       <AttributeList
         textLeft="Formatos:"
-        textRight={files.map((f) => `${f.name.split(".")[1]}, `)}
+        textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
-
-      <ReviewsSection reviews={reviews} asset={asset} assetReviews={assetReviews} />
     </div>
   );
 };

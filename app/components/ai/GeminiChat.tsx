@@ -305,7 +305,7 @@ export function GeminiChat({
               <div
                 className={`max-w-[80%] rounded-lg px-4 py-2 ${
                   message.role === "user"
-                    ? "bg-blue-500 text-white"
+                    ? "bg-brand-500 text-black"
                     : "bg-gray-100 text-gray-900"
                 }`}
               >
@@ -328,17 +328,18 @@ export function GeminiChat({
         <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
           <div className="flex space-x-2">
             <Input
+             
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={placeholder}
               disabled={isLoading}
-              className="flex-1"
+              inputClassName="focus:border-munsell focus:outline-none focus:ring-munsell "
             />
             <Button
               type="submit"
               isDisabled={!inputValue.trim() || isLoading}
-              className="px-4 py-2"
+              className="px-4 py-2 bg-munsell text-black"
             >
               {isLoading ? <Spinner size="sm" /> : "Enviar"}
             </Button>

@@ -102,7 +102,7 @@ export const FilesTable = ({
         onConfirm={handleDelete}
       />
 
-      <article className="bg-white border-[2px] rounded-xl border-black text-xs">
+      <article className="bg-brand-100 border-[2px] rounded-xl border-black text-xs">
         <section className="grid grid-cols-12 pl-4 py-2 border-b-[2px] border-black">
           <span className=""></span>
           <span className="col-span-2">Nombre</span>
@@ -126,7 +126,7 @@ export const FilesTable = ({
               animate={{ x: 0, opacity: 1 }}
               key={file.id}
               className={cn(
-                "pl-4",
+                "pl-4 bg-white",
                 "hover:bg-gray-100 ",
                 "grid grid-cols-12 items-center py-3 border-b",
                 {

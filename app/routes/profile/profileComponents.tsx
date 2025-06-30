@@ -19,7 +19,7 @@ export const plans: {
 };
 
 export const DEFAULT_PIC =
-  "https://images.pexels.com/photos/4839763/pexels-photo-4839763.jpeg?auto=compress&cs=tinysrgb&w=1200";
+  "/logo-default.svg";
 
 export const SuscriptionCard = ({
   plan,

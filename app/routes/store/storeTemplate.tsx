@@ -46,7 +46,7 @@ export const StoreTemplate = ({
     socialNetworks,
   } = user?.storeConfig || {};
   return (
-    <section className="h-full" style={{ fontFamily: typography }}>
+    <section className="h-full bg-white" style={{ fontFamily: typography }}>
       <div
         className={cn("overflow-hidden mb-32 ", {
           "mb-0 overflow-visible": variant === "slim",

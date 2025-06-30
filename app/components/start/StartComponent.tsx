@@ -6,14 +6,20 @@ import toast, { Toaster } from "react-hot-toast";
 import StepCheck from "/icons/y-check.png";
 import Escribenos from "/icons/escribenos.svg";
 import StepProgress from "../common/StepProgress";
+import { useTimeout } from "~/hooks/useTimeout";
+import { useBrutalToast } from "~/hooks/useBrutalToast";
 
 export default function StartComponent({
   tasks,
+  user, 
 }: {
   tasks: Record<number, boolean>;
+  user: any;
 }) {
   const [landing, setLanding] = useState(0);
   const [share, setShare] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const brutalToast = useBrutalToast();
   const saveLandingFlag = (num: number) => {
     localStorage.setItem("landingFlag", String(num));
     setLanding(num);
@@ -32,9 +38,11 @@ export default function StartComponent({
     // navigating with Link
   };
 
-  const handleShareClick = () => {
+  const handleCopyToClipboard = (text: string) => () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
     saveShareFlag(1);
-    toast.success("El link a tu tienda se ha copiado al portapapeles ");
+    brutalToast("Link copiado ");
   };
 
   useEffect(() => {
@@ -44,7 +52,6 @@ export default function StartComponent({
     //   navigate("/dash/estadisticas");
     // } // @todo @brendi confirmar si se redirecciona porfs
   }, []);
-
   return (
     <div className="flex justify-center items-center relative  w-full ">
       <Toaster />
@@ -75,7 +82,7 @@ export default function StartComponent({
                     className="flex justify-between items-center w-full gap-4"
                     key={key}
                   >
-                    <div className="flex justify-start items-start gap-2 w-3/4">
+                    <div className="flex justify-start items-start gap-3 w-3/4">
                       <div className="w-12 h-12 bg-grayLight flex items-center justify-center rounded-[4px]">
                         <img src={image} className="w-[32px]" />
                       </div>
@@ -90,22 +97,39 @@ export default function StartComponent({
                       (key === 4 && share) ? (
                         <img src={StepCheck} className="w-[64px] ml-12" />
                       ) : (
-                        <Link to={path}>
-                          <BrutalButton
-                            type="button"
-                            onClick={
-                              path === "/dash/tienda"
-                                ? handleLandingClick
-                                : path === ""
-                                ? handleShareClick
-                                : undefined
-                            }
-                            containerClassName="h-8 rounded-xl text-base font-medium"
-                            className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
-                          >
-                            {cta}
-                          </BrutalButton>
-                        </Link>
+                        <>
+                          {key === 3 ? (
+                            <a href={`https://${user.host}.easybits.cloud/tienda`} target="_blank">
+                              <BrutalButton
+           
+                                onClick={handleLandingClick}
+                                containerClassName="h-8 rounded-lg text-base font-medium"
+                                className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
+                              >
+                                {cta}
+                              </BrutalButton>
+                            </a>
+                          ) : key === 4 ? (
+                            <BrutalButton
+                              type="button"
+                              onClick={handleCopyToClipboard(`https://${user.host}.easybits.cloud/tienda`)}
+                              containerClassName="h-8 rounded-lg text-base font-medium"
+                              className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
+                            >
+                              {cta}
+                            </BrutalButton>
+                          ) : (
+                            <Link to={path}>
+                              <BrutalButton
+                                type="button"
+                                containerClassName="h-8 rounded-lg text-base font-medium"
+                                className="h-8 w-auto min-w-24 rounded-lg text-base font-medium"
+                              >
+                                {cta}
+                              </BrutalButton>
+                            </Link>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

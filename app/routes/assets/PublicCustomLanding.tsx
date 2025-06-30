@@ -20,7 +20,9 @@ export const meta = ({
 }: Route.MetaArgs) => {
   return getBasicMetaTags({
     title,
-    description: description?.slice(0, 80).replace("#", "") + "...",
+    description: description 
+      ? description.slice(0, 80).replace("#", "") + "..."
+      : "Hecha un vistazo a este increíble asset 🚀",
     // @todo get this from config?
     image: `https://easybits-public.fly.storage.tigris.dev/${userId}/gallery/${id}/metaImage`,
   });
