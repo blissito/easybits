@@ -105,6 +105,14 @@ export const createAccount = async () => {
         transfers: { requested: true },
       },
       country: "MX",
+      webhook_endpoint: {
+        url: `${location}/api/v1/stripe/webhook/merchant`,
+        enabled_events: [
+          'checkout.session.completed',
+          'payment_intent.succeeded',
+          'payment_intent.created'
+        ]
+      }
     });
     return account;
   } catch (error) {

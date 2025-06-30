@@ -16,7 +16,7 @@ export const action = async ({ request }: { request: Request }) => {
       console.info("OLLAMA_RESPONSE::\n", ollamaResponse.status);
 
       if (ollamaResponse.status > 399) {
-        const errorData = await ollamaResponse.json();
+        const errorData = await ollamaResponse.json(); // 🦙✨
         console.error("OLLAMA_ERROR::\n", errorData);
         return new Response(
           JSON.stringify({

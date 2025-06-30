@@ -36,7 +36,7 @@ const location =
     ? "http://localhost:3000"
     : "https://www.easybits.cloud";
 
-const webhookUrl = `${location}/api/stripe/webhook/merchant/{assetId}`;
+const webhookUrl = `${location}/api/v1/stripe/webhook/merchant`;
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
 const accountSessionsURL = "https://api.stripe.com/v1/account_sessions";
 const accountsURL = "https://api.stripe.com/v2/core/accounts";
@@ -64,7 +64,7 @@ export async function configureMerchantWebhook(
     // Usar la API REST en lugar del SDK
     const stripeWebhookApiUrl = "https://api.stripe.com/v1/webhook_endpoints";
     const params = new URLSearchParams({
-      url: webhookUrl.replace("{assetId}", assetId),
+      url: webhookUrl,
       enabled_events: [
         "account.updated",
         "charge.succeeded",

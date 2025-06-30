@@ -1,0 +1,6 @@
+export enum AssetAssignmentStatus {
+  SUCCESS = "SUCCESS",
+  FALLBACK_SUCCESS = "FALLBACK_SUCCESS",
+  FALLBACK_FAILED = "FALLBACK_FAILED",
+  ERROR = "ERROR"
+}

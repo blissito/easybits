@@ -131,21 +131,6 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
       ...updatedHistory,
     ];
 
-    // Debug: Log del chat que se envía
-    console.log("=== CHAT ENVIADO A LA IA ===");
-    console.log("Excel Context:", excelContext ? "PRESENTE" : "AUSENTE");
-    console.log("Excel Content:", excelContext?.substring(0, 200) + "...");
-    console.log("Is First Prompt:", isFirstPrompt);
-    console.log("Current Content Present:", !!currentContent);
-    console.log("Current Content Length:", currentContent?.length || 0);
-    console.log(
-      "Current Content Preview:",
-      currentContent?.substring(0, 100) + "..."
-    );
-    console.log("System Prompt:", systemPrompt.substring(0, 300) + "...");
-    console.log("User Message:", promptText);
-    console.log("Chat History Length:", updatedHistory.length);
-
     try {
       const response = await fetch("/api/v1/ai/sugestions", {
         method: "POST",
@@ -155,9 +140,6 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
         }),
         signal: controller.signal,
       });
-
-      console.log("Response status:", response.status);
-      console.log("Response ok:", response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
