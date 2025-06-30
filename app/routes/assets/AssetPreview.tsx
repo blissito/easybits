@@ -17,6 +17,7 @@ import { useAnimate, motion } from "motion/react";
 import { SiGmail } from "react-icons/si";
 import { ContentTemplate, HeaderTemplate } from "./template";
 import { useOpenLink } from "~/hooks/useOpenLink";
+import Spinner from "~/components/common/Spinner";
 
 export const AssetPreview = ({
   asset,
@@ -72,7 +73,7 @@ export const AssetPreview = ({
         onClose={handleClose}
         isOpen={isOpen}
         host={host}
-        slug={asset.slug}
+        asset={asset}
       />
     </aside>
   );
@@ -82,14 +83,14 @@ const ShareLink = ({
   isOpen,
   onClose,
   host,
-  slug,
+  asset,
 }: {
   isOpen: boolean;
   onClose?: () => void;
   host: string;
-  slug: string;
+  asset: Asset;
 }) => {
-  const link = `https://${host}.easybits.cloud/tienda/${slug}`;
+  const link = `https://${host}.easybits.cloud/tienda/${asset?.slug}`;
   return (
     <>
       <Modal
@@ -106,19 +107,102 @@ const ShareLink = ({
             están disponibles. Comparte ya en tus redes sociales.
           </p>
           <Input disabled defaultValue={link} className="disabled:opacity-75" />
-          <Sharing link={link} />
+          <Sharing link={link} asset={asset} />
         </div>
       </Modal>
     </>
   );
 };
 
-export const Sharing = ({ link }: { link: string }) => {
+export const Sharing = ({ link, asset }: { link: string; asset: Asset }) => {
+  const [text, setText] = useState("¡Vi este post y me pareció interesante!");
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSharelinkWithAIDescription = async ({
+    platform,
+  }: {
+    platform: string;
+  }) => {
+    if (isLoading && abortController) {
+      abortController.abort();
+    }
+    setIsLoading(true);
+    const controller = new AbortController();
+    setAbortController(controller);
+    const chat = [
+      {
+        role: "user",
+        content: `Quiero compartir el siguiente link: ${link} en ${platform}
+                  Genera directamente, sin saludos, explicaciones ni introducciones, una, solo una descripción atractiva, concisa y con un lenguaje informal y con emojis para redes sociales que resalte las características del asset "${asset.title} usa un tono de acuerdo al nombre y tipo del asset ${asset.type}".                                                       
+                  Por ejemplo, si el tipo de asset es un ebook y el nombre es "guia para convertirte en un experto en React", la descripción podría ser seria y concisa como:
+                  "¡Descubre esta guía definitiva para convertirte en un experto en React! 🚀📚 Aprende los secretos de los profesionales y lleva tus habilidades al siguiente nivel. ¡Haz clic aquí para obtenerla ahora! 👉"`,
+      },
+    ];
+
+    try {
+      const response = await fetch("/api/v1/ai/sugestions", {
+        method: "POST",
+        body: new URLSearchParams({
+          intent: "generate_social_description",
+          chat: JSON.stringify(chat),
+        }),
+        signal: controller.signal,
+      });
+      // @todo make this a hook
+      if (response.ok) {
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) return;
+
+        let buffer = "";
+        setText("");
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value);
+          const lines = buffer.split("\n");
+
+          // Mantén la última línea en el buffer por si está incompleta
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.trim() && line.startsWith("{")) {
+              try {
+                const data = JSON.parse(line);
+                if (data.response) {
+                  setText((v) => v + data.response);
+                  // Hacer scroll después de cada actualización del contenido
+                }
+              } catch (e) {
+                // Ignora errores de parsing de líneas no válidas
+                console.warn("Línea JSON no válida:", line);
+              }
+            }
+          }
+        }
+        setIsLoading(false);
+        return text; // Devuelve el texto generado
+      }
+    } catch (error) {
+      console.error("Error al generar la descripción:", error);
+    } finally {
+      setAbortController(null);
+    }
+  };
+
   return (
     <div className="flex justify-center gap-4 items-center mt-8">
       <SocialMedia
-        onClick={() => {
-          navigator.clipboard.writeText(link);
+        isLoading={isLoading}
+        onClick={async () => {
+          const description = await handleSharelinkWithAIDescription({
+            platform: "Any text chat",
+          });
+          navigator.clipboard.writeText(description);
+
           toast.success("Link copiado", {
             style: {
               border: "2px solid #000000",
@@ -139,35 +223,95 @@ export const Sharing = ({ link }: { link: string }) => {
       <SocialMedia
         name="Facebook"
         className="bg-sky"
-        link={`https://www.facebook.com/sharer/sharer.php?u=${link}`}
+        isLoading={isLoading}
+        // link={`https://www.facebook.com/sharer/sharer.php?u=${link}`}
+        onClick={() => {
+          const description = handleSharelinkWithAIDescription({
+            platform: "Facebook",
+          });
+          if (description) {
+            const facebookURL = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+              link
+            )}&quote=${encodeURIComponent(description)}`;
+            window.open(facebookURL, "_blank");
+          }
+        }}
       >
         <FaFacebookF />
       </SocialMedia>
       <SocialMedia
         name="X"
+        isLoading={isLoading}
         className="bg-sea"
-        link={`https://twitter.com/intent/tweet?url=${link}&text=¡Vi este post y me pareció interesante!`}
+        // link={`https://twitter.com/intent/tweet?url=${link}&text=${text}`}
+        onClick={async () => {
+          const description = await handleSharelinkWithAIDescription({
+            platform: "X (twitter)",
+          });
+          if (description) {
+            const tweetURL = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+              description
+            )}&url=${encodeURIComponent(link)}`;
+            window.open(tweetURL, "_blank");
+          }
+        }}
       >
         <FaXTwitter />
       </SocialMedia>
       <SocialMedia
         name="Linkedin"
+        isLoading={isLoading}
         className="bg-[#B5B5B5]"
-        link={`http://www.linkedin.com/shareArticle?mini=true&url=${link}&title=¡Vi este post y me pareció interesante!`}
+        // link={`http://www.linkedin.com/shareArticle?mini=true&url=${link}&title=${text}`}
+        onClick={async () => {
+          const description = await handleSharelinkWithAIDescription({
+            platform: "linkedin",
+          });
+          if (description) {
+            const linkedinURL = `https://www.linkedin.com/sharing/share-offsite?mini=true&url=${encodeURIComponent(
+              link
+            )}&title=${encodeURIComponent(description)}`;
+            window.open(linkedinURL, "_blank");
+          }
+        }}
       >
         <FaLinkedinIn />
       </SocialMedia>
       <SocialMedia
         name="Gmail"
         className="bg-[#EF8165]"
-        link={`https://mail.google.com/mail/?view=cm&fs=1&to=tu_amiga@example.com&su=¡Te comparto mi descueto!&body=Este es mi link de descuento para el curso de Animaciones con React: \n ${link}`}
+        isLoading={isLoading}
+        // link={`https://mail.google.com/mail/?view=cm&fs=1&to=tu_amiga@example.com&su=¡Te comparto mi descueto!&body=Este es mi link de descuento para el curso de Animaciones con React: \n ${link}`}
+        onClick={async () => {
+          const description = await handleSharelinkWithAIDescription({
+            platform: "mail",
+          });
+          if (description) {
+            const gmailURL = `https://mail.google.com/mail/?view=cm&fs=1&to=&su=${encodeURIComponent(
+              "¡Te comparto mi link!"
+            )}&body=${encodeURIComponent(description + " " + link)}`;
+            window.open(gmailURL, "_blank");
+          }
+        }}
       >
         <SiGmail />
       </SocialMedia>
       <SocialMedia
         name="WhatsApp"
         className="bg-[#8DBA90]"
-        link={`https://api.whatsapp.com/send/?text=¡Te+comparto+mi+link+de+descuento!${link}&type=phone_number&app_absent=0`}
+        isLoading={isLoading}
+        // link={`https://api.whatsapp.com/send/?text=¡Te+comparto+mi+link+de+descuento!${link}&type=phone_number&app_absent=0`}
+        onClick={async () => {
+          const description = await handleSharelinkWithAIDescription({
+            platform: "Whatsapp",
+          });
+          if (description) {
+            const whatsappURL = `https://api.whatsapp.com/send?text=${encodeURIComponent(
+              description
+            )} ${encodeURIComponent(link)}`;
+            window.open(whatsappURL, "_blank");
+          }
+        }}
       >
         <RiWhatsappFill />
       </SocialMedia>
@@ -181,12 +325,14 @@ export const SocialMedia = ({
   name,
   link,
   onClick,
+  isLoading,
 }: {
   className?: string;
   children: ReactNode;
   name?: string;
   onClick?: () => void;
   link?: string;
+  isLoading?: boolean;
 }) => {
   const [scope, animate] = useAnimate();
 
@@ -201,6 +347,7 @@ export const SocialMedia = ({
   return (
     <a rel="noreferrer" target="_blank" href={link}>
       <button
+        disabled={isLoading}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={onClick}
@@ -214,7 +361,7 @@ export const SocialMedia = ({
             className
           )}
         >
-          {children}
+          {isLoading ? <Spinner /> : children}
         </div>
 
         <motion.div

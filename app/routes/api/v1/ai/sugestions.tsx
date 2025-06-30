@@ -28,5 +28,26 @@ export const action = async ({ request }: { request: Request }) => {
       });
     }
   }
+  // i want a new action where I return  a description to share in social media based on the name, type and info from the asset i want to share/sell that is well structured based on the platfor it will be shareD
+  if (intent === "generate_social_description") {
+    const prompt = buildPromptFromHistory(chat);
+    const ollamaResponse = await fetchInternalOllama(prompt, true);
+    console.info("OLLAMA_RESPONSE::\n", ollamaResponse.status);
+    if (ollamaResponse.status > 399) {
+      const d = await ollamaResponse.json();
+      console.error("OLLAMA_ERROR::\n", d);
+    }
+
+    if (ollamaResponse.ok) {
+      return new Response(ollamaResponse.body, {
+        headers: {
+          "Content-Type": "text/plain",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+  }
+
   return null;
 };
