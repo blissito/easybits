@@ -184,6 +184,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         </section>
         {asset.extra?.showReviews && (
           <section
+          id="reviewsRank-open-button"
             className={cn(
               " overflow-hidden px-3 col-span-6 md:col-span-2 flex border-l-2 border-black items-center gap-2",
               {
@@ -448,7 +449,7 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
 
   return (
     <>
-      <div className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
+      <div id="reviews-open-button" className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
         <p className="mb-4">Qué opinan la comunidad:</p>
         {Object.keys(reviews?.byRating || {})
           .sort((a, b) => b - a)

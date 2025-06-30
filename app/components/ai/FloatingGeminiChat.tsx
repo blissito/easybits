@@ -91,6 +91,7 @@ export function FloatingGeminiChat({
     <>
       {/* Botón flotante */}
       <motion.div
+        id="chatbot-button"
         className="fixed bottom-6 right-8 z-30"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}

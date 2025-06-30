@@ -8,7 +8,8 @@ import { Banners, Robot } from "~/components/common/Banner";
 import { PiPaintBrushBroad } from "react-icons/pi";
 import { BiCommentDetail, BiHappy, BiSupport } from "react-icons/bi";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { SiGooglecontaineroptimizedos } from "react-icons/si";
+import { SiGoogleanalytics, SiGooglecontaineroptimizedos } from "react-icons/si";
+import { GrAnalytics } from "react-icons/gr";
 
 import { FaUsers } from "react-icons/fa";
 import {
@@ -17,7 +18,7 @@ import {
   MdVideogameAsset,
 } from "react-icons/md";
 import { CgWebsite } from "react-icons/cg";
-import { RiDiscountPercentLine } from "react-icons/ri";
+import { RiDiscountPercentLine, RiRobot2Fill } from "react-icons/ri";
 import { AiOutlineApi } from "react-icons/ai";
 import type { Route } from "./+types/funcionalidades";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -113,13 +114,14 @@ const FeaturesScroll = () => {
           <Card
             icon={<MdVideogameAsset />}
             className="bg-sky"
+            bgColor="bg-[#EBBBE9]"
             title="Vender assets digitales de todo tipo"
             description={
               <p>
                 {" "}
                 ¿Eres un creativo o profesional que tiene algo que compartir? No
-                importa si eres diseñador, arquitecto, escritor o artista. Vende
-                cualquier tipo de assets digitales:{" "}
+                importa si eres diseñador, arquitecto, escritor o maestro. Vende
+                todo tipo de assets digitales:{" "}
                 <span className="text-[#457D7B]  font-bold">
                   {" "}
                   libros electrónicos, videos, audio y música, o cualquier otro
@@ -133,12 +135,20 @@ const FeaturesScroll = () => {
             bgColor="bg-berry"
             icon={<PiPaintBrushBroad />}
             title="Personalizar tus landing pages"
-            description="Crea y personaliza landig pages para cada uno de tus assets, agrega su propia galería de fotos y una descripción completa para atraer a más clientes. Comparte el link de tu asset directamente en redes sociales, por correo o whats app. "
+            description={
+              <p>
+                Crea y personaliza landig pages para cada uno de tus assets,  <span className="text-[#DF7CB0]  font-bold">
+                 agrega su propia galería de fotos y una descripción completa para atraer a más clientes.</span>  {" "}
+                  Comparte el link de tu asset directamente en redes sociales, por correo o whats app. 
+              </p>
+            }
+            
           />
 
           <Card
             className="bg-[#ECD66E]"
             icon={<CgWebsite />}
+            bgColor="bg-[#B9A8F3]"
             title="Crear tu propio website de ventas"
             description={
               <p>
@@ -148,23 +158,23 @@ const FeaturesScroll = () => {
                   Añade tu logotipo, foto de portada, cambia los colores y
                   personaliza la tipografía,
                 </span>{" "}
-                selecciona el tema dark o light y agrega tus redes sociales.
+                selecciona el tema y agrega tus redes sociales.
               </p>
             }
           />
           <Card
             bgColor="bg-lime"
             icon={<RiDiscountPercentLine />}
-            title="Administrar descuentos"
+            title="Administrar descuentos (proximamente)"
             description={
               <p>
                 Crea{" "}
-                <span className="text-brand-500  font-bold">
+                <span className="text-[#61AA46]  font-bold">
                   descuentos para ocasiones especiales, para todos tus productos
                   o para productos específicos{" "}
                 </span>{" "}
                 y adminístralos de forma fácil y rápida desde tu dashboard.
-                Utiliza los descuentos para interactuar con tus clientes y
+                Utiliza los descuentos para consentir a tus clientes y
                 aumentar tus ventas.
               </p>
             }
@@ -178,27 +188,113 @@ const FeaturesScroll = () => {
               <p>
                 Además del subdominio gratuito que EasyBits te ofrece, puedes
                 &nbsp;
-                <span className="text-brand-500  font-bold">
+                <span className="text-[#76A5C0]  font-bold">
                   agregar tu propio dominio
                 </span>{" "}
                 y fortalecer tu marca.
+                <br/>
+                Pronto podrás comprar tu dominio directamente desde EasyBits.
+              </p>
+            }
+          />
+           <Card
+           className="bg-[#B9A8F3]"
+            bgColor="bg-[#ECD66E]"
+            icon={<RiRobot2Fill className="text-[28px]"/>}
+            title="Usar AI para llenar la información de tus assets"
+            description={
+              <p>
+              Con nuestro agente, 
+                <span className="text-[#5B567C]  font-bold">
+                  {" "}
+                  presenta tus assets de forma clara, creativa y con un toque de personalidad
+                </span> {" "}
+                que atrape a tus futuros clientes desde el primer vistazo.
               </p>
             }
           />
           <Card
+            icon={<SiGoogleanalytics className="text-[24px]"/>}
+            bgColor="bg-[#BFD0B3]"
+            title="Integrar Google Analytics"
+            description={
+              <p>
+              ¿Quieres medir conversiones específicas? Solo  {" "}
+                <span className="text-[#537C44]  font-bold">
+                pega tu ID de Google Analytics y comienza a recopilar datos clave de inmediato.
+                </span>
+              </p>
+            }
+          />
+          <Card
+             className="bg-[#E8A787]"
+            bgColor="bg-sky"
+            icon={<GrAnalytics />            }
+            title="Descargar reportes de ventas"
+            description={
+              <p>Toda la información de tus ventas está disponible en tu dashboard. <span className="text-[#703524]  font-bold">Descárgala cuando la necesites</span>.</p>
+            }
+          
+          />
+           <Card
+            bgColor="bg-sky"
+            icon={<FaUsers />}
+            title="Tener acceso completo a la información de tus clientes"
+            description={
+              <p>
+                ¿Quieres descargar los mails de tus clientes para enviar un mail
+                o crear una campaña de ADS? Descárgalos cuando quieras.{" "}
+                <span className="text-[#628FA9]  font-bold">
+                  {" "}
+                  ¡Tus clientes! ¡Tu información!
+                </span>
+              </p>
+            }
+          />
+          <Card
+            className="bg-[#B5E8A2]"
+            icon={<MdStorefront />}
+            bgColor="bg-[#E8A787]"
+            title="Acceder a la comunidad EasyBits para aumentar tus ventas (proximamente)"
+            description={
+              <p>
+                Aumenta tus ventas siendo parte de la comunidad EasyBits en
+                donde cientos de usuarios exploran y compran assets digitales.{" "}
+                <span className="text-[#537C44]  font-bold">
+                  La comunidad es un escaparte más para tus assets sin ningún
+                  costo o comisión adicional.
+                </span>
+              </p>
+            }
+          />
+          <Card
+          
+            bgColor="bg-rose"
+            icon={<SiGooglecontaineroptimizedos />}
+            title="Optimizar tus archivos"
+            description={
+              <p>
+                Puedes optimizar todo tu contenido en video bajo el <span className="text-[#C6478A]  font-bold">protocolo HLS (HTTP Live Streaming), </span> el cuál permite adaptar la calidad del video a las condiciones de la red. 
+              </p>
+            }
+            />
+          <Card
             className="bg-[#EFD7BC]"
             icon={<MdOutlineStorage />}
             title="Almacenar archivos"
-            description="En la misma plataforma puedes almacenar tus archivos, puedes venderlos o no, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día. "
+            bgColor="bg-[#B9A8F3]"
+            description={
+              <p>En la misma plataforma puedes   <span className="text-[#635C53]  font-bold">almacenar tus archivos</span>, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día.</p>
+            }
           />
           <Card
             bgColor="bg-munsell"
             icon={<AiOutlineApi />}
-            title="API para archivos"
+            title="Usar la API para archivos"
             description={
               <p>
                 Conecta EasyBits a tu propia plataforma y{" "}
-                <span className="text-brand-500  font-bold">
+                <span className="text-[#B78E47]  font-bold">
                   {" "}
                   usa la API para agregar, editar o eliminar archivos de forma
                   fácil
@@ -211,46 +307,16 @@ const FeaturesScroll = () => {
           <Card
             className="bg-[#EBBBE9]"
             icon={<BiSupport />}
+            bgColor="bg-[#B5E8A2]"
             title="Recibir soporte en español"
-            description="¿Dudas o preguntas? Nuestro equipo estará listo para ayudarte a través de nuestras redes sociales o contacto directo."
+            description=
+            {
+              <p>¿Dudas o preguntas?  <span className="text-[#91466D]  font-bold"> Nuestro equipo estará listo para ayudarte</span> a través de nuestras redes sociales o contacto directo.</p>
+            }
+         
           />
 
-          <Card
-            bgColor="bg-rose"
-            icon={<FaUsers />}
-            title="Tener acceso completo a la información de tus clientes"
-            description={
-              <p>
-                ¿Quieres descargar los mails de tus clientes para enviar un mail
-                o crear una campaña de ADS? Descárgalos cuando quieras.{" "}
-                <span className="text-brand-500  font-bold">
-                  {" "}
-                  ¡Tus clientes! ¡Tu información!
-                </span>
-              </p>
-            }
-          />
-          <Card
-            className="bg-[#B5E8A2]"
-            icon={<MdStorefront />}
-            title="Acceder a la comunidad EasyBits para aumentar tus ventas"
-            description={
-              <p>
-                Aumenta tus ventas siendo parte de la comunidad EasyBits en
-                donde miles de usuarios exploran y compran assets digitales.{" "}
-                <span className="text-[#537C44]  font-bold">
-                  La comunidad es un escaparte más para tus assets sin ningún
-                  costo o comisión adicional.
-                </span>
-              </p>
-            }
-          />
-          <Card
-            bgColor="bg-sky"
-            icon={<SiGooglecontaineroptimizedos />}
-            title="Optimizar tus archivos"
-            description="Todos el contenido el video es optimizado bajo el protocolo HLS (HTTP Live Streaming), el cuál permite adaptar la calidad del video a las condiciones de la red. "
-          />
+         
         </div>
       </div>
     </section>
