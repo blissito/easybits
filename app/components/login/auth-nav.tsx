@@ -59,7 +59,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
                 key={key}
                 to={path}
                 className={cn
-                  ("w-fit px-10 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all ", key === 0 && "px-3")
+                  ("w-fit px-6 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all ", key === 0 && "px-3")
                 }
               >
                 {title}

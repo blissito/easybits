@@ -394,6 +394,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           aria-label="Prompt para IA"
         />
         <button
+        id="ai-prompt-button"
           onClick={
             isLoading
               ? () => abortController?.abort()
