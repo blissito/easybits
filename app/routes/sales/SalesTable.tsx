@@ -21,8 +21,8 @@ export const SalesTable = ({ stripeId }: { stripeId?: string }) => {
   if (capabilities.card_payments?.status !== "active") return null; // only if active account
 
   return (
-    <article className="bg-white border-[1px] rounded-xl border-black text-xs ">
-      <section className="grid grid-cols-12 pl-4 py-2 border-b border-black">
+    <article className="bg-brand-100 border-2 overflow-hidden rounded-xl border-black text-xs ">
+      <section className="grid grid-cols-12 pl-4 py-2 border-b-2 border-black">
         <span className="col-span-3">Email</span>
         <span className="col-span-2">Asset</span>
         <span className="col-span-3">Fecha </span>
@@ -36,7 +36,7 @@ export const SalesTable = ({ stripeId }: { stripeId?: string }) => {
         {paymentIntents.length < 1 && (
           <motion.p
             key="empty"
-            className="p-10 mx-auto text-center font-semibold"
+            className="p-10 mx-auto text-center font-semibold bg-white" 
           >
             Aún no tienes ventas 🥲
           </motion.p>
@@ -55,7 +55,7 @@ const Row = ({ payment }: { payment: Payment }) => {
       animate={{ x: 0, opacity: 1 }}
       key=""
       className={cn(
-        "pl-4",
+        "pl-4 bg-white",
         "hover:bg-gray-100 ",
         "grid grid-cols-12 py-2 md:py-3 border-b items-center"
       )}

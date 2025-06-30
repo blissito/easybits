@@ -6,6 +6,7 @@ import {
   getLastPendingOrder,
   getEmailFromEvent,
 } from "~/.server/webhookUtils";
+import { applyRateLimit } from "~/.server/rateLimiter";
 
 export const action = async ({
   request,
@@ -13,6 +14,12 @@ export const action = async ({
   request: Request;
   params: { assetId: string };
 }) => {
+  // Aplicar rate limiting
+  const rateLimitResponse = await applyRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const event = await constructStripeEvent(request);
   if (event instanceof Response) return event;
   const email = getEmailFromEvent(event);

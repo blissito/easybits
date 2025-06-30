@@ -101,12 +101,6 @@ const FloatingItem = ({
   const scale = useSpring(0.5);
   return (
     <motion.div
-      onHoverStart={() => {
-        scale.set(1.1);
-      }}
-      onHoverEnd={() => {
-        scale.set(1);
-      }}
       custom={2}
       style={{
         scale,

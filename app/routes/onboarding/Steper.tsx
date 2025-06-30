@@ -211,7 +211,7 @@ export const StepThree = ({
         <h2 className="text-2xl lg:text-3xl font-bold">
           ¿Qué tipo de assets venderás en EasyBits?
         </h2>
-        <p className="text-base lg:text-lg mt-2 lg:mt-4 mb-6 lg:mb-10">
+        <p className="text-base lg:text-lg mt-2 lg:mt-4 mb-6 text-iron lg:mb-10">
           Selecciona la o las opciones que más coincidan con tu contenido
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4  md:grid-cols-2 xl:grid-cols-4 gap-4">

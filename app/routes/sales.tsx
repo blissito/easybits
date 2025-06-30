@@ -89,7 +89,7 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
           LAYOUT_PADDING
         )}
       >
-        <Header title="Ventas" />
+        <Header title="Ventas" searcher={false} layout={false} />
         {!stripeConnectInstance && (
           <EmptySales
             cta={

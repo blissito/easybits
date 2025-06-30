@@ -3,7 +3,8 @@ import { AnimatePresence, LayoutGroup } from "motion/react";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useImageResize } from "~/hooks/useImageResize";
-import InputImage from '~/components/common/InputImage';
+import InputImage from "~/components/common/InputImage";
+import { FloatingImageGenAssistant } from "~/components/ai/FloatingImageGenAssistant";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -64,7 +65,6 @@ export const GalleryUploader = ({
   useEffect(() => {
     uploadMetaImage(gallery); // @todo index:0
   }, [gallery]);
-
 
   return (
     <article className="">
@@ -135,15 +135,20 @@ const RowGalleryEditor = ({
         </AnimatePresence>
         {previews}
         {links.length < 10 && canUpload && (
-          <InputImage
-            buttonClassName="max-w-[144px] min-w-[144px]"
-            onChange={onChange}
-            persistFiles={false}
-            buttonProps={{ layoutId: 'upload_button' }}
-          />
+          <>
+            <InputImage
+              buttonClassName="max-w-[144px] min-w-[144px]"
+              onChange={onChange}
+              persistFiles={false}
+              buttonProps={{ layoutId: "upload_button" }}
+            />
+            {/* <FloatingImageGenAssistant
+              imageUrl="https://placekitten.com/400/400"
+              prompt="gato con sombrero"
+            /> */}
+          </>
         )}
       </LayoutGroup>
     </div>
   );
 };
-

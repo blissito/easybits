@@ -18,6 +18,7 @@ import { useUploader } from "~/hooks/useUploader";
 import { MarkEditor } from "./MarkEditor.client";
 import Spinner from "~/components/common/Spinner";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
+import { Switch } from "~/components/forms/Switch";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -265,21 +266,20 @@ export const EditAssetForm = ({
   return (
     <article className="w-full px-4 col-span-12 md:col-span-8">
       <LayoutGroup>
-        <Form onSubmit={handleSubmit} className="bg-white w-full">
-          <h2 className="text-2xl mt-6 mb-4 font-bold">Detalles de tu Asset</h2>
+        <Form onSubmit={handleSubmit} className="bg-white w-full mt-6">
           <Input
             defaultValue={asset.title}
             onChange={(ev) => handleChange("title")(ev.currentTarget.value)}
             label="Título"
             name="title"
-            className="mb-6"
+            className="mb-5"
           />
 
           <Input
             defaultValue={asset.tags}
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
             label="Tags"
-            placeholder="curso, programación"
+            placeholder="curso, inglés, profesional,"
             className="mb-3"
           />
           <Suspense fallback={<Spinner />}>
@@ -362,25 +362,53 @@ export const EditAssetForm = ({
           <HR />
           <ExtraConfig onChange={handleChange("extra")} extra={asset.extra} />
           <br />
-          <Footer isLoading={isLoading} />
+          <nav className="py-4 md:py-6 flex justify-between items-center gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white border-t-2 border-t-black">
+            <div className="flex gap-2 items-center">
+              <p>Estatus:</p>
+              <div id="status" className="flex border border-black rounded-lg gap-0 relative overflow-hidden">
+                <span 
+                  className={`rounded-l-none p-1 px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
+                    form.published 
+                      ? 'bg-black text-white shadow-md ' 
+                      : 'bg-white text-black hover:bg-gray-50 '
+                  }`}
+                  onClick={() => setState({ published: true })}
+                >
+                  Publicado
+                </span>
+                <span 
+                  className={`rounded-r-none p-1 px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
+                    !form.published 
+                      ? 'bg-black text-white shadow-md' 
+                      : 'bg-white text-black hover:bg-gray-50 '
+                  }`}
+                  onClick={() => setState({ published: false })}
+                >
+                  Sin publicar
+                </span>
+                {/* Animated background indicator */}
+                <div 
+                  className={`absolute top-0 h-full bg-black transition-all duration-300 ease-in-out rounded-md ${
+                    form.published ? 'left-0 w-1/2' : 'left-1/2 w-1/2'
+                  }`}
+                  style={{ zIndex: -1 }}
+                />
+              </div>
+            </div>
+            <div className="flex gap-6">
+            <Link prefetch="intent" to="/dash/assets">
+              <BrutalButton mode="ghost" isDisabled={isLoading}>
+                Cancelar
+              </BrutalButton>
+            </Link>
+            <BrutalButton isLoading={isLoading} type="submit">
+              Guardar
+            </BrutalButton>  
+             </div>
+          </nav>         
         </Form>
       </LayoutGroup>
     </article>
-  );
-};
-
-const Footer = ({ isLoading }: { isLoading?: boolean }) => {
-  return (
-    <nav className="py-4 md:py-6 flex justify-end gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white border-t-2 border-t-black">
-      <Link prefetch="intent" to="/dash/assets">
-        <BrutalButton mode="ghost" isDisabled={isLoading}>
-          Cancelar
-        </BrutalButton>
-      </Link>
-      <BrutalButton isLoading={isLoading} type="submit">
-        Guardar
-      </BrutalButton>
-    </nav>
   );
 };
 

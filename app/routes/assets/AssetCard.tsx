@@ -45,11 +45,11 @@ export const AssetCard = ({
             {asset.title || asset.slug || asset.template?.slug}
           </h3>
         </Link>
-        <nav className="flex justify-between items-center pr-4 ">
+        <nav className="flex justify-between  items-center pr-4 mt-1 mb-1 ">
           {left ? (
             left
           ) : (
-            <p className="text-brand-gray px-3 py-1">${asset.price || 0} mxn</p>
+            <p className="text-brand-gray px-3 ">${asset.price || 0} mxn</p>
           )}
           {right ? (
             right
@@ -146,7 +146,7 @@ const StatusTag = ({ published }: { published: boolean }) => {
         }
       )}
     >
-      <span> {published ? "Publicado" : "Oculto"}</span>
+      <span> {published ? "Publicado" : "Sin publicar"}</span>
     </div>
   );
 };

@@ -21,6 +21,7 @@ import Page from "./routes/assets/PublicCustomLanding";
 import { NotFound } from "./components/common/404";
 // import { DevAdmin } from "./components/experimental/DevAdmin";
 import { FloatingGeminiChat } from "./components/ai/FloatingGeminiChat";
+import { DevAdmin } from "./components/experimental/DevAdmin";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -53,7 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ScrollRestoration />
         <Scripts />
         <Toaster />
-        {/* <DevAdmin /> */}
+        <DevAdmin />
         <FloatingGeminiChat />
       </body>
     </html>
