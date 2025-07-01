@@ -200,6 +200,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         actionButton={
           asset.price !== "0" && asset.price !== 0 ? (
             <BrutalButton
+              id="purchase-button"
               isLoading={isLoading}
               type="button"
               onClick={handleOpenCheckout}

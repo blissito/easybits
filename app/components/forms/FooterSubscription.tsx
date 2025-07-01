@@ -34,6 +34,7 @@ export const FooterSuscription = ({
         />
       )}
       <BrutalButton
+        id={(asset.price || 0) === 0 ? "mobile-free-purchase-button" : "mobile-purchase-button"}
         isLoading={isLoading}
         type="submit"
         className="h-10 min-h-10 max-h-10  min-w-28 text-base rounded-md  font-medium mx-4 border-none "
