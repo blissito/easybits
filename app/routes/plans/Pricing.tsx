@@ -104,7 +104,7 @@ const PlanForm = ({
         type="submit"
         className={cn("w-full", buttonClassName)}
         containerClassName={cn("w-full")}
-        id={id}
+        id={id} // shouldn't be in form container?
       >
         <span>¡Empezar!</span>
       </BrutalButton>
@@ -154,8 +154,7 @@ export const PlanCard = ({
               <PerkItem perk={perk} key={index} />
             ))}
           </div>
-          <div className="mt-6">
-          {button}   </div>
+          <div className="mt-6">{button} </div>
         </div>
       </div>
     </section>

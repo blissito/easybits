@@ -36,8 +36,6 @@ export const getStripeCheckout = async (options: {
 }) => {
   const { plan, customer_email, priceId, secret } = options || {};
 
-  // const asset = await db.asset.findUnique({where:{id:assetId}}) // @todo for assets
-
   const successURL = `${location}/api/v1/stripe/plans?priceId=${priceId}&customer_email=${customer_email}`;
   const session = await getStripe(secret).checkout.sessions.create({
     metadata: {
@@ -108,11 +106,11 @@ export const createAccount = async () => {
       webhook_endpoint: {
         url: `${location}/api/v1/stripe/webhook/merchant`,
         enabled_events: [
-          'checkout.session.completed',
-          'payment_intent.succeeded',
-          'payment_intent.created'
-        ]
-      }
+          "checkout.session.completed",
+          "payment_intent.succeeded",
+          "payment_intent.created",
+        ],
+      },
     });
     return account;
   } catch (error) {
