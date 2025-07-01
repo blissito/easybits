@@ -3,10 +3,11 @@ import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/EditAsset";
 import { db } from "~/.server/db";
-import { redirect } from "react-router";
+import { Link, redirect } from "react-router";
 import { useEffect, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
 import { FloatingImageGenAssistant } from "~/components/ai/FloatingImageGenAssistant";
+import { FaArrowLeft } from "react-icons/fa";
 
 const PADDING_LAYOUT = `pl-4`;
 
@@ -41,14 +42,25 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
   // return null;
   return (
     <article className="w-screen">
-      <h1
-        className={cn(
-          "text-3xl md:text-4xl font-bold  md:pt-4 pt-16 pb-4 border-b border-black md:pl-24 ",
-          PADDING_LAYOUT
-        )}
-      >
-        {asset.title}
-      </h1>
+      <nav className="flex items-center w-full border-black border-b md:ml-20 md:pt-4 pt-16 pb-4">
+        <Link
+          prefetch="intent"
+          to="/dash/assets"
+          className="ml-6 hover:scale-105 transition-all"
+        >
+          <span className="text-black text-3xl">
+            <FaArrowLeft />
+          </span>
+        </Link>
+        <h1
+          className={cn(
+            "text-3xl md:text-4xl font-bold md:pl-6 ",
+            PADDING_LAYOUT
+          )}
+        >
+          {asset.title}
+        </h1>
+      </nav>
       <main className={cn("grid grid-cols-12 md:pl-20 items-start ")}>
         <EditAssetForm
           // files={files}
