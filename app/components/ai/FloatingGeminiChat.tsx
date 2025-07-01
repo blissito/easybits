@@ -104,7 +104,7 @@ export function FloatingGeminiChat({
           containerClassName="min-w-14 min-h-14 rounded-full"
         >
           {/* <BsChatDots className="w-6 h-6 text-white" /> */}
-          <img src="/icons/chatbot.svg" alt="chat" className="!w-9 !h-9" />
+          <img   id="chatbot-button" src="/icons/chatbot.svg" alt="chat" className="!w-9 !h-9" />
         </BrutalButton>
       </motion.div>
 
