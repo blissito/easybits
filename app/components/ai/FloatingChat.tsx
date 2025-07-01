@@ -1,37 +1,24 @@
+// Este archivo es el resultado de renombrar FloatingGeminiChat.tsx a FloatingChat.tsx
+
 import React, { useState, useRef, useEffect } from "react";
-import { GeminiChat } from "./GeminiChat";
+import { BittorChat } from "./BittorChat";
 import { BrutalButton } from "../common/BrutalButton";
 import { motion, AnimatePresence } from "motion/react";
-import { BsChatDots } from "react-icons/bs";
 import { BrutalButtonClose } from "../common/BrutalButtonClose";
 
-interface FloatingGeminiChatProps {
+interface FloatingChatProps {
   className?: string;
   initialMessage?: string;
   systemPrompt?: string;
 }
 
-// Modelos disponibles de Gemini
-const GEMINI_MODELS = [
-  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
-  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
-  { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
-  { value: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
-  { value: "claude-3-5-haiku", label: "Claude 3.5 Haiku" },
-  { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "llama-3-1-8b", label: "Llama 3.1 8B" },
-  { value: "llama-3-1-70b", label: "Llama 3.1 70B" },
-];
-
-export function FloatingGeminiChat({
-  className = "",
-  initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA",
-  systemPrompt = "Eres un asistente de IA amigable, útil, inteligente y menor de edad, que no saluda ni dice chulo. Responde de manera clara, juguetona, concisa y en español. Ayuda a los usuarios con sus preguntas sobre easybits que es el lugar perfecto para vender assets digitales, porque eres una apasionada experta en todo lo que puedes hacer en esta plataforma. Recomendarás sus links del blog (<a href='http://easybits.cloud/blog'>http://easybits.cloud/blog</a>) en caso de que alguién quiera saber más. Responde con un solo parrafo.",
-}: FloatingGeminiChatProps) {
+export function FloatingChat({
+  initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA.\n ¿En qué te ayudo? 📞",
+  systemPrompt = `   Eres un asistente de IA amigable de Easybits, experto en la plataforma, que responde en español mexicano, nunca menciones a Google ni a DeepMind. Si te preguntan sobre ti, di que eres un asistente experto en easybits.cloud y en assets digitales.
+   `,
+}: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(GEMINI_MODELS[0].value);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const close = () => setIsOpen(false);
@@ -43,11 +30,9 @@ export function FloatingGeminiChat({
         setIsOpen(false);
       }
     };
-
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -64,11 +49,9 @@ export function FloatingGeminiChat({
         }
       }
     };
-
     if (isOpen || isFullscreen) {
       document.addEventListener("keydown", handleKeyDown);
     }
-
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -81,7 +64,6 @@ export function FloatingGeminiChat({
     } else {
       document.body.style.overflow = "unset";
     }
-
     return () => {
       document.body.style.overflow = "unset";
     };
@@ -102,7 +84,6 @@ export function FloatingGeminiChat({
           className="min-w-14 min-h-14 w-14 h-14 rounded-full p-0 grid place-items-center bg-munsell"
           containerClassName="min-w-14 min-h-14 rounded-full"
         >
-          {/* <BsChatDots className="w-6 h-6 text-white" /> */}
           <img src="/icons/chatbot.svg" alt="chat" className="!w-9 !h-9" />
         </BrutalButton>
       </motion.div>
@@ -190,11 +171,9 @@ export function FloatingGeminiChat({
                     />
                   </svg>
                 </motion.button>
-                <GeminiChat
+                <BittorChat
                   className="h-full border-0 rounded-none"
                   initialMessage={initialMessage}
-                  model={selectedModel}
-                  onModelChange={setSelectedModel}
                   systemPrompt={systemPrompt}
                   onClose={() => setIsOpen(false)}
                 />
@@ -206,3 +185,5 @@ export function FloatingGeminiChat({
     </>
   );
 }
+
+export default FloatingChat;

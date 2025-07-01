@@ -6,7 +6,6 @@ import { db } from "~/.server/db";
 import { Link, redirect } from "react-router";
 import { useEffect, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
-import { FloatingImageGenAssistant } from "~/components/ai/FloatingImageGenAssistant";
 import { FaArrowLeft } from "react-icons/fa";
 
 const PADDING_LAYOUT = `pl-4`;

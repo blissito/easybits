@@ -4,7 +4,6 @@ import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useImageResize } from "~/hooks/useImageResize";
 import InputImage from "~/components/common/InputImage";
-import { FloatingImageGenAssistant } from "~/components/ai/FloatingImageGenAssistant";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -142,10 +141,6 @@ const RowGalleryEditor = ({
               persistFiles={false}
               buttonProps={{ layoutId: "upload_button" }}
             />
-            {/* <FloatingImageGenAssistant
-              imageUrl="https://placekitten.com/400/400"
-              prompt="gato con sombrero"
-            /> */}
           </>
         )}
       </LayoutGroup>

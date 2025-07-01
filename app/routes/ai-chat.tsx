@@ -1,4 +1,4 @@
-import { GeminiChat } from "~/components/ai/GeminiChat";
+import { BittorChat } from "~/components/ai/BittorChat";
 
 export default function AIChatPage() {
   return (
@@ -17,11 +17,7 @@ export default function AIChatPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Chat principal */}
           <div className="lg:col-span-2">
-            <GeminiChat
-              className="h-[600px]"
-              placeholder="Escribe tu pregunta aquí..."
-              initialMessage="¡Hola! Soy tu asistente de IA con Google Gemini. Puedo ayudarte con preguntas, explicaciones, análisis de código, y mucho más. ¿En qué puedo asistirte hoy?"
-            />
+            <BittorChat className="h-[600px]" />
           </div>
 
           {/* Sidebar con información */}
