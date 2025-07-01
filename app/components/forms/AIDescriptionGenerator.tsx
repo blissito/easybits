@@ -403,12 +403,14 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           {isLoading ? (
          <img className="w-8" src="/ai.gif" alt="thinking robot" />
           ) : (
-            <svg id="ai-prompt-button"  width="20" height="20" fill="none" viewBox="0 0 20 20">
+            <span id="ai-prompt-button">
+            <svg   width="20" height="20" fill="none" viewBox="0 0 20 20">
               <path
                 d="M10 2l2 6h6l-5 4 2 6-5-4-5 4 2-6-5-4h6z"
                 fill="currentColor"
               />
             </svg>
+            </span>
           )}
         </button>
       </div>
