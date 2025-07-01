@@ -42,17 +42,11 @@ export const fetchOpenRouter = async ({
     // "deepseek/deepseek-r1-0528-qwen3-8b:free"; // MASOMENO
   ];
 
-  const bodyBase = {
-    stream,
-    messages: [] as any[],
-    prompt: "",
-  };
-  if (messages) bodyBase.messages = messages;
-  if (prompt) bodyBase.prompt = prompt;
-
   let lastError: any = null;
   for (const model of models) {
-    const body = { ...bodyBase, model };
+    const body: any = { model, stream };
+    if (messages) body.messages = messages;
+    if (prompt) body.prompt = prompt;
     try {
       const response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",

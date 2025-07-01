@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { useExcelToText } from "~/hooks/useXLSX";
+import { useExcelAndDocToText } from "~/hooks/useXLSX";
 import { cn } from "~/utils/cn";
 import { FaFileExcel, FaFileWord } from "react-icons/fa";
 import { IoClose } from "react-icons/io5";
@@ -40,7 +40,7 @@ export const AIDescriptionGenerator: React.FC<AIDescriptionGeneratorProps> = ({
     error: excelError,
     clearData,
     isSupportedFile,
-  } = useExcelToText();
+  } = useExcelAndDocToText();
 
   // rememver: if you call this while isLoading will abort
   const handleGenerateDescription = async () => {
@@ -271,7 +271,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
                 </p>
                 <input
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept=".xlsx,.xls,.csv,.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
                   onChange={handleFileChange}
                   className="hidden"
                   id="excel-upload"

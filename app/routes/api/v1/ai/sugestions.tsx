@@ -14,13 +14,12 @@ export const action = async ({ request }: { request: Request }) => {
       const prompt = buildPromptFromHistory(chat);
       let aiResponse: Response | undefined;
       const isProd = process.env.NODE_ENV === "production";
-      const isForced = true; //TESTING
+      const isForced = true; //TESTING IN PROD AND DEV
       if (isProd || isForced) {
         const { response, error, success } = await fetchOpenRouter({
           messages: chat.map(({ role, content }) => ({ role, content })),
           stream: true,
         });
-        console.log("OPENROUTER_RESPONSE::\n", success, error);
         aiResponse = response;
       } else {
         aiResponse = await fetchInternalOllama(prompt, true);
