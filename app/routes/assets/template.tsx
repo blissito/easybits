@@ -184,7 +184,7 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
         </section>
         {asset.extra?.showReviews && (
           <section
-          id="reviewsRank-open-button"
+            id="reviewsRank-open-button"
             className={cn(
               " overflow-hidden px-3 col-span-6 md:col-span-2 flex border-l-2 border-black items-center gap-2",
               {
