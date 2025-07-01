@@ -184,7 +184,7 @@ const SocialButtons = ({
           type="button"
           onClick={handleLogin("google")}
         >
-          <FcGoogle />
+          <FcGoogle    id="GmailLogin"/>
           Iniciar con Gmail
         </Button>
         <Button
@@ -195,7 +195,7 @@ const SocialButtons = ({
           type="button"
           onClick={handleLogin("stripe")}
         >
-          <BsStripe fill="white" />
+          <BsStripe  id="StripeLogin" fill="white" />
           Iniciar con Stripe
         </Button>
         <Button

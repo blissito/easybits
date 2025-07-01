@@ -458,10 +458,11 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
 
             return (
               <div id="reviews-open-button" key={n} className="grid gap-6  grid-cols-9 mb-3 items-center">
-                <div id="reviews-open-button" className="col-span-1 flex gap-1 items-center"> <img src="/icons/star.png" alt="star" className="w-4 h-4"/>{n}</div>
+                <div id="reviews-open-button" className="col-span-1 flex gap-1 items-center"> <img id="reviews-open-button" src="/icons/star.png" alt="star" className="w-4 h-4"/>{n}</div>
                 <div id="reviews-open-button" className="col-span-8">
-                  <div className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
+                  <div id="reviews-open-button" className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
                     <motion.div
+                    id="reviews-open-button"
                       className="bg-black h-full rounded"
                       initial={{ width: 0 }}
                       animate={{ width: `${percentage}%` }}
