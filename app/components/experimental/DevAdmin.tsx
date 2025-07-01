@@ -7,7 +7,7 @@ import { cn } from "~/utils/cn";
 import { IoClose } from "react-icons/io5";
 
 export const DevAdmin = () => {
-  // return null; //DISABLED
+  return null; //DISABLED
   const [host, set] = useState("");
   useEffect(() => {
     set(window.location.host);
