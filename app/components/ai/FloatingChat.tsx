@@ -73,18 +73,24 @@ export function FloatingChat({
     <>
       {/* Botón flotante */}
       <motion.div
-        id="chatbot-button"
         className="fixed bottom-6 right-8 z-30"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
       >
         <BrutalButton
+          id="chatbot-button"
           onClick={() => setIsOpen(true)}
           className="min-w-14 min-h-14 w-14 h-14 rounded-full p-0 grid place-items-center bg-munsell"
           containerClassName="min-w-14 min-h-14 rounded-full"
         >
-          <img src="/icons/chatbot.svg" alt="chat" className="!w-9 !h-9" />
+          {/* <BsChatDots className="w-6 h-6 text-white" /> */}
+          <img
+            id="chatbot-button"
+            src="/icons/chatbot.svg"
+            alt="chat"
+            className="!w-9 !h-9"
+          />
         </BrutalButton>
       </motion.div>
 
