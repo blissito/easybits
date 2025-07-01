@@ -70,6 +70,37 @@ export const action = async ({ request }: { request: Request }) => {
       });
     }
 
+    if (intent === "generate_social_description") {
+      const prompt = buildPromptFromHistory(chat);
+      const ollamaResponse = await fetchInternalOllama(prompt, true);
+      console.info("OLLAMA_RESPONSE::\n", ollamaResponse.status);
+      if (ollamaResponse.status > 399) {
+        const d = await ollamaResponse.json();
+        console.error("OLLAMA_ERROR::\n", d);
+      }
+
+      if (ollamaResponse.ok) {
+        return new Response(ollamaResponse.body, {
+          headers: {
+            "Content-Type": "text/plain",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+          },
+        });
+      } else {
+        return new Response(
+          JSON.stringify({
+            error: "Error en el servicio de IA",
+            status: ollamaResponse.status,
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
     if (intent === "generate_image_dslx") {
       // Construir prompt contextual con historial
       const prompt = buildPromptFromHistory(chat);
@@ -108,4 +139,6 @@ export const action = async ({ request }: { request: Request }) => {
       }
     );
   }
+
+  return null;
 };
