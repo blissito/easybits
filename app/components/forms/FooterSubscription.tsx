@@ -18,6 +18,7 @@ export const FooterSuscription = ({
   
   return (
     <Form
+      id={(asset.price || 0) === 0 ? "mobile-free-purchase-button" : "mobile-purchase-button"}
       onSubmit={onSubmit}
       className={cn("border-t-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center","md:hidden")}
     >
@@ -34,7 +35,6 @@ export const FooterSuscription = ({
         />
       )}
       <BrutalButton
-        id={(asset.price || 0) === 0 ? "mobile-free-purchase-button" : "mobile-purchase-button"}
         isLoading={isLoading}
         type="submit"
         className="h-10 min-h-10 max-h-10  min-w-28 text-base rounded-md  font-medium mx-4 border-none "
