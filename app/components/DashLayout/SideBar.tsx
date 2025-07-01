@@ -20,7 +20,7 @@ interface MenuItemProps {
 export const SideBar = () => {
   return (
     <>
-      <section className="fixed right-4 bottom-0 z-20 block md:hidden  ">
+      <section className="fixed right-4 bottom-16 z-20 block md:hidden  ">
         <FoldMenu />
       </section>
       <SideBarWeb />
