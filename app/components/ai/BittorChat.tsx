@@ -31,12 +31,12 @@ interface BittorChatProps {
 export function BittorChat({
   className = "",
   placeholder = "Escribe tu mensaje...",
-  initialMessage = "¡Hola blissmo!",
+  initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA.\n ¿En qué te ayudo? 📞",
   onClose,
 }: BittorChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: "1",
+      id: "bittor-initial-message",
       role: "assistant",
       content: initialMessage,
       timestamp: new Date(),
@@ -56,19 +56,25 @@ export function BittorChat({
   }, [messages]);
 
   // Función para parsear links en el texto
-  const parseLinks = (text: string) => {
+  const parseLinks = (
+    input: string | (string | React.ReactNode)[]
+  ): React.ReactNode[] => {
+    if (Array.isArray(input)) {
+      // Procesa cada parte recursivamente
+      return input.flatMap((part, i) =>
+        typeof part === "string" ? parseLinks(part) : [part]
+      );
+    }
+    const text = input;
     const linkRegex = /<a\s+href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi;
-    const parts = [];
+    const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match;
 
     while ((match = linkRegex.exec(text)) !== null) {
-      // Agregar texto antes del link
       if (match.index > lastIndex) {
         parts.push(text.slice(lastIndex, match.index));
       }
-
-      // Agregar el link
       const href = match[1];
       const linkText = match[2];
       parts.push(
@@ -82,15 +88,34 @@ export function BittorChat({
           {linkText}
         </a>
       );
-
       lastIndex = match.index + match[0].length;
     }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts;
+  };
 
+  // Función para parsear negritas tipo **texto** (markdown)
+  const parseBold = (text: string) => {
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = boldRegex.exec(text)) !== null) {
+      // Agregar texto antes de la negrita
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      // Agregar el texto en negrita
+      parts.push(<strong key={`bold-${match.index}`}>{match[1]}</strong>);
+      lastIndex = match.index + match[0].length;
+    }
     // Agregar texto restante
     if (lastIndex < text.length) {
       parts.push(text.slice(lastIndex));
     }
-
     return parts.length > 0 ? parts : text;
   };
 
@@ -100,6 +125,7 @@ export function BittorChat({
       msg && typeof msg.role === "string" && typeof msg.content === "string"
   );
   const { sendMessage } = useBittor({
+    model: "deepseek/deepseek-chat:free",
     history: safeHistory,
     onMessages(messages: Message[]) {
       setMessages(messages);
@@ -152,41 +178,43 @@ export function BittorChat({
 
         {/* Messages */}
         <section className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${
-                message.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              {message.role === "assistant" && (
-                <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
-                  <img
-                    src="/logo-purple.svg"
-                    alt="EasyBits AI"
-                    className="w-5 h-5"
-                  />
-                </div>
-              )}
+          {messages
+            .filter((msg) => msg.role.toLowerCase() !== "system")
+            .map((message) => (
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.role === "user"
-                    ? "bg-brand-500 text-black"
-                    : "bg-gray-100 text-gray-900"
+                key={message.id}
+                className={`flex ${
+                  message.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">
-                  {parseLinks(message.content)}
-                  {message.isStreaming && (
-                    <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
-                  )}
-                </p>
-                <p className="text-xs opacity-70 mt-1">
-                  {message.timestamp.toLocaleTimeString()}
-                </p>
+                {message.role === "assistant" && (
+                  <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
+                    <img
+                      src="/logo-purple.svg"
+                      alt="EasyBits AI"
+                      className="w-5 h-5"
+                    />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    message.role === "user"
+                      ? "bg-brand-500 text-black"
+                      : "bg-gray-100 text-gray-900"
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">
+                    {parseLinks(parseBold(message.content))}
+                    {message.isStreaming && (
+                      <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
+                    )}
+                  </p>
+                  <p className="text-xs opacity-70 mt-1">
+                    {message.timestamp?.toLocaleTimeString()}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
           <div ref={messagesEndRef} />
         </section>
 

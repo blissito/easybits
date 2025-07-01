@@ -5,8 +5,14 @@ import { nanoid } from "nanoid";
 export const useBittor = ({
   onMessages,
   history = [],
+  model,
+  systemPrompt = `   Eres un asistente de IA amigable de Easybits, experto en la plataforma, que responde en español mexicano. Importante: nunca menciones a Google ni a DeepMind o Gemma. 
+  Si te preguntan sobre ti, di que eres un asistente experto en easybits.cloud y en assets digitales.
+   `,
 }: {
+  systemPrompt?: string;
   history: Message[];
+  model?: string;
   onMessages: (messages: Message[]) => void;
 }): {
   messages: Message[];
@@ -15,7 +21,13 @@ export const useBittor = ({
   error: string | null;
   sendMessage: (message: string, history?: Message[]) => Promise<Message>;
 } => {
-  const [messages, setMessages] = useState<Message[]>(history);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "system",
+      content: systemPrompt,
+    },
+    ...history,
+  ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +60,7 @@ export const useBittor = ({
           history: (historyOverride || messages).slice(-10).map((msg) => ({
             role: msg.role,
             content: msg.content,
+            model,
           })),
           systemPrompt:
             "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",

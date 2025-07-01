@@ -8,6 +8,7 @@ interface ChatMessage {
 export const action = async ({ request }: { request: Request }) => {
   try {
     const {
+      model,
       message,
       history = [],
       systemPrompt = "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
@@ -38,6 +39,7 @@ export const action = async ({ request }: { request: Request }) => {
       } = await fetchOpenRouter({
         messages: openRouterMessages,
         stream: true,
+        model,
       });
       if (!success || !response) {
         throw new Error(openRouterError || "Error desconocido en OpenRouter");
