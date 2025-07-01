@@ -11,13 +11,16 @@ export const fetchOpenRouter = async ({
   prompt,
   messages,
   stream = false,
+  model,
 }:
   | {
+      model?: string;
       messages: { role: string; content: string }[];
       prompt?: string;
       stream?: boolean;
     }
   | {
+      model?: string;
       prompt: string;
       messages?: { role: string; content: string }[];
       stream?: boolean;
@@ -27,9 +30,10 @@ export const fetchOpenRouter = async ({
 
   // Modelos a intentar en orden
   const models = [
-    process.env.OPENROUTER_MODEL || "google/gemma-3-27b-it:free", // MUY BUENO
+    model || "google/gemma-3-27b-it:free", // Muy bueno para descripción, no para chat.
+    "deepseek/deepseek-chat:free", // // Muy bueno para chat, no para descripción.
     "meta-llama/llama-4-maverick", // $0.60/M output tokens GRAN CONTEXTO
-    "anthropic/claude-sonnet-4", // carísimo $15/Mtokens
+    "anthropic/claude-sonnet-4", // carísimo $15/Mtokens MUY SMART EL PUTO!
     // "google/gemini-2.5-flash-lite-preview-06-17" // $0.40/M output tokens
     // "mistralai/mistral-nemo" // $0.011/M output tokens
     //   'meta-llama/llama-3.3-70b-instruct' //$0.12/M output tokens

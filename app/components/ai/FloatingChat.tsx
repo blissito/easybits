@@ -12,11 +12,7 @@ interface FloatingChatProps {
   systemPrompt?: string;
 }
 
-export function FloatingChat({
-  initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA.\n ¿En qué te ayudo? 📞",
-  systemPrompt = `   Eres un asistente de IA amigable de Easybits, experto en la plataforma, que responde en español mexicano, nunca menciones a Google ni a DeepMind. Si te preguntan sobre ti, di que eres un asistente experto en easybits.cloud y en assets digitales.
-   `,
-}: FloatingChatProps) {
+export function FloatingChat({}: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -179,9 +175,7 @@ export function FloatingChat({
                 </motion.button>
                 <BittorChat
                   className="h-full border-0 rounded-none"
-                  initialMessage={initialMessage}
-                  systemPrompt={systemPrompt}
-                  onClose={() => setIsOpen(false)}
+                  // onClose={() => setIsOpen(false)}
                 />
               </div>
             </motion.div>
