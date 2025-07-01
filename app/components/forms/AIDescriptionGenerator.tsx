@@ -401,7 +401,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           title="Enviar a IA"
         >
           {isLoading ? (
-            <img className="w-8" src="/ai.gif" alt="thinking robot" />
+         <img    id="ai-prompt-button" className="w-8" src="/ai.gif" alt="thinking robot" />
           ) : (
             <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
               <path
