@@ -193,11 +193,11 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
             )}
             onClick={handleOpen}
           >
-            <p className="underline underline-offset-4">
+            <p id="reviewsRank-open-button" className="underline underline-offset-4">
               {calculateAverageRating(reviews)}
             </p>
             {/* @todo This should be a svg */}
-            <img className="w-6" src="/icons/star.png" alt="star" />
+            <img id="reviewsRank-open-button" className="w-6" src="/icons/star.png" alt="star" />
           </section>
         )}
       </main>
@@ -457,9 +457,9 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
             const percentage = (reviews.byRating[n] * 100) / reviews.total;
 
             return (
-              <div key={n} className="grid gap-6  grid-cols-9 mb-3 items-center">
-                <div className="col-span-1 flex gap-1 items-center"> <img src="/icons/star.png" alt="star" className="w-4 h-4"/>{n}</div>
-                <div className="col-span-8">
+              <div id="reviews-open-button" key={n} className="grid gap-6  grid-cols-9 mb-3 items-center">
+                <div id="reviews-open-button" className="col-span-1 flex gap-1 items-center"> <img src="/icons/star.png" alt="star" className="w-4 h-4"/>{n}</div>
+                <div id="reviews-open-button" className="col-span-8">
                   <div className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
                     <motion.div
                       className="bg-black h-full rounded"
