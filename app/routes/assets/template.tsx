@@ -1,7 +1,6 @@
 import { AiFillInstagram } from "react-icons/ai";
 import {
   FaFacebookF,
-  FaInstagram,
   FaLink,
   FaLinkedin,
   FaTiktok,
@@ -13,7 +12,7 @@ import { Tag } from "~/components/common/Tag";
 import { ProductGallery } from "~/components/galleries/ProductGallery";
 import { Link, useFetcher } from "react-router";
 import { cn } from "~/utils/cn";
-import type { Asset, File } from "@prisma/client";
+import type { Asset, File, User } from "@prisma/client";
 import type { FormEvent, ReactNode } from "react";
 import Markdown from "~/components/common/Markdown";
 import { Input } from "~/components/common/Input";
@@ -24,11 +23,8 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { Modal } from "~/components/common/Modal";
 
-
 export const ContentTemplate = ({
   asset,
-  stripePromise,
-  checkoutSession,
   files = [],
   actionButton,
   reviews,
@@ -36,15 +32,14 @@ export const ContentTemplate = ({
 }: {
   actionButton?: ReactNode;
   files?: File[];
-  asset: Asset;
+  asset: Asset & { user: User };
   reviews: any;
   assetReviews?: any[];
 }) => {
-  const { typography } = asset?.user?.storeConfig || {};
   return (
     <section
       className={cn("border-b-0 border-black", "md:border-b-[2px]")}
-      style={{ fontFamily: typography }}
+      style={{ fontFamily: asset.user?.storeConfig?.typography }}
     >
       <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black bg-white">
         <ProductGallery
@@ -60,20 +55,26 @@ export const ContentTemplate = ({
               "md:border-r-[2px]"
             )}
           >
-            <Bragging asset={asset} reviews={reviews} assetReviews={assetReviews} />
-           {asset.description ?  <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
-              <Markdown>{asset.description}</Markdown>
-            </div> : null}
+            <Bragging
+              asset={asset}
+              reviews={reviews}
+              assetReviews={assetReviews}
+            />
+            {asset.description ? (
+              <div className={cn("h-fit px-4 pb-4", "md:px-6 md:pb-6")}>
+                <Markdown>{asset.description}</Markdown>
+              </div>
+            ) : null}
           </div>
           <Info
             files={files}
             asset={asset}
-            typography={typography}
-            stripePromise={stripePromise}
-            checkoutSession={checkoutSession}
             actionButton={actionButton}
             reviews={reviews}
             assetReviews={assetReviews}
+            freeSubscriptionComponent={
+              Number(asset.price || 0) === 0 && <Subscription asset={asset} />
+            }
           />
         </div>
       </div>
@@ -81,15 +82,32 @@ export const ContentTemplate = ({
   );
 };
 
-const ReviewsModal = ({ isOpen, onClose, assetReviews = [] }: { isOpen: boolean; onClose: () => void; assetReviews?: any[] }) => {
+const ReviewsModal = ({
+  isOpen,
+  onClose,
+  assetReviews = [],
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  assetReviews?: any[];
+}) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Echa un vistazo a los comentarios">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Echa un vistazo a los comentarios"
+    >
       <div className="space-y-0 max-h-[60vh] overflow-y-auto mt-2 scrollbar-hide-reviews">
         {(assetReviews || [])
           .slice()
           .sort((a, b) => (b.rating || 0) - (a.rating || 0))
           .map((review, idx, array) => (
-            <div key={idx} className={idx === array.length - 1 ? "" : "border-b border-black"}>
+            <div
+              key={idx}
+              className={
+                idx === array.length - 1 ? "" : "border-b border-black"
+              }
+            >
               <ReviewCard review={review} />
             </div>
           ))}
@@ -98,10 +116,18 @@ const ReviewsModal = ({ isOpen, onClose, assetReviews = [] }: { isOpen: boolean;
   );
 };
 
-const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; reviews?: any; assetReviews?: any[] }) => {
+const Bragging = ({
+  asset = {},
+  reviews,
+  assetReviews = [],
+}: {
+  asset: Asset;
+  reviews?: any;
+  assetReviews?: any[];
+}) => {
   const { typography } = asset.user?.storeConfig || {};
   const [open, setOpen] = useState(false);
-  
+
   const getTypeOfBrag = () => {
     switch (asset.type) {
       case "WEBINAR":
@@ -113,22 +139,27 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
 
   const calculateAverageRating = (reviews: any) => {
     if (!reviews?.total || !reviews?.byRating) return 0;
-    
-    const totalRating = Object.entries(reviews.byRating).reduce((acc, [rating, count]) => {
-      return acc + (parseInt(rating) * (count as number));
-    }, 0);
-    
+
+    const totalRating = Object.entries(reviews.byRating).reduce(
+      (acc, [rating, count]) => {
+        return acc + parseInt(rating) * (count as number);
+      },
+      0
+    );
+
     return (totalRating / reviews.total).toFixed(1);
   };
 
   const handleOpen = () => {
     // Only open modal if there are reviews available
-    const hasReviews = (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0);
+    const hasReviews =
+      (reviews?.total && reviews.total > 0) ||
+      (assetReviews && assetReviews.length > 0);
     if (hasReviews) {
       setOpen(true);
     }
   };
-  
+
   const handleClose = () => {
     setOpen(false);
   };
@@ -188,20 +219,34 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
             className={cn(
               " overflow-hidden px-3 col-span-6 md:col-span-2 flex border-l-2 border-black items-center gap-2",
               {
-                "cursor-pointer hover:bg-gray-100 transition-colors": (reviews?.total && reviews.total > 0) || (assetReviews && assetReviews.length > 0)
+                "cursor-pointer hover:bg-gray-100 transition-colors":
+                  (reviews?.total && reviews.total > 0) ||
+                  (assetReviews && assetReviews.length > 0),
               }
             )}
             onClick={handleOpen}
           >
-            <p id="reviewsRank-open-button" className="underline underline-offset-4">
+            <p
+              id="reviewsRank-open-button"
+              className="underline underline-offset-4"
+            >
               {calculateAverageRating(reviews)}
             </p>
             {/* @todo This should be a svg */}
-            <img id="reviewsRank-open-button" className="w-6" src="/icons/star.png" alt="star" />
+            <img
+              id="reviewsRank-open-button"
+              className="w-6"
+              src="/icons/star.png"
+              alt="star"
+            />
           </section>
         )}
       </main>
-      <ReviewsModal isOpen={open} onClose={handleClose} assetReviews={assetReviews} />
+      <ReviewsModal
+        isOpen={open}
+        onClose={handleClose}
+        assetReviews={assetReviews}
+      />
     </>
   );
 };
@@ -209,34 +254,30 @@ const Bragging = ({ asset = {}, reviews, assetReviews = [] }: { asset: Asset; re
 const Info = ({
   files = [],
   asset,
-  stripePromise,
-  checkoutSession,
   actionButton,
-  typography,
   reviews,
   assetReviews = [],
+  freeSubscriptionComponent = null,
 }: {
+  freeSubscriptionComponent?: ReactNode;
   actionButton?: ReactNode;
-  asset: Asset;
+  asset: Asset & { user: User };
   files?: File[];
-  typography: string;
   reviews: any;
   assetReviews?: any[];
 }) => {
   const text = asset.template?.ctaText
     ? asset.template.ctaText
-    : asset.price <= 0
+    : (asset.price || 0) <= 0
     ? "Suscribirse gratis"
     : "Comprar";
 
   const getPriceString = () => `$${asset.price} ${asset.currency}`;
+  const { typography } = asset?.user?.storeConfig || {};
   return (
     <div
       style={{ fontFamily: typography }}
-      className={cn(
-        "col-span-8 ",
-        "md:col-span-3 md:border-t-0"
-      )}
+      className={cn("col-span-8 ", "md:col-span-3 md:border-t-0")}
     >
       <div
         className={cn(
@@ -246,10 +287,8 @@ const Info = ({
       >
         <h3 className="text-2xl font-bold text-white">{getPriceString()} </h3>
       </div>
-      {asset.price <= 0 && <Subscription asset={asset} text={text} />}
-      <div className="hidden md:block">
-        {actionButton}
-      </div>
+      {freeSubscriptionComponent}
+      <div className="hidden md:block">{actionButton}</div>
       {/* Only show note if asset.note exists */}
       {asset.note && (
         <div className="h-fit p-3 border-b-[2px] border-black content-center">
@@ -261,9 +300,18 @@ const Info = ({
       ) : asset.type === "EBOOK" ? (
         <EbookDetails asset={asset} files={files} />
       ) : (
-        <Formats files={files} asset={asset} reviews={reviews} assetReviews={assetReviews} />
+        <Formats
+          files={files}
+          asset={asset}
+          reviews={reviews}
+          assetReviews={assetReviews}
+        />
       )}
-       <ReviewsSection reviews={reviews} asset={asset} assetReviews={assetReviews} />
+      <ReviewsSection
+        reviews={reviews}
+        asset={asset}
+        assetReviews={assetReviews}
+      />
     </div>
   );
 };
@@ -271,34 +319,38 @@ const Info = ({
 const Subscription = ({
   asset,
   actionId,
-  text,
+  text = "Suscribirme gratis",
 }: {
+  text?: string;
   actionId?: string;
   asset: Asset;
 }) => {
   const { hexColor, typography } = asset?.user?.storeConfig || {};
   const fetcher = useFetcher();
+  const isLoading = fetcher.state !== "idle";
+
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    const formData = new FormData(e.currentTarget);
-
-    formData.set("intent", "free_subscription");
-    formData.set("assetId", asset.id);
-    formData.set("actionId", actionId);
-
-    fetcher.submit(formData, {
-      method: "post",
-      action: "/api/v1/user",
-    });
+    const form = Object.fromEntries(new FormData(e.currentTarget));
+    // @todo validate form urgent! if see this, please fix it.
+    fetcher.submit(
+      new URLSearchParams({
+        ...form,
+        intent: "free_subscription",
+        assetId: asset.id,
+        actionId: actionId || "",
+      }),
+      {
+        method: "post",
+        action: "/api/v1/user",
+      }
+    );
   };
-
-  const isLoading = fetcher.state !== "idle";
 
   if (fetcher.data?.success) {
     return (
       <section
-        className="flex flex-col justify-center items-center text-xl h-[100px] pt-12"
+        className="flex flex-col justify-center items-center text-xl p-6 border-black border-b-2"
         style={{ fontFamily: typography }}
       >
         <h2>¡Gracias por suscribirte!</h2>
@@ -315,7 +367,7 @@ const Subscription = ({
       <Input
         placeholder="Escribe tu nombre"
         name="displayName"
-        inputClassName="border-0 border-t-2 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black" 
+        inputClassName="border-0 border-t-2 border-b-2 h-16 rounded-none focus:ring-0 focus:border-black"
       />
       <Input
         required
@@ -338,7 +390,7 @@ const Subscription = ({
   );
 };
 
-const EbookDetails = ({ asset, files }: { asset: Asset, files: File[] }) => {
+const EbookDetails = ({ asset, files }: { asset: Asset; files: File[] }) => {
   const getSizeInMB = () => {
     const bytes = files.reduce((acc, f) => (acc = acc + f.size), 0);
     return (bytes / 1_000_000).toFixed(2) + " mb";
@@ -346,7 +398,10 @@ const EbookDetails = ({ asset, files }: { asset: Asset, files: File[] }) => {
   const { typography } = asset?.user?.storeConfig || {};
   return (
     <section style={{ fontFamily: typography }}>
-      <AttributeList textLeft="Número de páginas" textRight={asset.metadata?.numberOfPages} />
+      <AttributeList
+        textLeft="Número de páginas"
+        textRight={asset.metadata?.numberOfPages}
+      />
       <AttributeList
         textLeft="Formatos:"
         textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
@@ -403,37 +458,50 @@ const ReviewCard = ({ review }: { review: any }) => {
       <div className="text-sm">
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }, (_, index) => (
-            <img 
-              key={index} 
-              src={index < review.rating ? "/icons/star.png" : "/icons/star-empty.svg"} 
-              alt="star" 
+            <img
+              key={index}
+              src={
+                index < review.rating
+                  ? "/icons/star.png"
+                  : "/icons/star-empty.svg"
+              }
+              alt="star"
               className="w-4 h-4"
             />
           ))}
-              {review.createdAt && (
-        <div className="text-xs text-metal ml-1">
-          {formatDate(review.createdAt)}
+          {review.createdAt && (
+            <div className="text-xs text-metal ml-1">
+              {formatDate(review.createdAt)}
+            </div>
+          )}
         </div>
-      )}
-        </div> 
-        <p className="text-base mt-1">  
-          {review.comment}
-        </p>
-       </div>
-       <div className="flex items-center justify-start gap-0">
-        <img src={review.user?.picture} className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full" alt="avatar"/>
+        <p className="text-base mt-1">{review.comment}</p>
+      </div>
+      <div className="flex items-center justify-start gap-0">
+        <img
+          src={review.user?.picture}
+          className="w-5 h-5 border-r-2 border-b-2 border-black rounded-full"
+          alt="avatar"
+        />
         <span className="text-xs text-gray-500 ml-1">
           {review.user?.displayName || review.user?.email || "Anónimo"}
         </span>
       </div>
-  
     </div>
   );
 };
 
-const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; assetReviews?: any[]; asset: any }) => {
+const ReviewsSection = ({
+  reviews,
+  assetReviews = [],
+  asset,
+}: {
+  reviews: any;
+  assetReviews?: any[];
+  asset: any;
+}) => {
   const [open, setOpen] = useState(false);
-  
+
   if (!reviews?.total || reviews.total === 0 || !asset?.extra?.showReviews) {
     return null;
   }
@@ -442,14 +510,18 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
   const handleOpen = () => {
     setOpen(true);
   };
-  
+
   const handleClose = () => {
     setOpen(false);
   };
 
   return (
     <>
-      <div id="reviews-open-button" className="border-b-[2px] border-black p-3 cursor-pointer" onClick={handleOpen}>
+      <div
+        id="reviews-open-button"
+        className="border-b-[2px] border-black p-3 cursor-pointer"
+        onClick={handleOpen}
+      >
         <p className="mb-4">Qué opinan la comunidad:</p>
         {Object.keys(reviews?.byRating || {})
           .sort((a, b) => b - a)
@@ -457,18 +529,37 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
             const percentage = (reviews.byRating[n] * 100) / reviews.total;
 
             return (
-              <div id="reviews-open-button" key={n} className="grid gap-6  grid-cols-9 mb-3 items-center">
-                <div id="reviews-open-button" className="col-span-1 flex gap-1 items-center"> <img id="reviews-open-button" src="/icons/star.png" alt="star" className="w-4 h-4"/>{n}</div>
-                <div id="reviews-open-button" className="col-span-8">
-                  <div id="reviews-open-button" className="bg-gray-200 h-[28px] rounded-lg w-full border border-black">
-                    <motion.div
+              <div
+                id="reviews-open-button"
+                key={n}
+                className="grid gap-6  grid-cols-9 mb-3 items-center"
+              >
+                <div
+                  id="reviews-open-button"
+                  className="col-span-1 flex gap-1 items-center"
+                >
+                  {" "}
+                  <img
                     id="reviews-open-button"
+                    src="/icons/star.png"
+                    alt="star"
+                    className="w-4 h-4"
+                  />
+                  {n}
+                </div>
+                <div id="reviews-open-button" className="col-span-8">
+                  <div
+                    id="reviews-open-button"
+                    className="bg-gray-200 h-[28px] rounded-lg w-full border border-black"
+                  >
+                    <motion.div
+                      id="reviews-open-button"
                       className="bg-black h-full rounded"
                       initial={{ width: 0 }}
                       animate={{ width: `${percentage}%` }}
-                      transition={{ 
-                        duration: 0.8, 
-                        delay: 0.3 + (index * 0.05),
+                      transition={{
+                        duration: 0.8,
+                        delay: 0.3 + index * 0.05,
                       }}
                     />
                   </div>
@@ -478,7 +569,11 @@ const ReviewsSection = ({ reviews, assetReviews = [], asset }: { reviews: any; a
             );
           })}
       </div>
-      <ReviewsModal isOpen={open} onClose={handleClose} assetReviews={assetReviews} />
+      <ReviewsModal
+        isOpen={open}
+        onClose={handleClose}
+        assetReviews={assetReviews}
+      />
     </>
   );
 };
@@ -514,12 +609,15 @@ const Formats = ({
 
 export const FooterTemplate = ({
   form,
+  asset,
 }: {
   form: (arg0: { isLoading: boolean }) => ReactNode;
+  asset: Asset;
 }) => {
   const { handleSubmit, isLoading, success, message } = useFetcherSubmit({
     action: "/api/v1/user",
     intent: "free_subscription",
+    assetId: asset.id,
   });
 
   return (

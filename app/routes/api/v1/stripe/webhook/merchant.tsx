@@ -6,6 +6,7 @@ import {
   getLastPendingOrder,
   getEmailFromEvent,
 } from "~/.server/webhookUtils";
+import { createOrder } from "~/.server/getters";
 import { applyRateLimit } from "~/.server/rateLimiter";
 
 export const action = async ({
@@ -30,21 +31,37 @@ export const action = async ({
     event.type === "charge.succeeded"
   ) {
     if (email) {
-      // FIXME: this is flaky: change.
-      const order = await getLastPendingOrder();
-      if (order) {
-        await assignAssetToUserByEmail({ assetId: order.assetId, email });
-        // FUTURO: conservar la orden y solo cambiar su estado a 'paid' en vez de eliminarla
-        await db.order.delete({ where: { id: order.id } });
-        console.info(
-          `::ASSET_ID::${order.assetId}::ASSIGNADO_AL_USER::${email}`
-        );
-      } else {
-        console.error("No se encontró orden para email:", email);
-        return new Response("no order found", {
-          status: 404,
-        });
+      const paymentIntent = event.data.object;
+      const assetId = paymentIntent.metadata?.assetId;
+
+      if (!assetId) {
+        console.error("No assetId en metadata del payment intent");
+        return new Response("Missing assetId in metadata", { status: 400 });
       }
+
+      // Obtener el asset para crear la orden
+      const asset = await db.asset.findUnique({
+        where: { id: assetId },
+      });
+
+      if (!asset) {
+        console.error("Asset no encontrado:", assetId);
+        return new Response("Asset not found", { status: 404 });
+      }
+
+      // Crear la orden cuando el pago es exitoso usando createOrder
+      const order = await createOrder({
+        customer_email: email,
+        asset,
+        status: "PAID",
+      });
+
+      // Asignar el asset al usuario
+      await assignAssetToUserByEmail({ assetId, email });
+
+      console.info(
+        `::ORDEN_CREADA::${order.id}::ASSET_ID::${assetId}::ASSIGNADO_AL_USER::${email}`
+      );
     } else {
       console.error("No se pudo determinar el email en el evento");
       return new Response("Missing required email", {
@@ -55,17 +72,33 @@ export const action = async ({
   // listener para activar o desactivar acceso al asset
   if (event.type === "charge.updated") {
     if (email) {
-      const order = await getLastPendingOrder();
-      if (order) {
+      const paymentIntent = event.data.object;
+      const assetId = paymentIntent.metadata?.assetId;
+
+      if (assetId) {
         const charge = event.data.object;
         if (charge.status === "failed" || charge.status === "refunded") {
-          await removeAssetFromUserByEmail({ assetId: order.assetId, email });
-          // FUTURO: conservar la orden y solo cambiar su estado a 'refunded' en vez de eliminarla
-          await db.order.delete({ where: { id: order.id } });
-          return new Response("Asset removed", { status: 200 });
+          // Buscar la orden por email y assetId
+          const order = await db.order.findFirst({
+            where: {
+              customer_email: email,
+              assetId: assetId,
+              status: "PAID",
+            },
+          });
+
+          if (order) {
+            await removeAssetFromUserByEmail({ assetId, email });
+            // Actualizar el estado de la orden a refunded en vez de eliminarla
+            await db.order.update({
+              where: { id: order.id },
+              data: { status: charge.status },
+            });
+            return new Response("Asset removed and order updated", {
+              status: 200,
+            });
+          }
         }
-      } else {
-        console.error("No se encontró orden pendiente para email:", email);
       }
       return new Response(null, { status: 200 });
     } else {

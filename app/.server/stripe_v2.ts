@@ -43,7 +43,7 @@ const accountsURL = "https://api.stripe.com/v2/core/accounts";
 const paymentsURL = "https://api.stripe.com/v1/payment_intents";
 const productsURL = "https://api.stripe.com/v1/products";
 const pricesURL = "https://api.stripe.com/v1/prices";
-const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`;
+const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`; // prod
 const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
 
@@ -277,16 +277,20 @@ const createProductAndPrice = async (
   return data;
 };
 
-export const getAccountPayments = async (accountId: string) => {
+export const getAccountPayments = async (accountId: string, isDev: boolean) => {
   const url = new URL(paymentsURL);
+  const Authorization = `Bearer ${
+    isDev ? process.env.STRIPE_DEV_SECRET_KEY : apiKey
+  }`;
   const headers = {
-    Authorization: apiKey,
+    Authorization,
     "content-type": "application/x-www-form-urlencoded",
     "Stripe-Account": accountId,
     "Stripe-Version": "2025-04-30.preview",
   };
   const response = await fetch(url.toString(), { headers });
   const json = await response.json();
+  console.info("payments", json);
   return json.data;
 };
 
@@ -314,15 +318,22 @@ export const createClientSecret = async ({
 };
 
 export const getAccountCapabilities = async (
-  accountId?: string
+  accountId?: string,
+  isDev: boolean = false
 ): Promise<Capabilities | null> => {
   if (!accountId) return null;
 
   const url = new URL(accountsURL + `/${accountId}`);
   // url.searchParams.append("include", "identity");
   url.searchParams.set("include", "configuration.merchant");
+  const Authorization = `Bearer ${
+    isDev ? process.env.STRIPE_DEV_SECRET_KEY : apiKey
+  }`;
   const response = await fetch(url.toString(), {
-    headers: { "Stripe-Version": version, Authorization: apiKey },
+    headers: {
+      "Stripe-Version": version,
+      Authorization,
+    },
   });
   const data = await response.json();
   return data.configuration?.merchant?.capabilities;

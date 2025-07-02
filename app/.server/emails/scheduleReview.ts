@@ -13,7 +13,7 @@ export const scheduleReview = async ({
   user,
   when = "in 7 days", // change time span here
 }: {
-  when: string;
+  when?: string;
   asset: Asset & { user: User };
   user: User;
 }) => {

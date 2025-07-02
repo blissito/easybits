@@ -8,13 +8,21 @@ export const useFetcherSubmit = <T extends Asset>(options: {
   model?: T;
   modelName?: string;
   action: string;
+  assetId?: string;
 }) => {
-  const { action = "/api/v1/user", intent = "free_subscription" } = options;
+  const {
+    action = "/api/v1/user",
+    intent = "free_subscription",
+    assetId,
+  } = options;
   const fetcher = useFetcher();
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     formData.set("intent", intent);
+    if (assetId) {
+      formData.set("assetId", assetId);
+    }
     fetcher.submit(formData, {
       method: "post",
       action,

@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 import { db } from "./db";
 import { commitSession, getSession } from "./sessions";
-import type { User } from "@prisma/client";
+import type { Asset, User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
 import { createHost } from "~/lib/fly_certs/certs_getters";
@@ -154,19 +154,27 @@ export const getFilesForAssetId = (assetId: string) =>
   });
 
 export const createOrder = ({
-  userId,
-  assetId,
-  email,
+  customer,
+  asset,
+  status,
 }: {
-  email: string;
-  userId: string;
-  assetId: string;
+  status?: string;
+  asset: Asset;
+  customer: User;
 }) =>
   db.order.create({
     data: {
-      customer_email: email,
-      assetId,
-      userId,
+      customer_email: customer.email,
+      customerId: customer.id,
+      assetId: asset.id,
+      merchantId: asset.userId,
+      price: asset.price,
+      currency: asset.currency,
+      total: `$ ${asset.price} ${asset.currency}`,
+      priceId: asset.stripePrice,
+      productId: asset.stripeProduct,
+      note: asset.note, // @revisit
+      status,
     },
   });
 

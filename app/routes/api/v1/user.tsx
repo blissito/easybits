@@ -15,6 +15,7 @@ import {
 import { redirect } from "react-router";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
 import { sendPurchase } from "~/.server/emails/sendPurchase";
+import type { Asset } from "@prisma/client";
 // @TODO: recaptcha (cloudflare?)
 // @todo try use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
@@ -43,6 +44,47 @@ export type CertificateResponse = {
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "get_orders") {
+    const user = await getUserOrRedirect(request);
+    const merchant = Boolean(formData.get("merchant") || 1);
+    const assets = merchant
+      ? []
+      : await db.asset.findMany({
+          select: {
+            id: true,
+          },
+          where: {
+            userId: user.id,
+          },
+        });
+    const orders = await db.order.findMany({
+      select: {
+        customer_email: true,
+        asset: true,
+        merchant: false, // not needed?
+        merchantId: true,
+        customer: true,
+        id: true,
+        total: true,
+        status: true,
+        createdAt: true,
+      },
+      where: {
+        // @revisit there are two different type of orders as (merchant or customer)
+        merchantId: merchant ? user.id : undefined,
+        customerId: merchant ? undefined : user.id,
+        assetId: merchant
+          ? undefined
+          : {
+              in: assets.map((asset) => asset.id),
+            },
+      },
+    });
+    return {
+      orders,
+    };
+  }
   // @todo is this ok in here? good question, is comfortable, yes...
   if (intent === "free_subscription") {
     const email = formData.get("email") as string;
@@ -54,13 +96,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     };
     const asset = await db.asset.findUnique({
       where: { id: assetId },
-      select: {
-        title: true,
-        id: true,
-        createdAt: true,
-        price: true,
-        user: true,
-      },
+      include: { user: true },
     });
     if (!asset) throw new Response("Asset not found", { status: 404 });
 
@@ -96,18 +132,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const orderExists = await db.order.findFirst({
       where: {
         assetId,
-        userId: user.id,
+        customer_email: user.email,
       },
     });
     // avoid order creation
     if (orderExists) {
-      throw redirect("/dash/compras/" + assetId); // ventajas de usar fetcher pa todo...
+      // throw redirect("/dash/compras/" + assetId); // ya no queremos redireccionar
+      return { success: true };
     }
     // order creation @todo count stats?
     await createOrder({
-      userId: user.id,
-      assetId: asset.id,
-      email: user.email,
+      customer: user,
+      asset,
     });
     // // deliver product @todo downloadable file link?
     await sendPurchase({
@@ -182,12 +218,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const domainResult = await showHost(domain);
 
     // @todo document this "specialities"
-    if (domainResult?.app?.certificate) {
+    if ((domainResult as any)?.app?.certificate) {
       await db.user.update({
         where: {
           id: user.id,
         },
-        data: { domain, dnsConfig: domainResult.app.certificate },
+        data: { domain, dnsConfig: (domainResult as any).app.certificate },
       });
     }
   }

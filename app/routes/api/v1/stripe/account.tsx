@@ -1,4 +1,4 @@
-import { getUserOrRedirect } from "~/.server/getters";
+import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import {
   createAccountV2,
   createClientSecret,
@@ -15,9 +15,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "get_account_payments") {
     // @todo permissions
-    const accountId = formData.get("stripeId") as string;
-    const payments = await getAccountPayments(accountId);
-    const capabilities = await getAccountCapabilities(accountId);
+    const user = await getUserOrNull(request);
+    if (!user || !user.stripeId)
+      throw new Response("Stripe account not found", { status: 404 });
+
+    const payments = await getAccountPayments(user.stripeId, true);
+    const capabilities = await getAccountCapabilities(user.stripeId, true);
+
     return {
       payments,
       capabilities,

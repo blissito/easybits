@@ -20,7 +20,7 @@ export const meta = ({
 }: Route.MetaArgs) => {
   return getBasicMetaTags({
     title,
-    description: description 
+    description: description
       ? description.slice(0, 80).replace("#", "") + "..."
       : "Hecha un vistazo a este increíble asset 🚀",
     // @todo get this from config?
@@ -135,23 +135,8 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const {
-    OpenCheckout,
-    asset,
-    publishableKey,
-    files,
-    successStripeId,
-    assetReviews,
-  } = loaderData;
+  const { asset, files, successStripeId, assetReviews } = loaderData;
   const actionData = useActionData();
-  const assetUserStripeId = (asset as any)?.user?.stripe?.id;
-  const stripePromise = useMemo(() => {
-    if (!publishableKey) return null;
-    return loadStripe(publishableKey, {
-      stripeAccount: assetUserStripeId,
-    });
-  }, [publishableKey, assetUserStripeId]);
-
   // Fetcher
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
@@ -183,22 +168,20 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     byRating: reviewsByRating || defaultRatings,
   };
   const text = asset.template?.ctaText
-  ? asset.template.ctaText
-  : asset.price || 0 <= 0
-  ? "Suscribirse gratis"
-  : "Comprar";
+    ? asset.template.ctaText
+    : (asset.price || 0) <= 0
+    ? "Suscribirse gratis"
+    : "Comprar";
 
   return (
     <article>
       <HeaderTemplate asset={asset} />
       {successStripeId && <EmojiConfetti />}
       <ContentTemplate
-        asset={asset}
-        stripePromise={stripePromise}
-        checkoutSession={actionData?.checkoutSession}
-        files={files}
+        asset={asset as any}
+        files={files as any}
         actionButton={
-          asset.price !== "0" && asset.price !== 0 ? (
+          Number(asset.price) !== 0 ? (
             <BrutalButton
               isLoading={isLoading}
               type="button"
@@ -206,8 +189,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               mode="landing"
               className="h-16"
               containerClassName="h-16  border-none rounded-none"
-              style={{ 
-                backgroundColor: (asset as any)?.user?.storeConfig?.hexColor || "red" 
+              style={{
+                backgroundColor:
+                  (asset as any)?.user?.storeConfig?.hexColor || "red",
               }}
             >
               {text}

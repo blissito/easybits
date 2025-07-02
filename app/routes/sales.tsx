@@ -34,12 +34,19 @@ export const clientLoader = async () => {
     }),
   });
   const user = await response.json();
-  const stripeId = user.stripeId;
-  return { user, stripeId };
+  const merchantOrders = await fetch("/api/v1/user", {
+    method: "post",
+    body: new URLSearchParams({
+      intent: "get_orders",
+    }),
+  })
+    .then((res) => res.json())
+    .then((data) => data.orders);
+  return { user, merchantOrders };
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
-  const { user, stripeId } = loaderData;
+  const { user, merchantOrders } = loaderData;
   const fetcher = useFetcher();
   // Stripe connect client instance
   const [stripeConnectInstance, setSCI] =
@@ -68,16 +75,18 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
   const clientSecret = fetcher.data?.clientSecret;
 
   useEffect(() => {
+    if (!clientSecret) return;
+
+    createInstance(clientSecret);
+  }, [clientSecret]);
+
+  // Aquí se detona todo @todo revisit: tal vez ya no es necesario usando solo Order
+  useEffect(() => {
     fetcher.submit(
       { intent: "get_client_secret", accountId: user.stripeId },
       { method: "post", action: "/api/v1/stripe/account" }
     );
   }, []);
-  useEffect(() => {
-    if (!clientSecret) return;
-
-    createInstance(clientSecret);
-  }, [clientSecret]);
 
   console.log("CLIENTSECRET::", clientSecret);
 
@@ -90,7 +99,7 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
         )}
       >
         <Header title="Ventas" searcher={false} layout={false} />
-        {!stripeConnectInstance && (
+        {merchantOrders.length < 1 && (
           <EmptySales
             cta={
               <BrutalButton
@@ -105,7 +114,7 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
             }
           />
         )}
-        <SalesTable stripeId={stripeId} />
+        <SalesTable orders={merchantOrders} />
         {stripeConnectInstance && (
           <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
             <ConnectAccountOnboarding
@@ -124,7 +133,11 @@ export const EmptySales = ({ cta }: { cta: ReactNode }) => {
   return (
     <Empty
       illustration={
-        <img className="w-44 mx-auto " src="/empty-states/sales-empty.webp" alt="No hay ventas registradas" />
+        <img
+          className="w-44 mx-auto "
+          src="/empty-states/sales-empty.webp"
+          alt="No hay ventas registradas"
+        />
       }
       title="Administra tus ventas desde aquí"
       text={
@@ -162,7 +175,13 @@ const EmptyPayment = ({
   };
   return (
     <Empty
-      illustration={<img className="w-44 mx-auto " src="/sales-empty.webp" alt="No hay ventas registradas" />}
+      illustration={
+        <img
+          className="w-44 mx-auto "
+          src="/sales-empty.webp"
+          alt="No hay ventas registradas"
+        />
+      }
       title="Conecta una pasarela de pagos"
       text={<span>Conectate a Stripe para ofrecerte pagos seguros.</span>}
       footer={
