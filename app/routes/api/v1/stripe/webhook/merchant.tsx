@@ -3,7 +3,6 @@ import {
   assignAssetToUserByEmail,
   removeAssetFromUserByEmail,
   constructStripeEvent,
-  getLastPendingOrder,
   getEmailFromEvent,
 } from "~/.server/webhookUtils";
 import { createOrder } from "~/.server/getters";
