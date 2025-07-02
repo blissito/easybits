@@ -40,14 +40,14 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
   }, [asset]);
   // return null;
   return (
-    <article className="w-screen">
-      <nav className="flex items-center w-full border-black border-b md:ml-20 md:pt-4 pt-16 pb-4">
+    <article className="w-full ">
+      <nav className="flex items-center border-black border-b md:ml-20 box-border md:pt-4 pt-16 pb-4">
         <Link
           prefetch="intent"
           to="/dash/assets"
-          className="ml-6 hover:scale-105 transition-all"
+          className="ml-4 md:ml-6 hover:scale-105 transition-all"
         >
-          <span className="text-black text-3xl">
+          <span className="text-black text-2xl lg:text-3xl">
             <FaArrowLeft />
           </span>
         </Link>

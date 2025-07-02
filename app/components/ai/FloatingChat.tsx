@@ -69,7 +69,7 @@ export function FloatingChat({}: FloatingChatProps) {
     <>
       {/* Botón flotante */}
       <motion.div
-        className="fixed bottom-6 right-8 z-30"
+        className="fixed bottom-4 md:bottom-6 right-4 md:right-8 z-30"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
@@ -77,8 +77,8 @@ export function FloatingChat({}: FloatingChatProps) {
         <BrutalButton
           id="chatbot-button"
           onClick={() => setIsOpen(true)}
-          className="min-w-14 min-h-14 w-14 h-14 rounded-full p-0 grid place-items-center bg-munsell"
-          containerClassName="min-w-14 min-h-14 rounded-full"
+          className="min-w-[49px] min-h-[49px] md:min-w-14 md:min-h-14 w-12 h-12 md:w-14 md:h-14 rounded-full p-0 grid place-items-center bg-munsell"
+          containerClassName="w-full h-full rounded-full"
         >
           {/* <BsChatDots className="w-6 h-6 text-white" /> */}
           <img

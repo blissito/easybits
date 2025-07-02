@@ -361,15 +361,15 @@ export const EditAssetForm = ({
           <HR />
           <ExtraConfig onChange={handleChange("extra")} extra={asset.extra} />
           <br />
-          <nav className="py-4 md:py-6 flex justify-between items-center gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white border-t-2 border-t-black">
-            <div className="flex gap-2 items-center">
+          <nav className="py-4 md:py-6 flex flex-wrap justify-between items-center gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white border-t-2 border-t-black">
+            <div className="flex gap-2 items-center flex-wrap lg:flex-nowrap">
               <p>Estatus:</p>
               <div
                 id="status"
                 className="flex border border-black rounded-lg gap-0 relative overflow-hidden"
               >
                 <span
-                  className={`rounded-l-none p-1 px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
+                  className={`text-sm lg:text-base rounded-l-none p-1 px-1 lg:px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
                     form.published
                       ? "bg-black text-white shadow-md "
                       : "bg-white text-black hover:bg-gray-50 "
@@ -379,7 +379,7 @@ export const EditAssetForm = ({
                   Publicado
                 </span>
                 <span
-                  className={`rounded-r-none p-1 px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
+                  className={`text-sm lg:text-base  rounded-r-none p-1 px-1 lg:px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
                     !form.published
                       ? "bg-black text-white shadow-md"
                       : "bg-white text-black hover:bg-gray-50 "

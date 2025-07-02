@@ -363,7 +363,7 @@ const Subscription = ({
 
   // hidden on mobile
   return (
-    <fetcher.Form onSubmit={handleSubmit} className="hidden md:block">
+    <fetcher.Form onSubmit={handleSubmit} className="hidden md:block"   id="free-purchase-button">
       <Input
         placeholder="Escribe tu nombre"
         name="displayName"

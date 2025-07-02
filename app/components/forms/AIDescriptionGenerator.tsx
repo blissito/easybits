@@ -403,7 +403,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           {isLoading ? (
          <img className="w-8" src="/ai.gif" alt="thinking robot" />
           ) : (
-          <IoStar title="ai-prompt-button" id="ai-prompt-button" className="text-white text-xl" />
+            <img id="ai-prompt-button" src="/icons/stars.svg" alt="star" className="w-8 h-8" />
           )}
         </button>
       </div>
