@@ -2,10 +2,15 @@ import { STRINGS } from "./StatsComponent.constants";
 import { HiOutlineInformationCircle } from "react-icons/hi";
 import LineChart from "../charts/LineChart";
 import { cn } from "~/utils/cn";
-import { Tooltip } from "../common/Tooltip";
 import { useAnimate, motion } from "motion/react";
 
-export default function StatsComponent({ user, salesData, mostSoldProducts }) {
+export default function StatsComponent({
+  user,
+  chartData,
+  mostSoldProducts,
+  currentMonthTotal,
+  grandTotal,
+}) {
   //:TODO get these insights and format them
   return (
     <div className="min-h-screen lg:h-screen  px-4 md:pl-28 md:pr-8   2xl:px-0">
@@ -28,15 +33,36 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
           </div>
         </div>
         <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-6 w-full mt-6">
-          {STRINGS.stats.map((stat) => (
-            <StatsCard stat={stat} />
-          ))}
+          <StatsCard
+            amount={currentMonthTotal}
+            title={"Ventas del mes"}
+            className={"bg-sky"}
+            tooltip={"Ventas totales del mes"}
+          />
+          <StatsCard
+            amount={"180"}
+            title={"Visitas"}
+            className={"bg-linen"}
+            tooltip={"Visitas totales de tus assets"}
+          />
+          <StatsCard
+            amount={"10%"}
+            title={"Rate de conversión"}
+            className={"bg-rose"}
+            tooltip={"Porcentaje de visitas entre ventas"}
+          />
+          <StatsCard
+            amount={grandTotal}
+            title={"Ganancias"}
+            className={"bg-lime"}
+            tooltip={"Ingresos después de comisiones"}
+          />
         </div>
         <div className="w-full grid grid-cols-12 gap-6 py-6 md:py-10 h-full   ">
           <div className="col-span-12 lg:col-span-8 rounded-xl border-2 border-black p-4 md:p-6 bg-white h-full flex flex-col justify-between ">
             <p className="mb-10">Ventas</p>
             <div className="w-full h-full  min-h-[200px]">
-              <LineChart data={salesData} />
+              <LineChart data={chartData} />
             </div>
           </div>
           <div
@@ -71,11 +97,16 @@ export default function StatsComponent({ user, salesData, mostSoldProducts }) {
 }
 
 const StatsCard = ({
-  stat,
+  className,
+  title,
+  amount,
+  tooltip,
 }: {
-  stat: { className: string; title: string; amount: string; tooltip: string };
+  className: string;
+  title: string;
+  amount: string;
+  tooltip: string;
 }) => {
-  const { className, title, amount, tooltip } = stat || {};
   const [scope, animate] = useAnimate();
   const handleMouseEnter = () => {
     animate(scope.current, { y: 5, opacity: 1 }, { type: "spring" });

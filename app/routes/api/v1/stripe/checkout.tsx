@@ -14,6 +14,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         user: { select: { stripeId: true } },
         price: true,
         stripePrice: true,
+        userId: true,
       },
     });
     if (!asset) throw new Response("Asset not found", { status: 404 });
@@ -25,6 +26,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         total: asset.price?.toString(),
         stripePriceId: asset.stripePrice,
         stripePriceProductId: asset.stripePrice,
+        userId: asset.userId,
       },
     });
 
