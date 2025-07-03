@@ -113,8 +113,7 @@ export const EditAssetForm = ({
   };
 
   const descriptionRef = useRef("");
-  const handleChange = (name: string) => (value: string) => {
-    // console.log("handleChange", name, value);
+  const handleChange = (name: string) => (value: any) => {
     if (name === "description") {
       descriptionRef.current = value;
     }
@@ -356,7 +355,7 @@ export const EditAssetForm = ({
             onChange={handleChange("template")}
             host={host}
             slug={asset.slug}
-            template={asset.template}
+            template={asset.template as any}
             error={errors.template}
           />
           <HR />
@@ -365,47 +364,50 @@ export const EditAssetForm = ({
           <nav className="py-4 md:py-6 flex flex-wrap justify-between items-center gap-4 sticky bottom-0 pr-16 md:pr-0 bg-white border-t-2 border-t-black">
             <div className="flex gap-2 items-center flex-wrap lg:flex-nowrap">
               <p>Estatus:</p>
-              <div id="status" className="flex border border-black rounded-lg gap-0 relative overflow-hidden">
-                <span 
+              <div
+                id="status"
+                className="flex border border-black rounded-lg gap-0 relative overflow-hidden"
+              >
+                <span
                   className={`text-sm lg:text-base rounded-l-none p-1 px-1 lg:px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
-                    form.published 
-                      ? 'bg-black text-white shadow-md ' 
-                      : 'bg-white text-black hover:bg-gray-50 '
+                    form.published
+                      ? "bg-black text-white shadow-md "
+                      : "bg-white text-black hover:bg-gray-50 "
                   }`}
                   onClick={() => setState({ published: true })}
                 >
                   Publicado
                 </span>
-                <span 
+                <span
                   className={`text-sm lg:text-base  rounded-r-none p-1 px-1 lg:px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
-                    !form.published 
-                      ? 'bg-black text-white shadow-md' 
-                      : 'bg-white text-black hover:bg-gray-50 '
+                    !form.published
+                      ? "bg-black text-white shadow-md"
+                      : "bg-white text-black hover:bg-gray-50 "
                   }`}
                   onClick={() => setState({ published: false })}
                 >
                   Sin publicar
                 </span>
                 {/* Animated background indicator */}
-                <div 
+                <div
                   className={`absolute top-0 h-full bg-black transition-all duration-300 ease-in-out rounded-md ${
-                    form.published ? 'left-0 w-1/2' : 'left-1/2 w-1/2'
+                    form.published ? "left-0 w-1/2" : "left-1/2 w-1/2"
                   }`}
                   style={{ zIndex: -1 }}
                 />
               </div>
             </div>
             <div className="flex gap-6">
-            <Link prefetch="intent" to="/dash/assets">
-              <BrutalButton mode="ghost" isDisabled={isLoading}>
-                Cancelar
+              <Link prefetch="intent" to="/dash/assets">
+                <BrutalButton mode="ghost" isDisabled={isLoading}>
+                  Cancelar
+                </BrutalButton>
+              </Link>
+              <BrutalButton isLoading={isLoading} type="submit">
+                Guardar
               </BrutalButton>
-            </Link>
-            <BrutalButton isLoading={isLoading} type="submit">
-              Guardar
-            </BrutalButton>  
-             </div>
-          </nav>         
+            </div>
+          </nav>
         </Form>
       </LayoutGroup>
     </article>

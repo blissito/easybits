@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { CopyButton } from "~/components/common/CopyButton";
 import slugify from "slugify";
+import type { AssetTemplateSettings } from "@prisma/client";
 
 export const Plantilla = ({
   onChange,
@@ -12,13 +13,13 @@ export const Plantilla = ({
   error,
 }: {
   error?: string;
-  onChange?: (arg0: Record<string, string>) => void;
-  template?: { ctaText?: string; templateName?: string; domain?: string };
+  onChange?: (arg0: AssetTemplateSettings) => void;
+  template?: AssetTemplateSettings;
   slug: string;
   host: string;
 }) => {
-  const [state, setState] = useState({
-    ctaText: "Compra ahora",
+  const [state, setState] = useState<AssetTemplateSettings>({
+    ctaText: "Comprar ahora",
     templateName: "default",
     ...template, // @todo take host out of template
     slug,
@@ -31,8 +32,11 @@ export const Plantilla = ({
 
   const handleChange =
     (field: string) => (event: ChangeEvent<HTMLInputElement>) => {
-      const formated = slugify(event.currentTarget.value);
-      update({ [field]: formated });
+      let v = event.currentTarget.value;
+      if (field !== "ctaText") {
+        v = slugify(v);
+      }
+      update({ [field]: v });
     };
 
   useEffect(() => {
