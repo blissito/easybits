@@ -380,7 +380,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
               handleGenerateDescription();
             }
           }}
-          className="flex-1 rounded-lg border border-black bg-white px-3 py-2 text-sm text-brand-500  focus:ring-1 focus:border-munsell focus:ring-munsell outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg text-black border border-black bg-white px-3 py-2 text-sm  focus:ring-1 focus:border-munsell focus:ring-munsell outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           placeholder="Escribe aquí tu prompt para la IA"
           aria-label="Prompt para IA"
         />
@@ -401,9 +401,14 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           title="Enviar a IA"
         >
           {isLoading ? (
-         <img className="w-8" src="/ai.gif" alt="thinking robot" />
+            <img className="w-8" src="/ai.gif" alt="thinking robot" />
           ) : (
-            <img id="ai-prompt-button" src="/icons/stars.svg" alt="star" className="w-8 h-8" />
+            <img
+              id="ai-prompt-button"
+              src="/icons/stars.svg"
+              alt="star"
+              className="w-8 h-8"
+            />
           )}
         </button>
       </div>

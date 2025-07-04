@@ -14,9 +14,21 @@ export const action = async ({ request }: Route.ActionArgs) => {
         user: { select: { stripeId: true } },
         price: true,
         stripePrice: true,
+        userId: true,
       },
     });
     if (!asset) throw new Response("Asset not found", { status: 404 });
+
+    await db.order.create({
+      data: {
+        assetId,
+        status: "pending",
+        total: asset.price?.toString(),
+        stripePriceId: asset.stripePrice,
+        stripePriceProductId: asset.stripePrice,
+        userId: asset.userId,
+      },
+    });
 
     const url = await createCheckoutURL(assetId, asset.user.stripeId!);
     return redirect(url);
