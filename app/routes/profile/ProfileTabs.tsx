@@ -79,7 +79,7 @@ export const ProfileTabs = ({
           <Notifications user={user} />{" "}
         </TabPanel>
         <TabPanel>
-          <Providers />
+          <Providers user={user} />
         </TabPanel>
       </TabPanels>
     </TabGroup>

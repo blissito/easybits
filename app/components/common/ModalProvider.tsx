@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 import { BrutalButtonClose } from "./BrutalButtonClose";
@@ -6,6 +6,7 @@ import { Avatar } from "./Avatar";
 import { Link } from "react-router";
 import { BrutalButton } from "./BrutalButton";
 import { FaCheck } from "react-icons/fa";
+import { Badge } from "./Badge";
 
 export const ModalProvider = ({
   noCloseButton,
@@ -17,7 +18,10 @@ export const ModalProvider = ({
   onClose,
   className,
   containerClassName,
+  user,
+  submitButton,
 }: {
+  submitButton?: ReactNode;
   noCloseButton?: boolean;
   className?: string;
   containerClassName?: string;
@@ -26,6 +30,8 @@ export const ModalProvider = ({
   children?: ReactNode;
   title?: ReactNode;
   icon: string;
+  mode?: string;
+  user?: { stripeId?: string | null };
 }) => {
   const keyDownHandler = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -182,18 +188,21 @@ export const ModalProvider = ({
                   icon="/icons/chat.svg"
                   label="Chatea con nosotros"
                 />
-                <div className="mt-6 md:mt-auto">
-                  <div className="text-xs flex gap-1 mb-3 w-full items-start  rounded bg-status-success-overlay text-status-success p-1">
-                    <FaCheck className="mt-[2px]" />
-                    <span>Cuenta conectada: Fixtergeek</span>
-                  </div>
-                  <BrutalButton
-                    className="w-full bg-black text-white "
-                    containerClassName="w-full  "
-                  >
-                    Conectar
-                  </BrutalButton>
-                </div>
+
+                {user?.stripeId ? (
+                  <section>
+                    <Link to="/dash/ventas">
+                      <Badge text={user.stripeId} />
+                    </Link>
+                    <p className="text-[10px] text-gray-500">
+                      ¿Quieres desconectar tu cuenta?
+                      <br />
+                      Envíame un correo: brenda@fixter.org
+                    </p>
+                  </section>
+                ) : (
+                  submitButton
+                )}
               </div>
             </div>
           </motion.section>
@@ -212,12 +221,21 @@ const ModalItemList = ({
   icon: string;
   label: string;
 }) => {
+  if (link) {
+    return (
+      <Link to={link}>
+        <div className="flex gap-2 items-center text-iron mt-2">
+          <img src={icon} alt={label} />
+          <span>{label}</span>
+        </div>{" "}
+      </Link>
+    );
+  }
+
   return (
-    <Link to={link}>
-      <div className="flex gap-2 items-center text-iron mt-2">
-        <img src={icon} alt={label} />
-        <span>{label}</span>
-      </div>{" "}
-    </Link>
+    <div className="flex gap-2 items-center text-iron mt-2">
+      <img src={icon} alt={label} />
+      <span>{label}</span>
+    </div>
   );
 };

@@ -1,9 +1,19 @@
-import { useState } from "react";
+import type { User } from "@prisma/client";
+import { useEffect, useRef, useState } from "react";
 import { FaCheck } from "react-icons/fa";
+import { useFetcher } from "react-router";
+import { Badge } from "~/components/common/Badge";
+import { BrutalButton } from "~/components/common/BrutalButton";
 import { Input } from "~/components/common/Input";
 import { ModalProvider } from "~/components/common/ModalProvider";
 
-export const Providers = () => {
+const isValidGoogleTrackingId = (value: string) =>
+  /^G-[A-Z0-9]{10}$/.test(value);
+
+export const Providers = ({ user }: { user?: User }) => {
+  const fetcher = useFetcher();
+  const [isValid, setIsValid] = useState(false);
+  const [inputValue, setInputValue] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [provider, setProvider] = useState(" ");
 
@@ -20,6 +30,32 @@ export const Providers = () => {
   const handleClose = () => {
     setIsOpen(false);
   };
+
+  const handleAnalitycsSubmit = async () => {
+    if (!inputValue || !isValidGoogleTrackingId(inputValue)) return;
+
+    await fetcher.submit(
+      {
+        googleAnalyticsTrackingId: inputValue,
+        intent: "update_analytics",
+      },
+      { method: "post", action: "/api/v1/store-config" }
+    );
+    setIsOpen(false);
+  };
+
+  const handleInputChange = (value: string) => {
+    if (isValidGoogleTrackingId(value)) {
+      setIsValid(true);
+    } else {
+      setIsValid(false);
+    }
+    setInputValue(value);
+  };
+  const isLoading = fetcher.state !== "idle";
+  const googleAnalyticsTrackingId =
+    user?.storeConfig?.googleAnalyticsTrackingId;
+
   return (
     <section className="flex flex-wrap mt-8 gap-6 w-full ">
       <ProviderCard
@@ -27,13 +63,14 @@ export const Providers = () => {
         icon="/icons/stripe.svg"
         title="Stripe"
         description="Recibe pagos en línea seguros y rápidos con stripe. "
-        stripeAccount="Fixtergeek"
+        accountId={user?.stripeId}
       />
       <ProviderCard
         handleModal={handleModalAnalytics}
         icon="/icons/analytics.svg"
         title="Google Analytics"
         description="Añade un ID de medición de Analytics y obten información sobre los visitantes. "
+        accountId={googleAnalyticsTrackingId}
       />
       {provider === "stripe" && (
         <ModalProvider
@@ -41,6 +78,7 @@ export const Providers = () => {
           icon="/icons/stripe.svg"
           onClose={handleClose}
           isOpen={isOpen}
+          user={user}
         >
           <div className="flex flex-col  h-full">
             <div>
@@ -81,6 +119,17 @@ export const Providers = () => {
           icon="/icons/analytics.svg"
           onClose={handleClose}
           isOpen={isOpen}
+          submitButton={
+            <BrutalButton
+              isLoading={isLoading}
+              isDisabled={!isValid}
+              onClick={handleAnalitycsSubmit}
+              className="w-full bg-black text-white"
+              containerClassName="w-full mt-4"
+            >
+              Conectar
+            </BrutalButton>
+          }
         >
           <div className="flex flex-col  h-full">
             <div>
@@ -91,7 +140,12 @@ export const Providers = () => {
                 marketing a su público de mayor valor.
               </p>
 
-              <Input label="Ingresa el código" placeholder="G-XXXXXXXXXX" />
+              <Input
+                defaultValue={googleAnalyticsTrackingId}
+                onChange={(ev) => handleInputChange(ev.currentTarget.value)}
+                label="Ingresa el código"
+                placeholder="G-XXXXXXXXXX"
+              />
             </div>
             <img
               src="/images/analytics-example.svg"
@@ -109,13 +163,13 @@ const ProviderCard = ({
   icon,
   title,
   description,
-  stripeAccount,
+  accountId,
   handleModal,
 }: {
   icon: string;
   title: string;
   description: string;
-  stripeAccount?: string;
+  accountId?: string;
   handleModal?: () => void;
 }) => {
   return (
@@ -124,10 +178,7 @@ const ProviderCard = ({
         <img src={icon} alt="provider" />
         <div className="flex gap-2 items-center mb-1 mt-2 ">
           <h3 className="text-xl font-bold">{title}</h3>
-          <div className="text-xs flex gap-1 items-center w-fit rounded bg-status-success-overlay text-status-success p-1">
-            <FaCheck />
-            <span>Cuenta: {stripeAccount}</span>
-          </div>
+          <Badge text={accountId} mode={accountId ? undefined : "hidden"} />
         </div>
         <p className="text-iron">{description}</p>
       </div>

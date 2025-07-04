@@ -5,6 +5,7 @@ import { db } from "~/.server/db";
 import type { Asset } from "@prisma/client";
 import { StoreTemplate } from "../store/storeTemplate";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
+import { useGoogleAnalytics } from "~/hooks/useGoogleAnalytics";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -20,7 +21,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
   let assets: Asset[] = [];
   let user = null;
-  
+
   if (hostExists) {
     user = hostExists;
     assets = await db.asset.findMany({
@@ -49,22 +50,35 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   return { assets, user };
 };
 
-export const meta = ({
-  data,
-}: Route.MetaArgs) => {
+export const meta = ({ data }: Route.MetaArgs) => {
   // Get user info from the data
   const user = data?.user;
-  
+
   return getBasicMetaTags({
-    title: (user as any)?.storeConfig?.metadata?.metaTitle || user?.displayName || "Creador EasyBits",
-    description: (user as any)?.storeConfig?.metadata?.metaDescription || 
-      `Descubre increíbles assets digitales en la tienda de ${user?.displayName || "este creador"} 🚀`,
+    title:
+      (user as any)?.storeConfig?.metadata?.metaTitle ||
+      user?.displayName ||
+      "Creador EasyBits",
+    description:
+      (user as any)?.storeConfig?.metadata?.metaDescription ||
+      `Descubre increíbles assets digitales en la tienda de ${
+        user?.displayName || "este creador"
+      } 🚀`,
     // @todo get this from config?
-    image: (user as any)?.storeConfig?.metadata?.metaImage || user?.storeConfig?.coverImage|| user?.storeConfig?.logoImage || `/metaImage-tienda.webp`,
+    image:
+      (user as any)?.storeConfig?.metadata?.metaImage ||
+      user?.storeConfig?.coverImage ||
+      user?.storeConfig?.logoImage ||
+      `/metaImage-tienda.webp`,
   });
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { assets } = loaderData;
+  const { assets, user } = loaderData;
+  user?.storeConfig?.googleAnalyticsTrackingId &&
+    useGoogleAnalytics({
+      trackingId: user.storeConfig.googleAnalyticsTrackingId,
+      // Se puede enviar un "pagePath" custom (pagePath: `/tienda/${asset.<id|slug|title|other>}`)
+    });
   return <StoreTemplate assets={assets} />;
 }

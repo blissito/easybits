@@ -110,21 +110,22 @@ type Notifications {
 }
 
 type StoreConfig {
-  colorMode      String  @default("light")
-  typography     String  @default("")
-  hexColor       String  @default("")
-  socialNetworks Boolean @default(true)
-  showProducts   Boolean @default(true)
-  instagram      String  @default("")
-  facebook       String  @default("")
-  tiktok         String  @default("")
-  youtube        String  @default("")
-  linkedin       String  @default("")
-  x              String  @default("")
-  website        String  @default("")
-  metadata       Json?
-  logoImage      String  @default("")
-  coverImage     String  @default("")
+  metadata                  Json?
+  colorMode                 String  @default("light")
+  typography                String  @default("")
+  hexColor                  String  @default("")
+  socialNetworks            Boolean @default(true)
+  showProducts              Boolean @default(true)
+  instagram                 String  @default("")
+  facebook                  String  @default("")
+  tiktok                    String  @default("")
+  youtube                   String  @default("")
+  linkedin                  String  @default("")
+  website                   String  @default("")
+  logoImage                 String  @default("")
+  coverImage                String  @default("")
+  googleAnalyticsTrackingId String  @default("")
+  x                         String  @default("") // ? what for, remove?
 }
 
 model User {
