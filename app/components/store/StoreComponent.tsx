@@ -4,8 +4,7 @@ import EditIcon from "/icons/edit.svg";
 import OpenIcon from "/icons/open.svg";
 import SeoIcon from "/icons/seo.svg";
 import ShareIcon from "/icons/share.svg";
-import { Link } from "react-router";
-import { useState, type ReactNode, useRef, type ChangeEvent, useEffect } from "react";
+import { useState, type ReactNode, useRef,useEffect } from "react";
 import { cn } from "~/utils/cn";
 import type { Asset, User } from "@prisma/client";
 import { Sharing } from "~/routes/assets/AssetPreview";
@@ -14,8 +13,6 @@ import { Input } from "../common/Input";
 import StoreConfigForm from "./StoreConfigForm";
 import { StoreTemplate } from "~/routes/store/storeTemplate";
 import { useOpenLink } from "~/hooks/useOpenLink";
-import { ImageIcon } from "~/components/icons/image";
-import { IoClose } from "react-icons/io5";
 import { BrutalButton } from "../common/BrutalButton";
 import { useFetcher } from "react-router";
 import React from "react";
@@ -39,7 +36,6 @@ export default function StoreComponent({
   cta?: ReactNode;
   variant: string;
 }) {
-  const [currentFilter, setCurrentFilter] = useState();
   const assetId = assets?.[0]?.id;
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
@@ -200,7 +196,10 @@ const SeoDrawer = ({
       removeMetaImageRef.current = false;
     }
   });
-  const { upload } = useUploader({ assetId: user?.id });
+  const { upload } = useUploader({
+    storageKey: '/store/metaImage',
+    deterministicKey: 'storageKey',
+  });
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -217,7 +216,7 @@ const SeoDrawer = ({
     formData.append("intent", "update_seo_metadata");
 
     if (metaImageRef.current) {
-      const metaImage = await upload(metaImageRef.current, user.id) as string;
+      const metaImage = await upload(metaImageRef.current) as string;
       formData.append("metaImage", metaImage);
     } else if (removeMetaImageRef.current) {
       formData.append("metaImage", '');
