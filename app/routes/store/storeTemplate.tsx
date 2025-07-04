@@ -28,7 +28,7 @@ export const StoreTemplate = ({
   assets: Asset[];
   variant?: string;
 }) => {
-  const [currentFilter, setCurrentFilter] = useState();
+  const [currentFilter, setCurrentFilter] = useState("ANY");
   const user = rootUser || assets?.[0]?.user || {};
   const {
     instagram,
@@ -45,6 +45,25 @@ export const StoreTemplate = ({
     showProducts,
     socialNetworks,
   } = user?.storeConfig || {};
+
+  const BASE_CATEGORIES = [
+    { type: "ANY", label: "TODOS" },
+    { type: "VOD_COURSE", label: "VIDEO COURSE" },
+    { type: "EMAIL_COURSE", label: "EMAIL COURSE" },
+    { type: "WEBINAR", label: "WEBINAR" },
+    { type: "EBOOK", label: "EBOOK" },
+    { type: "DOWNLOADABLE", label: "DESCARGABLE" },
+  ];
+
+  const activeCategories = BASE_CATEGORIES.filter((category) => {
+    if (category.type === "ANY") return true; // Keep the "ALL" category always
+    return assets.some((asset) => asset.type === category.type);
+  });
+
+  const filteredAssets =
+    currentFilter === "ANY"
+      ? assets
+      : assets.filter((a) => a.type === currentFilter);
   return (
     <section className="h-full bg-white" style={{ fontFamily: typography }}>
       <div
@@ -122,19 +141,19 @@ export const StoreTemplate = ({
         </div>
         <div className="flex justify-center gap-3 mb-10">
           {/* review which categories to show and display cause notr everyone publishes from all categories */}
-          {["Todos", "Nuevos", "Assets", "Libros"].map((f, i) => (
+          {activeCategories.map((f, i) => (
             <button
               key={i}
               style={{ fontFamily: typography }}
               className={cn(
                 "rounded-full p-3 border border-black cursor-pointer",
                 {
-                  "bg-black text-white": f === currentFilter,
+                  "bg-black text-white": f.type === currentFilter,
                 }
               )}
-              onClick={() => setCurrentFilter(f)}
+              onClick={() => setCurrentFilter(f.type)}
             >
-              {f}
+              {f.label}
             </button>
           ))}
         </div>
@@ -144,7 +163,7 @@ export const StoreTemplate = ({
             className=" max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0"
           >
             <AssetList isPublic={isPublic} assets={assets}>
-              {assets.map((asset) => (
+              {filteredAssets.map((asset) => (
                 <PublicCardBox key={asset.id} asset={asset} user={user} />
               ))}
             </AssetList>
@@ -162,7 +181,7 @@ const PublicCardBox = ({ user, asset }: { user: User; asset: Asset }) => {
     publicLink: `https://${user.host}.easybits.cloud/tienda/${asset.slug}`,
   });
   const { typography } = user?.storeConfig || {};
-  
+
   return (
     <div style={{ fontFamily: typography }}>
       <AssetCard to={url} key={asset.id} asset={asset} right={<></>} />
