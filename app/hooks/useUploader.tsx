@@ -4,9 +4,11 @@ import { useFetcher } from "react-router";
 export const useUploader = (config?: {
   defaultLinks?: string[];
   onLinksUpdated?: (arg0: string[]) => void;
-  assetId: string;
+  assetId?: string;
+  storageKey?: string;
+  deterministicKey?: 'fileName' | 'storageKey'; // when is equal to storageKey the file name will be determinate for storageKey not fileName
 }) => {
-  const { onLinksUpdated, defaultLinks, assetId } = config || {};
+  const { onLinksUpdated, defaultLinks, assetId, storageKey, deterministicKey = 'fileName' } = config || {};
   const [links, setLinks] = useState<string[]>(defaultLinks || []);
   const fetcher = useFetcher();
 
@@ -47,13 +49,15 @@ export const useUploader = (config?: {
     // );
   };
 
-  const getPublicPutUrl = async (fileName: string, assetId: string) => {
+  const getPublicPutUrl = async (fileName: string, assetId?: string) => {
     const response = await fetch("/api/v1/assets", {
       method: "post",
       body: new URLSearchParams({
         intent: "get_put_file_url",
         fileName,
-        assetId,
+        assetId: assetId || '',
+        storageKey: storageKey || '',
+        deterministicKey,
       }),
     });
     return await response.text();
@@ -66,7 +70,7 @@ export const useUploader = (config?: {
       headers: { "content-type": body.type },
     }).then((response) => response.ok);
 
-  const upload = async (file: File, assetId: string) => {
+  const upload = async (file: File, assetId?: string) => {
     const url = await getPublicPutUrl(file.name, assetId);
     const uri = url.split("?")[0];
     const ok = await putFile(url, file);

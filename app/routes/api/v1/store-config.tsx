@@ -31,7 +31,7 @@ export async function action({ request }) {
     const metaTitle = formData.get("metaTitle") as string;
     const metaDescription = formData.get("metaDescription") as string;
     const keywordsInput = formData.get("keywords") as string;
-    //   const metaImage = formData.get("metaImage") as string;
+    const metaImage = formData.get("metaImage") || '';
 
     // Process keywords: split by comma and trim whitespace
     const keywords = keywordsInput
@@ -43,7 +43,7 @@ export async function action({ request }) {
       metaTitle,
       metaDescription,
       keywords,
-      // metaImage,
+      metaImage,
     };
 
     const storeConfig = { ...user.storeConfig };

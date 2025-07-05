@@ -2,21 +2,27 @@ import { motion, type HTMLMotionProps } from 'motion/react';
 import { ImageIcon } from '../icons/image';
 import { cn } from '~/utils/cn';
 import { useDropFiles } from '~/hooks/useDropFiles';
-import { IoClose } from 'react-icons/io5';
+import { IoClose, IoReload, IoTrash } from 'react-icons/io5';
+import { useState } from 'react';
 
 interface InputImageProps {
   align?: 'center' | 'left' | 'right' | 'none';
   alignText?: 'center' | 'left' | 'right';
   allowPreview?: boolean;
-  buttonClassName?: string;
+  buttonClassName?: React.HTMLAttributes<typeof motion.button>['className'];
   buttonProps?: HTMLMotionProps<"button">;
   closable?: boolean;
+  currentPreview?: string;
   isHorizontal?: boolean;
   onChange?: (file: File[]) => void;
+  onClose?: PreviewProps['onClose'];
+  onDelete?: PreviewProps['onDelete'];
   onDrop?: (files: File[]) => void;
+  onReload?: PreviewProps['onReload'];
   persistFiles?: boolean;
   placeholder?: string;
-  placeholderClassName?: string;
+  placeholderClassName?: React.HTMLAttributes<any>['className'];
+  reloadable?: PreviewProps['reloadable'];
 }
 
 function InputImage({
@@ -25,14 +31,20 @@ function InputImage({
   allowPreview,
   buttonClassName,
   buttonProps,
-  closable,
+  closable = true,
+  currentPreview,
   isHorizontal,
   onChange,
+  onClose,
+  onDelete,
   onDrop,
+  onReload,
   persistFiles = true,
   placeholder,
   placeholderClassName,
+  reloadable,
 }: InputImageProps) {
+  const [isRemoved, setIsRemoved] = useState(false);
 
   const {
     ref,
@@ -41,16 +53,46 @@ function InputImage({
     isHovered,
   } = useDropFiles<HTMLButtonElement>({ onDrop, onChange, persistFiles });
 
+
+  const handleOnClose = () => {
+    if (closable) {
+      if (files.length) removeFile(0);
+      onClose?.();
+    }
+  }
+
+  const handleOnReload = () => {
+    if (reloadable) {
+      ref.current?.click();
+      onReload?.();
+    }
+  }
+
+  const previewProps: Partial<PreviewProps> = {
+    previewClassName: buttonClassName,
+    src: files?.[0] ? URL.createObjectURL(files[0]) : currentPreview,
+    onClose: handleOnClose,
+    onReload: handleOnReload,
+    reloadable: reloadable && !files.length,
+    closable,
+    deletable: Boolean(currentPreview) && !files.length,
+    onDelete: () => {
+      setIsRemoved(true);
+      onDelete?.();
+    },
+  }
+
+
   return (
       <>
         {
           files.length && allowPreview ? (
-            <Preview
-              previewClassName={buttonClassName}
-              src={URL.createObjectURL(files[0])}
-              onClose={() => removeFile(0)}
-              closable={closable}
-            />
+            <Preview {...previewProps} />
+          ) : null
+        }
+        {
+          currentPreview && !files.length && !isRemoved ? (
+            <Preview {...previewProps} />
           ) : null
         }
         <motion.button
@@ -66,7 +108,7 @@ function InputImage({
               'place-items-left': align === 'left',
               'place-items-center': align === 'center',
               'place-items-right': align === 'right',
-              'hidden': files.length && allowPreview,
+              'hidden': (files.length && allowPreview) || (Boolean(currentPreview) && !isRemoved),
               'border-brand-500': isHovered === 'dropping',
             }
           )}
@@ -110,17 +152,25 @@ InputImage.Preview = Preview;
 
 
 interface PreviewProps {
-  previewClassName?: string;
-  src?: string;
   closable?: boolean;
+  deletable?: boolean;
   onClose?: () => void;
+  onDelete?: () => void;
+  onReload?: () => void;
+  previewClassName?: string;
+  reloadable?: boolean;
+  src?: string;
 }
 
 function Preview({
-  previewClassName,
-  src,
   closable = true,
+  deletable,
   onClose,
+  onDelete,
+  onReload,
+  previewClassName,
+  reloadable,
+  src,
 }: PreviewProps) {
   return (
     <motion.figure
@@ -133,10 +183,19 @@ function Preview({
         previewClassName,
       )}
     >
-      {closable && (
+      {reloadable && (
         <button
           type="button"
-          onClick={onClose}
+          onClick={onReload}
+          className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute right-5 -top-2"
+        >
+          <IoReload />
+        </button>
+      )}
+      {(closable || deletable) && (
+        <button
+          type="button"
+          onClick={deletable ? onDelete : onClose}
           className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2"
         >
           <IoClose />
