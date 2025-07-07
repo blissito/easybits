@@ -237,7 +237,11 @@ export async function action({ request }: ActionFunctionArgs) {
       case "customer.subscription.updated":
         const subscriptionEvent = event.data.object as Stripe.Subscription;
         const subscriptionUser = await db.user.findFirst({
-          where: { stripeId: subscriptionEvent.customer as string },
+          where: { 
+            stripeIds: {
+              has: subscriptionEvent.customer as string
+            }
+          },
           select: { 
             id: true,
             email: true,

@@ -148,6 +148,7 @@ model User {
   roles          String[]
   metadata       Metadata?
   stripeId       String?
+  stripeIds      String[] // new. To work in dev and prod with confidence
   // domain stuff
   host           String?        @unique
   dnsConfig      Json?

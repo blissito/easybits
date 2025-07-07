@@ -11,7 +11,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const asset = await db.asset.findUnique({
       where: { id: assetId },
       select: {
-        user: { select: { stripeId: true } },
+        user: { 
+          select: { 
+            stripeIds: true
+          } 
+        },
         price: true,
         stripePrice: true,
         userId: true,
@@ -30,7 +34,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
       },
     });
 
-    const url = await createCheckoutURL(assetId, asset.user.stripeId!);
+    if (!asset.user.stripeIds || asset.user.stripeIds.length === 0) {
+      throw new Response("No Stripe account found for this user", { status: 400 });
+    }
+    // Prod is index 0, dev is index 1
+    const isDev = process.env.NODE_ENV === "development";
+    const url = await createCheckoutURL(assetId, asset.user.stripeIds[isDev ? 1 : 0]);
     return redirect(url);
   }
   return null;

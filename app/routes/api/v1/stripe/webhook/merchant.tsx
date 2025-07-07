@@ -7,6 +7,7 @@ import {
 } from "~/.server/webhookUtils";
 import { createOrder } from "~/.server/getters";
 import { applyRateLimit } from "~/.server/rateLimiter";
+import { webhookHandlers } from "~/.server/stripe/handlers";
 
 export const action = async ({
   request,
@@ -23,6 +24,9 @@ export const action = async ({
   const event = await constructStripeEvent(request);
   if (event instanceof Response) return event;
   const email = getEmailFromEvent(event);
+
+  // Testing new event handler
+  await webhookHandlers[event.type](event, request); // this can throw and it's ok
 
   // Manejo de éxitos
   if (

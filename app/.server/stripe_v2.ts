@@ -2,9 +2,6 @@ import type { Asset, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { db } from "./db";
 import { updateAsset } from "./assets";
-import { getStripe } from "~/.server/stripe";
-
-const stripe = getStripe();
 
 type CreateAccountResponse = {
   id: string;
@@ -30,11 +27,9 @@ export type Payment = {
   id: string;
 };
 //   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
-
+const isDev=  process.env.NODE_ENV === "development"
 const location =
-  process.env.NODE_ENV === "development"
-    ? "http://localhost:3000"
-    : "https://www.easybits.cloud";
+    isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
 const webhookUrl = `${location}/api/v1/stripe/webhook/merchant`;
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
@@ -43,13 +38,12 @@ const accountsURL = "https://api.stripe.com/v2/core/accounts";
 const paymentsURL = "https://api.stripe.com/v1/payment_intents";
 const productsURL = "https://api.stripe.com/v1/products";
 const pricesURL = "https://api.stripe.com/v1/prices";
-const apiKey = `Bearer ${process.env.STRIPE_SECRET_KEY}`; // prod
+const apiKey = isDev ? `Bearer ${process.env.STRIPE_DEV_SECRET_KEY}` : `Bearer ${process.env.STRIPE_SECRET_KEY}`; // prod
 const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
 
 export async function configureMerchantWebhook(
   userId: string,
-  assetId: string
 ) {
   try {
     const user = await db.user.findUnique({

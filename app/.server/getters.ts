@@ -160,11 +160,11 @@ export const createOrder = ({
 }: {
   status?: string;
   asset: Asset;
-  customer: User;
+  customer: User; // @todo change confusing name
 }) =>
   db.order.create({
     data: {
-      customer_email: customer.email,
+      customer_email: customer.email ,
       customerId: customer.id,
       assetId: asset.id,
       merchantId: asset.userId,

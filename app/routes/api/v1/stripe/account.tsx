@@ -51,14 +51,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "create_new_account") {
     const user = await getUserOrRedirect(request);
     const account = await createAccountV2(user);
+    
+    // Actualizar el array stripeIds con el nuevo ID
     await db.user.update({
-      where: {
-        id: user.id,
-      },
+      where: { id: user.id },
       data: {
-        stripeId: account.id,
+        stripeIds: {
+          // @todo Mantener los IDs existentes (si los hay) y agregar el nuevo avoid duplicates
+          push: account.id
+        }
       },
     });
+    
     // generate onboarding url
     const client_secret = await createOnboarding(account.id);
     return { clientSecret: client_secret };
