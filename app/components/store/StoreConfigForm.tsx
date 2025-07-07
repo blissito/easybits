@@ -9,6 +9,7 @@ import LinksStep from "./LinksStep";
 import { useRef } from 'react';
 import { useUploader } from '~/hooks/useUploader';
 import { useBrutalToast } from "~/hooks/useBrutalToast";
+import type { StoreConfig } from '@prisma/client';
 
 export default function StoreConfigForm({
   isOpen,
@@ -19,13 +20,14 @@ export default function StoreConfigForm({
   isOpen?: boolean;
   onClose?: () => void;
   assetId: string;
+  storeConfig: Partial<StoreConfig>
 }) {
   // const action = "";
-  const coverFile = useRef<File>(null);
-  const logoFile = useRef<File>(null);
+  const coverFile = useRef<File | 'remove'>(null);
+  const logoFile = useRef<File | 'remove'>(null);
   const fetcher = useFetcher();
 
-  const defaultValues = {
+  const defaultValues: Partial<StoreConfig> = {
     colorMode: "light",
     typography: "Avenir",
     hexColor: "#DADADA",
@@ -50,6 +52,7 @@ export default function StoreConfigForm({
       control={control}
       onCoverFileChange={(file) => coverFile.current = file}
       onLogoFileChange={(file) => logoFile.current = file}
+      storeConfig={storeConfig}
     />,
     <LinksStep control={control} register={register} />
   ];
@@ -69,17 +72,27 @@ export default function StoreConfigForm({
   }
   const brutalToast = useBrutalToast();
 
-  const submit = async (values) => {
+  const submit = async (values: Partial<StoreConfig>) => {
     if (isLast) {
       goTo(0);
       onClose?.();
       brutalToast("El look de tu sitio se ha actualizado");
 
-      const logoUrl = await processAndUploadImages(logoFile.current!);
-      const coverUrl = await processAndUploadImages(coverFile.current!);
-  
-      if (logoUrl) values.logoImage = logoUrl;
-      if (coverUrl) values.coverImage = coverUrl;
+      if (logoFile.current) {
+        if (logoFile.current !== 'remove') values.logoImage = await processAndUploadImages(logoFile.current!) as string;
+        else {
+          values.logoImage = '';
+          logoFile.current = null;
+        }
+      }
+
+      if (coverFile.current) {
+        if (coverFile.current !== 'remove') values.coverImage = await processAndUploadImages(coverFile.current!) as string;
+        else {
+          values.coverImage = '';
+          coverFile.current = null;
+        }
+      }
 
       fetcher.submit(
         {

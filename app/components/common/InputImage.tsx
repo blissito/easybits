@@ -73,7 +73,7 @@ function InputImage({
     src: files?.[0] ? URL.createObjectURL(files[0]) : currentPreview,
     onClose: handleOnClose,
     onReload: handleOnReload,
-    reloadable: reloadable && !files.length,
+    reloadable: reloadable && Boolean(currentPreview),
     closable,
     deletable: Boolean(currentPreview) && !files.length,
     onDelete: () => {
@@ -187,7 +187,13 @@ function Preview({
         <button
           type="button"
           onClick={onReload}
-          className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute right-5 -top-2"
+          className={cn(
+            "group-hover:block hidden bg-black text-white p-1 rounded-full absolute right-5 -top-2",
+            {
+              "right-2": !closable && !deletable,
+              "right-5": closable || deletable,
+            }
+          )}
         >
           <IoReload />
         </button>

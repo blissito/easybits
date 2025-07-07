@@ -1,20 +1,22 @@
+import { Controller, type Control } from "react-hook-form";
+import type { StoreConfig } from "@prisma/client"
 import { Input } from "../forms/Input";
-import { LuMoonStar, LuSun } from "react-icons/lu";
 import ButtonGroupInput from "../forms/ButtonGroupInput";
 import { cn } from "~/utils/cn";
-import { Controller, type Control } from "react-hook-form";
 import InputImage from '../common/InputImage';
 
 interface LookAndFeelProps {
-  control: Control;
-  onCoverFileChange: (file: File) => void;
-  onLogoFileChange: (file: File) => void;
+  control: Control<Partial<StoreConfig>>;
+  onCoverFileChange: (file: File | 'remove') => void;
+  onLogoFileChange: (file: File | 'remove') => void;
+  storeConfig: Partial<StoreConfig>;
 }
 
 export default function LookAndFeel({
   control,
   onCoverFileChange,
   onLogoFileChange,
+  storeConfig,
 }: LookAndFeelProps) {
   return (
     <>
@@ -27,6 +29,9 @@ export default function LookAndFeel({
             placeholder="Arrastra o selecciona tu logo"
             allowPreview
             onChange={(files) => onLogoFileChange(files?.[0])}
+            onDelete={() => onLogoFileChange('remove')}
+            currentPreview={storeConfig?.logoImage}
+            reloadable
           />
         </div>
         <div className="col-span-8">
@@ -36,6 +41,9 @@ export default function LookAndFeel({
             placeholder={'Arrastra o selecciona tu foto de portada'}
             allowPreview
             onChange={(files) => onCoverFileChange(files?.[0])}
+            onDelete={() => onCoverFileChange('remove')}
+            currentPreview={storeConfig?.coverImage}
+            reloadable
           />
         </div>
       </div>
