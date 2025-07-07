@@ -1,11 +1,9 @@
 import { db } from "~/.server/db";
 import {
-  assignAssetToUserByEmail,
   removeAssetFromUserByEmail,
   constructStripeEvent,
   getEmailFromEvent,
 } from "~/.server/webhookUtils";
-import { createOrder } from "~/.server/getters";
 import { applyRateLimit } from "~/.server/rateLimiter";
 import { webhookHandlers } from "~/.server/stripe/handlers";
 

@@ -1,6 +1,6 @@
 import { db } from "~/.server/db";
 import { getStripe } from "~/.server/stripe";
-import Stripe from "stripe";
+import type { User } from "@prisma/client";
 
 // Función para validar y construir el evento de Stripe
 export async function constructStripeEvent(request: Request) {
@@ -52,25 +52,33 @@ export function getEmailFromEvent(event: any) {
 export async function assignAssetToUserByEmail(metadata: {
   assetId?: string;
   email?: string;
-}) {
+}) :Promise<User>{
   const { assetId, email } = metadata;
   if (!assetId || !email) {
-    return new Response("Missing required metadata", { status: 400 });
+    throw new Error("Missing required metadata");
   }
-  const user = await db.user.findFirst({ where: { email } });
-  if (!user) {
-    return new Response("User not found", { status: 404 });
+  let user = await db.user.findUnique({ where: { email } });
+  if (user) {  
+    // Evitar assetIds repetidos
+    const assetIds = Array.from(new Set([...(user.assetIds || []), assetId]));
+    await db.user.update({
+      where: { email },
+      data: {
+        assetIds,
+      },
+    });
+
+  }else{
+    user = await db.user.create({
+      data: {
+        email,
+        assetIds: [assetId],
+      },
+    });
   }
-  // Evitar assetIds repetidos
-  const assetIds = Array.from(new Set([...(user.assetIds || []), assetId]));
-  await db.user.update({
-    where: { email },
-    data: {
-      assetIds,
-    },
-  });
-  console.info("::USER UPDATED::", assetId + "=>" + user.id);
-  return new Response(null, { status: 200 });
+
+  console.info("::ASSET_ASSIGNED::", assetId + "=>" + user.id);
+  return user
 }
 
 // Función auxiliar para desasignar assetId de un usuario por email

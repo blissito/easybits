@@ -1,19 +1,19 @@
+import type Stripe from "stripe";
 import { db } from "~/.server/db";
 import { createOrder, getUserOrNull } from "~/.server/getters";
 import { assignAssetToUserByEmail, getEmailFromEvent } from "~/.server/webhookUtils";
+import { sendPurchase, sendNotifyPurchase } from "~/.server/emails/sendPurchase";
 
 export const paymentIntentSucceeded = async (event: Stripe.Event, request: Request) => {
-    const email = getEmailFromEvent(event);
-        if (email) {
-        
-    const user = await getUserOrNull(request);
+    const customer_email = getEmailFromEvent(event);
+        if (customer_email) {
 
-    const paymentIntent = event.data.object;
-          const assetId = paymentIntent.metadata?.assetId;
+const paymentIntent = event.data.object;
+const assetId = paymentIntent.metadata?.assetId;
 
-          if(!user||!assetId ||!paymentIntent) {
+          if(!assetId ||!paymentIntent) {
             throw new Response(
-                "(User/AssetId/PaymentIntent) not found", 
+                "(AssetId/PaymentIntent) not found", 
                 {
                     status: 400
                 }
@@ -23,6 +23,7 @@ export const paymentIntentSucceeded = async (event: Stripe.Event, request: Reque
           // Obtener el asset para crear la orden
           const asset = await db.asset.findUnique({
             where: { id: assetId },
+            include: { user: true },
           });
     
           if (!asset) {
@@ -33,20 +34,35 @@ export const paymentIntentSucceeded = async (event: Stripe.Event, request: Reque
           }
     
           // Crear la orden cuando el pago es exitoso usando createOrder
+    
+          // Asignar el asset al usuario
+          const customer = await assignAssetToUserByEmail({ assetId, email: customer_email });
           const order = await createOrder({
             asset,
             status: "PAID",
-            customer: user!,
+            customer
           });
-    
-          // Asignar el asset al usuario
-          await assignAssetToUserByEmail({ assetId, email });
-          // Notify merchant and customer
-        //   await notifyMerchantAndCustomer({ assetId, customer_email: email, merchant_email: asset.user.email });
+          // 1. customer notification
+          await sendPurchase({
+            email: customer_email,
+            data: {
+              assetName: asset.title,
+              price: asset.price!,
+              date: new Date().toISOString(),
+              assetId,
+            },  
+          });
+          // 2. merchant notification
+          await sendNotifyPurchase({
+            email: asset.user?.email!,
+            assetName: asset.title!,
+            assetId,
+            customer_email: customer_email,
+          });
     
           // Info
           console.info(
-            `::ORDEN_CREADA::${order.id}::ASSET_ID::${assetId}::ASSIGNADO_AL_USER::${email}`
+            `::ORDEN_CREADA::${order.id}::ASSET_ID::${assetId}::ASSIGNADO_AL_USER::${customer_email}`
           );
         } else {
           console.error("No se pudo determinar el email en el evento");

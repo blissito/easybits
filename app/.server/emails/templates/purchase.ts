@@ -11,7 +11,7 @@ export const purchase = ({
 }) => {
   return `<html>
   <head>
-    <title></title>
+    <title>easybits.cloud</title>
   </head>
   <body style="font-family: Arial; background: #000000">
     <div style="background: #000000; margin: 0 auto; padding: 24px 16px">
