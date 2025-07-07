@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
+import { Link } from "react-router";
 import { Input } from "~/components/common/Input";
 
 export const PriceInput = ({
@@ -43,7 +44,7 @@ export const PriceInput = ({
           defaultValue={defaultPrice}
         />
         <select
-          onChange={(e) => onCurrencyChange(e.currentTarget.value)}
+          onChange={(e) => onCurrencyChange?.(e.currentTarget.value)}
           defaultValue={defaultCurrency}
           className="rounded-xl h-12 bg-black border-none text-white focus:ring-0"
         >
@@ -52,7 +53,10 @@ export const PriceInput = ({
         </select>
       </div>
       {!stripeAccountId && 
-      <p className="text-xs text-red-500">Para activar el precio, debes conectar tu cuenta de Stripe</p>
+      <p className="text-xs text-red-500">Para activar el precio, debes conectar tu cuenta de Stripe 
+      {" "}
+      <Link to="/dash/ventas" className="underline">aquí</Link>
+      </p>
         }
       <div className="h-5">
         {Number(earn) > 0 && (

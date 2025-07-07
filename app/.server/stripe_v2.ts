@@ -91,11 +91,15 @@ export async function configureMerchantWebhook(
 }
 
 export const createCheckoutURL = async (assetId: string, accountId: string) => {
+     // need to validate if the stripe id is valid
+  const user = await db.user.findFirst({ where: { stripeId: accountId } });
+  if (!user) return null // no account found
+
   const asset = await db.asset.findUnique({ where: { id: assetId } });
-  if (!asset) throw new Response("Asset not found", { status: 404 });
+  if (!asset) return null // no asset found
 
   if (!asset.stripePrice)
-    throw new Response("StripePrice not found", { status: 404 });
+      return null // no price found
 
   // Crear la sesión de checkout
   const url = new URL(checkoutSessionsURL);

@@ -136,23 +136,29 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { asset, files, successStripeId, assetReviews } = loaderData;
-  const actionData = useActionData();
   // Fetcher
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
   // Stripe Checkout
   const handleOpenCheckout = () => {
-    fetcher.submit(
-      {
-        intent: "account_checkout",
-        assetId: asset.id,
-      },
-      {
-        method: "post",
-        action: "/api/v1/stripe/checkout",
-      }
-    );
+
+      fetcher.submit(
+        {
+          intent: "account_checkout",
+          assetId: asset.id,
+        },
+        {
+          method: "post",
+          action: "/api/v1/stripe/checkout",
+        }
+      );
+  
   };
+
+  const errorMessage = fetcher.data?.message
+
+  console.log("fetcher", fetcher.data, errorMessage)
+
   const defaultRatings = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   const reviewsByRating = assetReviews?.reduce((acc, review) => {
     const rating = review.rating;
@@ -182,9 +188,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         files={files as any}
         actionButton={
           Number(asset.price) !== 0 ? (
+            <>
             <BrutalButton
               id="purchase-button"
               isLoading={isLoading}
+              isDisabled={!!errorMessage} 
               type="button"
               onClick={handleOpenCheckout}
               mode="landing"
@@ -192,11 +200,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               containerClassName="h-16  border-none rounded-none"
               style={{
                 backgroundColor:
-                  (asset as any)?.user?.storeConfig?.hexColor || "red",
+                (asset as any)?.user?.storeConfig?.hexColor || "red",
               }}
-            >
+              >
               {text}
             </BrutalButton>
+            {errorMessage && <p className="text-red-500 text-xs">{errorMessage}</p>}
+            </>
           ) : null
         }
         reviews={reviews}

@@ -51,15 +51,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "create_new_account") {
     const user = await getUserOrRedirect(request);
     const account = await createAccountV2(user);
+
+    // dev & prod config
+    const isDev = process.env.NODE_ENV === "development";
+    const devConfig = user.stripeIds.length > 0 ? [user.stripeIds[0], account.id]:['', account.id]
+    const prodConfig = [account.id]
+    const stripeIds = isDev ? devConfig : prodConfig
     
     // Actualizar el array stripeIds con el nuevo ID
     await db.user.update({
       where: { id: user.id },
       data: {
-        stripeIds: {
-          // @todo Mantener los IDs existentes (si los hay) y agregar el nuevo avoid duplicates
-          push: account.id
-        }
+        stripeIds
       },
     });
     
