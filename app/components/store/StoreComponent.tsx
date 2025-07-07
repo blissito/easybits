@@ -4,8 +4,7 @@ import EditIcon from "/icons/edit.svg";
 import OpenIcon from "/icons/open.svg";
 import SeoIcon from "/icons/seo.svg";
 import ShareIcon from "/icons/share.svg";
-import { Link } from "react-router";
-import { useState, type ReactNode, useRef, type ChangeEvent, useEffect } from "react";
+import { useState, type ReactNode, useRef,useEffect } from "react";
 import { cn } from "~/utils/cn";
 import type { Asset, User } from "@prisma/client";
 import { Sharing } from "~/routes/assets/AssetPreview";
@@ -14,12 +13,13 @@ import { Input } from "../common/Input";
 import StoreConfigForm from "./StoreConfigForm";
 import { StoreTemplate } from "~/routes/store/storeTemplate";
 import { useOpenLink } from "~/hooks/useOpenLink";
-import { ImageIcon } from "~/components/icons/image";
-import { IoClose } from "react-icons/io5";
 import { BrutalButton } from "../common/BrutalButton";
 import { useFetcher } from "react-router";
 import React from "react";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
+import InputImage from '../common/InputImage';
+import { useImageResize } from '~/hooks/useImageResize';
+import { useUploader } from '~/hooks/useUploader';
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
@@ -36,7 +36,6 @@ export default function StoreComponent({
   cta?: ReactNode;
   variant: string;
 }) {
-  const [currentFilter, setCurrentFilter] = useState();
   const assetId = assets?.[0]?.id;
   const user = rootUser || assets?.[0]?.user || {};
   const [isOpen, setIsOpen] = useState(false);
@@ -183,10 +182,24 @@ const SeoDrawer = ({
   onClose?: () => void;
   user: any;
 }) => {
-  const fetcher = useFetcher();
-  const formRef = useRef<HTMLFormElement>(null);
   const [descriptionLength, setDescriptionLength] = useState(0);
+
+  const formRef = useRef<HTMLFormElement>(null);
+  const metaImageRef = useRef<File>(null);
+  const removeMetaImageRef = useRef<boolean>(false);
   const wasSubmitted = useRef(false);
+
+  const fetcher = useFetcher();
+  const { resize } = useImageResize({
+    async callback(blob, success, meta) {
+      metaImageRef.current = new File([blob], meta?.name!, { type: meta?.type });
+      removeMetaImageRef.current = false;
+    }
+  });
+  const { upload } = useUploader({
+    storageKey: '/store/metaImage',
+    deterministicKey: 'storageKey',
+  });
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -195,18 +208,36 @@ const SeoDrawer = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     wasSubmitted.current = true;
     const formData = new FormData(formRef.current!);
     formData.append("intent", "update_seo_metadata");
+
+    if (metaImageRef.current) {
+      const metaImage = await upload(metaImageRef.current) as string;
+      formData.append("metaImage", metaImage);
+    } else if (removeMetaImageRef.current) {
+      formData.append("metaImage", '');
+    }
 
 
     fetcher.submit(formData, {
       method: "post",
       action: "/api/v1/store-config"
     });
+
+    removeMetaImageRef.current = false;
   };
+
+  const handleMetaImageChange = (files: File[]) => {
+    if (files) {
+      resize(files[0])
+    } else {
+      metaImageRef.current = null;
+    }
+  }
 
   const isLoading = fetcher.state === "submitting";
   const brutalToast = useBrutalToast();
@@ -218,6 +249,7 @@ const SeoDrawer = ({
       brutalToast("El SEO se ha actualizado correctamente");
     }
   }, [fetcher.state, fetcher.data, onClose]);
+
 
   return (
     <Modal
@@ -260,6 +292,18 @@ const SeoDrawer = ({
             defaultValue={Array.isArray(user?.storeConfig?.metadata?.keywords) 
               ? user?.storeConfig?.metadata?.keywords?.join(', ') 
               : user?.storeConfig?.metadata?.keywords || ""}
+          />
+          <label>Sube una imagen representativa de tu tienda</label>
+          <InputImage
+            buttonClassName="max-h-[144px] mt-[-20px]"
+            placeholder="Arrastra o selecciona una imagen de tu tienda aquí"
+            isHorizontal
+            alignText="left"
+            allowPreview
+            onChange={handleMetaImageChange}
+            currentPreview={user?.storeConfig?.metadata?.metaImage}
+            reloadable={Boolean(user?.storeConfig?.metadata?.metaImage)}
+            onDelete={() => removeMetaImageRef.current = true}
           />
           
     

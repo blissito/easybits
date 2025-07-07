@@ -9,7 +9,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
   const orders = await db.order.findMany({
     where: {
-      userId: user.id,
+      merchantId: user.id,
     },
     include: {
       asset: true,

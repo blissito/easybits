@@ -56,6 +56,27 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  const storageKeyBuilder = (config: {
+    fileName?: string,
+    deterministicKey?: 'fileName' | 'storageKey',
+    user: typeof user,
+    storageKey?: string,
+    assetId?: string;
+  }) => {
+    const { fileName, deterministicKey = 'fileName', user, storageKey, assetId } = config;
+    let finalStorageKey = `${user.id}/gallery/${assetId}/${fileName}`;
+
+    if (storageKey) {
+      if (deterministicKey === 'storageKey') {
+        finalStorageKey = `${user.id}${storageKey}`;
+      } else {
+        finalStorageKey = `${user.id}${storageKey}/${fileName}`
+      }
+    }
+
+    return finalStorageKey;
+  }
+
   if (intent === "get_enrolled_users") {
     const assetId = formData.get("assetId") as string;
     // @todo interesting problem...
@@ -127,14 +148,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);
     let fileName = formData.get("fileName") as string;
+    const storageKey = formData.get("storageKey") as string;
+    const deterministicKey = formData.get("deterministicKey") as 'fileName';
 
     if (fileName !== "metaImage") {
       const arr = fileName.split(".");
       fileName = `${nanoid()}.${arr[arr.length - 1]}`; // keeps extension
     }
-    const assetId = formData.get("assetId"); // + nanoid(3);
-    const storageKey = `${user.id}/gallery/${assetId}/${fileName}`;
-    const url = await getPutFileUrl(storageKey, 900, {
+    const assetId = formData.get("assetId") as string; // + nanoid(3);
+    const finalStorageKey = storageKeyBuilder({ user, assetId, deterministicKey, fileName, storageKey });
+    const url = await getPutFileUrl(finalStorageKey, 900, {
       Bucket: "easybits-public", // all galleries are public
       ACL: "public-read", // not working, @todo revisit
     });
