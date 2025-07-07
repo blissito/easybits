@@ -23,14 +23,28 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
     if (!asset) throw new Response("Asset not found", { status: 404 });
 
+    // Get the current user's email from the session
+    const user = await db.user.findUnique({
+      where: { id: asset.userId },
+      select: { email: true }
+    });
+
+    if (!user?.email) {
+      throw new Response("User email not found", { status: 400 });
+    }
+
     await db.order.create({
       data: {
         assetId,
         status: "pending",
-        total: asset.price?.toString(),
-        stripePriceId: asset.stripePrice,
-        stripePriceProductId: asset.stripePrice,
-        userId: asset.userId,
+        total: asset.price ? `$${asset.price} MXN` : "$0.00 MXN",
+        price: asset.price || 0,
+        priceId: asset.stripePrice,
+        customer_email: user.email,
+        // Set the relation IDs directly
+        merchantId: asset.userId,
+        customerId: asset.userId,
+        // The asset relation is automatically handled by Prisma using assetId
       },
     });
 

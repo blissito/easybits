@@ -29,49 +29,60 @@ export const action = async ({
   await webhookHandlers[event.type](event, request); // this can throw and it's ok
 
   // Manejo de éxitos
-  if (
-    event.type === "payment_intent.succeeded" ||
-    event.type === "charge.succeeded"
-  ) {
-    if (email) {
-      const paymentIntent = event.data.object;
-      const assetId = paymentIntent.metadata?.assetId;
+  // if (
+  //   event.type === "payment_intent.succeeded" ||
+  //   event.type === "charge.succeeded"
+  // ) {
+  //   if (email) {
+  //     const paymentIntent = event.data.object;
+  //     const assetId = paymentIntent.metadata?.assetId;
 
-      if (!assetId) {
-        console.error("No assetId en metadata del payment intent");
-        return new Response("Missing assetId in metadata", { status: 400 });
-      }
+  //     if (!assetId) {
+  //       console.error("No assetId en metadata del payment intent");
+  //       return new Response("Missing assetId in metadata", { status: 400 });
+  //     }
 
-      // Obtener el asset para crear la orden
-      const asset = await db.asset.findUnique({
-        where: { id: assetId },
-      });
+  //     // Obtener el asset y el usuario para crear la orden
+  //     const [asset, user] = await Promise.all([
+  //       db.asset.findUnique({
+  //         where: { id: assetId },
+  //         include: { user: true }
+  //       }),
+  //       db.user.findUnique({
+  //         where: { email }
+  //       })
+  //     ]);
 
-      if (!asset) {
-        console.error("Asset no encontrado:", assetId);
-        return new Response("Asset not found", { status: 404 });
-      }
+  //     if (!asset) {
+  //       console.error("Asset no encontrado:", assetId);
+  //       return new Response("Asset not found", { status: 404 });
+  //     }
 
-      // Crear la orden cuando el pago es exitoso usando createOrder
-      const order = await createOrder({
-        customer_email: email,
-        asset,
-        status: "PAID",
-      });
+  //     if (!user) {
+  //       console.error("Usuario no encontrado:", email);
+  //       return new Response("User not found", { status: 404 });
+  //     }
 
-      // Asignar el asset al usuario
-      await assignAssetToUserByEmail({ assetId, email });
+  //     // Crear la orden cuando el pago es exitoso usando createOrder
+  //     const order = await createOrder({
+  //       customer: user,
+  //       asset,
+  //       status: "PAID",
+  //     });
 
-      console.info(
-        `::ORDEN_CREADA::${order.id}::ASSET_ID::${assetId}::ASSIGNADO_AL_USER::${email}`
-      );
-    } else {
-      console.error("No se pudo determinar el email en el evento");
-      return new Response("Missing required email", {
-        status: 400,
-      });
-    }
-  }
+  //     // Asignar el asset al usuario
+  //     await assignAssetToUserByEmail({ assetId, email });
+
+  //     console.info(
+  //       `::ORDEN_CREADA::${order.id}::ASSET_ID::${assetId}::ASSIGNADO_AL_USER::${email}`
+  //     );
+  //   } else {
+  //     console.error("No se pudo determinar el email en el evento");
+  //     return new Response("Missing required email", {
+  //       status: 400,
+  //     });
+  //   }
+  // }
   // listener para activar o desactivar acceso al asset
   if (event.type === "charge.updated") {
     if (email) {

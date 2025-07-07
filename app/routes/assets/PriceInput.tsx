@@ -7,7 +7,9 @@ export const PriceInput = ({
   error,
   defaultPrice,
   defaultCurrency = "mxn",
+  stripeAccountId
 }: {
+  stripeAccountId?: string;
   defaultPrice?: string | number;
   defaultCurrency?: string;
   onCurrencyChange?: (arg0: string) => void;
@@ -30,7 +32,8 @@ export const PriceInput = ({
       <p className="pt-2 pb-2">Ponle precio a tu asset</p>
       <div className="flex items-center gap-4">
         <Input
-          className="flex-1 "
+        disabled={!stripeAccountId}
+          inputClassName="flex-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
           onChange={handlePriceChange}
           ref={inputRef}
           placeholder="$300.00"
@@ -48,6 +51,9 @@ export const PriceInput = ({
           <option value="mxn">MXN</option>
         </select>
       </div>
+      {!stripeAccountId && 
+      <p className="text-xs text-red-500">Para activar el precio, debes conectar tu cuenta de Stripe</p>
+        }
       <div className="h-5">
         {Number(earn) > 0 && (
           <p className="text-xs text-brand-gray">¡Ganarás ${earn} por venta!</p>

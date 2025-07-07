@@ -73,9 +73,10 @@ export const EditAssetForm = ({
   host,
   asset,
   assetFiles,
-  // files = [],
+stripeAccountId,
   onUpdate,
 }: {
+  stripeAccountId?: string;
   onUpdate?: (arg0: Partial<Asset>) => void;
   assetFiles?: File[];
   asset: Asset;
@@ -301,6 +302,7 @@ export const EditAssetForm = ({
           />
           <HR />
           <PriceInput
+            stripeAccountId={stripeAccountId}
             defaultPrice={asset.price}
             defaultCurrency={asset.currency}
             error={errors.price}
