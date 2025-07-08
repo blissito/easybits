@@ -11,6 +11,9 @@ import { useUploader } from '~/hooks/useUploader';
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import type { StoreConfig } from '@prisma/client';
 
+export type FileImageRef = File | 'remove' | null;
+export type FileImageName = 'logoImage' | 'coverImage';
+
 export default function StoreConfigForm({
   isOpen,
   onClose,
@@ -23,8 +26,11 @@ export default function StoreConfigForm({
   storeConfig: Partial<StoreConfig>
 }) {
   // const action = "";
-  const coverFile = useRef<File | 'remove'>(null);
-  const logoFile = useRef<File | 'remove'>(null);
+  const imageFiles = useRef<{ logoImage: FileImageRef, coverImage: FileImageRef }>({
+    logoImage: null,
+    coverImage: null
+  });
+
   const fetcher = useFetcher();
 
   const defaultValues: Partial<StoreConfig> = {
@@ -43,15 +49,18 @@ export default function StoreConfigForm({
     ...storeConfig,
   };
 
-  const { handleSubmit, control, register } = useForm({
+  const { handleSubmit, control, register, setValue } = useForm({
     defaultValues,
   });
+
+  const handleFileChange = (files: File[], name?: string) => imageFiles.current[name as FileImageName] = files?.[0] || null;
+  const handleFileDelete = (name?: string) => imageFiles.current[name as FileImageName] = 'remove';
 
   const steps = [
     <LookAndFeel
       control={control}
-      onCoverFileChange={(file) => coverFile.current = file}
-      onLogoFileChange={(file) => logoFile.current = file}
+      onImageFileChange={handleFileChange}
+      onDeleteImage={handleFileDelete}
       storeConfig={storeConfig}
     />,
     <LinksStep control={control} register={register} />
@@ -65,11 +74,16 @@ export default function StoreConfigForm({
 
   const { upload } = useUploader({ assetId });
 
-  const processAndUploadImages = async (file: File) => {
-    if (!file) return null;
+  const processAndUploadImages = async (file: File | 'remove', ref: FileImageName) => {
+    if (!file || file === 'remove') {
+      if (file === 'remove') imageFiles.current[ref] = null;
+      return '';
+    }
     const uploaded = await upload(file, assetId);
-    return uploaded;
+    setValue(ref, uploaded as string);
+    return uploaded as string;
   }
+
   const brutalToast = useBrutalToast();
 
   const submit = async (values: Partial<StoreConfig>) => {
@@ -78,20 +92,12 @@ export default function StoreConfigForm({
       onClose?.();
       brutalToast("El look de tu sitio se ha actualizado");
 
-      if (logoFile.current) {
-        if (logoFile.current !== 'remove') values.logoImage = await processAndUploadImages(logoFile.current!) as string;
-        else {
-          values.logoImage = '';
-          logoFile.current = null;
-        }
+      if (imageFiles.current.logoImage) {
+        values.logoImage = await processAndUploadImages(imageFiles.current.logoImage, 'logoImage');
       }
 
-      if (coverFile.current) {
-        if (coverFile.current !== 'remove') values.coverImage = await processAndUploadImages(coverFile.current!) as string;
-        else {
-          values.coverImage = '';
-          coverFile.current = null;
-        }
+      if (imageFiles.current.coverImage) {
+        values.coverImage = await processAndUploadImages(imageFiles.current.coverImage, 'coverImage');
       }
 
       fetcher.submit(

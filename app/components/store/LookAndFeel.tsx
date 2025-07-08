@@ -7,15 +7,15 @@ import InputImage from '../common/InputImage';
 
 interface LookAndFeelProps {
   control: Control<Partial<StoreConfig>>;
-  onCoverFileChange: (file: File | 'remove') => void;
-  onLogoFileChange: (file: File | 'remove') => void;
+  onImageFileChange: (files: File[], name?: string) => void;
+  onDeleteImage: (name?: string) => void;
   storeConfig: Partial<StoreConfig>;
 }
 
 export default function LookAndFeel({
   control,
-  onCoverFileChange,
-  onLogoFileChange,
+  onImageFileChange,
+  onDeleteImage,
   storeConfig,
 }: LookAndFeelProps) {
   return (
@@ -25,23 +25,25 @@ export default function LookAndFeel({
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-4">
           <InputImage
+            name="logoImage"
             buttonClassName="min-h-[125px] max-h-[125px] w-full"
             placeholder="Arrastra o selecciona tu logo"
             allowPreview
-            onChange={(files) => onLogoFileChange(files?.[0])}
-            onDelete={() => onLogoFileChange('remove')}
+            onChange={onImageFileChange}
+            onDelete={onDeleteImage}
             currentPreview={storeConfig?.logoImage}
             reloadable
           />
         </div>
         <div className="col-span-8">
           <InputImage
+            name="coverImage"
             buttonClassName="w-full min-h-[125px] max-h-[125px] min-w-[144px]"
             placeholderClassName="max-w-[180px]"
             placeholder={'Arrastra o selecciona tu foto de portada'}
             allowPreview
-            onChange={(files) => onCoverFileChange(files?.[0])}
-            onDelete={() => onCoverFileChange('remove')}
+            onChange={onImageFileChange}
+            onDelete={onDeleteImage}
             currentPreview={storeConfig?.coverImage}
             reloadable
           />

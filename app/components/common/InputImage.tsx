@@ -16,16 +16,19 @@ interface InputImageProps {
   isHorizontal?: boolean;
   onChange?: (file: File[]) => void;
   onClose?: PreviewProps['onClose'];
-  onDelete?: PreviewProps['onDelete'];
+  onDelete?: (name?: string) => void;
   onDrop?: (files: File[]) => void;
   onReload?: PreviewProps['onReload'];
   persistFiles?: boolean;
   placeholder?: string;
   placeholderClassName?: React.HTMLAttributes<any>['className'];
   reloadable?: PreviewProps['reloadable'];
+  name?: string;
+  mode?: 'single' | 'multiple' // TODO: working multiple selection
 }
 
 function InputImage({
+  name,
   align = 'center',
   alignText = 'center',
   allowPreview,
@@ -43,6 +46,7 @@ function InputImage({
   placeholder,
   placeholderClassName,
   reloadable,
+  mode = 'single',
 }: InputImageProps) {
   const [isRemoved, setIsRemoved] = useState(false);
 
@@ -51,7 +55,7 @@ function InputImage({
     files,
     removeFile,
     isHovered,
-  } = useDropFiles<HTMLButtonElement>({ onDrop, onChange, persistFiles });
+  } = useDropFiles<HTMLButtonElement>({ onDrop, onChange, persistFiles, name, mode });
 
 
   const handleOnClose = () => {
@@ -78,7 +82,7 @@ function InputImage({
     deletable: Boolean(currentPreview) && !files.length,
     onDelete: () => {
       setIsRemoved(true);
-      onDelete?.();
+      onDelete?.(name);
     },
   }
 
