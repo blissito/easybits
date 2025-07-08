@@ -3,6 +3,7 @@ import { db } from "~/.server/db";
 import { createOrder, getUserOrNull } from "~/.server/getters";
 import { assignAssetToUserByEmail, getEmailFromEvent } from "~/.server/webhookUtils";
 import { sendPurchase, sendNotifyPurchase } from "~/.server/emails/sendPurchase";
+import { scheduleReview } from "~/.server/emails/scheduleReview";
 
 export const paymentIntentSucceeded = async (event: Stripe.Event, request: Request) => {
     const customer_email = getEmailFromEvent(event);
@@ -23,7 +24,7 @@ const assetId = paymentIntent.metadata?.assetId;
           // Obtener el asset para crear la orden
           const asset = await db.asset.findUnique({
             where: { id: assetId },
-            include: { user: true },
+            include: { user: true }, // important!
           });
     
           if (!asset) {
@@ -60,6 +61,13 @@ const assetId = paymentIntent.metadata?.assetId;
             customer_email: customer_email,
           });
     
+          // shcedule 7 days email to add review
+          await scheduleReview({
+            asset,
+            user: customer,
+            when: "in 7 days",
+          });
+
           // Info
           console.info(
             `::ORDEN_CREADA::${order.id}::ASSET_ID::${assetId}::ASSIGNADO_AL_USER::${customer_email}`

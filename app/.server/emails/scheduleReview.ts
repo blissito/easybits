@@ -8,6 +8,7 @@ const getAgenda = () => {
   return agenda as typeof agenda;
 };
 
+// needs user to be in asset
 export const scheduleReview = async ({
   asset,
   user,
@@ -31,7 +32,7 @@ export const scheduleReview = async ({
 getAgenda().define("send_review", async (job: any) => {
   console.info("::JOB_WORKING::", job.attrs.name);
   const { assetTitle, creatorName, email, assetId } = job.attrs?.data || {};
-  if (!assetTitle || !email || !creatorName || !assetId) {
+  if (!assetTitle || !email || !creatorName || !assetId) { // @todo revisit
     const error = new Error(
       "missing data to execute correctly::execution_avoided::"
     );

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import toast from "react-hot-toast";
+import { useErrorToast } from "./useErrorToast";
 
 export const useDropFiles = <T extends HTMLElement>(config?: {
-  type?: string;
+  type?: 'epub' | 'pdf' | 'mobi' | 'text/plain';
   onDrop?: (files: File[]) => void;
   onChange?: (files: File[]) => void;
   persistFiles?: boolean;
@@ -18,18 +18,13 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     setFiles(fs);
   };
 
+  const errorToast = useErrorToast("Selecciona el tipo de archivo correcto."); 
+
   const addFiles = (files: File[]) => {
     let fls = [];
     if (type) {
       fls = [...files].filter((f) => f.type.includes(type));
-      fls.length < files.length &&
-        toast.error("Selecciona el tipo de archivo correcto.", {
-          style: {
-            border: "2px solid #000000",
-            padding: "16px",
-            color: "#000000",
-          },
-        });
+      fls.length < files.length && errorToast();
     } else {
       fls = files;
     }
@@ -59,6 +54,7 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
       hidden: true,
       multiple: true,
     });
+    input.accept = type!
     document.body.appendChild(input);
     input.click();
     input.onchange = (ev: ChangeEvent<HTMLInputElement>) => {

@@ -345,7 +345,7 @@ stripeAccountId,
           {asset.type === "EBOOK" && (
             <>
               <EbookFields
-                files={filesRef.current}
+                files={assetFiles}
                 asset={asset}
                 onChange={handleMetadata}
               />

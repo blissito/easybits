@@ -23,6 +23,7 @@ export const EbookFields = ({
   const pdf = files.find((f) => f.contentType?.includes("pdf"));
   const mobi = files.find((f) => f.contentType?.includes("mobi"));
   const txt = files.find((f) => f.contentType?.includes("text/plain"));
+
   return (
     <>
       <h2 className="text-2xl mb-3 font-bold">Completa la información de tu Ebook</h2>
@@ -113,22 +114,20 @@ export const UploadBox = ({
     const isLoading = fetcher.state !== "idle";
 
     return (
-      <div className="text-center py-6 h-[130px] bg-gray-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden">
-        {isFromDB && (
+      <div className="text-center py-6 h-[130px] bg-brand-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden">
+ {/* @todo Do we wanto to implement delete file? */}
+        {/* {isFromDB && (
           <button
             onClick={handleDelete}
             className="absolute top-4 right-4 group-hover:visible invisible text-2xl"
           >
             {isLoading ? <Spinner /> : <IoClose />}
           </button>
-        )}
+        )} */}
         <span className="text-xl ">
           <FaBook />
         </span>
-        <p className="text-xs truncate w-full"> {localFile.name}</p>
-        {localFile.id && (
-          <span className="text-xs text-gray-500">Id: {localFile.id}</span>
-        )}
+        <p className="text-[8px] w-full"> {localFile.name}</p>
       </div>
     );
   }
@@ -149,12 +148,12 @@ export const UploadBox = ({
             )}
             unforceFill
           />
-      <span className="text-brand-gray group-hover:text-brand-500 text-xs font-thin ">
-        Arrastra o sube el{" "}
-        <strong className="font-semibold uppercase">
+      <p className="text-brand-gray group-hover:text-brand-500 text-xs font-thin ">
+        Arrastra un {" "}
+        <strong className="font-semibold uppercase text-center text-xs">
           {type === "text/plain" ? "TXT" : type}
         </strong>
-      </span>
+      </p>
     </div>
   );
 };
