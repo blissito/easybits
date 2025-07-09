@@ -4,6 +4,7 @@ type FetchOpenRouterResponse = {
   prompt?: string;
   stream: boolean;
   success: boolean;
+  data?: any;
   error?: string;
 };
 
@@ -12,14 +13,31 @@ export const fetchOpenRouter = async ({
   messages,
   stream = false,
   model,
+  // herramientas
+  tools,
+  tool_choice = 'auto'
 }:
   | {
+    tools?: any;
+    tool_choice?: 'auto' | {
+    type: "function";
+    function: {
+      name: string
+    }
+  };
       model?: string;
       messages: { role: string; content: string }[];
       prompt?: string;
       stream?: boolean;
     }
   | {
+    tools?: any;
+    tool_choice?: 'auto' | {
+    type: "function";
+    function: {
+      name: string
+    }
+  };
       model?: string;
       prompt: string;
       messages?: { role: string; content: string }[];
@@ -48,7 +66,13 @@ export const fetchOpenRouter = async ({
 
   let lastError: any = null;
   for (const model of models) {
-    const body: any = { model, stream };
+    const body: any = { model, stream,
+
+      // herramientas
+      tools,
+      tool_choice
+
+     };
     if (messages) body.messages = messages;
     if (prompt) body.prompt = prompt;
     try {
@@ -63,8 +87,27 @@ export const fetchOpenRouter = async ({
           body: JSON.stringify(body),
         }
       );
+      // @todo what's the shape of response and its data? 
       if (response.ok) {
-        return { response, messages, prompt, stream, success: true };
+        // When streaming, don't parse the response as JSON
+        if (stream) {
+          return { 
+            stream, 
+            prompt, 
+            messages, 
+            response,
+            success: true
+          };
+        }
+        // For non-streaming responses, parse the JSON
+        return { 
+          stream, 
+          prompt, 
+          messages, 
+          response,
+          success: true,
+          data: await response.json()
+        };
       } else {
         lastError = `OpenRouter error with model ${model}: ${response.status} ${response.statusText}`;
       }
@@ -79,5 +122,6 @@ export const fetchOpenRouter = async ({
     prompt,
     stream,
     success: false,
+
   };
 };

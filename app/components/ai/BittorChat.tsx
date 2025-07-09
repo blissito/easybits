@@ -1,30 +1,11 @@
-// Este archivo es el resultado de renombrar GeminiChat.tsx a BittorChat.tsx
-
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Button } from "../common/Button";
-import { Input } from "../common/Input";
-import { BrutalButtonClose } from "../common/BrutalButtonClose";
-import { BrutalButton } from "../common/BrutalButton";
-import Spinner from "../common/Spinner";
 import { useBittor } from "~/hooks/useBittor";
-import { nanoid } from "nanoid";
-
-export interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-  isStreaming?: boolean;
-}
+import Spinner from "~/components/common/Spinner";
 
 interface BittorChatProps {
   className?: string;
   placeholder?: string;
   initialMessage?: string;
-  model?: string;
-  onModelChange?: (model: string) => void;
-  systemPrompt?: string;
   onClose?: () => void;
 }
 
@@ -34,212 +15,306 @@ export function BittorChat({
   initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA.\n ¿En qué te ayudo? 📞",
   onClose,
 }: BittorChatProps) {
-  const [messages, setMessages] = useState<Message[]>([
+  const [inputValue, setInputValue] = useState("");
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Inicializar el hook con el mensaje inicial
+  const { messages, sendMessage, isLoading } = useBittor([
     {
       id: "bittor-initial-message",
       role: "assistant",
-      content: initialMessage,
+      content: initialMessage || "¡Hola! ¿En qué puedo ayudarte hoy?",
       timestamp: new Date(),
     },
   ]);
-  const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // Scroll al final de los mensajes cuando se actualicen
   useEffect(() => {
-    scrollToBottom();
+    const container = chatContainerRef.current;
+    if (container) {
+      // Usar requestAnimationFrame para asegurar que el DOM se ha actualizado
+      requestAnimationFrame(() => {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+      });
+    }
   }, [messages]);
 
-  // Función para parsear links en el texto
-  const parseLinks = (
-    input: string | (string | React.ReactNode)[]
-  ): React.ReactNode[] => {
-    if (Array.isArray(input)) {
-      // Procesa cada parte recursivamente
-      return input.flatMap((part, i) =>
-        typeof part === "string" ? parseLinks(part) : [part]
-      );
+  // Función para parsear negritas y enlaces en el texto
+  const parseText = (
+    text: string,
+    isCodeBlock: boolean = false
+  ): React.ReactNode => {
+    if (isCodeBlock) {
+      return <pre className="whitespace-pre-wrap">{text}</pre>;
     }
-    const text = input;
-    const linkRegex = /<a\s+href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi;
+
+    // Primero manejar las negritas
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    const partsWithBold = [];
+    let lastIndex = 0;
+    let match;
+
+    // Procesar texto con negritas
+    while ((match = boldRegex.exec(text)) !== null) {
+      // Añadir texto antes de la negrita
+      if (match.index > lastIndex) {
+        partsWithBold.push(text.substring(lastIndex, match.index));
+      }
+      // Añadir texto en negrita
+      partsWithBold.push(<strong key={match.index}>{match[1]}</strong>);
+      lastIndex = match.index + match[0].length;
+    }
+    // Añadir el texto restante
+    if (lastIndex < text.length) {
+      partsWithBold.push(text.substring(lastIndex));
+    }
+
+    // Luego manejar los enlaces en cada parte
+    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    // Mejorar la expresión regular para URLs
+    const urlRegex = /(https?:\/\/(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+[^\s<>\)\]"']*)|([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+    
+    return partsWithBold.map((part, index) => {
+      if (typeof part !== 'string') return part;
+      
+      const linkParts = [];
+      let lastIndex = 0;
+      let match;
+
+      // Primero manejar enlaces en formato markdown [texto](url)
+      while ((match = markdownLinkRegex.exec(part)) !== null) {
+        // Añadir texto antes del enlace
+        if (match.index > lastIndex) {
+          linkParts.push(part.substring(lastIndex, match.index));
+        }
+        
+        const [fullMatch, linkText, url] = match;
+        
+        // Añadir el enlace markdown
+        linkParts.push(
+          <a
+            key={`md-${index}-${match.index}`}
+            href={url.startsWith('http') ? url : `https://${url}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline"
+          >
+            {linkText}
+          </a>
+        );
+        
+        lastIndex = match.index + fullMatch.length;
+      }
+      
+      // Si no había enlaces markdown, procesar URLs directas
+      const remainingText = part.substring(lastIndex);
+      if (remainingText) {
+        let urlLastIndex = 0;
+        let urlMatch;
+        
+        while ((urlMatch = urlRegex.exec(remainingText)) !== null) {
+          // Añadir texto antes del enlace
+          if (urlMatch.index > urlLastIndex) {
+            linkParts.push(remainingText.substring(urlLastIndex, urlMatch.index));
+          }
+          
+          const url = urlMatch[0];
+          const displayUrl = url.length > 30 ? `${url.substring(0, 30)}...` : url;
+          
+          // Añadir el enlace directo
+          linkParts.push(
+            <a
+              key={`url-${index}-${urlMatch.index}`}
+              href={url.startsWith('http') ? url : `mailto:${url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:underline break-all"
+              title={url}
+            >
+              {displayUrl}
+            </a>
+          );
+          
+          urlLastIndex = urlMatch.index + url.length;
+        }
+        
+        // Añadir cualquier texto restante
+        if (urlLastIndex < remainingText.length) {
+          linkParts.push(remainingText.substring(urlLastIndex));
+        }
+      }
+      
+      
+      return linkParts.length > 0 ? linkParts : part;
+    });
+  };
+
+  // Función para dividir el texto en bloques de código
+  const splitCodeBlocks = (text: string): React.ReactNode => {
+    // Primero verificar si hay bloques de código válidos
+    const codeBlockRegex = /(^|\n)```(\w*\n[\s\S]*?\n)```(\n|$)/g;
+    
+    // Si no hay bloques de código válidos, procesar normalmente
+    if (!codeBlockRegex.test(text)) {
+      return parseText(text);
+    }
+    
+    // Resetear el índice de la expresión regular
+    codeBlockRegex.lastIndex = 0;
+    
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match;
-
-    while ((match = linkRegex.exec(text)) !== null) {
+    
+    // Procesar cada bloque de código encontrado
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      // Añadir texto antes del bloque de código
       if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
+        parts.push(parseText(text.substring(lastIndex, match.index)));
       }
-      const href = match[1];
-      const linkText = match[2];
+      
+      // Extraer el código y el lenguaje (si existe)
+      const [fullMatch, , codeContent] = match;
+      const code = codeContent.trim();
+      
+      // Añadir el bloque de código formateado
       parts.push(
-        <a
-          key={`link-${match.index}`}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800 underline"
+        <pre
+          key={`code-${match.index}`}
+          className="bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto my-2 text-sm whitespace-pre-wrap"
         >
-          {linkText}
-        </a>
+          <code>{code}</code>
+        </pre>
       );
-      lastIndex = match.index + match[0].length;
+      
+      lastIndex = match.index + fullMatch.length;
     }
+    
+    // Añadir cualquier texto restante después del último bloque de código
     if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
+      parts.push(parseText(text.substring(lastIndex)));
     }
-    return parts;
+    
+    return parts.length > 0 ? parts : parseText(text);
   };
 
-  // Función para parsear negritas tipo **texto** (markdown)
-  const parseBold = (text: string) => {
-    const boldRegex = /\*\*(.*?)\*\*/g;
-    const parts = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = boldRegex.exec(text)) !== null) {
-      // Agregar texto antes de la negrita
-      if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
-      }
-      // Agregar el texto en negrita
-      parts.push(<strong key={`bold-${match.index}`}>{match[1]}</strong>);
-      lastIndex = match.index + match[0].length;
-    }
-    // Agregar texto restante
-    if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
-    }
-    return parts.length > 0 ? parts : text;
-  };
-
-  // Validación defensiva para historial
-  const safeHistory = messages.filter(
-    (msg) =>
-      msg && typeof msg.role === "string" && typeof msg.content === "string"
-  );
-  const { sendMessage } = useBittor({
-    model: "deepseek/deepseek-chat:free",
-    history: safeHistory,
-    onMessages(messages: Message[]) {
-      setMessages(messages);
-    },
-  });
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: inputValue.trim(),
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
-    setIsLoading(true);
 
-    // WIP
-    // @todo here whe should let the streams flow
-    const responseMessage = await sendMessage(inputValue.trim(), safeHistory);
-    setMessages((prev) => [...prev, responseMessage]);
+    try {
+      // El hook se encarga de añadir el mensaje del usuario y la respuesta
+      await sendMessage(inputValue.trim());
 
-    setIsLoading(false);
-    // Restaurar el focus al input después de enviar
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
+      // Restaurar el focus al input después de enviar
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    } catch (error) {
+      console.error("Error al enviar mensaje:", error);
+    }
   };
 
+
+  // focus
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
-    <>
+    <div className="relative">
       <article
-        className={`flex flex-col bg-white rounded-lg border border-gray-200 ${className}`}
+        className={`grid grid-rows-[auto_1fr_auto] bg-white rounded-lg border border-gray-200 ${className}`}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          zIndex: 50,
+          width: "100%",
+          height: "100%",
+          maxHeight: "80vh",
+          overflow: "hidden"
+        }}
       >
         {/* Header */}
-        <header className="flex items-center p-4 border-b border-gray-200">
-          <section className="flex items-center gap-2">
+        <header className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="font-bold">Bittor</h2>
+          <button onClick={() => onClose?.()} className="flex items-center gap-2">
             <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold w-10 text-center">
-                AI
+                ✕
               </span>
             </div>
-            <h2 className="text-2xl font-bold">Bittor</h2>
-          </section>
+          </button>
         </header>
 
-        {/* Messages */}
-        <section className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages
-            .filter((msg) => msg.role.toLowerCase() !== "system")
-            .map((message) => (
+        {/* Message List */}
+        <div 
+          ref={chatContainerRef}
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+          style={{
+            scrollBehavior: 'smooth',
+            scrollbarWidth: 'thin',
+            scrollbarGutter: 'stable'
+          }}
+        >
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${
+                message.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
               <div
-                key={message.id}
-                className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
+                className={`max-w-[80%] rounded-lg p-3 ${
+                  message.role === "user"
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-800"
                 }`}
               >
-                {message.role === "assistant" && (
-                  <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center mr-2 flex-shrink-0">
-                    <img
-                      src="/logo-purple.svg"
-                      alt="EasyBits AI"
-                      className="w-5 h-5"
-                    />
-                  </div>
-                )}
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                    message.role === "user"
-                      ? "bg-brand-500 text-black"
-                      : "bg-gray-100 text-gray-900"
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">
-                    {parseLinks(parseBold(message.content))}
-                    {message.isStreaming && (
-                      <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
-                    )}
-                  </p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {message.timestamp?.toLocaleTimeString()}
-                  </p>
-                </div>
+                {splitCodeBlocks(message.content)}
+                <p className="text-xs opacity-70 mt-1">
+                  {message.timestamp?.toLocaleTimeString()}
+                </p>
               </div>
-            ))}
-          <div ref={messagesEndRef} />
-        </section>
+            </div>
+          ))}
+          {/* Empty div to ensure scrolling to bottom */}
+          <div ref={(el) => {
+            // This ensures we always have a reference to the last message
+            if (el) {
+              el.scrollIntoView({ behavior: 'auto' });
+            }
+          }} />
+        </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
-          <div className="flex space-x-2">
-            <Input
+        <div className="border-t border-gray-200 p-4">
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={placeholder}
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isLoading}
-              inputClassName="focus:border-munsell focus:outline-none focus:ring-munsell "
             />
-            <Button
+            <button
               type="submit"
-              isDisabled={!inputValue.trim() || isLoading}
-              className="px-4 py-2 bg-munsell text-black"
+              disabled={!inputValue.trim() || isLoading}
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[80px]"
             >
-              {isLoading ? <Spinner size="sm" /> : "Enviar"}
-            </Button>
-          </div>
-        </form>
+              {isLoading ? <Spinner className="w-5 h-5" /> : "Enviar"}
+            </button>
+          </form>
+        </div>
       </article>
-    </>
+    </div>
   );
 }
 

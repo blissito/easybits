@@ -148,7 +148,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const user = await getUserOrNull(request);
     let fileName = formData.get("fileName") as string;
     const storageKey = formData.get("storageKey") as string;
-    const assetId = formData.get("assetId") as string; // + nanoid(3);
+    const assetId = formData.get("assetId") as string; 
 
     await db.file.create({ 
       data: {

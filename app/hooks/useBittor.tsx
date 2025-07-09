@@ -1,193 +1,86 @@
-import type { Message } from "~/components/ai/BittorChat";
-import { use, useEffect, useState } from "react";
+import { useState } from "react";
 import { nanoid } from "nanoid";
 
-export const useBittor = ({
-  onMessages,
-  history = [],
-  model,
-  systemPrompt = `   Eres un asistente de IA amigable de Easybits, experto en la plataforma, que responde en español mexicano. Importante: nunca menciones a Google ni a DeepMind o Gemma. 
-  Si te preguntan sobre ti, di que eres un asistente experto en easybits.cloud y en assets digitales.
-   `,
-}: {
-  systemPrompt?: string;
-  history: Message[];
-  model?: string;
-  onMessages: (messages: Message[]) => void;
-}): {
-  messages: Message[];
-  isLoading: boolean;
-  isStreaming: boolean;
-  error: string | null;
-  sendMessage: (message: string, history?: Message[]) => Promise<Message>;
-} => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "system",
-      content: systemPrompt,
-    },
-    ...history,
-  ]);
+export type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  isStreaming?: boolean;
+};
+
+export const useBittor = (initialHistory: Message[] = []) => {
+  const [messages, setMessages] = useState<Message[]>(initialHistory);
   const [isLoading, setIsLoading] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const assistantMessageId = nanoid(4);
-
-  useEffect(() => {
-    onMessages(messages);
-  }, []);
-
-  const sendMessage = async (
-    userMessage: string,
-    historyOverride?: Message[]
-  ): Promise<Message> => {
-    let finalMessage: Message = {
-      id: assistantMessageId,
-      role: "assistant",
-      content: "",
-      timestamp: new Date(),
-      isStreaming: false,
+  const sendMessage = async (userMessage: string) => {
+    setIsLoading(true);
+    setError(null);
+    const assistantId = nanoid();
+    
+    // Crear mensaje del usuario
+    const userMessageObj: Message = {
+      id: nanoid(3),
+      role: "user",
+      content: userMessage,
+      timestamp: new Date()
     };
+    
+    // Añadir mensaje del usuario al historial
+    setMessages(prev => [...prev, userMessageObj]);
+    
     try {
       const response = await fetch("/api/v1/ai/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          history: (historyOverride || messages).slice(-10).map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-            model,
-          })),
-          systemPrompt:
-            "Eres un asistente de IA amigable y útil. Responde de manera clara, concisa y en español. Ayuda a los usuarios con sus preguntas y tareas de la mejor manera posible.",
+          history: messages
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Error en la respuesta del servidor");
+        const errorText = await response.text();
+        throw new Error(`Error en la respuesta: ${response.status} - ${errorText}`);
       }
-
-      // Procesar el stream de respuesta (compatible con OpenRouter)
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error("No se pudo leer el stream");
-      }
-
-      let accumulatedContent = "";
-      let streamEnded = false;
-
-      while (!streamEnded) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              // Soporte para formato OpenRouter
-              if (data.choices && data.choices[0]) {
-                const delta = data.choices[0].delta;
-                // @todo make it a hook
-                if (delta && delta.content) {
-                  accumulatedContent += delta.content;
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, content: accumulatedContent }
-                        : msg
-                    )
-                  );
-                  finalMessage = {
-                    ...finalMessage,
-                    content: accumulatedContent,
-                    isStreaming: true,
-                  };
-                }
-                if (data.choices[0].finish_reason) {
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, isStreaming: false }
-                        : msg
-                    )
-                  );
-                  finalMessage = {
-                    ...finalMessage,
-                    isStreaming: false,
-                  };
-                  streamEnded = true;
-                }
-              }
-              // Soporte para formato antiguo (por compatibilidad)
-              else if (data.type) {
-                switch (data.type) {
-                  case "start":
-                    break;
-                  case "chunk":
-                    accumulatedContent += data.content;
-                    setMessages((prev) =>
-                      prev.map((msg) =>
-                        msg.id === assistantMessageId
-                          ? { ...msg, content: accumulatedContent }
-                          : msg
-                      )
-                    );
-                    finalMessage = {
-                      ...finalMessage,
-                      content: accumulatedContent,
-                      isStreaming: true,
-                    };
-                    break;
-                  case "end":
-                    setMessages((prev) =>
-                      prev.map((msg) =>
-                        msg.id === assistantMessageId
-                          ? { ...msg, isStreaming: false }
-                          : msg
-                      )
-                    );
-                    finalMessage = {
-                      ...finalMessage,
-                      isStreaming: false,
-                    };
-                    streamEnded = true;
-                    break;
-                  case "error":
-                    throw new Error(data.error);
-                }
-              }
-            } catch (parseError) {
-              console.error("Error parsing SSE data:", parseError);
-            }
-          }
-        }
-      }
-      return finalMessage;
-    } catch (error) {
-      console.error("Error al enviar mensaje:", error);
-      const errorMessage: Message = {
-        id: assistantMessageId,
+      
+      const data = await response.json();
+      const assistantMessage: Message = {
+        id: assistantId,
         role: "assistant",
-        content:
-          "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.",
+        content: data.content || data.message?.content || "No se pudo obtener una respuesta",
         timestamp: new Date(),
-        isStreaming: false,
+        isStreaming: false
       };
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === assistantMessageId ? errorMessage : msg))
-      );
-      return errorMessage;
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      return assistantMessage;
+      
+    } catch (err) {
+      const errorMessage = "Error al procesar tu mensaje. Intenta de nuevo.";
+      setError(errorMessage);
+      
+      const errorMessageObj: Message = {
+        id: assistantId,
+        role: "assistant",
+        content: errorMessage,
+        timestamp: new Date(),
+        isStreaming: false
+      };
+      
+      setMessages(prev => [...prev, errorMessageObj]);
+      return errorMessageObj;
+      
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  return { sendMessage, messages, isLoading, isStreaming, error };
+  return { 
+    messages, 
+    sendMessage, 
+    isLoading, 
+    error 
+  };
 };
