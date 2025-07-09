@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useErrorToast } from "./useErrorToast";
 
 export const useDropFiles = <T extends HTMLElement>(config?: {
+
   type?: 'epub' | 'pdf' | 'mobi' | 'text/plain';
   onDrop?: (files: File[]) => void;
   onChange?: (files: File[]) => void;
   persistFiles?: boolean;
+  avoidClickWhenFiles?: boolean;
 }) => {
-  const { type, onDrop, onChange, persistFiles = true } = config || {};
+  const { type, onDrop, onChange, persistFiles = true, avoidClickWhenFiles = false } = config || {};
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
   const ref = useRef<T>(null);
@@ -49,6 +51,8 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   };
 
   const handleClick = () => {
+    if (avoidClickWhenFiles && files.length > 0) return;
+
     const input = Object.assign(document.createElement("input"), {
       type: "file",
       hidden: true,
@@ -56,13 +60,13 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     });
     input.accept = type!
     document.body.appendChild(input);
-    input.click();
     input.onchange = (ev: ChangeEvent<HTMLInputElement>) => {
       if (!ev.currentTarget?.files || ev.currentTarget.files.length < 1) {
         return;
       }
       addFiles([...ev.currentTarget.files]);
     };
+    input.click();
   };
 
   const handleMouseEnter = () => {
@@ -97,7 +101,7 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   }, []);
 
   useEffect(() => {
-    onChange?.(files);
+    onChange?.(files); // drop and click
     if (!persistFiles) {
       setFiles([]);
     }

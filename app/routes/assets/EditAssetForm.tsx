@@ -5,9 +5,9 @@ import { Plantilla } from "./Plantilla";
 import { GalleryUploader } from "./GalleryUploader";
 import { ExtraConfig } from "./ExtraConfig";
 import { PriceInput } from "./PriceInput";
-import type { Asset, File } from "@prisma/client";
+import type { Asset, File as PrismaFile } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { createContext, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
@@ -18,7 +18,6 @@ import { useUploader } from "~/hooks/useUploader";
 import { MarkEditor } from "./MarkEditor.client";
 import Spinner from "~/components/common/Spinner";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
-import { Switch } from "~/components/forms/Switch";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -69,6 +68,8 @@ const assetClientSchema = assetSchema.omit({
   userId: true,
 });
 
+export const EbookContext = createContext({})
+
 export const EditAssetForm = ({
   host,
   asset,
@@ -78,7 +79,7 @@ stripeAccountId,
 }: {
   stripeAccountId?: string;
   onUpdate?: (arg0: Partial<Asset>) => void;
-  assetFiles?: File[];
+  assetFiles?: PrismaFile[];
   asset: Asset;
   host: string;
 }) => {
@@ -143,6 +144,11 @@ stripeAccountId,
     updateSrcset();
   };
 
+  const { upload } = useUploader({
+    assetId: asset.id,
+    defaultLinks: asset.gallery,
+  });
+
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
   const brutalToast = useBrutalToast();
   const fetcher = useFetcher();
@@ -164,6 +170,17 @@ stripeAccountId,
       (link) => !removedList.includes(link)
     ) as string[];
     //
+
+    // @todo upload ebook files
+    const promises = Object.values(ebookFiles).map((file) => upload(file, asset.id, {
+        isPrivate: true,
+        storageKey: `${asset.id}/ebooks/${file.name}`,
+      }) 
+    )
+    const ebooksLinks = await Promise.all(promises);
+    console.log("ebooksLinks", ebooksLinks)
+    //
+
     await fetcher.submit(
       {
         data: JSON.stringify({
@@ -172,8 +189,11 @@ stripeAccountId,
           gallery: updatedGallery,
           id: asset.id,
           slug: asset.slug,
+          s3ObjectsToDelete,
         }),
         intent: "update_asset",
+        // @todo very custom revisit
+       
       },
       {
         method: "POST",
@@ -211,10 +231,7 @@ stripeAccountId,
 
     updateSrcset();
   };
-  const { upload } = useUploader({
-    assetId: asset.id,
-    defaultLinks: asset.gallery,
-  });
+
   const uploadGallery = async (): Promise<(string | null)[]> => {
     // console.log("ABOUT_TO_UPLOAD::", filesRef.current);
     // return;
@@ -262,6 +279,39 @@ stripeAccountId,
     removeFilePreviews();
     setGallery(asset.gallery);
   }, [asset]);
+
+  // Ebook files ========================================================== Ebook Files
+  const [ebookFiles, setEbookFiles] = useState<Record<string, File>>({})
+  const [s3ObjectsToDelete, setS3ObjectsToDelete] = useState<string[]>([])
+  const { Provider: EbookProvider } = EbookContext
+  const addEbookFile = (file: any) => {
+    setEbookFiles((fs) => ({...fs, [file.type]: file})) 
+  }
+  const removeEbookFile = (key: string) => {
+    const fs = {...ebookFiles};
+    delete fs[key];
+    setEbookFiles(fs);
+  };
+  const handleEbookChange = (file: any)=>{
+    addEbookFile(file)
+  }
+  const enqueueDelete = (storageKey: string) => {
+    setS3ObjectsToDelete((l) => [...l, storageKey]);
+  }
+      // const handleDelete = () => {
+      //   removeFile(0);
+      //   fetcher.submit(
+      //     {
+      //       intent: "delete_file",
+      //       storageKey: localFile?.storageKey,
+      //     },
+      //     {
+      //       method: "post",
+      //       action: "/api/v1/files",
+      //     }
+      //   );
+      // };
+  // ========================================================== Ebook Files
 
   return (
     <article className="w-full px-4 col-span-12 md:col-span-8">
@@ -343,13 +393,12 @@ stripeAccountId,
           )}
 
           {asset.type === "EBOOK" && (
-            <>
+            <EbookProvider value={{ebookFiles, handleEbookChange, addEbookFile, removeEbookFile, enqueueDelete, s3ObjectsToDelete}}>
               <EbookFields
-                files={assetFiles}
+                assetFiles={assetFiles}
                 asset={asset}
-                onChange={handleMetadata}
               />
-            </>
+            </EbookProvider>
           )}
 
           <HR />

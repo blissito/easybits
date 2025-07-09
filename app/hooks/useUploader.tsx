@@ -49,6 +49,29 @@ export const useUploader = (config?: {
     // );
   };
 
+  const getPrivatePutUrl = async (fileName: string, assetId: string, storageKey?: string) => {
+    const params = new URLSearchParams({
+      intent: "get_put_file_url",
+      fileName,
+      private: 'true',
+      deterministicKey,
+      assetId,
+    });
+
+    if (storageKey) params.set('storageKey', storageKey);
+
+    const response = await fetch("/api/v1/assets", {
+      method: "post",
+      body: params,
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get private URL: ${response.statusText}`);
+    }
+    
+    return await response.text();
+  };
+
   const getPublicPutUrl = async (fileName: string, assetId?: string) => {
     const response = await fetch("/api/v1/assets", {
       method: "post",
@@ -70,25 +93,38 @@ export const useUploader = (config?: {
       headers: { "content-type": body.type },
     }).then((response) => response.ok);
 
-  const upload = async (file: File, assetId?: string) => {
-    const url = await getPublicPutUrl(file.name, assetId);
+  const upload = async (file: File, assetId?: string, config?: {
+    isPrivate?: boolean;
+    storageKey?: string;
+  }) => {
+    const {
+      isPrivate = false,
+      storageKey: customStorageKey,
+    } = config || {};
+    
+    const url = isPrivate
+      ? await getPrivatePutUrl(file.name, assetId!, customStorageKey)
+      : await getPublicPutUrl(file.name, assetId);
+    
     const uri = url.split("?")[0];
+
     const ok = await putFile(url, file);
     if (ok) {
       setLinks((lks) => [...lks, uri]); // update
+      // @todo update db
+      await fetch("/api/v1/assets", {
+        method: "post",
+        body: new URLSearchParams({
+          intent: "create_uploaded_file",
+          contentType: file.type,
+          name: file.name,
+          size: `${file.size}`,
+          assetId: assetId!,
+          storageKey:storageKey!,
+          fileName: file.name,
+        }),
+      });
     }
-    // update db ==> revisit
-    // fetcher.submit(
-    //   {
-    //     intent: "update_asset_gallery_links",
-    //     data: JSON.stringify({
-    //       gallery: [...new Set([...links, uri])],
-    //       id: assetId,
-    //     }),
-    //   },
-    //   { method: "post", action: "/api/v1/assets" }
-    // );
-
     return ok ? uri : null;
   };
 

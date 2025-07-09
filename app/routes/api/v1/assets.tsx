@@ -2,16 +2,15 @@ import { newAssetSchema } from "~/utils/zod.schemas";
 import { db } from "~/.server/db";
 import slugify from "slugify";
 import { nanoid } from "nanoid";
-import { getUserOrRedirect } from "~/.server/getters";
+import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
 import type { Asset, AssetType } from "@prisma/client";
-import { getPutFileUrl, deleteObject } from "react-hook-multipart";
+import { getPutFileUrl, deleteObject, deleteObjects } from "react-hook-multipart";
 import type { Action } from "~/components/forms/NewsLetterForm";
 import {
   updateOrCreateProductAndPrice,
   updateProduct,
 } from "~/.server/stripe_v2";
-import { redirect } from "react-router";
 import { generateDescription } from "~/.server/llms/tools/generators/getAssetDescription";
 
 // Función de validación de precios
@@ -144,9 +143,35 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // });
   }
 
+  // create File for uploaded s3Object
+  if(intent==='create_uploaded_file'){
+    const user = await getUserOrNull(request);
+    let fileName = formData.get("fileName") as string;
+    const storageKey = formData.get("storageKey") as string;
+    const assetId = formData.get("assetId") as string; // + nanoid(3);
+
+    await db.file.create({ 
+      data: {
+        name: fileName,
+        storageKey,
+        assetIds: [assetId],
+        ownerId: user?.id,
+        status: "DONE",
+        slug: slugify(fileName),
+        contentType: formData.get("contentType") as string,
+        size: +formData.get("size")!,
+        url:''
+
+      },
+    });
+
+    return new Response(storageKey, { status: 201 });
+  }
+
   // injects gallery file path
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);
+    const isPrivate = !!formData.get("private");
     let fileName = formData.get("fileName") as string;
     const storageKey = formData.get("storageKey") as string;
     const deterministicKey = formData.get("deterministicKey") as 'fileName';
@@ -156,16 +181,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
       fileName = `${nanoid()}.${arr[arr.length - 1]}`; // keeps extension
     }
     const assetId = formData.get("assetId") as string; // + nanoid(3);
-    const finalStorageKey = storageKeyBuilder({ user, assetId, deterministicKey, fileName, storageKey });
+    const finalStorageKey = 
+    isPrivate ? 
+    `${storageKey}` :
+    storageKeyBuilder({ user, assetId, deterministicKey, fileName, storageKey });
     const url = await getPutFileUrl(finalStorageKey, 900, {
-      Bucket: "easybits-public", // all galleries are public
-      ACL: "public-read", // not working, @todo revisit
+      Bucket: isPrivate ? "easybits-dev" : "easybits-public", // all galleries are public
+      ACL: isPrivate ? 'private' : 'public-read', // not working, @todo revisit
     });
     return new Response(url, { status: 201 });
   }
 
   if (intent === "new_asset") {
     const data = JSON.parse(formData.get("data") as string);
+    // new delete objects
+    const s3ObjectsToDelete = data.s3ObjectsToDelete;
+    delete data.s3ObjectsToDelete;
+    //
     const parsed = newAssetSchema.parse({
       ...data,
       userId: user.id,
@@ -179,6 +211,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "update_asset") {
     // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
+    const s3ObjectsToDelete = data.s3ObjectsToDelete;
+    delete data.s3ObjectsToDelete;
     if (data.template?.slug) {
       data.slug = data.template.slug; // @todo! should recive it directly?
     }
@@ -224,7 +258,27 @@ export const action = async ({ request }: Route.ActionArgs) => {
       images: asset.gallery,
       description: asset.note!,
     });
-    // return null
+
+    // delete objects
+    try {
+      // @todo delete vars
+     const delRes = await deleteObjects(s3ObjectsToDelete) // @todo Revisit
+     console.log("DELETED??", delRes)
+     const remRes = await db.file.deleteMany({
+       where: {
+         storageKey: {
+           in: s3ObjectsToDelete,
+          },
+        },
+      });
+      console.log("REMOVED??", remRes)
+    } catch (e) {
+      console.error("NO se pudo borrar: ",e);
+    } 
+    //
+
+
+  
   }
 
   if (intent === "update_asset_gallery_links") {
