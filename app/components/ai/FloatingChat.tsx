@@ -65,6 +65,20 @@ export function FloatingChat({}: FloatingChatProps) {
     };
   }, [isOpen]);
 
+
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkSize = ()=>{
+      if(window.innerWidth < 768){
+        setIsMobile(true);
+      }else{
+        setIsMobile(false);
+      }
+    }
+    window.addEventListener("resize", checkSize);
+    checkSize();
+  }, []);
+
   return (
     <>
       {/* Botón flotante */}
@@ -108,8 +122,8 @@ export function FloatingChat({}: FloatingChatProps) {
               ref={chatRef}
               className="bg-white rounded-lg shadow-2xl overflow-hidden relative z-50"
               style={{
-                width: "50%",
-                height: "50%",
+                width: isMobile ? "100%" : "50%",
+                height: isMobile ? "100%" : "50%",
                 marginBottom: "24px",
               }}
               initial={{
@@ -121,8 +135,8 @@ export function FloatingChat({}: FloatingChatProps) {
                 opacity: 1,
                 x: 0,
                 scale: 1,
-                width: "80%",
-                height: "80%",
+                width: isMobile ? "100%" : "50%",
+                height: isMobile ? "90%" : "80%",
               }}
               exit={{
                 opacity: 0,

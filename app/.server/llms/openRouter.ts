@@ -66,8 +66,9 @@ export const fetchOpenRouter = async ({
 
   let lastError: any = null;
   for (const model of models) {
-    const body: any = { model, stream,
-
+    const body: any = { 
+      model, 
+      stream,
       // herramientas
       tools,
       tool_choice
