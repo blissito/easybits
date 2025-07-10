@@ -77,6 +77,7 @@ export default function StoreConfigForm({
   const processAndUploadImages = async (file: File | 'remove', ref: FileImageName) => {
     if (!file || file === 'remove') {
       if (file === 'remove') imageFiles.current[ref] = null;
+      setValue(ref, '');
       return '';
     }
     const uploaded = await upload(file, assetId);
