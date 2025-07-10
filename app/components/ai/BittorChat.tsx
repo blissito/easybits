@@ -230,21 +230,29 @@ export function BittorChat({
   return (
     <div className="relative">
       <article
-        className={`grid grid-rows-[auto_1fr_auto] bg-white rounded-lg border border-gray-200 ${className}`}
+        className={`grid grid-rows-[auto_1fr_auto] bg-white rounded-lg border border-gray-200 ${className} relative`}
         onClick={(e) => e.stopPropagation()}
         style={{
           zIndex: 50,
           width: "100%",
           height: "100%",
           maxHeight: "80vh",
-          overflow: "hidden"
+          display: "flex",
+          flexDirection: "column"
         }}
       >
         {/* Header */}
-        <header className="flex items-center justify-between p-4 border-b border-gray-200">
+        <header className="flex items-center justify-between p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
           <h2 className="font-bold">Bittor</h2>
-          <button onClick={() => onClose?.()} className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose?.();
+            }} 
+            className="flex items-center gap-2 z-20"
+            aria-label="Cerrar chat"
+          >
+            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors">
               <span className="text-white text-sm font-bold w-10 text-center">
                 ✕
               </span>
@@ -255,11 +263,13 @@ export function BittorChat({
         {/* Message List */}
         <div 
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-4 space-y-4"
+          className="flex-1 overflow-y-auto p-4 space-y-4 overflow-x-hidden"
           style={{
             scrollBehavior: 'smooth',
             scrollbarWidth: 'thin',
-            scrollbarGutter: 'stable'
+            scrollbarGutter: 'stable',
+            WebkitOverflowScrolling: 'touch',
+            position: 'relative'
           }}
         >
           {messages.map((message) => (

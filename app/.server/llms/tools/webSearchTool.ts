@@ -1,4 +1,4 @@
-// Servicio de búsqueda web usando la API pública de DuckDuckGo
+// Servicio de búsqueda web usando múltiples proveedores (DuckDuckGo y Tavily)
 
 interface SearchResult {
   FirstURL?: string;
@@ -38,9 +38,57 @@ interface DuckDuckGoResponse {
   };
 }
 
-// Función que maneja la llamada a la herramienta
-// URL base para la búsqueda directa de DuckDuckGo
+// URLs base para búsquedas
 const DUCKDUCKGO_SEARCH_URL = 'https://duckduckgo.com/?q=';
+const TAVILY_API_URL = 'https://api.tavily.com/search';
+
+// Interfaz para los resultados de Tavily
+interface TavilySearchResult {
+  url: string;
+  title: string;
+  content: string;
+  score?: number;
+}
+
+interface TavilyResponse {
+  results: TavilySearchResult[];
+  query: string;
+  images?: string[];
+  news?: any[];
+  error?: string;
+}
+
+// Función para buscar usando Tavily
+async function searchWithTavily(query: string, maxResults: number = 5): Promise<TavilySearchResult[]> {
+  try {
+    const response = await fetch(TAVILY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.TAVILY_API_KEY}`
+      },
+      body: JSON.stringify({
+        query,
+        include_domains: [],
+        search_depth: 'basic',
+        include_answer: true,
+        include_raw_content: false,
+        max_results: maxResults,
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Tavily API error:', await response.text());
+      return [];
+    }
+
+    const data: TavilyResponse = await response.json();
+    return data.results || [];
+  } catch (error) {
+    console.error('Error searching with Tavily:', error);
+    return [];
+  }
+}
 
 // Función para detectar si una consulta parece ser un dominio
 function isDomainQuery(query: string): boolean {
@@ -56,22 +104,12 @@ function isDomainQuery(query: string): boolean {
          query.startsWith('https://');
 }
 
-// Función para normalizar una URL asegurando que use HTTPS
-function normalizeUrl(url: string): string {
-  // Si no tiene protocolo, asumir HTTPS
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    return `https://${url}`;
-  }
-  // Si tiene HTTP, cambiarlo a HTTPS
-  return url.replace(/^http:\/\//i, 'https://');
-}
-
 // Función para generar un enlace de búsqueda directa
 function getSearchLink(query: string): string {
   return `${DUCKDUCKGO_SEARCH_URL}${encodeURIComponent(query)}`;
 }
 
-export async function handleWebSearch(args: { query: string; format?: string; timeout?: number }) {
+export async function handleWebSearch(args: { query: string; format?: string; timeout?: number; useTavily?: boolean }) {
   // Limpiar y normalizar la consulta
   const cleanQuery = (args.query || '').trim();
   if (!cleanQuery) {
@@ -114,40 +152,94 @@ export async function handleWebSearch(args: { query: string; format?: string; ti
   });
 
   try {
-    // 1. Intentar con la API de DuckDuckGo primero
-    const response = await fetch(ddgUrl.toString(), {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
+    let hasValidResponse = false;
+  let data: DuckDuckGoResponse | null = null;
+  
+  // 1. Intentar con la API de DuckDuckGo primero (a menos que se solicite específicamente Tavily)
+  if (!args.useTavily) {
+    try {
+      const response = await fetch(ddgUrl.toString(), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      data = await response.json();
+      
+      // Verificar si la respuesta es válida o solo contiene metadatos
+      hasValidResponse = !!data?.Abstract || 
+                        (data?.RelatedTopics && data.RelatedTopics.length > 0) ||
+                        (data?.Results && data.Results.length > 0) ||
+                        !!data?.Answer ||
+                        !!data?.Redirect;
+    } catch (error) {
+      console.warn('Error con DuckDuckGo, intentando con Tavily...', error);
+    }
+  }
+  
+  // 2. Si DuckDuckGo falló o se solicitó Tavily explícitamente, intentar con Tavily
+  if ((!hasValidResponse || args.useTavily) && process.env.TAVILY_API_KEY) {
+    try {
+      const tavilyResults = await searchWithTavily(query, 5);
+      if (tavilyResults.length > 0) {
+        // Formatear resultados de Tavily para que coincidan con la estructura esperada
+        data = {
+          Abstract: '',
+          AbstractSource: 'Tavily',
+          AbstractText: tavilyResults[0]?.content || '',
+          AbstractURL: tavilyResults[0]?.url || '',
+          Answer: '',
+          AnswerType: '',
+          Definition: '',
+          DefinitionSource: '',
+          DefinitionURL: '',
+          Entity: '',
+          Heading: tavilyResults[0]?.title || 'Resultados de búsqueda',
+          Image: '',
+          ImageHeight: 0,
+          ImageIsLogo: 0,
+          ImageWidth: 0,
+          Infobox: {},
+          Redirect: '',
+          RelatedTopics: tavilyResults.map(result => ({
+            FirstURL: result.url,
+            Text: result.title,
+            Result: result.content,
+            URL: result.url
+          })),
+          Results: [],
+          Type: 'A',
+          meta: { status: 200 }
+        };
+        hasValidResponse = true;
+      }
+    } catch (error) {
+      console.error('Error con Tavily:', error);
+    }
+  }
+    
+    if (data) {
+      console.log('📊 Análisis de respuesta:', {
+        hasAbstract: !!data.Abstract,
+        hasRelatedTopics: data.RelatedTopics?.length > 0,
+        hasResults: data.Results?.length > 0,
+        hasAnswer: !!data.Answer,
+        hasRedirect: !!data.Redirect,
+        isValid: hasValidResponse,
+        dataSample: JSON.stringify(data, null, 2).substring(0, 500) + '...'
+      });
+    } else {
+      console.log('No se recibieron datos de búsqueda');
+    }
     
     clearTimeout(timeoutId);
     
-    if (!response.ok) {
-      throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const data: DuckDuckGoResponse = await response.json();
-    
-    // Verificar si la respuesta es válida o solo contiene metadatos
-    const hasValidResponse = data.Abstract || 
-                           (data.RelatedTopics && data.RelatedTopics.length > 0) ||
-                           (data.Results && data.Results.length > 0) ||
-                           data.Answer ||
-                           data.Redirect;
-    
-    console.log('📊 Análisis de respuesta:', {
-      hasAbstract: !!data.Abstract,
-      hasRelatedTopics: data.RelatedTopics?.length > 0,
-      hasResults: data.Results?.length > 0,
-      hasAnswer: !!data.Answer,
-      hasRedirect: !!data.Redirect,
-      isValid: hasValidResponse,
-      dataSample: JSON.stringify(data, null, 2).substring(0, 500) + '...'
-    });
-    
     // Si no hay una respuesta válida, verificar si parece ser una búsqueda de dominio
-    if (!hasValidResponse) {
+    if (!hasValidResponse || !data) {
       if (isDomainQuery(args.query)) {
         // Si parece ser un dominio, sugerir usar web_fetch
         const domain = args.query.replace(/^https?:\/\//i, '').split('/')[0];
@@ -284,6 +376,11 @@ export const webSearchToolDefinition = {
         query: {
           type: "string",
           description: "Términos de búsqueda"
+        },
+        useTavily: {
+          type: "boolean",
+          description: "Si es true, usa Tavily como motor de búsqueda en lugar de DuckDuckGo",
+          default: false
         },
         format: {
           type: "string",
