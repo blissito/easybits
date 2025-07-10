@@ -108,8 +108,8 @@ export function FloatingChat({}: FloatingChatProps) {
               ref={chatRef}
               className="bg-white rounded-lg shadow-2xl overflow-hidden relative z-50"
               style={{
-                width: isFullscreen ? "800px" : "400px",
-                height: isFullscreen ? "800px" : "600px",
+                width: "50%",
+                height: "50%",
                 marginBottom: "24px",
               }}
               initial={{
@@ -121,8 +121,8 @@ export function FloatingChat({}: FloatingChatProps) {
                 opacity: 1,
                 x: 0,
                 scale: 1,
-                width: isFullscreen ? "800px" : "400px",
-                height: isFullscreen ? "800px" : "600px",
+                width: "80%",
+                height: "80%",
               }}
               exit={{
                 opacity: 0,
@@ -145,37 +145,10 @@ export function FloatingChat({}: FloatingChatProps) {
                   />
                 </div>
 
-                <motion.button
-                  id="expand"
-                  onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="border-2 border-black z-50 w-10 h-10 items-center justify-center rounded-full absolute top-3 right-3 bg-white hidden md:flex"
-                  whileHover={{
-                    scale: 1.05,
-                    backgroundColor: "#f3f4f6",
-                  }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{
-                    duration: 0.2,
-                    ease: "easeInOut",
-                  }}
-                >
-                  <svg
-                    className="w-5 h-5 text-black"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                    />
-                  </svg>
-                </motion.button>
+         
                 <BittorChat
                   className="h-full border-0 rounded-none"
-                  // onClose={() => setIsOpen(false)}
+                  onClose={() => setIsOpen(false)}
                 />
               </div>
             </motion.div>

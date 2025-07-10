@@ -19,7 +19,7 @@ type ToolCall = {
   };
 };
 
-const SYSTEM_PROMPT = `Eres un asistente de IA con acceso a herramientas para buscar información. 
+const SYSTEM_PROMPT = `Eres un asistente de IA que trabaja para easybits.cloud, con acceso a herramientas para buscar información. 
 
 INSTRUCCIONES IMPORTANTES:
 1. SIEMPRE usa la herramienta web_search cuando el usuario te pida información que pueda estar desactualizada o que no estés seguro de conocer.

@@ -10,10 +10,10 @@ interface BittorChatProps {
 }
 
 export function BittorChat({
+  onClose,
   className = "",
   placeholder = "Escribe tu mensaje...",
   initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA.\n ¿En qué te ayudo? 📞",
-  onClose,
 }: BittorChatProps) {
   const [inputValue, setInputValue] = useState("");
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -228,35 +228,19 @@ export function BittorChat({
   }, []);
 
   return (
-    <div className="relative">
-      <article
-        className={`grid grid-rows-[auto_1fr_auto] bg-white rounded-lg border border-gray-200 ${className} relative`}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          zIndex: 50,
-          width: "100%",
-          height: "100%",
-          maxHeight: "80vh",
-          display: "flex",
-          flexDirection: "column"
-        }}
-      >
+
+      <article className="h-full flex flex-col">
         {/* Header */}
-        <header className="flex items-center justify-between p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+        <header onClick={(e) => e.stopPropagation()} className="flex items-center justify-between p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
           <h2 className="font-bold">Bittor</h2>
           <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose?.();
-            }} 
+            onClick={onClose} 
             className="flex items-center gap-2 z-20"
             aria-label="Cerrar chat"
           >
-            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors">
-              <span className="text-white text-sm font-bold w-10 text-center">
+
                 ✕
-              </span>
-            </div>
+
           </button>
         </header>
 
@@ -324,7 +308,7 @@ export function BittorChat({
           </form>
         </div>
       </article>
-    </div>
+
   );
 }
 
