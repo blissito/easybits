@@ -22,6 +22,7 @@ import { useOpenLink } from "~/hooks/useOpenLink";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { Modal } from "~/components/common/Modal";
+import WebinarDetails from "./WebinarDetails";
 
 export const ContentTemplate = ({
   asset,
@@ -412,39 +413,6 @@ const EbookDetails = ({ asset, files }: { asset: Asset; files: File[] }) => {
   );
 };
 
-const WebinarDetails = ({ asset }: { asset: Asset }) => {
-  const { typography } = asset?.user?.storeConfig || {};
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "long",
-    });
-  };
-  return (
-    <section style={{ fontFamily: typography }}>
-      <AttributeList
-        textLeft="No. de sesiones"
-        textRight={asset.metadata?.numberOfSessions}
-      />
-
-      <AttributeList
-        textLeft="Modalidad"
-        textRight={
-          <div className="flex gap-2 items-center">
-            {" "}
-            <div className="relative w-3 h-3">
-              <div className=" rounded-full absolute inset-0 blur-sm animate-pulse" />
-              <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
-            </div>
-            En vivo
-          </div>
-        }
-      />
-
-      <AttributeList textLeft="Fecha" textRight={formatDate(asset.eventDate)} />
-    </section>
-  );
-};
 
 const ReviewCard = ({ review }: { review: any }) => {
   const formatDate = (date: Date | string) => {
@@ -756,7 +724,7 @@ export const HeaderTemplate = ({
   );
 };
 
-const AttributeList = ({
+export const AttributeList = ({
   textLeft,
   textRight,
 }: {
