@@ -52,6 +52,7 @@ export const fetchOpenRouter = async ({
 
   // Modelos a intentar en orden
   const models = [
+    "anthropic/claude-3.7-sonnet:thinking",
     model || "google/gemma-3-27b-it:free", // Muy bueno para descripción, no para chat.
     "deepseek/deepseek-chat:free", // // Muy bueno para chat, no para descripción.
     "meta-llama/llama-4-maverick", // $0.60/M output tokens GRAN CONTEXTO

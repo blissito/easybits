@@ -59,6 +59,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  /**
+   *
+   * The right path for all the public assets should be:
+   *          /:UserID/:AssetID/gallery/:FileName
+   * O en su defecto:
+   *          /:UserID/gallery/:AssetID/:FileName
+   * Pero, se prefiere la anterior.
+   * Existe una convención para la meta imagen:
+   *          /:UserID/gallery/:AssetID/metaImagen
+   * Sin extensión soporta cualquier formato de imagen
+   */
+
+  // This is wrong DEPRECATE!
   const storageKeyBuilder = (config: {
     fileName?: string;
     deterministicKey?: "fileName" | "storageKey";
@@ -177,7 +190,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return new Response(storageKey, { status: 201 });
   }
 
-  // injects gallery file path
+  // injects gallery file path!! don't use out asset form editing
   if (intent === "get_put_file_url") {
     const user = await getUserOrRedirect(request);
     const isPrivate = !!formData.get("private");
@@ -300,6 +313,17 @@ export const action = async ({ request }: Route.ActionArgs) => {
         id: data.id,
       },
       data: { gallery: data.gallery, id: undefined }, // gallery
+    });
+  }
+
+  if (intent === "insert_link_in_gallery") {
+    const assetId = formData.get("assetId") as string;
+    const links = formData.get("links") as string;
+    return await db.asset.update({
+      where: {
+        id: assetId,
+      },
+      data: { gallery: { push: links.split(",") } }, // gallery
     });
   }
 

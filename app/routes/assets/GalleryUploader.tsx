@@ -1,9 +1,10 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useImageResize } from "~/hooks/useImageResize";
 import InputImage from "~/components/common/InputImage";
+import { createURLFromStorageKey } from "~/utils/urlConstructors";
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -69,6 +70,23 @@ export const GalleryUploader = ({
     }
   }, [gallery]);
 
+// ç======================catch videos
+  const [images, setImages] = useState<string[]>([]);
+  const [videos, setVideos] = useState<string[]>([]);
+  const catchVideos = ()=> {
+    const videos = gallery.filter((link) => link.endsWith(".mp4"));
+    if(videos.length > 0){
+      setVideos(videos)
+    } 
+    const images = gallery.filter((link) => !link.endsWith(".mp4"));
+    if(images.length > 0){
+      setImages(images)
+    }
+  }
+useEffect(() => {
+  catchVideos()
+}, [gallery])
+  // ========== catch videos
   return (
     <article className="">
       <h2 className="mt-5 mb-2">Galería y miniatura principal</h2>
@@ -96,11 +114,17 @@ export const GalleryUploader = ({
                     previewClassName="max-w-[144px] min-w-[144px]"
                   />
                 ))}
+                {videos.map((src, i) => (
+                  <InputImage.PreviewVideo
+                    key={i}
+                    src={src}
+                  />
+                ))}
               </section>
             }
             canUpload={canUpload}
             onChange={onAddFiles}
-            links={gallery}
+            links={images}
             onRemoveLink={onRemoveLink} // @todo change name
           />
         )}
@@ -127,9 +151,9 @@ const RowGalleryEditor = ({
     <div className={cn("flex items-center gap-3")}>
       <LayoutGroup>
         <AnimatePresence>
-          {links.map((l) => (
+          {links.map((l, i) => (
             <InputImage.Preview
-              key={l}
+              key={l+i}
               onClose={() => onRemoveLink?.(l)}
               src={l}
               previewClassName="max-w-[144px] min-w-[144px]"
@@ -151,3 +175,92 @@ const RowGalleryEditor = ({
     </div>
   );
 };
+
+export const useGalleryUploader = (config?: {directory?: string, allowedTypes?: string}) => {
+  const { directory = "gallery", allowedTypes = "video, image" } = config || {};
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+
+  const handleOnSave = async (assetId: string) => {
+    // 1. upload each and save links
+   const newLinks = await uploadFiles(files,assetId, {
+     directory,
+      async onFileUploaded(storageKey, file:File){
+        await createFileModel(storageKey,assetId,file)
+      }
+    });
+    await updateAssetGallery(assetId, newLinks)
+    // @todo update asset meta image?
+
+  };
+
+  return {
+    files,
+    previews,
+    handleOnSave,
+    setFiles,
+    setPreviews,
+  };
+};
+
+type Links = Promise<string[]>;
+const uploadFiles = async (files: File[],assetId: string, {
+  onFileUploaded,
+  directory,
+}: {onFileUploaded: (storageKey: string, file: File) => void, 
+  directory?: string,
+   allowedTypes?: string
+  }) => {
+  const promises = files.map(async (file) => {
+    // get url
+    const { url: putURL, storageKey } = await fetch("/api/v1/files", {
+      method: "post",
+      body: new URLSearchParams({
+        assetId,
+        fileName: file.name,
+        intent: "get_put_url",
+        directory: directory || "gallery",
+      }),
+    }).then((r) => r.json());
+    // put blob
+    await fetch(putURL, {
+      method: "put",
+      body: file,
+      headers: {
+        "content-type": file.type,
+      },
+    });
+    await onFileUploaded(storageKey,file) // upper callback
+    // return link
+    return createURLFromStorageKey(storageKey);
+  });
+  // 4. update asset gallery with links
+  return Promise.all(promises) as Links
+}
+
+const createFileModel = async (storageKey: string, assetId: string, file: File) => {
+  await fetch("/api/v1/files", {
+    method: "post",
+    body: new URLSearchParams({
+      intent: "create_new_file",
+      storageKey,
+      assetId,
+      metadata: JSON.stringify({
+        type: file.type,
+        size: file.size,
+        name: file.name,
+        lastModified: file.lastModified,
+      }),
+    }),
+  })
+}
+const updateAssetGallery = async (assetId: string, newLinks: string[]) => {
+  await fetch("/api/v1/assets", {
+    method: "post", 
+    body: new URLSearchParams({
+      intent: "insert_link_in_gallery",
+      links: newLinks.join(","),
+      assetId,
+    }),
+  }).then((r) => r.text());
+}

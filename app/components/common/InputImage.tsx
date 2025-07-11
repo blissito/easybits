@@ -148,7 +148,7 @@ function InputImage({
 
 export default InputImage;
 
-InputImage.Preview = Preview;
+
 
 
 interface PreviewProps {
@@ -208,3 +208,37 @@ function Preview({
     </motion.figure>
   );
 }
+
+function PreviewVideo({
+  src,
+}: {
+  src: string;
+}) {
+  return (
+    <motion.figure
+      layout
+      initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
+      exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
+      animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+      className="aspect-square relative group border rounded-2xl my-2 w-[144px] relative"
+    >
+      <button
+      onClick={()=>{}}  
+          type="button"
+          className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2 z-10"
+        >
+          <IoClose />
+        </button>
+      <video
+      loop
+      muted
+      autoPlay
+      src={src}
+      className="rounded-2xl object-cover w-full h-full"
+      />
+    </motion.figure>
+  );
+} 
+
+InputImage.Preview = Preview; 
+InputImage.PreviewVideo = PreviewVideo; 

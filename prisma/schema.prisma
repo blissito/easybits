@@ -177,11 +177,11 @@ enum FileStatus {
 
 model File {
   id                    String     @id @default(auto()) @map("_id") @db.ObjectId
-  storageKey            String     @unique
-  slug                  String     @unique
-  name                  String
-  size                  Float
-  contentType           String
+  storageKey            String     @unique // this
+  slug                  String     @unique // !
+  name                  String // !
+  size                  Float // !
+  contentType           String // !
   metadata              Json?
   // ^ meta
   status                FileStatus @default(PENDING)
@@ -189,20 +189,20 @@ model File {
   masterPlaylistURL     String?
   versions              String[]
   // ^ hls
-  url                   String
+  url                   String // ?
   access                String     @default("private")
   // ^ share
-  ownerId               String     @db.ObjectId
+  ownerId               String     @db.ObjectId // this
   // ^ ownership
   owner                 User       @relation(fields: [ownerId], references: [id])
-  assetIds              String[]   @db.ObjectId
+  assetIds              String[]   @db.ObjectId // this
   actionId              String?
   // ^ relations
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
   // ^ auto-dates
   Asset                 Asset?     @relation(fields: [assetId], references: [id])
-  assetId               String?    @db.ObjectId
+  assetId               String?    @db.ObjectId // deprecate!
 }
 
 model Client {

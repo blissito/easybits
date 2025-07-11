@@ -25,6 +25,7 @@ import { useUploader } from "~/hooks/useUploader";
 import { MarkEditor } from "./MarkEditor.client";
 import Spinner from "~/components/common/Spinner";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
+import { useVideoCover, VideoCover } from "./VideoCover";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -178,7 +179,9 @@ export const EditAssetForm = ({
         storageKey: `${asset.id}/ebooks/${file.name}`,
       })
     );
-
+    // DEV
+    await onSave(asset.id); // Video cover
+    return; // REMOVE! JUST DEV
     await fetcher.submit(
       {
         data: JSON.stringify({
@@ -310,6 +313,20 @@ export const EditAssetForm = ({
   // };
   // ========================================================== Ebook Files
 
+  //============================================== Gallery Supporting Video
+const galleryComponent = (
+<GalleryUploader
+  limit={12}
+  asset={asset}
+  gallery={gallery}
+  host={host}
+  onAddFiles={handleAddFiles}
+  onRemoveLink={handleAddLinkToRemove}
+  onRemoveFile={removeFile}
+  srcset={srcset}
+/>)
+  // =========================
+
   return (
     <article className="w-full px-4 col-span-12 md:col-span-8">
       <LayoutGroup>
@@ -337,17 +354,13 @@ export const EditAssetForm = ({
               error={errors.description}
             />
           </Suspense>
-          <GalleryUploader
-            limit={12}
-            asset={asset}
-            gallery={gallery}
-            host={host}
-            onAddFiles={handleAddFiles}
-            onRemoveLink={handleAddLinkToRemove}
-            onRemoveFile={removeFile}
-            srcset={srcset}
-          />
+         {galleryComponent}
           <HR />
+          {/* <VideoCover
+            assetFiles={assetFiles}
+            src={previewSrc}
+            ref={videoFileInputRef}
+          /> */}
           <PriceInput
             stripeAccountId={stripeAccountId}
             defaultPrice={asset.price}
