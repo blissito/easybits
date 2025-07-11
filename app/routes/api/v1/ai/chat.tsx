@@ -297,8 +297,21 @@ export const action = async ({ request }: Route.ActionArgs) => {
       throw new Error('No se pudo generar una respuesta final');
     }
 
+    // Obtener información de la herramienta utilizada
+    const toolUsed = toolCalls.length > 0 ? {
+      name: toolCalls[0].function?.name || 'unknown',
+      input: toolCalls[0].function?.arguments || '',
+      result: toolResults[0]?.content || ''
+    } : null;
+
+    // Crear respuesta con información de la herramienta
+    const responseWithToolInfo = {
+      ...finalResponse,
+      tool_used: toolUsed
+    };
+
     return new Response(
-      JSON.stringify(finalResponse),
+      JSON.stringify(responseWithToolInfo),
       { headers: { 'Content-Type': 'application/json' } }
     );
 

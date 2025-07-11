@@ -7,7 +7,14 @@ import { ExtraConfig } from "./ExtraConfig";
 import { PriceInput } from "./PriceInput";
 import type { Asset, File as PrismaFile } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { createContext, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  createContext,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { z, ZodError } from "zod";
 import { Input } from "~/components/common/Input";
 import { FilesPicker } from "./FilesPicker";
@@ -68,13 +75,13 @@ const assetClientSchema = assetSchema.omit({
   userId: true,
 });
 
-export const EbookContext = createContext({})
+export const EbookContext = createContext({});
 
 export const EditAssetForm = ({
   host,
   asset,
   assetFiles,
-stripeAccountId,
+  stripeAccountId,
   onUpdate,
 }: {
   stripeAccountId?: string;
@@ -122,13 +129,6 @@ stripeAccountId,
     setState({ [name]: value });
   };
 
-  const handleMetadata = (name: string) => (value: string) => {
-    const update = {
-      [name]: value,
-    };
-    setState({ ...form, metadata: { ...form.metadata, ...update } });
-  };
-
   const formatErrors = (error?: ZodError) => {
     if (!error) return setErrors({});
     const errors = error.issues.reduce((acc, issue) => {
@@ -172,14 +172,12 @@ stripeAccountId,
     //
 
     // @todo upload ebook files
-    const promises = Object.values(ebookFiles).map((file) => upload(file, asset.id, {
+    const promises = Object.values(ebookFiles).map((file) =>
+      upload(file, asset.id, {
         isPrivate: true,
         storageKey: `${asset.id}/ebooks/${file.name}`,
-      }) 
-    )
-    const ebooksLinks = await Promise.all(promises);
-    console.log("ebooksLinks", ebooksLinks)
-    //
+      })
+    );
 
     await fetcher.submit(
       {
@@ -193,7 +191,6 @@ stripeAccountId,
         }),
         intent: "update_asset",
         // @todo very custom revisit
-       
       },
       {
         method: "POST",
@@ -281,36 +278,36 @@ stripeAccountId,
   }, [asset]);
 
   // Ebook files ========================================================== Ebook Files
-  const [ebookFiles, setEbookFiles] = useState<Record<string, File>>({})
-  const [s3ObjectsToDelete, setS3ObjectsToDelete] = useState<string[]>([])
-  const { Provider: EbookProvider } = EbookContext
+  const [ebookFiles, setEbookFiles] = useState<Record<string, File>>({});
+  const [s3ObjectsToDelete, setS3ObjectsToDelete] = useState<string[]>([]);
+  const { Provider: EbookProvider } = EbookContext;
   const addEbookFile = (file: any) => {
-    setEbookFiles((fs) => ({...fs, [file.type]: file})) 
-  }
+    setEbookFiles((fs) => ({ ...fs, [file.type]: file }));
+  };
   const removeEbookFile = (key: string) => {
-    const fs = {...ebookFiles};
+    const fs = { ...ebookFiles };
     delete fs[key];
     setEbookFiles(fs);
   };
-  const handleEbookChange = (file: any)=>{
-    addEbookFile(file)
-  }
+  const handleEbookChange = (file: any) => {
+    addEbookFile(file);
+  };
   const enqueueDelete = (storageKey: string) => {
     setS3ObjectsToDelete((l) => [...l, storageKey]);
-  }
-      // const handleDelete = () => {
-      //   removeFile(0);
-      //   fetcher.submit(
-      //     {
-      //       intent: "delete_file",
-      //       storageKey: localFile?.storageKey,
-      //     },
-      //     {
-      //       method: "post",
-      //       action: "/api/v1/files",
-      //     }
-      //   );
-      // };
+  };
+  // const handleDelete = () => {
+  //   removeFile(0);
+  //   fetcher.submit(
+  //     {
+  //       intent: "delete_file",
+  //       storageKey: localFile?.storageKey,
+  //     },
+  //     {
+  //       method: "post",
+  //       action: "/api/v1/files",
+  //     }
+  //   );
+  // };
   // ========================================================== Ebook Files
 
   return (
@@ -393,11 +390,17 @@ stripeAccountId,
           )}
 
           {asset.type === "EBOOK" && (
-            <EbookProvider value={{ebookFiles, handleEbookChange, addEbookFile, removeEbookFile, enqueueDelete, s3ObjectsToDelete}}>
-              <EbookFields
-                assetFiles={assetFiles}
-                asset={asset}
-              />
+            <EbookProvider
+              value={{
+                ebookFiles,
+                handleEbookChange,
+                addEbookFile,
+                removeEbookFile,
+                enqueueDelete,
+                s3ObjectsToDelete,
+              }}
+            >
+              <EbookFields assetFiles={assetFiles} asset={asset} />
             </EbookProvider>
           )}
 

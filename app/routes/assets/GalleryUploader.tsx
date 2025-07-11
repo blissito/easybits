@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
@@ -61,8 +61,12 @@ export const GalleryUploader = ({
 
   const handleRemoveFile = (index: number) => () => onRemoveFile?.(index);
 
+  const isFirstRender = useRef(true);
   useEffect(() => {
-    uploadMetaImage(gallery); // @todo index:0
+    if (isFirstRender.current) {
+      uploadMetaImage(gallery); // @todo index:0
+      isFirstRender.current = false;
+    }
   }, [gallery]);
 
   return (

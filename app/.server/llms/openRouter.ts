@@ -15,29 +15,33 @@ export const fetchOpenRouter = async ({
   model,
   // herramientas
   tools,
-  tool_choice = 'auto'
+  tool_choice = "auto",
 }:
   | {
-    tools?: any;
-    tool_choice?: 'auto' | {
-    type: "function";
-    function: {
-      name: string
-    }
-  };
+      tools?: any;
+      tool_choice?:
+        | "auto"
+        | {
+            type: "function";
+            function: {
+              name: string;
+            };
+          };
       model?: string;
       messages: { role: string; content: string }[];
       prompt?: string;
       stream?: boolean;
     }
   | {
-    tools?: any;
-    tool_choice?: 'auto' | {
-    type: "function";
-    function: {
-      name: string
-    }
-  };
+      tools?: any;
+      tool_choice?:
+        | "auto"
+        | {
+            type: "function";
+            function: {
+              name: string;
+            };
+          };
       model?: string;
       prompt: string;
       messages?: { role: string; content: string }[];
@@ -48,6 +52,7 @@ export const fetchOpenRouter = async ({
 
   // Modelos a intentar en orden
   const models = [
+    "x-ai/grok-4",
     model || "google/gemma-3-27b-it:free", // Muy bueno para descripción, no para chat.
     "deepseek/deepseek-chat:free", // // Muy bueno para chat, no para descripción.
     "meta-llama/llama-4-maverick", // $0.60/M output tokens GRAN CONTEXTO
@@ -66,14 +71,13 @@ export const fetchOpenRouter = async ({
 
   let lastError: any = null;
   for (const model of models) {
-    const body: any = { 
-      model, 
+    const body: any = {
+      model,
       stream,
       // herramientas
       tools,
-      tool_choice
-
-     };
+      tool_choice,
+    };
     if (messages) body.messages = messages;
     if (prompt) body.prompt = prompt;
     try {
@@ -88,26 +92,26 @@ export const fetchOpenRouter = async ({
           body: JSON.stringify(body),
         }
       );
-      // @todo what's the shape of response and its data? 
+      // @todo what's the shape of response and its data?
       if (response.ok) {
         // When streaming, don't parse the response as JSON
         if (stream) {
-          return { 
-            stream, 
-            prompt, 
-            messages, 
+          return {
+            stream,
+            prompt,
+            messages,
             response,
-            success: true
+            success: true,
           };
         }
         // For non-streaming responses, parse the JSON
-        return { 
-          stream, 
-          prompt, 
-          messages, 
+        return {
+          stream,
+          prompt,
+          messages,
           response,
           success: true,
-          data: await response.json()
+          data: await response.json(),
         };
       } else {
         lastError = `OpenRouter error with model ${model}: ${response.status} ${response.statusText}`;
@@ -123,6 +127,5 @@ export const fetchOpenRouter = async ({
     prompt,
     stream,
     success: false,
-
   };
 };

@@ -5,7 +5,11 @@ import { nanoid } from "nanoid";
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
 import type { Asset, AssetType } from "@prisma/client";
-import { getPutFileUrl, deleteObject, deleteObjects } from "react-hook-multipart";
+import {
+  getPutFileUrl,
+  deleteObject,
+  deleteObjects,
+} from "react-hook-multipart";
 import type { Action } from "~/components/forms/NewsLetterForm";
 import {
   updateOrCreateProductAndPrice,
@@ -56,25 +60,31 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const intent = formData.get("intent");
 
   const storageKeyBuilder = (config: {
-    fileName?: string,
-    deterministicKey?: 'fileName' | 'storageKey',
-    user: typeof user,
-    storageKey?: string,
+    fileName?: string;
+    deterministicKey?: "fileName" | "storageKey";
+    user: typeof user;
+    storageKey?: string;
     assetId?: string;
   }) => {
-    const { fileName, deterministicKey = 'fileName', user, storageKey, assetId } = config;
+    const {
+      fileName,
+      deterministicKey = "fileName",
+      user,
+      storageKey,
+      assetId,
+    } = config;
     let finalStorageKey = `${user.id}/gallery/${assetId}/${fileName}`;
 
     if (storageKey) {
-      if (deterministicKey === 'storageKey') {
+      if (deterministicKey === "storageKey") {
         finalStorageKey = `${user.id}${storageKey}`;
       } else {
-        finalStorageKey = `${user.id}${storageKey}/${fileName}`
+        finalStorageKey = `${user.id}${storageKey}/${fileName}`;
       }
     }
 
     return finalStorageKey;
-  }
+  };
 
   if (intent === "get_enrolled_users") {
     const assetId = formData.get("assetId") as string;
@@ -144,13 +154,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   // create File for uploaded s3Object
-  if(intent==='create_uploaded_file'){
+  if (intent === "create_uploaded_file") {
     const user = await getUserOrNull(request);
     let fileName = formData.get("fileName") as string;
     const storageKey = formData.get("storageKey") as string;
-    const assetId = formData.get("assetId") as string; 
+    const assetId = formData.get("assetId") as string;
 
-    await db.file.create({ 
+    await db.file.create({
       data: {
         name: fileName,
         storageKey,
@@ -160,8 +170,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         slug: slugify(fileName),
         contentType: formData.get("contentType") as string,
         size: +formData.get("size")!,
-        url:''
-
+        url: "",
       },
     });
 
@@ -174,20 +183,25 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const isPrivate = !!formData.get("private");
     let fileName = formData.get("fileName") as string;
     const storageKey = formData.get("storageKey") as string;
-    const deterministicKey = formData.get("deterministicKey") as 'fileName';
+    const deterministicKey = formData.get("deterministicKey") as "fileName";
 
     if (fileName !== "metaImage") {
       const arr = fileName.split(".");
       fileName = `${nanoid()}.${arr[arr.length - 1]}`; // keeps extension
     }
     const assetId = formData.get("assetId") as string; // + nanoid(3);
-    const finalStorageKey = 
-    isPrivate ? 
-    `${storageKey}` :
-    storageKeyBuilder({ user, assetId, deterministicKey, fileName, storageKey });
+    const finalStorageKey = isPrivate
+      ? `${storageKey}`
+      : storageKeyBuilder({
+          user,
+          assetId,
+          deterministicKey,
+          fileName,
+          storageKey,
+        });
     const url = await getPutFileUrl(finalStorageKey, 900, {
       Bucket: isPrivate ? "easybits-dev" : "easybits-public", // all galleries are public
-      ACL: isPrivate ? 'private' : 'public-read', // not working, @todo revisit
+      ACL: isPrivate ? "private" : "public-read", // not working, @todo revisit
     });
     return new Response(url, { status: 201 });
   }
@@ -233,6 +247,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
           : "Error de validación de precio";
       return new Response(errorMessage, { status: 400 });
     }
+    // return;
 
     asset = await db.asset.update({
       where: {
@@ -262,23 +277,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // delete objects
     try {
       // @todo delete vars
-     const delRes = await deleteObjects(s3ObjectsToDelete) // @todo Revisit
-     console.log("DELETED??", delRes)
-     const remRes = await db.file.deleteMany({
-       where: {
-         storageKey: {
-           in: s3ObjectsToDelete,
+      const delRes = await deleteObjects(s3ObjectsToDelete); // @todo Revisit
+      console.log("DELETED??", delRes);
+      const remRes = await db.file.deleteMany({
+        where: {
+          storageKey: {
+            in: s3ObjectsToDelete,
           },
         },
       });
-      console.log("REMOVED??", remRes)
+      console.log("REMOVED??", remRes);
     } catch (e) {
-      console.error("NO se pudo borrar: ",e);
-    } 
+      console.error("NO se pudo borrar: ", e);
+    }
     //
-
-
-  
   }
 
   if (intent === "update_asset_gallery_links") {

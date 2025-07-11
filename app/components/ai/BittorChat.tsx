@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useBittor } from "~/hooks/useBittor";
 import Spinner from "~/components/common/Spinner";
+import { cn } from "~/utils/cn";
 
 interface BittorChatProps {
   className?: string;
@@ -11,7 +12,7 @@ interface BittorChatProps {
 
 export function BittorChat({
   onClose,
-  className = "",
+  className ,
   placeholder = "Escribe tu mensaje...",
   initialMessage = "¡Hola! 👋🏼 soy Bittor, tu asistente de IA.\n ¿En qué te ayudo? 📞",
 }: BittorChatProps) {
@@ -20,7 +21,7 @@ export function BittorChat({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Inicializar el hook con el mensaje inicial
-  const { messages, sendMessage, isLoading } = useBittor([
+  const { messages, sendMessage, isLoading, isGenerating, toolInUse } = useBittor([
     {
       id: "bittor-initial-message",
       role: "assistant",
@@ -229,7 +230,7 @@ export function BittorChat({
 
   return (
 
-      <article className="h-full flex flex-col">
+      <article className={cn("h-full flex flex-col", className)}>
         {/* Header */}
         <header onClick={(e) => e.stopPropagation()} className="flex items-center justify-between p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
           <h2 className="font-bold">Bittor</h2>
@@ -256,6 +257,47 @@ export function BittorChat({
             position: 'relative'
           }}
         >
+          {/* Mostrar herramienta en uso */}
+          {toolInUse && (
+            <div className={cn(`mb-4 p-3 rounded-lg text-sm ${
+              toolInUse.status === 'completed' 
+                ? 'bg-green-50 border border-green-200 text-green-800' 
+                : toolInUse.status === 'error'
+                  ? 'bg-orange-50 border border-orange-200 text-orange-800'
+                  : 'bg-blue-50 border border-blue-200 text-blue-800'
+            }`, {
+               'border-blue-200' : toolInUse.status === 'pending' ? 'border-blue-200' : ''})}>
+            
+              <div className="flex items-center gap-2 mb-1">
+                {toolInUse.status === 'completed' ? (
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : toolInUse.status === 'error' ? (
+                  <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                )}
+                <span className="font-medium">
+                  {toolInUse.status === 'completed'
+                    ? `Listo: ${toolInUse.name}`
+                    : toolInUse.status === 'error'
+                      ? `Error: ${toolInUse.name}`
+                      : `Usando: ${toolInUse.name}`}
+                </span>
+              </div>
+              {toolInUse.status === 'pending' && (
+                <div className="mt-1 text-xs text-blue-600 flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></span>
+                  Procesando...
+                </div>
+              )}
+            </div>
+          )}
           {messages.map((message) => (
             <div
               key={message.id}
@@ -270,10 +312,44 @@ export function BittorChat({
                     : "bg-gray-100 text-gray-800"
                 }`}
               >
-                {splitCodeBlocks(message.content)}
-                <p className="text-xs opacity-70 mt-1">
-                  {message.timestamp?.toLocaleTimeString()}
-                </p>
+                {message.isStreaming && message.role === 'assistant' ? (
+                  <div className="flex items-center gap-1">
+                    <span className="typing-dot" style={{ '--delay': '0s' } as React.CSSProperties}></span>
+                    <span className="typing-dot" style={{ '--delay': '0.2s' } as React.CSSProperties}></span>
+                    <span className="typing-dot" style={{ '--delay': '0.4s' } as React.CSSProperties}></span>
+                  </div>
+                ) : (
+                  splitCodeBlocks(message.content)
+                )}
+                
+    
+                <section className="flex">
+
+                      <p className="text-xs opacity-70 mt-1">
+                        {message.timestamp?.toLocaleTimeString()}
+                      </p>
+                                  {/* Mostrar información de la herramienta usada  @TODO: make a component to better reuse */}
+                                  {message.toolInUse && message.role === 'assistant' && (
+                        <div className="w-max px-2 rounded">
+                          <div className={`flex items-center gap-1 px-1 text-xs shadow-sm ${message.toolInUse.status === 'completed' ? 'text-green-600 border border-green-100 bg-green-50' : 'text-orange-500 border border-orange-100 bg-orange-50'}`}>
+                            {message.toolInUse.status === 'completed' ? (
+                              <svg className="w-3 h-3 flex-shrink-0 " fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
+                            <span className="text-gray-600">
+                              {message.toolInUse.status === 'completed' 
+                                ? `Usó: ${message.toolInUse.name}`
+                                : `Error al usar: ${message.toolInUse.name}`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                </section>
               </div>
             </div>
           ))}
@@ -310,6 +386,32 @@ export function BittorChat({
       </article>
 
   );
+}
+
+// Estilos para la animación de los puntos suspensivos
+const styles = `
+  @keyframes typing-dot {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+  }
+  
+  .typing-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #4b5563; /* Color gris para los puntos */
+    margin: 0 1px;
+    animation: typing-dot 1.4s infinite ease-in-out;
+    animation-delay: var(--delay);
+  }
+`;
+
+// Añadir estilos al documento
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = styles;
+  document.head.appendChild(styleElement);
 }
 
 export default BittorChat;
