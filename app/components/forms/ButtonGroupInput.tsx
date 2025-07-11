@@ -15,6 +15,7 @@ export type ButtonGroupProps = {
   selectedButtonClassName?: string;
   selectedShadowClassName?: string;
   renderOption?: (option: ButtonOption, isSelected: boolean) => React.ReactNode;
+  value?: string;
 };
 
 const ButtonGroupInput = ({
