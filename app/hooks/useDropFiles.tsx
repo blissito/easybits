@@ -5,11 +5,22 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
 
   type?: 'epub' | 'pdf' | 'mobi' | 'text/plain';
   onDrop?: (files: File[]) => void;
-  onChange?: (files: File[]) => void;
+  onChange?: (files: File[], name?: string) => void;
   persistFiles?: boolean;
   avoidClickWhenFiles?: boolean;
+  name?: string;
+  mode?: 'single' | 'multiple';
 }) => {
-  const { type, onDrop, onChange, persistFiles = true, avoidClickWhenFiles = false } = config || {};
+  const {
+    type,
+    onDrop,
+    onChange,
+    persistFiles = true,
+    avoidClickWhenFiles = false,
+    name,
+    mode = 'multiple',
+  } = config || {};
+
   const [isHovered, setIsHovered] = useState<null | "hover" | "dropping">(null);
   const [files, setFiles] = useState<File[]>([]);
   const ref = useRef<T>(null);
@@ -30,7 +41,11 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     } else {
       fls = files;
     }
-    setFiles((fs) => [...fs, ...fls]);
+    if (mode === 'single') {
+      setFiles(fls);
+    } else {
+      setFiles((fs) => [...fs, ...fls]);
+    }
   };
 
   const handleDrop = (e: MouseEvent & any) => {
@@ -101,7 +116,7 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
   }, []);
 
   useEffect(() => {
-    onChange?.(files); // drop and click
+    onChange?.(files, name); // drop and click
     if (!persistFiles) {
       setFiles([]);
     }
