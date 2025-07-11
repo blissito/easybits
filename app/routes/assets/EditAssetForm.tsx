@@ -172,16 +172,6 @@ export const EditAssetForm = ({
     ) as string[];
     //
 
-    // @todo upload ebook files
-    const promises = Object.values(ebookFiles).map((file) =>
-      upload(file, asset.id, {
-        isPrivate: true,
-        storageKey: `${asset.id}/ebooks/${file.name}`,
-      })
-    );
-    // DEV
-    await onSave(asset.id); // Video cover
-    return; // REMOVE! JUST DEV
     await fetcher.submit(
       {
         data: JSON.stringify({

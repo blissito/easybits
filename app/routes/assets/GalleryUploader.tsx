@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { cn } from "~/utils/cn";
 import type { Asset } from "@prisma/client";
 import { useImageResize } from "~/hooks/useImageResize";
 import InputImage from "~/components/common/InputImage";
 import { createURLFromStorageKey } from "~/utils/urlConstructors";
+import { nanoid } from "nanoid";
+
+type MediaItem = {
+  type: 'image' | 'video';
+  src: string;
+  storageKey?: string;
+};
 
 export const GalleryUploader = ({
   limit = Infinity,
@@ -60,7 +67,13 @@ export const GalleryUploader = ({
 
   const elemsLength = srcset.length + gallery.length;
 
-  const handleRemoveFile = (index: number) => () => onRemoveFile?.(index);
+  const handleRemoveFile = (index: number) => () => {
+    if (allMedia[index].isTemporary) {
+      onRemoveFile?.(index);
+    } else {
+      onRemoveLink?.(allMedia[index].src);
+    }
+  }
 
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -70,23 +83,34 @@ export const GalleryUploader = ({
     }
   }, [gallery]);
 
-// ç======================catch videos
-  const [images, setImages] = useState<string[]>([]);
-  const [videos, setVideos] = useState<string[]>([]);
-  const catchVideos = ()=> {
-    const videos = gallery.filter((link) => link.endsWith(".mp4"));
-    if(videos.length > 0){
-      setVideos(videos)
-    } 
-    const images = gallery.filter((link) => !link.endsWith(".mp4"));
-    if(images.length > 0){
-      setImages(images)
-    }
-  }
-useEffect(() => {
-  catchVideos()
-}, [gallery])
-  // ========== catch videos
+  const allMedia = useMemo(() => {
+    // Procesar archivos subidos (srcset) - URLs temporales
+    const uploadedMedia = srcset.map((src, index) => {
+      const isVideo = src.endsWith('.mp4') || src.startsWith('blob:');
+      return {
+        id: `uploaded-${index}`,
+        type: isVideo ? 'video' as const : 'image' as const,
+        src,
+        isTemporary: true, // Marcar como temporal
+        storageKey: `temp-${nanoid(3)}-${index}` // No tenemos un storageKey real aún
+      };
+    });
+  
+    // Procesar enlaces de la galería - URLs finales
+    const galleryMedia = (gallery || []).map((src, index) => {
+      const isVideo = src.endsWith('.mp4');
+      return {
+        id: `gallery-${index}`,
+        type: isVideo ? 'video' as const : 'image' as const,
+        src,
+        isTemporary: false,
+        storageKey: src.split('/').pop()?.split('?')[0] || `gallery-${index}`
+      };
+    });
+  
+    return [ ...galleryMedia,...uploadedMedia];
+  }, [srcset, gallery]);
+
   return (
     <article className="">
       <h2 className="mt-5 mb-2">Galería y miniatura principal</h2>
@@ -106,25 +130,26 @@ useEffect(() => {
           <RowGalleryEditor
             previews={
               <section className="flex gap-3">
-                {srcset.map((src, i) => (
+                {allMedia
+                .map((media, i) => (
+                  media.type === 'image' ? 
                   <InputImage.Preview
                     key={i}
                     onClose={handleRemoveFile(i)}
-                    src={src}
+                    src={media.src}
                     previewClassName="max-w-[144px] min-w-[144px]"
-                  />
-                ))}
-                {videos.map((src, i) => (
+                  /> : 
                   <InputImage.PreviewVideo
                     key={i}
-                    src={src}
+                    src={media.src}
+                    onClose={handleRemoveFile(i)}
                   />
                 ))}
+             
               </section>
             }
             canUpload={canUpload}
             onChange={onAddFiles}
-            links={images}
             onRemoveLink={onRemoveLink} // @todo change name
           />
         )}

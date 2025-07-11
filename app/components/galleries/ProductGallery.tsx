@@ -6,6 +6,7 @@ type Item = {
   name?: string;
   text?: string;
   src: string;
+  type?: 'image' | 'video';
 };
 
 export const ProductGallery = ({
@@ -47,16 +48,32 @@ export const ProductGallery = ({
       )}
     >
       <div className="w-full h-full">
-        {items.length == 0 ? (
+        {items.length === 0 ? (
           <img
             className="object-cover h-full w-full"
             src="/images/easybits-default.webp"
+            alt="Imagen por defecto"
           />
-        ) : items.length == 1 ? (
-          <img className="object-cover h-full w-full" src={items[0].src} alt="Imagen del producto" />
+        ) : items.length === 1 ? (
+          items[0].src.endsWith('.mp4') || items[0].type === 'video' ? (
+            <video
+              className="object-cover h-full w-full"
+              src={items[0].src}
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          ) : (
+            <img 
+              className="object-cover h-full w-full" 
+              src={items[0].src} 
+              alt={items[0].name || 'Imagen del producto'} 
+            />
+          )
         ) : items.length >= 2 ? (
           <ImageItem
-            items={items.map((i) => i.name)} // esto se puede evitar
+            items={items}
             item={items[currentIndex]}
             onClick={(index) => setCurrentIndex(index)}
             currentIndex={currentIndex}
@@ -76,12 +93,12 @@ const ImageItem = ({
   currentIndex: number;
   onClick?: (arg0: number) => void;
   item: Item;
-  items: string[];
+  items: Item[];
 }) => {
   return (
     <AnimatePresence mode="popLayout">
       <section className="flex items-center justify-between h-[280px] md:h-[600px] w-full relative ">
-        <section className=" absolute flex w-full z-30 justify-center bottom-4 md:bottom-10 gap-2">
+        <section className="absolute flex w-full z-30 justify-center bottom-4 md:bottom-10 gap-2">
           {items.map((_, i) => (
             <DotButton
               index={i}
@@ -92,19 +109,53 @@ const ImageItem = ({
           ))}
         </section>
 
-        <motion.img
-          initial={{
-            x: 30,
-            opacity: 1,
-            filter: "blur(4px)",
-          }}
-          animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
-          exit={{ x: -30, opacity: 0, filter: "blur(4px)" }}
-          key={item.src}
-          className="w-full h-full object-cover object-center bg-black"
-          src={item.src}
-          alt="asset"
-        />
+        {item.src.endsWith('.mp4') || item.type === 'video' ? (
+          <motion.video
+            initial={{
+              x: 30,
+              opacity: 1,
+              filter: "blur(4px)",
+            }}
+            animate={{
+              x: 0,
+              opacity: 1,
+              filter: "blur(0px)",
+            }}
+            exit={{
+              x: -30,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            className="object-cover h-full w-full"
+            autoPlay
+            loop
+            muted
+            playsInline
+            src={item.src}
+          />
+        ) : (
+          <motion.img
+            initial={{
+              x: 30,
+              opacity: 1,
+              filter: "blur(4px)",
+            }}
+            animate={{
+              x: 0,
+              opacity: 1,
+              filter: "blur(0px)",
+            }}
+            exit={{
+              x: -30,
+              opacity: 0,
+              filter: "blur(4px)",
+            }}
+            key={item.src}
+            className="object-cover h-full w-full"
+            src={item.src}
+            alt={item.name || 'Gallery image'}
+          />
+        )}
       </section>
     </AnimatePresence>
   );

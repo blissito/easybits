@@ -209,11 +209,15 @@ function Preview({
   );
 }
 
+interface PreviewVideoProps {
+  src: string;
+  onClose?: () => void;
+}
+
 function PreviewVideo({
   src,
-}: {
-  src: string;
-}) {
+  onClose
+}: PreviewVideoProps) {
   return (
     <motion.figure
       layout
@@ -223,22 +227,24 @@ function PreviewVideo({
       className="aspect-square relative group border rounded-2xl my-2 w-[144px] relative"
     >
       <button
-      onClick={()=>{}}  
-          type="button"
-          className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2 z-10"
-        >
-          <IoClose />
-        </button>
+        onClick={onClose}
+        type="button"
+        className="group-hover:block hidden bg-black text-white p-1 rounded-full absolute -right-2 -top-2 z-10 hover:bg-red-500 transition-colors"
+        title="Delete video"
+      >
+        <IoClose />
+      </button>
       <video
-      loop
-      muted
-      autoPlay
-      src={src}
-      className="rounded-2xl object-cover w-full h-full"
+        loop
+        muted
+        autoPlay
+        src={src}
+        className="rounded-2xl object-cover w-full h-full"
+        playsInline
       />
     </motion.figure>
   );
-} 
+}
 
 InputImage.Preview = Preview; 
 InputImage.PreviewVideo = PreviewVideo; 

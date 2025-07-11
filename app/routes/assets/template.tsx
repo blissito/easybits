@@ -46,6 +46,7 @@ export const ContentTemplate = ({
           className="bg-white"
           items={asset.gallery.map((src) => ({
             src,
+            type: src.endsWith('.mp4') ? 'video' as const : 'image' as const
           }))}
         />
         <div className="grid grid-cols-8 border-t-[2px] border-black">
