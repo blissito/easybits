@@ -106,13 +106,15 @@ jobs:
           # Set staging-specific environment
           flyctl secrets set NODE_ENV="staging" --app $STAGING_APP
 
+                    # Configure custom domain for staging (if available)
+          echo "Configuring staging domain..."
+          flyctl certs create staging.easybits.cloud --app $STAGING_APP || echo "Domain already configured or not available"
+
           # Deploy to staging
           flyctl deploy --app $STAGING_APP --remote-only
 
-          # Get staging URL
-          STAGING_HOSTNAME=$(flyctl status --app $STAGING_APP --json | jq -r .Hostname)
-          STAGING_URL="https://$STAGING_HOSTNAME"
-
+          # Get staging URL (prefer custom domain)
+          STAGING_URL="https://staging.easybits.cloud"
           echo "Staging deployed to: $STAGING_URL"
           echo "staging_url=$STAGING_URL" >> $GITHUB_ENV
 
