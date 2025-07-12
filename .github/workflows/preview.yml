@@ -2,7 +2,7 @@ name: Preview Deployment
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened, closed, labeled]
     branches: [main]
 
 env:
@@ -99,6 +99,12 @@ jobs:
       - name: Deploy to staging (if PR has staging label)
         if: contains(github.event.pull_request.labels.*.name, 'staging')
         run: |
+          echo "=== DEBUG: Checking staging conditions ==="
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Labels: ${{ github.event.pull_request.labels.*.name }}"
+          echo "Contains staging label: ${{ contains(github.event.pull_request.labels.*.name, 'staging') }}"
+          echo "=== END DEBUG ==="
+
           echo "Deploying to staging machine..."
           STAGING_APP="easybits-staging"
           MAIN_APP="easybits"
