@@ -62,6 +62,10 @@ jobs:
           HOSTNAME=$(flyctl status --app $APP_NAME --json | jq -r .Hostname)
           PREVIEW_URL="https://$HOSTNAME"
 
+          # Scale to 1 machine for cost optimization
+          echo "Scaling preview app to 1 machine for cost optimization"
+          flyctl scale count 1 --app $APP_NAME
+
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
