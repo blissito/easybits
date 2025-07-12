@@ -8,6 +8,11 @@ on:
 env:
   FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
+
 jobs:
   deploy-preview:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
