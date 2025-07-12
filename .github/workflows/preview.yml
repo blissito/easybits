@@ -51,8 +51,8 @@ jobs:
             # Copy all secrets from main app to preview app (single command)
             echo "Copying all secrets from main app..."
             # Export secrets from main app and import to preview app
-            flyctl secrets export --app $MAIN_APP > /tmp/secrets.txt
-            flyctl secrets import --app $APP_NAME < /tmp/secrets.txt
+            flyctl secrets export -a $MAIN_APP > /tmp/secrets.txt
+            flyctl secrets import -a $APP_NAME < /tmp/secrets.txt
             flyctl deploy --app $APP_NAME --remote-only
           else
             echo "Creating new preview app"
@@ -61,8 +61,8 @@ jobs:
             # Copy all secrets from main app to new preview app (single command)
             echo "Copying all secrets from main app..."
             # Export secrets from main app and import to preview app
-            flyctl secrets export --app $MAIN_APP > /tmp/secrets.txt
-            flyctl secrets import --app $APP_NAME < /tmp/secrets.txt
+            flyctl secrets export -a $MAIN_APP > /tmp/secrets.txt
+            flyctl secrets import -a $APP_NAME < /tmp/secrets.txt
             
             flyctl deploy --app $APP_NAME --remote-only
           fi
@@ -103,8 +103,8 @@ jobs:
           # Copy all secrets from main app to staging
           echo "Copying secrets to staging..."
           # Export secrets from main app and import to staging
-          flyctl secrets export --app $MAIN_APP > /tmp/staging-secrets.txt
-          flyctl secrets import --app $STAGING_APP < /tmp/staging-secrets.txt
+          flyctl secrets export -a $MAIN_APP > /tmp/staging-secrets.txt
+          flyctl secrets import -a $STAGING_APP < /tmp/staging-secrets.txt
 
           # Set staging-specific environment
           flyctl secrets set NODE_ENV="staging" --app $STAGING_APP
