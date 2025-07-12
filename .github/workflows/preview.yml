@@ -33,14 +33,28 @@ jobs:
         run: |
           PR_NUMBER="${{ github.event.number }}"
           APP_NAME="easybits-preview-$PR_NUMBER"
+          MAIN_APP="easybits"  # Tu app principal
 
           # Deploy or update app
           if flyctl status --app $APP_NAME &>/dev/null; then
             echo "Updating existing preview app"
+            # Copy secrets from main app to preview app
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[].Name' | while read secret_name; do
+              echo "Copying secret: $secret_name"
+              flyctl secrets set $secret_name="$(flyctl secrets list --app $MAIN_APP --json | jq -r ".[] | select(.Name==\"$secret_name\") | .Digest")" --app $APP_NAME
+            done
             flyctl deploy --app $APP_NAME --remote-only
           else
             echo "Creating new preview app"
             flyctl apps create $APP_NAME --org personal
+            
+            # Copy all secrets from main app to new preview app
+            echo "Copying all secrets from main app..."
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[].Name' | while read secret_name; do
+              echo "Copying secret: $secret_name"
+              flyctl secrets set $secret_name="$(flyctl secrets list --app $MAIN_APP --json | jq -r ".[] | select(.Name==\"$secret_name\") | .Digest")" --app $APP_NAME
+            done
+            
             flyctl deploy --app $APP_NAME --remote-only
           fi
 
