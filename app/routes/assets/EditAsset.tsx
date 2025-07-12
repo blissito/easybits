@@ -66,7 +66,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
           assetFiles={files}
           host={host}
           asset={asset}
-          onUpdate={(form) => setPrev(form)}
+          onUpdate={(form) => setPrev({ ...form, user: asset.user })}
         />
         <AssetPreview host={host} asset={prev} />
       </main>

@@ -18,6 +18,8 @@ export const AssetCard = ({
   asset: Asset;
   right?: ReactNode;
 }) => {
+  const publicLink = usePublicLink(asset as any);
+
   return (
     <motion.main
       initial={{ opacity: 0, scale: 0.8 }}
@@ -35,7 +37,11 @@ export const AssetCard = ({
           "overflow-hidden"
         )}
       >
-        <Link prefetch="render" to={to || `/dash/assets/${asset.id}/edit`} className="">
+        <Link
+          prefetch="render"
+          to={to || `/dash/assets/${asset.id}/edit`}
+          className=""
+        >
           <img
             className="h-[180px] object-cover w-full flex-grow-0"
             src={asset.gallery?.[0] || "/images/easybits-default.webp"}
@@ -55,12 +61,16 @@ export const AssetCard = ({
             right
           ) : (
             <a
-              href={usePublicLink(asset as any) || "#"}
+              href={publicLink || "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="text-brand-gray"
             >
-              <img alt="external link" src="/icons/opentab.svg" className="w-6 h-6" />
+              <img
+                alt="external link"
+                src="/icons/opentab.svg"
+                className="w-6 h-6"
+              />
             </a>
           )}
         </nav>
@@ -82,6 +92,8 @@ export const CollapsedAssetCard = ({
   salesAmount?: number;
   orderCount?: number;
 }) => {
+  const publicLink = usePublicLink(asset, host);
+
   return (
     <motion.main
       initial={{ opacity: 0, scale: 0.8 }}
@@ -112,7 +124,7 @@ export const CollapsedAssetCard = ({
             <h3 className="font-bold text-base md:text-lg  ">
               {asset.title || asset.slug || asset.template?.slug}
             </h3>
-            <p className="hidden md:block">{usePublicLink(asset, host)} </p>
+            <p className="hidden md:block">{publicLink} </p>
           </div>
         </Link>
         <div className="col-span-2 place-content-center hidden md:block">
@@ -129,7 +141,7 @@ export const CollapsedAssetCard = ({
         </div>
         <div className="col-span-1 place-content-center">
           {" "}
-          <CopyButton className="" text={usePublicLink(asset as any, host)} />
+          <CopyButton className="" text={publicLink} />
         </div>
       </div>
     </motion.main>

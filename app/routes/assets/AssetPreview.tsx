@@ -23,8 +23,10 @@ export const AssetPreview = ({
   host,
 }: {
   host: string;
-  asset: Asset;
+  asset: Asset & { user?: { host: string } };
 }) => {
+  const publicLink = constructPublicLink(host, asset.slug);
+
   const reload = () => {
     window.location.reload();
   };
@@ -40,7 +42,7 @@ export const AssetPreview = ({
 
   const { handleOpenLink } = useOpenLink({
     localLink: `http://${host}.localhost:3000/tienda/${asset.slug}`,
-    publicLink: constructPublicLink(host, asset.slug),
+    publicLink: publicLink,
   });
   return (
     <aside
@@ -90,6 +92,7 @@ const ShareLink = ({
   slug: string;
 }) => {
   const link = constructPublicLink(host, slug);
+
   return (
     <>
       <Modal

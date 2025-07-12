@@ -24,6 +24,16 @@ export const getClientDomain = () => {
 
 // Client-side only: construct public link for assets
 export const constructPublicLink = (host: string, slug: string) => {
-  const domain = getClientDomain();
-  return `https://${host}.${domain}/tienda/${slug}`;
+  // Check if we're on the client side
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    const domain = getClientDomain();
+    return `https://${host}.${domain}/tienda/${slug}`;
+  } catch (error) {
+    console.warn("Failed to construct public link:", error);
+    return "";
+  }
 };
