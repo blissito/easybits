@@ -48,21 +48,19 @@ jobs:
           # Deploy or update app
           if flyctl status --app $APP_NAME &>/dev/null; then
             echo "Updating existing preview app"
-            # Copy all secrets from main app to preview app (efficient method)
+            # Copy all secrets from main app to preview app (single command)
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | while IFS='=' read -r name digest; do
-              flyctl secrets set "$name=$digest" --app $APP_NAME
-            done
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' > /tmp/secrets.txt
+            flyctl secrets import --app $APP_NAME < /tmp/secrets.txt
             flyctl deploy --app $APP_NAME --remote-only
           else
             echo "Creating new preview app"
             flyctl apps create $APP_NAME --org personal
             
-            # Copy all secrets from main app to new preview app (efficient method)
+            # Copy all secrets from main app to new preview app (single command)
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | while IFS='=' read -r name digest; do
-              flyctl secrets set "$name=$digest" --app $APP_NAME
-            done
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' > /tmp/secrets.txt
+            flyctl secrets import --app $APP_NAME < /tmp/secrets.txt
             
             flyctl deploy --app $APP_NAME --remote-only
           fi
@@ -102,9 +100,8 @@ jobs:
 
           # Copy all secrets from main app to staging
           echo "Copying secrets to staging..."
-          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | while IFS='=' read -r name digest; do
-            flyctl secrets set "$name=$digest" --app $STAGING_APP
-          done
+          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' > /tmp/staging-secrets.txt
+          flyctl secrets import --app $STAGING_APP < /tmp/staging-secrets.txt
 
           # Set staging-specific environment
           flyctl secrets set NODE_ENV="staging" --app $STAGING_APP
