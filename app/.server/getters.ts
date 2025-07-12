@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { sendWelcomeEmail } from "./emails/sendWelcome";
-import { config } from "./config";
+import { getServerDomain } from "./urlUtils";
 
 const throwRedirect = (request: Request) => {
   const url = new URL(request.url);
@@ -93,8 +93,8 @@ export const createUserSession = async (
   }
 
   session.set("email", userData.email);
-  // create certificate - use config.baseUrl to get the domain
-  const domain = new URL(config.baseUrl).hostname;
+  // create certificate - use server domain
+  const domain = getServerDomain();
   await createHost(`${host}.${domain}`); // @revisit
   // @todo revisit!
   await cb?.(user);

@@ -1,9 +1,8 @@
-import { config } from "~/.server/config";
+import { constructPublicLink } from "~/utils/urlConstructors";
 
 export const usePublicLink = (asset: {
   slug: string;
   user: { host: string };
 }) => {
-  const domain = new URL(config.baseUrl).hostname;
-  return `https://${asset.user.host}.${domain}/tienda/${asset.slug}`;
+  return constructPublicLink(asset.user.host, asset.slug);
 };

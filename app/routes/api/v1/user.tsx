@@ -16,7 +16,7 @@ import { redirect } from "react-router";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
 import { sendPurchase } from "~/.server/emails/sendPurchase";
 import type { Asset } from "@prisma/client";
-import { config } from "~/.server/config";
+import { getServerDomain } from "~/.server/urlUtils";
 // @TODO: recaptcha (cloudflare?)
 // @todo try use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
@@ -232,7 +232,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "update_host") {
     const currentUser = await getUserOrRedirect(request);
     const host = formData.get("host") as string;
-    const domain = new URL(config.baseUrl).hostname;
+    const domain = getServerDomain();
 
     // Update DNS validation instructions to use dynamic domain
     const dnsValidationInstructions = `CNAME _acme-challenge.${host}.${domain} => ${host}.${domain}.jnk0nd.flydns.net.`;
@@ -266,7 +266,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "remove_host") {
     const user = await getUserOrRedirect(request);
     const host = formData.get("host") as string;
-    const domain = new URL(config.baseUrl).hostname;
+    const domain = getServerDomain();
 
     // console.log("removing:", `${user.host}.${domain}`);
     await removeHost(`${user.host}.${domain}`);
