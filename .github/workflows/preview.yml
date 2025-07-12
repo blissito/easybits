@@ -18,22 +18,13 @@ jobs:
 
       - name: Set up Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@master
-        with:
-          api-token: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Debug Fly credentials
+      - name: Configure Fly.io credentials
         run: |
-          echo "=== Debug Fly.io Setup ==="
-          echo "HOME: $HOME"
-          echo "FLY_API_TOKEN exists: ${{ secrets.FLY_API_TOKEN != '' }}"
-          echo "FLY_API_TOKEN length: ${#FLY_API_TOKEN}"
-          echo "=== .fly directory ==="
-          ls -la $HOME/.fly || echo "No .fly directory found"
-          echo "=== .fly/credentials ==="
-          cat $HOME/.fly/credentials || echo "No credentials file found"
-          echo "=== Environment variables ==="
-          env | grep -i fly || echo "No FLY_* env vars found"
-          echo "=== End Debug ==="
+          mkdir -p "$HOME/.fly"
+          echo "${{ secrets.FLY_API_TOKEN }}" > "$HOME/.fly/credentials"
+          chmod 600 "$HOME/.fly/credentials"
+          echo "Fly.io credentials configured"
 
       - name: Deploy to Fly.io
         id: deploy
@@ -90,8 +81,13 @@ jobs:
     steps:
       - name: Set up Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@master
-        with:
-          api-token: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Configure Fly.io credentials
+        run: |
+          mkdir -p "$HOME/.fly"
+          echo "${{ secrets.FLY_API_TOKEN }}" > "$HOME/.fly/credentials"
+          chmod 600 "$HOME/.fly/credentials"
+          echo "Fly.io credentials configured"
 
       - name: Delete preview app
         run: |
