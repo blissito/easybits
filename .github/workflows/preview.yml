@@ -49,19 +49,29 @@ jobs:
           # Deploy or update app
           if flyctl status --app $APP_NAME &>/dev/null; then
             echo "Updating existing preview app"
-            # Copy all secrets from main app in one command
-            echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$APP_NAME''
-            flyctl secrets set NODE_ENV="preview" --app $APP_NAME
+            # Copy essential variables only (fast and simple)
+            flyctl secrets set \
+              DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+              GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              GOOGLE_SECRET="${{ secrets.GOOGLE_SECRET }}" \
+              NODE_ENV="preview" \
+              --app $APP_NAME
             flyctl deploy --app $APP_NAME --remote-only --detach
           else
             echo "Creating new preview app"
             flyctl apps create $APP_NAME --org personal
             
-            # Copy all secrets from main app in one command
-            echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$APP_NAME''
-            flyctl secrets set NODE_ENV="preview" --app $APP_NAME
+            # Copy essential variables only (fast and simple)
+            flyctl secrets set \
+              DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+              GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              GOOGLE_SECRET="${{ secrets.GOOGLE_SECRET }}" \
+              NODE_ENV="preview" \
+              --app $APP_NAME
             
             flyctl deploy --app $APP_NAME --remote-only --detach
           fi
@@ -99,12 +109,15 @@ jobs:
             flyctl apps create $STAGING_APP --org personal
           fi
 
-          # Set staging-specific environment
-          flyctl secrets set NODE_ENV="staging" --app $STAGING_APP
-
-          # Copy all secrets from main app efficiently
-          echo "Copying all secrets from main app to staging..."
-          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$STAGING_APP''
+          # Copy essential variables only (fast and simple)
+          flyctl secrets set \
+            DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+            GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+            GOOGLE_SECRET="${{ secrets.GOOGLE_SECRET }}" \
+            NODE_ENV="staging" \
+            --app $STAGING_APP
 
           # Configure custom domain for staging (if available)
           echo "Configuring staging domain..."
