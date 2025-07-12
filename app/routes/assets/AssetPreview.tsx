@@ -17,6 +17,7 @@ import { useAnimate, motion } from "motion/react";
 import { SiGmail } from "react-icons/si";
 import { ContentTemplate, HeaderTemplate } from "./template";
 import { useOpenLink } from "~/hooks/useOpenLink";
+import { config } from "~/.server/config";
 
 export const AssetPreview = ({
   asset,
@@ -40,7 +41,9 @@ export const AssetPreview = ({
 
   const { handleOpenLink } = useOpenLink({
     localLink: `http://${host}.localhost:3000/tienda/${asset.slug}`,
-    publicLink: `https://${host}.easybits.cloud/tienda/${asset.slug}`,
+    publicLink: `https://${host}.${new URL(config.baseUrl).hostname}/tienda/${
+      asset.slug
+    }`,
   });
   return (
     <aside
@@ -89,7 +92,9 @@ const ShareLink = ({
   host: string;
   slug: string;
 }) => {
-  const link = `https://${host}.easybits.cloud/tienda/${slug}`;
+  const link = `https://${host}.${
+    new URL(config.baseUrl).hostname
+  }/tienda/${slug}`;
   return (
     <>
       <Modal

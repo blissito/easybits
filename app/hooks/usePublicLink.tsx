@@ -1,13 +1,9 @@
-import type { Asset } from "@prisma/client";
+import { config } from "~/.server/config";
 
-export const usePublicLink = (asset: Asset, host?: string) => {
-  if (!asset) return null;
-
-  if (host) {
-    return `https://${host}.easybits.cloud/tienda/${asset.slug}`;
-  }
-
-  // @todo custom d
-
-  return `/tienda/${asset.slug}`;
+export const usePublicLink = (asset: {
+  slug: string;
+  user: { host: string };
+}) => {
+  const domain = new URL(config.baseUrl).hostname;
+  return `https://${asset.user.host}.${domain}/tienda/${asset.slug}`;
 };
