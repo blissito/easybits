@@ -71,7 +71,7 @@ jobs:
 
           # Scale to 1 machine for cost optimization
           echo "Scaling preview app to 1 machine for cost optimization"
-          flyctl scale count 1 --app $APP_NAME
+          flyctl scale count 1 --app $APP_NAME --yes
 
           # If this is staging, set up staging-specific configuration
           if [[ "$IS_STAGING" == "true" ]]; then
