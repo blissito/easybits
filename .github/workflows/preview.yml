@@ -21,6 +21,20 @@ jobs:
         with:
           api-token: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Debug Fly credentials
+        run: |
+          echo "=== Debug Fly.io Setup ==="
+          echo "HOME: $HOME"
+          echo "FLY_API_TOKEN exists: ${{ secrets.FLY_API_TOKEN != '' }}"
+          echo "FLY_API_TOKEN length: ${#FLY_API_TOKEN}"
+          echo "=== .fly directory ==="
+          ls -la $HOME/.fly || echo "No .fly directory found"
+          echo "=== .fly/credentials ==="
+          cat $HOME/.fly/credentials || echo "No credentials file found"
+          echo "=== Environment variables ==="
+          env | grep -i fly || echo "No FLY_* env vars found"
+          echo "=== End Debug ==="
+
       - name: Deploy to Fly.io
         id: deploy
         run: |
