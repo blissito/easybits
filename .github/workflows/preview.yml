@@ -162,6 +162,8 @@ jobs:
               comment += `\n\n## 🎯 Staging Deployment
               
               **Staging URL:** ${stagingUrl}
+
+              Or **Oficial domain:** https://staging.easybits.cloud
               
               This PR has been deployed to staging as well!`;
             }
