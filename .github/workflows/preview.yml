@@ -91,6 +91,7 @@ jobs:
           if [[ "$IS_STAGING" == "true" ]]; then
             echo "Setting up staging configuration..."
             flyctl secrets set NODE_ENV="staging" --app $APP_NAME
+            flyctl secrets set BASE_URL="https://easybits-staging.fly.dev" --app $APP_NAME
             flyctl secrets set STAGING_URL="https://$HOSTNAME" --app $APP_NAME
             echo "Staging URL: https://$HOSTNAME"
           fi
@@ -126,7 +127,7 @@ jobs:
             GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
             GOOGLE_SECRET="${{ secrets.GOOGLE_SECRET }}" \
             NODE_ENV="staging" \
-            BASE_URL="https://staging.easybits.cloud" \
+            BASE_URL="https://easybits-staging.fly.dev" \
             --app $STAGING_APP
 
           # Configure custom domain for staging (if available)
