@@ -18,6 +18,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     concurrency: preview-${{ github.event.number }}
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -52,7 +53,7 @@ jobs:
             echo "Copying all secrets from main app..."
             flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$APP_NAME''
             flyctl secrets set NODE_ENV="preview" --app $APP_NAME
-            flyctl deploy --app $APP_NAME --remote-only
+            flyctl deploy --app $APP_NAME --remote-only --detach
           else
             echo "Creating new preview app"
             flyctl apps create $APP_NAME --org personal
@@ -62,7 +63,7 @@ jobs:
             flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$APP_NAME''
             flyctl secrets set NODE_ENV="preview" --app $APP_NAME
             
-            flyctl deploy --app $APP_NAME --remote-only
+            flyctl deploy --app $APP_NAME --remote-only --detach
           fi
 
           # Get app URL
@@ -110,7 +111,7 @@ jobs:
           flyctl certs create staging.easybits.cloud --app $STAGING_APP || echo "Domain already configured or not available"
 
           # Deploy to staging
-          flyctl deploy --app $STAGING_APP --remote-only
+          flyctl deploy --app $STAGING_APP --remote-only --detach
 
           # Get staging URL (prefer custom domain)
           STAGING_URL="https://staging.easybits.cloud"
