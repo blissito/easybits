@@ -5,119 +5,111 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
 
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
 jobs:
   deploy-preview:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
+    concurrency: preview-${{ github.event.number }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Fly.io
+        uses: superfly/flyctl-actions/setup-flyctl@v1
         with:
-          fetch-depth: 0
+          api-token: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Set up Fly.io
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Configure Fly.io credentials
-        run: |
-          mkdir -p "$HOME/.fly"
-          echo "${{ secrets.FLY_API_TOKEN }}" > "$HOME/.fly/credentials"
-          chmod 600 "$HOME/.fly/credentials"
-          echo "Fly.io credentials configured"
-
-      - name: Deploy to Fly.io
+      - name: Deploy preview
         id: deploy
         run: |
-          # Obtener usuario y número de PR
-          USERNAME="${{ github.actor }}"
           PR_NUMBER="${{ github.event.number }}"
-          APP_NAME="easybits-${USERNAME}-${PR_NUMBER}"
+          APP_NAME="easybits-preview-$PR_NUMBER"
 
-          # Verificar si la app ya existe
-          if ! flyctl status --app $APP_NAME &>/dev/null; then
-            # Crear nueva app
-            flyctl apps create $APP_NAME --json | jq -r .Hostname > hostname.txt
-            flyctl regions set qro --app $APP_NAME
-            flyctl deploy --app $APP_NAME --region qro
-          else:
-            # Actualizar app existente
-            flyctl deploy --app $APP_NAME --region qro
-            flyctl status --app $APP_NAME --json | jq -r .Hostname > hostname.txt
+          # Deploy or update app
+          if flyctl status --app $APP_NAME &>/dev/null; then
+            echo "Updating existing preview app"
+            flyctl deploy --app $APP_NAME --remote-only
+          else
+            echo "Creating new preview app"
+            flyctl apps create $APP_NAME --org personal
+            flyctl deploy --app $APP_NAME --remote-only
           fi
 
-          # Guardar URL para el deployment
-          echo "DEPLOY_URL=https://$(cat hostname.txt)" >> $GITHUB_ENV
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          # Get app URL
+          HOSTNAME=$(flyctl status --app $APP_NAME --json | jq -r .Hostname)
+          PREVIEW_URL="https://$HOSTNAME"
 
-      - name: Update GitHub Deployment
+          echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create deployment
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: deployment } = await github.rest.repos.createDeployment({
+            const deployment = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: context.payload.pull_request.head.sha,
-              environment: `preview-${context.actor}-${context.payload.number}`,
+              environment: `preview-${context.payload.number}`,
               auto_merge: false,
               required_contexts: [],
               transient_environment: true,
-              production_environment: false
+              production_environment: false,
+              description: `Preview deployment for PR #${context.payload.number}`
             });
 
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              deployment_id: deployment.id,
+              deployment_id: deployment.data.id,
               state: 'success',
-              environment_url: process.env.DEPLOY_URL,
+              environment_url: '${{ steps.deploy.outputs.preview_url }}',
               log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             });
 
   cleanup-preview:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
+    concurrency: preview-${{ github.event.number }}
 
     steps:
-      - name: Set up Fly.io
-        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Setup Fly.io
+        uses: superfly/flyctl-actions/setup-flyctl@v1
+        with:
+          api-token: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Configure Fly.io credentials
+      - name: Destroy preview app
         run: |
-          mkdir -p "$HOME/.fly"
-          echo "${{ secrets.FLY_API_TOKEN }}" > "$HOME/.fly/credentials"
-          chmod 600 "$HOME/.fly/credentials"
-          echo "Fly.io credentials configured"
-
-      - name: Delete preview app
-        run: |
-          USERNAME="${{ github.actor }}"
           PR_NUMBER="${{ github.event.number }}"
-          APP_NAME="easybits-${USERNAME}-${PR_NUMBER}"
+          APP_NAME="easybits-preview-$PR_NUMBER"
 
-          # Verificar si la app existe antes de intentar borrarla
           if flyctl status --app $APP_NAME &>/dev/null; then
-            flyctl apps destroy $APP_NAME -y || true
+            echo "Destroying preview app: $APP_NAME"
+            flyctl apps destroy $APP_NAME -y
+          else
+            echo "Preview app $APP_NAME not found"
           fi
 
-      - name: Mark deployment as inactive
+      - name: Mark deployment inactive
         uses: actions/github-script@v7
         with:
           script: |
-            // Obtener el deployment existente
-            const { data: deployments } = await github.rest.repos.listDeployments({
+            const deployments = await github.rest.repos.listDeployments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              environment: `preview-${context.actor}-${context.payload.number}`
+              environment: `preview-${context.payload.number}`
             });
 
-            // Marcar como inactivo
-            for (const deployment of deployments) {
+            for (const deployment of deployments.data) {
               await github.rest.repos.createDeploymentStatus({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 deployment_id: deployment.id,
                 state: 'inactive',
-                environment: `preview-${context.actor}-${context.payload.number}`
+                environment: `preview-${context.payload.number}`
               });
             }
