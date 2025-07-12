@@ -50,7 +50,8 @@ jobs:
             echo "Updating existing preview app"
             # Copy all secrets from main app to preview app (single command)
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' > /tmp/secrets.txt
+            # Export secrets from main app and import to preview app
+            flyctl secrets export --app $MAIN_APP > /tmp/secrets.txt
             flyctl secrets import --app $APP_NAME < /tmp/secrets.txt
             flyctl deploy --app $APP_NAME --remote-only
           else
@@ -59,7 +60,8 @@ jobs:
             
             # Copy all secrets from main app to new preview app (single command)
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' > /tmp/secrets.txt
+            # Export secrets from main app and import to preview app
+            flyctl secrets export --app $MAIN_APP > /tmp/secrets.txt
             flyctl secrets import --app $APP_NAME < /tmp/secrets.txt
             
             flyctl deploy --app $APP_NAME --remote-only
@@ -100,7 +102,8 @@ jobs:
 
           # Copy all secrets from main app to staging
           echo "Copying secrets to staging..."
-          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' > /tmp/staging-secrets.txt
+          # Export secrets from main app and import to staging
+          flyctl secrets export --app $MAIN_APP > /tmp/staging-secrets.txt
           flyctl secrets import --app $STAGING_APP < /tmp/staging-secrets.txt
 
           # Set staging-specific environment
