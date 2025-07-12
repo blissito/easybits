@@ -61,8 +61,14 @@ jobs:
             flyctl deploy --app $APP_NAME --remote-only --detach
           else
             echo "Creating new preview app"
-            flyctl apps create $APP_NAME --org personal
-            
+            # Crear la app solo si no existe
+            if flyctl status --app $APP_NAME &>/dev/null; then
+              echo "App $APP_NAME already exists, skipping creation."
+            else
+              echo "Creating new preview app"
+              flyctl apps create $APP_NAME --org personal
+            fi
+
             # Copy essential variables only (fast and simple)
             flyctl secrets set \
               DATABASE_URL="${{ secrets.DATABASE_URL }}" \
@@ -72,7 +78,7 @@ jobs:
               GOOGLE_SECRET="${{ secrets.GOOGLE_SECRET }}" \
               NODE_ENV="preview" \
               --app $APP_NAME
-            
+
             flyctl deploy --app $APP_NAME --remote-only --detach
           fi
 
