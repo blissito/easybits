@@ -41,9 +41,6 @@ jobs:
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'staging') }}" == "true" ]]; then
             IS_STAGING=true
             echo "This PR is marked as staging!"
-          elif [[ "${{ github.event.pull_request.title }}" == *"[STAGING]"* ]]; then
-            IS_STAGING=true
-            echo "This PR title contains [STAGING]!"
           fi
 
           # Deploy or update app
@@ -94,6 +91,7 @@ jobs:
           if [[ "$IS_STAGING" == "true" ]]; then
             echo "Setting up staging configuration..."
             flyctl secrets set NODE_ENV="staging" --app $APP_NAME
+            flyctl secrets set BASE_URL="https://easybits-staging.fly.dev" --app $APP_NAME
             flyctl secrets set STAGING_URL="https://$HOSTNAME" --app $APP_NAME
             echo "Staging URL: https://$HOSTNAME"
           fi
@@ -121,7 +119,7 @@ jobs:
             flyctl apps create $STAGING_APP --org personal
           fi
 
-          # Copy essential variables only (fast and simple)
+          # Copy essential variables only (fast and simple) + BASE_URL for staging
           flyctl secrets set \
             DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             JWT_SECRET="${{ secrets.JWT_SECRET }}" \
@@ -129,6 +127,7 @@ jobs:
             GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
             GOOGLE_SECRET="${{ secrets.GOOGLE_SECRET }}" \
             NODE_ENV="staging" \
+            BASE_URL="https://easybits-staging.fly.dev" \
             --app $STAGING_APP
 
           # Configure custom domain for staging (if available)
@@ -205,8 +204,6 @@ jobs:
     steps:
       - name: Setup Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@v1
-        with:
-          api-token: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Destroy preview app
         run: |

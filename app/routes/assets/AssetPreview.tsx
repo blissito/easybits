@@ -3,7 +3,6 @@ import toast from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";
 import { useState, type ReactNode } from "react";
 import { EnrolledUsers } from "~/components/fullstack/EnrolledUsers";
-import { MdContentCopy } from "react-icons/md";
 import { IoShareSocialOutline } from "react-icons/io5";
 import { Modal } from "~/components/common/Modal";
 import { FaXTwitter } from "react-icons/fa6";
@@ -17,6 +16,7 @@ import { useAnimate, motion } from "motion/react";
 import { SiGmail } from "react-icons/si";
 import { ContentTemplate, HeaderTemplate } from "./template";
 import { useOpenLink } from "~/hooks/useOpenLink";
+import { constructPublicLink } from "~/utils/urlConstructors";
 
 export const AssetPreview = ({
   asset,
@@ -26,7 +26,7 @@ export const AssetPreview = ({
   asset: Asset;
 }) => {
   const reload = () => {
-    location.reload();
+    window.location.reload();
   };
   const [isOpen, setIsOpen] = useState(false);
 
@@ -40,7 +40,7 @@ export const AssetPreview = ({
 
   const { handleOpenLink } = useOpenLink({
     localLink: `http://${host}.localhost:3000/tienda/${asset.slug}`,
-    publicLink: `https://${host}.easybits.cloud/tienda/${asset.slug}`,
+    publicLink: constructPublicLink(host, asset.slug),
   });
   return (
     <aside
@@ -89,7 +89,7 @@ const ShareLink = ({
   host: string;
   slug: string;
 }) => {
-  const link = `https://${host}.easybits.cloud/tienda/${slug}`;
+  const link = constructPublicLink(host, slug);
   return (
     <>
       <Modal

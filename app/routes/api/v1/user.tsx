@@ -16,6 +16,7 @@ import { redirect } from "react-router";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
 import { sendPurchase } from "~/.server/emails/sendPurchase";
 import type { Asset } from "@prisma/client";
+import { getServerDomain } from "~/.server/urlUtils";
 // @TODO: recaptcha (cloudflare?)
 // @todo try use transactions
 // const transaction = await prisma.$transaction([deletePosts, deleteUser])
@@ -229,29 +230,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "update_host") {
-    const userId = formData.get("userId") as string;
+    const currentUser = await getUserOrRedirect(request);
     const host = formData.get("host") as string;
-    const exists = await db.user.findFirst({
-      where: {
-        host,
-      },
-    });
-    if (exists) {
-      return { error: "Este dominio ya está en uso, intenta con otro" };
-    }
+    const domain = getServerDomain();
+
+    // Update DNS validation instructions to use dynamic domain
+    const dnsValidationInstructions = `CNAME _acme-challenge.${host}.${domain} => ${host}.${domain}.jnk0nd.flydns.net.`;
+    const dnsValidationHostname = `_acme-challenge.${host}.${domain}`;
+    const dnsValidationTarget = `${host}.${domain}.jnk0nd.flydns.net`;
+    const hostname = `${host}.${domain}`;
 
     // removing previous
-    const user = await db.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-    if (!user) return { error: "User not found" };
+    if (!currentUser) return { error: "User not found" };
 
-    // console.log("removing:", `${user.host}.easybits.cloud`);
-    await removeHost(`${user.host}.easybits.cloud`);
+    // console.log("removing:", `${currentUser.host}.${domain}`);
+    await removeHost(`${currentUser.host}.${domain}`);
     const hostResult = (await createHost(
-      `${host}.easybits.cloud`
+      `${host}.${domain}`
     )) as CertificateResponse;
 
     const {
@@ -260,12 +255,26 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     await db.user.update({
       where: {
-        id: userId,
+        id: currentUser.id,
       },
       data: { host, dnsConfig: certificate },
     });
 
     return { success: true, nextStep: 1 };
+  }
+
+  if (intent === "remove_host") {
+    const user = await getUserOrRedirect(request);
+    const host = formData.get("host") as string;
+    const domain = getServerDomain();
+
+    // console.log("removing:", `${user.host}.${domain}`);
+    await removeHost(`${user.host}.${domain}`);
+
+    return {
+      message: "Host removed successfully",
+      hostname: `${host}.${domain}`,
+    };
   }
 
   return null;

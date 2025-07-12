@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { sendWelcomeEmail } from "./emails/sendWelcome";
+import { getServerDomain } from "./urlUtils";
 
 const throwRedirect = (request: Request) => {
   const url = new URL(request.url);
@@ -92,8 +93,9 @@ export const createUserSession = async (
   }
 
   session.set("email", userData.email);
-  // create certificate
-  await createHost(`${host}.easybits.cloud`); // @revisit
+  // create certificate - use server domain
+  const domain = getServerDomain();
+  await createHost(`${host}.${domain}`); // @revisit
   // @todo revisit!
   await cb?.(user);
   throw redirect(userData.redirectURL || "/dash", {
@@ -164,7 +166,7 @@ export const createOrder = ({
 }) =>
   db.order.create({
     data: {
-      customer_email: customer.email ,
+      customer_email: customer.email,
       customerId: customer.id,
       assetId: asset.id,
       merchantId: asset.userId,
