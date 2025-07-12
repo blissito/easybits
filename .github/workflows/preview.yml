@@ -33,7 +33,7 @@ jobs:
         run: |
           PR_NUMBER="${{ github.event.number }}"
           APP_NAME="easybits-preview-$PR_NUMBER"
-          MAIN_APP="easybits"  # Tu app principal
+          MAIN_APP="easybits"
 
           # Check if this PR should be staging
           IS_STAGING=false
@@ -48,21 +48,19 @@ jobs:
           # Deploy or update app
           if flyctl status --app $APP_NAME &>/dev/null; then
             echo "Updating existing preview app"
-            # Copy all secrets from main app to preview app (single command)
+            # Copy all secrets from main app in one command
             echo "Copying all secrets from main app..."
-            # Export secrets from main app and import to preview app
-            flyctl secrets export -a $MAIN_APP > /tmp/secrets.txt
-            flyctl secrets import -a $APP_NAME < /tmp/secrets.txt
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app $APP_NAME'
+            flyctl secrets set NODE_ENV="preview" --app $APP_NAME
             flyctl deploy --app $APP_NAME --remote-only
           else
             echo "Creating new preview app"
             flyctl apps create $APP_NAME --org personal
             
-            # Copy all secrets from main app to new preview app (single command)
+            # Copy all secrets from main app in one command
             echo "Copying all secrets from main app..."
-            # Export secrets from main app and import to preview app
-            flyctl secrets export -a $MAIN_APP > /tmp/secrets.txt
-            flyctl secrets import -a $APP_NAME < /tmp/secrets.txt
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app $APP_NAME'
+            flyctl secrets set NODE_ENV="preview" --app $APP_NAME
             
             flyctl deploy --app $APP_NAME --remote-only
           fi
@@ -100,16 +98,14 @@ jobs:
             flyctl apps create $STAGING_APP --org personal
           fi
 
-          # Copy all secrets from main app to staging
-          echo "Copying secrets to staging..."
-          # Export secrets from main app and import to staging
-          flyctl secrets export -a $MAIN_APP > /tmp/staging-secrets.txt
-          flyctl secrets import -a $STAGING_APP < /tmp/staging-secrets.txt
-
           # Set staging-specific environment
           flyctl secrets set NODE_ENV="staging" --app $STAGING_APP
 
-                    # Configure custom domain for staging (if available)
+          # Copy all secrets from main app efficiently
+          echo "Copying all secrets from main app to staging..."
+          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app $STAGING_APP'
+
+          # Configure custom domain for staging (if available)
           echo "Configuring staging domain..."
           flyctl certs create staging.easybits.cloud --app $STAGING_APP || echo "Domain already configured or not available"
 
