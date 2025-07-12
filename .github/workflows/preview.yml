@@ -50,7 +50,7 @@ jobs:
             echo "Updating existing preview app"
             # Copy all secrets from main app in one command
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app $APP_NAME'
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$APP_NAME''
             flyctl secrets set NODE_ENV="preview" --app $APP_NAME
             flyctl deploy --app $APP_NAME --remote-only
           else
@@ -59,7 +59,7 @@ jobs:
             
             # Copy all secrets from main app in one command
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app $APP_NAME'
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$APP_NAME''
             flyctl secrets set NODE_ENV="preview" --app $APP_NAME
             
             flyctl deploy --app $APP_NAME --remote-only
@@ -103,7 +103,7 @@ jobs:
 
           # Copy all secrets from main app efficiently
           echo "Copying all secrets from main app to staging..."
-          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app $STAGING_APP'
+          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | xargs -I {} sh -c 'flyctl secrets set "{}" --app '$STAGING_APP''
 
           # Configure custom domain for staging (if available)
           echo "Configuring staging domain..."
