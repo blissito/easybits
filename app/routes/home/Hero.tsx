@@ -12,7 +12,7 @@ export const Hero = () => {
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Saca los chispos digitales en línea{" "} 🫘
+            Saca los chispos digitales en línea{" "} 🫘 🧐
           </h1>
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
