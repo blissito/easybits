@@ -18,8 +18,13 @@ jobs:
 
       - name: Set up Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@master
-        with:
-          api-token: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Configure Fly.io credentials
+        run: |
+          mkdir -p "$HOME/.fly"
+          echo "${{ secrets.FLY_API_TOKEN }}" > "$HOME/.fly/credentials"
+          chmod 600 "$HOME/.fly/credentials"
+          echo "Fly.io credentials configured"
 
       - name: Deploy to Fly.io
         id: deploy
@@ -76,8 +81,13 @@ jobs:
     steps:
       - name: Set up Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@master
-        with:
-          api-token: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Configure Fly.io credentials
+        run: |
+          mkdir -p "$HOME/.fly"
+          echo "${{ secrets.FLY_API_TOKEN }}" > "$HOME/.fly/credentials"
+          chmod 600 "$HOME/.fly/credentials"
+          echo "Fly.io credentials configured"
 
       - name: Delete preview app
         run: |
