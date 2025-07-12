@@ -35,24 +35,33 @@ jobs:
           APP_NAME="easybits-preview-$PR_NUMBER"
           MAIN_APP="easybits"  # Tu app principal
 
+          # Check if this PR should be staging
+          IS_STAGING=false
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'staging') }}" == "true" ]]; then
+            IS_STAGING=true
+            echo "This PR is marked as staging!"
+          elif [[ "${{ github.event.pull_request.title }}" == *"[STAGING]"* ]]; then
+            IS_STAGING=true
+            echo "This PR title contains [STAGING]!"
+          fi
+
           # Deploy or update app
           if flyctl status --app $APP_NAME &>/dev/null; then
             echo "Updating existing preview app"
-            # Copy secrets from main app to preview app
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[].Name' | while read secret_name; do
-              echo "Copying secret: $secret_name"
-              flyctl secrets set $secret_name="$(flyctl secrets list --app $MAIN_APP --json | jq -r ".[] | select(.Name==\"$secret_name\") | .Digest")" --app $APP_NAME
+            # Copy all secrets from main app to preview app (efficient method)
+            echo "Copying all secrets from main app..."
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | while IFS='=' read -r name digest; do
+              flyctl secrets set "$name=$digest" --app $APP_NAME
             done
             flyctl deploy --app $APP_NAME --remote-only
           else
             echo "Creating new preview app"
             flyctl apps create $APP_NAME --org personal
             
-            # Copy all secrets from main app to new preview app
+            # Copy all secrets from main app to new preview app (efficient method)
             echo "Copying all secrets from main app..."
-            flyctl secrets list --app $MAIN_APP --json | jq -r '.[].Name' | while read secret_name; do
-              echo "Copying secret: $secret_name"
-              flyctl secrets set $secret_name="$(flyctl secrets list --app $MAIN_APP --json | jq -r ".[] | select(.Name==\"$secret_name\") | .Digest")" --app $APP_NAME
+            flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | while IFS='=' read -r name digest; do
+              flyctl secrets set "$name=$digest" --app $APP_NAME
             done
             
             flyctl deploy --app $APP_NAME --remote-only
@@ -62,33 +71,107 @@ jobs:
           HOSTNAME=$(flyctl status --app $APP_NAME --json | jq -r .Hostname)
           PREVIEW_URL="https://$HOSTNAME"
 
+          # Scale to 1 machine for cost optimization
+          echo "Scaling preview app to 1 machine for cost optimization"
+          flyctl scale count 1 --app $APP_NAME
+
+          # If this is staging, set up staging-specific configuration
+          if [[ "$IS_STAGING" == "true" ]]; then
+            echo "Setting up staging configuration..."
+            flyctl secrets set NODE_ENV="staging" --app $APP_NAME
+            flyctl secrets set STAGING_URL="https://$HOSTNAME" --app $APP_NAME
+            echo "Staging URL: https://$HOSTNAME"
+          fi
+
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "is_staging=$IS_STAGING" >> $GITHUB_OUTPUT
+
+      - name: Deploy to staging (if PR has staging label)
+        if: contains(github.event.pull_request.labels.*.name, 'staging')
+        run: |
+          echo "Deploying to staging machine..."
+          STAGING_APP="easybits-staging"
+          MAIN_APP="easybits"
+
+          # Ensure staging app exists
+          if ! flyctl status --app $STAGING_APP &>/dev/null; then
+            echo "Creating staging app..."
+            flyctl apps create $STAGING_APP --org personal
+          fi
+
+          # Copy all secrets from main app to staging
+          echo "Copying secrets to staging..."
+          flyctl secrets list --app $MAIN_APP --json | jq -r '.[] | "\(.Name)=\(.Digest)"' | while IFS='=' read -r name digest; do
+            flyctl secrets set "$name=$digest" --app $STAGING_APP
+          done
+
+          # Set staging-specific environment
+          flyctl secrets set NODE_ENV="staging" --app $STAGING_APP
+
+          # Deploy to staging
+          flyctl deploy --app $STAGING_APP --remote-only
+
+          # Get staging URL
+          STAGING_HOSTNAME=$(flyctl status --app $STAGING_APP --json | jq -r .Hostname)
+          STAGING_URL="https://$STAGING_HOSTNAME"
+
+          echo "Staging deployed to: $STAGING_URL"
+          echo "staging_url=$STAGING_URL" >> $GITHUB_ENV
 
       - name: Create deployment
         uses: actions/github-script@v7
         with:
           script: |
-            const deployment = await github.rest.repos.createDeployment({
+            const previewUrl = '${{ steps.deploy.outputs.preview_url }}';
+            const appName = '${{ steps.deploy.outputs.app_name }}';
+            const isStaging = '${{ steps.deploy.outputs.is_staging }}';
+            const stagingUrl = '${{ env.staging_url }}';
+
+            let comment = `## 🚀 Preview Deployment Ready!
+
+            **Preview URL:** ${previewUrl}
+            **App Name:** ${appName}
+
+            Your preview deployment is now live and ready for testing! 🎉`;
+
+            if (isStaging === 'true' && stagingUrl) {
+              comment += `\n\n## 🎯 Staging Deployment
+              
+              **Staging URL:** ${stagingUrl}
+              
+              This PR has been deployed to staging as well!`;
+            }
+
+            // Check if comment already exists
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: context.payload.pull_request.head.sha,
-              environment: `preview-${context.payload.number}`,
-              auto_merge: false,
-              required_contexts: [],
-              transient_environment: true,
-              production_environment: false,
-              description: `Preview deployment for PR #${context.payload.number}`
+              issue_number: context.payload.number
             });
 
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: deployment.data.id,
-              state: 'success',
-              environment_url: '${{ steps.deploy.outputs.preview_url }}',
-              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            });
+            const existingComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Preview Deployment Ready')
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.number,
+                body: comment
+              });
+            }
 
   cleanup-preview:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
