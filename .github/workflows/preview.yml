@@ -205,8 +205,6 @@ jobs:
     steps:
       - name: Setup Fly.io
         uses: superfly/flyctl-actions/setup-flyctl@v1
-        with:
-          api-token: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Destroy preview app
         run: |
