@@ -5,14 +5,18 @@
 > made by fixter.org
 
 ## Inicio
+
 Antes de iniciar el proyecto asegurate de ejecutar:
+
 ```
 npx prisma generate
 ```
+
 Inicia el proyecto ejecutando:
-````
+
+```
 npm dev
-````
+```
 
 ## En relación a los tipos de curso
 
@@ -43,39 +47,47 @@ model Asset {
 
 Constantes definidas. El tipo `WEBINAR` puede aún mutar en el transcurso del desarrollo.
 
-## Pruebas de Stripe
+## Updates (Subidas de archivos)
 
-### Configuración necesaria
-- Asegúrate de tener las variables de entorno de Stripe configuradas correctamente en `.env`
-- Verifica que los webhooks estén configurados en el dashboard de Stripe
+- Ahora la subida de archivos a S3 es concurrente y en segundo plano usando Effect y react-hook-multipart.
+- El estado y progreso de todas las subidas se maneja globalmente con un contexto React (`UploadsContext`).
+- Puedes ver y controlar el progreso desde cualquier parte de la app, incluso si navegas entre rutas.
+- Hay un stacker flotante en /dash/assets que muestra el progreso de subidas activas.
+- Beneficios: mejor UX, control total, reusabilidad y robustez.
 
-### Flujo de compra
-1. **Proceso de checkout**
-   - [ ] Verificar que se pueda iniciar el checkout
-   - [ ] Probar con tarjetas de prueba de Stripe
-   - [ ] Validar redirección después del pago exitoso
+### Custom hook y provider
 
-2. **Notificaciones por email**
-   - [ ] Confirmar recepción de email de compra al comprador
-   - [ ] Verificar notificación al vendedor por nueva venta
-   - [ ] Revisar que los enlaces en los emails sean funcionales
+- Usa el custom hook `useUploads()` para acceder al estado y acciones de subidas desde cualquier componente.
+- El provider `UploadsProvider` envuelve la app y mantiene el estado global de subidas.
+- Effect se usa para manejar la lógica asíncrona y la concurrencia de las subidas, permitiendo lanzar, cancelar y controlar tareas de subida de forma declarativa y robusta.
 
-3. **Asignación de assets**
-   - [ ] Verificar que el asset se asigne correctamente al comprador
-   - [ ] Probar con usuarios nuevos (debe crearse la cuenta)
-   - [ ] Probar con usuarios existentes (debe asignar el asset)
+#### Ejemplo de uso
 
-4. **Manejo de errores**
-   - [ ] Probar con tarjeta rechazada
-   - [ ] Verificar mensajes de error en la UI
-   - [ ] Probar con sesión expirada
+```tsx
+// En tu root/layout
+<UploadsProvider>
+  <App />
+</UploadsProvider>;
 
-### Ambiente de desarrollo
-- Usa las claves de prueba de Stripe
-- Los webhooks locales pueden configurarse con Stripe CLI
-- Verifica que el modo desarrollo/producción funcione correctamente
+// En cualquier componente
+import { useUploads } from "~/context";
+const { uploads, uploadFile } = useUploads();
 
-### Monitoreo
-- Revisar logs del servidor para transacciones
-- Verificar webhooks recibidos en el dashboard de Stripe
-- Monitorear cola de emails enviados
+// Subir un archivo (por ejemplo, desde un input)
+<input
+  type="file"
+  onChange={(e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file, "assetId");
+  }}
+/>;
+
+// Mostrar progreso
+uploads.map((u) => (
+  <div key={u.id}>
+    {u.file.name}: {u.progress}%
+  </div>
+));
+```
+
+---
