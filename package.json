@@ -37,6 +37,7 @@
     "cross-env": "^7.0.3",
     "docx": "^9.5.1",
     "easymde": "^2.20.0",
+    "effect": "^3.16.13",
     "fixtergeek-mcp-server": "^0.0.8",
     "framer-motion": "^12.18.1",
     "graphql-request": "^7.1.2",

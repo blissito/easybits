@@ -26,6 +26,7 @@ import { MarkEditor } from "./MarkEditor.client";
 import Spinner from "~/components/common/Spinner";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import { useVideoCover, VideoCover } from "./VideoCover";
+import { useUploadMultipart } from "react-hook-multipart/react";
 
 export const assetSchema = z.object({
   id: z.string().min(3),
@@ -145,10 +146,8 @@ export const EditAssetForm = ({
     updateSrcset();
   };
 
-  const { upload } = useUploader({
-    assetId: asset.id,
-    defaultLinks: asset.gallery,
-  });
+  const { upload } = useUploadMultipart();
+  console.log("upload function", upload);
 
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
   const brutalToast = useBrutalToast();
@@ -304,17 +303,18 @@ export const EditAssetForm = ({
   // ========================================================== Ebook Files
 
   //============================================== Gallery Supporting Video
-const galleryComponent = (
-<GalleryUploader
-  limit={12}
-  asset={asset}
-  gallery={gallery}
-  host={host}
-  onAddFiles={handleAddFiles}
-  onRemoveLink={handleAddLinkToRemove}
-  onRemoveFile={removeFile}
-  srcset={srcset}
-/>)
+  const galleryComponent = (
+    <GalleryUploader
+      limit={12}
+      asset={asset}
+      gallery={gallery}
+      host={host}
+      onAddFiles={handleAddFiles}
+      onRemoveLink={handleAddLinkToRemove}
+      onRemoveFile={removeFile}
+      srcset={srcset}
+    />
+  );
   // =========================
 
   return (
@@ -328,7 +328,6 @@ const galleryComponent = (
             name="title"
             className="mb-5"
           />
-
           <Input
             defaultValue={asset.tags}
             onChange={(ev) => handleChange("tags")(ev.currentTarget.value)}
@@ -344,7 +343,7 @@ const galleryComponent = (
               error={errors.description}
             />
           </Suspense>
-         {galleryComponent}
+          {galleryComponent}
           <HR />
           {/* <VideoCover
             assetFiles={assetFiles}
@@ -366,7 +365,6 @@ const galleryComponent = (
             placeholder="Ej.: En la compra de este curso te enviaremos también tu playera oficial"
           />
           <HR />
-
           {(asset.type === "EMAIL_COURSE" ||
             asset.type === "VOD_COURSE" || // @todo get buttons outside of here
             asset.type === "WEBINAR") && (
@@ -385,13 +383,10 @@ const galleryComponent = (
               }
             />
           )}
-
           {asset.type === "DOWNLOADABLE" && (
-            <>
-              <FilesPicker assetFiles={assetFiles} asset={asset} />
-            </>
+            <FilesPicker assetFiles={assetFiles} asset={asset} />
           )}
-
+          {/* // @todo Esto se puede abstraer */}
           {asset.type === "EBOOK" && (
             <EbookProvider
               value={{
@@ -406,7 +401,6 @@ const galleryComponent = (
               <EbookFields assetFiles={assetFiles} asset={asset} />
             </EbookProvider>
           )}
-
           <HR />
           <Plantilla
             onChange={handleChange("template")}

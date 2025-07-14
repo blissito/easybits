@@ -22,6 +22,7 @@ import { NotFound } from "./components/common/404";
 // import { DevAdmin } from "./components/experimental/DevAdmin";
 import { FloatingChat } from "./components/ai/FloatingChat";
 import { DevAdmin } from "./components/experimental/DevAdmin";
+import { UploadsProvider } from "./context";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -50,7 +51,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body suppressHydrationWarning>
-        {children}
+        <UploadsProvider>{children}</UploadsProvider>
         <ScrollRestoration />
         <Scripts />
         <Toaster />

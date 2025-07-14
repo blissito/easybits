@@ -14,6 +14,8 @@ import { AnimatePresence } from "motion/react";
 import { CopyButton } from "~/components/common/CopyButton";
 import { Copy } from "~/components/common/Copy";
 import type { Asset, Order } from "@prisma/client";
+import { useUploads } from "~/context";
+import { Stacker } from "./FilesPicker";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -49,6 +51,12 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
   const { assets, host, orders, salesAmount } = loaderData;
   const [showModal, setShowModal] = useState(false);
   const [isFolded, setIsFolded] = useState(false);
+  const { uploads, cancelUpload, retryUpload, clearUpload } = useUploads();
+
+  // Subidas activas (no success ni error ni canceladas)
+  const activeUploads = uploads.filter((u) =>
+    ["uploading", "idle"].includes(u.status)
+  );
 
   return (
     <section className="max-w-7xl w-full mx-auto min-h-svh  box-border pt-16 pb-10 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0">
@@ -77,6 +85,28 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
         salesAmount={salesAmount}
       />
       <AssetFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
+      {/* Stacker flotante para progreso de subidas */}
+      {activeUploads.length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: 100,
+            zIndex: 50,
+            minWidth: 320,
+          }}
+        >
+          <Stacker
+            defaultFiles={[]}
+            files={[]}
+            assetId={activeUploads[0].assetId}
+            uploads={activeUploads}
+            cancelUpload={cancelUpload}
+            retryUpload={retryUpload}
+            clearUpload={clearUpload}
+          />
+        </div>
+      )}
     </section>
   );
 }

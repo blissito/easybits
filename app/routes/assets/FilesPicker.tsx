@@ -14,6 +14,7 @@ import { AnimatePresence, LayoutGroup } from "motion/react";
 import { motion } from "motion/react";
 import { useEndpoint } from "~/hooks/useEndpoint";
 import { ImageIcon } from "~/components/icons/image";
+import { useUploads } from "~/context";
 
 export const FilesPicker = ({
   assetFiles = [],
@@ -24,6 +25,19 @@ export const FilesPicker = ({
 }) => {
   const { isHovered, ref, files, removeFile } =
     useDropFiles<HTMLButtonElement>();
+  const { uploads, uploadFile, cancelUpload, retryUpload, clearUpload } =
+    useUploads();
+
+  // Lanzar subidas cuando se agregan archivos nuevos
+  useEffect(() => {
+    files.forEach((file) => {
+      // Si el archivo no está ya en uploads, lo subimos
+      if (!uploads.some((u) => u.file === file)) {
+        uploadFile(file, asset.id);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, asset.id]);
 
   const unoUOtro = files.length > 0 || assetFiles.length > 0;
   return (
@@ -43,6 +57,10 @@ export const FilesPicker = ({
           defaultFiles={assetFiles}
           assetId={asset.id}
           files={files}
+          uploads={uploads}
+          cancelUpload={cancelUpload}
+          retryUpload={retryUpload}
+          clearUpload={clearUpload}
         />
       )}
       {
@@ -206,35 +224,99 @@ const Stacker = ({
   files,
   assetId,
   removeFile,
+  uploads,
+  cancelUpload,
+  retryUpload,
+  clearUpload,
 }: {
   removeFile?: (i: number) => void;
   defaultFiles: AssetFile[];
   assetId: string;
   files: File[];
+  uploads: any[];
+  cancelUpload: (id: string) => void;
+  retryUpload: (id: string) => void;
+  clearUpload: (id: string) => void;
 }) => {
   return (
     <section className="grid gap-2">
       <AnimatePresence>
-        {files
-          .filter((f, i) => {
-            // revisit
-            const v = !defaultFiles.find((d) => d.name === f.name);
-            if (!v) {
-              removeFile?.(i);
-            }
-            return v;
-          })
-          .map((file, i) => (
-            <Uploader
-              onUpload={() => {
-                //   removeFile?.(i);
-                // @todo fetch asset files
-              }}
-              assetId={assetId}
-              key={i}
-              file={file}
-            />
+        {/* Mostrar subidas activas (uploads) */}
+        {uploads
+          .filter((u) => u.assetId === assetId)
+          .map((u) => (
+            <motion.main
+              layoutId={u.file.name}
+              key={u.id}
+              initial={{ opacity: 0, y: 10 }}
+              exit={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "bg-white",
+                "border-2 border-dashed border-brand-gray rounded-xl px-2 py-2"
+              )}
+            >
+              <div className="flex justify-between mb-1">
+                <span className="text-xs truncate">{u.file.name}</span>
+                <span
+                  className={cn("text-brand-500", {
+                    "text-brand-grass": u.progress >= 100,
+                    "animate-pulse": u.progress < 100,
+                  })}
+                >
+                  {u.status === "success" ? (
+                    <FaCheckCircle />
+                  ) : (
+                    <MdOutlineCloudUpload />
+                  )}
+                </span>
+              </div>
+              <div className="h-2 bg-black rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "bg-brand-500 h-full rounded-full border border-black",
+                    {
+                      "bg-brand-grass": u.progress >= 100,
+                    }
+                  )}
+                  style={{ width: `${u.progress}%` }}
+                />
+              </div>
+              <div className="flex gap-2 mt-2">
+                {u.status === "uploading" && (
+                  <button
+                    className="text-xs text-red-500"
+                    onClick={() => cancelUpload(u.id)}
+                  >
+                    Cancelar
+                  </button>
+                )}
+                {u.status === "error" && (
+                  <button
+                    className="text-xs text-yellow-600"
+                    onClick={() => retryUpload(u.id)}
+                  >
+                    Reintentar
+                  </button>
+                )}
+                {["success", "error", "cancelled"].includes(u.status) && (
+                  <button
+                    className="text-xs text-gray-500"
+                    onClick={() => clearUpload(u.id)}
+                  >
+                    Quitar
+                  </button>
+                )}
+                {u.status === "error" && (
+                  <span className="text-xs text-red-500">Error</span>
+                )}
+                {u.status === "cancelled" && (
+                  <span className="text-xs text-gray-500">Cancelado</span>
+                )}
+              </div>
+            </motion.main>
           ))}
+        {/* Mostrar archivos ya subidos (defaultFiles) */}
         {defaultFiles.map((assetFile, i) => (
           <FakeUploader index={i} file={assetFile} key={assetFile.id} />
         ))}
@@ -242,6 +324,8 @@ const Stacker = ({
     </section>
   );
 };
+
+export { Stacker };
 
 const Dropper = ({
   ref,
