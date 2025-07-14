@@ -63,7 +63,7 @@ export function EnrolledUsers({ assetId }: { assetId: string }) {
     return (
       <>
         <CTA />
-        {portal};
+        {portal}
       </>
     );
   }
