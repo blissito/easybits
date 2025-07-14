@@ -29,6 +29,10 @@ export interface EmailNodeCardProps {
   onDelete: () => void;
   onSave: () => void;
   onCancel: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  disableMoveUp?: boolean;
+  disableMoveDown?: boolean;
 }
 
 const DELAY_OPTIONS = [
@@ -56,6 +60,10 @@ export const EmailNodeCard: React.FC<EmailNodeCardProps> = ({
   onDelete,
   onSave,
   onCancel,
+  onMoveUp,
+  onMoveDown,
+  disableMoveUp,
+  disableMoveDown,
 }) => {
   const isCustom =
     editDelay &&
@@ -63,7 +71,34 @@ export const EmailNodeCard: React.FC<EmailNodeCardProps> = ({
     editDelay !== "";
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 mb-2 w-full flex flex-col items-center border border-gray-200 relative">
+    <div className="bg-white rounded-lg shadow p-4 mb-2 w-full flex flex-col items-center border border-gray-200 relative group">
+      {/* Botones de mover arriba/abajo */}
+      {(onMoveUp || onMoveDown) && (
+        <div className="absolute top-2 left-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          {onMoveUp && (
+            <button
+              onClick={onMoveUp}
+              disabled={disableMoveUp}
+              className={`text-gray-400 hover:text-blue-600 bg-white rounded-full p-1 shadow border border-gray-200 disabled:opacity-30 disabled:cursor-not-allowed`}
+              title="Mover arriba"
+              type="button"
+            >
+              ▲
+            </button>
+          )}
+          {onMoveDown && (
+            <button
+              onClick={onMoveDown}
+              disabled={disableMoveDown}
+              className={`text-gray-400 hover:text-blue-600 bg-white rounded-full p-1 shadow border border-gray-200 disabled:opacity-30 disabled:cursor-not-allowed`}
+              title="Mover abajo"
+              type="button"
+            >
+              ▼
+            </button>
+          )}
+        </div>
+      )}
       <button
         onClick={onDelete}
         className="absolute top-2 right-2 text-gray-400 hover:text-red-500"

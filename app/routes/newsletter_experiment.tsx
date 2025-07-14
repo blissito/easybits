@@ -204,6 +204,25 @@ export default function NewsletterExperiment({
     ]);
   }
 
+  // Mover nodo arriba
+  function moveNodeUp(idx: number) {
+    if (idx === 0) return;
+    setNodes((prev) => {
+      const arr = [...prev];
+      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+      return arr;
+    });
+  }
+  // Mover nodo abajo
+  function moveNodeDown(idx: number) {
+    if (idx === nodes.length - 1) return;
+    setNodes((prev) => {
+      const arr = [...prev];
+      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+      return arr;
+    });
+  }
+
   // El render de los nodos ya mostrará todos los que llegan del backend
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10">
@@ -245,6 +264,12 @@ export default function NewsletterExperiment({
               onDelete={() => handleDelete(node)}
               onSave={() => handleSaveNode(node)}
               onCancel={handleCancelEdit}
+              onMoveUp={idx > 0 ? () => moveNodeUp(idx) : undefined}
+              onMoveDown={
+                idx < nodes.length - 1 ? () => moveNodeDown(idx) : undefined
+              }
+              disableMoveUp={idx === 0}
+              disableMoveDown={idx === nodes.length - 1}
             />
             {idx < nodes.length - 1 && (
               <div className="mb-2">
