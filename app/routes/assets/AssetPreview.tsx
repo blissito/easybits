@@ -17,6 +17,7 @@ import { SiGmail } from "react-icons/si";
 import { ContentTemplate, HeaderTemplate } from "./template";
 import { useOpenLink } from "~/hooks/useOpenLink";
 import { constructPublicLink } from "~/utils/urlConstructors";
+import { Tooltip } from "~/components/common/Tooltip";
 
 export const AssetPreview = ({
   asset,
@@ -31,6 +32,7 @@ export const AssetPreview = ({
     window.location.reload();
   };
   const [isOpen, setIsOpen] = useState(false);
+  const [showPopover, setShowPopover] = useState(false);
 
   const handleModal = () => {
     setIsOpen(true);
@@ -57,13 +59,34 @@ export const AssetPreview = ({
         <button onClick={handleModal}>
           <IoShareSocialOutline className="text-2xl" />
         </button>
-        <button onClick={handleOpenLink} className="text-xl">
-          <img
-            alt="external link"
-            src="/icons/opentab-white.svg"
-            className="w-6 h-6"
-          />
-        </button>
+        {asset.published ? (
+          <button onClick={handleOpenLink} className="text-xl">
+            <img
+              alt="external link"
+              src="/icons/opentab-white.svg"
+              className="w-6 h-6"
+            />
+          </button>
+        ) : (
+          <div
+            className="relative"
+            onMouseEnter={() => setShowPopover(true)}
+            onMouseLeave={() => setShowPopover(false)}
+          >
+            <button className="text-xl opacity-50 cursor-not-allowed" disabled>
+              <img
+                alt="external link"
+                src="/icons/opentab-white.svg"
+                className="w-6 h-6"
+              />
+            </button>
+            {showPopover && (
+              <div className="absolute left-1/2 -translate-x-1/2 mt-2 px-3 py-2 bg-black text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+                Habilita publicando
+              </div>
+            )}
+          </div>
+        )}
         <EnrolledUsers assetId={asset.id} />
       </nav>
       <section className="origin-top-left scale-[.5] w-[200%] text-black bg-white">

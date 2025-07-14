@@ -27,7 +27,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     assets = await db.asset.findMany({
       where: {
         userId: hostExists.id,
-        //   published:true // @todo activate?
+        published: true,
       },
       include: {
         user: true,
@@ -39,7 +39,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     assets = await db.asset.findMany({
       where: {
         userId: domainExists.id,
-        //   published:true // @todo activate?
+        published: true,
       },
       include: {
         user: true,

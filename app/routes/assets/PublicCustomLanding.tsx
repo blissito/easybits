@@ -1,3 +1,4 @@
+import React from "react";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/PublicCustomLanding";
 import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
@@ -13,18 +14,14 @@ import { Button } from "~/components/common/Button";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getReviews } from "~/.server/reviews";
 
-export const meta = ({
-  data: {
-    asset: { title, description, userId, id },
-  },
-}: Route.MetaArgs) => {
+export const meta = ({ data }: Route.MetaArgs) => {
+  const { asset } = data as { asset: Asset & { user: any } };
   return getBasicMetaTags({
-    title,
-    description: description
-      ? description.slice(0, 80).replace("#", "") + "..."
+    title: asset.title,
+    description: asset.description
+      ? asset.description.slice(0, 80).replace("#", "") + "..."
       : "Hecha un vistazo a este increíble asset 🚀",
-    // @todo get this from config?
-    image: `https://easybits-public.fly.storage.tigris.dev/${userId}/gallery/${id}/metaImage`,
+    image: `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`,
   });
 };
 
@@ -70,6 +67,21 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     });
   }
   if (!asset) throw new Response("Asset not found", { status: 404 });
+  // Nueva validación: si el asset no está publicado, redirigir a la tienda
+  if (!asset.published) {
+    // Determinar la URL de la tienda según el dominio
+    let tiendaUrl = "/tienda";
+    if (domain.endsWith(".localhost")) {
+      tiendaUrl = `http://${host}.localhost:3000/tienda`;
+    } else if (!domain.includes("easybits")) {
+      tiendaUrl = `https://${domain}/tienda`;
+    } else if (host !== "localhost") {
+      tiendaUrl = `https://${host}.easybits.cloud/tienda`;
+    } else {
+      tiendaUrl = "/tienda";
+    }
+    return Response.redirect(tiendaUrl, 302);
+  }
   const assetReviews = await getReviews(asset.id);
 
   // Generating ActionButton
@@ -101,6 +113,13 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     publishableKey,
     successStripeId,
     assetReviews,
+  } as {
+    OpenCheckout: React.ReactNode;
+    files: { name: string; id: string; size: number }[];
+    asset: Asset & { user: any };
+    publishableKey: string | undefined;
+    successStripeId: string | null;
+    assetReviews: any[];
   };
 };
 
@@ -135,29 +154,32 @@ export const action = async ({ request, params }: Route.ClientActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { asset, files, successStripeId, assetReviews } = loaderData;
+  const { asset, files, successStripeId, assetReviews } = loaderData as {
+    asset: Asset & { user: any };
+    files: { name: string; id: string; size: number }[];
+    successStripeId: string | null;
+    assetReviews: any[];
+  };
   // Fetcher
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
   // Stripe Checkout
   const handleOpenCheckout = () => {
-
-      fetcher.submit(
-        {
-          intent: "account_checkout",
-          assetId: asset.id,
-        },
-        {
-          method: "post",
-          action: "/api/v1/stripe/checkout",
-        }
-      );
-  
+    fetcher.submit(
+      {
+        intent: "account_checkout",
+        assetId: asset.id,
+      },
+      {
+        method: "post",
+        action: "/api/v1/stripe/checkout",
+      }
+    );
   };
 
-  const errorMessage = fetcher.data?.message
+  const errorMessage = fetcher.data?.message;
 
-  console.log("fetcher", fetcher.data, errorMessage)
+  console.log("fetcher", fetcher.data, errorMessage);
 
   const defaultRatings = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   const reviewsByRating = assetReviews?.reduce((acc, review) => {
@@ -189,23 +211,25 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         actionButton={
           Number(asset.price) !== 0 ? (
             <>
-            <BrutalButton
-              id="purchase-button"
-              isLoading={isLoading}
-              isDisabled={!!errorMessage} 
-              type="button"
-              onClick={handleOpenCheckout}
-              mode="landing"
-              className="h-16"
-              containerClassName="h-16  border-none rounded-none"
-              style={{
-                backgroundColor:
-                (asset as any)?.user?.storeConfig?.hexColor || "red",
-              }}
+              <BrutalButton
+                id="purchase-button"
+                isLoading={isLoading}
+                isDisabled={!!errorMessage}
+                type="button"
+                onClick={handleOpenCheckout}
+                mode="landing"
+                className="h-16"
+                containerClassName="h-16  border-none rounded-none"
+                style={{
+                  backgroundColor:
+                    (asset as any)?.user?.storeConfig?.hexColor || "red",
+                }}
               >
-              {text}
-            </BrutalButton>
-            {errorMessage && <p className="text-red-500 text-xs">{errorMessage}</p>}
+                {text}
+              </BrutalButton>
+              {errorMessage && (
+                <p className="text-red-500 text-xs">{errorMessage}</p>
+              )}
             </>
           ) : null
         }
@@ -215,20 +239,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
       <FooterTemplate
         asset={asset}
-        form={({
-          isLoading,
-          handleSubmit,
-        }: {
-          handleSubmit: () => void;
-          isLoading: boolean;
-        }) => {
-          return (
-            <FooterSuscription
-              onSubmit={handleSubmit}
-              asset={asset}
-              isLoading={isLoading}
-            />
-          );
+        form={({ isLoading }: { isLoading: boolean }) => {
+          return <FooterSuscription asset={asset} isLoading={isLoading} />;
         }}
       />
     </article>

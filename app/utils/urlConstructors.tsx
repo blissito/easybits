@@ -30,7 +30,11 @@ export const constructPublicLink = (host: string, slug: string) => {
   }
 
   try {
-    const domain = getClientDomain();
+    let domain = getClientDomain();
+    // Eliminar 'www.' si está presente al inicio del dominio
+    if (domain.startsWith("www.")) {
+      domain = domain.replace(/^www\./, "");
+    }
     return `https://${host}.${domain}/tienda/${slug}`;
   } catch (error) {
     console.warn("Failed to construct public link:", error);
