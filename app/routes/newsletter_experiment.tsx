@@ -15,7 +15,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
   const isProd = process.env.NODE_ENV === "production";
   const baseUrl = isProd
-    ? "https://www.easybits.cloud"
+    ? "https://easybits-staging.fly.dev"
     : "http://localhost:3000";
   const newsletterId = "6875706f6ec1b9e9870e7189";
   const subscribeUrl = `${baseUrl}/api/v1/newsletters?newsletterId=${newsletterId}`;
