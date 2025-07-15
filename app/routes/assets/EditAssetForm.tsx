@@ -267,6 +267,7 @@ export const EditAssetForm = ({
     galleryRef.current = asset.gallery;
     removeFilePreviews();
     setGallery(asset.gallery);
+    filesRef.current = []; // Limpiar archivos locales tras refresh/cambio de asset
   }, [asset]);
 
   // Ebook files ========================================================== Ebook Files
@@ -316,6 +317,8 @@ export const EditAssetForm = ({
     />
   );
   // =========================
+
+  const canPublish = assetFiles && assetFiles.length > 0;
 
   return (
     <article className="w-full px-4 col-span-12 md:col-span-8">
@@ -379,12 +382,12 @@ export const EditAssetForm = ({
               asset={asset}
               onChangeMetadata={handleMetadataChange}
               vode_course={
-                <FilesPicker assetFiles={assetFiles} asset={asset} />
+                <FilesPicker assetFiles={assetFiles || []} asset={asset} />
               }
             />
           )}
           {asset.type === "DOWNLOADABLE" && (
-            <FilesPicker assetFiles={assetFiles} asset={asset} />
+            <FilesPicker assetFiles={assetFiles || []} asset={asset} />
           )}
           {/* // @todo Esto se puede abstraer */}
           {asset.type === "EBOOK" && (
@@ -398,7 +401,11 @@ export const EditAssetForm = ({
                 s3ObjectsToDelete,
               }}
             >
-              <EbookFields assetFiles={assetFiles} asset={asset} />
+              <EbookFields
+                assetFiles={assetFiles || []}
+                asset={asset}
+                onChange={handleEbookChange}
+              />
             </EbookProvider>
           )}
           <HR />
@@ -420,12 +427,19 @@ export const EditAssetForm = ({
                 className="flex border border-black rounded-lg gap-0 relative overflow-hidden"
               >
                 <span
-                  className={`text-sm lg:text-base rounded-l-none p-1 px-1 lg:px-3 cursor-pointer transition-all duration-300 ease-in-out transform ${
+                  className={`text-sm lg:text-base rounded-l-none p-1 px-1 lg:px-3 transition-all duration-300 ease-in-out transform ${
                     form.published
                       ? "bg-black text-white shadow-md "
                       : "bg-white text-black hover:bg-gray-50 "
+                  } ${
+                    !canPublish
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
                   }`}
-                  onClick={() => setState({ published: true })}
+                  onClick={() => {
+                    if (canPublish) setState({ published: true });
+                  }}
+                  aria-disabled={!canPublish}
                 >
                   Publicado
                 </span>
@@ -447,6 +461,11 @@ export const EditAssetForm = ({
                   style={{ zIndex: -1 }}
                 />
               </div>
+              {!canPublish && (
+                <p className="text-xs text-red-500 mt-1 ml-2">
+                  Debes asignar al menos un archivo privado para poder publicar.
+                </p>
+              )}
             </div>
             <div className="flex gap-6">
               <Link prefetch="intent" to="/dash/assets">

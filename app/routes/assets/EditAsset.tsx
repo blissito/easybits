@@ -29,7 +29,18 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     },
   });
 
-  return { host: user.host!, asset, files };
+  // Solo despublicar si es de tipo DOWNLOADABLE y no tiene archivos
+  let assetToReturn = asset;
+  if (asset.published && asset.type === "DOWNLOADABLE" && files.length === 0) {
+    assetToReturn = await db.asset.update({
+      where: { id: asset.id },
+      data: { published: false },
+      include: { user: true },
+    });
+  }
+
+  // Asegurar que host nunca sea null
+  return { host: user.host || "", asset: assetToReturn, files };
 };
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
