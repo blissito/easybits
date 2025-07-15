@@ -81,6 +81,8 @@ export default function NewsletterExperiment({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
+        snapToGrid={true}
+        snapGrid={[20, 20]}
       >
         <Background />
       </ReactFlow>
