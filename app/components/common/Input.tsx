@@ -50,15 +50,15 @@ export const Input = ({
       {label && <span>{label}</span>}
       <div className="relative flex-1">
         <ElementName
-          autoFocus
           defaultValue={defaultValue}
+          autoFocus
           className={cn(
             "rounded-xl p-4 text-lg h-12 w-full placeholder:text-tale placeholder:font-light  border border-black  bg-white text-black",
             "focus:border-brand-500 focus:outline-none focus:ring-brand-500",
             {
               "pr-24": !!copy,
               "ring-2 ring-red-500 transition-all border-none": isError,
-              "px-4 pt-2" : type === "textarea"
+              "px-4 pt-2": type === "textarea",
             },
             inputClassName
           )}

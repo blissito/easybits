@@ -7,6 +7,8 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
+  // experiment
+  route("/experiment", "routes/newsletter_experiment.tsx"),
   // public tienda
   // index("routes/tienda.tsx"),
   route("/inicio?", "routes/home/home.tsx"), // this is gold ⭐️
@@ -76,6 +78,7 @@ export default [
     route("uploads", "routes/api/v1/direct-upload-edit.ts"),
     route("reviews", "routes/api/v1/reviews.tsx"),
     route("store-config", "routes/api/v1/store-config.tsx"),
+    route("newsletters", "routes/api/v1/newsletters.tsx"),
     ...prefix("ai", [
       route("sugestions", "routes/api/v1/ai/sugestions.tsx"),
       route("chat", "routes/api/v1/ai/chat.tsx"),

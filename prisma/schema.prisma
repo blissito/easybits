@@ -154,7 +154,6 @@ model User {
   dnsConfig      Json?
   domain         String?
   // subscriptions
-  newsletters    NewsLetter[]
   notifications  Notifications?
   assetIds       String[] // experiment
   customer       String?
@@ -165,6 +164,9 @@ model User {
   Review         Review[]
   merchantOrders Order[]        @relation("OrderMerchant")
   customerOrders Order[]        @relation("OrderCustomer")
+  newsletters    NewsLetter[]
+
+  Newsletter Newsletter[]
 }
 
 enum FileStatus {
@@ -233,4 +235,26 @@ model Review {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Newsletter {
+  id          String                 @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String                 @db.ObjectId
+  user        User                   @relation(fields: [userId], references: [id])
+  name        String
+  data        Json // JSON del flujo de entregas
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  subscribers NewsletterSubscriber[]
+}
+
+model NewsletterSubscriber {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  newsletterId String     @db.ObjectId
+  newsletter   Newsletter @relation(fields: [newsletterId], references: [id])
+  email        String
+  currentStep  Int        @default(0) // Índice de la próxima entrega a enviar
+  lastSentAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
