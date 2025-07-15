@@ -1,20 +1,17 @@
 import React, { useState } from "react";
 import ReactFlow, {
   Background,
-  addEdge,
   applyNodeChanges,
   applyEdgeChanges,
   MarkerType,
   Handle,
   Position,
 } from "reactflow";
-import type { Connection, Edge, Node, NodeChange, EdgeChange } from "reactflow";
+import type { Edge, Node, NodeChange, EdgeChange } from "reactflow";
 import "reactflow/dist/style.css";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/newsletter_experiment";
-import { Button } from "../components/common/Button";
-import { cn } from "~/utils/cn";
 
 // Contexto para pasar handlers y estado a los nodos custom
 type NewsletterNodeContextType = {
@@ -221,9 +218,36 @@ export default function NewsletterExperiment({
       ? loaderData.newsletter.data
       : DEFAULT_NODES;
 
-  // 1. Inicializa nodes solo con datos básicos
-  const [nodes, setNodes] = React.useState<Node[]>(() =>
-    nodesData.map((n: any, idx: number) => ({
+  // 1. Inicializa nodes: si ya vienen con estructura de React Flow, úsalos tal cual
+  const [nodes, setNodes] = React.useState<Node[]>(() => {
+    if (!Array.isArray(nodesData) || nodesData.length === 0) {
+      // fallback seguro
+      return DEFAULT_NODES.map((n: any, idx: number) => ({
+        id: n.id?.toString() ?? (idx + 1).toString(),
+        type: "editableNode",
+        position: { x: 100 + idx * 200, y: 200 },
+        data: {
+          label: n.title || `Correo ${idx + 1}`,
+          idx,
+        },
+      }));
+    }
+    // Verifica que todos los nodos tengan 'type' y 'position'
+    if (
+      nodesData.every(
+        (n: any) => n && typeof n === "object" && "type" in n && "position" in n
+      )
+    ) {
+      // Ya es un array de nodos de React Flow
+      return nodesData
+        .filter(
+          (n: any) =>
+            n && typeof n === "object" && "type" in n && "position" in n
+        )
+        .map((n) => n as Node);
+    }
+    // Si no, mapea a la estructura de React Flow
+    return nodesData.map((n: any, idx: number) => ({
       id: n.id?.toString() ?? (idx + 1).toString(),
       type: "editableNode",
       position: { x: 100 + idx * 200, y: 200 },
@@ -231,8 +255,8 @@ export default function NewsletterExperiment({
         label: n.title || `Correo ${idx + 1}`,
         idx,
       },
-    }))
-  );
+    }));
+  });
 
   // Mapea los nodos del newsletter a nodos de React Flow
   function mapNodes(data: any[]): Node[] {
@@ -247,13 +271,11 @@ export default function NewsletterExperiment({
   // Crea edges conectando los nodos en orden de aparición en el array
   function mapEdges(nodes: Node[]): Edge[] {
     if (!Array.isArray(nodes) || nodes.length < 2) return [];
-    // Filtra nodos inválidos
-    const validNodes = nodes.filter((n) => n && n.id);
-    if (validNodes.length < 2) return [];
-    return validNodes.slice(1).map((n, idx) => ({
-      id: `e${validNodes[idx].id}-${n.id}`,
-      source: validNodes[idx].id,
-      target: n.id,
+    // Solo conecta secuencialmente según el orden actual
+    return nodes.slice(0, -1).map((n, idx) => ({
+      id: `e${n.id}-${nodes[idx + 1].id}`,
+      source: n.id,
+      target: nodes[idx + 1].id,
       type: "smoothstep",
       style: { stroke: "#222", strokeWidth: 2 },
       markerEnd: {
@@ -301,6 +323,27 @@ export default function NewsletterExperiment({
     [setNodes]
   );
 
+  // Función para guardar realmente en la base de datos
+  async function saveNewsletter(nodes: any[]) {
+    if (!loaderData?.newsletter?.id || !loaderData?.newsletter?.name) return;
+    await fetch("/api/v1/newsletters", {
+      method: "POST",
+      body: (() => {
+        const form = new FormData();
+        form.append("intent", "update_newsletter");
+        form.append(
+          "data",
+          JSON.stringify({
+            id: loaderData.newsletter.id,
+            name: loaderData.newsletter.name,
+            data: nodes,
+          })
+        );
+        return form;
+      })(),
+    });
+  }
+
   // Recalcula edges cada vez que cambia el array de nodos
   React.useEffect(() => {
     setEdges(mapEdges(nodes));
@@ -308,7 +351,8 @@ export default function NewsletterExperiment({
     const serialized = JSON.stringify(nodes);
     if (serialized !== lastSavedNodes) {
       setShowSavedToast(false);
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
+        await saveNewsletter(nodes);
         setShowSavedToast(true);
         setLastSavedNodes(serialized);
         setTimeout(() => setShowSavedToast(false), 1800);
