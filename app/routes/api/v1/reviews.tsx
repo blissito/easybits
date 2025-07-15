@@ -1,5 +1,6 @@
 import type { Route } from "../../+types/clients";
 import { createReview, getReviews, updateReview } from "~/.server/reviews";
+import { censorBadWords } from "~/utils/censorBadWords";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
@@ -10,10 +11,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   switch (intent) {
     case "create_review":
+      data.comment = censorBadWords(data.comment);
       return createReview({
         ...data,
-        stars:undefined,
-        rating:data.stars
+        stars: undefined,
+        rating: data.stars,
       });
     case "update_review":
       return updateReview(reviewId, {
