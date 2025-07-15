@@ -234,3 +234,15 @@ model Review {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model TelemetryEvent {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  assetId   String?  @db.ObjectId
+  linkType  String // 'store' | 'assetDetail'
+  eventType String // 'visit'
+  timestamp DateTime
+  sessionId String?
+  ip        String?
+  metadata  Json?
+}

@@ -6,6 +6,7 @@ import type { Asset } from "@prisma/client";
 import { StoreTemplate } from "../store/storeTemplate";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useGoogleAnalytics } from "~/hooks/useGoogleAnalytics";
+import { trackTelemetryVisit } from "~/.server/telemetry";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -46,6 +47,20 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       },
     });
   }
+
+  // --- TELEMETRÍA: Guardar visita a tienda pública ---
+  if (user) {
+    try {
+      await trackTelemetryVisit({
+        asset: { userId: user.id },
+        request,
+        linkType: "store",
+      });
+    } catch (err) {
+      console.error("Telemetry error:", err);
+    }
+  }
+  // --- FIN TELEMETRÍA ---
 
   return { assets, user };
 };

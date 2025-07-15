@@ -13,6 +13,9 @@ import type { Asset } from "@prisma/client";
 import { Button } from "~/components/common/Button";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getReviews } from "~/.server/reviews";
+import { TelemetryEventSchema } from "~/.server/telemetry";
+import { Effect, Schema } from "effect";
+import { trackTelemetryVisit } from "~/.server/telemetry";
 
 export const meta = ({ data }: Route.MetaArgs) => {
   const { asset } = data as { asset: Asset & { user: any } };
@@ -83,6 +86,15 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     return Response.redirect(tiendaUrl, 302);
   }
   const assetReviews = await getReviews(asset.id);
+
+  // --- TELEMETRÍA: Guardar visita ---
+  try {
+    await trackTelemetryVisit({ asset, request, linkType: "assetDetail" });
+  } catch (err) {
+    // No interrumpir la carga si falla la telemetría
+    console.error("Telemetry error:", err);
+  }
+  // --- FIN TELEMETRÍA ---
 
   // Generating ActionButton
   const OpenCheckout = <button className="bg-indigo-500">Pushale</button>;
