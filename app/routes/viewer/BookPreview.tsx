@@ -8,10 +8,10 @@ import { HiDownload } from "react-icons/hi";
 export const BookPreview = ({
   asset,
   files = [],
-  reviewExists
+  reviewExists,
 }: {
-  reviewExists?:boolean
-  asset: Asset;
+  reviewExists?: boolean;
+  asset: Asset & { user: any };
   files: File[];
 }) => {
   // @todo make this a hook?
@@ -43,24 +43,26 @@ export const BookPreview = ({
   });
   return (
     <section className="overflow-hidden min-h-svh h-full">
-      <div id="book-preview-container">
+      <div id="book-preview-container"></div>
 
-      </div>
-     
-     <div className="bg-[#111111] h-20 w-full fixed bottom-0 left-0 grid grid-cols-12 px-32">
-
-     <div className="flex flex-col col-span-4 h-full  justify-center">
+      <div className="bg-[#111111] h-20 w-full fixed bottom-0 left-0 grid grid-cols-12 px-32">
+        <div className="flex flex-col col-span-4 h-full  justify-center">
           <h3 className="text-white font-bold text-xl">{asset.title}</h3>
           <div className=" flex gap-2 items-center">
-          <img className="w-4 h-4 rounded-full border-b border-r border-white" src={asset.user?.picture} alt="avatar" />
-          <a href={url} target="_blank">
-            <p className="text-tale text-sm font-light underline">
-              {asset.user?.displayName}
-            </p>
-          </a>
-        </div>
+            <img
+              className="w-4 h-4 rounded-full border-b border-r border-white"
+              src={asset.user?.picture}
+              alt="avatar"
+            />
+            <a href={url} target="_blank">
+              <p className="text-tale text-sm font-light underline">
+                {asset.user?.displayName}
+              </p>
+            </a>
+          </div>
         </div>
         <div className="col-span-2 col-start-11 grid place-content-center">
+          {!reviewExists && (
             <Link prefetch="render" to={`/dash/compras/${asset.slug}/review`}>
               <BrutalButton
                 containerClassName="w-full"
@@ -69,8 +71,9 @@ export const BookPreview = ({
                 Agregar comentarios
               </BrutalButton>
             </Link>
-          </div>
-     </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 };

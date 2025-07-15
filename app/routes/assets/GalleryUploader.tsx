@@ -8,7 +8,7 @@ import { createURLFromStorageKey } from "~/utils/urlConstructors";
 import { nanoid } from "nanoid";
 
 type MediaItem = {
-  type: 'image' | 'video';
+  type: "image" | "video";
   src: string;
   storageKey?: string;
 };
@@ -52,7 +52,6 @@ export const GalleryUploader = ({
           "content-type": blob.type,
         },
       });
-      console.log("::META_IMAGE::UPLOADED::", res2.ok);
       // 3. Update model? No need, because of name conventions.
     },
   });
@@ -73,7 +72,7 @@ export const GalleryUploader = ({
     } else {
       onRemoveLink?.(allMedia[index].src);
     }
-  }
+  };
 
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -86,29 +85,29 @@ export const GalleryUploader = ({
   const allMedia = useMemo(() => {
     // Procesar archivos subidos (srcset) - URLs temporales
     const uploadedMedia = srcset.map((src, index) => {
-      const isVideo = src.endsWith('.mp4') || src.startsWith('blob:');
+      const isVideo = src.endsWith(".mp4") || src.startsWith("blob:");
       return {
         id: `uploaded-${index}`,
-        type: isVideo ? 'video' as const : 'image' as const,
+        type: isVideo ? ("video" as const) : ("image" as const),
         src,
         isTemporary: true, // Marcar como temporal
-        storageKey: `temp-${nanoid(3)}-${index}` // No tenemos un storageKey real aún
+        storageKey: `temp-${nanoid(3)}-${index}`, // No tenemos un storageKey real aún
       };
     });
-  
+
     // Procesar enlaces de la galería - URLs finales
     const galleryMedia = (gallery || []).map((src, index) => {
-      const isVideo = src.endsWith('.mp4');
+      const isVideo = src.endsWith(".mp4");
       return {
         id: `gallery-${index}`,
-        type: isVideo ? 'video' as const : 'image' as const,
+        type: isVideo ? ("video" as const) : ("image" as const),
         src,
         isTemporary: false,
-        storageKey: src.split('/').pop()?.split('?')[0] || `gallery-${index}`
+        storageKey: src.split("/").pop()?.split("?")[0] || `gallery-${index}`,
       };
     });
-  
-    return [ ...galleryMedia,...uploadedMedia];
+
+    return [...galleryMedia, ...uploadedMedia];
   }, [srcset, gallery]);
 
   return (
@@ -130,22 +129,22 @@ export const GalleryUploader = ({
           <RowGalleryEditor
             previews={
               <section className="flex gap-3">
-                {allMedia
-                .map((media, i) => (
-                  media.type === 'image' ? 
-                  <InputImage.Preview
-                    key={i}
-                    onClose={handleRemoveFile(i)}
-                    src={media.src}
-                    previewClassName="max-w-[144px] min-w-[144px]"
-                  /> : 
-                  <InputImage.PreviewVideo
-                    key={i}
-                    src={media.src}
-                    onClose={handleRemoveFile(i)}
-                  />
-                ))}
-             
+                {allMedia.map((media, i) =>
+                  media.type === "image" ? (
+                    <InputImage.Preview
+                      key={i}
+                      onClose={handleRemoveFile(i)}
+                      src={media.src}
+                      previewClassName="max-w-[144px] min-w-[144px]"
+                    />
+                  ) : (
+                    <InputImage.PreviewVideo
+                      key={i}
+                      src={media.src}
+                      onClose={handleRemoveFile(i)}
+                    />
+                  )
+                )}
               </section>
             }
             canUpload={canUpload}
@@ -178,7 +177,7 @@ const RowGalleryEditor = ({
         <AnimatePresence>
           {links.map((l, i) => (
             <InputImage.Preview
-              key={l+i}
+              key={l + i}
               onClose={() => onRemoveLink?.(l)}
               src={l}
               previewClassName="max-w-[144px] min-w-[144px]"
@@ -201,22 +200,24 @@ const RowGalleryEditor = ({
   );
 };
 
-export const useGalleryUploader = (config?: {directory?: string, allowedTypes?: string}) => {
+export const useGalleryUploader = (config?: {
+  directory?: string;
+  allowedTypes?: string;
+}) => {
   const { directory = "gallery", allowedTypes = "video, image" } = config || {};
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
 
   const handleOnSave = async (assetId: string) => {
     // 1. upload each and save links
-   const newLinks = await uploadFiles(files,assetId, {
-     directory,
-      async onFileUploaded(storageKey, file:File){
-        await createFileModel(storageKey,assetId,file)
-      }
+    const newLinks = await uploadFiles(files, assetId, {
+      directory,
+      async onFileUploaded(storageKey, file: File) {
+        await createFileModel(storageKey, assetId, file);
+      },
     });
-    await updateAssetGallery(assetId, newLinks)
+    await updateAssetGallery(assetId, newLinks);
     // @todo update asset meta image?
-
   };
 
   return {
@@ -229,13 +230,18 @@ export const useGalleryUploader = (config?: {directory?: string, allowedTypes?: 
 };
 
 type Links = Promise<string[]>;
-const uploadFiles = async (files: File[],assetId: string, {
-  onFileUploaded,
-  directory,
-}: {onFileUploaded: (storageKey: string, file: File) => void, 
-  directory?: string,
-   allowedTypes?: string
-  }) => {
+const uploadFiles = async (
+  files: File[],
+  assetId: string,
+  {
+    onFileUploaded,
+    directory,
+  }: {
+    onFileUploaded: (storageKey: string, file: File) => void;
+    directory?: string;
+    allowedTypes?: string;
+  }
+) => {
   const promises = files.map(async (file) => {
     // get url
     const { url: putURL, storageKey } = await fetch("/api/v1/files", {
@@ -255,15 +261,19 @@ const uploadFiles = async (files: File[],assetId: string, {
         "content-type": file.type,
       },
     });
-    await onFileUploaded(storageKey,file) // upper callback
+    await onFileUploaded(storageKey, file); // upper callback
     // return link
     return createURLFromStorageKey(storageKey);
   });
   // 4. update asset gallery with links
-  return Promise.all(promises) as Links
-}
+  return Promise.all(promises) as Links;
+};
 
-const createFileModel = async (storageKey: string, assetId: string, file: File) => {
+const createFileModel = async (
+  storageKey: string,
+  assetId: string,
+  file: File
+) => {
   await fetch("/api/v1/files", {
     method: "post",
     body: new URLSearchParams({
@@ -277,15 +287,15 @@ const createFileModel = async (storageKey: string, assetId: string, file: File) 
         lastModified: file.lastModified,
       }),
     }),
-  })
-}
+  });
+};
 const updateAssetGallery = async (assetId: string, newLinks: string[]) => {
   await fetch("/api/v1/assets", {
-    method: "post", 
+    method: "post",
     body: new URLSearchParams({
       intent: "insert_link_in_gallery",
       links: newLinks.join(","),
       assetId,
     }),
   }).then((r) => r.text());
-}
+};

@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { Link, redirect, useFetcher, useLoaderData } from "react-router";
-import {FaArrowLeft } from "react-icons/fa6";
+import { FaArrowLeft } from "react-icons/fa6";
 import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Controller, useForm } from "react-hook-form";
@@ -13,7 +13,7 @@ import type { Route } from "../../routes/+types/review";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  
+
   // Obtener el asset
   const asset = await db.asset.findUnique({
     where: {
@@ -33,13 +33,10 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   //   },
   // });
 
-
   // if (existingReview) {
   //   // return redirect(`/compras/${asset.id}`) // FUTURE: redirect to purchase detail
   // }
 
-  console.log("LOADED::",asset.slug, )
-  console.log("USER::",user.email, )
   return {
     asset,
     user,
@@ -52,7 +49,7 @@ interface ReviewFormValues {
 }
 
 // @todo edit review?
-export default function ReviewAsset({loaderData}: Route.ComponentProps) {
+export default function ReviewAsset({ loaderData }: Route.ComponentProps) {
   const { asset, user } = loaderData;
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState("");
@@ -177,10 +174,7 @@ export default function ReviewAsset({loaderData}: Route.ComponentProps) {
               transition={{ duration: 0.2 }}
             >
               <Link prefetch="render" to={`/dash/compras/${asset.id}/`}>
-                <BrutalButton
-                type="button"
-                  className="bg-white"
-                >
+                <BrutalButton type="button" className="bg-white">
                   Volver
                 </BrutalButton>
               </Link>
