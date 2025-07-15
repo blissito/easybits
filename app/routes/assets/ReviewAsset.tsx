@@ -26,16 +26,16 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   }
 
   // Verificar si el usuario ya dejó una review para este asset
-  // const existingReview = await db.review.findFirst({
-  //   where: {
-  //     userId: user.id,
-  //     assetId: asset.id,
-  //   },
-  // });
+  const existingReview = await db.review.findFirst({
+    where: {
+      userId: user.id,
+      assetId: asset.id,
+    },
+  });
 
-  // if (existingReview) {
-  //   // return redirect(`/compras/${asset.id}`) // FUTURE: redirect to purchase detail
-  // }
+  if (existingReview) {
+    return redirect(`/dash/compras/${asset.id}`);
+  }
 
   return {
     asset,
