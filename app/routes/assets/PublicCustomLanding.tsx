@@ -3,19 +3,14 @@ import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/PublicCustomLanding";
 import { ContentTemplate, FooterTemplate, HeaderTemplate } from "./template";
 import { db } from "~/.server/db";
-import { loadStripe } from "@stripe/stripe-js";
 import { createCheckoutSession, getPublishableKey } from "~/.server/stripe";
-import { useActionData, useFetcher } from "react-router";
-import { useMemo } from "react";
 import { EmojiConfetti } from "~/components/Confetti";
 import { FooterSuscription } from "~/components/forms/FooterSubscription";
 import type { Asset } from "@prisma/client";
-import { Button } from "~/components/common/Button";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getReviews } from "~/.server/reviews";
-import { TelemetryEventSchema } from "~/.server/telemetry";
-import { Effect, Schema } from "effect";
-import { trackTelemetryVisit } from "~/.server/telemetry";
+import { useFetcher } from "react-router";
+import { useTelemetry } from "~/hooks/useTelemetry";
 
 export const meta = ({ data }: Route.MetaArgs) => {
   const { asset } = data as { asset: Asset & { user: any } };
@@ -86,15 +81,6 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     return Response.redirect(tiendaUrl, 302);
   }
   const assetReviews = await getReviews(asset.id);
-
-  // --- TELEMETRÍA: Guardar visita ---
-  try {
-    await trackTelemetryVisit({ asset, request, linkType: "assetDetail" });
-  } catch (err) {
-    // No interrumpir la carga si falla la telemetría
-    console.error("Telemetry error:", err);
-  }
-  // --- FIN TELEMETRÍA ---
 
   // Generating ActionButton
   const OpenCheckout = <button className="bg-indigo-500">Pushale</button>;
@@ -191,8 +177,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
   const errorMessage = fetcher.data?.message;
 
-  console.log("fetcher", fetcher.data, errorMessage);
-
   const defaultRatings = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   const reviewsByRating = assetReviews?.reduce((acc, review) => {
     const rating = review.rating;
@@ -212,6 +196,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     : (asset.price || 0) <= 0
     ? "Suscribirse gratis"
     : "Comprar";
+
+  // register visit
+  useTelemetry({
+    assetId: asset.id,
+    ownerId: asset.userId,
+    linkType: "assetDetail",
+  });
 
   return (
     <article>

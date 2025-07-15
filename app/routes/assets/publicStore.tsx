@@ -6,7 +6,7 @@ import type { Asset } from "@prisma/client";
 import { StoreTemplate } from "../store/storeTemplate";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useGoogleAnalytics } from "~/hooks/useGoogleAnalytics";
-import { trackTelemetryVisit } from "~/.server/telemetry";
+import { useTelemetry } from "~/hooks/useTelemetry";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -21,10 +21,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   });
 
   let assets: Asset[] = [];
-  let user = null;
+  let owner = null;
 
   if (hostExists) {
-    user = hostExists;
+    owner = hostExists;
     assets = await db.asset.findMany({
       where: {
         userId: hostExists.id,
@@ -36,7 +36,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     });
   }
   if (domainExists) {
-    user = domainExists;
+    owner = domainExists;
     assets = await db.asset.findMany({
       where: {
         userId: domainExists.id,
@@ -48,21 +48,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     });
   }
 
-  // --- TELEMETRÍA: Guardar visita a tienda pública ---
-  if (user) {
-    try {
-      await trackTelemetryVisit({
-        asset: { userId: user.id },
-        request,
-        linkType: "store",
-      });
-    } catch (err) {
-      console.error("Telemetry error:", err);
-    }
-  }
-  // --- FIN TELEMETRÍA ---
-
-  return { assets, user };
+  return { assets, owner };
 };
 
 export const meta = ({ data }: Route.MetaArgs) => {
@@ -89,10 +75,11 @@ export const meta = ({ data }: Route.MetaArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { assets, user } = loaderData;
-  user?.storeConfig?.googleAnalyticsTrackingId &&
+  const { assets, owner } = loaderData;
+  useTelemetry({ ownerId: owner.id, linkType: "store" });
+  owner?.storeConfig?.googleAnalyticsTrackingId &&
     useGoogleAnalytics({
-      trackingId: user.storeConfig.googleAnalyticsTrackingId,
+      trackingId: owner.storeConfig.googleAnalyticsTrackingId,
       // Se puede enviar un "pagePath" custom (pagePath: `/tienda/${asset.<id|slug|title|other>}`)
     });
   return <StoreTemplate assets={assets} />;

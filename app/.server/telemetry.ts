@@ -1,14 +1,14 @@
 import { Effect, Schema } from "effect";
 import { ObjectId } from "mongodb";
 import { db } from "./db";
-import { Schema } from "effect";
 import type { Asset } from "@prisma/client";
 import type { Request } from "express"; // O ajusta el tipo según tu framework
+import { startOfMonth, subMonths } from "date-fns";
 
 // Modelo TypeScript para un evento de telemetría
 export interface TelemetryEvent {
   _id?: ObjectId;
-  userId: string;
+  ownerId: string;
   assetId?: string;
   linkType: "store" | "assetDetail";
   eventType: "visit";
@@ -20,7 +20,7 @@ export interface TelemetryEvent {
 
 // Schema Effect para validación
 export const TelemetryEventSchema = Schema.Struct({
-  userId: Schema.String,
+  ownerId: Schema.String,
   assetId: Schema.optional(Schema.String),
   linkType: Schema.Union(
     Schema.Literal("store"),
@@ -57,7 +57,7 @@ export async function trackTelemetryVisit({
   request,
   linkType = "assetDetail",
 }: {
-  asset: { userId: string; id?: string };
+  asset: { ownerId: string; id?: string };
   request: Request | { headers: any; url: string };
   linkType?: "assetDetail" | "store";
 }) {
@@ -80,7 +80,7 @@ export async function trackTelemetryVisit({
       host,
     };
     const event: any = {
-      userId: asset.userId,
+      ownerId: asset.ownerId,
       linkType,
       eventType: "visit",
       timestamp: new Date().toISOString(),
@@ -96,4 +96,62 @@ export async function trackTelemetryVisit({
   } catch (err) {
     console.error("Telemetry error:", err);
   }
+}
+
+// Devuelve datos de visitas agrupados por mes para la gráfica de dashboard
+export async function getVisitsChartData(ownerId: string) {
+  const threeMonthsAgo = startOfMonth(subMonths(new Date(), 2));
+  const visitsByMonth = await db.telemetryEvent.groupBy({
+    by: ["timestamp"],
+    where: {
+      ownerId,
+      eventType: "visit",
+      timestamp: {
+        gte: threeMonthsAgo,
+      },
+    },
+    _count: true,
+    orderBy: {
+      timestamp: "asc",
+    },
+  });
+  // Agrupar por mes
+  const visitsPerMonth: Record<string, number> = {};
+  visitsByMonth.forEach((row) => {
+    const date = new Date(row.timestamp);
+    const monthKey = `${date.getFullYear()}-${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}`;
+    visitsPerMonth[monthKey] = (visitsPerMonth[monthKey] || 0) + row._count;
+  });
+  const months = Array.from({ length: 3 }).map((_, i) => {
+    const date = subMonths(new Date(), 2 - i);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
+  });
+  return {
+    labels: months.map((month) => {
+      const [year, monthNum] = month.split("-").map(Number);
+      const date = new Date(Date.UTC(year, monthNum - 1));
+      const raw = new Intl.DateTimeFormat("es", { month: "short" }).format(
+        date
+      );
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    }),
+    datasets: [
+      {
+        label: "Visitas",
+        data: months.map((month) => visitsPerMonth[month] || 0),
+        borderColor: "#9870ED",
+        backgroundColor: "rgba(152, 112, 237, 0.1)",
+        borderWidth: 2,
+        pointBorderColor: "#9870ED",
+        pointBackgroundColor: "#9870ED",
+        tension: 0.3,
+        fill: true,
+      },
+    ],
+  };
 }

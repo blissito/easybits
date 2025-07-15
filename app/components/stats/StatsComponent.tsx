@@ -3,6 +3,21 @@ import { HiOutlineInformationCircle } from "react-icons/hi";
 import LineChart from "../charts/LineChart";
 import { cn } from "~/utils/cn";
 import { useAnimate, motion } from "motion/react";
+import type { User } from "@prisma/client";
+
+type StatsComponentProps = {
+  user: User;
+  chartData: any;
+  mostSoldProducts: Array<{
+    imageUrl: string;
+    title: string;
+    soldTimes: number;
+    unitPrice: number;
+  }>;
+  currentMonthTotal: string;
+  grandTotal: string;
+  visits: number;
+};
 
 export default function StatsComponent({
   user,
@@ -10,7 +25,8 @@ export default function StatsComponent({
   mostSoldProducts,
   currentMonthTotal,
   grandTotal,
-}) {
+  visits,
+}: StatsComponentProps) {
   //:TODO get these insights and format them
   return (
     <div className="min-h-screen lg:h-screen  px-4 md:pl-28 md:pr-8   2xl:px-0">
@@ -28,7 +44,7 @@ export default function StatsComponent({
           <div className="mt-4 md:mt-0">
             {/* improve thissss */}
             <select className="bg-black text-white rounded-xl p-3">
-              <option>último año</option>
+              <option>últimos 3 meses</option>
             </select>
           </div>
         </div>
@@ -40,10 +56,10 @@ export default function StatsComponent({
             tooltip={"Ventas totales del mes"}
           />
           <StatsCard
-            amount={"180"}
+            amount={String(visits)}
             title={"Visitas"}
             className={"bg-linen"}
-            tooltip={"Visitas totales de tus assets"}
+            tooltip={"Visitas totales de tu tienda + assets"}
           />
           <StatsCard
             amount={"10%"}
@@ -60,7 +76,7 @@ export default function StatsComponent({
         </div>
         <div className="w-full grid grid-cols-12 gap-6 py-6 md:py-10 h-full   ">
           <div className="col-span-12 lg:col-span-8 rounded-xl border-2 border-black p-4 md:p-6 bg-white h-full flex flex-col justify-between ">
-            <p className="mb-10">Ventas</p>
+            <p className="mb-10">Visitas</p>
             <div className="w-full h-full  min-h-[200px]">
               <LineChart data={chartData} />
             </div>

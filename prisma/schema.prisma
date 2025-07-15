@@ -237,7 +237,7 @@ model Review {
 
 model TelemetryEvent {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
+  ownerId   String?  @db.ObjectId
   assetId   String?  @db.ObjectId
   linkType  String // 'store' | 'assetDetail'
   eventType String // 'visit'

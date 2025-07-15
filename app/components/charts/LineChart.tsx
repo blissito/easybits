@@ -21,7 +21,12 @@ ChartJS.register(
   Legend
 );
 
-const LineChart = ({ data }) => {
+// Tipar la prop data
+interface LineChartProps {
+  data: any;
+}
+
+const LineChart = ({ data }: LineChartProps) => {
   // Chart Options
   const options = {
     responsive: true,
@@ -48,7 +53,7 @@ const LineChart = ({ data }) => {
         },
         beginAtZero: true,
         ticks: {
-          callback: (val) => `$${val}`,
+          callback: (val: string | number) => String(val),
         },
       },
     },

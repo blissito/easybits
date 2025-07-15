@@ -4,21 +4,11 @@ import { getUserOrRedirect } from "~/.server/getters";
 import GlobeIcon from "/icons/globe.svg";
 import { DNSModal, useDisclosure } from "~/hooks/DNSToolkit";
 import type { Route } from "./+types/store";
-import { trackTelemetryVisit } from "~/.server/telemetry";
+import { useEffect } from "react";
+import { useTelemetry } from "~/hooks/useTelemetry";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  // --- TELEMETRÍA: Guardar visita a tienda ---
-  try {
-    await trackTelemetryVisit({
-      asset: { userId: user.id },
-      request,
-      linkType: "store",
-    });
-  } catch (err) {
-    console.error("Telemetry error:", err);
-  }
-  // --- FIN TELEMETRÍA ---
   // get store details
   const assets = await db.asset.findMany({
     where: {
@@ -35,6 +25,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export default function Store({ loaderData }: Route.ComponentProps) {
   const { assets, user } = loaderData;
   const { onOpen, isOpen, onClose } = useDisclosure({ user });
+
+  useTelemetry({ ownerId: user.id, linkType: "store" });
 
   return (
     <div className=" w-full flex justify-center">

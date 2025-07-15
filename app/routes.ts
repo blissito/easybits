@@ -61,6 +61,8 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // v1
   ...prefix("api/v1", [
+    // Telemetry
+    route("telemetry", "routes/api/v1/telemetry/telemetry.tsx"),
     // AI & LLMs
     ...prefix("llms", [route("devstral", "routes/api/llms/devstral.ts")]), // LLMs communication Jun25
     route(":fileId/main.m3u8", "routes/api/v1/mainm3u8.tsx"), // experiment
