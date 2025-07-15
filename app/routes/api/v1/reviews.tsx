@@ -18,6 +18,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         rating: data.stars,
       });
     case "update_review":
+      data.comment = censorBadWords(data.comment);
       return updateReview(reviewId, {
         ...data,
       });
