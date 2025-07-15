@@ -71,7 +71,10 @@ export const EmailNodeCard: React.FC<EmailNodeCardProps> = ({
     editDelay !== "";
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 mb-2 w-full flex flex-col items-center border border-gray-200 relative group">
+    <div
+      className="bg-white rounded-lg shadow p-4 mb-2 border border-gray-200 relative group drag-handle"
+      style={{ minWidth: 320, maxWidth: 400 }}
+    >
       {/* Botones de mover arriba/abajo */}
       {(onMoveUp || onMoveDown) && (
         <div className="absolute top-2 left-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
