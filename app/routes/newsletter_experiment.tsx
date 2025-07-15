@@ -12,9 +12,11 @@ import "reactflow/dist/style.css";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/newsletter_experiment";
+import NewsletterNodeDrawer from "../components/newsletters/NewsletterNodeDrawer";
+import { nanoid } from "nanoid";
 
-// Contexto para pasar handlers y estado a los nodos custom
-type NewsletterNodeContextType = {
+// Contexto extendido para pasar handleOpenDrawer
+export type NewsletterNodeContextType = {
   setNodes: React.Dispatch<React.SetStateAction<any[]>>;
   setEditingNodeId: React.Dispatch<React.SetStateAction<string | null>>;
   editValue: string;
@@ -22,6 +24,7 @@ type NewsletterNodeContextType = {
   handleDeleteNode: (nodeId: string) => void;
   editingNodeId: string | null;
   nodes: any[];
+  handleOpenDrawer: (nodeId: string) => void;
 };
 export const NewsletterNodeContext = React.createContext<
   NewsletterNodeContextType | undefined
@@ -47,27 +50,18 @@ const DEFAULT_NODES = [
   },
 ];
 
-// EditableNode ahora recibe handlers y estado como props
+// EditableNode definido FUERA del componente
 const EditableNode = ({ id, data }: any) => {
   const context = React.useContext(NewsletterNodeContext);
   if (!context)
     throw new Error(
       "EditableNode must be used within a NewsletterNodeContext.Provider"
     );
-  const {
-    setNodes,
-    setEditingNodeId,
-    editValue,
-    setEditValue,
-    handleDeleteNode,
-    editingNodeId,
-    nodes,
-  } = context;
+  const { setNodes, handleDeleteNode, nodes, handleOpenDrawer } = context;
 
   const { label = "", idx } = data || {};
   // Busca el índice real del nodo en el array actual de nodos
   const realIdx = nodes.findIndex((n) => n.id === id);
-  const isEditing = editingNodeId === id;
 
   function moveNodeLeft() {
     if (realIdx > 0) {
@@ -100,10 +94,7 @@ const EditableNode = ({ id, data }: any) => {
         textAlign: "center",
         position: "relative",
       }}
-      onDoubleClick={() => {
-        setEditingNodeId(id);
-        setEditValue(label);
-      }}
+      onDoubleClick={() => handleOpenDrawer(id)}
     >
       <Handle
         type="target"
@@ -144,43 +135,12 @@ const EditableNode = ({ id, data }: any) => {
           ×
         </button>
       </div>
-      {isEditing ? (
-        <input
-          autoFocus
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={() => {
-            setNodes((nds: any[]) =>
-              nds.map((n) =>
-                n.id === id
-                  ? { ...n, data: { ...n.data, label: editValue } }
-                  : n
-              )
-            );
-            setEditingNodeId(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              setNodes((nds: any[]) =>
-                nds.map((n) =>
-                  n.id === id
-                    ? { ...n, data: { ...n.data, label: editValue } }
-                    : n
-                )
-              );
-              setEditingNodeId(null);
-            }
-            if (e.key === "Escape") setEditingNodeId(null);
-          }}
-          style={{ width: "90%" }}
-        />
-      ) : (
-        <span>{label}</span>
-      )}
+      <span>{data?.title || label}</span>
     </div>
   );
 };
 
+// nodeTypes definido fuera del componente
 export const nodeTypes = { editableNode: EditableNode };
 
 // Toast verde sutil para notificar guardado
@@ -227,32 +187,24 @@ export default function NewsletterExperiment({
         type: "editableNode",
         position: { x: 100 + idx * 200, y: 200 },
         data: {
+          title: n.title || `Correo ${idx + 1}`,
           label: n.title || `Correo ${idx + 1}`,
+          content: n.content || "",
+          delay: n.delay || DEFAULT_DELAY,
           idx,
         },
       }));
     }
-    // Verifica que todos los nodos tengan 'type' y 'position'
-    if (
-      nodesData.every(
-        (n: any) => n && typeof n === "object" && "type" in n && "position" in n
-      )
-    ) {
-      // Ya es un array de nodos de React Flow
-      return nodesData
-        .filter(
-          (n: any) =>
-            n && typeof n === "object" && "type" in n && "position" in n
-        )
-        .map((n) => n as Node);
-    }
-    // Si no, mapea a la estructura de React Flow
+    // Siempre mapea a la estructura de React Flow
     return nodesData.map((n: any, idx: number) => ({
       id: n.id?.toString() ?? (idx + 1).toString(),
       type: "editableNode",
-      position: { x: 100 + idx * 200, y: 200 },
+      position: n.position || { x: 100 + idx * 200, y: 200 },
       data: {
-        label: n.title || `Correo ${idx + 1}`,
+        title: n.title || n.data?.title || `Correo ${idx + 1}`,
+        label: n.title || n.data?.title || `Correo ${idx + 1}`,
+        content: n.content || n.data?.content || "",
+        delay: n.delay || n.data?.delay || DEFAULT_DELAY,
         idx,
       },
     }));
@@ -282,6 +234,9 @@ export default function NewsletterExperiment({
         type: MarkerType.ArrowClosed,
         color: "#222",
       },
+      label: nodes[idx + 1].data?.delay || "",
+      labelStyle: { fill: "#222", fontWeight: 600, fontSize: 13 },
+      labelBgStyle: { fill: "#fff", fillOpacity: 0.8 },
     }));
   }
 
@@ -295,6 +250,15 @@ export default function NewsletterExperiment({
   const [lastSavedNodes, setLastSavedNodes] = React.useState<string>(
     JSON.stringify(nodes)
   );
+  // Estado para respaldo de undo
+  const [lastNodesBackup, setLastNodesBackup] = React.useState<Node[] | null>(
+    null
+  );
+  const [lastEdgesBackup, setLastEdgesBackup] = React.useState<Edge[] | null>(
+    null
+  );
+  const [showUndoToast, setShowUndoToast] = React.useState(false);
+
   // Al crear los nodos, pasamos los handlers y estado necesarios directamente
   const [editingNodeId, setEditingNodeId] = React.useState<string | null>(null);
   const [editValue, setEditValue] = React.useState("");
@@ -302,26 +266,68 @@ export default function NewsletterExperiment({
   // Añadir nodo
   function handleAddNode() {
     setNodes((prev) => {
-      const newId = (prev.length + 1).toString();
+      // Usar nanoid para id único
+      const newId = nanoid();
+      let newX = 100;
+      let newY = 200;
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1];
+        newX = (last.position?.x ?? 100) + 200;
+        newY = last.position?.y ?? 200;
+      }
       return [
         ...prev,
         {
           id: newId,
           type: "editableNode",
-          position: { x: 100 + prev.length * 200, y: 200 },
-          data: { label: `Correo ${prev.length + 1}`, idx: prev.length },
+          position: { x: newX, y: newY },
+          data: {
+            label: `Correo ${prev.length + 1}`,
+            idx: prev.length,
+            delay: DEFAULT_DELAY,
+            title: `Correo ${prev.length + 1}`,
+            content: "",
+          },
         },
       ];
     });
   }
 
-  // Borrar nodo y reconectar
+  // Borrar nodo y reconectar, con respaldo para undo
   const handleDeleteNode = React.useCallback(
     (nodeId: string) => {
+      setLastNodesBackup(nodes);
+      setLastEdgesBackup(edges);
+      setShowUndoToast(true);
       setNodes((prev) => prev.filter((n) => n.id !== nodeId));
     },
-    [setNodes]
+    [nodes, edges]
   );
+
+  // Handler para deshacer
+  function handleUndoDelete() {
+    if (lastNodesBackup && lastEdgesBackup) {
+      setNodes(lastNodesBackup);
+      setEdges(lastEdgesBackup);
+      setLastNodesBackup(null);
+      setLastEdgesBackup(null);
+      setShowUndoToast(false);
+    }
+  }
+
+  // Soporte para Ctrl+Z / Cmd+Z
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        if (lastNodesBackup && lastEdgesBackup) {
+          e.preventDefault();
+          handleUndoDelete();
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lastNodesBackup, lastEdgesBackup]);
 
   // Función para guardar realmente en la base de datos
   async function saveNewsletter(nodes: any[]) {
@@ -378,6 +384,51 @@ export default function NewsletterExperiment({
     return null;
   }, []);
 
+  // Estado para el drawer lateral y el nodo seleccionado
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [drawerNodeId, setDrawerNodeId] = React.useState<string | null>(null);
+
+  // Encuentra el nodo seleccionado para el drawer
+  const drawerNode = React.useMemo(() => {
+    if (!drawerNodeId) return null;
+    return nodes.find((n) => n.id === drawerNodeId) || null;
+  }, [drawerNodeId, nodes]);
+
+  // Handler para abrir el drawer desde el nodo
+  function handleOpenDrawer(nodeId: string) {
+    setDrawerNodeId(nodeId);
+    setDrawerOpen(true);
+  }
+  function handleCloseDrawer() {
+    setDrawerOpen(false);
+    setDrawerNodeId(null);
+  }
+  // Handler para guardar cambios del drawer
+  function handleSaveDrawerNode(updated: {
+    title: string;
+    content: string;
+    delay: string;
+  }) {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === drawerNodeId
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                title: updated.title,
+                label: updated.title, // para mostrar en el nodo
+                content: updated.content,
+                delay: updated.delay,
+              },
+            }
+          : n
+      )
+    );
+    setDrawerOpen(false);
+    setDrawerNodeId(null);
+  }
+
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
       <div style={{ position: "absolute", top: 20, left: 20, zIndex: 10 }}>
@@ -396,6 +447,10 @@ export default function NewsletterExperiment({
         >
           + Añadir Entrega
         </button>
+        {/* Panel flotante para copiar enlace de suscripción */}
+        {loaderData?.newsletter?.id && (
+          <FloatingNewsletterLink newsletterId={loaderData.newsletter.id} />
+        )}
       </div>
       <NewsletterNodeContext.Provider
         value={{
@@ -406,6 +461,7 @@ export default function NewsletterExperiment({
           handleDeleteNode,
           editingNodeId,
           nodes,
+          handleOpenDrawer,
         }}
       >
         <ReactFlow
@@ -421,8 +477,160 @@ export default function NewsletterExperiment({
         >
           <Background />
         </ReactFlow>
+        <NewsletterNodeDrawer
+          open={drawerOpen}
+          onClose={handleCloseDrawer}
+          node={drawerNode}
+          onSave={handleSaveDrawerNode}
+        />
         <SimpleToast show={showSavedToast} message="¡Guardado!" />
+        {showUndoToast && (
+          <UndoToast
+            onUndo={handleUndoDelete}
+            onClose={() => setShowUndoToast(false)}
+          />
+        )}
       </NewsletterNodeContext.Provider>
+    </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = React.useState(false);
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      style={{
+        background: copied ? "#d1fae5" : "#eee",
+        color: copied ? "#065f46" : "#333",
+        border: "none",
+        borderRadius: 4,
+        padding: "4px 12px",
+        fontWeight: 500,
+        cursor: "pointer",
+        fontSize: 14,
+        transition: "background 0.2s, color 0.2s",
+      }}
+      title="Copiar enlace"
+    >
+      {copied ? "¡Copiado!" : "Copiar"}
+    </button>
+  );
+}
+
+function FloatingNewsletterLink({ newsletterId }: { newsletterId: string }) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const url = `${origin}/api/v1/newsletters?newsletterId=${newsletterId}`;
+  const [copied, setCopied] = React.useState(false);
+  async function handleCopy() {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        background: "#fff",
+        border: "1px solid #ccc",
+        borderRadius: 8,
+        padding: "10px 16px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: 15,
+        position: "relative",
+        width: 420,
+        maxWidth: "90vw",
+      }}
+    >
+      <span
+        style={{
+          color: "#222",
+          fontWeight: 500,
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {url}
+      </span>
+      <button
+        onClick={handleCopy}
+        style={{
+          background: copied ? "#d1fae5" : "#eee",
+          color: copied ? "#065f46" : "#333",
+          border: "none",
+          borderRadius: 4,
+          padding: "4px 12px",
+          fontWeight: 500,
+          cursor: "pointer",
+          fontSize: 14,
+          transition: "background 0.2s, color 0.2s",
+        }}
+        title="Copiar enlace"
+      >
+        {copied ? "¡Copiado!" : "Copiar"}
+      </button>
+    </div>
+  );
+}
+
+function UndoToast({
+  onUndo,
+  onClose,
+}: {
+  onUndo: () => void;
+  onClose: () => void;
+}) {
+  React.useEffect(() => {
+    const timeout = setTimeout(onClose, 4000);
+    return () => clearTimeout(timeout);
+  }, [onClose]);
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 80,
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: "#fef3c7",
+        color: "#92400e",
+        padding: "12px 32px",
+        borderRadius: 8,
+        fontWeight: 500,
+        fontSize: 17,
+        zIndex: 1001,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.10)",
+        border: "1px solid #fde68a",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+      }}
+    >
+      Nodo eliminado
+      <button
+        onClick={onUndo}
+        style={{
+          background: "#fff7ed",
+          color: "#b45309",
+          border: "1px solid #fde68a",
+          borderRadius: 4,
+          padding: "6px 18px",
+          fontWeight: 600,
+          marginLeft: 12,
+          cursor: "pointer",
+        }}
+      >
+        Deshacer
+      </button>
     </div>
   );
 }
