@@ -7,7 +7,7 @@
   - Add helper functions to map between display items and source arrays
   - _Requirements: 1.4, 4.2, 4.3, 4.4_
 
-- [ ] 2. Create reorderable gallery item wrapper component
+- [x] 2. Create reorderable gallery item wrapper component
 
   - Implement ReorderableItem component using Motion's Reorder.Item
   - Configure drag constraints for horizontal-only movement
@@ -15,7 +15,7 @@
   - Ensure proper event handling for remove functionality
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 3.4_
 
-- [ ] 3. Implement reorder state management and callbacks
+- [x] 3. Implement reorder state management and callbacks
 
   - Create handleReorder function to process reorder operations
   - Implement logic to separate gallery items from srcset items during reorder
@@ -31,7 +31,7 @@
   - Maintain existing gap and layout styling
   - _Requirements: 1.1, 1.2, 3.1, 3.2, 3.3_
 
-- [ ] 5. Update GalleryUploader props interface and integrate callbacks
+- [x] 5. Update GalleryUploader props interface and integrate callbacks
 
   - Add onReorderGallery and onReorderSrcset props to GalleryUploader interface
   - Wire up reorder callbacks to parent component communication

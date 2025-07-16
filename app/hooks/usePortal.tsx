@@ -8,7 +8,6 @@ export const usePortal = (jsx: ReactNode) => {
     if (!document || ref) return;
 
     setRef(document.body);
-    console.log("??", ref, jsx);
   }, [jsx]);
 
   return ref ? createPortal(<>{jsx}</>, ref) : "PERRO";

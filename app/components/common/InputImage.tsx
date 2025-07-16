@@ -1,36 +1,36 @@
-import { motion, type HTMLMotionProps } from 'motion/react';
-import { ImageIcon } from '../icons/image';
-import { cn } from '~/utils/cn';
-import { useDropFiles } from '~/hooks/useDropFiles';
-import { IoClose, IoReload, IoTrash } from 'react-icons/io5';
-import { useState } from 'react';
+import { motion, type HTMLMotionProps } from "motion/react";
+import { ImageIcon } from "../icons/image";
+import { cn } from "~/utils/cn";
+import { useDropFiles } from "~/hooks/useDropFiles";
+import { IoClose, IoReload, IoTrash } from "react-icons/io5";
+import { useState } from "react";
 
 interface InputImageProps {
-  align?: 'center' | 'left' | 'right' | 'none';
-  alignText?: 'center' | 'left' | 'right';
+  align?: "center" | "left" | "right" | "none";
+  alignText?: "center" | "left" | "right";
   allowPreview?: boolean;
-  buttonClassName?: React.HTMLAttributes<typeof motion.button>['className'];
+  buttonClassName?: React.HTMLAttributes<typeof motion.button>["className"];
   buttonProps?: HTMLMotionProps<"button">;
   closable?: boolean;
   currentPreview?: string;
   isHorizontal?: boolean;
   onChange?: (file: File[]) => void;
-  onClose?: PreviewProps['onClose'];
+  onClose?: PreviewProps["onClose"];
   onDelete?: (name?: string) => void;
   onDrop?: (files: File[]) => void;
-  onReload?: PreviewProps['onReload'];
+  onReload?: PreviewProps["onReload"];
   persistFiles?: boolean;
   placeholder?: string;
-  placeholderClassName?: React.HTMLAttributes<any>['className'];
-  reloadable?: PreviewProps['reloadable'];
+  placeholderClassName?: React.HTMLAttributes<any>["className"];
+  reloadable?: PreviewProps["reloadable"];
   name?: string;
-  mode?: 'single' | 'multiple' // TODO: working multiple selection
+  mode?: "single" | "multiple"; // TODO: working multiple selection
 }
 
 function InputImage({
   name,
-  align = 'center',
-  alignText = 'center',
+  align = "center",
+  alignText = "center",
   allowPreview,
   buttonClassName,
   buttonProps,
@@ -46,31 +46,27 @@ function InputImage({
   placeholder,
   placeholderClassName,
   reloadable,
-  mode = 'single',
+  mode = "single",
 }: InputImageProps) {
   const [isRemoved, setIsRemoved] = useState(false);
 
-  const {
-    ref,
-    files,
-    removeFile,
-    isHovered,
-  } = useDropFiles<HTMLButtonElement>({ onDrop, onChange, persistFiles, name, mode });
-
+  const { ref, files, removeFile, isHovered } = useDropFiles<HTMLButtonElement>(
+    { onDrop, onChange, persistFiles, name, mode }
+  );
 
   const handleOnClose = () => {
     if (closable) {
       if (files.length) removeFile(0);
       onClose?.();
     }
-  }
+  };
 
   const handleOnReload = () => {
     if (reloadable) {
       ref.current?.click();
       onReload?.();
     }
-  }
+  };
 
   const previewProps: Partial<PreviewProps> = {
     previewClassName: buttonClassName,
@@ -84,76 +80,65 @@ function InputImage({
       setIsRemoved(true);
       onDelete?.(name);
     },
-  }
-
+  };
 
   return (
-      <>
-        {
-          files.length && allowPreview ? (
-            <Preview {...previewProps} />
-          ) : null
-        }
-        {
-          currentPreview && !files.length && !isRemoved ? (
-            <Preview {...previewProps} />
-          ) : null
-        }
-        <motion.button
-          ref={ref}
-          type='button'
-          whileHover={{ scale: 0.95 }}
-          className={cn(
-            "group flex justify-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square my-2",
-            buttonClassName,
-            {
-              'flex-row': isHorizontal,
-              'flex-col': !isHorizontal,
-              'place-items-left': align === 'left',
-              'place-items-center': align === 'center',
-              'place-items-right': align === 'right',
-              'hidden': (files.length && allowPreview) || (Boolean(currentPreview) && !isRemoved),
-              'border-brand-500': isHovered === 'dropping',
-            }
-          )}
-          {...buttonProps}
-        >
-          <ImageIcon
-            className={cn(
-              'w-8 fill-[#6A6966] group-hover:fill-brand-500',
-              {
-                'ml-[15px]': isHorizontal,
-                'fill-brand-500': isHovered === 'dropping',
-              }
-            )}
-            unforceFill
-          />
+    <>
+      {files.length && allowPreview ? <Preview {...previewProps} /> : null}
+      {currentPreview && !files.length && !isRemoved ? (
+        <Preview {...previewProps} />
+      ) : null}
+      <motion.button
+        ref={ref}
+        type="button"
+        whileHover={{ scale: 0.95 }}
+        className={cn(
+          "group flex justify-center border rounded-2xl border-dashed border-iron hover:border-brand-500 aspect-square my-2",
+          buttonClassName,
           {
-            placeholder && (
-              <p className={cn(
-                'max-w-md mx-[12px] text-brand-gray text-sm group-hover:text-brand-500',
-                {
-                  'text-left': alignText === 'left',
-                  'text-center': alignText === 'center',
-                  'text-right': alignText === 'right',
-                  'my-[12px]': isHorizontal,
-                  'text-brand-500': isHovered === 'dropping',
-                },
-                placeholderClassName,
-              )}>
-                { placeholder }
-              </p>
-            )
+            "flex-row": isHorizontal,
+            "flex-col": !isHorizontal,
+            "place-items-left": align === "left",
+            "place-items-center": align === "center",
+            "place-items-right": align === "right",
+            hidden:
+              (files.length && allowPreview) ||
+              (Boolean(currentPreview) && !isRemoved),
+            "border-brand-500": isHovered === "dropping",
           }
-        </motion.button>   
-      </>
+        )}
+        {...buttonProps}
+      >
+        <ImageIcon
+          className={cn("w-8 fill-[#6A6966] group-hover:fill-brand-500", {
+            "ml-[15px]": isHorizontal,
+            "fill-brand-500": isHovered === "dropping",
+          })}
+          unforceFill
+        />
+        {placeholder && (
+          <p
+            className={cn(
+              "max-w-md mx-[12px] text-brand-gray text-sm group-hover:text-brand-500",
+              {
+                "text-left": alignText === "left",
+                "text-center": alignText === "center",
+                "text-right": alignText === "right",
+                "my-[12px]": isHorizontal,
+                "text-brand-500": isHovered === "dropping",
+              },
+              placeholderClassName
+            )}
+          >
+            {placeholder}
+          </p>
+        )}
+      </motion.button>
+    </>
   );
 }
 
 export default InputImage;
-
-
-
 
 interface PreviewProps {
   closable?: boolean;
@@ -183,8 +168,8 @@ function Preview({
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
       className={cn(
-        'aspect-square relative group border rounded-2xl my-2',
-        previewClassName,
+        "aspect-square relative group border rounded-2xl my-2",
+        previewClassName
       )}
     >
       {reloadable && (
@@ -213,7 +198,7 @@ function Preview({
       )}
       <img
         src={src}
-        className="rounded-2xl object-cover w-full h-full"
+        className="pointer-events-none rounded-2xl object-cover w-full h-full"
       />
     </motion.figure>
   );
@@ -224,17 +209,14 @@ interface PreviewVideoProps {
   onClose?: () => void;
 }
 
-function PreviewVideo({
-  src,
-  onClose
-}: PreviewVideoProps) {
+function PreviewVideo({ src, onClose }: PreviewVideoProps) {
   return (
     <motion.figure
       layout
       initial={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       exit={{ x: -10, opacity: 0, filter: "blur(4px)" }}
       animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
-      className="aspect-square relative group border rounded-2xl my-2 w-[144px] relative"
+      className="aspect-square relative group border rounded-2xl my-2 w-[144px]"
     >
       <button
         onClick={onClose}
@@ -256,5 +238,5 @@ function PreviewVideo({
   );
 }
 
-InputImage.Preview = Preview; 
-InputImage.PreviewVideo = PreviewVideo; 
+InputImage.Preview = Preview;
+InputImage.PreviewVideo = PreviewVideo;

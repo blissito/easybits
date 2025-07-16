@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, LayoutGroup } from "motion/react";
-import { cn } from "~/utils/cn";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Reorder } from "motion/react";
 import type { Asset } from "@prisma/client";
 import { useImageResize } from "~/hooks/useImageResize";
 import InputImage from "~/components/common/InputImage";
 import { createURLFromStorageKey } from "~/utils/urlConstructors";
 import { nanoid } from "nanoid";
+import { ReorderableItem } from "~/components/galleries/ReorderableItem";
 
 type MediaItem = {
   id: string;
@@ -25,6 +25,8 @@ export const GalleryUploader = ({
   onRemoveFile,
   onRemoveLink,
   gallery = [],
+  onReorderGallery,
+  onReorderSrcset,
 }: {
   gallery: string[];
   onRemoveLink?: (arg0: string) => void;
@@ -34,6 +36,8 @@ export const GalleryUploader = ({
   limit?: number;
   host: string;
   asset: Asset;
+  onReorderGallery?: (newOrder: string[]) => void;
+  onReorderSrcset?: (newOrder: string[]) => void;
 }) => {
   const { resize } = useImageResize({
     async callback(blob) {
@@ -60,15 +64,92 @@ export const GalleryUploader = ({
     },
   });
   const uploadMetaImage = async (linksArray: string[]) => {
-    const link = linksArray[0];
-    if (!link) return;
+    // Buscar la primera imagen (no video) en el array
+    const firstImage = linksArray.find((link) => {
+      if (!link) return false;
 
-    resize({ link });
+      // Verificar que no sea un video por extensión
+      const isVideo =
+        link.endsWith(".mp4") ||
+        link.endsWith(".mov") ||
+        link.endsWith(".avi") ||
+        link.endsWith(".webm") ||
+        link.includes("video");
+
+      return !isVideo;
+    });
+
+    if (!firstImage) {
+      return; // No hay imágenes disponibles para metaImage
+    }
+
+    resize({ link: firstImage });
   };
 
   const canUpload = limit > gallery.length + srcset.length;
 
   const elemsLength = srcset.length + gallery.length;
+
+  // State for tracking drag operations
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Handle reorder operations
+  const handleReorder = (newOrder: MediaItem[]) => {
+    try {
+      // Basic validation
+      if (!newOrder || newOrder.length === 0) {
+        return;
+      }
+
+      // Separate gallery items from srcset items
+      const galleryItems = newOrder.filter(
+        (item) => item.sourceType === "gallery"
+      );
+      const srcsetItems = newOrder.filter(
+        (item) => item.sourceType === "srcset"
+      );
+
+      // Create new ordered arrays
+      const newGalleryOrder = galleryItems.map((item) => item.src);
+      const newSrcsetOrder = srcsetItems.map((item) => item.src);
+
+      // Call appropriate callbacks if the order actually changed
+      const galleryChanged =
+        newGalleryOrder.length !== gallery.length ||
+        newGalleryOrder.some((src, index) => src !== gallery[index]);
+
+      const srcsetChanged =
+        newSrcsetOrder.length !== srcset.length ||
+        newSrcsetOrder.some((src, index) => src !== srcset[index]);
+
+      if (galleryChanged && onReorderGallery) {
+        try {
+          onReorderGallery(newGalleryOrder);
+        } catch (error) {
+          // Handle error silently
+        }
+      }
+
+      if (srcsetChanged && onReorderSrcset) {
+        try {
+          onReorderSrcset(newSrcsetOrder);
+        } catch (error) {
+          // Handle error silently
+        }
+      }
+    } catch (error) {
+      // Handle error silently
+    }
+  };
+
+  // Handle drag start/end for state tracking
+  const handleDragStart = () => {
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
 
   const handleRemoveFile = (index: number) => () => {
     if (allMedia[index].isTemporary) {
@@ -78,24 +159,22 @@ export const GalleryUploader = ({
     }
   };
 
-  const isFirstRender = useRef(true);
   useEffect(() => {
-    if (isFirstRender.current) {
-      uploadMetaImage(gallery); // @todo index:0
-      isFirstRender.current = false;
-    }
+    uploadMetaImage(gallery);
   }, [gallery]);
 
   const allMedia = useMemo((): MediaItem[] => {
     // Procesar enlaces de la galería - URLs finales
     const galleryMedia = (gallery || []).map((src, index) => {
       const isVideo = src.endsWith(".mp4");
+      // Use src as stable ID for gallery items
+      const stableId = `gallery-${src.split("/").pop()?.split("?")[0] || src}`;
       return {
-        id: `gallery-${index}`,
+        id: stableId,
         type: isVideo ? ("video" as const) : ("image" as const),
         src,
         isTemporary: false,
-        storageKey: src.split("/").pop()?.split("?")[0] || `gallery-${index}`,
+        storageKey: src.split("/").pop()?.split("?")[0] || stableId,
         originalIndex: index,
         sourceType: "gallery" as const,
       };
@@ -104,12 +183,14 @@ export const GalleryUploader = ({
     // Procesar archivos subidos (srcset) - URLs temporales
     const uploadedMedia = srcset.map((src, index) => {
       const isVideo = src.endsWith(".mp4") || src.startsWith("blob:");
+      // Use src as stable ID for srcset items (blob URLs are stable during session)
+      const stableId = `srcset-${src}`;
       return {
-        id: `srcset-${index}`,
+        id: stableId,
         type: isVideo ? ("video" as const) : ("image" as const),
         src,
         isTemporary: true,
-        storageKey: `temp-${nanoid(3)}-${index}`,
+        storageKey: `temp-${index}`,
         originalIndex: index,
         sourceType: "srcset" as const,
       };
@@ -134,77 +215,48 @@ export const GalleryUploader = ({
         )}
 
         {elemsLength > 0 && (
-          <RowGalleryEditor
-            previews={
-              <section className="flex gap-3">
-                {allMedia.map((media, i) =>
-                  media.type === "image" ? (
+          <div className="flex items-center gap-3">
+            <Reorder.Group
+              axis="x"
+              values={allMedia}
+              onReorder={handleReorder}
+              className="flex gap-3"
+            >
+              {allMedia.map((media, i) => (
+                <ReorderableItem
+                  key={media.id}
+                  item={media}
+                  onRemove={handleRemoveFile(i)}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  {media.type === "image" ? (
                     <InputImage.Preview
-                      key={i}
                       onClose={handleRemoveFile(i)}
                       src={media.src}
                       previewClassName="max-w-[144px] min-w-[144px]"
                     />
                   ) : (
                     <InputImage.PreviewVideo
-                      key={i}
                       src={media.src}
                       onClose={handleRemoveFile(i)}
                     />
-                  )
-                )}
-              </section>
-            }
-            canUpload={canUpload}
-            onChange={onAddFiles}
-            onRemoveLink={onRemoveLink} // @todo change name
-          />
+                  )}
+                </ReorderableItem>
+              ))}
+            </Reorder.Group>
+            {allMedia.length < 10 && canUpload && (
+              <InputImage
+                buttonClassName="max-w-[144px] min-w-[144px]"
+                onChange={onAddFiles}
+                persistFiles={false}
+                buttonProps={{ layoutId: "upload_button" }}
+              />
+            )}
+          </div>
         )}
       </section>
     </article>
-  );
-};
-
-const RowGalleryEditor = ({
-  links = [],
-  onChange,
-  onRemoveLink,
-  canUpload,
-  previews,
-}: {
-  onDrop?: (arg0: File[]) => void;
-  previews?: ReactNode;
-  canUpload?: boolean;
-  links?: string[];
-  onRemoveLink?: (arg0: string) => void;
-  onChange: (files: File[]) => void;
-}) => {
-  return (
-    <div className={cn("flex items-center gap-3")}>
-      <LayoutGroup>
-        <AnimatePresence>
-          {links.map((l, i) => (
-            <InputImage.Preview
-              key={l + i}
-              onClose={() => onRemoveLink?.(l)}
-              src={l}
-              previewClassName="max-w-[144px] min-w-[144px]"
-            />
-          ))}
-        </AnimatePresence>
-        {previews}
-        {links.length < 10 && canUpload && (
-          <>
-            <InputImage
-              buttonClassName="max-w-[144px] min-w-[144px]"
-              onChange={onChange}
-              persistFiles={false}
-              buttonProps={{ layoutId: "upload_button" }}
-            />
-          </>
-        )}
-      </LayoutGroup>
-    </div>
   );
 };
 

@@ -7,6 +7,12 @@ import { FaExternalLinkAlt } from "react-icons/fa";
 import { usePublicLink } from "~/hooks/usePublicLink";
 import { cn } from "~/utils/cn";
 
+// Helper function to get the metaImage URL for an asset
+const getMetaImageUrl = (asset: Asset): string => {
+  // Use the standard metaImage path that gets generated automatically
+  return `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
+};
+
 export const AssetCard = ({
   left,
   asset,
@@ -44,7 +50,7 @@ export const AssetCard = ({
         >
           <img
             className="h-[180px] object-cover w-full flex-grow-0"
-            src={asset.gallery?.[0] || "/images/easybits-default.webp"}
+            src={getMetaImageUrl(asset)}
             alt="cover"
           />
           <h3 className="font-bold text-lg px-3 border-t border-t-black pt-3 h-full line-clamp-1">

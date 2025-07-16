@@ -147,7 +147,6 @@ export const EditAssetForm = ({
   };
 
   const { upload } = useUploadMultipart();
-  console.log("upload function", upload);
 
   // Main SUBMIT :: :: :: : :: :: : : : ::: : : : : :: :: :::: : :: : :: :: :: : :::
   const brutalToast = useBrutalToast();
@@ -304,6 +303,23 @@ export const EditAssetForm = ({
   // ========================================================== Ebook Files
 
   //============================================== Gallery Supporting Video
+  const handleReorderGallery = (newOrder: string[]) => {
+    setGallery(newOrder);
+    galleryRef.current = newOrder;
+  };
+
+  const handleReorderSrcset = (newOrder: string[]) => {
+    setSrcset(newOrder);
+    // Also need to reorder the filesRef to match
+    const reorderedFiles = newOrder
+      .map((src) => {
+        const index = srcset.indexOf(src);
+        return filesRef.current[index];
+      })
+      .filter(Boolean);
+    filesRef.current = reorderedFiles;
+  };
+
   const galleryComponent = (
     <GalleryUploader
       limit={12}
@@ -314,6 +330,8 @@ export const EditAssetForm = ({
       onRemoveLink={handleAddLinkToRemove}
       onRemoveFile={removeFile}
       srcset={srcset}
+      onReorderGallery={handleReorderGallery}
+      onReorderSrcset={handleReorderSrcset}
     />
   );
   // =========================
