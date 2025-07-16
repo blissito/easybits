@@ -73,7 +73,6 @@ export default function StoreConfigForm({
   const stepComponent = steps[stepIndex];
 
   const { upload } = useUploader({ assetId });
-
   const processAndUploadImages = async (file: File | 'remove', ref: FileImageName) => {
     if (!file || file === 'remove') {
       if (file === 'remove') imageFiles.current[ref] = null;
@@ -127,21 +126,24 @@ export default function StoreConfigForm({
       >
         <fetcher.Form
           onSubmit={handleSubmit(submit)}
-          className="w-full h-max flex flex-col"
+          className="w-full h-full flex flex-col"
         >
-          <div>
+          <div className="min-h-fit ">
             { stepComponent }
           </div>
-          <div className="flex justify-between gap-2 mt-4 fixed bottom-0 w-full left-0 p-6 md:p-8">
-            <BrutalButton
-              mode="ghost"
-              type="button"
-              className="min-w-10"
-              onClick={previous}
-              isDisabled={isFirst}
-            >
-              <FaArrowLeft />
-            </BrutalButton>
+          {/* <div className={`flex gap-2 mt-6 md:mt-4 block md:fixed  md:bottom-0 w-full left-0 px-0 md:p-8 ${stepIndex === 1 ? 'justify-between' : 'justify-end'}`}> */}
+        <div className={`flex gap-2 mt-auto pt-6  ${stepIndex === 1 ? 'justify-between' : 'justify-end'}`}>
+            {stepIndex === 1 && (
+              <BrutalButton
+                mode="ghost"
+                type="button"
+                className="min-w-10"
+                onClick={previous}
+                isDisabled={isFirst}
+              >
+                <FaArrowLeft />
+              </BrutalButton>
+            )}
             <BrutalButton isLoading={fetcher.state !== "idle"} type="submit">
               { isLast ? 'Guardar' : 'Continuar' }
             </BrutalButton>

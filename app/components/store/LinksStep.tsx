@@ -176,7 +176,7 @@ export default function LinksStep({ control, register }) {
           ) : null
         }
       </AnimatePresence>
-      <div className="mt-6">
+      <div className="mt-4">
         <Controller
           name="showProducts"
           control={control}
