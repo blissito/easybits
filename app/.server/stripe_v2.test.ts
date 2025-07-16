@@ -11,6 +11,7 @@ vi.mock("./db", () => ({
     },
     user: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
@@ -52,7 +53,7 @@ const mockUser = {
   updatedAt: new Date(),
   confirmed: true,
   publicKey: null,
-  displayName: null,
+  displayName: "Test User",
   email: "test@example.com",
   verified_email: null,
   family_name: null,
@@ -64,12 +65,30 @@ const mockUser = {
   dnsConfig: null,
   domain: null,
   notifications: null,
-  storeConfig: null,
+  storeConfig: {
+    hexColor: "#FF6B35",
+    logoImage: "https://example.com/logo.png",
+    colorMode: "light",
+    typography: "",
+    socialNetworks: true,
+    showProducts: true,
+    instagram: "",
+    facebook: "",
+    tiktok: "",
+    youtube: "",
+    linkedin: "",
+    website: "",
+    coverImage: "",
+    googleAnalyticsTrackingId: "",
+    x: "",
+    metadata: null,
+  },
   // Faltantes para tipo completo
   roles: [],
   assetIds: [],
   customer: null,
   newsletters: [],
+  stripeIds: [],
 };
 
 describe("stripe_v2", () => {

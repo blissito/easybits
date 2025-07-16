@@ -27,9 +27,8 @@ export type Payment = {
   id: string;
 };
 //   capabilities: { card_payments: 'inactive', transfers: 'inactive' },
-const isDev=  process.env.NODE_ENV === "development"
-const location =
-    isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
+const isDev = process.env.NODE_ENV === "development";
+const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
 const webhookUrl = `${location}/api/v1/stripe/webhook/merchant`;
 const stripeURL = "https://api.stripe.com/v2/core/accounts";
@@ -38,13 +37,14 @@ const accountsURL = "https://api.stripe.com/v2/core/accounts";
 const paymentsURL = "https://api.stripe.com/v1/payment_intents";
 const productsURL = "https://api.stripe.com/v1/products";
 const pricesURL = "https://api.stripe.com/v1/prices";
-const apiKey = isDev ? `Bearer ${process.env.STRIPE_DEV_SECRET_KEY}` : `Bearer ${process.env.STRIPE_SECRET_KEY}`; // prod
+const apiKey = isDev
+  ? `Bearer ${process.env.STRIPE_DEV_SECRET_KEY}`
+  : `Bearer ${process.env.STRIPE_SECRET_KEY}`; // prod
 const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
+const brandingURL = "https://api.stripe.com/v1/account/branding_settings";
 
-export async function configureMerchantWebhook(
-  userId: string,
-) {
+export async function configureMerchantWebhook(userId: string) {
   try {
     const user = await db.user.findUnique({
       where: { id: userId },
@@ -90,16 +90,34 @@ export async function configureMerchantWebhook(
   }
 }
 
-export const createCheckoutURL = async (assetId: string, accountId: string) => {
-     // need to validate if the stripe id is valid
-  const user = await db.user.findFirst({ where: { stripeId: accountId } });
-  if (!user) return null // no account found
+export const createCheckoutURL = async (
+  assetId: string,
+  accountId: string,
+  brandOptions?: {
+    primaryColor?: string;
+    logo?: string;
+    businessName?: string;
+  }
+) => {
+  // need to validate if the stripe id is valid
+  const user = await db.user.findFirst({
+    where: { stripeId: accountId },
+    include: { storeConfig: true },
+  });
+  if (!user) return null; // no account found
 
   const asset = await db.asset.findUnique({ where: { id: assetId } });
-  if (!asset) return null // no asset found
+  if (!asset) return null; // no asset found
 
-  if (!asset.stripePrice)
-      return null // no price found
+  if (!asset.stripePrice) return null; // no price found
+
+  // Usar configuración de marca de la base de datos si no se proporciona brandOptions
+  const finalBrandOptions = {
+    primaryColor:
+      brandOptions?.primaryColor || user.storeConfig?.hexColor || undefined,
+    logo: brandOptions?.logo || user.storeConfig?.logoImage || undefined,
+    businessName: brandOptions?.businessName || user.displayName || undefined,
+  };
 
   // Crear la sesión de checkout
   const url = new URL(checkoutSessionsURL);
@@ -107,6 +125,29 @@ export const createCheckoutURL = async (assetId: string, accountId: string) => {
   url.searchParams.set("line_items[0][quantity]", "1");
   url.searchParams.set("line_items[0][price]", asset.stripePrice);
   url.searchParams.set("success_url", `${location}/api/v1/stripe/success`);
+
+  // Personalización de marca
+  url.searchParams.set("ui_mode", "hosted");
+  url.searchParams.set("custom_text[submit][message]", "Procesar pago");
+  url.searchParams.set("locale", "es");
+
+  // Personalización de marca usando la configuración de la base de datos
+  if (finalBrandOptions.businessName) {
+    url.searchParams.set(
+      "custom_text[submit][message]",
+      `Pagar a ${finalBrandOptions.businessName}`
+    );
+  }
+
+  // Si hay colores configurados, aplicar configuración de marca automáticamente
+  if (finalBrandOptions.primaryColor || finalBrandOptions.logo) {
+    // Configurar colores de marca en la cuenta de Stripe antes del checkout
+    await configureBrandColors(accountId, {
+      primaryColor: finalBrandOptions.primaryColor,
+      logo: finalBrandOptions.logo,
+      primaryButtonColor: finalBrandOptions.primaryColor, // usar el mismo color para el botón
+    });
+  }
 
   const sessionRes = await fetch(url.toString(), {
     method: "post",
@@ -170,7 +211,7 @@ export const updateOrCreateProductAndPrice = async (
     });
     await updateAsset(asset.id, { stripePrice: price.id });
     // Configurar webhook después de crear el price
-    await configureMerchantWebhook(user.id, asset.id);
+    await configureMerchantWebhook(user.id);
   } else {
     const product = await createProductAndPrice(
       asset.slug,
@@ -185,7 +226,7 @@ export const updateOrCreateProductAndPrice = async (
       data: { stripeProduct: product.id, stripePrice: product.default_price },
     });
     // Configurar webhook después de crear el price
-    await configureMerchantWebhook(user.id, asset.id);
+    await configureMerchantWebhook(user.id);
   }
 };
 
@@ -450,6 +491,50 @@ export const createAccountV2 = async (
   const response = await fetch(stripeURL, init);
   const data = await response.json();
   return data;
+};
+
+// Configurar colores de marca para la cuenta
+export const configureBrandColors = async (
+  accountId: string,
+  brandOptions: {
+    primaryColor?: string;
+    logo?: string;
+    icon?: string;
+    primaryButtonColor?: string;
+  }
+) => {
+  const url = new URL(brandingURL);
+
+  if (brandOptions.primaryColor) {
+    url.searchParams.set("primary_color", brandOptions.primaryColor);
+  }
+
+  if (brandOptions.primaryButtonColor) {
+    url.searchParams.set(
+      "primary_button_color",
+      brandOptions.primaryButtonColor
+    );
+  }
+
+  if (brandOptions.logo) {
+    url.searchParams.set("logo", brandOptions.logo);
+  }
+
+  if (brandOptions.icon) {
+    url.searchParams.set("icon", brandOptions.icon);
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "post",
+    headers: {
+      Authorization: apiKey,
+      "Stripe-Account": accountId,
+      "Stripe-Version": "2025-04-30.preview",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+  });
+
+  return await response.json();
 };
 
 const getInit = (body: any = {}, headers: any = {}) =>
