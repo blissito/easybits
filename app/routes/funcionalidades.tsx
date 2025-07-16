@@ -8,7 +8,10 @@ import { Banners, Robot } from "~/components/common/Banner";
 import { PiPaintBrushBroad } from "react-icons/pi";
 import { BiCommentDetail, BiHappy, BiSupport } from "react-icons/bi";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { SiGoogleanalytics, SiGooglecontaineroptimizedos } from "react-icons/si";
+import {
+  SiGoogleanalytics,
+  SiGooglecontaineroptimizedos,
+} from "react-icons/si";
 import { GrAnalytics } from "react-icons/gr";
 
 import { FaUsers } from "react-icons/fa";
@@ -24,6 +27,7 @@ import type { Route } from "./+types/funcionalidades";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { cn } from "~/utils/cn";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
+import { FloatingChat } from "~/components/ai/FloatingChat";
 
 export const clientLoader = async () => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
@@ -59,6 +63,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
         <SuscriptionBox className="w-full max-w-7xl my-20 md:my-40 " />{" "}
       </div>
       <Footer />
+      <FloatingChat chatClassName="md:bottom-10" className="md:bottom-20" />
     </section>
   );
 }
@@ -137,12 +142,15 @@ const FeaturesScroll = () => {
             title="Personalizar tus landing pages"
             description={
               <p>
-                Crea y personaliza landig pages para cada uno de tus assets,  <span className="text-[#DF7CB0]  font-bold">
-                 agrega su propia galería de fotos y una descripción completa para atraer a más clientes.</span>  {" "}
-                  Comparte el link de tu asset directamente en redes sociales, por correo o whats app. 
+                Crea y personaliza landig pages para cada uno de tus assets,{" "}
+                <span className="text-[#DF7CB0]  font-bold">
+                  agrega su propia galería de fotos y una descripción completa
+                  para atraer a más clientes.
+                </span>{" "}
+                Comparte el link de tu asset directamente en redes sociales, por
+                correo o whats app.
               </p>
             }
-            
           />
 
           <Card
@@ -174,8 +182,8 @@ const FeaturesScroll = () => {
                   o para productos específicos{" "}
                 </span>{" "}
                 y adminístralos de forma fácil y rápida desde tu dashboard.
-                Utiliza los descuentos para consentir a tus clientes y
-                aumentar tus ventas.
+                Utiliza los descuentos para consentir a tus clientes y aumentar
+                tus ventas.
               </p>
             }
           />
@@ -192,51 +200,59 @@ const FeaturesScroll = () => {
                   agregar tu propio dominio
                 </span>{" "}
                 y fortalecer tu marca.
-                <br/>
+                <br />
                 Pronto podrás comprar tu dominio directamente desde EasyBits.
               </p>
             }
           />
-           <Card
-           className="bg-[#B9A8F3]"
+          <Card
+            className="bg-[#B9A8F3]"
             bgColor="bg-[#ECD66E]"
-            icon={<RiRobot2Fill className="text-[28px]"/>}
+            icon={<RiRobot2Fill className="text-[28px]" />}
             title="Usar AI para llenar la información de tus assets"
             description={
               <p>
-              Con nuestro agente, 
+                Con nuestro agente,
                 <span className="text-[#5B567C]  font-bold">
                   {" "}
-                  presenta tus assets de forma clara, creativa y con un toque de personalidad
-                </span> {" "}
+                  presenta tus assets de forma clara, creativa y con un toque de
+                  personalidad
+                </span>{" "}
                 que atrape a tus futuros clientes desde el primer vistazo.
               </p>
             }
           />
           <Card
-            icon={<SiGoogleanalytics className="text-[24px]"/>}
+            icon={<SiGoogleanalytics className="text-[24px]" />}
             bgColor="bg-[#BFD0B3]"
             title="Integrar Google Analytics"
             description={
               <p>
-              ¿Quieres medir conversiones específicas? Solo  {" "}
+                ¿Quieres medir conversiones específicas? Solo{" "}
                 <span className="text-[#537C44]  font-bold">
-                pega tu ID de Google Analytics y comienza a recopilar datos clave de inmediato.
+                  pega tu ID de Google Analytics y comienza a recopilar datos
+                  clave de inmediato.
                 </span>
               </p>
             }
           />
           <Card
-             className="bg-[#E8A787]"
+            className="bg-[#E8A787]"
             bgColor="bg-sky"
-            icon={<GrAnalytics />            }
+            icon={<GrAnalytics />}
             title="Descargar reportes de ventas"
             description={
-              <p>Toda la información de tus ventas está disponible en tu dashboard. <span className="text-[#703524]  font-bold">Descárgala cuando la necesites</span>.</p>
+              <p>
+                Toda la información de tus ventas está disponible en tu
+                dashboard.{" "}
+                <span className="text-[#703524]  font-bold">
+                  Descárgala cuando la necesites
+                </span>
+                .
+              </p>
             }
-          
           />
-           <Card
+          <Card
             bgColor="bg-sky"
             icon={<FaUsers />}
             title="Tener acceso completo a la información de tus clientes"
@@ -268,23 +284,35 @@ const FeaturesScroll = () => {
             }
           />
           <Card
-          
             bgColor="bg-rose"
             icon={<SiGooglecontaineroptimizedos />}
             title="Optimizar tus archivos"
             description={
               <p>
-                Puedes optimizar todo tu contenido en video bajo el <span className="text-[#C6478A]  font-bold">protocolo HLS (HTTP Live Streaming), </span> el cuál permite adaptar la calidad del video a las condiciones de la red. 
+                Puedes optimizar todo tu contenido en video bajo el{" "}
+                <span className="text-[#C6478A]  font-bold">
+                  protocolo HLS (HTTP Live Streaming),{" "}
+                </span>{" "}
+                el cuál permite adaptar la calidad del video a las condiciones
+                de la red.
               </p>
             }
-            />
+          />
           <Card
             className="bg-[#EFD7BC]"
             icon={<MdOutlineStorage />}
             title="Almacenar archivos"
             bgColor="bg-[#B9A8F3]"
             description={
-              <p>En la misma plataforma puedes   <span className="text-[#635C53]  font-bold">almacenar tus archivos</span>, establecerlos como públicos o privados, consumirlos desde otra plataforma e incluso puedes compartirlos y definir tokens de acceso limitado por 1 minto, 1 hora o 1 día.</p>
+              <p>
+                En la misma plataforma puedes{" "}
+                <span className="text-[#635C53]  font-bold">
+                  almacenar tus archivos
+                </span>
+                , establecerlos como públicos o privados, consumirlos desde otra
+                plataforma e incluso puedes compartirlos y definir tokens de
+                acceso limitado por 1 minto, 1 hora o 1 día.
+              </p>
             }
           />
           <Card
@@ -309,14 +337,17 @@ const FeaturesScroll = () => {
             icon={<BiSupport />}
             bgColor="bg-[#B5E8A2]"
             title="Recibir soporte en español"
-            description=
-            {
-              <p>¿Dudas o preguntas?  <span className="text-[#91466D]  font-bold"> Nuestro equipo estará listo para ayudarte</span> a través de nuestras redes sociales o contacto directo.</p>
+            description={
+              <p>
+                ¿Dudas o preguntas?{" "}
+                <span className="text-[#91466D]  font-bold">
+                  {" "}
+                  Nuestro equipo estará listo para ayudarte
+                </span>{" "}
+                a través de nuestras redes sociales o contacto directo.
+              </p>
             }
-         
           />
-
-         
         </div>
       </div>
     </section>

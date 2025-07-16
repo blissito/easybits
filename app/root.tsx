@@ -20,7 +20,7 @@ import StoreComponent from "./components/store/StoreComponent";
 import Page from "./routes/assets/PublicCustomLanding";
 import { NotFound } from "./components/common/404";
 // import { DevAdmin } from "./components/experimental/DevAdmin";
-import { FloatingChat } from "./components/ai/FloatingChat";
+
 import { DevAdmin } from "./components/experimental/DevAdmin";
 import { UploadsProvider } from "./context";
 
@@ -56,7 +56,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Scripts />
         <Toaster />
         <DevAdmin />
-        <FloatingChat />
       </body>
     </html>
   );

@@ -1,8 +1,16 @@
+type MetaTag = {
+  name: string;
+  content: string;
+};
+
+type Others = MetaTag[];
+
 export type GetBasicMetaTagsPros = {
   title?: string;
   description?: string;
   image?: string;
   twitterCard?: "summary" | "summary_large_image";
+  others?: Others;
 };
 
 export default function getBasicMetaTags({
@@ -10,6 +18,7 @@ export default function getBasicMetaTags({
   description = "Convierte esas ilustraciones, ese libro, ese cuento o esas conferencias en assets digitales", // description should be at least 100 chars
   image = "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
   twitterCard = "summary_large_image",
+  others = [],
 }: GetBasicMetaTagsPros) {
   if (!title) {
     return [
@@ -52,13 +61,6 @@ export default function getBasicMetaTags({
       name: "twitter:image",
       content: image,
     },
-    // {
-    //   name: "og:image:width",
-    //   content: "300",
-    // },
-    // {
-    //   name: "og:image:height",
-    //   content: "300",
-    // },
+    ...others,
   ];
 }

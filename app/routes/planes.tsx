@@ -7,6 +7,7 @@ import { Faq } from "./plans/Faq";
 import { Footer } from "~/components/common/Footer";
 import type { Route } from "./+types/planes";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
+import { FloatingChat } from "~/components/ai/FloatingChat";
 
 export const clientLoader = async () => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
@@ -58,6 +59,7 @@ export default function Planes({ loaderData }: Route.ComponentProps) {
       </Banners>
       <Faq />
       <Footer />
+      <FloatingChat />
     </section>
   );
 }

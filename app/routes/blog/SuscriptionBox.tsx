@@ -74,18 +74,7 @@ export const Turnstile = ({
   setIsDisabled?: (arg0: boolean) => void;
 }) => {
   const ref = useRef<HTMLDivElement>(null);
-  useScript("https://challenges.cloudflare.com/turnstile/v0/api.js", () => {
-    //@ts-ignore
-    window.turnstile?.ready(() => {
-      if (ref.current?.id) return;
-      ref.current!.id = "loaded"; // avoiding duplication
-      // @ts-ignore
-      window.turnstile?.render(ref.current, {
-        callback: enable,
-        sitekey: "0x4AAAAAABbVIYBqxYY44hTw",
-      });
-    });
-  });
+
   const enable = (token: string) => {
     if (token) {
       setIsDisabled?.(false);
@@ -93,5 +82,39 @@ export const Turnstile = ({
       setIsDisabled?.(true);
     }
   };
+
+  const onError = () => {
+    console.error("Turnstile error occurred");
+    setIsDisabled?.(true);
+  };
+
+  const onExpired = () => {
+    console.warn("Turnstile token expired");
+    setIsDisabled?.(true);
+  };
+
+  useScript("https://challenges.cloudflare.com/turnstile/v0/api.js", () => {
+    //@ts-ignore
+    window.turnstile?.ready(() => {
+      if (ref.current?.id) return;
+      ref.current!.id = "loaded"; // avoiding duplication
+
+      try {
+        // @ts-ignore
+        window.turnstile?.render(ref.current, {
+          callback: enable,
+          "error-callback": onError,
+          "expired-callback": onExpired,
+          sitekey: "0x4AAAAAABbVIYBqxYY44hTw",
+          theme: "light",
+          size: "normal",
+        });
+      } catch (error) {
+        console.error("Failed to render Turnstile:", error);
+        setIsDisabled?.(true);
+      }
+    });
+  });
+
   return <div ref={ref} className="fixed bottom-0 right-0 z-50" />;
 };

@@ -5,14 +5,16 @@ import { BittorChat } from "./BittorChat";
 import { BrutalButton } from "../common/BrutalButton";
 import { motion, AnimatePresence } from "motion/react";
 import { BrutalButtonClose } from "../common/BrutalButtonClose";
+import { cn } from "~/utils/cn";
 
 interface FloatingChatProps {
+  chatClassName?: string;
   className?: string;
   initialMessage?: string;
   systemPrompt?: string;
 }
 
-export function FloatingChat({}: FloatingChatProps) {
+export function FloatingChat({ className, chatClassName }: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -65,16 +67,15 @@ export function FloatingChat({}: FloatingChatProps) {
     };
   }, [isOpen]);
 
-
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const checkSize = ()=>{
-      if(window.innerWidth < 768){
+    const checkSize = () => {
+      if (window.innerWidth < 768) {
         setIsMobile(true);
-      }else{
+      } else {
         setIsMobile(false);
       }
-    }
+    };
     window.addEventListener("resize", checkSize);
     checkSize();
   }, []);
@@ -83,7 +84,10 @@ export function FloatingChat({}: FloatingChatProps) {
     <>
       {/* Botón flotante */}
       <motion.div
-        className="fixed bottom-4 md:bottom-6 right-4 md:right-8 z-30"
+        className={cn(
+          "fixed bottom-4 md:bottom-6 right-4 md:right-8 z-30",
+          className
+        )}
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
@@ -120,7 +124,10 @@ export function FloatingChat({}: FloatingChatProps) {
           >
             <motion.div
               ref={chatRef}
-              className="bg-white rounded-lg shadow-2xl overflow-hidden relative z-50"
+              className={cn(
+                "bg-white rounded-lg shadow-2xl overflow-hidden relative z-50",
+                chatClassName
+              )}
               style={{
                 width: isMobile ? "100%" : "50%",
                 height: isMobile ? "100%" : "50%",
@@ -159,7 +166,6 @@ export function FloatingChat({}: FloatingChatProps) {
                   />
                 </div>
 
-         
                 <BittorChat
                   className="h-full border-0 rounded-none"
                   onClose={() => setIsOpen(false)}

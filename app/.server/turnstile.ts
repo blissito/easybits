@@ -1,22 +1,63 @@
 export const handleTurnstilePost = async (request: Request, body: FormData) => {
-  // Turnstile injects a token in "cf-turnstile-response".
-  const response = body.get("cf-turnstile-response") as string;
-  const remoteip = request.headers.get("CF-Connecting-IP") as string;
+  try {
+    // Turnstile injects a token in "cf-turnstile-response".
+    const response = body.get("cf-turnstile-response") as string;
+    const remoteip = request.headers.get("CF-Connecting-IP") as string;
 
-  // Validate the token by calling the
-  // "/siteverify" API endpoint.
-  const url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-  const result = await fetch(url, {
-    body: new URLSearchParams({
-      secret: process.env.TURNSTILE_SECRET!,
-      response,
-      remoteip,
-    }),
-    method: "POST",
-  });
-  const outcome = (await result.json()) as { success: boolean };
-  console.info("::TURNSTILE_SITEVERIFY_RESPONSE::", outcome); // INFO
-  return outcome.success;
+    if (!response) {
+      console.error("::TURNSTILE_ERROR:: No cf-turnstile-response token found");
+      return false;
+    }
+
+    if (!process.env.TURNSTILE_SECRET) {
+      console.error(
+        "::TURNSTILE_ERROR:: TURNSTILE_SECRET environment variable not set"
+      );
+      return false;
+    }
+
+    // Validate the token by calling the
+    // "/siteverify" API endpoint.
+    const url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+    const result = await fetch(url, {
+      body: new URLSearchParams({
+        secret: process.env.TURNSTILE_SECRET,
+        response,
+        remoteip: remoteip || "",
+      }),
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    if (!result.ok) {
+      console.error(
+        "::TURNSTILE_ERROR:: Failed to verify token, HTTP status:",
+        result.status
+      );
+      return false;
+    }
+
+    const outcome = (await result.json()) as {
+      success: boolean;
+      "error-codes"?: string[];
+      challenge_ts?: string;
+      hostname?: string;
+    };
+
+    if (!outcome.success && outcome["error-codes"]) {
+      console.error(
+        "::TURNSTILE_ERROR:: Verification failed with error codes:",
+        outcome["error-codes"]
+      );
+    }
+
+    return outcome.success;
+  } catch (error) {
+    console.error("::TURNSTILE_ERROR:: Exception during verification:", error);
+    return false;
+  }
 };
 
 // {

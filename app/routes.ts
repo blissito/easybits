@@ -24,9 +24,11 @@ export default [
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/blog", "routes/blog.tsx"),
+  route("/blog/:slug", "routes/blog.$slug.tsx"),
+  route("/sitemap.xml", "routes/sitemap.xml.tsx"),
+  route("/robots.txt", "routes/robots.txt.tsx"),
   route("/terminos-y-condiciones", "routes/terminos.tsx"),
   route("/aviso-de-privacidad", "routes/aviso.tsx"),
-  route("/blogPost", "routes/blogPost.tsx"),
   // public video link @todo revisit private only? tokens?
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // embed share
