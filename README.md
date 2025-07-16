@@ -91,3 +91,24 @@ uploads.map((u) => (
 ```
 
 ---
+
+## Blog System
+
+El blog usa archivos MDX como rutas directas para evitar duplicación de datos y problemas en producción.
+
+### Agregar nuevos posts
+
+1. Crear archivo MDX en `app/content/blog/YYYY-MM-DD-nombre-post.mdx`
+2. Actualizar 3 lugares:
+   - `app/routes/blog.tsx` (lista)
+   - `app/routes/blog.$slug.tsx` (post individual)
+   - `react-router.config.ts` (prerendering)
+
+### Ventajas
+
+- ✅ Sin duplicación de datos
+- ✅ Funciona en producción (Fly.io)
+- ✅ Prerendering eficiente
+- ✅ SEO optimizado con meta tags automáticos
+
+---

@@ -58,6 +58,92 @@ export class MDXProcessor {
   private static watcher: any = null;
   private static isWatching = false;
 
+  // Fallback posts for production when file system is not available
+  private static readonly FALLBACK_POSTS: BlogPost[] = [
+    {
+      slug: "como-conectar-stripe-onboarding",
+      title:
+        "Cómo Conectar Stripe en tu Onboarding: Guía Completa para Creadores",
+      description:
+        "Aprende a integrar Stripe Connect en tu proceso de onboarding para monetizar tu conocimiento de forma profesional y segura.",
+      date: "2025-01-20",
+      author: "EasyBits Team",
+      tags: ["stripe", "onboarding", "monetización", "creadores"],
+      featuredImage: "/blog/assets/stripe-connect-guide.jpg",
+      readingTime: 8,
+      content:
+        "# Cómo Conectar Stripe en tu Onboarding\n\nGuía completa para integrar pagos en tu proceso de onboarding...",
+      excerpt:
+        "Aprende a integrar Stripe Connect en tu proceso de onboarding para monetizar tu conocimiento de forma profesional y segura.",
+      published: true,
+    },
+    {
+      slug: "tendencias-economia-creadores-2025",
+      title:
+        "Tendencias de la Economía de Creadores en 2025: Oportunidades y Desafíos",
+      description:
+        "Descubre las principales tendencias que están moldeando la economía de creadores en 2025 y cómo aprovecharlas.",
+      date: "2025-01-16",
+      author: "EasyBits Team",
+      tags: ["tendencias", "economía", "creadores", "2025"],
+      featuredImage: "/blog/assets/creator-economy-2025.jpg",
+      readingTime: 12,
+      content:
+        "# Tendencias de la Economía de Creadores en 2025\n\nDescubre las principales tendencias que están moldeando...",
+      excerpt:
+        "Descubre las principales tendencias que están moldeando la economía de creadores en 2025 y cómo aprovecharlas.",
+      published: true,
+    },
+    {
+      slug: "monetizar-conocimiento-online",
+      title: "Cómo Monetizar tu Conocimiento Online: Estrategias Comprobadas",
+      description:
+        "Guía práctica para convertir tu experiencia en ingresos sostenibles a través de diferentes canales digitales.",
+      date: "2025-01-14",
+      author: "EasyBits Team",
+      tags: ["monetización", "conocimiento", "online", "estrategias"],
+      featuredImage: "/blog/assets/monetize-knowledge.jpg",
+      readingTime: 10,
+      content:
+        "# Cómo Monetizar tu Conocimiento Online\n\nGuía práctica para convertir tu experiencia en ingresos...",
+      excerpt:
+        "Guía práctica para convertir tu experiencia en ingresos sostenibles a través de diferentes canales digitales.",
+      published: true,
+    },
+    {
+      slug: "marketing-digital-para-creadores",
+      title: "Marketing Digital para Creadores: Estrategias que Funcionan",
+      description:
+        "Aprende las mejores estrategias de marketing digital para hacer crecer tu audiencia y monetizar tu contenido.",
+      date: "2025-01-12",
+      author: "EasyBits Team",
+      tags: ["marketing", "digital", "creadores", "estrategias"],
+      featuredImage: "/blog/assets/digital-marketing-creators.jpg",
+      readingTime: 7,
+      content:
+        "# Marketing Digital para Creadores\n\nAprende las mejores estrategias de marketing digital...",
+      excerpt:
+        "Aprende las mejores estrategias de marketing digital para hacer crecer tu audiencia y monetizar tu contenido.",
+      published: true,
+    },
+    {
+      slug: "como-crear-assets-digitales-exitosos",
+      title: "Cómo Crear Assets Digitales Exitosos: Guía para Creadores",
+      description:
+        "Descubre el proceso completo para crear y vender assets digitales que generen ingresos pasivos.",
+      date: "2025-01-10",
+      author: "EasyBits Team",
+      tags: ["assets", "digitales", "creadores", "ventas"],
+      featuredImage: "/blog/assets/digital-assets-guide.jpg",
+      readingTime: 6,
+      content:
+        "# Cómo Crear Assets Digitales Exitosos\n\nDescubre el proceso completo para crear y vender...",
+      excerpt:
+        "Descubre el proceso completo para crear y vender assets digitales que generen ingresos pasivos.",
+      published: true,
+    },
+  ];
+
   /**
    * Process a single MDX file and return a BlogPost object
    */
@@ -104,16 +190,45 @@ export class MDXProcessor {
    */
   static async getAllPosts(): Promise<BlogPost[]> {
     try {
+      // Check if we're in production and file system might not be available
+      if (process.env.NODE_ENV === "production") {
+        console.log(
+          "🔧 Production environment detected, checking file system availability..."
+        );
+      }
+
       // Check if blog content directory exists
       try {
         await fs.access(this.BLOG_CONTENT_DIR);
-      } catch {
-        // Directory doesn't exist, return empty array
+      } catch (error) {
+        console.warn("⚠️ Blog content directory not accessible:", error);
+
+        // In production, return fallback posts if file system is not available
+        if (process.env.NODE_ENV === "production") {
+          console.log("📝 Using fallback posts for production");
+          return this.FALLBACK_POSTS;
+        }
+
+        // In development, return empty array
         return [];
       }
 
       const files = await fs.readdir(this.BLOG_CONTENT_DIR);
       const mdxFiles = files.filter((file) => file.endsWith(".mdx"));
+
+      if (mdxFiles.length === 0) {
+        console.warn("⚠️ No MDX files found in blog directory");
+
+        // In production, return fallback posts if no files found
+        if (process.env.NODE_ENV === "production") {
+          console.log("📝 Using fallback posts - no MDX files found");
+          return this.FALLBACK_POSTS;
+        }
+
+        return [];
+      }
+
+      console.log(`📚 Found ${mdxFiles.length} MDX files`);
 
       const posts = await Promise.all(
         mdxFiles.map(async (file) => {
@@ -123,12 +238,25 @@ export class MDXProcessor {
       );
 
       // Filter published posts and sort by date (newest first)
-      return posts
+      const publishedPosts = posts
         .filter((post) => post.published)
         .sort(
           (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
+
+      console.log(
+        `✅ Successfully loaded ${publishedPosts.length} published posts`
+      );
+      return publishedPosts;
     } catch (error) {
+      console.error("❌ Error getting all posts:", error);
+
+      // In production, return fallback posts on error
+      if (process.env.NODE_ENV === "production") {
+        console.log("📝 Using fallback posts due to error");
+        return this.FALLBACK_POSTS;
+      }
+
       throw new Error(
         `Error getting all posts: ${
           error instanceof Error ? error.message : "Unknown error"
