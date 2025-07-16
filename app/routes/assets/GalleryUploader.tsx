@@ -8,9 +8,13 @@ import { createURLFromStorageKey } from "~/utils/urlConstructors";
 import { nanoid } from "nanoid";
 
 type MediaItem = {
+  id: string;
   type: "image" | "video";
   src: string;
-  storageKey?: string;
+  isTemporary: boolean;
+  storageKey: string;
+  originalIndex: number;
+  sourceType: "gallery" | "srcset";
 };
 
 export const GalleryUploader = ({
@@ -82,19 +86,7 @@ export const GalleryUploader = ({
     }
   }, [gallery]);
 
-  const allMedia = useMemo(() => {
-    // Procesar archivos subidos (srcset) - URLs temporales
-    const uploadedMedia = srcset.map((src, index) => {
-      const isVideo = src.endsWith(".mp4") || src.startsWith("blob:");
-      return {
-        id: `uploaded-${index}`,
-        type: isVideo ? ("video" as const) : ("image" as const),
-        src,
-        isTemporary: true, // Marcar como temporal
-        storageKey: `temp-${nanoid(3)}-${index}`, // No tenemos un storageKey real aún
-      };
-    });
-
+  const allMedia = useMemo((): MediaItem[] => {
     // Procesar enlaces de la galería - URLs finales
     const galleryMedia = (gallery || []).map((src, index) => {
       const isVideo = src.endsWith(".mp4");
@@ -104,6 +96,22 @@ export const GalleryUploader = ({
         src,
         isTemporary: false,
         storageKey: src.split("/").pop()?.split("?")[0] || `gallery-${index}`,
+        originalIndex: index,
+        sourceType: "gallery" as const,
+      };
+    });
+
+    // Procesar archivos subidos (srcset) - URLs temporales
+    const uploadedMedia = srcset.map((src, index) => {
+      const isVideo = src.endsWith(".mp4") || src.startsWith("blob:");
+      return {
+        id: `srcset-${index}`,
+        type: isVideo ? ("video" as const) : ("image" as const),
+        src,
+        isTemporary: true,
+        storageKey: `temp-${nanoid(3)}-${index}`,
+        originalIndex: index,
+        sourceType: "srcset" as const,
       };
     });
 
