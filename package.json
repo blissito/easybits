@@ -46,7 +46,7 @@
     "date-fns": "^4.1.0",
     "docx": "^9.5.1",
     "easymde": "^2.20.0",
-    "effect": "^3.16.13",
+    "effect": "^3.16.16",
     "fixtergeek-mcp-server": "^0.0.8",
     "framer-motion": "^12.18.1",
     "graphql": "^16.11.0",

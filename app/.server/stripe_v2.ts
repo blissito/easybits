@@ -1,3 +1,64 @@
+/*
+============================
+Error Handling Flow & Usage Examples
+============================
+
+## Backend (Node.js)
+- Todas las funciones que interactúan con Stripe usan internamente Effect (ts) para manejar efectos y errores.
+- Las funciones públicas (como updateOrCreateProductAndPrice) devuelven un resultado estructurado:
+  - `{ ok: true, data }` en caso de éxito
+  - `{ ok: false, error }` en caso de error
+- El endpoint solo revisa la propiedad `ok` y responde al frontend con un mensaje claro si hay error.
+
+### Ejemplo de uso en el backend:
+```ts
+const stripeResult = await updateOrCreateProductAndPrice(asset, request);
+if (!stripeResult.ok) {
+  return new Response(
+    `Error al actualizar el precio en Stripe: ${stripeResult.error}`,
+    { status: 500 }
+  );
+}
+// ... continuar flujo normal
+```
+
+## Frontend
+- Si el backend responde con status 500 y un mensaje de error, el frontend puede mostrar ese mensaje al usuario.
+- Ejemplo de manejo en React:
+```ts
+const response = await fetch(...);
+if (!response.ok) {
+  const errorText = await response.text();
+  showToast(errorText); // o mostrar en UI
+}
+```
+
+## Ventajas
+- El código de backend no necesita try/catch para Stripe, solo revisa el resultado.
+- Los logs de Stripe quedan centralizados y estructurados.
+- El frontend recibe mensajes claros y controlados, sin stacktraces ni detalles internos.
+- Fácil de extender a otros servicios de terceros.
+*/
+
+/**
+ * E2E Purchase Flow Test Spec (Minimalista)
+
+[ ] Instalar Playwright en el proyecto (npx playwright install)
+[ ] Crear un archivo de test E2E (por ejemplo, test/e2e-purchase.spec.ts)
+[ ] Escribir el test: navegar, seleccionar asset, iniciar compra, completar pago con tarjeta de prueba Stripe, verificar éxito.
+[ ] Agregar el comando a package.json para correr el test (npx playwright test)
+[ ] Documentar en el README cómo correr el test E2E.
+ * 
+ */
+
+// Logger centralizado para Stripe
+export const stripeLogger = {
+  info: (...args: any[]) => console.log("[STRIPE][INFO]", ...args),
+  warn: (...args: any[]) => console.warn("[STRIPE][WARN]", ...args),
+  error: (...args: any[]) => console.error("[STRIPE][ERROR]", ...args),
+};
+
+import { Effect } from "effect";
 import type { Asset, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { db } from "./db";
@@ -184,25 +245,39 @@ export const createCheckoutURL = async (
 export const updateOrCreateProductAndPrice = async (
   asset: Asset,
   request: Request
-) => {
-  // @todo add description from "notas sobre el producto"
+): Promise<{ ok: true; data: any } | { ok: false; error: string }> => {
   const user = await getUserOrNull(request);
-  if (!user) return;
+  if (!user) return { ok: false, error: "Usuario no encontrado" };
 
   const accountId = user.stripeId;
-  if (!accountId) return;
+  if (!accountId) return { ok: false, error: "Cuenta de Stripe no encontrada" };
 
-  console.log("About to create price");
+  stripeLogger.info("About to create price");
 
   if (asset.stripeProduct && asset.stripePrice) {
-    // @todo create price & assign new price to product
-    const price = await createNewPriceForProduct({
-      productId: asset.stripeProduct,
-      accountId,
-      currency: asset.currency as "mxn", // @todo: all others
-      unit_amount: Number(asset.price) * 100, // cents
-    });
-    console.info("::STRIPE_PRICE::NEW_PRICE::", price);
+    const priceResult = await Effect.runPromiseExit(
+      createNewPriceForProductEffect({
+        productId: asset.stripeProduct,
+        accountId,
+        currency: asset.currency as "mxn",
+        unit_amount: Number(asset.price) * 100,
+      })
+    );
+    if (priceResult._tag === "Failure") {
+      stripeLogger.error(
+        "No se pudo crear el nuevo precio en Stripe",
+        priceResult.cause
+      );
+      return { ok: false, error: "No se pudo crear el nuevo precio en Stripe" };
+    }
+    const price = priceResult.value;
+    if (!price || !price.id) {
+      stripeLogger.error("Respuesta inválida al crear precio en Stripe", price);
+      return {
+        ok: false,
+        error: "Respuesta inválida al crear precio en Stripe",
+      };
+    }
     await updateProduct({
       productId: asset.stripeProduct,
       priceId: price.id,
@@ -210,23 +285,46 @@ export const updateOrCreateProductAndPrice = async (
       images: [],
     });
     await updateAsset(asset.id, { stripePrice: price.id });
-    // Configurar webhook después de crear el price
     await configureMerchantWebhook(user.id);
+    return { ok: true, data: price };
   } else {
-    const product = await createProductAndPrice(
-      asset.slug,
-      Number(asset.price),
-      asset.currency,
-      accountId
-    ); // @todo iterate slug?
+    const productResult = await Effect.runPromiseExit(
+      createProductAndPriceEffect(
+        asset.slug,
+        Number(asset.price),
+        asset.currency,
+        accountId
+      )
+    );
+    if (productResult._tag === "Failure") {
+      stripeLogger.error(
+        "No se pudo crear el producto/precio en Stripe",
+        productResult.cause
+      );
+      return {
+        ok: false,
+        error: "No se pudo crear el producto/precio en Stripe",
+      };
+    }
+    const product = productResult.value;
+    if (!product || !product.id || !product.default_price) {
+      stripeLogger.error(
+        "Respuesta inválida al crear producto/precio en Stripe",
+        product
+      );
+      return {
+        ok: false,
+        error: "Respuesta inválida al crear producto/precio en Stripe",
+      };
+    }
     await db.asset.update({
       where: {
         id: asset.id,
       },
       data: { stripeProduct: product.id, stripePrice: product.default_price },
     });
-    // Configurar webhook después de crear el price
     await configureMerchantWebhook(user.id);
+    return { ok: true, data: product };
   }
 };
 
@@ -265,8 +363,8 @@ export const updateProduct = async ({
     .catch((e) => console.error("::STRIPE::ERROR::", e));
 };
 
-// @todo can't be updated, we should archive and create new one...
-const createNewPriceForProduct = async ({
+// Refactor: createNewPriceForProduct usando Effect
+export const createNewPriceForProductEffect = ({
   productId,
   currency,
   unit_amount,
@@ -276,45 +374,72 @@ const createNewPriceForProduct = async ({
   currency: "mxn";
   unit_amount: number;
   accountId: string;
-}) => {
-  const url = new URL(pricesURL);
-  // url.searchParams.set("currency", currency);
-  url.searchParams.set(`currency`, currency); // in cents
-  url.searchParams.set(`unit_amount`, String(unit_amount)); // in cents?
-  url.searchParams.set(`product`, productId); // in cents
-  const headers = {
-    Authorization: apiKey,
-    "Stripe-Account": accountId,
-    "Stripe-Version": "2025-04-30.preview",
-    "content-type": "application/x-www-form-urlencoded",
-  };
-  const price = fetch(url.toString(), { headers, method: "post" })
-    .then((r) => r.json())
-    .catch((e) => console.error("::STRIPE::ERROR::", e));
-  return price;
-};
+}) =>
+  Effect.tryPromise({
+    try: async () => {
+      const url = new URL(pricesURL);
+      url.searchParams.set(`currency`, currency);
+      url.searchParams.set(`unit_amount`, String(unit_amount));
+      url.searchParams.set(`product`, productId);
+      const headers = {
+        Authorization: apiKey,
+        "Stripe-Account": accountId,
+        "Stripe-Version": "2025-04-30.preview",
+        "content-type": "application/x-www-form-urlencoded",
+      };
+      const response = await fetch(url.toString(), { headers, method: "post" });
+      if (!response.ok) {
+        const error = await response.text();
+        stripeLogger.error("Error al crear precio en Stripe", error);
+        throw new Error(error);
+      }
+      const price = await response.json();
+      stripeLogger.info("Precio creado en Stripe", price);
+      return price;
+    },
+    catch: (e) => {
+      stripeLogger.error("Stripe fetch error (createNewPriceForProduct)", e);
+      return e;
+    },
+  });
 
-const createProductAndPrice = async (
+// Refactor: createProductAndPrice usando Effect
+export const createProductAndPriceEffect = (
   name: string,
   price: number,
   currency: string,
   accountId: string
-) => {
-  const url = new URL(productsURL);
-  url.searchParams.set("name", name);
-  url.searchParams.set("default_price_data[currency]", currency);
-  url.searchParams.set("default_price_data[unit_amount]", String(price * 100));
-  const headers = {
-    Authorization: apiKey,
-    "Stripe-Account": accountId,
-    "Stripe-Version": "2025-04-30.preview",
-    "content-type": "application/x-www-form-urlencoded",
-  };
-  const data = fetch(url.toString(), { headers, method: "post" })
-    .then((r) => r.json())
-    .catch((e) => console.error("::STRIPE::ERROR::", e));
-  return data;
-};
+) =>
+  Effect.tryPromise({
+    try: async () => {
+      const url = new URL(productsURL);
+      url.searchParams.set("name", name);
+      url.searchParams.set("default_price_data[currency]", currency);
+      url.searchParams.set(
+        "default_price_data[unit_amount]",
+        String(price * 100)
+      );
+      const headers = {
+        Authorization: apiKey,
+        "Stripe-Account": accountId,
+        "Stripe-Version": "2025-04-30.preview",
+        "content-type": "application/x-www-form-urlencoded",
+      };
+      const response = await fetch(url.toString(), { headers, method: "post" });
+      if (!response.ok) {
+        const error = await response.text();
+        stripeLogger.error("Error al crear producto/precio en Stripe", error);
+        throw new Error(error);
+      }
+      const data = await response.json();
+      stripeLogger.info("Producto y precio creados en Stripe", data);
+      return data;
+    },
+    catch: (e) => {
+      stripeLogger.error("Stripe fetch error (createProductAndPrice)", e);
+      return e;
+    },
+  });
 
 export const getAccountPayments = async (accountId: string, isDev: boolean) => {
   const url = new URL(paymentsURL);

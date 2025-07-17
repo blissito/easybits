@@ -276,8 +276,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
     const nuevo = asset.price;
     if (oldPrice !== nuevo) {
-      await updateOrCreateProductAndPrice(asset, request); // stripe stuff
-      // }
+      const stripeResult = await updateOrCreateProductAndPrice(asset, request);
+      if (!stripeResult.ok) {
+        return new Response(
+          `Error al actualizar el precio en Stripe: ${stripeResult.error}`,
+          { status: 500 }
+        );
+      }
     }
     // @todo errors?
     await updateProduct({
