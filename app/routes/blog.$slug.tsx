@@ -24,6 +24,54 @@ const BLOG_POSTS = {
     "app/content/blog/2025-01-18-herramientas-esenciales-creadores-2025.mdx",
 } as const;
 
+// Array con slug y featuredImage igual que en la lista de blog
+const BLOG_POSTS_LIST = [
+  {
+    slug: "como-conectar-stripe-onboarding",
+    featuredImage:
+      "https://images.pexels.com/photos/4968391/pexels-photo-4968391.jpeg?auto=compress&w=800",
+  },
+  {
+    slug: "tendencias-economia-creadores-2025",
+    featuredImage:
+      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&w=800",
+  },
+  {
+    slug: "monetizar-conocimiento-online",
+    featuredImage:
+      "https://images.pexels.com/photos/4386375/pexels-photo-4386375.jpeg?auto=compress&w=800",
+  },
+  {
+    slug: "marketing-digital-para-creadores",
+    featuredImage:
+      "https://images.pexels.com/photos/3861964/pexels-photo-3861964.jpeg?auto=compress&w=800",
+  },
+  {
+    slug: "como-crear-assets-digitales-exitosos",
+    featuredImage:
+      "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&w=800",
+  },
+  {
+    slug: "herramientas-esenciales-creadores-2025",
+    featuredImage:
+      "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&w=800",
+  },
+];
+
+// Helper para buscar la imagen por slug
+const getFeaturedImageBySlug = (slug: string) => {
+  const post = BLOG_POSTS_LIST.find((p) => p.slug === slug);
+  return post?.featuredImage || null;
+};
+
+// Helper to ensure absolute image URLs
+const getAbsoluteImageUrl = (img: string | undefined) =>
+  img?.startsWith("http")
+    ? img
+    : img
+    ? `https://www.easybits.cloud${img}`
+    : undefined;
+
 export const loader = async ({ params }: Route.LoaderArgs) => {
   const slug = params.slug;
 
@@ -56,7 +104,7 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
       date: frontmatter.date,
       author: frontmatter.author,
       tags: frontmatter.tags || [],
-      featuredImage: frontmatter.featuredImage,
+      featuredImage: frontmatter.featuredImage || getFeaturedImageBySlug(slug),
       readingTime: Math.ceil(readingTimeResult.minutes),
       content,
       excerpt,
@@ -78,7 +126,7 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
         date: "2025-01-01",
         author: "EasyBits Team",
         tags: [],
-        featuredImage: "",
+        featuredImage: getFeaturedImageBySlug(otherSlug),
         readingTime: 5,
         content: "",
         excerpt: "Related blog post",
@@ -104,6 +152,8 @@ export const meta = ({ data }: Route.MetaArgs) => {
   }
 
   const { post } = data;
+  const fallbackImage = "https://www.easybits.cloud/logo-eb.svg";
+  const imageUrl = getAbsoluteImageUrl(post.featuredImage) || fallbackImage;
 
   return [
     { title: `${post.title} | EasyBits` },
@@ -121,9 +171,7 @@ export const meta = ({ data }: Route.MetaArgs) => {
     },
     {
       property: "og:image",
-      content:
-        post.featuredImage ||
-        "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
+      content: imageUrl,
     },
     { property: "article:author", content: post.author },
     {
@@ -138,9 +186,7 @@ export const meta = ({ data }: Route.MetaArgs) => {
     { name: "twitter:description", content: post.description },
     {
       name: "twitter:image",
-      content:
-        post.featuredImage ||
-        "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
+      content: imageUrl,
     },
   ];
 };
@@ -189,8 +235,8 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
             headline: post.title,
             description: post.description,
             image: [
-              post.featuredImage ||
-                "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
+              getAbsoluteImageUrl(post.featuredImage) ||
+                "https://www.easybits.cloud/logo-eb.svg",
             ],
             datePublished: new Date(post.date).toISOString(),
             dateModified: new Date(post.date).toISOString(),
@@ -203,7 +249,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
               name: "EasyBits",
               logo: {
                 "@type": "ImageObject",
-                url: "https://brendiwebsite.fly.storage.tigris.dev/logo-easybits.webp",
+                url: "https://www.easybits.cloud/logo-eb.svg",
               },
             },
             mainEntityOfPage: {
