@@ -22,7 +22,7 @@ export default function Index() {
 const Content = () => {
   return (
     <section className="py-32 lg:py-40 max-w-7xl mx-auto px-4 md:px-[5%] 2xl:px-0">
-      <div className="bg-coverInfo bg-center  h-56 rounded-xl border-2 border-black p-6 flex flex-col justify-center items-start">
+      <div className="bg-cover-info bg-center  h-56 rounded-xl border-2 border-black p-6 flex flex-col justify-center items-start">
         <h2 className=" text-4xl lg:text-6xl font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
           Aviso de Privacidad
         </h2>

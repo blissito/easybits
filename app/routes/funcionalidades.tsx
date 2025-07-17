@@ -343,7 +343,7 @@ const Card = ({
   return (
     <div className={cn("z-20 w-full col-span-1 bg-white ", className)}>
       <div
-        className={cn("border-[2px]  h-full border-black p-6 md:p-10 ", {
+        className={cn("border-2  h-full border-black p-6 md:p-10 ", {
           "p-0 md:p-0": variant === "fullImage",
         })}
       >

@@ -330,14 +330,14 @@ export function BittorChat({
                       </p>
                                   {/* Mostrar información de la herramienta usada  @TODO: make a component to better reuse */}
                                   {message.toolInUse && message.role === 'assistant' && (
-                        <div className="w-max px-2 rounded">
-                          <div className={`flex items-center gap-1 px-1 text-xs shadow-sm ${message.toolInUse.status === 'completed' ? 'text-green-600 border border-green-100 bg-green-50' : 'text-orange-500 border border-orange-100 bg-orange-50'}`}>
+                        <div className="w-max px-2 rounded-sm">
+                          <div className={`flex items-center gap-1 px-1 text-xs shadow-xs ${message.toolInUse.status === 'completed' ? 'text-green-600 border border-green-100 bg-green-50' : 'text-orange-500 border border-orange-100 bg-orange-50'}`}>
                             {message.toolInUse.status === 'completed' ? (
-                              <svg className="w-3 h-3 flex-shrink-0 " fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <svg className="w-3 h-3 shrink-0 " fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
                             ) : (
-                              <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             )}
@@ -371,7 +371,7 @@ export function BittorChat({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={placeholder}
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               disabled={isLoading}
             />
             <button

@@ -305,13 +305,13 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
           {/* Removed Excel preview section */}
 
           {excelError && (
-            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-sm p-2">
               Error: {excelError}
             </div>
           )}
 
           {aiError && (
-            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-sm p-2">
               <strong>Error de IA:</strong> {aiError}
             </div>
           )}
@@ -380,7 +380,7 @@ RESPUESTA INCORRECTA: "El curso tiene un precio de $99 USD y está disponible en
               handleGenerateDescription();
             }
           }}
-          className="flex-1 rounded-lg text-black border border-black bg-white px-3 py-2 text-sm  focus:ring-1 focus:border-munsell focus:ring-munsell outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg text-black border border-black bg-white px-3 py-2 text-sm  focus:ring-1 focus:border-munsell focus:ring-munsell outline-hidden transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           placeholder="Escribe aquí tu prompt para la IA"
           aria-label="Prompt para IA"
         />

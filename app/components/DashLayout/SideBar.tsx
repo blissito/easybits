@@ -31,7 +31,7 @@ export const SideBar = () => {
 const SideBarWeb = () => {
   const location = useLocation();
   return (
-    <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2 flex-col gap-4">
+    <section className="w-20  h-full hidden md:flex bg-black border-r-2 border-black fixed z-40 py-2 flex-col gap-4">
       <SideBarItem isLogo />
       <ul className="flex flex-col gap-3 pt-2 pb-0 items-center">
         {ITEMS.navItems.map((item, key) => (
@@ -49,7 +49,7 @@ const SideBarWeb = () => {
           />
         ))}
       </ul>
-      <hr className="bg-white opacity-20 h-[1px] w-full" />
+      <hr className="bg-white opacity-20 h-px w-full" />
       <ul className="flex flex-col gap-3 py-0 items-center">
         {ITEMS.sectionItems.map((item, key) => (
           <SideBarItem key={key} {...item} />
@@ -117,7 +117,7 @@ const SideBarItem = ({
         {isLogo ? null : (
           <button
             ref={scope}
-            className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+            className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded-sm text-black px-2 opacity-0 "
           >
             <span className="whitespace-nowrap ">{title}</span>
           </button>

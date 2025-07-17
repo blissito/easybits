@@ -37,7 +37,7 @@ export const Copy = ({
       onClick={trigger}
       className={cn(
         "w-max h-max",
-        "hover:shadow",
+        "hover:shadow-sm",
         "transition-all",
         "p-1 rounded-lg border absolute right-2 top-6 bg-white",
         "active:scale-95 active:shadow-inner",

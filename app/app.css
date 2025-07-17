@@ -1,10 +1,88 @@
-@import url("https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&family=Outfit:wght@100..900&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Jersey+10&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Outfit:wght@100..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400..700;1,400..700&family=Outfit:wght@100..900&display=swap')
+layer(base);
+@import url('https://fonts.googleapis.com/css2?family=Jersey+10&display=swap')
+layer(base);
+@import url('https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Outfit:wght@100..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap')
+layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/forms';
+
+@theme {
+  --color-brand-gray: #6a6966;
+  --color-brand-aqua: #bad9d8;
+  --color-brand-yellow: #ecd66e;
+  --color-brand-red: #aa4958;
+  --color-brand-grass: #96b894;
+  --color-brand-pink: #ffafa3;
+
+  --color-brand-100: #f3f0f5;
+  --color-brand-500: #9870ed;
+
+  --color-green-grass: #a6eb9a;
+  --color-lavander: #6772e5;
+  --color-gray-light: #f9f9f9;
+  --color-marengo: #6a6966;
+  --color-tale: #a19e9e;
+  --color-onix: #181818;
+  --color-iron: #323232;
+  --color-metal: #8391a1;
+  --color-sky: #b2dad8;
+  --color-linen: #f3d7b8;
+  --color-rose: #f4b7ec;
+  --color-lime: #c8f9ab;
+  --color-berry: #e299a4;
+  --color-munsell: #daa23d;
+  --color-sea: #83d0e4;
+  --color-emerald: #9addaa;
+  --color-maya: #75baf9;
+
+  --color-status-success: #3b4730;
+  --color-status-success-overlay: #dae8cf;
+
+  --background-image-pattern: url('/dash/pattern.svg');
+  --background-image-pattern-dark: url('/dash/pattern-dark.svg');
+  --background-image-cover-suscription: url('/home/cover-yellow.svg');
+  --background-image-cover-info: url('/home/info.svg');
+  --background-image-cover-success: url('/images/cover-success.svg');
+  --background-image-cover-success-mobile: url('/images/cover-success-mobile.svg');
+
+  --font-jersey: Jersey 10;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+  --animate-moving: moving 1s linear infinite;
+
+  @keyframes moving {
+    0%,
+    100% {
+      transform: translateX(0px);
+    }
+    50% {
+      transform: translateX(10px);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 @font-face {
   font-family: "Satoshi";

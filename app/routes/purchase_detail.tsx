@@ -54,7 +54,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <article
       className={cn(
-        "text-white bg-black min-h-svh h-full bg-patternDark relative",
+        "text-white bg-black min-h-svh h-full bg-pattern-dark relative",
         "w-full",
       )}
     >

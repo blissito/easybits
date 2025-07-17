@@ -26,7 +26,7 @@ export default function Planes({ loaderData }: Route.ComponentProps) {
       <AuthNav user={user} />
       <Pricing />
       <BasicGallery
-        className="bg-brand-grass border-[2px] border-black"
+        className="bg-brand-grass border-2 border-black"
         items={[
           {
             src: "/client.png",

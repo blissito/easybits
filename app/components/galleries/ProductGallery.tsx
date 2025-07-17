@@ -174,7 +174,7 @@ const DotButton = ({
     <button
       onClick={() => onClick?.(2)}
       className={cn(
-        "w-6 h-6 rounded-full bg-black border-[1px] border-b-[2px] border-r-[2px] border-black relative"
+        "w-6 h-6 rounded-full bg-black border border-b-2 border-r-2 border-black relative"
       )}
       {...props}
     >

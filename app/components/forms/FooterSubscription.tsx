@@ -20,7 +20,7 @@ export const FooterSuscription = ({
     <Form
       id={(asset.price || 0) === 0 ? "mobile-free-purchase-button" : "mobile-purchase-button"}
       onSubmit={onSubmit}
-      className={cn("border-t-[2px] border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center","md:hidden")}
+      className={cn("border-t-2 border-black fixed bottom-0 bg-black w-full h-16 flex justify-between items-center","md:hidden")}
     >
       <p className="text-white font-bold whitespace-pre px-4">
         {getPriceString()}

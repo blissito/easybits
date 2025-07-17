@@ -111,7 +111,7 @@ const UserCrudDrawer = ({
     <article
       style={{ opacity: 0, filter: "blur(4px)" }}
       ref={scope}
-      className="fixed inset-0 bg-brand-500/20 backdrop-blur-sm z-10 grid place-content-center overflow-hidden"
+      className="fixed inset-0 bg-brand-500/20 backdrop-blur-xs z-10 grid place-content-center overflow-hidden"
     >
       <Card id="card" cardHeader={<CardHeader onClose={onClose} />}>
         <UserTable assetId={assetId} users={users} />
@@ -153,7 +153,7 @@ const UserTable = ({
         <div
           className={cn(
             gridClassName,
-            "text-xs px-1 py-1 rounded",
+            "text-xs px-1 py-1 rounded-sm",
             index % 2 === 0 && "bg-gray-200 "
           )}
           key={user.id}
@@ -200,7 +200,7 @@ const CardHeader = ({ onClose }: { onClose?: () => void }) => {
       <button
         onClick={onClose}
         type="button"
-        className="px-2 border py-1 rounded hover:scale-105 active:scale-100"
+        className="px-2 border py-1 rounded-sm hover:scale-105 active:scale-100"
       >
         <IoClose />
       </button>

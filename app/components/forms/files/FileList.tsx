@@ -60,7 +60,7 @@ const AddMoreButton = ({
       <div
         className={cn(
           "flex items-center gap-3  bg-white px-2 py-3",
-          "border border-dashed border-marengo rounded-xl active:group-hover:translate-x-0 active:group-hover:translate-y-0",
+          "border border-dashed border-marengo rounded-xl group-hover:active:translate-x-0 group-hover:active:translate-y-0",
           "transition-all",
           "group-hover:text-brand-500 group-hover:border-brand-500"
         )}

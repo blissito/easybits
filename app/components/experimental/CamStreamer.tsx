@@ -29,7 +29,7 @@ export const CamStreamer = () => {
       {" "}
       <button
         onClick={requestPermission}
-        className="py-3 px-8 rounded-full bg-fuchsia-500 text-white font-bold text-2xl my-8 enabled:hover:bg-fuchsia-600 enabled:active:bg-fuchsia-700 shadow"
+        className="py-3 px-8 rounded-full bg-fuchsia-500 text-white font-bold text-2xl my-8 enabled:hover:bg-fuchsia-600 enabled:active:bg-fuchsia-700 shadow-sm"
       >
         Comenzar transmisión en vivo
       </button>
