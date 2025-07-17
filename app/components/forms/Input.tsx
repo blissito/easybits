@@ -12,7 +12,7 @@ export const Input = ({
   sufix,
   ...props
 }: {
-  onChange?: React.InputHTMLAttributes<HTMLInputElement>['onChange'];
+  onChange?: React.InputHTMLAttributes<HTMLInputElement>["onChange"];
   copyText?: string;
   type?: "number" | "text";
   error?: string;

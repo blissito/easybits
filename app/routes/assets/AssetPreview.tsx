@@ -81,7 +81,7 @@ export const AssetPreview = ({
               />
             </button>
             {showPopover && (
-              <div className="absolute left-1/2 -translate-x-1/2 mt-2 px-3 py-2 bg-black text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+              <div className="absolute left-1/2 -translate-x-1/2 mt-2 px-3 py-2 bg-black text-white text-xs rounded-sm shadow-lg z-50 whitespace-nowrap">
                 Habilita publicando
               </div>
             )}
@@ -246,7 +246,7 @@ export const SocialMedia = ({
         <motion.div
           ref={scope}
           className={twMerge(
-            "absolute bg-dark dark:bg-[#1B1D22] -bottom-7 text-xs text-white px-2 py-1 rounded hidden group-hover:block"
+            "absolute bg-dark dark:bg-[#1B1D22] -bottom-7 text-xs text-white px-2 py-1 rounded-sm hidden group-hover:block"
           )}
         >
           {name}

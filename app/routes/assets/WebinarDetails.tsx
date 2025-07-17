@@ -64,7 +64,7 @@ const WebinarDetails = ({ asset }: { asset: AssetWithUser }) => {
         textRight={
           <div className="flex gap-2 items-center">
             <div className="relative w-3 h-3">
-              <div className="rounded-full absolute inset-0 blur-sm animate-pulse" />
+              <div className="rounded-full absolute inset-0 blur-xs animate-pulse" />
               <div className="bg-red-500 rounded-full absolute inset-[.1px]" />
             </div>
             En vivo

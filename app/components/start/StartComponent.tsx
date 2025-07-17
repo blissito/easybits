@@ -83,7 +83,7 @@ export default function StartComponent({
                     key={key}
                   >
                     <div className="flex justify-start items-start gap-3 w-3/4">
-                      <div className="w-12 h-12 bg-grayLight flex items-center justify-center rounded-[4px]">
+                      <div className="w-12 h-12 bg-gray-light flex items-center justify-center rounded-[4px]">
                         <img src={image} className="w-[32px]" />
                       </div>
                       <div className="w-full">

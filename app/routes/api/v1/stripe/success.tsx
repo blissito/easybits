@@ -25,7 +25,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
   const handleClick = () => navigate("/dash/compras");
   return (
-    <article className="h-svh w-full grid bg-center place-content-center bg-coverSuccessMobile lg:bg-coverSuccess bg-cover overflow-hidden relative">
+    <article className="h-svh w-full grid bg-center place-content-center bg-cover-success-mobile lg:bg-cover-success bg-cover overflow-hidden relative">
       {component}
       <BrutalButton
         containerClassName="mx-auto block my-10"

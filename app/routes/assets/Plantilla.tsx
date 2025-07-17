@@ -67,7 +67,7 @@ export const Plantilla = ({
         />
         <CopyButton
           text={`https://${state.host}.easybits.cloud/tienda/${state.slug}`}
-          className="absolute right-2 top-2 border rounded-xl p-1 hover:shadow h-8 w-8 flex justify-center items-center"
+          className="absolute right-2 top-2 border rounded-xl p-1 hover:shadow-sm h-8 w-8 flex justify-center items-center"
         />
       </div>
       {error && (

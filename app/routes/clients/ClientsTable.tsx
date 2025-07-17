@@ -127,7 +127,7 @@ const Row = ({
       <Cell>
         <input
           type="checkbox"
-          className="text-brand-500 border rounded focus:outline-brand-500 border-black"
+          className="text-brand-500 border rounded-sm focus:outline-brand-500 border-black"
         />
       </Cell>
       <Cell>

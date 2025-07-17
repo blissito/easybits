@@ -523,7 +523,7 @@ const ReviewsSection = ({
                   >
                     <motion.div
                       id="reviews-open-button"
-                      className="bg-black h-full rounded"
+                      className="bg-black h-full rounded-sm"
                       initial={{ width: 0 }}
                       animate={{ width: `${percentage}%` }}
                       transition={{

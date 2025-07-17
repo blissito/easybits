@@ -15,7 +15,7 @@ export default function Index() {
       <div className="bg-white rounded-b-[40px] pb-0 md:pb-[120px]">
         <AuthNav />
         <div className="grid grid-cols-8 max-w-[90%] xl:max-w-7xl mx-auto gap-12 pt-32 md:pt-[240px] ">
-          <div className="bg-coverInfo bg-center h-56 rounded-xl border-2 border-black p-6 col-span-8 flex items-center lg:hidden">
+          <div className="bg-cover-info bg-center h-56 rounded-xl border-2 border-black p-6 col-span-8 flex items-center lg:hidden">
             <div>
               <h2 className=" text-4xl lg:text-6xl	font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
                 Términos y condiciones
@@ -35,7 +35,7 @@ export default function Index() {
 const Info = () => {
   return (
     <section className="col-span-8 lg:col-span-6  ">
-      <div className="bg-coverInfo hidden lg:flex bg-center h-56 rounded-xl border-2 border-black p-6  items-center">
+      <div className="bg-cover-info hidden lg:flex bg-center h-56 rounded-xl border-2 border-black p-6  items-center">
         <div>
           <h2 className=" text-4xl lg:text-6xl	font-bold text-brand_dark leading-tight flex flex-wrap items-center justify-start ">
             Términos y condiciones

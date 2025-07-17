@@ -409,7 +409,7 @@ const Modal = ({
   if (!open) return null;
   return (
     <article className="z-40 fixed inset-0 grid place-content-center">
-      <section className="absolute inset-0 bg-black/50 backdrop-blur"></section>
+      <section className="absolute inset-0 bg-black/50 backdrop-blur-sm"></section>
       <section className="relative max-w-[800px] w-full md:w-[756px]  mx-auto border-2 border-black bg-white p-8 rounded-2xl flex flex-col items-start gap-6">
         <nav className="flex justify-between items-start gap-4 w-full ">
           <h1 className="text-2xl md:text-3xl font-semibold">

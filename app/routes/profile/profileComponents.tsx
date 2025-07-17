@@ -166,7 +166,7 @@ export const ProfileCard = ({ user }: { user: User }) => {
           <div className="flex gap-1">
             <h2 className="text-xl md:text-2xl font-semibold">{displayName}</h2>
             <button onClick={handleEdit}>
-              <img className="!text-iron" src={Edit} alt="icon" />
+              <img className="text-iron!" src={Edit} alt="icon" />
             </button>
           </div>
         )}

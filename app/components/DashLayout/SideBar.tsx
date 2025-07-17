@@ -117,7 +117,7 @@ const SideBarItem = ({
         {isLogo ? null : (
           <button
             ref={scope}
-            className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+            className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded-sm text-black px-2 opacity-0 "
           >
             <span className="whitespace-nowrap ">{title}</span>
           </button>

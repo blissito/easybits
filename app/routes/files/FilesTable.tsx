@@ -137,7 +137,7 @@ export const FilesTable = ({
               <span className="">
                 <input
                   type="checkbox"
-                  className="text-brand-500 border rounded focus:outline-brand-500 border-black"
+                  className="text-brand-500 border rounded-sm focus:outline-brand-500 border-black"
                 />
               </span>
               <button
@@ -200,7 +200,7 @@ export const FilesTable = ({
               <span className="relative">
                 {file.access === "private" ? (
                   <button
-                    className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
+                    className="p-1 rounded-lg active:scale-95 hover:shadow-sm active:shadow-inner bg-white"
                     onClick={() => onTokenClick?.(file)}
                   >
                     <img alt="icon" src="/icons/keys.svg" className="w-6" />

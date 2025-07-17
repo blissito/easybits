@@ -41,7 +41,7 @@ export const SelectInput = ({
           "border border-black",
           "rounded-xl px-4 h-12 text-lg",
           "bg-white",
-          "focus:outline-none focus:border-brand-500 focus:ring-transparent",
+          "focus:outline-hidden focus:border-brand-500 focus:ring-transparent",
           className
         )}
       >

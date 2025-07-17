@@ -157,7 +157,7 @@ const ActionBlock = ({
         type="button"
         className="bg-blue-400/10 rounded-md p-4 border border-blue-400 relative active:scale-95 transition-all"
       >
-        <p className="w-max bg-yellow-500/40 p-1 rounded absolute -bottom-3 -right-3">
+        <p className="w-max bg-yellow-500/40 p-1 rounded-sm absolute -bottom-3 -right-3">
           {action.gap}
         </p>
         <span className="absolute -right-2 bg-white top-[40%]">
@@ -210,7 +210,7 @@ const Drawer = ({
         }}
         id="overlay"
         type="button"
-        className="fixed bg-brand-500/20 inset-0 z-10 backdrop-blur-sm hover:cursor-grab"
+        className="fixed bg-brand-500/20 inset-0 z-10 backdrop-blur-xs hover:cursor-grab"
       />
       <motion.section
         // onClick={onClose} // @todo
