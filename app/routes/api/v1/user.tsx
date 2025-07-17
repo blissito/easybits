@@ -49,6 +49,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "get_orders") {
     const user = await getUserOrRedirect(request);
     const merchant = Boolean(formData.get("merchant") || 1);
+    // Obtener parámetros de paginación desde la URL
+    const url = new URL(request.url, `http://${request.headers.get("host")}`);
+    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+    const pageSize = Math.max(
+      1,
+      Number(url.searchParams.get("pageSize")) || 20
+    );
+    const offset = (page - 1) * pageSize;
     const assets = merchant
       ? []
       : await db.asset.findMany({
@@ -59,31 +67,54 @@ export const action = async ({ request }: Route.ActionArgs) => {
             userId: user.id,
           },
         });
-    const orders = await db.order.findMany({
-      select: {
-        customer_email: true,
-        asset: true,
-        merchant: false, // not needed?
-        merchantId: true,
-        customer: true,
-        id: true,
-        total: true,
-        status: true,
-        createdAt: true,
-      },
-      where: {
-        // @revisit there are two different type of orders as (merchant or customer)
-        merchantId: merchant ? user.id : undefined,
-        customerId: merchant ? undefined : user.id,
-        assetId: merchant
-          ? undefined
-          : {
-              in: assets.map((asset) => asset.id),
-            },
-      },
-    });
+    // Consulta paginada
+    const [orders, totalItems] = await Promise.all([
+      db.order.findMany({
+        select: {
+          customer_email: true,
+          asset: true,
+          merchant: false, // not needed?
+          merchantId: true,
+          customer: true,
+          id: true,
+          total: true,
+          status: true,
+          createdAt: true,
+        },
+        where: {
+          merchantId: merchant ? user.id : undefined,
+          customerId: merchant ? undefined : user.id,
+          assetId: merchant
+            ? undefined
+            : {
+                in: assets.map((asset) => asset.id),
+              },
+        },
+        skip: offset,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      db.order.count({
+        where: {
+          merchantId: merchant ? user.id : undefined,
+          customerId: merchant ? undefined : user.id,
+          assetId: merchant
+            ? undefined
+            : {
+                in: assets.map((asset) => asset.id),
+              },
+        },
+      }),
+    ]);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     return {
       orders,
+      pagination: {
+        currentPage: page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
     };
   }
   // @todo is this ok in here? good question, is comfortable, yes...

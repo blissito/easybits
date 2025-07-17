@@ -20,33 +20,37 @@ import {
   type StripeConnectInstance,
 } from "@stripe/connect-js";
 import { SalesTable } from "./sales/SalesTable";
+import { getPaginatedOrders } from "~/.server/pagination/orders";
+import { PaginatedTable } from "~/components/common/pagination/PaginatedTable";
+import { TablePagination } from "~/components/common/pagination/TablePagination";
+import { getUserOrRedirect } from "~/.server/getters";
 
 // @todo remove from here
 const publishableKey =
   "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
-export const clientLoader = async () => {
-  const response = await fetch("/api/v1/user", {
-    method: "post",
-    body: new URLSearchParams({
-      intent: "self",
-    }),
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  // Obtener usuario autenticado
+  const user = await getUserOrRedirect(request);
+  // Leer parámetros de paginación de la URL
+  const url = new URL(request.url, `http://${request.headers.get("host")}`);
+  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+  const pageSize = Math.max(1, Number(url.searchParams.get("pageSize")) || 20);
+  // Obtener órdenes paginadas
+  const { orders, pagination } = await getPaginatedOrders({
+    user,
+    merchant: true,
+    page,
+    pageSize,
   });
-  const user = await response.json();
-  const merchantOrders = await fetch("/api/v1/user", {
-    method: "post",
-    body: new URLSearchParams({
-      intent: "get_orders",
-    }),
-  })
-    .then((res) => res.json())
-    .then((data) => data.orders);
-  return { user, merchantOrders };
+  return { user, orders, pagination };
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
-  const { user, merchantOrders } = loaderData;
+  const user = loaderData.user;
+  const orders = loaderData.orders;
+  const pagination = loaderData.pagination;
   const fetcher = useFetcher();
   // Stripe connect client instance
   const [stripeConnectInstance, setSCI] =
@@ -83,7 +87,7 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
   // Aquí se detona todo @todo revisit: tal vez ya no es necesario usando solo Order
   useEffect(() => {
     fetcher.submit(
-      { intent: "get_client_secret", accountId: user.stripeId },
+      { intent: "get_client_secret", accountId: user?.stripeId },
       { method: "post", action: "/api/v1/stripe/account" }
     );
   }, []);
@@ -99,22 +103,33 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
         )}
       >
         <Header title="Ventas" searcher={false} layout={false} />
-        {merchantOrders.length < 1 && (
+        {orders.length < 1 && (
           <EmptySales
             cta={
               <BrutalButton
-                isDisabled={user.stripeId}
+                isDisabled={user?.stripeId}
                 isLoading={isLoading}
                 onClick={handleStripeConnect}
               >
-                {user.stripeId
+                {user?.stripeId
                   ? "Cuenta conectada: " + user.stripeId
                   : "Conectar con stripe"}
               </BrutalButton>
             }
           />
         )}
-        <SalesTable orders={merchantOrders} />
+        <PaginatedTable
+          data={orders}
+          totalItems={pagination.totalItems}
+          config={{ defaultPageSize: pagination.pageSize }}
+        >
+          {(paginatedOrders) => (
+            <>
+              <SalesTable orders={paginatedOrders} />
+              <TablePagination />
+            </>
+          )}
+        </PaginatedTable>
         {stripeConnectInstance && (
           <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
             <ConnectAccountOnboarding

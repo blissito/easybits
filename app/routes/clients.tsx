@@ -9,43 +9,37 @@ import { useState } from "react";
 import type { Client } from "@prisma/client";
 import { Empty } from "./assets/Empty";
 import { MdOutlineContentCopy } from "react-icons/md";
+import { PaginatedTable } from "~/components/common/pagination/PaginatedTable";
+import { TablePagination } from "~/components/common/pagination/TablePagination";
+import { getPaginatedClients } from "~/.server/pagination/clients";
 
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  const assets = await db.asset.findMany({
-    where: {
-      userId: user!.id,
-    },
+  const url = new URL(request.url, `http://${request.headers.get("host")}`);
+
+  // 3 líneas para clientes paginados
+  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+  const pageSize = Math.max(1, Number(url.searchParams.get("pageSize")) || 20);
+  const { clients, pagination } = await getPaginatedClients({
+    user,
+    page,
+    pageSize,
   });
+
+  // Si orders es necesario para la tabla, mantenlo:
+  const assets = await db.asset.findMany({ where: { userId: user.id } });
   const assetIds = assets.map((a) => a.id);
-  const clients = await db.user.findMany({
-    where: {
-      assetIds: {
-        hasSome: assetIds, // @revisit interesting?
-      },
-    },
-    select: {
-      picture: true,
-      id: true,
-      displayName: true,
-      email: true,
-    },
-  });
   const orders = await db.order.findMany({
-    where: {
-      assetId: {
-        in: assetIds,
-      },
-    },
+    where: { assetId: { in: assetIds } },
   });
-  // const userOrders = orders.filter(o=>clients[0].id === o.userId)
-  return { clients, user, orders };
+
+  return { clients, user, orders, pagination };
 };
 
 export default function Clients({ loaderData }: Route.ComponentProps) {
-  const { clients, orders } = loaderData;
+  const { clients, orders, pagination } = loaderData;
   const [showForm, setShowForm] = useState(false);
 
   const handleClose = () => {
@@ -60,20 +54,30 @@ export default function Clients({ loaderData }: Route.ComponentProps) {
     <article
       className={cn(
         " min-h-screen w-full relative box-border inline-block max-w-7xl mx-auto px-4 md:pl-28 md:pr-8 2xl:px-0",
-
         LAYOUT_PADDING
       )}
     >
       <Header title="Clientes" searcher={false} layout={false} />
       {/* Aquí está el crud 👇🏼 */}
       {clients.length > 0 ? (
-        <ClientsTable
-          onOpen={handleOpen}
-          onClose={handleClose}
-          isFormOpen={showForm}
-          clients={clients as Partial<Client>[]}
-          orders={orders}
-        />
+        <PaginatedTable
+          data={clients}
+          totalItems={pagination.totalItems}
+          config={{ defaultPageSize: pagination.pageSize }}
+        >
+          {(paginatedClients) => (
+            <>
+              <ClientsTable
+                onOpen={handleOpen}
+                onClose={handleClose}
+                isFormOpen={showForm}
+                clients={paginatedClients as Partial<Client>[]}
+                orders={orders}
+              />
+              <TablePagination />
+            </>
+          )}
+        </PaginatedTable>
       ) : (
         <EmptyClients />
       )}
@@ -85,7 +89,11 @@ const EmptyClients = () => {
   return (
     <Empty
       illustration={
-        <img className="w-44 mx-auto " src="/empty-states/clients-empty.webp" alt="No hay clientes registrados" />
+        <img
+          className="w-44 mx-auto "
+          src="/empty-states/clients-empty.webp"
+          alt="No hay clientes registrados"
+        />
       }
       title=" ¡Vaya! Aún no hay clientes en tu lista"
       text={<span>Comparte tu tienda y consigue tu primera venta.</span>}
