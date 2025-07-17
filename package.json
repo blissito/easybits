@@ -27,6 +27,7 @@
     "@mdx-js/mdx": "^3.1.0",
     "@mdx-js/react": "^3.1.0",
     "@prisma/client": "^6.1.0",
+    "@react-router/dev": "^7.7.0",
     "@react-router/node": "^7.1.1",
     "@react-router/serve": "^7.1.1",
     "@stripe/connect-js": "^3.3.25",
@@ -84,7 +85,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@react-router/dev": "^7.7.0",
     "@remix-run/node": "^2.16.8",
     "@tailwindcss/forms": "^0.5.10",
     "@testing-library/jest-dom": "^6.6.3",
