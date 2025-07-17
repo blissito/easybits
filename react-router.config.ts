@@ -19,8 +19,6 @@ export default {
     // Add blog routes
     routes.push("/blog", ...BLOG_POSTS.map((slug) => `/blog/${slug}`));
 
-    console.log(`📝 Prerendering ${BLOG_POSTS.length} blog posts`);
-
     // Add static routes
     routes.push(
       "/planes",

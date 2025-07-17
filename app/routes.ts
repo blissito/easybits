@@ -95,6 +95,7 @@ export default [
     ]),
   ]),
 
+  route("/.well-known/*", "components/common/NoContent.tsx"),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
   route("waitlist", "routes/waitlist.tsx"),

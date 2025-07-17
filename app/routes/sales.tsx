@@ -92,8 +92,6 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
     );
   }, []);
 
-  console.log("CLIENTSECRET::", clientSecret);
-
   return (
     <>
       <article
