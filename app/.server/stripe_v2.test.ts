@@ -52,6 +52,7 @@ const mockUser = {
   createdAt: new Date(),
   updatedAt: new Date(),
   confirmed: true,
+  trained: false,
   publicKey: null,
   displayName: "Test User",
   email: "test@example.com",

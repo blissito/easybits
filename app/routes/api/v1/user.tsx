@@ -179,6 +179,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return { success: true };
   }
 
+  if (intent === "update_trained") {
+    const userId = formData.get("userId") as string;
+    await db.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        trained: true,
+      },
+    });
+    return { success: true };
+  }
+
   if (intent === "self") {
     return await getUserOrNull(request);
   }

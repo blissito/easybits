@@ -118,12 +118,12 @@ export default function WelcomeAi({ user }: { user: any }) {
 type NewsCardProps = { title: string; description: string; icon: string };
 const NewsCard = ({ title, description, icon }: NewsCardProps) => {
   return (
-    <div className="flex items-center gap-4 bg-brand-100 rounded-xl p-4 shadow-sm">
+    <div className="flex items-center gap-3 bg-brand-100 rounded-xl p-4 shadow-sm">
       <div className="!min-w-14 max-w-14 !h-14 rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden">
         <img src={icon} alt={title} className="w-full h-full object-cover" />
       </div>
       <div>
-        <div className="font-semibold text-gray-900 text-base mb-1">{title}</div>
+        <div className="font-semibold text-gray-900 text-base mb-0">{title}</div>
         <div className="text-gray-600 text-sm leading-tight">{description}</div>
       </div>
     </div>
