@@ -4,7 +4,7 @@ import {
 } from "react-icons/md";
 import { Link, useSearchParams } from "react-router";
 import { cn } from "~/utils/cn";
-import type { BlogPost } from "~/.server/blog/mdx-processor";
+import type { BlogPost } from "~/types/blog";
 
 interface BlogContentProps {
   posts: BlogPost[];
@@ -215,7 +215,7 @@ export const BlogCard = ({
           <img
             src={post.featuredImage}
             alt={post.title}
-            className="w-full md:w-[240px] h-48 md:h-auto object-cover rounded-xl"
+            className="aspect-video w-full md:w-[240px] h-48 md:h-auto object-cover rounded-xl"
           />
         ) : (
           <div className="w-full md:w-[240px] h-48 md:h-auto bg-gray-200 rounded-xl flex items-center justify-center">

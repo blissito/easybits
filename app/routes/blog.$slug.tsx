@@ -4,10 +4,9 @@ import { PostContent } from "./blog/PostContent";
 import { SuscriptionBox } from "./blog/SuscriptionBox";
 import { Footer } from "~/components/common/Footer";
 import type { Route } from "./+types/blog.$slug";
-import { promises as fs } from "fs";
 import path from "path";
 import matter from "gray-matter";
-import readingTime from "reading-time";
+// import readingTime from "reading-time"; // REMOVE this import
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
@@ -33,12 +32,15 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
   }
 
   try {
+    const { promises: fs } = await import("fs");
     const filePath = BLOG_POSTS[slug as keyof typeof BLOG_POSTS];
     const fullPath = path.join(process.cwd(), filePath);
 
     const fileContent = await fs.readFile(fullPath, "utf-8");
     const { data: frontmatter, content } = matter(fileContent);
 
+    // Import reading-time only in the loader (server-side)
+    const readingTime = (await import("reading-time")).default;
     const readingTimeResult = readingTime(content);
     const excerpt =
       content

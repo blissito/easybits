@@ -1,6 +1,6 @@
 import { FaArrowLeft } from "react-icons/fa";
 import { Link } from "react-router";
-import type { BlogPost } from "~/.server/blog/mdx-processor";
+import type { BlogPost } from "~/types/blog";
 
 interface PostHeaderProps {
   post: BlogPost;

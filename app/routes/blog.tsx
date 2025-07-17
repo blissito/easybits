@@ -3,10 +3,9 @@ import { Footer } from "~/components/common/Footer";
 import { BlogContent, BlogHeader } from "./blog/BlogList";
 import type { Route } from "./+types/blog";
 import { FloatingChat } from "~/components/ai/FloatingChat";
-import { promises as fs } from "fs";
 import path from "path";
 import matter from "gray-matter";
-import readingTime from "reading-time";
+// import readingTime from "reading-time"; // REMOVE this import
 
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
@@ -20,7 +19,8 @@ const BLOG_POSTS = [
     date: "2025-01-20",
     author: "EasyBits Team",
     tags: ["stripe", "onboarding", "monetización", "creadores"],
-    featuredImage: "/blog/assets/stripe-connect-guide.jpg",
+    featuredImage:
+      "https://images.pexels.com/photos/4968391/pexels-photo-4968391.jpeg?auto=compress&w=800",
     readingTime: 8,
     excerpt:
       "Aprende a integrar Stripe Connect en tu proceso de onboarding para monetizar tu conocimiento de forma profesional y segura.",
@@ -37,7 +37,8 @@ const BLOG_POSTS = [
     date: "2025-01-16",
     author: "EasyBits Team",
     tags: ["tendencias", "economía", "creadores", "2025"],
-    featuredImage: "/blog/assets/creator-economy-2025.jpg",
+    featuredImage:
+      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&w=800",
     readingTime: 12,
     excerpt:
       "Descubre las principales tendencias que están moldeando la economía de creadores en 2025 y cómo aprovecharlas.",
@@ -52,7 +53,8 @@ const BLOG_POSTS = [
     date: "2025-01-14",
     author: "EasyBits Team",
     tags: ["monetización", "conocimiento", "online", "estrategias"],
-    featuredImage: "/blog/assets/monetize-knowledge.jpg",
+    featuredImage:
+      "https://images.pexels.com/photos/4386375/pexels-photo-4386375.jpeg?auto=compress&w=800",
     readingTime: 10,
     excerpt:
       "Guía práctica para convertir tu experiencia en ingresos sostenibles a través de diferentes canales digitales.",
@@ -68,7 +70,8 @@ const BLOG_POSTS = [
     date: "2025-01-12",
     author: "EasyBits Team",
     tags: ["marketing", "digital", "creadores", "estrategias"],
-    featuredImage: "/blog/assets/digital-marketing-creators.jpg",
+    featuredImage:
+      "https://images.pexels.com/photos/3861964/pexels-photo-3861964.jpeg?auto=compress&w=800",
     readingTime: 7,
     excerpt:
       "Aprende las mejores estrategias de marketing digital para hacer crecer tu audiencia y monetizar tu contenido.",
@@ -84,7 +87,8 @@ const BLOG_POSTS = [
     date: "2025-01-10",
     author: "EasyBits Team",
     tags: ["assets", "digitales", "creadores", "ventas"],
-    featuredImage: "/blog/assets/digital-assets-guide.jpg",
+    featuredImage:
+      "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&w=800",
     readingTime: 6,
     excerpt:
       "Descubre el proceso completo para crear y vender assets digitales que generen ingresos pasivos.",
@@ -100,7 +104,8 @@ const BLOG_POSTS = [
     date: "2025-01-18",
     author: "EasyBits Team",
     tags: ["herramientas", "creadores", "2025", "productividad"],
-    featuredImage: "/blog/assets/creator-tools-2025.jpg",
+    featuredImage:
+      "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&w=800",
     readingTime: 15,
     excerpt:
       "Descubre las herramientas más importantes que todo creador necesita para crecer en 2025.",
@@ -114,6 +119,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const tag = url.searchParams.get("tag") || undefined;
   const search = url.searchParams.get("search") || undefined;
   const limit = 10;
+
+  // Import fs only in the loader (server-side)
+  // const { promises: fs } = await import("fs");
+  // Si necesitas leer archivos aquí, usa fs.readFile
+
+  // Import reading-time only in the loader (server-side)
+  // const readingTime = (await import("reading-time")).default;
+  // Si necesitas calcular el tiempo de lectura aquí, hazlo así:
+  // const readingTimeResult = readingTime(content);
 
   // Filter posts based on criteria
   let filteredPosts = BLOG_POSTS.filter((post) => post.published);

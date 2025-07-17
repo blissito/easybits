@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { ImageGallery } from "~/components/mdx/ImageGallery";
 import { Callout } from "~/components/mdx/Callout";
-import type { BlogPost } from "~/.server/blog/mdx-processor";
+import type { BlogPost } from "~/types/blog";
 
 interface PostContentProps {
   post: BlogPost;
