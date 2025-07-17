@@ -131,6 +131,7 @@ type StoreConfig {
 model User {
   id             String         @id @default(auto()) @map("_id") @db.ObjectId
   confirmed      Boolean        @default(false)
+  trained        Boolean        @default(false)
   // file ownership
   // assets         Asset[]
   // storageUsed    Int?         @default(0) // thinking about it @todo

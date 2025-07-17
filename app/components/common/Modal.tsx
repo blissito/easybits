@@ -151,10 +151,10 @@ export const Modal = ({
               "border-2 border-black",
               "p-6 md:p-8 rounded-3xl min-h-[472px] min-w-[360px] relative",
               "flex flex-col",
-              "max-w-[600px]  mx-auto  md:w-[600px] lg:min-w-[600px]",
+              "max-w-[600px]  mx-auto  min-w-full max-w-[90%]  md:w-[600px] lg:min-w-[600px]",
               {
                 "min-h-[0px] max-w-[300px]": mode === "naked",
-                "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute border-l-2 border-y-0 border-r-0":
+                "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute border-l-2 border-y-0 border-r-0 md:max-w-[600px]  overflow-y-scroll":
                   mode === "drawer",
               },
               className
