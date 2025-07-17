@@ -103,7 +103,7 @@ export function FloatingChat({ className, chatClassName }: FloatingChatProps) {
             id="chatbot-button"
             src="/icons/chatbot.svg"
             alt="chat"
-            className="!w-9 !h-9"
+            className="w-9! h-9!"
           />
         </BrutalButton>
       </motion.div>

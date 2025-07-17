@@ -333,11 +333,11 @@ export function BittorChat({
                         <div className="w-max px-2 rounded">
                           <div className={`flex items-center gap-1 px-1 text-xs shadow-sm ${message.toolInUse.status === 'completed' ? 'text-green-600 border border-green-100 bg-green-50' : 'text-orange-500 border border-orange-100 bg-orange-50'}`}>
                             {message.toolInUse.status === 'completed' ? (
-                              <svg className="w-3 h-3 flex-shrink-0 " fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <svg className="w-3 h-3 shrink-0 " fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
                             ) : (
-                              <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             )}

@@ -26,7 +26,7 @@ export const TransmisionBox = () => {
   return (
     <div
       className={cn(
-        "bg-gradient-to-r from-indigo-500 via-brand-500 to-[#C58D99] h-[280px]  grow w-full rounded-2xl  grid place-content-center ",
+        "bg-linear-to-r from-indigo-500 via-brand-500 to-[#C58D99] h-[280px]  grow w-full rounded-2xl  grid place-content-center ",
         "md:h-[400px] lg:h-[78vh] lg:rounded-r-none lg:rounded-l-2xl"
       )}
     >

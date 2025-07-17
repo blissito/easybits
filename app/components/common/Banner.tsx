@@ -108,7 +108,7 @@ const AnimatedBanner = ({
       <motion.div
         ref={ref}
         style={{ x }}
-        className=" text-black font-normal font-cabin flex items-center h-full  lg:text-4xl text-2xl md:text-3xl gap-10 whitespace-nowrap font-sans translate-x-[-100%]"
+        className=" text-black font-normal font-cabin flex items-center h-full  lg:text-4xl text-2xl md:text-3xl gap-10 whitespace-nowrap font-sans -translate-x-full"
       >
         {children}
       </motion.div>

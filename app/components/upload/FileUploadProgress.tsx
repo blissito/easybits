@@ -44,7 +44,7 @@ const UploadingItem = ({
   return (
     <section className="flex items-center gap-4 py-2">
       <img src={previewURL} alt="preview" />
-      <div className="flex-grow">
+      <div className="grow">
         <h3 className="truncate max-w-[200px]">{file.name}</h3>
         <p className="text-xs text-gray-500">
           {progress > 0 ? `${progress.toFixed(0)}%` : "preparando subida..."}

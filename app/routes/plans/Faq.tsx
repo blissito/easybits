@@ -15,7 +15,7 @@ export const Faq = () => {
         </a>{" "}
         .
       </p>
-      <div className="mt-12 lg:mt-20 flex flex-col border-[2px] border-black rounded-xl overflow-hidden">
+      <div className="mt-12 lg:mt-20 flex flex-col border-2 border-black rounded-xl overflow-hidden">
         <Question
           question="¿Qué es un asset digital?"
           answer="En EasyBits un asset digital es un archivo que se transforma en un producto digital al tener una landing page de detalle, descripción, vista previa, reseñas, y que se vende de forma 100% digital. Este archivo puede ser un e-book sobre un tema que te apasiona, fotografías que has tomado en tus viajes, ilustraciones que realizas como hobby, conferencias profesionales, poemas que escribes en tu tiempo libre o profesionalmente, o cualquier tipo de contenido creativo digital."
@@ -63,7 +63,7 @@ export const Question = ({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-black   border-b-[2px] overflow-hidden">
+    <div className="border-black   border-b-2 overflow-hidden">
       <button
         className="w-full px-6 py-6 text-lg md:text-xl font-medium text-left flex justify-between items-center"
         onClick={() => {

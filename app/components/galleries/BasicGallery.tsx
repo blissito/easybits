@@ -39,7 +39,7 @@ export const BasicGallery = ({
       onMouseEnter={pause}
       onMouseLeave={resume}
       className={cn(
-        "bg-brand-500 min-h-[70vh] relative border-b-[2px] border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0",
+        "bg-brand-500 min-h-[70vh] relative border-b-2 border-b-black px-4 md:px-[5%] xl:px-0 pb-28 pt-16 md:py-0",
         className
       )}
     >
@@ -139,7 +139,7 @@ const DotButton = ({
     <button
       onClick={() => onClick?.(2)}
       className={cn(
-        "w-6 h-6 rounded-full bg-black border-[1px] border-b-[2px] border-r-[2px] border-black relative"
+        "w-6 h-6 rounded-full bg-black border border-b-2 border-r-2 border-black relative"
       )}
       {...props}
     >

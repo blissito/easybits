@@ -54,10 +54,10 @@ export const BlogContent = ({
 
   return (
     <section className="">
-      <div className="border-x-[2px] border-black  h-12 max-w-7xl mx-4 md:mx-[5%] xl:mx-auto "></div>
-      <div className="border-y-[2px] border-black w-full h-fit lg:h-[72px] px-4 md:px-[5%] xl:px-0 ">
-        <div className="border-x-[2px]  border-black w-full  h-full max-w-7xl flex-wrap lg:flex-nowrap  mx-auto flex justify-between gap-0 lg:gap-4 items-center pl-0 lg:pl-4">
-          <div className="flex h-12 md:h-full items-center w-full lg:w-fit overflow-x-scroll md:overflow-hidden border-b-[2px] border-black lg:border-none">
+      <div className="border-x-2 border-black  h-12 max-w-7xl mx-4 md:mx-[5%] xl:mx-auto "></div>
+      <div className="border-y-2 border-black w-full h-fit lg:h-[72px] px-4 md:px-[5%] xl:px-0 ">
+        <div className="border-x-2  border-black w-full  h-full max-w-7xl flex-wrap lg:flex-nowrap  mx-auto flex justify-between gap-0 lg:gap-4 items-center pl-0 lg:pl-4">
+          <div className="flex h-12 md:h-full items-center w-full lg:w-fit overflow-x-scroll md:overflow-hidden border-b-2 border-black lg:border-none">
             <Chip
               category="Todos"
               active={!currentTag}
@@ -79,7 +79,7 @@ export const BlogContent = ({
             <input
               name="search"
               defaultValue={currentSearch}
-              className="w-full h-full border-[0px]  md:border-l-black  md:border-l-[2px] border-r-[0px] border-y-none px-3"
+              className="w-full h-full border-0  md:border-l-black  md:border-l-2 border-r-0 border-y-none px-3"
               placeholder="¿Qué quieres saber hoy?"
             />
             <button
@@ -91,7 +91,7 @@ export const BlogContent = ({
           </form>
         </div>
       </div>
-      <div className="border-x-[2px] border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
+      <div className="border-x-2 border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
         {posts.length > 0 ? (
           posts.map((post) => <BlogCard key={post.slug} post={post} />)
         ) : (
@@ -109,7 +109,7 @@ export const BlogContent = ({
         hasPrevPage={hasPrevPage}
       />
       <div className=" w-full h-12 lg:h-20 px-4 md:px-[5%] xl:px-0">
-        <div className="border-x-[2px] border-black   h-full max-w-7xl mx-auto flex justify-between gap-4 items-center pl-4"></div>
+        <div className="border-x-2 border-black   h-full max-w-7xl mx-auto flex justify-between gap-4 items-center pl-4"></div>
       </div>
     </section>
   );
@@ -151,9 +151,9 @@ export const Pagination = ({
   }
 
   return (
-    <div className="border-y-[2px] border-black w-full h-10 px-4 md:px-[5%] xl:px-0">
-      <div className="border-x-[2px] border-black  h-full max-w-7xl mx-auto flex justify-end  items-center pl-4">
-        <div className="px-3 border-l-[2px] h-full grid place-content-center border-black">
+    <div className="border-y-2 border-black w-full h-10 px-4 md:px-[5%] xl:px-0">
+      <div className="border-x-2 border-black  h-full max-w-7xl mx-auto flex justify-end  items-center pl-4">
+        <div className="px-3 border-l-2 h-full grid place-content-center border-black">
           <p>
             {currentPage} de {totalPages}
           </p>
@@ -174,7 +174,7 @@ export const Pagination = ({
           onClick={handleNextPage}
           disabled={!hasNextPage}
           className={cn(
-            "w-10 text-2xl text-white h-full grid place-content-center border-l-[2px] border-white/20 transition-colors",
+            "w-10 text-2xl text-white h-full grid place-content-center border-l-2 border-white/20 transition-colors",
             hasNextPage
               ? "hover:bg-black/80 cursor-pointer bg-black"
               : "bg-gray-400 cursor-not-allowed"
@@ -207,7 +207,7 @@ export const BlogCard = ({
     <Link to={`/blog/${post.slug}`}>
       <section
         className={cn(
-          "border-t-[2px] border-black p-4 md:p-6 flex-wrap md:flex-nowrap hover:bg-grayLight flex gap-8 group transition-all cursor-pointer",
+          "border-t-2 border-black p-4 md:p-6 flex-wrap md:flex-nowrap hover:bg-grayLight flex gap-8 group transition-all cursor-pointer",
           className
         )}
       >
@@ -231,17 +231,17 @@ export const BlogCard = ({
           </h3>
           <p className="text-iron">{post.excerpt}</p>
           <div className="flex text-sm md:text-base mt-2 gap-2 items-center text-brand-gray">
-            <div className="w-8 h-8 rounded-full border-[2px] border-black bg-gray-200 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full border-2 border-black bg-gray-200 flex items-center justify-center">
               <span className="text-xs font-bold">
                 {post.author.charAt(0).toUpperCase()}
               </span>
             </div>
             <p>{post.author}</p>
-            <hr className="bg-brand-gray/50 w-[1px] h-3" />
+            <hr className="bg-brand-gray/50 w-px h-3" />
             <p>{post.readingTime} min de lectura</p>
             {post.tags.length > 0 && (
               <>
-                <hr className="bg-brand-gray/50 w-[1px] h-3" />
+                <hr className="bg-brand-gray/50 w-px h-3" />
                 <p>{post.tags[0]}</p>
               </>
             )}
@@ -264,7 +264,7 @@ export const Chip = ({
   return (
     <div
       className={cn(
-        "min-w-max h-10 rounded-full border-[2px] grid place-content-center px-3 cursor-pointer hover:border-black/50 transition-colors",
+        "min-w-max h-10 rounded-full border-2 grid place-content-center px-3 cursor-pointer hover:border-black/50 transition-colors",
         active ? "border-black" : "border-transparent"
       )}
       onClick={onClick}

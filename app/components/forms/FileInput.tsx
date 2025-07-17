@@ -66,7 +66,7 @@ export const FileInput = ({
         ref={ref}
         type="button"
         className={cn(
-          "py-4 pl-12 border-iron border-[1px] my-6 border-dashed rounded-xl flex items-center justify-center gap-6",
+          "py-4 pl-12 border-iron border my-6 border-dashed rounded-xl flex items-center justify-center gap-6",
           "hover:scale-[0.95] active:scale-100",
           "transition-all w-full",
           buttonClassName

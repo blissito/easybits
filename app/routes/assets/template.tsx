@@ -39,10 +39,10 @@ export const ContentTemplate = ({
 }) => {
   return (
     <section
-      className={cn("border-b-0 border-black", "md:border-b-[2px]")}
+      className={cn("border-b-0 border-black", "md:border-b-2")}
       style={{ fontFamily: asset.user?.storeConfig?.typography }}
     >
-      <div className="max-w-7xl mx-auto border-x-none md:border-x-[2px] border-black bg-white">
+      <div className="max-w-7xl mx-auto border-x-none md:border-x-2 border-black bg-white">
         <ProductGallery
           className="bg-white"
           items={asset.gallery.map((src) => ({
@@ -50,11 +50,11 @@ export const ContentTemplate = ({
             type: src.endsWith('.mp4') ? 'video' as const : 'image' as const
           }))}
         />
-        <div className="grid grid-cols-8 border-t-[2px] border-black">
+        <div className="grid grid-cols-8 border-t-2 border-black">
           <div
             className={cn(
               "col-span-8 md:col-span-5 border-r-0  border-black ",
-              "md:border-r-[2px]"
+              "md:border-r-2"
             )}
           >
             <Bragging
@@ -169,7 +169,7 @@ const Bragging = ({
   return (
     <>
       <main
-        className="grid grid-cols-12 h-fit md:h-16 border-b-[2px] border-black"
+        className="grid grid-cols-12 h-fit md:h-16 border-b-2 border-black"
         style={{ fontFamily: typography }}
       >
         {asset.tags.length === 0 ? null : (
@@ -283,7 +283,7 @@ const Info = ({
     >
       <div
         className={cn(
-          "h-[62px] border-y-[0px] bg-black border-black  place-content-center hidden",
+          "h-[62px] border-y-0 bg-black border-black  place-content-center hidden",
           "md:grid"
         )}
       >
@@ -293,7 +293,7 @@ const Info = ({
       <div className="hidden md:block">{actionButton}</div>
       {/* Only show note if asset.note exists */}
       {asset.note && (
-        <div className="h-fit p-3 border-b-[2px] border-black content-center">
+        <div className="h-fit p-3 border-b-2 border-black content-center">
           {asset.note}
         </div>
       )}
@@ -382,7 +382,7 @@ const Subscription = ({
         disabled={isLoading}
         type="submit"
         className={cn(
-          "hidden md:grid h-16 w-full text-2xl font-bold border-b-[2px] bg-[#CE95F9] border-black place-content-center disabled:text-gray-500 disabled:bg-gray-400/40"
+          "hidden md:grid h-16 w-full text-2xl font-bold border-b-2 bg-[#CE95F9] border-black place-content-center disabled:text-gray-500 disabled:bg-gray-400/40"
         )}
         style={{ background: hexColor, fontFamily: typography }}
       >
@@ -488,7 +488,7 @@ const ReviewsSection = ({
     <>
       <div
         id="reviews-open-button"
-        className="border-b-[2px] border-black p-3 cursor-pointer"
+        className="border-b-2 border-black p-3 cursor-pointer"
         onClick={handleOpen}
       >
         <p className="mb-4">Qué opinan la comunidad:</p>
@@ -593,7 +593,7 @@ export const FooterTemplate = ({
     <>
       <section
         className={cn(
-          "flex gap-1 items-center h-fit pb-16 justify-center border-b-[2px] border-black ",
+          "flex gap-1 items-center h-fit pb-16 justify-center border-b-2 border-black ",
           " md:h-10 md:pb-0 "
         )}
       >
@@ -639,11 +639,11 @@ export const HeaderTemplate = ({
   });
   return (
     <section
-      className={cn("border-b-[2px] border-black bg-[#CE95F9]", className)}
+      className={cn("border-b-2 border-black bg-[#CE95F9]", className)}
       style={{ background: hexColor, fontFamily: typography }}
     >
-      <div className="border-b-[2px] border-black h-16">
-        <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] h-16 border-black px-4 flex justify-between ">
+      <div className="border-b-2 border-black h-16">
+        <div className="max-w-7xl mx-auto border-x-0 md:border-x-2 h-16 border-black px-4 flex justify-between ">
           <button onClick={handleOpenLink}>
             <div className="flex gap-2 items-center h-full">
               <Avatar src={authorPic} />{" "}
@@ -692,7 +692,7 @@ export const HeaderTemplate = ({
           )}
         </div>
       </div>
-      <div className="max-w-7xl mx-auto border-x-0 md:border-x-[2px] border-black px-4 flex justify-between h-fit py-6 md:py-9 relative ">
+      <div className="max-w-7xl mx-auto border-x-0 md:border-x-2 border-black px-4 flex justify-between h-fit py-6 md:py-9 relative ">
         <img
           className="absolute right-96 bottom-0"
           src="/icons/waves.svg"
@@ -732,7 +732,7 @@ export const AttributeList = ({
   textRight: ReactNode;
 }) => {
   return (
-    <section className="border-b-[2px] border-black flex justify-between p-3 gap-3">
+    <section className="border-b-2 border-black flex justify-between p-3 gap-3">
       <p className="min-w-max">{textLeft}</p>
       <div className="max-w-[420px]">{textRight}</div>
     </section>

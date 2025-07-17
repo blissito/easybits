@@ -203,7 +203,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
     return (
       <section className="overflow-hidden">
         <AuthNav user={user} />
-        <div className="pt-32 md:pt-[200px] pb-20 md:pb-32 max-w-7xl border-x-[2px] border-black mx-4 md:mx-[5%] xl:mx-auto px-4">
+        <div className="pt-32 md:pt-[200px] pb-20 md:pb-32 max-w-7xl border-x-2 border-black mx-4 md:mx-[5%] xl:mx-auto px-4">
           <div className="text-center py-20">
             <h1 className="text-2xl font-bold mb-4">Post no encontrado</h1>
             <p className="text-iron">
@@ -218,7 +218,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
   return (
     <section className="overflow-hidden">
       <AuthNav user={user} />
-      <div className="pt-32 md:pt-[200px] pb-20 md:pb-32 max-w-7xl border-x-[2px] border-black mx-4 md:mx-[5%] xl:mx-auto px-4">
+      <div className="pt-32 md:pt-[200px] pb-20 md:pb-32 max-w-7xl border-x-2 border-black mx-4 md:mx-[5%] xl:mx-auto px-4">
         <PostHeader post={post} />
         <PostContent post={post} />
         <SuscriptionBox />

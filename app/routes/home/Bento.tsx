@@ -18,7 +18,7 @@ export const Bento = ({
   return (
     <article
       className={cn(
-        "border-b-black border-b-[2px] lg:min-h-[680px] flex flex-row-reverse flex-wrap md:flex-nowrap",
+        "border-b-black border-b-2 lg:min-h-[680px] flex flex-row-reverse flex-wrap md:flex-nowrap",
         {
           "flex-row": position === "right",
         },
@@ -27,7 +27,7 @@ export const Bento = ({
     >
       <section className="w-full md:w-[50%]  h-[384px] md:h-[480px] lg:h-[680px] ">
         <img
-          className="w-full h-full object-cover bg-center border-x-[0px] border-b-[2px] md:border-b-[0px] md:border-x-[2px] border-black"
+          className="w-full h-full object-cover bg-center border-x-0 border-b-2 md:border-b-0 md:border-x-2 border-black"
           src={image}
           alt="purchaising example"
         />

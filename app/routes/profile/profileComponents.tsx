@@ -56,10 +56,10 @@ export const SuscriptionCard = ({
         <PerkItem perk="Sistema de venta en línea con integración Stripe o Paypal" />
         <PerkItem perk={`Hasta ${plans[plan].max} GB de almacenamiento`} />
       </div>
-      <hr className={cn("bg-black h-[1px] border-none  w-full")} />
+      <hr className={cn("bg-black h-px border-none  w-full")} />
       <StorageBar current={used} plan={plans[plan]} />
 
-      <hr className={cn("bg-black h-[1px] border-none w-full")} />
+      <hr className={cn("bg-black h-px border-none w-full")} />
       <div
         className={cn(
           "flex justify-between items-center w-full flex-wrap p-4 md:p-6 gap-3",
@@ -205,14 +205,14 @@ export const Notifications = ({ user }: { user: User }) => {
         title="Newsletter"
         description="Cuando encendido, te enviaremos nuestro newletter regularmente"
       />
-      <hr className="w-full bg-black border-none h-[1px]" />
+      <hr className="w-full bg-black border-none h-px" />
       <SwitchItem
         onChange={handle("sells")}
         value={user.notifications?.sells!}
         title="Ventas"
         description="Si encendido, te enviaremos un correo cada que hagas una venta"
       />
-      <hr className="w-full bg-black border-none h-[1px]" />
+      <hr className="w-full bg-black border-none h-px" />
       <SwitchItem
         onChange={handle("reviews")}
         value={user.notifications?.reviews!}

@@ -10,12 +10,12 @@ export const Footer = () => {
   const [hover, setHover] = useState(false);
   return (
     <section className="bg-black">
-      <div className="border-b-[1px] border-b-white/20 h-10 md:h-20 mx-4 md:mx-[5%] xl:mx-0">
-        <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto"></div>
+      <div className="border-b border-b-white/20 h-10 md:h-20 mx-4 md:mx-[5%] xl:mx-0">
+        <div className="h-full max-w-7xl border-x border-x-white/20 mx-auto"></div>
       </div>
-      <div className="border-y-[1px] border-y-white/20 h-20 md:h-40 w-full  ">
+      <div className="border-y border-y-white/20 h-20 md:h-40 w-full  ">
         <Link to="/login">
-          <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto px-4 md:px-[5%] xl:px-0">
+          <div className="h-full max-w-7xl border-x border-x-white/20 mx-auto px-4 md:px-[5%] xl:px-0">
             <motion.button
               initial={{ borderRadius: "0px" }}
               whileHover={{ borderRadius: "199px" }}
@@ -29,8 +29,8 @@ export const Footer = () => {
           </div>
         </Link>
       </div>
-      <div className="border-b-[1px] border-b-white/20 h-20 md:h-40 px-4 md:px-[5%] xl:px-0">
-        <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto flex">
+      <div className="border-b border-b-white/20 h-20 md:h-40 px-4 md:px-[5%] xl:px-0">
+        <div className="h-full max-w-7xl border-x border-x-white/20 mx-auto flex">
           <a
             href="https://calendly.com/brenda-formmy/easybits-demo"
             target="_blank"
@@ -43,7 +43,7 @@ export const Footer = () => {
               whileHover={{ borderRadius: "199px", borderColor: "white" }}
               whileTap={{ borderRadius: "199px", borderColor: "white" }}
               transition={{ type: "tween" }}
-              className="flex gap-4 items-center justify-center bg-transparent text-white border-[1px]  h-full  text-2xl font-light "
+              className="flex gap-4 items-center justify-center bg-transparent text-white border  h-full  text-2xl font-light "
             >
               {" "}
               <img src="/home/demo.svg" className="w-12 md:w-16" alt="demo" />
@@ -61,7 +61,7 @@ export const Footer = () => {
               whileHover={{ borderRadius: "199px", borderColor: "white" }}
               whileTap={{ borderRadius: "199px", borderColor: "white" }}
               transition={{ type: "tween" }}
-              className=" flex gap-4 items-center group justify-center bg-transparent text-white w-full border-[1px] border-white/20 h-full text-2xl font-light "
+              className=" flex gap-4 items-center group justify-center bg-transparent text-white w-full border border-white/20 h-full text-2xl font-light "
             >
               <img
                 src="/home/plans.svg"
@@ -78,11 +78,11 @@ export const Footer = () => {
           </Link>
         </div>
       </div>
-      <div className="border-b-[1px] border-b-white/20 h-10 md:h-20 px-4 md:px-[5%] xl:px-0">
-        <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto"></div>
+      <div className="border-b border-b-white/20 h-10 md:h-20 px-4 md:px-[5%] xl:px-0">
+        <div className="h-full max-w-7xl border-x border-x-white/20 mx-auto"></div>
       </div>
-      <div className="border-b-[1px] border-b-white/20 h-fit px-4 md:px-[5%] xl:px-0  ">
-        <div className="h-full max-w-7xl gap-y-10 md:gap-y-0 border-x-[1px] border-x-white/20 mx-aut py-12 md:py-20 px-4 mx-auto grid grid-cols-12">
+      <div className="border-b border-b-white/20 h-fit px-4 md:px-[5%] xl:px-0  ">
+        <div className="h-full max-w-7xl gap-y-10 md:gap-y-0 border-x border-x-white/20 mx-aut py-12 md:py-20 px-4 mx-auto grid grid-cols-12">
           <div className="col-span-12 md:col-span-6">
             <h2 className="flex flex-wrap items-center text-2xl md:text-3xl text-white">
               <span> Suscríbete&nbsp; </span>{" "}

@@ -175,7 +175,7 @@ const Cell = ({
 
 const Header = () => {
   return (
-    <section className="grid bg-brand-100 grid-cols-12 pl-4 py-2 border-b-[2px] border-black">
+    <section className="grid bg-brand-100 grid-cols-12 pl-4 py-2 border-b-2 border-black">
       <span className="col-span-1" />
       <span className="col-span-1" />
       <span className="col-span-3">Email</span>

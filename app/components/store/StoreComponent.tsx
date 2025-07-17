@@ -82,14 +82,14 @@ export default function StoreComponent({
               {cta ? (
                 cta
               ) : (
-                <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
+                <div className="bg-white border-2 border-black rounded-xl p-1 w-[48px] h-[48px]">
                   <img className="w-full" src={GlobeIcon} />
                 </div>
               )}
             </HeaderIconButton>
             <HeaderIconButton>
               <div
-                className="bg-white border-[2px] border-black grid place-content-center rounded-xl p-1 w-[48px] h-[48px] cursor-pointer hover:bg-gray-50 transition-colors"
+                className="bg-white border-2 border-black grid place-content-center rounded-xl p-1 w-[48px] h-[48px] cursor-pointer hover:bg-gray-50 transition-colors"
                 onClick={handleSeoOpen}
               >
                 <img className="w-full" src={SeoIcon} />
@@ -97,7 +97,7 @@ export default function StoreComponent({
             </HeaderIconButton>
             <HeaderIconButton>
               <div
-                className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]"
+                className="bg-white border-2 border-black rounded-xl p-1 w-[48px] h-[48px]"
                 onClick={() => setIsConfigOpen(true)}
               >
                 <img className="w-full" src={EditIcon} />
@@ -106,14 +106,14 @@ export default function StoreComponent({
             <HeaderIconButton>
               <div
                 onClick={handleModal}
-                className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]"
+                className="bg-white border-2 border-black rounded-xl p-1 w-[48px] h-[48px]"
               >
                 <img className="w-full" src={ShareIcon} />
               </div>
             </HeaderIconButton>
             <button onClick={handleOpenLink}>
               <HeaderIconButton>
-                <div className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px]">
+                <div className="bg-white border-2 border-black rounded-xl p-1 w-[48px] h-[48px]">
                   <img className="w-full" src={OpenIcon} />
                 </div>
               </HeaderIconButton>
