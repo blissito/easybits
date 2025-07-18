@@ -2,7 +2,6 @@ import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import {
   createAccountV2,
   createClientSecret,
-  createOnboarding,
   getAccountPayments,
   getAccountCapabilities,
 } from "~/.server/stripe_v2";
@@ -10,6 +9,7 @@ import type { Route } from "./+types/account";
 import { db } from "~/.server/db";
 
 export const action = async ({ request }: Route.ActionArgs) => {
+  const isProd = process.env.NODE_ENV === "production";
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -30,46 +30,59 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "get_client_secret") {
     let clientSecret;
-    const accountId = formData.get("accountId") as string;
-    const capabilities = await getAccountCapabilities(accountId);
-    if (!capabilities) {
-      clientSecret = await createClientSecret({
+    const user = await getUserOrRedirect(request);
+    const accountId = user.stripeIds[isProd ? 0 : 1];
+    const capabilities = await getAccountCapabilities(accountId, !isProd);
+
+    if (capabilities?.card_payments?.status === "active") {
+      // Si ya está activo, no necesitamos client secret
+      return { clientSecret: null };
+    }
+
+    try {
+      const result = await createClientSecret({
         accountId,
         onboarding: true,
         payments: false,
       });
-    } else {
-      clientSecret = await createClientSecret({
-        accountId,
-        onboarding: capabilities.card_payments?.status !== "active",
-        payments: capabilities.card_payments?.status === "active",
-      });
+      clientSecret = result;
+    } catch (error) {
+      console.error("Error creating client secret:", error);
+      throw new Response("Failed to create client secret", { status: 500 });
     }
+
     return { clientSecret };
   }
 
   if (intent === "create_new_account") {
     const user = await getUserOrRedirect(request);
-    const account = await createAccountV2(user);
 
-    // dev & prod config
-    const isDev = process.env.NODE_ENV === "development";
-    const devConfig = user.stripeIds.length > 0 ? [user.stripeIds[0], account.id]:['', account.id]
-    const prodConfig = [account.id]
-    const stripeIds = isDev ? devConfig : prodConfig
-    
-    // Actualizar el array stripeIds con el nuevo ID
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        stripeIds
-      },
-    });
-    
-    // generate onboarding url
-    const client_secret = await createOnboarding(account.id);
-    return { clientSecret: client_secret };
+    try {
+      const account = await createAccountV2(user);
+
+      // Actualizar el usuario con el nuevo stripeId
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          stripeIds: {
+            push: account.id,
+          },
+        },
+      });
+
+      // Crear client secret para onboarding
+      const result = await createClientSecret({
+        accountId: account.id,
+        onboarding: true,
+        payments: false,
+      });
+
+      return { clientSecret: result };
+    } catch (error) {
+      console.error("Error creating account:", error);
+      throw new Response("Failed to create account", { status: 500 });
+    }
   }
 
-  return null;
+  throw new Response("Invalid intent", { status: 400 });
 };

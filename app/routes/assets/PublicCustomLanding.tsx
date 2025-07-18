@@ -11,6 +11,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { getReviews } from "~/.server/reviews";
 import { useFetcher } from "react-router";
 import { useTelemetry } from "~/hooks/useTelemetry";
+import toast from "react-hot-toast";
 
 export const meta = ({ data }: Route.MetaArgs) => {
   const { asset } = data as { asset: Asset & { user: any } };
@@ -163,6 +164,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const isLoading = fetcher.state !== "idle";
   // Stripe Checkout
   const handleOpenCheckout = () => {
+    if (!asset.stripePrice) {
+      toast.error("Este Asset no tiene un precio relacionado");
+      return;
+    }
     fetcher.submit(
       {
         intent: "account_checkout",
@@ -217,7 +222,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               <BrutalButton
                 id="purchase-button"
                 isLoading={isLoading}
-                isDisabled={!!errorMessage}
+                isDisabled={!!errorMessage || !asset.stripePrice}
                 type="button"
                 onClick={handleOpenCheckout}
                 mode="landing"
@@ -230,6 +235,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
               >
                 {text}
               </BrutalButton>
+              {!asset.stripePrice && Number(asset.price) > 0 && (
+                <p className="text-red-500 text-xs">
+                  Este Asset no tiene un precio de stripe asignado.
+                </p>
+              )}
               {errorMessage && (
                 <p className="text-red-500 text-xs">{errorMessage}</p>
               )}

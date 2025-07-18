@@ -134,11 +134,10 @@ export const confirmation = ({
               background-image: url(https://i.imgur.com/vt00XNp.png);
             "
           >
-            <a
-              href="https://www.facebook.com/profile.php?id=61554028371141"
+                <a
+              href="https://www.facebook.com/profile.php?id=61574014173527"
               target="blank"
               style="text-decoration: none"
-              rel="noreferer"
             >
               <img
                 alt="facebook"
@@ -147,10 +146,9 @@ export const confirmation = ({
               />
             </a>
             <a
-              href="https://www.instagram.com/_formmyapp/"
+              href="https://www.instagram.com/easybits.cloud/"
               target="blank"
               style="text-decoration: none"
-              rel="noreferer"
             >
               <img
                 alt="instagram"
@@ -159,10 +157,9 @@ export const confirmation = ({
               />
             </a>
             <a
-              href="https://www.linkedin.com/company/99530596"
+              href="https://www.linkedin.com/company/easybitscloud/"
               target="blank"
               style="text-decoration: none"
-              rel="noreferer"
             >
               <img
                 alt="linkedin"
@@ -172,10 +169,9 @@ export const confirmation = ({
             </a>
 
             <a
-              href="https://twitter.com/FormmyApp1"
+            href="https://x.com/EasyBitsCloud"
               target="blank"
               style="text-decoration: none"
-              rel="noreferer"
             >
               <img
                 alt="twitter"
@@ -184,10 +180,9 @@ export const confirmation = ({
               />
             </a>
             <a
-              href="https://www.youtube.com/@_FormmyApp"
+              href="https://www.youtube.com/@EasyBitsCloud"
               target="blank"
               style="text-decoration: none"
-              rel="noreferer"
             >
               <img
                 alt="youtube"

@@ -86,23 +86,30 @@ export default function StatsComponent({
 "
           >
             <p className="mb-2 font-semibold text-lg">Productos más vendidos</p>
-            {mostSoldProducts.map(
-              ({ imageUrl, title, soldTimes, unitPrice }) => (
-                <div className="flex justify-between gap-4 items-start py-4 border-b border-li">
-                  <img
-                    className="w-[48px] h-[48px] rounded-xl"
-                    src={imageUrl}
-                  />
-                  <div className="w-full">
-                    <p className="text-sm text-start">{title}</p>
-                    <p className="text-xs text-iron">
-                      {soldTimes} venta{soldTimes > 1 ? "s" : null}
+            {mostSoldProducts.length === 0 ? (
+              <div className="flex flex-col h-full items-center justify-center py-10">
+                <img src="/empty-states/top-products-empty.webp" alt="No hay productos más vendidos" className="w-40 h-40 mb-4 -mt-32" />
+                <p className="text-iron text-center text-base">Tus seguidores te están conociendo.<br/> Pronto llegará tu primera venta.</p>
+              </div>
+            ) : (
+              mostSoldProducts.map(
+                ({ imageUrl, title, soldTimes, unitPrice }) => (
+                  <div className="flex justify-between gap-4 items-start py-4 border-b border-li">
+                    <img
+                      className="w-[48px] h-[48px] rounded-xl"
+                      src={imageUrl}
+                    />
+                    <div className="w-full">
+                      <p className="text-sm text-start">{title}</p>
+                      <p className="text-xs text-iron">
+                        {soldTimes} venta{soldTimes > 1 ? "s" : null}
+                      </p>
+                    </div>
+                    <p className="text-base text-iron">
+                      ${soldTimes * unitPrice}
                     </p>
                   </div>
-                  <p className="text-base text-iron">
-                    ${soldTimes * unitPrice}
-                  </p>
-                </div>
+                )
               )
             )}
           </div>

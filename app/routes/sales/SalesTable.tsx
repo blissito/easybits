@@ -37,7 +37,6 @@ export const SalesTable = ({ orders = [] }: { orders: Order[] }) => {
 };
 
 const Row = ({ order }: { order: Order }) => {
-  console.log("ORDER:", order);
   return (
     <motion.section
       layout

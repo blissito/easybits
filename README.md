@@ -112,3 +112,9 @@ El blog usa archivos MDX como rutas directas para evitar duplicación de datos y
 - ✅ SEO optimizado con meta tags automáticos
 
 ---
+
+## Manejo de errores con Stripe y Effect (ts)
+
+Ahora todas las operaciones críticas con Stripe usan la librería Effect (ts) para controlar los errores de forma funcional y predecible. Las funciones que interactúan con Stripe devuelven un resultado estructurado: `{ ok: true, data }` en caso de éxito, o `{ ok: false, error }` en caso de error. Así, el backend nunca lanza errores inesperados y el código que consume estas funciones solo revisa la propiedad `ok` para saber si todo salió bien.
+
+Esto permite que el frontend reciba mensajes de error claros y controlados, sin stacktraces ni detalles internos, facilitando la experiencia de usuario y el debugging. Además, los logs de Stripe quedan centralizados y es fácil extender este patrón a otros servicios de terceros en el futuro.

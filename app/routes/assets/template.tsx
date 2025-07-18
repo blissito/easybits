@@ -406,7 +406,7 @@ const EbookDetails = ({ asset, files }: { asset: Asset; files: File[] }) => {
       />
       <AttributeList
         textLeft="Formatos:"
-        textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
+        textRight={Array.from(new Set(files.map((f) => f.name.split(".").pop()))).join(", ")}
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
     </section>
@@ -569,7 +569,7 @@ const Formats = ({
       <AttributeList textLeft="Número de archivos:" textRight={files.length} />
       <AttributeList
         textLeft="Formatos:"
-        textRight={files.map((f) => f.name.split(".")[1]).join(", ")}
+        textRight={Array.from(new Set(files.map((f) => f.name.split(".").pop()))).join(", ")}
       />
       <AttributeList textLeft="Peso:" textRight={getSizeInMB()} />
     </div>

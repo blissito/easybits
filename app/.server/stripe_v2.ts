@@ -1,3 +1,64 @@
+/*
+============================
+Error Handling Flow & Usage Examples
+============================
+
+## Backend (Node.js)
+- Todas las funciones que interactúan con Stripe usan internamente Effect (ts) para manejar efectos y errores.
+- Las funciones públicas (como updateOrCreateProductAndPrice) devuelven un resultado estructurado:
+  - `{ ok: true, data }` en caso de éxito
+  - `{ ok: false, error }` en caso de error
+- El endpoint solo revisa la propiedad `ok` y responde al frontend con un mensaje claro si hay error.
+
+### Ejemplo de uso en el backend:
+```ts
+const stripeResult = await updateOrCreateProductAndPrice(asset, request);
+if (!stripeResult.ok) {
+  return new Response(
+    `Error al actualizar el precio en Stripe: ${stripeResult.error}`,
+    { status: 500 }
+  );
+}
+// ... continuar flujo normal
+```
+
+## Frontend
+- Si el backend responde con status 500 y un mensaje de error, el frontend puede mostrar ese mensaje al usuario.
+- Ejemplo de manejo en React:
+```ts
+const response = await fetch(...);
+if (!response.ok) {
+  const errorText = await response.text();
+  showToast(errorText); // o mostrar en UI
+}
+```
+
+## Ventajas
+- El código de backend no necesita try/catch para Stripe, solo revisa el resultado.
+- Los logs de Stripe quedan centralizados y estructurados.
+- El frontend recibe mensajes claros y controlados, sin stacktraces ni detalles internos.
+- Fácil de extender a otros servicios de terceros.
+*/
+
+/**
+ * E2E Purchase Flow Test Spec (Minimalista)
+
+[ ] Instalar Playwright en el proyecto (npx playwright install)
+[ ] Crear un archivo de test E2E (por ejemplo, test/e2e-purchase.spec.ts)
+[ ] Escribir el test: navegar, seleccionar asset, iniciar compra, completar pago con tarjeta de prueba Stripe, verificar éxito.
+[ ] Agregar el comando a package.json para correr el test (npx playwright test)
+[ ] Documentar en el README cómo correr el test E2E.
+ * 
+ */
+
+// Logger centralizado para Stripe
+export const stripeLogger = {
+  info: (...args: any[]) => console.log("[STRIPE][INFO]", ...args),
+  warn: (...args: any[]) => console.warn("[STRIPE][WARN]", ...args),
+  error: (...args: any[]) => console.error("[STRIPE][ERROR]", ...args),
+};
+
+import { Effect } from "effect";
 import type { Asset, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { db } from "./db";
@@ -44,13 +105,15 @@ const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
 const brandingURL = "https://api.stripe.com/v1/account/branding_settings";
 
+// @TODO: every function is making a query: avoid it. Just pass the same user from top level
 export async function configureMerchantWebhook(userId: string) {
   try {
-    const user = await db.user.findUnique({
+    const u = await db.user.findUnique({
       where: { id: userId },
-      select: { stripeId: true },
+      select: { stripeIds: true },
     });
-
+    const isProd = process.env.NODE_ENV === "production";
+    const user = { ...u, stripeId: u.stripeIds[isProd ? 0 : 1] };
     if (!user?.stripeId) {
       throw new Error("User doesn't have a Stripe account");
     }
@@ -91,23 +154,15 @@ export async function configureMerchantWebhook(userId: string) {
 }
 
 export const createCheckoutURL = async (
-  assetId: string,
-  accountId: string,
+  asset: Asset,
+  user: User,
   brandOptions?: {
     primaryColor?: string;
     logo?: string;
     businessName?: string;
   }
 ) => {
-  // need to validate if the stripe id is valid
-  const user = await db.user.findFirst({
-    where: { stripeId: accountId },
-    include: { storeConfig: true },
-  });
-  if (!user) return null; // no account found
-
-  const asset = await db.asset.findUnique({ where: { id: assetId } });
-  if (!asset) return null; // no asset found
+  console.log("!!", asset, user);
 
   if (!asset.stripePrice) return null; // no price found
 
@@ -142,7 +197,7 @@ export const createCheckoutURL = async (
   // Si hay colores configurados, aplicar configuración de marca automáticamente
   if (finalBrandOptions.primaryColor || finalBrandOptions.logo) {
     // Configurar colores de marca en la cuenta de Stripe antes del checkout
-    await configureBrandColors(accountId, {
+    await configureBrandColors(user.stripeId!, {
       primaryColor: finalBrandOptions.primaryColor,
       logo: finalBrandOptions.logo,
       primaryButtonColor: finalBrandOptions.primaryColor, // usar el mismo color para el botón
@@ -153,7 +208,7 @@ export const createCheckoutURL = async (
     method: "post",
     headers: {
       Authorization: apiKey,
-      "Stripe-Account": accountId,
+      "Stripe-Account": user.stripeId!,
       "Stripe-Version": "2025-04-30.preview",
       "content-type": "application/x-www-form-urlencoded",
     },
@@ -170,7 +225,7 @@ export const createCheckoutURL = async (
       method: "post",
       headers: {
         Authorization: apiKey,
-        "Stripe-Account": accountId,
+        "Stripe-Account": user.stripeId!,
         "Stripe-Version": "2025-04-30.preview",
         "content-type": "application/x-www-form-urlencoded",
       },
@@ -184,25 +239,41 @@ export const createCheckoutURL = async (
 export const updateOrCreateProductAndPrice = async (
   asset: Asset,
   request: Request
-) => {
-  // @todo add description from "notas sobre el producto"
+): Promise<{ ok: true; data: any } | { ok: false; error: string }> => {
   const user = await getUserOrNull(request);
-  if (!user) return;
+  if (!user) return { ok: false, error: "Usuario no encontrado" };
 
-  const accountId = user.stripeId;
-  if (!accountId) return;
+  const isProd = process.env.NODE_ENV === "production";
 
-  console.log("About to create price");
+  const accountId = user.stripeIds[isProd ? 0 : 1];
+  if (!accountId) return { ok: false, error: "Cuenta de Stripe no encontrada" };
+
+  stripeLogger.info("About to create price");
 
   if (asset.stripeProduct && asset.stripePrice) {
-    // @todo create price & assign new price to product
-    const price = await createNewPriceForProduct({
-      productId: asset.stripeProduct,
-      accountId,
-      currency: asset.currency as "mxn", // @todo: all others
-      unit_amount: Number(asset.price) * 100, // cents
-    });
-    console.info("::STRIPE_PRICE::NEW_PRICE::", price);
+    const priceResult = await Effect.runPromiseExit(
+      createNewPriceForProductEffect({
+        productId: asset.stripeProduct,
+        accountId,
+        currency: asset.currency as "mxn",
+        unit_amount: Number(asset.price) * 100,
+      })
+    );
+    if (priceResult._tag === "Failure") {
+      stripeLogger.error(
+        "No se pudo crear el nuevo precio en Stripe",
+        priceResult.cause
+      );
+      return { ok: false, error: "No se pudo crear el nuevo precio en Stripe" };
+    }
+    const price = priceResult.value;
+    if (!price || !price.id) {
+      stripeLogger.error("Respuesta inválida al crear precio en Stripe", price);
+      return {
+        ok: false,
+        error: "Respuesta inválida al crear precio en Stripe",
+      };
+    }
     await updateProduct({
       productId: asset.stripeProduct,
       priceId: price.id,
@@ -210,23 +281,46 @@ export const updateOrCreateProductAndPrice = async (
       images: [],
     });
     await updateAsset(asset.id, { stripePrice: price.id });
-    // Configurar webhook después de crear el price
     await configureMerchantWebhook(user.id);
+    return { ok: true, data: price };
   } else {
-    const product = await createProductAndPrice(
-      asset.slug,
-      Number(asset.price),
-      asset.currency,
-      accountId
-    ); // @todo iterate slug?
+    const productResult = await Effect.runPromiseExit(
+      createProductAndPriceEffect(
+        asset.slug,
+        Number(asset.price),
+        asset.currency,
+        accountId
+      )
+    );
+    if (productResult._tag === "Failure") {
+      stripeLogger.error(
+        "No se pudo crear el producto/precio en Stripe",
+        productResult.cause
+      );
+      return {
+        ok: false,
+        error: "No se pudo crear el producto/precio en Stripe",
+      };
+    }
+    const product = productResult.value;
+    if (!product || !product.id || !product.default_price) {
+      stripeLogger.error(
+        "Respuesta inválida al crear producto/precio en Stripe",
+        product
+      );
+      return {
+        ok: false,
+        error: "Respuesta inválida al crear producto/precio en Stripe",
+      };
+    }
     await db.asset.update({
       where: {
         id: asset.id,
       },
       data: { stripeProduct: product.id, stripePrice: product.default_price },
     });
-    // Configurar webhook después de crear el price
     await configureMerchantWebhook(user.id);
+    return { ok: true, data: product };
   }
 };
 
@@ -265,8 +359,8 @@ export const updateProduct = async ({
     .catch((e) => console.error("::STRIPE::ERROR::", e));
 };
 
-// @todo can't be updated, we should archive and create new one...
-const createNewPriceForProduct = async ({
+// Refactor: createNewPriceForProduct usando Effect
+export const createNewPriceForProductEffect = ({
   productId,
   currency,
   unit_amount,
@@ -276,45 +370,72 @@ const createNewPriceForProduct = async ({
   currency: "mxn";
   unit_amount: number;
   accountId: string;
-}) => {
-  const url = new URL(pricesURL);
-  // url.searchParams.set("currency", currency);
-  url.searchParams.set(`currency`, currency); // in cents
-  url.searchParams.set(`unit_amount`, String(unit_amount)); // in cents?
-  url.searchParams.set(`product`, productId); // in cents
-  const headers = {
-    Authorization: apiKey,
-    "Stripe-Account": accountId,
-    "Stripe-Version": "2025-04-30.preview",
-    "content-type": "application/x-www-form-urlencoded",
-  };
-  const price = fetch(url.toString(), { headers, method: "post" })
-    .then((r) => r.json())
-    .catch((e) => console.error("::STRIPE::ERROR::", e));
-  return price;
-};
+}) =>
+  Effect.tryPromise({
+    try: async () => {
+      const url = new URL(pricesURL);
+      url.searchParams.set(`currency`, currency);
+      url.searchParams.set(`unit_amount`, String(unit_amount));
+      url.searchParams.set(`product`, productId);
+      const headers = {
+        Authorization: apiKey,
+        "Stripe-Account": accountId,
+        "Stripe-Version": "2025-04-30.preview",
+        "content-type": "application/x-www-form-urlencoded",
+      };
+      const response = await fetch(url.toString(), { headers, method: "post" });
+      if (!response.ok) {
+        const error = await response.text();
+        stripeLogger.error("Error al crear precio en Stripe", error);
+        throw new Error(error);
+      }
+      const price = await response.json();
+      stripeLogger.info("Precio creado en Stripe", price);
+      return price;
+    },
+    catch: (e) => {
+      stripeLogger.error("Stripe fetch error (createNewPriceForProduct)", e);
+      return e;
+    },
+  });
 
-const createProductAndPrice = async (
+// Refactor: createProductAndPrice usando Effect
+export const createProductAndPriceEffect = (
   name: string,
   price: number,
   currency: string,
   accountId: string
-) => {
-  const url = new URL(productsURL);
-  url.searchParams.set("name", name);
-  url.searchParams.set("default_price_data[currency]", currency);
-  url.searchParams.set("default_price_data[unit_amount]", String(price * 100));
-  const headers = {
-    Authorization: apiKey,
-    "Stripe-Account": accountId,
-    "Stripe-Version": "2025-04-30.preview",
-    "content-type": "application/x-www-form-urlencoded",
-  };
-  const data = fetch(url.toString(), { headers, method: "post" })
-    .then((r) => r.json())
-    .catch((e) => console.error("::STRIPE::ERROR::", e));
-  return data;
-};
+) =>
+  Effect.tryPromise({
+    try: async () => {
+      const url = new URL(productsURL);
+      url.searchParams.set("name", name);
+      url.searchParams.set("default_price_data[currency]", currency);
+      url.searchParams.set(
+        "default_price_data[unit_amount]",
+        String(price * 100)
+      );
+      const headers = {
+        Authorization: apiKey,
+        "Stripe-Account": accountId,
+        "Stripe-Version": "2025-04-30.preview",
+        "content-type": "application/x-www-form-urlencoded",
+      };
+      const response = await fetch(url.toString(), { headers, method: "post" });
+      if (!response.ok) {
+        const error = await response.text();
+        stripeLogger.error("Error al crear producto/precio en Stripe", error);
+        throw new Error(error);
+      }
+      const data = await response.json();
+      stripeLogger.info("Producto y precio creados en Stripe", data);
+      return data;
+    },
+    catch: (e) => {
+      stripeLogger.error("Stripe fetch error (createProductAndPrice)", e);
+      return e;
+    },
+  });
 
 export const getAccountPayments = async (accountId: string, isDev: boolean) => {
   const url = new URL(paymentsURL);
@@ -356,26 +477,90 @@ export const createClientSecret = async ({
   return data.client_secret;
 };
 
+const getAuthHeader = (useDev: boolean = false) => {
+  const key =
+    useDev || isDev
+      ? process.env.STRIPE_DEV_SECRET_KEY
+      : process.env.STRIPE_SECRET_KEY;
+  return `Bearer ${key}`;
+};
+
 export const getAccountCapabilities = async (
   accountId?: string,
-  isDev: boolean = false
+  useDev: boolean = false
 ): Promise<Capabilities | null> => {
   if (!accountId) return null;
 
   const url = new URL(accountsURL + `/${accountId}`);
-  // url.searchParams.append("include", "identity");
   url.searchParams.set("include", "configuration.merchant");
-  const Authorization = `Bearer ${
-    isDev ? process.env.STRIPE_DEV_SECRET_KEY : apiKey
-  }`;
+  const Authorization = getAuthHeader(useDev);
   const response = await fetch(url.toString(), {
     headers: {
       "Stripe-Version": version,
       Authorization,
     },
   });
+
+  if (!response.ok) {
+    console.error(
+      "Error fetching capabilities:",
+      response.status,
+      response.statusText
+    );
+    return null;
+  }
+
   const data = await response.json();
   return data.configuration?.merchant?.capabilities;
+};
+
+// Nueva función para obtener información completa del estado de la cuenta
+export const getAccountStatus = async (
+  accountId?: string,
+  isDev: boolean = false
+): Promise<{
+  capabilities: Capabilities | null;
+  requirements: any;
+  isOnboardingComplete: boolean;
+} | null> => {
+  if (!accountId) return null;
+
+  const url = new URL(accountsURL + `/${accountId}`);
+  url.searchParams.set("include", "configuration.merchant,requirements");
+  const Authorization = `Bearer ${
+    isDev ? process.env.STRIPE_DEV_SECRET_KEY : apiKey
+  }`;
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Stripe-Version": version,
+        Authorization,
+      },
+    });
+
+    if (!response.ok) {
+      console.error("Error fetching account status:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const capabilities = data.configuration?.merchant?.capabilities;
+    const requirements = data.requirements;
+
+    // Determinar si el onboarding está completo
+    const isOnboardingComplete =
+      capabilities?.card_payments?.status === "active";
+
+    return {
+      capabilities,
+      requirements,
+      isOnboardingComplete,
+    };
+  } catch (error) {
+    console.error("Error fetching account status:", error);
+    return null;
+  }
 };
 
 export const findOrCreateStripeAccountV2 = async (email: string) => {

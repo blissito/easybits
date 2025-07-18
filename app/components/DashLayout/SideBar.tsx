@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, useRef } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
@@ -129,9 +129,24 @@ const SideBarItem = ({
 
 const FoldMenu = () => {
   const [isFold, setIsFold] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isFold) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsFold(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isFold]);
+
   const onClick = () => setIsFold(!isFold);
   return (
-    <div className="flex flex-col  justify-end pb-4 items-end h-fit gap-4">
+    <div ref={menuRef} className="flex flex-col  justify-end pb-4 items-end h-fit gap-2">
       <AnimatePresence>
         {isFold && (
           <>
@@ -140,11 +155,11 @@ const FoldMenu = () => {
               .concat(ITEMS.bottomItems)
               .filter(
                 (item) =>
-                  item.index !== 3 && item.index !== 6 && item.index !== 4
+                  item.index !== 3  && item.index !== 4
               )
               .map((item, key) => (
                 <FoldMenuItem key={key} {...item} />
-              ))}{" "}
+              ))} {" "}
           </>
         )}
       </AnimatePresence>

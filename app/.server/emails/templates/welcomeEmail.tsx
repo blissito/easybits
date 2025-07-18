@@ -212,7 +212,7 @@ export const welcomeEmail = ({
               background-image: url(https://i.imgur.com/vt00XNp.png);
             "
           >
-            <a
+                <a
               href="https://www.facebook.com/profile.php?id=61574014173527"
               target="blank"
               style="text-decoration: none"
@@ -224,35 +224,35 @@ export const welcomeEmail = ({
               />
             </a>
             <a
-              href="https://www.linkedin.com/company/106821922/"
-              target="blank"
-              style="text-decoration: none"
-            >
-              <img
-                alt="linkedin"
-                style="width: 18px; height: 18px; margin: 0 4px"
-                src="https://i.imgur.com/npFiXsH.png"
-              />
-            </a>
-            <a
-              href="https://x.com/EasyBitsCloud"
-              target="blank"
-              style="text-decoration: none"
-            >
-              <img
-                alt="x"
-                style="width: 16px; height: 16px; margin: 0 4px"
-                src="https://i.imgur.com/SiJY9vZ.png"
-              />
-            </a>
-
-            <a
               href="https://www.instagram.com/easybits.cloud/"
               target="blank"
               style="text-decoration: none"
             >
               <img
                 alt="instagram"
+                style="width: 18px; height: 18px; margin: 0 4px"
+                src="https://i.imgur.com/npFiXsH.png"
+              />
+            </a>
+            <a
+              href="https://www.linkedin.com/company/easybitscloud/"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="linkedin"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/SiJY9vZ.png"
+              />
+            </a>
+
+            <a
+            href="https://x.com/EasyBitsCloud"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="twitter"
                 style="width: 16px; height: 16px; margin: 0 4px"
                 src="https://i.imgur.com/Ft5uWk4.png"
               />

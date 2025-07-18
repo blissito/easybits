@@ -20,6 +20,8 @@ export default function StartComponent({
   const [share, setShare] = useState(0);
   const [copied, setCopied] = useState(false);
   const brutalToast = useBrutalToast();
+  const navigate = useNavigate();
+  
   const saveLandingFlag = (num: number) => {
     localStorage.setItem("landingFlag", String(num));
     setLanding(num);
@@ -48,10 +50,30 @@ export default function StartComponent({
   useEffect(() => {
     setLanding(getLandingFlag());
     setShare(getShareFlag());
-    // if (Object.values(tasks).every(Boolean)) {
-    //   navigate("/dash/estadisticas");
-    // } // @todo @brendi confirmar si se redirecciona porfs
   }, []);
+
+  // Verificar si todas las tareas están completadas
+  useEffect(() => {
+    const allTasksCompleted = tasks[0] && tasks[1] && tasks[2] && landing === 1 && share === 1;
+    
+    if (allTasksCompleted && !user.trained) {
+      // Actualizar el campo trained en la base de datos
+      fetch("/api/v1/user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          intent: "update_trained",
+          userId: user.id,
+        }),
+      }).then(() => {
+        // Redirigir a la página de inicio para que el loader decida qué componente mostrar
+        navigate("/start", { replace: true });
+      }).catch(console.error);
+    }
+  }, [tasks, landing, share, user.trained, user.id, navigate]);
+
   return (
     <div className="flex justify-center items-center relative  w-full ">
       <Toaster />
