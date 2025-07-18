@@ -246,6 +246,9 @@ export const updateOrCreateProductAndPrice = async (
   const accountId = user.stripeIds[isProd ? 0 : 1];
   if (!accountId) return { ok: false, error: "Cuenta de Stripe no encontrada" };
 
+  // Construir la URL de la meta imagen
+  const metaImageUrl = `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
+
   if (asset.stripeProduct && asset.stripePrice) {
     const priceResult = await Effect.runPromiseExit(
       createNewPriceForProductEffect({
@@ -274,7 +277,8 @@ export const updateOrCreateProductAndPrice = async (
       productId: asset.stripeProduct,
       priceId: price.id,
       accountId,
-      images: [],
+      images: [metaImageUrl],
+      description: asset.note || undefined,
     });
     await updateAsset(asset.id, { stripePrice: price.id });
     await configureMerchantWebhook(user.id);
@@ -285,7 +289,9 @@ export const updateOrCreateProductAndPrice = async (
         asset.slug,
         Number(asset.price),
         asset.currency,
-        accountId
+        accountId,
+        asset.note || undefined,
+        [metaImageUrl]
       )
     );
     if (productResult._tag === "Failure") {
@@ -400,7 +406,9 @@ export const createProductAndPriceEffect = (
   name: string,
   price: number,
   currency: string,
-  accountId: string
+  accountId: string,
+  description?: string,
+  images: string[] = []
 ) =>
   Effect.tryPromise({
     try: async () => {
@@ -411,6 +419,8 @@ export const createProductAndPriceEffect = (
         "default_price_data[unit_amount]",
         String(price * 100)
       );
+      if (description) url.searchParams.set("description", description);
+      images.forEach((img) => url.searchParams.append("images[]", img));
       const headers = {
         Authorization: apiKey,
         "Stripe-Account": accountId,

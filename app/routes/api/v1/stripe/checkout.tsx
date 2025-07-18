@@ -44,7 +44,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     // Prod is index 0, dev is index 1
     const url = await createCheckoutURL(asset, user);
-    console.log("WTF?", url);
     if (url) {
       return redirect(url);
     }
