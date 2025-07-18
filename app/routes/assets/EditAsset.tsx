@@ -7,11 +7,15 @@ import { Link, redirect } from "react-router";
 import { useEffect, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
 import { FaArrowLeft } from "react-icons/fa";
+import { getAccountCapabilities } from "~/.server/stripe_v2";
 
 const PADDING_LAYOUT = `pl-4`;
 
 export const loader = async ({ params, request }: Route.LoaderArgs) => {
-  const user = await getUserOrRedirect(request);
+  const isProd = process.env.NODE_ENV === "production";
+  const u = await getUserOrRedirect(request);
+  const user = { ...u, stripeId: u.stripeIds[isProd ? 0 : 1] };
+  const capabilities = await getAccountCapabilities(user.stripeId, !isProd);
   const asset = await db.asset.findUnique({
     where: {
       id: params.assetId,
@@ -40,11 +44,16 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
   }
 
   // Asegurar que host nunca sea null
-  return { host: user.host || "", asset: assetToReturn, files };
+  return {
+    host: user.host || "",
+    asset: assetToReturn,
+    files,
+    onboardingDone: capabilities?.card_payments?.status === "active",
+  };
 };
 
 export default function EditAsset({ loaderData }: Route.ComponentProps) {
-  const { host, asset, files } = loaderData;
+  const { host, asset, files, onboardingDone } = loaderData;
   const [prev, setPrev] = useState(asset);
   useEffect(() => {
     setPrev(asset);
@@ -73,7 +82,7 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
       </nav>
       <main className={cn("grid grid-cols-12 md:pl-20 items-start ")}>
         <EditAssetForm
-          // files={files}
+          onboardingDone={onboardingDone}
           assetFiles={files}
           host={host}
           asset={asset}

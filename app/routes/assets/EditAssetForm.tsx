@@ -85,7 +85,9 @@ export const EditAssetForm = ({
   assetFiles,
   stripeAccountId,
   onUpdate,
+  onboardingDone,
 }: {
+  onboardingDone?: boolean;
   stripeAccountId?: string;
   onUpdate?: (arg0: Partial<Asset>) => void;
   assetFiles?: PrismaFile[];
@@ -372,6 +374,7 @@ export const EditAssetForm = ({
             ref={videoFileInputRef}
           /> */}
           <PriceInput
+            onboardingDone={onboardingDone}
             stripeAccountId={stripeAccountId}
             defaultPrice={asset.price}
             defaultCurrency={asset.currency}

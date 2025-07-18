@@ -1,19 +1,15 @@
-import { BsStripe } from "react-icons/bs";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";
 
 import { Empty } from "./assets/Empty";
 
-import { useFetcher, useSubmit } from "react-router";
+import { useFetcher } from "react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import Spinner from "~/components/common/Spinner";
-import { Modal } from "~/components/common/Modal";
 import type { Route } from "./+types/sales";
 import {
   ConnectAccountOnboarding,
   ConnectComponentsProvider,
-  // ConnectPayments,
 } from "@stripe/react-connect-js";
 import {
   loadConnectAndInitialize,
@@ -24,6 +20,8 @@ import { getPaginatedOrders } from "~/.server/pagination/orders";
 import { PaginatedTable } from "~/components/common/pagination/PaginatedTable";
 import { TablePagination } from "~/components/common/pagination/TablePagination";
 import { getUserOrRedirect } from "~/.server/getters";
+import { FaStripeS } from "react-icons/fa";
+import { getAccountCapabilities } from "~/.server/stripe_v2";
 
 // @todo remove from here
 const publishableKey =
@@ -33,6 +31,7 @@ const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (
 export const loader = async ({ request }: Route.LoaderArgs) => {
   // Obtener usuario autenticado
   const user = await getUserOrRedirect(request);
+
   // Leer parámetros de paginación de la URL
   const url = new URL(request.url, `http://${request.headers.get("host")}`);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -44,17 +43,28 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     page,
     pageSize,
   });
-  return { user, orders, pagination };
+  const isProd = process.env.NODE_ENV === "production";
+  const u = { ...user, stripeId: user.stripeIds[isProd ? 0 : 1] };
+  const capabilities = await getAccountCapabilities(u.stripeId, !isProd);
+  return {
+    user: u,
+    orders,
+    pagination,
+    onboardingDone: capabilities?.card_payments?.status === "active",
+  };
 };
 
 export default function Sales({ loaderData }: Route.ComponentProps) {
   const user = loaderData.user;
   const orders = loaderData.orders;
+  const onboardingDone = loaderData.onboardingDone;
   const pagination = loaderData.pagination;
   const fetcher = useFetcher();
+
   // Stripe connect client instance
   const [stripeConnectInstance, setSCI] =
     useState<null | StripeConnectInstance>(null);
+
   const createInstance = (secret: string) => {
     const instance = loadConnectAndInitialize({
       fetchClientSecret: async () => secret,
@@ -62,7 +72,6 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
     });
     setSCI(instance);
   };
-  //
 
   const handleStripeConnect = () => {
     fetcher.submit(
@@ -75,22 +84,28 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
       }
     );
   };
+
   const isLoading = fetcher.state !== "idle";
   const clientSecret = fetcher.data?.clientSecret;
 
   useEffect(() => {
     if (!clientSecret) return;
-
     createInstance(clientSecret);
   }, [clientSecret]);
 
-  // Aquí se detona todo @todo revisit: tal vez ya no es necesario usando solo Order
+  // Solo obtener client secret si el onboarding no está completo
   useEffect(() => {
-    fetcher.submit(
-      { intent: "get_client_secret", accountId: user?.stripeId },
-      { method: "post", action: "/api/v1/stripe/account" }
-    );
-  }, []);
+    if (user.stripeId && !onboardingDone) {
+      fetcher.submit(
+        { intent: "get_client_secret" },
+        { method: "post", action: "/api/v1/stripe/account" }
+      );
+    }
+  }, [user.stripeId, onboardingDone]);
+
+  const handleOnboardingExit = () => {
+    console.log("The account has exited onboarding");
+  };
 
   return (
     <>
@@ -100,41 +115,48 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
           LAYOUT_PADDING
         )}
       >
-        <Header title="Ventas" searcher={false} layout={false} />
+        <Header
+          title="Ventas"
+          searcher={false}
+          layout={false}
+          cta={
+            <ConectStripeButton
+              accountId={user.stripeId}
+              isLoading={isLoading}
+              onClick={handleStripeConnect}
+              onboardingCompleted={onboardingDone}
+            />
+          }
+        />
         {orders.length < 1 && (
           <EmptySales
             cta={
-              <BrutalButton
-                isDisabled={user?.stripeId}
+              <ConectStripeButton
+                accountId={user.stripeId}
                 isLoading={isLoading}
                 onClick={handleStripeConnect}
-              >
-                {user?.stripeId
-                  ? "Cuenta conectada: " + user.stripeId
-                  : "Conectar con stripe"}
-              </BrutalButton>
+                onboardingCompleted={onboardingDone}
+              />
             }
           />
         )}
-        <PaginatedTable
-          data={orders}
-          totalItems={pagination.totalItems}
-          config={{ defaultPageSize: pagination.pageSize }}
-        >
-          {(paginatedOrders) => (
-            <>
-              <SalesTable orders={paginatedOrders} />
-              <TablePagination />
-            </>
-          )}
-        </PaginatedTable>
-        {stripeConnectInstance && (
+        {orders.length > 0 && (
+          <PaginatedTable
+            data={orders}
+            totalItems={pagination.totalItems}
+            config={{ defaultPageSize: pagination.pageSize }}
+          >
+            {(paginatedOrders) => (
+              <>
+                <SalesTable orders={paginatedOrders as any} />
+                <TablePagination />
+              </>
+            )}
+          </PaginatedTable>
+        )}
+        {stripeConnectInstance && !onboardingDone && (
           <ConnectComponentsProvider connectInstance={stripeConnectInstance}>
-            <ConnectAccountOnboarding
-              onExit={() => {
-                console.log("The account has exited onboarding"); // @todo notify or save status?
-              }}
-            />
+            <ConnectAccountOnboarding onExit={handleOnboardingExit} />
           </ConnectComponentsProvider>
         )}
       </article>
@@ -159,85 +181,43 @@ export const EmptySales = ({ cta }: { cta: ReactNode }) => {
           ¡Sigue compartiendo tu tienda!
         </span>
       }
-      footer={
-        <div className="flex gap-6 justify-center">
-          {cta || <BrutalButton>Conecta con Stripe</BrutalButton>}
-        </div>
-      }
+      footer={cta && <div className="flex gap-6 justify-center">{cta}</div>}
     />
   );
 };
 
-const EmptyPayment = ({
-  connectedAccountId,
-  stripeConnectInstance,
-  setOnboardingExited,
-  isStripeLoading,
-  isModalOpen,
-  setIsModalOpen,
-}: any) => {
-  const submit = useSubmit();
-  const handleSubmit = () => {
-    setIsModalOpen(true);
+const ConectStripeButton = ({
+  accountId,
+  isLoading,
+  onClick,
+  onboardingCompleted,
+}: {
+  accountId?: string | null;
+  isLoading: boolean;
+  onClick: () => void;
+  onboardingCompleted?: boolean;
+}) => {
+  if (onboardingCompleted) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-2 bg-green-100 border-2 border-green-500 rounded-lg">
+        <FaStripeS className="text-green-600" />
+        <span className="text-green-800 font-medium">Cuenta Stripe activa</span>
+      </div>
+    );
+  }
 
-    const formData = new FormData();
-    formData.append("stripeAccount", connectedAccountId);
-    submit(formData, {
-      method: "post",
-    });
-  };
   return (
-    <Empty
-      illustration={
-        <img
-          className="w-44 mx-auto "
-          src="/sales-empty.webp"
-          alt="No hay ventas registradas"
-        />
-      }
-      title="Conecta una pasarela de pagos"
-      text={<span>Conectate a Stripe para ofrecerte pagos seguros.</span>}
-      footer={
-        <div className="flex gap-6 justify-center">
-          {!connectedAccountId ? (
-            <BrutalButton
-              className="bg-[#6772E5] flex gap-2 items-center"
-              onClick={handleSubmit}
-            >
-              Conectar Stripe
-              <BsStripe />
-            </BrutalButton>
-          ) : (
-            <BrutalButton
-              className="bg-[#6772E5] flex gap-2 items-center"
-              onClick={() => setIsModalOpen(true)}
-            >
-              Ve tu info de Stripe
-              <BsStripe />
-            </BrutalButton>
-          )}
-          <Modal
-            key="asset-payment"
-            containerClassName="z-50 text-black text-center"
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-          >
-            <div className="h-full overflow-scroll px-9">
-              {stripeConnectInstance || isStripeLoading ? (
-                <ConnectComponentsProvider
-                  connectInstance={stripeConnectInstance}
-                >
-                  <ConnectAccountOnboarding
-                    onExit={() => setOnboardingExited(true)}
-                  />
-                </ConnectComponentsProvider>
-              ) : (
-                <Spinner />
-              )}
-            </div>
-          </Modal>
-        </div>
-      }
-    />
+    <BrutalButton
+      isDisabled={!!accountId}
+      isLoading={isLoading}
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-2">
+        <FaStripeS />
+        <span>
+          {accountId ? "Id: " + accountId : "Conecta tu cuenta Stripe"}
+        </span>
+      </div>
+    </BrutalButton>
   );
 };

@@ -1,0 +1,94 @@
+# Page snapshot
+
+```yaml
+- main:
+  - link "EasyBits Logo":
+    - /url: /inicio
+    - img "EasyBits Logo"
+  - list:
+    - link "¡Empieza ya!":
+      - /url: /dash
+      - img
+      - button "¡Empieza ya!"
+    - link "Estadísticas":
+      - /url: /dash/estadisticas
+      - img
+      - button "Estadísticas"
+    - link "Assets":
+      - /url: /dash/assets
+      - img
+      - button "Assets"
+    - link "Mi tienda":
+      - /url: /dash/tienda
+      - img
+      - button "Mi tienda"
+    - link "Ventas":
+      - /url: /dash/ventas
+      - img
+      - button "Ventas"
+    - link "Clientes":
+      - /url: /dash/clientes
+      - img
+      - button "Clientes"
+  - separator
+  - list:
+    - link "Archivos":
+      - /url: /dash/archivos
+      - img
+      - button "Archivos"
+    - link "Compras":
+      - /url: /dash/compras
+      - img
+      - button "Compras"
+  - list:
+    - link "Perfil":
+      - /url: /dash/perfil
+      - img
+      - button "Perfil"
+    - link "Cerrar Sesión":
+      - /url: /logout
+      - img
+      - button "Cerrar Sesión"
+  - article:
+    - navigation:
+      - heading "Ventas" [level=1]
+    - article:
+      - text: Asset Email Cliente Fecha Precio Acciones
+      - img "meta image"
+      - text: Cómo Crear y publicar un libro electrónico con EasyBits fixtergeek@gmail.com
+      - paragraph: Héctor BlisS
+      - text: 7 de julio de 2025 $399 MXN
+      - button:
+        - img
+      - img "meta image"
+      - text: Cómo Crear y publicar un libro electrónico con EasyBits fixtergeek@gmail.com
+      - paragraph: Héctor BlisS
+      - text: 7 de julio de 2025 $399 MXN
+      - button:
+        - img
+      - img "meta image"
+      - text: Cómo Crear y publicar un libro electrónico con EasyBits fixtergeek@gmail.com
+      - paragraph: Héctor BlisS
+      - text: 7 de julio de 2025 $399 MXN
+      - button:
+        - img
+      - img "meta image"
+      - text: Cómo Crear y publicar un libro electrónico con EasyBits brenda@fixter.org
+      - paragraph: Brenda Gonzalez
+      - text: 1 de julio de 2025 $ 0 mxn
+      - button:
+        - img
+      - img "meta image"
+      - text: Cómo Crear y publicar un libro electrónico con EasyBits bremin11.20.93@gmail.com
+      - paragraph: Brenda Go
+      - text: 1 de julio de 2025 $ 0 mxn
+      - button:
+        - img
+      - img "meta image"
+      - text: Prueba de Pelusina contacto@fixter.org
+      - paragraph: Fixer Geek
+      - text: 1 de julio de 2025 $ 0 mxn
+      - button:
+        - img
+    - iframe
+```

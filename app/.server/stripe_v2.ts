@@ -105,13 +105,15 @@ const checkoutSessionsURL = "https://api.stripe.com/v1/checkout/sessions";
 const version = "2025-04-30.preview";
 const brandingURL = "https://api.stripe.com/v1/account/branding_settings";
 
+// @TODO: every function is making a query: avoid it. Just pass the same user from top level
 export async function configureMerchantWebhook(userId: string) {
   try {
-    const user = await db.user.findUnique({
+    const u = await db.user.findUnique({
       where: { id: userId },
-      select: { stripeId: true },
+      select: { stripeIds: true },
     });
-
+    const isProd = process.env.NODE_ENV === "production";
+    const user = { ...u, stripeId: u.stripeIds[isProd ? 0 : 1] };
     if (!user?.stripeId) {
       throw new Error("User doesn't have a Stripe account");
     }
@@ -152,23 +154,15 @@ export async function configureMerchantWebhook(userId: string) {
 }
 
 export const createCheckoutURL = async (
-  assetId: string,
-  accountId: string,
+  asset: Asset,
+  user: User,
   brandOptions?: {
     primaryColor?: string;
     logo?: string;
     businessName?: string;
   }
 ) => {
-  // need to validate if the stripe id is valid
-  const user = await db.user.findFirst({
-    where: { stripeId: accountId },
-    include: { storeConfig: true },
-  });
-  if (!user) return null; // no account found
-
-  const asset = await db.asset.findUnique({ where: { id: assetId } });
-  if (!asset) return null; // no asset found
+  console.log("!!", asset, user);
 
   if (!asset.stripePrice) return null; // no price found
 
@@ -203,7 +197,7 @@ export const createCheckoutURL = async (
   // Si hay colores configurados, aplicar configuración de marca automáticamente
   if (finalBrandOptions.primaryColor || finalBrandOptions.logo) {
     // Configurar colores de marca en la cuenta de Stripe antes del checkout
-    await configureBrandColors(accountId, {
+    await configureBrandColors(user.stripeId!, {
       primaryColor: finalBrandOptions.primaryColor,
       logo: finalBrandOptions.logo,
       primaryButtonColor: finalBrandOptions.primaryColor, // usar el mismo color para el botón
@@ -214,7 +208,7 @@ export const createCheckoutURL = async (
     method: "post",
     headers: {
       Authorization: apiKey,
-      "Stripe-Account": accountId,
+      "Stripe-Account": user.stripeId!,
       "Stripe-Version": "2025-04-30.preview",
       "content-type": "application/x-www-form-urlencoded",
     },
@@ -231,7 +225,7 @@ export const createCheckoutURL = async (
       method: "post",
       headers: {
         Authorization: apiKey,
-        "Stripe-Account": accountId,
+        "Stripe-Account": user.stripeId!,
         "Stripe-Version": "2025-04-30.preview",
         "content-type": "application/x-www-form-urlencoded",
       },
@@ -249,7 +243,9 @@ export const updateOrCreateProductAndPrice = async (
   const user = await getUserOrNull(request);
   if (!user) return { ok: false, error: "Usuario no encontrado" };
 
-  const accountId = user.stripeId;
+  const isProd = process.env.NODE_ENV === "production";
+
+  const accountId = user.stripeIds[isProd ? 0 : 1];
   if (!accountId) return { ok: false, error: "Cuenta de Stripe no encontrada" };
 
   stripeLogger.info("About to create price");
@@ -481,26 +477,90 @@ export const createClientSecret = async ({
   return data.client_secret;
 };
 
+const getAuthHeader = (useDev: boolean = false) => {
+  const key =
+    useDev || isDev
+      ? process.env.STRIPE_DEV_SECRET_KEY
+      : process.env.STRIPE_SECRET_KEY;
+  return `Bearer ${key}`;
+};
+
 export const getAccountCapabilities = async (
   accountId?: string,
-  isDev: boolean = false
+  useDev: boolean = false
 ): Promise<Capabilities | null> => {
   if (!accountId) return null;
 
   const url = new URL(accountsURL + `/${accountId}`);
-  // url.searchParams.append("include", "identity");
   url.searchParams.set("include", "configuration.merchant");
-  const Authorization = `Bearer ${
-    isDev ? process.env.STRIPE_DEV_SECRET_KEY : apiKey
-  }`;
+  const Authorization = getAuthHeader(useDev);
   const response = await fetch(url.toString(), {
     headers: {
       "Stripe-Version": version,
       Authorization,
     },
   });
+
+  if (!response.ok) {
+    console.error(
+      "Error fetching capabilities:",
+      response.status,
+      response.statusText
+    );
+    return null;
+  }
+
   const data = await response.json();
   return data.configuration?.merchant?.capabilities;
+};
+
+// Nueva función para obtener información completa del estado de la cuenta
+export const getAccountStatus = async (
+  accountId?: string,
+  isDev: boolean = false
+): Promise<{
+  capabilities: Capabilities | null;
+  requirements: any;
+  isOnboardingComplete: boolean;
+} | null> => {
+  if (!accountId) return null;
+
+  const url = new URL(accountsURL + `/${accountId}`);
+  url.searchParams.set("include", "configuration.merchant,requirements");
+  const Authorization = `Bearer ${
+    isDev ? process.env.STRIPE_DEV_SECRET_KEY : apiKey
+  }`;
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Stripe-Version": version,
+        Authorization,
+      },
+    });
+
+    if (!response.ok) {
+      console.error("Error fetching account status:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const capabilities = data.configuration?.merchant?.capabilities;
+    const requirements = data.requirements;
+
+    // Determinar si el onboarding está completo
+    const isOnboardingComplete =
+      capabilities?.card_payments?.status === "active";
+
+    return {
+      capabilities,
+      requirements,
+      isOnboardingComplete,
+    };
+  } catch (error) {
+    console.error("Error fetching account status:", error);
+    return null;
+  }
 };
 
 export const findOrCreateStripeAccountV2 = async (email: string) => {

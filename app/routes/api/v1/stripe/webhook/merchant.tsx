@@ -26,6 +26,27 @@ export const action = async ({
   // Testing new event handler
   await webhookHandlers[event.type](event, request); // this can throw and it's ok
 
+  // Manejo específico para actualizaciones de cuenta (onboarding completado)
+  if (event.type === "account.updated") {
+    const account = event.data.object;
+    const accountId = account.id;
+
+    // Buscar usuario por stripeId
+    const user = await db.user.findFirst({
+      where: {
+        stripeIds: {
+          has: accountId,
+        },
+      },
+    });
+
+    if (user) {
+      console.info(`Account ${accountId} updated for user ${user.email}`);
+      // Aquí podrías actualizar el estado del usuario si es necesario
+      // Por ejemplo, marcar que el onboarding está completo
+    }
+  }
+
   // Manejo de éxitos
   // if (
   //   event.type === "payment_intent.succeeded" ||
