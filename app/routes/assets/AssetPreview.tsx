@@ -141,7 +141,7 @@ const ShareLink = ({
 
 export const Sharing = ({ link }: { link: string }) => {
   return (
-    <div className="flex justify-center gap-4 items-center mt-8">
+    <div className="flex justify-center gap-2 md:gap-4 items-center mt-8">
       <SocialMedia
         onClick={() => {
           navigator.clipboard.writeText(link);

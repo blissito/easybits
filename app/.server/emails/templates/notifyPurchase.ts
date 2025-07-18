@@ -130,67 +130,62 @@ Con el email: ${email}
                 background-image: url(https://i.imgur.com/vt00XNp.png);
               "
             >
-              <a
-                href="https://www.facebook.com/profile.php?id=61554028371141"
-                target="blank"
-                style="text-decoration: none"
-                   rel="noreferer"
-              >
-                <img
-                  alt="facebook"
-                  style="width: 16px; height: 16px; margin: 0 4px"
-                  src="https://i.imgur.com/UPZRiNu.png"
-                />
-              </a>
-              <a
-                href="https://www.instagram.com/_formmyapp/"
-                target="blank"
-                style="text-decoration: none"
-                   rel="noreferer"
-              >
-                <img
-                  alt="instagram"
-                  style="width: 18px; height: 18px; margin: 0 4px"
-                  src="https://i.imgur.com/npFiXsH.png"
-                />
-              </a>
-              <a
-                href="https://www.linkedin.com/company/99530596"
-                target="blank"
-                style="text-decoration: none"
-                   rel="noreferer"
-              >
-                <img
-                  alt="linkedin"
-                  style="width: 16px; height: 16px; margin: 0 4px"
-                  src="https://i.imgur.com/SiJY9vZ.png"
-                />
-              </a>
-  
-              <a
-                href="https://twitter.com/FormmyApp1"
-                target="blank"
-                style="text-decoration: none"
-                   rel="noreferer"
-              >
-                <img
-                  alt="twitter"
-                  style="width: 16px; height: 16px; margin: 0 4px"
-                  src="https://i.imgur.com/Ft5uWk4.png"
-                />
-              </a>
-              <a
-                href="https://www.youtube.com/@_FormmyApp"
-                target="blank"
-                style="text-decoration: none"
-                   rel="noreferer"
-              >
-                <img
-                  alt="youtube"
-                  style="width: 16px; height: 16px; margin: 0 4px"
-                  src="https://i.imgur.com/OCSq1sz.png"
-                />
-              </a>
+                  <a
+              href="https://www.facebook.com/profile.php?id=61574014173527"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="facebook"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/UPZRiNu.png"
+              />
+            </a>
+            <a
+              href="https://www.instagram.com/easybits.cloud/"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="instagram"
+                style="width: 18px; height: 18px; margin: 0 4px"
+                src="https://i.imgur.com/npFiXsH.png"
+              />
+            </a>
+            <a
+              href="https://www.linkedin.com/company/easybitscloud/"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="linkedin"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/SiJY9vZ.png"
+              />
+            </a>
+
+            <a
+            href="https://x.com/EasyBitsCloud"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="twitter"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/Ft5uWk4.png"
+              />
+            </a>
+            <a
+              href="https://www.youtube.com/@EasyBitsCloud"
+              target="blank"
+              style="text-decoration: none"
+            >
+              <img
+                alt="youtube"
+                style="width: 16px; height: 16px; margin: 0 4px"
+                src="https://i.imgur.com/OCSq1sz.png"
+              />
+            </a>
               <div style="text-align: center; margin-top: 16px">
                 <p style="color: #6a6966; font-size: 10px">
                   EasyBits. La mejor plataforma para compartir tu trabajo.

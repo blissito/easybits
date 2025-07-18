@@ -101,19 +101,10 @@ export const purchase = ({
                     price || 0
                   }</strong>
                 </p>
-                 <a href="https://www.formmy.app/profile" target="blank">
-            <div
-              style="
-                background: black;
-                height: 40px;
-                width: 150px;
-       
-                border-radius: 12px;
-              "
-            >
               <a
               href="${link}"
-                style="
+              >
+                <button  style="
                   background: #9870ed;
                   height: 40px;
                   font-weight: 500;
@@ -125,12 +116,11 @@ export const purchase = ({
                   font-size: 16px;
                   margin-left: -4px;
                   margin-top: -4px;
-                "
-              >
+                  text-decoration:none;
+                ">
                 Ver contenido
+                </button>
               </a>
-            </div>
-          </a>
               </td>
             </tr>
           </table>
@@ -178,7 +168,7 @@ export const purchase = ({
             "
           >
             <a
-              href="https://www.facebook.com/profile.php?id=61554028371141"
+              href="https://www.facebook.com/profile.php?id=61574014173527"
               target="blank"
               style="text-decoration: none"
             >
@@ -189,7 +179,7 @@ export const purchase = ({
               />
             </a>
             <a
-              href="https://www.instagram.com/_formmyapp/"
+              href="https://www.instagram.com/easybits.cloud/"
               target="blank"
               style="text-decoration: none"
             >
@@ -200,7 +190,7 @@ export const purchase = ({
               />
             </a>
             <a
-              href="https://www.linkedin.com/company/99530596"
+              href="https://www.linkedin.com/company/easybitscloud/"
               target="blank"
               style="text-decoration: none"
             >
@@ -212,7 +202,7 @@ export const purchase = ({
             </a>
 
             <a
-              href="https://twitter.com/FormmyApp1"
+            href="https://x.com/EasyBitsCloud"
               target="blank"
               style="text-decoration: none"
             >
@@ -223,7 +213,7 @@ export const purchase = ({
               />
             </a>
             <a
-              href="https://www.youtube.com/@_FormmyApp"
+              href="https://www.youtube.com/@EasyBitsCloud"
               target="blank"
               style="text-decoration: none"
             >
