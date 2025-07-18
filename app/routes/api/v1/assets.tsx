@@ -23,14 +23,17 @@ const validatePriceUpdate = (oldPrice: number, newPrice: number): void => {
   if (newPrice < 0) {
     throw new Error("El precio no puede ser negativo");
   }
+
+  // Validar que el precio no sea demasiado alto (más de 999,999)
   if (newPrice > 999999) {
     throw new Error("El precio es demasiado alto. Máximo permitido: $999,999");
   }
+
+  // Validar que el precio no sea NaN o infinito
   if (!Number.isFinite(newPrice)) {
     throw new Error("El precio debe ser un número válido");
   }
-  // Si hay un precio anterior, validar cambios muy pequeños que podrían ser errores
-  // (El warning se elimina, permitimos cualquier cambio)
+
   // Validar que el precio tenga máximo 2 decimales
   if (newPrice !== Math.round(newPrice * 100) / 100) {
     throw new Error("El precio debe tener máximo 2 decimales");
@@ -133,7 +136,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     await deleteObject(key, "easybits-public");
     await deleteObject(key, "easybits-public");
     await deleteObject(key, "easybits-public"); // revisit 😅
-    console.log("::DELETED: ", key);
     return null;
     // const asset = await db.asset.findUnique({
     //   where: {
@@ -220,7 +222,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "update_asset") {
-    console.log("[ASSET] SERVER: update_asset intent recibido");
     // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
     const s3ObjectsToDelete = data.s3ObjectsToDelete;
@@ -234,9 +235,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
     const oldPrice = asset.price || 0;
     const newPrice = Number(data.price);
-    console.log(
-      `[ASSET] BEFORE UPDATE: oldPrice=${oldPrice}, newPrice=${newPrice}`
-    );
+
     // Validar el cambio de precio antes de proceder
     try {
       validatePriceUpdate(oldPrice, newPrice);
@@ -245,7 +244,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
         error instanceof Error
           ? error.message
           : "Error de validación de precio";
-      console.log(`[ASSET] VALIDATION ERROR: ${errorMessage}`);
       return new Response(errorMessage, { status: 400 });
     }
     // return;
@@ -263,22 +261,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
       }, // @todo remove id in parsing?
     });
     const nuevo = asset.price;
-    console.log(`[ASSET] AFTER UPDATE: asset.id=${asset.id}, nuevo=${nuevo}`);
     if (oldPrice !== nuevo) {
-      console.log(
-        `[ASSET] Llamando a updateOrCreateProductAndPrice para asset.id=${asset.id}`
-      );
-      const stripeResult = await updateOrCreateProductAndPrice(asset, request);
-      console.log(`[ASSET] Stripe result:`, stripeResult);
-      if (!stripeResult.ok) {
-        console.log(
-          `[ASSET] ERROR al actualizar precio en Stripe: ${stripeResult.error}`
-        );
-        return new Response(
-          `Error al actualizar el precio en Stripe: ${stripeResult.error}`,
-          { status: 500 }
-        );
-      }
+      await updateOrCreateProductAndPrice(asset, request); // stripe stuff
+      // }
     }
     // @todo errors?
     await updateProduct({
@@ -292,7 +277,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     try {
       // @todo delete vars
       const delRes = await deleteObjects(s3ObjectsToDelete); // @todo Revisit
-      console.log("DELETED??", delRes);
       const remRes = await db.file.deleteMany({
         where: {
           storageKey: {
@@ -300,9 +284,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
           },
         },
       });
-      console.log("REMOVED??", remRes);
     } catch (e) {
-      console.error("NO se pudo borrar: ", e);
+      // console.error("NO se pudo borrar: ", e);
     }
     //
   }

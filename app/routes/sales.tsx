@@ -120,23 +120,27 @@ export default function Sales({ loaderData }: Route.ComponentProps) {
           searcher={false}
           layout={false}
           cta={
-            <ConectStripeButton
-              accountId={user.stripeId}
-              isLoading={isLoading}
-              onClick={handleStripeConnect}
-              onboardingCompleted={onboardingDone}
-            />
-          }
-        />
-        {orders.length < 1 && (
-          <EmptySales
-            cta={
+            user.stripeId && (
               <ConectStripeButton
                 accountId={user.stripeId}
                 isLoading={isLoading}
                 onClick={handleStripeConnect}
                 onboardingCompleted={onboardingDone}
               />
+            )
+          }
+        />
+        {orders.length < 1 && (
+          <EmptySales
+            cta={
+              !user.stripeId && (
+                <ConectStripeButton
+                  accountId={user.stripeId}
+                  isLoading={isLoading}
+                  onClick={handleStripeConnect}
+                  onboardingCompleted={onboardingDone}
+                />
+              )
             }
           />
         )}

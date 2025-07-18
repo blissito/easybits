@@ -162,8 +162,6 @@ export const createCheckoutURL = async (
     businessName?: string;
   }
 ) => {
-  console.log("!!", asset, user);
-
   if (!asset.stripePrice) return null; // no price found
 
   // Usar configuración de marca de la base de datos si no se proporciona brandOptions
@@ -220,7 +218,7 @@ export const createCheckoutURL = async (
     const piUrl = `https://api.stripe.com/v1/payment_intents/${sessionData.payment_intent}`;
     const params = new URLSearchParams();
     params.set("metadata[checkout_session]", sessionData.id);
-    params.set("metadata[assetId]", assetId);
+    params.set("metadata[assetId]", asset.id);
     await fetch(piUrl, {
       method: "post",
       headers: {
@@ -247,8 +245,6 @@ export const updateOrCreateProductAndPrice = async (
 
   const accountId = user.stripeIds[isProd ? 0 : 1];
   if (!accountId) return { ok: false, error: "Cuenta de Stripe no encontrada" };
-
-  stripeLogger.info("About to create price");
 
   if (asset.stripeProduct && asset.stripePrice) {
     const priceResult = await Effect.runPromiseExit(
@@ -450,7 +446,6 @@ export const getAccountPayments = async (accountId: string, isDev: boolean) => {
   };
   const response = await fetch(url.toString(), { headers });
   const json = await response.json();
-  console.info("payments", json);
   return json.data;
 };
 
@@ -473,7 +468,6 @@ export const createClientSecret = async ({
   });
   const response = await fetch(url.toString(), init);
   const data = await response.json();
-  //   console.log("Account session", data);
   return data.client_secret;
 };
 
@@ -603,7 +597,6 @@ export const createPaymentsSession = async (accountId: string) => {
   });
   const response = await fetch(url.toString(), init);
   const data = await response.json();
-  //   console.log("Account session", data);
   return data.client_secret;
 };
 
@@ -616,7 +609,6 @@ export const createOnboarding = async (accountId: string): Promise<string> => {
   });
   const response = await fetch(url.toString(), init);
   const data = await response.json();
-  //   console.log("Account session", data);
   return data.client_secret;
 };
 

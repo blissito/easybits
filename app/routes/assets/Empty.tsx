@@ -35,13 +35,7 @@ export const Empty = ({
         )}
       </p>
 
-      {footer ? (
-        footer
-      ) : (
-        <BrutalButton onClick={onClick} className="bg-brand-500">
-          + Agregar
-        </BrutalButton>
-      )}
+      {footer}
     </section>
   );
 };

@@ -56,17 +56,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "create_new_account") {
     const user = await getUserOrRedirect(request);
-
+    const isProd = process.env.NODE_ENV === "production";
     try {
       const account = await createAccountV2(user);
 
       // Actualizar el usuario con el nuevo stripeId
+      const stripeIds = [...user.stripeIds];
+      stripeIds[isProd ? 0 : 1] = account.id;
+      if (!stripeIds[0]) {
+        stripeIds[0] = "";
+      } else if (!stripeIds[1]) {
+        stripeIds[1] = "";
+      }
+
       await db.user.update({
         where: { id: user.id },
         data: {
-          stripeIds: {
-            push: account.id,
-          },
+          stripeIds,
         },
       });
 
