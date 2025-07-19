@@ -63,62 +63,40 @@ export default function EbookReader() {
       {file ? (
         <>
           <div className="flex flex-col items-center justify-start py-8 px-4 min-h-screen bg-gray-50">
-            {/* Container with constrained width */}
-            <div className="w-full max-w-4xl mx-auto">
+            <div>
               <p className="text-3xl font-bold mb-3"> Titulo del librin</p>
-
-              {/* Flipbook wrapper */}
-
-              <Document
-                file={file}
-                onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                loading={
-                  <div className="flex items-center justify-center h-full bg-white">
-                    <div className="animate-pulse text-gray-500">
-                      Loading PDF...
-                    </div>
-                  </div>
-                }
-              >
-                <HTMLFlipBook
-                  ref={flipBookRef}
-                  width={bookSize.width}
-                  height={bookSize.height}
-                  minWidth={300}
-                  maxWidth={650}
-                  minHeight={424}
-                  maxHeight={800}
-                  maxShadowOpacity={0.2}
-                  showCover={true}
-                  mobileScrollSupport={true}
-                  className="mx-auto"
+              <div>
+                <Document
+                  file={file}
+                  onLoadSuccess={({ numPages }) => setNumPages(numPages)}
                 >
-                  {Array.from({ length: numPages || 0 }, (_, index) => (
-                    <div
-                      key={`page_${index + 1}`}
-                      className="flex items-center justify-center bg-white"
-                    >
-                      <Page
-                        pageNumber={index + 1}
-                        width={bookSize.width - 20} // Account for padding
-                        renderTextLayer={false}
-                        renderAnnotationLayer={false}
-                        loading={
-                          <div className="flex items-center justify-center h-full">
-                            <div className="animate-pulse text-gray-400">
-                              Loading page...
-                            </div>
-                          </div>
-                        }
-                      />
-                    </div>
-                  ))}
-                </HTMLFlipBook>
-              </Document>
+                  <HTMLFlipBook
+                    ref={flipBookRef}
+                    width={bookSize.width}
+                    height={bookSize.height}
+                    maxShadowOpacity={0.2}
+                    drawShadow={true}
+                    showCover={true}
+                    size="fixed"
+                    mobileScrollSupport={true}
+                  >
+                    {Array.from({ length: numPages || 0 }, (_, index) => (
+                      <div key={`page_${index + 1}`}>
+                        <Page
+                          pageNumber={index + 1}
+                          width={bookSize.width - 20}
+                          renderTextLayer={false}
+                          renderAnnotationLayer={false}
+                        />
+                      </div>
+                    ))}
+                  </HTMLFlipBook>
+                </Document>
+              </div>
             </div>
           </div>
 
-          {/* Navigation controls (optional) */}
+          {/* Navigation controls (optional)
           <div className="flex justify-center gap-4 mt-6">
             <button
               onClick={() => flipBookRef.current.pageFlip().flipPrev()}
@@ -132,7 +110,7 @@ export default function EbookReader() {
             >
               Next
             </button>
-          </div>
+          </div> */}
         </>
       ) : (
         <input
