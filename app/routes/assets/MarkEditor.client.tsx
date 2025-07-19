@@ -91,7 +91,7 @@ export const MarkEditor = ({
         </div>
               <button
             type="button"
-            className={cn("group w-10 h-10 border border-black flex items-center justify-center bg-brand-500/10  rounded-full  shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none", {"": showAISuggestion})}
+            className={cn("group w-10 h-10 border border-black flex items-center justify-center bg-brand-500/10  rounded-full  shadow-xs hover:shadow-md transition-all duration-200 focus:outline-hidden", {"": showAISuggestion})}
             onClick={() => setShowAISuggestion((v) => !v)}
             aria-expanded={showAISuggestion}
             aria-controls="ai-suggestion-content"
@@ -145,7 +145,7 @@ export const MarkEditor = ({
               showAISuggestion 
                 ? "max-h-[800px] w-full lg:w-[300px] opacity-100 scale-100 p-4" 
                 : "max-h-0 w-0 opacity-0 scale-95"
-            } bg-brand-500/10 border border-black rounded-xl  shadow-sm`}
+            } bg-brand-500/10 border border-black rounded-xl  shadow-xs`}
             style={{ 
               pointerEvents: showAISuggestion ? "auto" : "none"
             }}

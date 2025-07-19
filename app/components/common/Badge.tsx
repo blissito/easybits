@@ -14,7 +14,7 @@ export const Badge = ({
   return (
     <div
       className={cn(
-        "mt-3 text-[11px] flex w-full items-center gap-2 rounded bg-status-success-overlay text-status-success pl-2 py-1",
+        "mt-3 text-[11px] flex w-full items-center gap-2 rounded-sm bg-status-success-overlay text-status-success pl-2 py-1",
         {
           hidden: mode === "hidden",
         }

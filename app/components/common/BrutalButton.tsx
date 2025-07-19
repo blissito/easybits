@@ -48,7 +48,7 @@ export const BrutalButton = ({
           "grid place-content-center",
           "block", // así podemos usar translate
           "text-lg font-semibold",
-          "rounded-xl border-[2px] border-black bg-brand-500",
+          "rounded-xl border-2 border-black bg-brand-500",
           "transition-all ",
           className,
           {

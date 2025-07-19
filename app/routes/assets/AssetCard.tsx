@@ -49,7 +49,7 @@ export const AssetCard = ({
           className=""
         >
           <img
-            className="h-[180px] object-cover w-full flex-grow-0"
+            className="h-[180px] object-cover w-full grow-0"
             src={getMetaImageUrl(asset)}
             alt="cover"
           />
@@ -122,7 +122,7 @@ export const CollapsedAssetCard = ({
           className="flex gap-6 col-span-3 md:col-span-5 items-center"
         >
           <img
-            className="h-16 w-20 object-cover rounded-xl flex-grow-0 hidden md:block"
+            className="h-16 w-20 object-cover rounded-xl grow-0 hidden md:block"
             src={asset.gallery?.[0] || "/images/easybits-default.webp"}
             alt="cover"
           />

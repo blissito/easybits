@@ -31,7 +31,7 @@ export const ProfileTabs = ({
                 "px-2 md:px-4 h-10 text-black border-2 border-white",
                 { " border-black": hover },
                 {
-                  "bg-brand-500  border-black focus:outline-none": selected,
+                  "bg-brand-500  border-black focus:outline-hidden": selected,
                 }
               )}
             >
@@ -46,7 +46,7 @@ export const ProfileTabs = ({
                 "px-2 md:px-4 h-10 text-black border-2 border-white",
                 { " border-black": hover },
                 {
-                  "bg-brand-500   border-black focus:outline-none": selected,
+                  "bg-brand-500   border-black focus:outline-hidden": selected,
                 }
               )}
             >
@@ -61,7 +61,7 @@ export const ProfileTabs = ({
                 "px-2 md:px-4 h-10 text-black border-2 border-white",
                 { " border-black": hover },
                 {
-                  "bg-brand-500   border-black focus:outline-none": selected,
+                  "bg-brand-500   border-black focus:outline-hidden": selected,
                 }
               )}
             >

@@ -157,7 +157,7 @@ const StatsCard = ({
               <div
                 ref={scope}
                 className={cn(
-                  "absolute opacity-0 -top-14 bg-black text-white text-sm w-[132px] p-1 rounded",
+                  "absolute opacity-0 -top-14 bg-black text-white text-sm w-[132px] p-1 rounded-sm",
                   {}
                 )}
               >

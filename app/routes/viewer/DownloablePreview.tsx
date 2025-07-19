@@ -70,7 +70,7 @@ export const DownloablePreview = ({
                 </p>
                 <button
                   onClick={() => download(file)}
-                  className="ml-2 p-1 hover:bg-white/10 rounded transition-colors"
+                  className="ml-2 p-1 hover:bg-white/10 rounded-sm transition-colors"
                   title={`Descargar ${file.name}`}
                 >
                   <HiDownload className="w-[16px] h-[16px]" />

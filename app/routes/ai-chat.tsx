@@ -48,7 +48,7 @@ export default function AIChatPage() {
               </ul>
             </div>
 
-            <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg p-6 text-white">
+            <div className="bg-linear-to-r from-blue-500 to-purple-500 rounded-lg p-6 text-white">
               <h3 className="font-semibold mb-2">🤖 Google Gemini</h3>
               <p className="text-sm opacity-90">
                 Potenciado por la tecnología de IA más avanzada de Google para

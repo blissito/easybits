@@ -147,7 +147,7 @@ export const UploadBox = ({
   if(assetFile && !isEnqueuedToDelete) {
     return (
       <div
-       className="text-center py-6 h-[130px] bg-brand-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden"
+       className="text-center py-6 h-[130px] bg-brand-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border rounded-2xl relative group px-4 overflow-hidden"
      >
  {/* @todo Do we wanto to implement delete file? */}
 
@@ -181,7 +181,7 @@ export const UploadBox = ({
 
     return (
       <div
-       className="text-center py-6 h-[130px] bg-brand-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border-[1px] rounded-2xl relative group px-4 overflow-hidden">
+       className="text-center py-6 h-[130px] bg-brand-500/10 mt-2 flex justify-center flex-col items-center gap-4 select-none border-brand-gray border rounded-2xl relative group px-4 overflow-hidden">
  {/* @todo Do we wanto to implement delete file? */}
           <BrutalButtonClose
           mode="mini"

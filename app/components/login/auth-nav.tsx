@@ -42,10 +42,10 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
       ref={scope}
       className={cn(
         "z-30",
-        "bg-black h-14 md:h-20 md:px-0 border-b-[1px] border-white/30 fixed inset-0"
+        "bg-black h-14 md:h-20 md:px-0 border-b border-white/30 fixed inset-0"
       )}
     >
-      <nav className=" max-w-7xl z-[99] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center px-4 md:px-0">
+      <nav className=" max-w-7xl z-99 relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center px-4 md:px-0">
         <Link to="/inicio">
           <div className="flex gap-3 ">
             <img src={Logo} alt="easybits" className="w-12" />
@@ -59,7 +59,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
                 key={key}
                 to={path}
                 className={cn
-                  ("w-fit px-6 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all ", key === 0 && "px-3")
+                  ("w-fit px-6 hover:text-black hover:border-b hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all ", key === 0 && "px-3")
                 }
               >
                 {title}
@@ -88,7 +88,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
             </div>
           )}
           {user?.id && (
-            <div className="flex h-full items-center border-r-[1px] border-white/30">
+            <div className="flex h-full items-center border-r border-white/30">
               <Link
                 to="/dash/assets"
                 className="px-8 border-x border-white/30 h-full flex items-center  hover:text-black border-b hover:border-black  hover:bg-white"
@@ -116,7 +116,7 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
         style={{
           y: "-100%",
         }}
-        className="bg-black pb-8 inset-0 w-full h-fit absolute border-b-[1px] border-b-white/20"
+        className="bg-black pb-8 inset-0 w-full h-fit absolute border-b border-b-white/20"
       >
         <div className="text-center mt-16 px-6 flex flex-col ">
           <ul className="bg-black flex flex-col">

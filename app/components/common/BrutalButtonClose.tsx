@@ -25,7 +25,7 @@ export const BrutalButtonClose = ({
       )}
       {...props}
     >
-      <span className="block group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white rounded-full border border-black transition-all active:group-hover:translate-x-0 active:group-hover:translate-y-0">
+      <span className="block group-hover:-translate-x-1 group-hover:-translate-y-1 bg-white rounded-full border border-black transition-all group-hover:active:translate-x-0 group-hover:active:translate-y-0">
     {
       isLoading ? <Spinner /> : <IoIosClose />
     }

@@ -76,7 +76,7 @@ const Message = ({ text }: { text: string }) => {
 
 const ChatBox = () => {
   return (
-    <div className="px-2 md:px-4 pb-4 h-fit pt-2  w-full flex bg-onix backdrop-blur ">
+    <div className="px-2 md:px-4 pb-4 h-fit pt-2  w-full flex bg-onix backdrop-blur-sm ">
       <input
         className={cn(
           "w-full h-12 rounded-lg bg-onix border border-marengo",

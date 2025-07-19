@@ -38,7 +38,7 @@ export default function Store({ loaderData }: Route.ComponentProps) {
         cta={
           <button
             onClick={onOpen}
-            className="bg-white border-[2px] border-black rounded-xl p-1 w-[48px] h-[48px] active:"
+            className="bg-white border-2 border-black rounded-xl p-1 w-[48px] h-[48px] active:"
           >
             <img className="w-full" src={GlobeIcon} />
           </button>

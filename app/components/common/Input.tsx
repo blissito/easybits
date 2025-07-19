@@ -54,7 +54,7 @@ export const Input = ({
           defaultValue={defaultValue}
           className={cn(
             "rounded-xl p-4 text-lg h-12 w-full placeholder:text-tale placeholder:font-light  border border-black  bg-white text-black",
-            "focus:border-brand-500 focus:outline-none focus:ring-brand-500",
+            "focus:border-brand-500 focus:outline-hidden focus:ring-brand-500",
             {
               "pr-24": !!copy,
               "ring-2 ring-red-500 transition-all border-none": isError,

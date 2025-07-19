@@ -12,7 +12,7 @@ export const Input = ({
   sufix,
   ...props
 }: {
-  onChange?: React.InputHTMLAttributes<HTMLInputElement>['onChange'];
+  onChange?: React.InputHTMLAttributes<HTMLInputElement>["onChange"];
   copyText?: string;
   type?: "number" | "text";
   error?: string;
@@ -38,7 +38,7 @@ export const Input = ({
           {...props}
           type={type}
           className={cn(
-            "border-1 rounded-xl border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all",
+            "border rounded-xl border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all",
             "h-12 w-full",
             {
               "w-28": type === "number",

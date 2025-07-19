@@ -9,7 +9,7 @@ export default function Waitlist() {
   return (
     <section className="overflow-hidden">
       <AuthNav noCTA />
-      <section className="border-b-[2px] border-b-black min-h-svh grid place-content-center ">
+      <section className="border-b-2 border-b-black min-h-svh grid place-content-center ">
         <div className="max-w-5xl mx-auto flex flex-col items-center px-4 md:px-[5%] xl:px-0">
           <img src="/images/logo-animation.gif" className="w-52 mx-auto mb-6" alt="logo" />
           <h2 className="text-3xl xl:text-5xl font-bold text-center leading-tight mb-6">

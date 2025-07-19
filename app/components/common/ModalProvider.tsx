@@ -113,7 +113,7 @@ export const ModalProvider = ({
       {isOpen ? (
         <article
           className={cn(
-            "z-[90] relative", // try to not go further than 30
+            "z-90 relative", // try to not go further than 30
             "grid place-content-center min-h-svh h-fit px-4",
             "fixed overflow-hidden",
             {

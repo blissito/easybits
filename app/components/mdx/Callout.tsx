@@ -106,7 +106,7 @@ export function Callout({ children, type = "info", title }: CalloutProps) {
       className={`relative p-4 my-6 border-2 border-black rounded-lg ${styles.container}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`flex-shrink-0 ${styles.icon}`}>{getIcon()}</div>
+        <div className={`shrink-0 ${styles.icon}`}>{getIcon()}</div>
         <div className="flex-1 min-w-0">
           {title && (
             <h4 className={`font-semibold text-lg mb-2 ${styles.title}`}>
