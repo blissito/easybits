@@ -76,6 +76,7 @@
     "react-markdown": "^10.1.0",
     "react-pageflip": "^2.0.3",
     "react-pdf": "^10.0.1",
+    "react-reader": "^2.0.13",
     "react-router-dom": "^7.7.0",
     "react-simplemde-editor": "^5.2.0",
     "react-syntax-highlighter": "^15.6.1",

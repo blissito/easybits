@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 
 const DESKTOP_BREAKPOINT = 768; // Adjust this as needed
 
-const useScreenDimensions = (aspectRatio = 1.414) => {
+const useScreenDimensions = (aspectRatio = 1.3) => {
   const [isMobileView, setIsMobileView] = useState(false);
   const [screenWidth, setscreenWidth] = useState(600); // Initialize to 0
   const [screenHeight, setscreenHeight] = useState(800); // Initialize to 0

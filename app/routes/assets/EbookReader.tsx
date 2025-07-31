@@ -4,6 +4,7 @@ import FlipBook from "./EbookReader/FlipBook";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import useScreenDimensions from "~/hooks/useScreenDimensions";
+import { ReactReader } from "react-reader";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -12,45 +13,54 @@ export default function EbookReader() {
   const flipBookRef = useRef(null);
   const [file, setFile] = useState(null);
   const [fileType, setFileType] = useState(null);
+  const [fileUrl, setFileUrl] = useState(null);
   // Responsive sizing
   const { isMobileView, screenWidth, screenHeight } = useScreenDimensions();
+
+  const [location, setLocation] = useState<string | number>(0);
 
   const onDocumentLoadSuccess = ({ numPages }) => {
     setNumPages(numPages);
   };
 
-  const getFileType = (fileName) => {
-    const extension = fileName.split(".").pop().toLowerCase();
-    switch (extension) {
+  const processFile = async (e) => {
+    const file = e.target.files[0];
+    const type = file.name.split(".").pop().toLowerCase();
+    console.log(file);
+    setFileType(type);
+    switch (type) {
       case "pdf":
-        return "pdf";
+        setFile(file);
+        break;
       case "epub":
-        return "epub";
-      case "docx":
-        return "docx";
+        const url = URL.createObjectURL(file);
+        setFileUrl(url);
+        break;
+      case "mobi":
+      case "azw3":
       default:
-        return null;
+        throw new Error("Unsupported file type");
     }
   };
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      const type = getFileType(selectedFile.name);
-      if (type) {
-        setFile(selectedFile);
-        setFileType(type);
-      } else {
-        alert("Unsupported file format. Please upload PDF, EPUB, or DOCX.");
-      }
-    }
+  const asset = {
+    title: "Book sample",
   };
-
+  console.log({ fileType, fileUrl });
   return (
-    <div className="h-screen w-full bg-brand-500 p-10">
-      {file ? (
-        <>
-          <div className="flex flex-col items-center justify-center h-full">
+    <div className="h-screen w-full bg-brand-500 md:p-10">
+      <input
+        type="file"
+        id="ebook-upload"
+        accept=".pdf,.epub"
+        onChange={processFile}
+      />
+      <div
+      //className="w-full flex flex-col items-center justify-center"
+      >
+        <p className="mb-3 text-3xl font-semibold text-center">{asset.title}</p>
+        {file && fileType === "pdf" && (
+          <>
             <Document
               file={file}
               onLoadSuccess={onDocumentLoadSuccess}
@@ -60,7 +70,7 @@ export default function EbookReader() {
             >
               {numPages && (
                 <FlipBook
-                  title="El perrrro"
+                  title={asset.title}
                   numPages={numPages}
                   width={screenWidth}
                   height={screenHeight}
@@ -78,16 +88,20 @@ export default function EbookReader() {
                 </FlipBook>
               )}
             </Document>
-          </div>
-        </>
-      ) : (
-        <input
-          type="file"
-          id="ebook-upload"
-          accept=".pdf,.epub,.docx"
-          onChange={handleFileChange}
-        />
-      )}
+          </>
+        )}
+
+        {fileUrl && fileType === "epub" && (
+          <>
+            <ReactReader
+              url="https://react-reader.metabits.no/files/alice.epub"
+              title={asset.title}
+              location={location}
+              locationChanged={(loc: string) => setLocation(loc)}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }

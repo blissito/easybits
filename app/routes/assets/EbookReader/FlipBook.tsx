@@ -26,7 +26,6 @@ export default function FlipBook({ numPages, children, title }) {
 
   return (
     <div>
-      <p className="mb-3 text-3xl font-semibold text-center">{title}</p>
       <HTMLFlipBook
         className="shadow-xl" // Added shadow and border for better visual separation
         width={screenWidth}
@@ -42,10 +41,10 @@ export default function FlipBook({ numPages, children, title }) {
         // onChangeOrientation={this.onChangeOrientation}
         // onChangeState={this.onChangeState}
         //   startPage={0}
-        //   minWidth={315}
-        //   maxWidth={1000}
-        //   minHeight={400}
-        //   maxHeight={1533}
+        // minWidth={screenWidth}
+        // maxWidth={screenWidth}
+        // minHeight={screenHeight}
+        // maxHeight={screenHeight}
         //   flippingTime={1000}
         //   usePortrait={false}
         //   startZIndex={0}
