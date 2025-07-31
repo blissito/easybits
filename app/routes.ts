@@ -39,6 +39,7 @@ export default [
   // user dash
   ...prefix("dash", [
     route("compras/:assetId", "routes/purchase_detail.tsx"),
+    route("ebook/:assetId", "routes/assets/EbookReaderPage.tsx"),
     route("compras/:assetSlug/review", "routes/assets/ReviewAsset.tsx"),
     layout("components/DashLayout/DashLayout.tsx", [
       index("routes/start.tsx"),
