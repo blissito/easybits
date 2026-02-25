@@ -247,17 +247,32 @@ function UserRow({ user }: { user: any }) {
         {new Date(user.createdAt).toLocaleDateString()}
       </td>
       <td className="px-4 py-2">
-        <fetcher.Form method="post">
-          <input type="hidden" name="intent" value="disable" />
-          <input type="hidden" name="userId" value={user.id} />
-          <button
-            type="submit"
-            disabled={busy || user.roles.length === 0}
-            className="px-2 py-1 bg-red-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
-          >
-            {user.roles.length === 0 ? "Deshabilitado" : "Deshabilitar"}
-          </button>
-        </fetcher.Form>
+        {user.roles.length === 0 ? (
+          <fetcher.Form method="post">
+            <input type="hidden" name="intent" value="addRole" />
+            <input type="hidden" name="role" value="Enrolled" />
+            <input type="hidden" name="userId" value={user.id} />
+            <button
+              type="submit"
+              disabled={busy}
+              className="px-2 py-1 bg-green-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
+            >
+              Habilitar
+            </button>
+          </fetcher.Form>
+        ) : (
+          <fetcher.Form method="post">
+            <input type="hidden" name="intent" value="disable" />
+            <input type="hidden" name="userId" value={user.id} />
+            <button
+              type="submit"
+              disabled={busy}
+              className="px-2 py-1 bg-red-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
+            >
+              Deshabilitar
+            </button>
+          </fetcher.Form>
+        )}
       </td>
     </tr>
   );
