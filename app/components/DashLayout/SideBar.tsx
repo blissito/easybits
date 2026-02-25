@@ -17,19 +17,22 @@ interface MenuItemProps {
   isCurrentActive?: boolean;
 }
 
-export const SideBar = () => {
+export const SideBar = ({ isAdmin = false }: { isAdmin?: boolean }) => {
   return (
     <>
       <section className="fixed right-4 bottom-16 z-20 block md:hidden  ">
         <FoldMenu />
       </section>
-      <SideBarWeb />
+      <SideBarWeb isAdmin={isAdmin} />
     </>
   );
 };
 
-const SideBarWeb = () => {
+const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
   const location = useLocation();
+  const bottomItems = isAdmin
+    ? [ITEMS.adminItem, ...ITEMS.bottomItems]
+    : ITEMS.bottomItems;
   return (
     <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-40 py-2 flex-col gap-4">
       <SideBarItem isLogo />
@@ -56,7 +59,7 @@ const SideBarWeb = () => {
         ))}
       </ul>
       <ul className="flex flex-col items-center pb-0 gap-3 w-full mt-auto">
-        {ITEMS.bottomItems.map((item, key) => (
+        {bottomItems.map((item, key) => (
           <SideBarItem key={key} {...item} />
         ))}
       </ul>
@@ -219,7 +222,7 @@ const DashBurger = ({
   );
 };
 
-export const HeaderMobile = () => {
+export const HeaderMobile = ({ isAdmin = false }: { isAdmin?: boolean }) => {
   return (
     <div className="w-full h-12 bg-black z-30 px-4 fixed flex items-center justify-center md:hidden">
       <Link to="/">

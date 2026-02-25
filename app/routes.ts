@@ -65,6 +65,13 @@ export default [
           route("setup", "routes/dash/developer/setup.tsx"),
         ]),
       ]),
+      // Admin dashboard
+      layout("routes/dash/admin/admin.tsx", [
+        ...prefix("admin", [
+          index("routes/dash/admin/users.tsx"),
+          route("waitlist", "routes/dash/admin/waitlist.tsx"),
+        ]),
+      ]),
     ]),
   ]),
   route("/edicion", "routes/store/storeEdition.tsx"),
