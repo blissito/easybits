@@ -6,10 +6,10 @@ import { deleteFile, restoreFile } from "~/.server/core/operations";
 import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
 import { IconRenderer } from "~/routes/files/IconRenderer";
-import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic } from "react-icons/fa6";
+import { Copy } from "~/components/common/Copy";
+import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic, FaBook, FaLock } from "react-icons/fa6";
 import { MdFolderZip } from "react-icons/md";
 import { GiMagicLamp } from "react-icons/gi";
-import { FaBook } from "react-icons/fa6";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -39,6 +39,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       name: true,
       size: true,
       contentType: true,
+      access: true,
+      url: true,
       status: true,
       storageProviderId: true,
       deletedAt: true,
@@ -200,6 +202,8 @@ export default function DevFilesPage() {
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Name</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Size</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Type</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Acceso</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Link</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Provider</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">
                 {trash ? "Purge in" : "Status"}
@@ -211,7 +215,14 @@ export default function DevFilesPage() {
           <tbody>
             {items.map((f) => (
               <tr key={f.id} className="border-t-2 border-black hover:bg-brand-100 transition-colors">
-                <td className="px-4 py-3 max-w-[200px] truncate font-bold">{f.name}</td>
+                <td className="px-4 py-3 max-w-[200px] truncate font-bold">
+                  <span className="flex items-center gap-2">
+                    {f.contentType.startsWith("image/") && f.url ? (
+                      <img src={f.url} alt="" className="w-8 h-8 rounded border border-black object-cover flex-shrink-0" />
+                    ) : null}
+                    <span className="truncate">{f.name}</span>
+                  </span>
+                </td>
                 <td className="px-4 py-3 font-mono text-xs">{formatSize(f.size)}</td>
                 <td className="px-4 py-3">
                   <IconRenderer
@@ -227,6 +238,20 @@ export default function DevFilesPage() {
                       other: <GiMagicLamp />,
                     }}
                   />
+                </td>
+                <td className="px-4 py-3">
+                  {f.access === "private" ? (
+                    <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-full border border-black">Privado</span>
+                  ) : (
+                    <span className="bg-brand-yellow text-xs font-bold px-2 py-0.5 rounded-full border border-black">Público</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {f.access === "private" ? (
+                    <FaLock className="text-gray-400" />
+                  ) : f.url ? (
+                    <Copy mode="ghost" text={f.url} />
+                  ) : null}
                 </td>
                 <td className="px-4 py-3">
                   <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">
@@ -262,7 +287,7 @@ export default function DevFilesPage() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
+                <td colSpan={9} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
                   {trash ? "La papelera esta vacia" : "Sube archivos via MCP, SDK o API"}
                 </td>
               </tr>
