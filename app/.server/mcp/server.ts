@@ -7,7 +7,7 @@ import {
   deleteFile,
   shareFile,
 } from "../core/operations";
-import { getDefaultClient, resolveProvider } from "../storage";
+import { resolveProvider } from "../storage";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 

@@ -10,3 +10,4 @@ dist/
 .env
 /files/
 yarn.lock
+respaldo.json

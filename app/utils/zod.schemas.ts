@@ -26,4 +26,4 @@ export const newAssetSchema = z.object({
   userId: z.string().min(5),
 });
 
-export type NewAssetSchema = z.infer<typeof newProductSchema>;
+export type NewAssetSchema = z.infer<typeof newAssetSchema>;
