@@ -229,6 +229,7 @@ model File {
   actionId              String?
   // ^ relations
   createdAt             DateTime   @default(now())
+  deletedAt             DateTime?
   updatedAt             DateTime   @updatedAt
   // ^ auto-dates
   Asset                 Asset?     @relation(fields: [assetId], references: [id])

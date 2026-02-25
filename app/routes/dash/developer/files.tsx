@@ -1,6 +1,8 @@
-import { useLoaderData, useSearchParams } from "react-router";
+import { useLoaderData, useSearchParams, useFetcher, data } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
+import { deleteFile, restoreFile } from "~/.server/core/operations";
+import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -8,9 +10,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const cursor = url.searchParams.get("cursor") || undefined;
   const search = url.searchParams.get("q") || undefined;
+  const trash = url.searchParams.get("trash") === "1";
   const limit = 25;
 
   const where: Record<string, unknown> = { ownerId: user.id };
+  if (trash) {
+    where.status = "DELETED";
+  } else {
+    where.status = { not: "DELETED" };
+  }
   if (search) {
     where.name = { contains: search, mode: "insensitive" };
   }
@@ -27,6 +35,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       contentType: true,
       status: true,
       storageProviderId: true,
+      deletedAt: true,
       createdAt: true,
     },
   });
@@ -35,7 +44,34 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const items = hasMore ? files.slice(0, limit) : files;
   const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-  return { items, nextCursor };
+  return { items, nextCursor, trash };
+};
+
+export const action = async ({ request }: Route.ActionArgs) => {
+  const user = await getUserOrRedirect(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  const ctx: AuthContext = {
+    user,
+    scopes: ["READ", "WRITE", "DELETE", "ADMIN"],
+  };
+
+  if (intent === "delete") {
+    const fileId = formData.get("fileId") as string;
+    if (!fileId) throw data({ error: "Missing fileId" }, { status: 400 });
+    await deleteFile(ctx, fileId);
+    return { ok: true };
+  }
+
+  if (intent === "restore") {
+    const fileId = formData.get("fileId") as string;
+    if (!fileId) throw data({ error: "Missing fileId" }, { status: 400 });
+    await restoreFile(ctx, fileId);
+    return { ok: true };
+  }
+
+  throw data({ error: "Invalid intent" }, { status: 400 });
 };
 
 function formatSize(bytes: number) {
@@ -44,9 +80,73 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function daysUntilPurge(deletedAt: string | null) {
+  if (!deletedAt) return null;
+  const deleted = new Date(deletedAt).getTime();
+  const purgeAt = deleted + 30 * 24 * 60 * 60 * 1000;
+  const remaining = Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000));
+  return Math.max(0, remaining);
+}
+
+function DeleteButton({ fileId }: { fileId: string }) {
+  const fetcher = useFetcher();
+  const isDeleting = fetcher.state !== "idle";
+
+  return (
+    <fetcher.Form
+      method="post"
+      onSubmit={(e) => {
+        if (!confirm("¿Mover a la papelera?")) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <input type="hidden" name="intent" value="delete" />
+      <input type="hidden" name="fileId" value={fileId} />
+      <button
+        type="submit"
+        disabled={isDeleting}
+        className="text-xs font-bold text-brand-red hover:bg-brand-red hover:text-white px-2 py-1 rounded-md border-2 border-brand-red transition-colors disabled:opacity-50"
+      >
+        {isDeleting ? "Eliminando..." : "Eliminar"}
+      </button>
+    </fetcher.Form>
+  );
+}
+
+function RestoreButton({ fileId }: { fileId: string }) {
+  const fetcher = useFetcher();
+  const isRestoring = fetcher.state !== "idle";
+
+  return (
+    <fetcher.Form method="post">
+      <input type="hidden" name="intent" value="restore" />
+      <input type="hidden" name="fileId" value={fileId} />
+      <button
+        type="submit"
+        disabled={isRestoring}
+        className="text-xs font-bold text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-md border-2 border-emerald-600 transition-colors disabled:opacity-50"
+      >
+        {isRestoring ? "Restaurando..." : "Restaurar"}
+      </button>
+    </fetcher.Form>
+  );
+}
+
 export default function DevFilesPage() {
-  const { items, nextCursor } = useLoaderData<typeof loader>();
+  const { items, nextCursor, trash } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const toggleTrash = () => {
+    const params = new URLSearchParams(searchParams);
+    if (trash) {
+      params.delete("trash");
+    } else {
+      params.set("trash", "1");
+    }
+    params.delete("cursor");
+    setSearchParams(params);
+  };
 
   return (
     <div>
@@ -64,6 +164,16 @@ export default function DevFilesPage() {
           }}
           className="border-2 border-black rounded-xl px-4 py-2 text-sm font-mono flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
         />
+        <button
+          onClick={toggleTrash}
+          className={`px-4 py-2 rounded-xl border-2 border-black text-sm font-bold transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
+            trash
+              ? "bg-brand-red text-white"
+              : "bg-white hover:bg-gray-100"
+          }`}
+        >
+          {trash ? "Ver archivos" : "Papelera"}
+        </button>
       </div>
 
       <div className="border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white">
@@ -74,8 +184,11 @@ export default function DevFilesPage() {
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Size</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Type</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Provider</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Status</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">
+                {trash ? "Purge in" : "Status"}
+              </th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Created</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -90,27 +203,36 @@ export default function DevFilesPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
-                      f.status === "DONE"
-                        ? "bg-lime"
-                        : f.status === "ERROR"
-                        ? "bg-brand-red text-white"
-                        : "bg-brand-yellow"
-                    }`}
-                  >
-                    {f.status}
-                  </span>
+                  {trash ? (
+                    <span className="text-xs font-bold px-2 py-1 rounded-md border-2 border-black bg-brand-yellow">
+                      {daysUntilPurge(f.deletedAt)} days
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
+                        f.status === "DONE"
+                          ? "bg-lime"
+                          : f.status === "ERROR"
+                          ? "bg-brand-red text-white"
+                          : "bg-brand-yellow"
+                      }`}
+                    >
+                      {f.status}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs">
                   {new Date(f.createdAt).toLocaleDateString()}
+                </td>
+                <td className="px-4 py-3">
+                  {trash ? <RestoreButton fileId={f.id} /> : <DeleteButton fileId={f.id} />}
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
-                  No files found
+                <td colSpan={7} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
+                  {trash ? "La papelera esta vacia" : "No files found"}
                 </td>
               </tr>
             )}

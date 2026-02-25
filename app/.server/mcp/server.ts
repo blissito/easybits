@@ -5,6 +5,7 @@ import {
   getFile,
   uploadFile,
   deleteFile,
+  restoreFile,
   shareFile,
 } from "../core/operations";
 import { db } from "../db";
@@ -79,6 +80,21 @@ export function createMcpServer() {
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteFile(ctx, params.fileId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "restore_file",
+    "Restore a previously deleted file from trash",
+    {
+      fileId: z.string().describe("The file ID to restore"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await restoreFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

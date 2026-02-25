@@ -137,15 +137,58 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
     throw new Error("Forbidden");
   }
 
-  const client = await getClientForFile(file.storageProviderId, ctx.user.id);
-  await client.deleteObject(file.storageKey);
-
   await db.file.update({
     where: { id: fileId },
-    data: { status: "DELETED" },
+    data: { status: "DELETED", deletedAt: new Date() },
   });
 
   return { success: true };
+}
+
+// --- Restore File ---
+
+export async function restoreFile(ctx: AuthContext, fileId: string) {
+  requireScope(ctx, "DELETE");
+
+  const file = await db.file.findUnique({ where: { id: fileId } });
+  if (!file) {
+    throw new Error("File not found");
+  }
+  if (file.ownerId !== ctx.user.id) {
+    throw new Error("Forbidden");
+  }
+  if (file.status !== "DELETED") {
+    throw new Error("File is not deleted");
+  }
+
+  await db.file.update({
+    where: { id: fileId },
+    data: { status: "DONE", deletedAt: null },
+  });
+
+  return { success: true };
+}
+
+// --- Purge Deleted Files (30+ days) ---
+
+export async function purgeDeletedFiles() {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const files = await db.file.findMany({
+    where: { status: "DELETED", deletedAt: { lt: cutoff } },
+  });
+
+  for (const file of files) {
+    try {
+      const client = await getClientForFile(file.storageProviderId, file.ownerId);
+      await client.deleteObject(file.storageKey);
+    } catch {
+      // storage already gone, continue with DB cleanup
+    }
+    await db.file.delete({ where: { id: file.id } });
+  }
+
+  return { purged: files.length };
 }
 
 // --- Share File ---
