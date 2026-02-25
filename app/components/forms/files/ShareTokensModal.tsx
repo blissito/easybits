@@ -1,12 +1,19 @@
 import { Modal } from "~/components/common/Modal";
-import { Input } from "../Input";
-import { SelectInput } from "../SelectInput";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState } from "react";
 import { useDateCalculations } from "~/hooks/useDateCalculations";
 import { useFetcher } from "react-router";
+import { Copy } from "~/components/common/Copy";
+import { cn } from "~/utils/cn";
+import { IoTime } from "react-icons/io5";
+import { HiClipboardDocument } from "react-icons/hi2";
 
 type TokenFile = { id: string; name: string };
+
+const UNITS = [
+  { label: "Minutos", value: "m", max: 10080, multiplier: 60 },
+  { label: "Horas", value: "h", max: 168, multiplier: 3600 },
+] as const;
 
 export const ShareTokensModal = ({
   onClose,
@@ -17,30 +24,29 @@ export const ShareTokensModal = ({
   onClose?: () => void;
 }) => {
   const { getDisplayTime, getDisplayDate } = useDateCalculations();
-  const [url, setUrl] = useState("-- Genera un token primero --");
+  const [url, setUrl] = useState("");
   const [number, setNumber] = useState(15);
-  const [type, setType] = useState("m");
+  const [unitIdx, setUnitIdx] = useState(0);
 
-  const expInSecs = type === "h" ? number * 3600 : number * 60;
+  const unit = UNITS[unitIdx];
+  const expInSecs = number * unit.multiplier;
   const date = new Date(Date.now() + expInSecs * 1000);
-  const maxValue = type === "h" ? 168 : 10080;
 
   const fetcher = useFetcher();
+  const isFetching = fetcher.state !== "idle";
+
   const onGenerate = () => {
     if (!tokenFor) return;
     fetcher.submit(
-      {
-        intent: "generate_token",
-        fileId: tokenFor.id,
-        expInSecs,
-      },
+      { intent: "generate_token", fileId: tokenFor.id, expInSecs },
       { method: "post", action: "/api/v1/tokens" }
     );
   };
-  const isFetching = fetcher.state !== "idle";
 
   const handleClose = () => {
-    setUrl("-- Genera un token primero --");
+    setUrl("");
+    setNumber(15);
+    setUnitIdx(0);
     onClose?.();
   };
 
@@ -50,77 +56,114 @@ export const ShareTokensModal = ({
     }
   }, [fetcher.data]);
 
+  const hasUrl = !!url;
+
   return (
     <Modal
       onClose={handleClose}
       isOpen={!!tokenFor}
-      title="Crea tokens de acceso"
+      title="Token de acceso"
     >
-      <p className="mb-2 truncate">
-        Para:{" "}
-        <strong className="text-lg font-semibold">{tokenFor?.name}</strong>
-      </p>
-      <p>
-        Como tu archivo es privado, necesitas un token para consumirlo.
-        Recuerda, el máximo es{" "}
-        <strong className="text-brand-500">168 horas</strong> (7 días).
-      </p>
+      <div className="flex flex-col flex-1">
+        {/* File info */}
+        <div className="flex items-center gap-2 mb-6 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
+          <HiClipboardDocument className="text-gray-400 shrink-0" />
+          <span className="truncate text-sm text-gray-600">
+            {tokenFor?.name}
+          </span>
+        </div>
 
-      <section className="flex flex-col gap-6 mt-8">
-        <div className="flex flex-col gap-2">
-          <p className="font-medium">Define la duración del token</p>
-          <div className="flex gap-4 items-start">
-            <Input
-              min="1"
-              max={String(maxValue)}
-              type="number"
-              defaultValue={number}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                setNumber(Number(event.currentTarget.value));
-              }}
-            />
-            <SelectInput
-              name="type"
-              defaultValue="m"
-              onChange={(value) => setType(value)}
-              className="w-40"
-              options={[
-                {
-                  label: "Horas",
-                  value: "h",
-                },
-                {
-                  label: "Minutos",
-                  value: "m",
-                },
-              ]}
-            />
+        {/* Duration picker */}
+        <p className="text-sm font-medium text-gray-500 mb-2">Duración</p>
+        <div className="flex gap-2 items-center mb-6">
+          <input
+            min={1}
+            max={unit.max}
+            type="number"
+            value={number}
+            onChange={(e) => {
+              const v = Math.max(1, Math.min(unit.max, Number(e.target.value) || 1));
+              setNumber(v);
+            }}
+            className={cn(
+              "border border-gray-300 rounded-xl px-4 py-3 h-12 w-24 text-center text-lg font-semibold",
+              "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+            )}
+          />
+          <div className="flex bg-gray-100 rounded-xl p-1">
+            {UNITS.map((u, i) => (
+              <button
+                key={u.value}
+                type="button"
+                onClick={() => {
+                  setUnitIdx(i);
+                  // Clamp number to new max
+                  setNumber((prev) => Math.min(prev, u.max));
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  i === unitIdx
+                    ? "bg-white border border-gray-300 shadow-sm text-black"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                {u.label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="bg-black rounded-2xl flex flex-col gap-3 text-center py-6 px-4">
-          <p className="text-gray-400 text-sm">Token válido hasta:</p>
-          <h2 className="text-white text-2xl md:text-3xl">{getDisplayDate(date)}</h2>
-          <h4 className="text-white text-lg">{getDisplayTime(date)}</h4>
-        </div>
-        <div>
-          <Input readOnly className="select-none w-full text-sm" value={url} copyText={url} />
-          <p className="text-xs text-brand-500 mt-1">
-            Esta es la única ocasión en la que verás este token, guárdalo bien.
+
+        {/* Expiry preview */}
+        <div className="bg-black rounded-2xl px-5 py-5 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <IoTime className="text-brand-500" />
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              Válido hasta
+            </span>
+          </div>
+          <p className="text-white text-2xl font-bold">
+            {getDisplayDate(date)}
+          </p>
+          <p className="text-gray-400 text-lg">
+            {getDisplayTime(date)}
           </p>
         </div>
-      </section>
-      <nav className="mt-10 mb-6 flex gap-6">
-        <BrutalButton onClick={handleClose} mode="ghost">
-          Cerrar
-        </BrutalButton>
-        <BrutalButton
-          isLoading={isFetching}
-          onClick={onGenerate}
-          containerClassName="w-full"
-        >
-          Generar nuevo token
-        </BrutalButton>
-      </nav>
+
+        {/* Generated URL */}
+        {hasUrl && (
+          <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <p className="text-sm font-medium text-gray-500 mb-2">URL generada</p>
+            <div className="relative flex items-center bg-gray-50 border border-gray-200 rounded-xl">
+              <input
+                readOnly
+                value={url}
+                className="w-full bg-transparent text-xs text-gray-700 px-4 py-3 pr-10 rounded-xl select-all focus:outline-none"
+                onFocus={(e) => e.target.select()}
+              />
+              <div className="absolute right-2">
+                <Copy text={url} />
+              </div>
+            </div>
+            <p className="text-xs text-brand-500 mt-1.5">
+              Guarda este enlace — no se mostrará de nuevo.
+            </p>
+          </div>
+        )}
+
+        {/* Actions — pushed to bottom */}
+        <nav className="mt-auto flex gap-3 pt-4">
+          <BrutalButton onClick={handleClose} mode="ghost">
+            Cerrar
+          </BrutalButton>
+          <BrutalButton
+            isLoading={isFetching}
+            onClick={onGenerate}
+            containerClassName="w-full"
+          >
+            {hasUrl ? "Regenerar token" : "Generar token"}
+          </BrutalButton>
+        </nav>
+      </div>
     </Modal>
   );
 };
