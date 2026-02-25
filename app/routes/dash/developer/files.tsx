@@ -4,6 +4,11 @@ import { db } from "~/.server/db";
 import { deleteFile, restoreFile } from "~/.server/core/operations";
 import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
+import { IconRenderer } from "~/routes/files/IconRenderer";
+import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic } from "react-icons/fa6";
+import { MdFolderZip } from "react-icons/md";
+import { GiMagicLamp } from "react-icons/gi";
+import { FaBook } from "react-icons/fa6";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -83,7 +88,7 @@ function formatSize(bytes: number) {
 function daysUntilPurge(deletedAt: string | null) {
   if (!deletedAt) return null;
   const deleted = new Date(deletedAt).getTime();
-  const purgeAt = deleted + 30 * 24 * 60 * 60 * 1000;
+  const purgeAt = deleted + 7 * 24 * 60 * 60 * 1000;
   const remaining = Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000));
   return Math.max(0, remaining);
 }
@@ -196,7 +201,21 @@ export default function DevFilesPage() {
               <tr key={f.id} className="border-t-2 border-black hover:bg-brand-100 transition-colors">
                 <td className="px-4 py-3 max-w-[200px] truncate font-bold">{f.name}</td>
                 <td className="px-4 py-3 font-mono text-xs">{formatSize(f.size)}</td>
-                <td className="px-4 py-3 font-mono text-xs">{f.contentType}</td>
+                <td className="px-4 py-3">
+                  <IconRenderer
+                    fileName={f.name}
+                    type={f.contentType}
+                    icons={{
+                      video: <FaVideo />,
+                      image: <FaRegImage />,
+                      epub: <FaBook />,
+                      pdf: <FaRegFilePdf />,
+                      zip: <MdFolderZip />,
+                      audio: <FaMusic />,
+                      other: <GiMagicLamp />,
+                    }}
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">
                     {f.storageProviderId ? "Custom" : "Tigris"}

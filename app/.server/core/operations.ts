@@ -169,10 +169,10 @@ export async function restoreFile(ctx: AuthContext, fileId: string) {
   return { success: true };
 }
 
-// --- Purge Deleted Files (30+ days) ---
+// --- Purge Deleted Files (7+ days) ---
 
 export async function purgeDeletedFiles() {
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const files = await db.file.findMany({
     where: { status: "DELETED", deletedAt: { lt: cutoff } },
