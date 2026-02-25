@@ -1,8 +1,11 @@
-import { useSearchParams } from "react-router";
+import { useFetcher, useSearchParams } from "react-router";
+import { data } from "react-router";
+import { db } from "~/.server/db";
 import { getPaginatedUsers } from "~/.server/pagination/admin";
 import { PaginatedTable } from "~/components/common/pagination/PaginatedTable";
 import { TablePagination } from "~/components/common/pagination/TablePagination";
 import type { Route } from "./+types/users";
+import { useState } from "react";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url, `http://${request.headers.get("host")}`);
@@ -16,6 +19,53 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     search,
   });
   return { users, pagination };
+};
+
+export const action = async ({ request }: Route.ActionArgs) => {
+  const formData = await request.formData();
+  const intent = formData.get("intent") as string;
+  const userId = formData.get("userId") as string;
+
+  if (!userId) return data({ error: "Missing userId" }, { status: 400 });
+
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user) return data({ error: "User not found" }, { status: 404 });
+
+  switch (intent) {
+    case "addRole": {
+      const role = formData.get("role") as string;
+      if (!role) return data({ error: "Missing role" }, { status: 400 });
+      if (user.roles.includes(role)) return { ok: true };
+      await db.user.update({
+        where: { id: userId },
+        data: { roles: { push: role } },
+      });
+      return { ok: true };
+    }
+    case "removeRole": {
+      const role = formData.get("role") as string;
+      if (!role) return data({ error: "Missing role" }, { status: 400 });
+      await db.user.update({
+        where: { id: userId },
+        data: { roles: user.roles.filter((r) => r !== role) },
+      });
+      return { ok: true };
+    }
+    case "updateName": {
+      const displayName = formData.get("displayName") as string;
+      await db.user.update({
+        where: { id: userId },
+        data: { displayName },
+      });
+      return { ok: true };
+    }
+    case "delete": {
+      await db.user.delete({ where: { id: userId } });
+      return { ok: true };
+    }
+    default:
+      return data({ error: "Invalid intent" }, { status: 400 });
+  }
 };
 
 export default function AdminUsers({ loaderData }: Route.ComponentProps) {
@@ -67,41 +117,12 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
                       <th className="px-4 py-2">Nombre</th>
                       <th className="px-4 py-2">Roles</th>
                       <th className="px-4 py-2">Registro</th>
+                      <th className="px-4 py-2">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedUsers.map((user: any) => (
-                      <tr
-                        key={user.id}
-                        className="border-b-2 border-black hover:bg-gray-50"
-                      >
-                        <td className="px-4 py-2">
-                          <img
-                            src={user.picture || "/images/profile.svg"}
-                            alt=""
-                            className="w-8 h-8 rounded-full"
-                          />
-                        </td>
-                        <td className="px-4 py-2 font-mono">{user.email}</td>
-                        <td className="px-4 py-2">
-                          {user.displayName || "—"}
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex gap-1 flex-wrap">
-                            {user.roles.map((role: string) => (
-                              <span
-                                key={role}
-                                className="px-2 py-0.5 bg-brand-100 text-brand-700 text-xs font-bold rounded-md border border-brand-300"
-                              >
-                                {role}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 text-gray-500">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </td>
-                      </tr>
+                      <UserRow key={user.id} user={user} />
                     ))}
                   </tbody>
                 </table>
@@ -114,5 +135,134 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
         <p className="text-gray-500 font-mono">No se encontraron usuarios.</p>
       )}
     </div>
+  );
+}
+
+function UserRow({ user }: { user: any }) {
+  const fetcher = useFetcher();
+  const [editing, setEditing] = useState(false);
+  const [newRole, setNewRole] = useState("");
+  const busy = fetcher.state !== "idle";
+
+  return (
+    <tr className="border-b-2 border-black hover:bg-gray-50 align-top">
+      <td className="px-4 py-2">
+        <img
+          src={user.picture || "/images/profile.svg"}
+          alt=""
+          className="w-8 h-8 rounded-full"
+        />
+      </td>
+      <td className="px-4 py-2 font-mono text-xs">{user.email}</td>
+      <td className="px-4 py-2">
+        {editing ? (
+          <fetcher.Form
+            method="post"
+            className="flex gap-1"
+            onSubmit={() => setEditing(false)}
+          >
+            <input type="hidden" name="intent" value="updateName" />
+            <input type="hidden" name="userId" value={user.id} />
+            <input
+              name="displayName"
+              defaultValue={user.displayName || ""}
+              className="px-2 py-0.5 border-2 border-black rounded text-xs w-28"
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="text-xs font-bold bg-black text-white px-2 rounded"
+            >
+              OK
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="text-xs font-bold px-2"
+            >
+              X
+            </button>
+          </fetcher.Form>
+        ) : (
+          <button
+            onClick={() => setEditing(true)}
+            className="hover:underline text-left"
+            title="Editar nombre"
+          >
+            {user.displayName || "—"}
+          </button>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        <div className="flex gap-1 flex-wrap items-center">
+          {user.roles.map((role: string) => (
+            <span
+              key={role}
+              className="px-2 py-0.5 bg-brand-100 text-brand-700 text-xs font-bold rounded-md border border-brand-300 inline-flex items-center gap-1"
+            >
+              {role}
+              <fetcher.Form method="post" className="inline">
+                <input type="hidden" name="intent" value="removeRole" />
+                <input type="hidden" name="userId" value={user.id} />
+                <input type="hidden" name="role" value={role} />
+                <button
+                  type="submit"
+                  className="text-brand-500 hover:text-red-600 font-black text-xs leading-none"
+                  title={`Quitar ${role}`}
+                >
+                  x
+                </button>
+              </fetcher.Form>
+            </span>
+          ))}
+          <fetcher.Form
+            method="post"
+            className="inline-flex gap-1 items-center"
+            onSubmit={() => setNewRole("")}
+          >
+            <input type="hidden" name="intent" value="addRole" />
+            <input type="hidden" name="userId" value={user.id} />
+            <input
+              name="role"
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value)}
+              placeholder="+ rol"
+              className="px-1 py-0.5 border border-black rounded text-xs w-16"
+            />
+            {newRole && (
+              <button
+                type="submit"
+                className="text-xs font-bold bg-brand-500 text-white px-1.5 rounded"
+              >
+                +
+              </button>
+            )}
+          </fetcher.Form>
+        </div>
+      </td>
+      <td className="px-4 py-2 text-gray-500 text-xs">
+        {new Date(user.createdAt).toLocaleDateString()}
+      </td>
+      <td className="px-4 py-2">
+        <fetcher.Form
+          method="post"
+          onSubmit={(e) => {
+            if (!confirm("Eliminar usuario " + user.email + "?")) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <input type="hidden" name="intent" value="delete" />
+          <input type="hidden" name="userId" value={user.id} />
+          <button
+            type="submit"
+            disabled={busy}
+            className="px-2 py-1 bg-red-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
+          >
+            Eliminar
+          </button>
+        </fetcher.Form>
+      </td>
+    </tr>
   );
 }
