@@ -18,6 +18,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Publish SDK
+        continue-on-error: true
         working-directory: packages/sdk
         run: |
           npm ci
@@ -26,6 +27,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish MCP
+        continue-on-error: true
         working-directory: packages/mcp
         run: |
           npm ci
@@ -34,6 +36,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish CLI
+        continue-on-error: true
         working-directory: cli
         run: |
           npm ci
