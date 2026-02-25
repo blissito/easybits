@@ -59,8 +59,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
       });
       return { ok: true };
     }
-    case "delete": {
-      await db.user.delete({ where: { id: userId } });
+    case "disable": {
+      await db.user.update({
+        where: { id: userId },
+        data: { roles: [] },
+      });
       return { ok: true };
     }
     default:
@@ -244,22 +247,15 @@ function UserRow({ user }: { user: any }) {
         {new Date(user.createdAt).toLocaleDateString()}
       </td>
       <td className="px-4 py-2">
-        <fetcher.Form
-          method="post"
-          onSubmit={(e) => {
-            if (!confirm("Eliminar usuario " + user.email + "?")) {
-              e.preventDefault();
-            }
-          }}
-        >
-          <input type="hidden" name="intent" value="delete" />
+        <fetcher.Form method="post">
+          <input type="hidden" name="intent" value="disable" />
           <input type="hidden" name="userId" value={user.id} />
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || user.roles.length === 0}
             className="px-2 py-1 bg-red-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
           >
-            Eliminar
+            {user.roles.length === 0 ? "Deshabilitado" : "Deshabilitar"}
           </button>
         </fetcher.Form>
       </td>
