@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   PutBucketCorsCommand,
   DeleteObjectCommand,
+  CopyObjectCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
@@ -13,6 +14,9 @@ import type { StorageProvider, StorageRegion } from "@prisma/client";
 import { db } from "./db";
 
 const DEFAULT_PREFIX = "API_EXPERIMENT/";
+
+export const PRIVATE_BUCKET = process.env.BUCKET_NAME || "easybits-dev";
+export const PUBLIC_BUCKET = process.env.PUBLIC_BUCKET_NAME || "easybits-public";
 
 // --- Types ---
 
@@ -224,4 +228,47 @@ export async function resolveProvider(
   }
 
   return providers.find((p) => p.isDefault) || providers[0];
+}
+
+// --- Cross-bucket operations (platform S3 only) ---
+
+function getPlatformS3(): S3Client {
+  const endpoint = process.env.AWS_ENDPOINT_URL_S3;
+  if (!endpoint) throw new Error("Platform storage not configured");
+  return new S3Client({
+    region: process.env.AWS_REGION || "auto",
+    endpoint,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    },
+  });
+}
+
+export async function copyObjectAcrossBuckets(opts: {
+  fromBucket: string;
+  toBucket: string;
+  key: string;
+}) {
+  const s3 = getPlatformS3();
+  await s3.send(
+    new CopyObjectCommand({
+      Bucket: opts.toBucket,
+      Key: opts.key,
+      CopySource: `${opts.fromBucket}/${opts.key}`,
+    })
+  );
+}
+
+export async function deleteObjectFromBucket(opts: {
+  bucket: string;
+  key: string;
+}) {
+  const s3 = getPlatformS3();
+  await s3.send(
+    new DeleteObjectCommand({
+      Bucket: opts.bucket,
+      Key: opts.key,
+    })
+  );
 }

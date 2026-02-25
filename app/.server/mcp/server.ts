@@ -7,6 +7,8 @@ import {
   deleteFile,
   restoreFile,
   shareFile,
+  updateFile,
+  listDeletedFiles,
 } from "../core/operations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -114,6 +116,40 @@ export function createMcpServer() {
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await shareFile(ctx, params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "update_file",
+    "Update a file's name, access level, or metadata. For access changes (public↔private), copies the object between storage buckets (platform files only). Returns the updated file object with new `url` for public files.",
+    {
+      fileId: z.string().describe("The file ID"),
+      name: z.string().optional().describe("New file name"),
+      access: z.enum(["public", "private"]).optional().describe("Change access level (copies object between buckets)"),
+      metadata: z.record(z.unknown()).optional().describe("Metadata to shallow-merge with existing"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await updateFile(ctx, params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_deleted_files",
+    "List soft-deleted files with `daysUntilPurge` for each. Files are auto-purged after 7 days. Use `restore_file` to recover them.",
+    {
+      limit: z.number().optional().describe("Max results (default 50)"),
+      cursor: z.string().optional().describe("Pagination cursor"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listDeletedFiles(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

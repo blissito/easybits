@@ -1,6 +1,15 @@
 import { db } from "../db";
 import { nanoid } from "nanoid";
-import { getClientForFile, resolveProvider, createStorageClient, getPlatformDefaultClient } from "../storage";
+import {
+  getClientForFile,
+  resolveProvider,
+  createStorageClient,
+  getPlatformDefaultClient,
+  copyObjectAcrossBuckets,
+  deleteObjectFromBucket,
+  PRIVATE_BUCKET,
+  PUBLIC_BUCKET,
+} from "../storage";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
@@ -228,4 +237,109 @@ export async function shareFile(
   });
 
   return permission;
+}
+
+// --- Update File ---
+
+export async function updateFile(
+  ctx: AuthContext,
+  opts: {
+    fileId: string;
+    name?: string;
+    access?: "public" | "private";
+    metadata?: Record<string, unknown>;
+  }
+) {
+  requireScope(ctx, "WRITE");
+
+  const file = await db.file.findUnique({ where: { id: opts.fileId } });
+  if (!file || file.ownerId !== ctx.user.id) {
+    throw new Error("File not found or not owner");
+  }
+  if (file.status === "DELETED") {
+    throw new Error("Cannot update a deleted file");
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  if (opts.name !== undefined) {
+    updates.name = opts.name;
+  }
+
+  if (opts.metadata !== undefined) {
+    const existing = (file.metadata as Record<string, unknown>) || {};
+    updates.metadata = { ...existing, ...opts.metadata };
+  }
+
+  if (opts.access !== undefined && opts.access !== file.access) {
+    if (file.storageProviderId !== null) {
+      throw new Error("Access change is only supported for platform-stored files (no custom provider)");
+    }
+
+    const s3Key = `mcp/${file.storageKey}`;
+
+    if (opts.access === "public") {
+      await copyObjectAcrossBuckets({ fromBucket: PRIVATE_BUCKET, toBucket: PUBLIC_BUCKET, key: s3Key });
+      await deleteObjectFromBucket({ bucket: PRIVATE_BUCKET, key: s3Key });
+      updates.access = "public";
+      updates.url = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${s3Key}`;
+    } else {
+      await copyObjectAcrossBuckets({ fromBucket: PUBLIC_BUCKET, toBucket: PRIVATE_BUCKET, key: s3Key });
+      await deleteObjectFromBucket({ bucket: PUBLIC_BUCKET, key: s3Key });
+      updates.access = "private";
+      updates.url = "";
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return file;
+  }
+
+  const updated = await db.file.update({
+    where: { id: opts.fileId },
+    data: updates,
+  });
+
+  fileEvents.emit("file:changed", ctx.user.id);
+  return updated;
+}
+
+// --- List Deleted Files ---
+
+export async function listDeletedFiles(
+  ctx: AuthContext,
+  opts?: { limit?: number; cursor?: string }
+) {
+  requireScope(ctx, "READ");
+  const limit = Math.min(opts?.limit ?? 50, 100);
+
+  const files = await db.file.findMany({
+    where: { ownerId: ctx.user.id, status: "DELETED" },
+    take: limit + 1,
+    ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    orderBy: { deletedAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      storageKey: true,
+      size: true,
+      contentType: true,
+      status: true,
+      access: true,
+      metadata: true,
+      deletedAt: true,
+      createdAt: true,
+    },
+  });
+
+  const hasMore = files.length > limit;
+  const items = (hasMore ? files.slice(0, limit) : files).map((f) => {
+    const deletedAt = f.deletedAt ? new Date(f.deletedAt).getTime() : Date.now();
+    const purgeAt = deletedAt + 7 * 24 * 60 * 60 * 1000;
+    const daysUntilPurge = Math.max(0, Math.ceil((purgeAt - Date.now()) / (24 * 60 * 60 * 1000)));
+    return { ...f, daysUntilPurge };
+  });
+  const nextCursor = hasMore ? items[items.length - 1].id : undefined;
+
+  return { items, nextCursor };
 }
