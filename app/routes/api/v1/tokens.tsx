@@ -7,7 +7,8 @@ import { FlipLetters } from "~/components/animated/FlipLetters";
 import { getUserOrRedirect, setSessionCookie } from "~/.server/getters";
 import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 import { decode } from "~/.server/tokens";
-import { getClientForFile } from "~/.server/storage";
+import { generateShareToken } from "~/.server/core/operations";
+import type { AuthContext } from "~/.server/apiAuth";
 
 // @todo send welcome?
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
@@ -51,17 +52,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (intent === "generate_token") {
     const user = await getUserOrRedirect(request);
     const fileId = formData.get("fileId") as string;
-    const expInSecs = Number(formData.get("expInSecs") || 3600);
+    const expiresIn = Number(formData.get("expInSecs") || 3600);
 
-    const file = await db.file.findUnique({ where: { id: fileId } });
-    if (!file || !file.storageKey)
-      throw new Response("The file does not exist", { status: 404 });
-    if (file.ownerId !== user.id)
-      throw new Response("Forbidden", { status: 403 });
-
-    const client = await getClientForFile(file.storageProviderId, user.id);
-    const url = await client.getReadUrl(file.storageKey, expInSecs);
-    return data({ url });
+    const ctx: AuthContext = { user, scopes: ["READ", "WRITE", "DELETE", "ADMIN"] };
+    const result = await generateShareToken(ctx, { fileId, expiresIn, source: "ui" });
+    return data({ url: result.url });
   }
 
   if (intent === "set_session") {

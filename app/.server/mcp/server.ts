@@ -9,6 +9,8 @@ import {
   shareFile,
   updateFile,
   listDeletedFiles,
+  generateShareToken,
+  listShareTokens,
 } from "../core/operations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -252,6 +254,43 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { optimizeImage } = await import("../core/imageOperations");
       const result = await optimizeImage(ctx, params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "generate_share_token",
+    "Generate a presigned download URL for a file and record it as a ShareToken. Returns `{ url, token }`. Default expiration: 1 hour (3600s).",
+    {
+      fileId: z.string().describe("The file ID"),
+      expiresIn: z.number().optional().describe("Expiration in seconds (default 3600)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await generateShareToken(ctx, {
+        fileId: params.fileId,
+        expiresIn: params.expiresIn,
+        source: "mcp",
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_share_tokens",
+    "List generated share tokens with expiration status. Each token includes an `expired` boolean. Optionally filter by fileId.",
+    {
+      fileId: z.string().optional().describe("Filter by file ID"),
+      limit: z.number().optional().describe("Max results (default 50)"),
+      cursor: z.string().optional().describe("Pagination cursor"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listShareTokens(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

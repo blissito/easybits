@@ -142,6 +142,7 @@ model User {
   // storageUsed    Int?         @default(0) // thinking about it @todo
   assets         Asset[]
   files          File[]
+  shareTokens    ShareToken[]
   publicKey      String?        @unique
   // defaults
   displayName    String?
@@ -242,6 +243,7 @@ model File {
   Asset                 Asset?     @relation(fields: [assetId], references: [id])
   assetId               String?    @db.ObjectId // deprecate!
   storageProviderId     String?    @db.ObjectId
+  shareTokens           ShareToken[]
 }
 
 model Client {
@@ -340,6 +342,18 @@ model Website {
   totalSize Float    @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ShareToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  fileId    String   @db.ObjectId
+  file      File     @relation(fields: [fileId], references: [id])
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id])
+  source    String   // "ui" | "mcp" | "sdk"
+  expiresAt DateTime
+  expiresIn Int      // original seconds requested
+  createdAt DateTime @default(now())
 }
 
 model TelemetryEvent {

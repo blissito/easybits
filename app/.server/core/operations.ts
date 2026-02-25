@@ -304,6 +304,80 @@ export async function updateFile(
   return updated;
 }
 
+// --- Generate Share Token ---
+
+export async function generateShareToken(
+  ctx: AuthContext,
+  opts: { fileId: string; expiresIn?: number; source: "ui" | "mcp" | "sdk" }
+) {
+  requireScope(ctx, "READ");
+
+  const expiresIn = opts.expiresIn ?? 3600;
+  const file = await db.file.findUnique({ where: { id: opts.fileId } });
+  if (!file || file.status === "DELETED") {
+    throw new Error("File not found");
+  }
+  if (file.ownerId !== ctx.user.id) {
+    throw new Error("Forbidden");
+  }
+
+  const client = await getClientForFile(file.storageProviderId, ctx.user.id);
+  const url = await client.getReadUrl(file.storageKey, expiresIn);
+
+  const expiresAt = new Date(Date.now() + expiresIn * 1000);
+  const token = await db.shareToken.create({
+    data: {
+      fileId: opts.fileId,
+      ownerId: ctx.user.id,
+      source: opts.source,
+      expiresAt,
+      expiresIn,
+    },
+  });
+
+  return { url, token: { id: token.id, fileId: token.fileId, source: token.source, expiresAt: token.expiresAt, createdAt: token.createdAt } };
+}
+
+// --- List Share Tokens ---
+
+export async function listShareTokens(
+  ctx: AuthContext,
+  opts?: { fileId?: string; limit?: number; cursor?: string }
+) {
+  requireScope(ctx, "READ");
+  const limit = Math.min(opts?.limit ?? 50, 100);
+
+  const where: Record<string, unknown> = { ownerId: ctx.user.id };
+  if (opts?.fileId) {
+    where.fileId = opts.fileId;
+  }
+
+  const tokens = await db.shareToken.findMany({
+    where,
+    take: limit + 1,
+    ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      fileId: true,
+      source: true,
+      expiresAt: true,
+      expiresIn: true,
+      createdAt: true,
+      file: { select: { name: true } },
+    },
+  });
+
+  const hasMore = tokens.length > limit;
+  const items = (hasMore ? tokens.slice(0, limit) : tokens).map((t) => ({
+    ...t,
+    expired: t.expiresAt < new Date(),
+  }));
+  const nextCursor = hasMore ? items[items.length - 1].id : undefined;
+
+  return { items, nextCursor };
+}
+
 // --- List Deleted Files ---
 
 export async function listDeletedFiles(
