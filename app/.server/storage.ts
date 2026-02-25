@@ -255,7 +255,7 @@ export async function copyObjectAcrossBuckets(opts: {
     new CopyObjectCommand({
       Bucket: opts.toBucket,
       Key: opts.key,
-      CopySource: `${opts.fromBucket}/${opts.key}`,
+      CopySource: `/${opts.fromBucket}/${opts.key}`,
     })
   );
 }
