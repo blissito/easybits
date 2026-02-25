@@ -58,7 +58,6 @@ export const stripeLogger = {
   error: (...args: any[]) => console.error("[STRIPE][ERROR]", ...args),
 };
 
-import { Effect } from "effect";
 import type { Asset, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { db } from "./db";
@@ -250,79 +249,69 @@ export const updateOrCreateProductAndPrice = async (
   const metaImageUrl = `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
 
   if (asset.stripeProduct && asset.stripePrice) {
-    const priceResult = await Effect.runPromiseExit(
-      createNewPriceForProductEffect({
+    try {
+      const price = await createNewPriceForProduct({
         productId: asset.stripeProduct,
         accountId,
         currency: asset.currency as "mxn",
         unit_amount: Number(asset.price) * 100,
-      })
-    );
-    if (priceResult._tag === "Failure") {
-      stripeLogger.error(
-        "No se pudo crear el nuevo precio en Stripe",
-        priceResult.cause
-      );
+      });
+      if (!price || !price.id) {
+        stripeLogger.error("Respuesta inválida al crear precio en Stripe", price);
+        return {
+          ok: false,
+          error: "Respuesta inválida al crear precio en Stripe",
+        };
+      }
+      await updateProduct({
+        productId: asset.stripeProduct,
+        priceId: price.id,
+        accountId,
+        images: [metaImageUrl],
+        description: asset.note || undefined,
+      });
+      await updateAsset(asset.id, { stripePrice: price.id });
+      await configureMerchantWebhook(user.id);
+      return { ok: true, data: price };
+    } catch (e) {
+      stripeLogger.error("No se pudo crear el nuevo precio en Stripe", e);
       return { ok: false, error: "No se pudo crear el nuevo precio en Stripe" };
     }
-    const price = priceResult.value;
-    if (!price || !price.id) {
-      stripeLogger.error("Respuesta inválida al crear precio en Stripe", price);
-      return {
-        ok: false,
-        error: "Respuesta inválida al crear precio en Stripe",
-      };
-    }
-    await updateProduct({
-      productId: asset.stripeProduct,
-      priceId: price.id,
-      accountId,
-      images: [metaImageUrl],
-      description: asset.note || undefined,
-    });
-    await updateAsset(asset.id, { stripePrice: price.id });
-    await configureMerchantWebhook(user.id);
-    return { ok: true, data: price };
   } else {
-    const productResult = await Effect.runPromiseExit(
-      createProductAndPriceEffect(
+    try {
+      const product = await createProductAndPrice(
         asset.slug,
         Number(asset.price),
         asset.currency,
         accountId,
         asset.note || undefined,
         [metaImageUrl]
-      )
-    );
-    if (productResult._tag === "Failure") {
-      stripeLogger.error(
-        "No se pudo crear el producto/precio en Stripe",
-        productResult.cause
       );
+      if (!product || !product.id || !product.default_price) {
+        stripeLogger.error(
+          "Respuesta inválida al crear producto/precio en Stripe",
+          product
+        );
+        return {
+          ok: false,
+          error: "Respuesta inválida al crear producto/precio en Stripe",
+        };
+      }
+      await db.asset.update({
+        where: {
+          id: asset.id,
+        },
+        data: { stripeProduct: product.id, stripePrice: product.default_price },
+      });
+      await configureMerchantWebhook(user.id);
+      return { ok: true, data: product };
+    } catch (e) {
+      stripeLogger.error("No se pudo crear el producto/precio en Stripe", e);
       return {
         ok: false,
         error: "No se pudo crear el producto/precio en Stripe",
       };
     }
-    const product = productResult.value;
-    if (!product || !product.id || !product.default_price) {
-      stripeLogger.error(
-        "Respuesta inválida al crear producto/precio en Stripe",
-        product
-      );
-      return {
-        ok: false,
-        error: "Respuesta inválida al crear producto/precio en Stripe",
-      };
-    }
-    await db.asset.update({
-      where: {
-        id: asset.id,
-      },
-      data: { stripeProduct: product.id, stripePrice: product.default_price },
-    });
-    await configureMerchantWebhook(user.id);
-    return { ok: true, data: product };
   }
 };
 
@@ -361,8 +350,7 @@ export const updateProduct = async ({
     .catch((e) => console.error("::STRIPE::ERROR::", e));
 };
 
-// Refactor: createNewPriceForProduct usando Effect
-export const createNewPriceForProductEffect = ({
+export const createNewPriceForProduct = async ({
   productId,
   currency,
   unit_amount,
@@ -372,76 +360,61 @@ export const createNewPriceForProductEffect = ({
   currency: "mxn";
   unit_amount: number;
   accountId: string;
-}) =>
-  Effect.tryPromise({
-    try: async () => {
-      const url = new URL(pricesURL);
-      url.searchParams.set(`currency`, currency);
-      url.searchParams.set(`unit_amount`, String(unit_amount));
-      url.searchParams.set(`product`, productId);
-      const headers = {
-        Authorization: apiKey,
-        "Stripe-Account": accountId,
-        "Stripe-Version": "2025-04-30.preview",
-        "content-type": "application/x-www-form-urlencoded",
-      };
-      const response = await fetch(url.toString(), { headers, method: "post" });
-      if (!response.ok) {
-        const error = await response.text();
-        stripeLogger.error("Error al crear precio en Stripe", error);
-        throw new Error(error);
-      }
-      const price = await response.json();
-      stripeLogger.info("Precio creado en Stripe", price);
-      return price;
-    },
-    catch: (e) => {
-      stripeLogger.error("Stripe fetch error (createNewPriceForProduct)", e);
-      return e;
-    },
-  });
+}) => {
+  const url = new URL(pricesURL);
+  url.searchParams.set(`currency`, currency);
+  url.searchParams.set(`unit_amount`, String(unit_amount));
+  url.searchParams.set(`product`, productId);
+  const headers = {
+    Authorization: apiKey,
+    "Stripe-Account": accountId,
+    "Stripe-Version": "2025-04-30.preview",
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  const response = await fetch(url.toString(), { headers, method: "post" });
+  if (!response.ok) {
+    const error = await response.text();
+    stripeLogger.error("Error al crear precio en Stripe", error);
+    throw new Error(error);
+  }
+  const price = await response.json();
+  stripeLogger.info("Precio creado en Stripe", price);
+  return price;
+};
 
-// Refactor: createProductAndPrice usando Effect
-export const createProductAndPriceEffect = (
+export const createProductAndPrice = async (
   name: string,
   price: number,
   currency: string,
   accountId: string,
   description?: string,
   images: string[] = []
-) =>
-  Effect.tryPromise({
-    try: async () => {
-      const url = new URL(productsURL);
-      url.searchParams.set("name", name);
-      url.searchParams.set("default_price_data[currency]", currency);
-      url.searchParams.set(
-        "default_price_data[unit_amount]",
-        String(price * 100)
-      );
-      if (description) url.searchParams.set("description", description);
-      images.forEach((img) => url.searchParams.append("images[]", img));
-      const headers = {
-        Authorization: apiKey,
-        "Stripe-Account": accountId,
-        "Stripe-Version": "2025-04-30.preview",
-        "content-type": "application/x-www-form-urlencoded",
-      };
-      const response = await fetch(url.toString(), { headers, method: "post" });
-      if (!response.ok) {
-        const error = await response.text();
-        stripeLogger.error("Error al crear producto/precio en Stripe", error);
-        throw new Error(error);
-      }
-      const data = await response.json();
-      stripeLogger.info("Producto y precio creados en Stripe", data);
-      return data;
-    },
-    catch: (e) => {
-      stripeLogger.error("Stripe fetch error (createProductAndPrice)", e);
-      return e;
-    },
-  });
+) => {
+  const url = new URL(productsURL);
+  url.searchParams.set("name", name);
+  url.searchParams.set("default_price_data[currency]", currency);
+  url.searchParams.set(
+    "default_price_data[unit_amount]",
+    String(price * 100)
+  );
+  if (description) url.searchParams.set("description", description);
+  images.forEach((img) => url.searchParams.append("images[]", img));
+  const headers = {
+    Authorization: apiKey,
+    "Stripe-Account": accountId,
+    "Stripe-Version": "2025-04-30.preview",
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  const response = await fetch(url.toString(), { headers, method: "post" });
+  if (!response.ok) {
+    const error = await response.text();
+    stripeLogger.error("Error al crear producto/precio en Stripe", error);
+    throw new Error(error);
+  }
+  const data = await response.json();
+  stripeLogger.info("Producto y precio creados en Stripe", data);
+  return data;
+};
 
 export const getAccountPayments = async (accountId: string, isDev: boolean) => {
   const url = new URL(paymentsURL);

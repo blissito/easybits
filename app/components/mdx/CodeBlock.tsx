@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useState, useEffect } from "react";
+import { codeToHtml } from "shiki";
 
 interface CodeBlockProps {
   children: string;
@@ -15,13 +14,30 @@ export function CodeBlock({
   className = "",
   language,
   title,
-  showLineNumbers = true,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const [html, setHtml] = useState("");
 
-  // Extract language from className (e.g., "language-javascript" -> "javascript")
   const detectedLanguage =
     language || className.replace(/language-/, "") || "text";
+
+  useEffect(() => {
+    let cancelled = false;
+    codeToHtml(children.trim(), {
+      lang: detectedLanguage,
+      theme: "github-dark",
+    })
+      .then((result) => {
+        if (!cancelled) setHtml(result);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setHtml(`<pre><code>${children.trim()}</code></pre>`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [children, detectedLanguage]);
 
   const handleCopy = async () => {
     try {
@@ -75,44 +91,16 @@ export function CodeBlock({
       </div>
 
       {/* Code content */}
-      <div className="rounded-b-lg overflow-hidden">
-        <SyntaxHighlighter
-          language={detectedLanguage}
-          style={vscDarkPlus}
-          showLineNumbers={showLineNumbers}
-          customStyle={{
-            margin: 0,
-            padding: "16px",
-            background: "#2f343f",
-            fontSize: "14px",
-            fontFamily: '"Courier New", Courier, monospace',
-            borderRadius: 0,
-            border: "none",
-            outline: "none",
-          }}
-          lineNumberStyle={{
-            color: "#6b7280",
-            fontSize: "12px",
-            minWidth: "2.5em",
-            paddingRight: "1em",
-            userSelect: "none",
-          }}
-          codeTagProps={{
-            style: {
-              fontFamily: '"Courier New", Courier, monospace',
-            },
-          }}
-        >
-          {children.trim()}
-        </SyntaxHighlighter>
-      </div>
+      <div
+        className="rounded-b-lg overflow-hidden [&_pre]:!m-0 [&_pre]:!p-4 [&_pre]:!rounded-none [&_pre]:text-sm [&_pre]:font-mono"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </div>
   );
 }
 
 // Export a pre-configured version for MDX
 export function Pre({ children, ...props }: any) {
-  // Handle both direct code and code wrapped in <code> tags
   if (children?.props?.children) {
     return (
       <CodeBlock className={children.props.className} {...props}>
@@ -126,7 +114,6 @@ export function Pre({ children, ...props }: any) {
 
 // Export a code component for inline code
 export function Code({ children, className, ...props }: any) {
-  // If it's a block code (has language class), use CodeBlock
   if (className?.startsWith("language-")) {
     return (
       <CodeBlock className={className} {...props}>
@@ -135,7 +122,6 @@ export function Code({ children, className, ...props }: any) {
     );
   }
 
-  // Otherwise, render as inline code with existing styles
   return (
     <code className="markdown-inline-code" {...props}>
       {children}

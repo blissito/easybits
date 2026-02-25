@@ -1,8 +1,5 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import rangeParser from "parse-numeric-range";
 import { ImageGallery, Image } from "../mdx/ImageGallery";
 import { Callout } from "../mdx/Callout";
 import { CodeBlock } from "../mdx/CodeBlock";
@@ -25,37 +22,11 @@ const components = {
   // Enhanced code highlighting
   code({ node, inline, className, children, ...props }: CodeProps) {
     const match = /language-(\w+)/.exec(className || "");
-    const hasMeta = node?.data?.meta;
-
-    const applyHighlights = (lineNumber: number) => {
-      if (hasMeta) {
-        const RE = /{([\d,-]+)}/;
-        const metadata = node.data.meta?.replace(/\s/g, "");
-        const strlineNumbers = RE.test(metadata) ? RE.exec(metadata)?.[1] : "0";
-        if (strlineNumbers) {
-          const highlightLines = rangeParser(strlineNumbers);
-          const shouldHighlight = highlightLines.includes(lineNumber);
-          return shouldHighlight
-            ? { style: { backgroundColor: "#374151" } }
-            : {};
-        }
-      }
-      return {};
-    };
 
     return !inline && match ? (
-      <SyntaxHighlighter
-        style={vscDarkPlus}
-        language={match[1]}
-        PreTag="div"
-        className="rounded-lg border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] my-6"
-        showLineNumbers={true}
-        wrapLines={true}
-        lineProps={applyHighlights}
-        {...props}
-      >
+      <CodeBlock className={className} language={match[1]}>
         {String(children).replace(/\n$/, "")}
-      </SyntaxHighlighter>
+      </CodeBlock>
     ) : (
       <code
         className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm font-mono border border-gray-300"

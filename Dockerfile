@@ -1,30 +1,26 @@
-# Build stage
-FROM node:20-alpine AS builder
-
-# Instalar dependencias de build
+FROM node:20-alpine AS development-dependencies-env
+COPY . /app
 WORKDIR /app
-COPY package*.json ./
 RUN npm ci
 
-# Copiar archivos necesarios y hacer build
-COPY . .
-# Generar Prisma en la etapa de build
+FROM node:20-alpine AS production-dependencies-env
+COPY ./package.json package-lock.json /app/
+WORKDIR /app
+RUN npm ci --omit=dev
+# prisma
+COPY ./prisma /app/
 RUN npx prisma generate
+
+FROM node:20-alpine AS build-env
+COPY . /app/
+COPY --from=development-dependencies-env /app/node_modules /app/node_modules
+WORKDIR /app
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS runner
+FROM node:20-alpine
+COPY ./package.json package-lock.json /app/
+COPY --from=production-dependencies-env /app/node_modules /app/node_modules
+COPY --from=build-env /app/build /app/build
 WORKDIR /app
-
-# Copiar solo los archivos necesarios
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/node_modules ./node_modules
-COPY package*.json ./
-
-# Limpiar caché de npm
-RUN npm cache clean --force
-
-# Configurar variables de entorno
 ENV NODE_ENV=production
-
 CMD ["npm", "run", "start"]

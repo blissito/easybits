@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState } from "react";
-import { Effect } from "effect";
 import { nanoid } from "nanoid";
 import { useUploadMultipart } from "react-hook-multipart/react";
 
@@ -19,7 +18,6 @@ export interface UploadTask {
   error?: any;
   result?: any;
   abortController: AbortController;
-  fiber?: any; // Effect Fiber
 }
 
 interface UploadsContextType {
@@ -51,45 +49,32 @@ export const UploadsProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     setUploads((prev) => [...prev, newTask]);
 
-    const effect = Effect.tryPromise({
-      try: async () => {
-        const result = await upload(
-          file.name,
-          file,
-          ({ percentage }: { percentage: number }) => {
-            setUploads((prev) =>
-              prev.map((t) =>
-                t.id === id
-                  ? { ...t, progress: percentage, status: "uploading" }
-                  : t
-              )
-            );
-          },
-          { data: { assetId }, signal: abortController.signal }
+    upload(
+      file.name,
+      file,
+      ({ percentage }: { percentage: number }) => {
+        setUploads((prev) =>
+          prev.map((t) =>
+            t.id === id
+              ? { ...t, progress: percentage, status: "uploading" }
+              : t
+          )
         );
-        return result;
       },
-      catch: (error) => {
-        return error;
-      },
-    }).pipe(
-      Effect.tap((result) => {
+      { data: { assetId }, signal: abortController.signal } as any
+    )
+      .then((result) => {
         setUploads((prev) =>
           prev.map((t) =>
             t.id === id ? { ...t, status: "success", result, progress: 100 } : t
           )
         );
-        return Effect.unit;
-      }),
-      Effect.catchAll((error) => {
+      })
+      .catch((error) => {
         setUploads((prev) =>
           prev.map((t) => (t.id === id ? { ...t, status: "error", error } : t))
         );
-        return Effect.unit;
-      })
-    );
-    const fiber = Effect.runPromise(effect);
-    setUploads((prev) => prev.map((t) => (t.id === id ? { ...t, fiber } : t)));
+      });
   };
 
   const cancelUpload = (id: string) => {
@@ -97,7 +82,6 @@ export const UploadsProvider: React.FC<{ children: React.ReactNode }> = ({
       prev.map((t) => {
         if (t.id === id) {
           t.abortController.abort();
-          t.fiber?.interrupt?.();
           return { ...t, status: "cancelled" };
         }
         return t;

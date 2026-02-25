@@ -1,11 +1,9 @@
 import { generateUserToken } from "~/.server/tokens";
 import { getSesTransport, gmailTransport } from "./sendgridTransport";
 import { confirmation } from "./templates/confirmation";
-import AWS from "aws-sdk";
 import { magic_link } from "./templates/magic_link";
 import { db } from "../db";
 import { z } from "zod";
-AWS.config.update({ region: "us-east-2" });
 
 export const emailSchema = z.string().email();
 

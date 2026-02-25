@@ -4,7 +4,6 @@ import Logo from "/icons/easybits-logo.svg";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/stats";
 import type { User, Order } from "@prisma/client";
-import { startOfMonth, subMonths } from "date-fns";
 import { getVisitsChartData } from "~/.server/telemetry";
 
 type StatsLoaderData = {

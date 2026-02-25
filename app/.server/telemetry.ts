@@ -1,13 +1,8 @@
-import { Effect, Schema } from "effect";
-import { ObjectId } from "mongodb";
+import { z } from "zod";
 import { db } from "./db";
-import type { Asset } from "@prisma/client";
-import type { Request } from "express"; // O ajusta el tipo según tu framework
-import { startOfMonth, subMonths } from "date-fns";
 
 // Modelo TypeScript para un evento de telemetría
 export interface TelemetryEvent {
-  _id?: ObjectId;
   ownerId: string;
   assetId?: string;
   linkType: "store" | "assetDetail";
@@ -18,38 +13,16 @@ export interface TelemetryEvent {
   metadata?: Record<string, any>;
 }
 
-// Schema Effect para validación
-export const TelemetryEventSchema = Schema.Struct({
-  ownerId: Schema.String,
-  assetId: Schema.optional(Schema.String),
-  linkType: Schema.Union(
-    Schema.Literal("store"),
-    Schema.Literal("assetDetail")
-  ),
-  eventType: Schema.Literal("visit"),
-  timestamp: Schema.Date,
-  sessionId: Schema.optional(Schema.String),
-  ip: Schema.optional(Schema.String),
-  metadata: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.Unknown })
-  ),
-});
-
-// Setter auxiliar para guardar un evento de telemetría en MongoDB
-// import { getMongoDb } from '../lib/mongo'; // Descomenta y ajusta si existe
-
-export const insertTelemetryEvent = Effect.gen(function* (_) {
-  return (event: TelemetryEvent) =>
-    Effect.tryPromise({
-      try: async () => {
-        // const db = await getMongoDb();
-        // const collection = db.collection('telemetry_events');
-        // await collection.insertOne(event);
-        // return true;
-        return true; // Quita esto y descomenta lo de arriba cuando tengas getMongoDb
-      },
-      catch: (error) => error,
-    });
+// Schema Zod para validación
+export const TelemetryEventSchema = z.object({
+  ownerId: z.string(),
+  assetId: z.string().optional(),
+  linkType: z.union([z.literal("store"), z.literal("assetDetail")]),
+  eventType: z.literal("visit"),
+  timestamp: z.coerce.date(),
+  sessionId: z.string().optional(),
+  ip: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function trackTelemetryVisit({
@@ -90,12 +63,23 @@ export async function trackTelemetryVisit({
     if (asset.id) {
       event.assetId = asset.id;
     }
-    const parsed = Schema.decodeSync(TelemetryEventSchema)(event);
+    const parsed = TelemetryEventSchema.parse(event);
     const mutableParsed = JSON.parse(JSON.stringify(parsed));
     await db.telemetryEvent.create({ data: mutableParsed });
   } catch (err) {
     console.error("Telemetry error:", err);
   }
+}
+
+// Native date helpers (replacing date-fns)
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function subMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() - months);
+  return result;
 }
 
 // Devuelve datos de visitas agrupados por mes para la gráfica de dashboard
