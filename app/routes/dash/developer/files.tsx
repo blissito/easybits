@@ -147,7 +147,7 @@ export default function DevFilesPage() {
   const { items, nextCursor, trash } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
-  const [tokenFor, setTokenFor] = useState<Partial<File> | null>(null);
+  const [tokenFor, setTokenFor] = useState<Pick<File, "id" | "name"> | null>(null);
 
   useEffect(() => {
     const es = new EventSource("/api/sse/files");
@@ -319,7 +319,7 @@ export default function DevFilesPage() {
         </button>
       )}
 
-      <ShareTokensModal tokenFor={tokenFor as File} onClose={() => setTokenFor(null)} />
+      <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
     </div>
   );
 }

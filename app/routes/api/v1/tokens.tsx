@@ -1,13 +1,13 @@
 import { db } from "~/.server/db";
 import type { Route } from "./+types/tokens";
-import { getReadURL } from "react-hook-multipart";
 import { data, Form, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import Logo from "/icons/easybits-logo.svg";
 import { FlipLetters } from "~/components/animated/FlipLetters";
-import { setSessionCookie } from "~/.server/getters";
+import { getUserOrRedirect, setSessionCookie } from "~/.server/getters";
 import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 import { decode } from "~/.server/tokens";
+import { getClientForFile } from "~/.server/storage";
 
 // @todo send welcome?
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
@@ -49,18 +49,18 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
   if (intent === "generate_token") {
-    console.log("here");
+    const user = await getUserOrRedirect(request);
     const fileId = formData.get("fileId") as string;
-    const expInSecs = formData.get("expInSecs") as string;
-    const expiresIn = formData.get("expiresIn") as string;
+    const expInSecs = Number(formData.get("expInSecs") || 3600);
+
     const file = await db.file.findUnique({ where: { id: fileId } });
     if (!file || !file.storageKey)
       throw new Response("The file does not exist", { status: 404 });
+    if (file.ownerId !== user.id)
+      throw new Response("Forbidden", { status: 403 });
 
-    const url = await getReadURL(
-      file.storageKey,
-      Number(expiresIn || expInSecs)
-    );
+    const client = await getClientForFile(file.storageProviderId, user.id);
+    const url = await client.getReadUrl(file.storageKey, expInSecs);
     return data({ url });
   }
 
