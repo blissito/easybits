@@ -1,14 +1,25 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { db } from "../db";
+import { resolveAiKey } from "./aiKeyOperations";
+
+async function getAnthropicProvider(userId?: string) {
+  if (userId) {
+    const userKey = await resolveAiKey(userId, "ANTHROPIC");
+    if (userKey) return createAnthropic({ apiKey: userKey });
+  }
+  return createAnthropic();
+}
 
 export async function autoTagFile(fileId: string) {
   const file = await db.file.findUnique({ where: { id: fileId } });
   if (!file) return;
 
+  const provider = await getAnthropicProvider(file.ownerId);
+
   const { object } = await generateObject({
-    model: anthropic("claude-haiku-4-5-20251001"),
+    model: provider("claude-haiku-4-5-20251001"),
     schema: z.object({
       tags: z.array(z.string()).max(10).describe("Relevant tags for this file"),
       category: z.string().describe("Primary category"),
@@ -37,8 +48,10 @@ export async function searchFilesWithAI(
   userId: string,
   query: string
 ) {
+  const provider = await getAnthropicProvider(userId);
+
   const { object } = await generateObject({
-    model: anthropic("claude-haiku-4-5-20251001"),
+    model: provider("claude-haiku-4-5-20251001"),
     schema: z.object({
       nameContains: z.string().optional().describe("Substring to match in file name"),
       contentTypes: z.array(z.string()).optional().describe("MIME types to filter"),

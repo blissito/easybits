@@ -158,6 +158,53 @@ export function createMcpServer() {
   );
 
   server.tool(
+    "set_ai_key",
+    "Store your AI provider API key for AI-powered features (search, auto-tagging)",
+    {
+      provider: z.enum(["ANTHROPIC", "OPENAI"]).describe("AI provider"),
+      apiKey: z.string().describe("Your API key for the provider"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { setAiKey } = await import("../core/aiKeyOperations");
+      const result = await setAiKey(ctx, params.provider, params.apiKey);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_ai_keys",
+    "List your configured AI provider API keys (values are masked)",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listAiKeys } = await import("../core/aiKeyOperations");
+      const result = await listAiKeys(ctx);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_ai_key",
+    "Remove a stored AI provider API key",
+    {
+      provider: z.enum(["ANTHROPIC", "OPENAI"]).describe("AI provider to remove"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deleteAiKey } = await import("../core/aiKeyOperations");
+      const result = await deleteAiKey(ctx, params.provider);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
     "search_files",
     "Search files using natural language (AI-powered)",
     {
