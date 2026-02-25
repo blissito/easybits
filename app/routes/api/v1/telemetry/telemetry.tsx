@@ -1,25 +1,25 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { data } from "react-router";
 import { trackTelemetryVisit } from "~/.server/telemetry";
+import type { Route } from "./+types/telemetry";
 
-export const action = async ({ request }: ActionFunctionArgs) => {
+export const action = async ({ request }: Route.ActionArgs) => {
   try {
-    const body = await request.json();
+    const body = await request.data();
     const { intent, assetId, ownerId, linkType } = body;
 
     if (intent !== "track-visit") {
-      return json({ error: "Invalid intent" }, { status: 400 });
+      return data({ error: "Invalid intent" }, { status: 400 });
     }
     if (!ownerId) {
-      return json({ error: "Missing ownerId" }, { status: 400 });
+      return data({ error: "Missing ownerId" }, { status: 400 });
     }
     await trackTelemetryVisit({
       asset: assetId ? { ownerId, id: assetId } : { ownerId },
       request,
       linkType: linkType || "store",
     });
-    return json({ ok: true });
+    return data({ ok: true });
   } catch (err) {
-    return json({ error: "Telemetry error" }, { status: 500 });
+    return data({ error: "Telemetry error" }, { status: 500 });
   }
 };

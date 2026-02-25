@@ -85,7 +85,6 @@
     "vite-node": "^3.0.6",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1",
-    "@remix-run/node": "^2.16.8",
     "react-router": "^7.7.0",
     "winston": "^3.17.0"
   },
