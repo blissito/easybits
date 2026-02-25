@@ -21,7 +21,7 @@ export function createMcpServer() {
 
   server.tool(
     "list_files",
-    "List your files with optional filtering by asset",
+    "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor }`. Pass `nextCursor` as `cursor` to get the next page. Excludes deleted files.",
     {
       assetId: z.string().optional().describe("Filter by asset ID"),
       limit: z.number().optional().describe("Max results (default 50)"),
@@ -38,7 +38,7 @@ export function createMcpServer() {
 
   server.tool(
     "get_file",
-    "Get file metadata and a signed download URL",
+    "Get file metadata and a signed download URL. Returns file object with a `readUrl` field containing a presigned GET URL (expires in 1h).",
     {
       fileId: z.string().describe("The file ID"),
     },
@@ -53,7 +53,7 @@ export function createMcpServer() {
 
   server.tool(
     "upload_file",
-    "Get a presigned upload URL for a new file",
+    "Create a file record and get a presigned upload URL. Returns `{ file, putUrl }`. Upload bytes via PUT to `putUrl`. The file is created with status DONE immediately.",
     {
       fileName: z.string().describe("Name of the file"),
       contentType: z.string().describe("MIME type"),
@@ -73,7 +73,7 @@ export function createMcpServer() {
 
   server.tool(
     "delete_file",
-    "Delete a file by ID",
+    "Soft-delete a file (sets status to DELETED). Recoverable for 7 days via `restore_file`, then auto-purged from storage.",
     {
       fileId: z.string().describe("The file ID to delete"),
     },
@@ -88,7 +88,7 @@ export function createMcpServer() {
 
   server.tool(
     "restore_file",
-    "Restore a previously deleted file from trash",
+    "Restore a soft-deleted file back to DONE status. Only works on files with status DELETED.",
     {
       fileId: z.string().describe("The file ID to restore"),
     },
@@ -103,7 +103,7 @@ export function createMcpServer() {
 
   server.tool(
     "share_file",
-    "Share a file with another user by email",
+    "Share a file with another user by email. Creates a permission record. canRead defaults to true, canWrite/canDelete to false. Target user must exist.",
     {
       fileId: z.string().describe("The file ID to share"),
       targetEmail: z.string().describe("Email of the user to share with"),
@@ -122,7 +122,7 @@ export function createMcpServer() {
 
   server.tool(
     "list_providers",
-    "List configured storage providers",
+    "List your configured storage providers. If none configured, shows platform default (Tigris).",
     {},
     async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -159,7 +159,7 @@ export function createMcpServer() {
 
   server.tool(
     "set_ai_key",
-    "Store your AI provider API key for AI-powered features (search, auto-tagging)",
+    "Store your AI provider API key for AI-powered features (search, auto-tagging). Key is encrypted; response shows masked value only.",
     {
       provider: z.enum(["ANTHROPIC", "OPENAI"]).describe("AI provider"),
       apiKey: z.string().describe("Your API key for the provider"),
@@ -206,7 +206,7 @@ export function createMcpServer() {
 
   server.tool(
     "optimize_image",
-    "Convert an image file to an optimized format (WebP or AVIF). Creates a new file without modifying the original.",
+    "Convert an image to WebP or AVIF, creating a new file (original unchanged). Default quality: 80 (WebP), 50 (AVIF). Returns `{ file, originalSize, optimizedSize, savings }`.",
     {
       fileId: z.string().describe("ID of the image file to optimize"),
       format: z.enum(["webp", "avif"]).default("webp").describe("Target format"),
@@ -224,7 +224,7 @@ export function createMcpServer() {
 
   server.tool(
     "search_files",
-    "Search files using natural language (AI-powered)",
+    "Search files using natural language (AI-powered). Requires an AI key (set_ai_key). Returns up to 20 matching files sorted by newest first.",
     {
       query: z.string().describe("Natural language search query, e.g. 'all PDF files' or 'images uploaded recently'"),
     },
