@@ -205,6 +205,24 @@ export function createMcpServer() {
   );
 
   server.tool(
+    "optimize_image",
+    "Convert an image file to an optimized format (WebP or AVIF). Creates a new file without modifying the original.",
+    {
+      fileId: z.string().describe("ID of the image file to optimize"),
+      format: z.enum(["webp", "avif"]).default("webp").describe("Target format"),
+      quality: z.number().min(1).max(100).optional().describe("Quality 1-100. Default: 80 for WebP, 50 for AVIF"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { optimizeImage } = await import("../core/imageOperations");
+      const result = await optimizeImage(ctx, params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
     "search_files",
     "Search files using natural language (AI-powered)",
     {

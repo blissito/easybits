@@ -56,6 +56,19 @@ export interface UploadFileResponse {
   putUrl: string;
 }
 
+export interface OptimizeImageParams {
+  fileId: string;
+  format?: "webp" | "avif";
+  quality?: number;
+}
+
+export interface OptimizeImageResponse {
+  file: EasybitsFile;
+  originalSize: number;
+  optimizedSize: number;
+  savings: string;
+}
+
 export interface ShareFileParams {
   fileId: string;
   targetEmail: string;
@@ -151,6 +164,14 @@ export class EasybitsClient {
   async deleteFile(fileId: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/files/${fileId}`, {
       method: "DELETE",
+    });
+  }
+
+  async optimizeImage(params: OptimizeImageParams): Promise<OptimizeImageResponse> {
+    const { fileId, ...body } = params;
+    return this.request<OptimizeImageResponse>(`/files/${fileId}/optimize`, {
+      method: "POST",
+      body: JSON.stringify(body),
     });
   }
 
