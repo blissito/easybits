@@ -11,8 +11,8 @@ import { HiClipboardDocument } from "react-icons/hi2";
 type TokenFile = { id: string; name: string };
 
 const UNITS = [
-  { label: "Minutos", value: "m", max: 10080, multiplier: 60 },
-  { label: "Horas", value: "h", max: 168, multiplier: 3600 },
+  { label: "Min", value: "m", max: 10080, multiplier: 60 },
+  { label: "Hrs", value: "h", max: 168, multiplier: 3600 },
 ] as const;
 
 export const ShareTokensModal = ({
@@ -64,17 +64,19 @@ export const ShareTokensModal = ({
       isOpen={!!tokenFor}
       title="Token de acceso"
     >
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 mt-6">
         {/* File info */}
-        <div className="flex items-center gap-2 mb-6 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
-          <HiClipboardDocument className="text-gray-400 shrink-0" />
-          <span className="truncate text-sm text-gray-600">
+        <div className="flex items-center gap-3 mb-6 border-2 border-black rounded-xl px-4 py-3 bg-gray-50">
+          <HiClipboardDocument className="text-black shrink-0" size={18} />
+          <span className="truncate text-sm font-medium text-gray-700">
             {tokenFor?.name}
           </span>
         </div>
 
         {/* Duration picker */}
-        <p className="text-sm font-medium text-gray-500 mb-2">Duración</p>
+        <label className="text-xs font-bold text-black uppercase tracking-wider mb-2">
+          Duración
+        </label>
         <div className="flex gap-2 items-center mb-6">
           <input
             min={1}
@@ -86,25 +88,25 @@ export const ShareTokensModal = ({
               setNumber(v);
             }}
             className={cn(
-              "border border-gray-300 rounded-xl px-4 py-3 h-12 w-24 text-center text-lg font-semibold",
-              "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+              "border-2 border-black rounded-xl px-4 py-3 h-12 w-24 text-center text-lg font-bold",
+              "focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
             )}
           />
-          <div className="flex bg-gray-100 rounded-xl p-1">
+          <div className="flex border-2 border-black rounded-xl overflow-hidden">
             {UNITS.map((u, i) => (
               <button
                 key={u.value}
                 type="button"
                 onClick={() => {
                   setUnitIdx(i);
-                  // Clamp number to new max
                   setNumber((prev) => Math.min(prev, u.max));
                 }}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  "px-4 h-12 text-sm font-bold transition-all",
                   i === unitIdx
-                    ? "bg-white border border-gray-300 shadow-sm text-black"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-brand-500 text-black"
+                    : "bg-white text-gray-500 hover:bg-gray-50",
+                  i > 0 && "border-l-2 border-black"
                 )}
               >
                 {u.label}
@@ -114,10 +116,10 @@ export const ShareTokensModal = ({
         </div>
 
         {/* Expiry preview */}
-        <div className="bg-black rounded-2xl px-5 py-5 mb-6">
+        <div className="bg-black border-2 border-black rounded-2xl px-5 py-5 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <IoTime className="text-brand-500" />
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
               Válido hasta
             </span>
           </div>
@@ -132,25 +134,27 @@ export const ShareTokensModal = ({
         {/* Generated URL */}
         {hasUrl && (
           <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <p className="text-sm font-medium text-gray-500 mb-2">URL generada</p>
-            <div className="relative flex items-center bg-gray-50 border border-gray-200 rounded-xl">
+            <label className="text-xs font-bold text-black uppercase tracking-wider mb-2 block">
+              URL generada
+            </label>
+            <div className="relative flex items-center border-2 border-black rounded-xl bg-gray-50">
               <input
                 readOnly
                 value={url}
-                className="w-full bg-transparent text-xs text-gray-700 px-4 py-3 pr-10 rounded-xl select-all focus:outline-none"
+                className="w-full bg-transparent text-xs text-gray-700 px-4 py-3 pr-10 rounded-xl select-all focus:outline-none font-mono"
                 onFocus={(e) => e.target.select()}
               />
               <div className="absolute right-2">
                 <Copy text={url} />
               </div>
             </div>
-            <p className="text-xs text-brand-500 mt-1.5">
+            <p className="text-xs font-semibold text-brand-600 mt-2">
               Guarda este enlace — no se mostrará de nuevo.
             </p>
           </div>
         )}
 
-        {/* Actions — pushed to bottom */}
+        {/* Actions */}
         <nav className="mt-auto flex gap-3 pt-4">
           <BrutalButton onClick={handleClose} mode="ghost">
             Cerrar
@@ -158,6 +162,7 @@ export const ShareTokensModal = ({
           <BrutalButton
             isLoading={isFetching}
             onClick={onGenerate}
+            className="w-full"
             containerClassName="w-full"
           >
             {hasUrl ? "Regenerar token" : "Generar token"}
