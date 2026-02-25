@@ -232,7 +232,7 @@ export default function DevFilesPage() {
             {items.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
-                  {trash ? "La papelera esta vacia" : "No files found"}
+                  {trash ? "La papelera esta vacia" : "Sube archivos via MCP, SDK o API"}
                 </td>
               </tr>
             )}
