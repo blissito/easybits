@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLoaderData, useSearchParams, useFetcher, useRevalidator, data } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
@@ -7,9 +7,11 @@ import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
 import { IconRenderer } from "~/routes/files/IconRenderer";
 import { Copy } from "~/components/common/Copy";
-import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic, FaBook, FaLock } from "react-icons/fa6";
+import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic, FaBook } from "react-icons/fa6";
 import { MdFolderZip } from "react-icons/md";
 import { GiMagicLamp } from "react-icons/gi";
+import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
+import type { File } from "@prisma/client";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -145,6 +147,7 @@ export default function DevFilesPage() {
   const { items, nextCursor, trash } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
+  const [tokenFor, setTokenFor] = useState<Partial<File> | null>(null);
 
   useEffect(() => {
     const es = new EventSource("/api/sse/files");
@@ -248,7 +251,12 @@ export default function DevFilesPage() {
                 </td>
                 <td className="px-4 py-3">
                   {f.access === "private" ? (
-                    <FaLock className="text-gray-400" />
+                    <button
+                      className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
+                      onClick={() => setTokenFor(f)}
+                    >
+                      <img alt="keys" src="/icons/keys.svg" className="w-6" />
+                    </button>
                   ) : f.url ? (
                     <Copy mode="ghost" text={f.url} />
                   ) : null}
@@ -310,6 +318,8 @@ export default function DevFilesPage() {
           </span>
         </button>
       )}
+
+      <ShareTokensModal tokenFor={tokenFor as File} onClose={() => setTokenFor(null)} />
     </div>
   );
 }
