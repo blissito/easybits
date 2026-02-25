@@ -1,4 +1,16 @@
 .react-router
 build
 node_modules
-README.md
+.git
+packages
+cli
+test
+test-results
+*.md
+.env
+.env.*
+.claude
+.kiro
+.build
+scripts
+stripe-onboarding-visible.png

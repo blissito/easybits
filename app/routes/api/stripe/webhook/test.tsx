@@ -10,7 +10,7 @@ export const action = async ({ request }: { request: Request }) => {
       throw new Error("No signature header");
     }
 
-    const event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+    const event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_SIGN!);
     
     // Aquí puedes agregar logs para ver la metadata
     console.log("Webhook event received:", {

@@ -75,7 +75,11 @@ const SideBarItem = ({
   const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
-    setIsActive(isCurrentActive || location.pathname === path);
+    setIsActive(
+      isCurrentActive ||
+        location.pathname === path ||
+        (path !== "/dash" && path !== "/inicio" && location.pathname.startsWith(path + "/"))
+    );
   }, [location.pathname, path]);
 
   const [scope, animate] = useAnimate();

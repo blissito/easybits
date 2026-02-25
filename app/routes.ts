@@ -56,11 +56,30 @@ export default [
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
       route("websites", "routes/dash/websites.tsx"),
+      // Developer dashboard
+      layout("routes/dash/developer/developer.tsx", [
+        ...prefix("developer", [
+          index("routes/dash/developer/keys.tsx"),
+          route("files", "routes/dash/developer/files.tsx"),
+          route("providers", "routes/dash/developer/providers.tsx"),
+          route("setup", "routes/dash/developer/setup.tsx"),
+        ]),
+      ]),
     ]),
   ]),
   route("/edicion", "routes/store/storeEdition.tsx"),
   // multipar upload
   route("api/upload", "routes/api/v1/upload.ts"),
+  // MCP
+  route("api/mcp", "routes/api/mcp.ts"),
+  // v2
+  ...prefix("api/v2", [
+    route("files", "routes/api/v2/files.ts"),
+    route("files/:fileId", "routes/api/v2/file.ts"),
+    route("files/:fileId/share", "routes/api/v2/fileShare.ts"),
+    route("keys", "routes/api/v2/keys.ts"),
+    route("keys/:keyId", "routes/api/v2/key.ts"),
+  ]),
   // v1
   ...prefix("api/v1", [
     // Telemetry

@@ -16,9 +16,9 @@ export const WEBHOOK_EVENTS = [
 export type StripeEnvironment = 'development' | 'production';
 
 const stripeConfigSchema = z.object({
-  secretKey: z.string().min(1, { message: 'Stripe secret key is required' }),
-  publishableKey: z.string().min(1, { message: 'Stripe publishable key is required' }),
-  webhookSecret: z.string().min(1, { message: 'Stripe webhook secret is required' }),
+  secretKey: z.string().optional(),
+  publishableKey: z.string().optional(),
+  webhookSecret: z.string().optional(),
   apiVersion: z.string().default('2023-08-16'),
 });
 
@@ -29,7 +29,7 @@ function getValidatedConfig(env: StripeEnvironment): StripeConfig {
   const config = {
     secretKey: env === 'development' ? process.env.STRIPE_DEV_SECRET_KEY : process.env.STRIPE_SECRET_KEY, 
     publishableKey: env === 'development' ? process.env.STRIPE_DEV_PUBLISHABLE_KEY : process.env.STRIPE_PUBLISHABLE_KEY,
-    webhookSecret: env === 'development' ? process.env.STRIPE_DEV_WEBHOOK_SECRET : process.env.STRIPE_WEBHOOK_SECRET,
+    webhookSecret: env === 'development' ? process.env.STRIPE_DEV_WEBHOOK_SECRET : process.env.STRIPE_SIGN,
   };
 
   const result = stripeConfigSchema.safeParse(config);

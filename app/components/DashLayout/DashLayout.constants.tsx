@@ -56,6 +56,17 @@ export const ITEMS = {
 
   bottomItems: [
     {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg>
+      ),
+      path: "/dash/developer",
+      title: "Developer",
+      index: 2,
+    },
+    {
       icon: <img className="scale" src="/images/profile.svg" />,
       path: "/dash/perfil",
       title: "Perfil",

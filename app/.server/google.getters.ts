@@ -30,7 +30,7 @@ const validateGoogleAccessToken = async (
     headers: {
       "content-type": "application/json",
       Authorization: `Basic ${btoa(
-        process.env.GOOGLE_CLIENT_ID + ":" + process.env.GOOGLE_SECRET
+        process.env.GOOGLE_CLIENT_ID + ":" + process.env.GOOGLE_CLIENT_SECRET
       )}`,
     },
   };
@@ -85,20 +85,25 @@ export const createGoogleSession = async (code: string, request: Request) => {
   const userData = await getGoogleExtraData(access_token);
   if (!userData.email) throw new Error("::Missing User Data::(email)");
 
-  const data = {
+  const updateData = {
     picture: userData.picture,
     family_name: userData.family_name,
     given_name: userData.given_name,
     verified_email: userData.verified_email,
     displayName: userData.name,
-    email: userData.email,
   };
+  const host = userData.email.split("@")[0];
   await db.user.upsert({
     where: {
       email: userData.email,
     },
-    create: data,
-    update: data,
+    create: {
+      ...updateData,
+      email: userData.email,
+      publicKey: crypto.randomUUID(),
+      host,
+    },
+    update: updateData,
   }); // @revisit
   return await getUserSession(userData.email, request);
 };

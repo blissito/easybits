@@ -1,0 +1,40 @@
+{
+  "name": "@easybits.cloud/cli",
+  "version": "0.1.0",
+  "description": "Official CLI for Easybits — manage files, storage, and MCP from your terminal",
+  "type": "module",
+  "bin": {
+    "easybits": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "easybits",
+    "cli",
+    "file-management",
+    "mcp",
+    "digital-assets"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/easybits-cloud/easybits",
+    "directory": "cli"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@easybits.cloud/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  }
+}

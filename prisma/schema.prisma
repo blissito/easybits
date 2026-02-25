@@ -163,9 +163,13 @@ model User {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   storeConfig    StoreConfig?
-  Review         Review[]
-  merchantOrders Order[]        @relation("OrderMerchant")
-  customerOrders Order[]        @relation("OrderCustomer")
+  Review           Review[]
+  merchantOrders   Order[]          @relation("OrderMerchant")
+  customerOrders   Order[]          @relation("OrderCustomer")
+  apiKeys          ApiKey[]
+  permissions      Permission[]     @relation("PermissionGrantee")
+  grantedPermissions Permission[]   @relation("PermissionGranter")
+  storageProviders StorageProvider[]
 }
 
 enum FileStatus {
@@ -174,6 +178,31 @@ enum FileStatus {
   DONE
   ERROR
   DELETED
+}
+
+enum ApiKeyScope {
+  READ
+  WRITE
+  DELETE
+  ADMIN
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum StorageProviderType {
+  TIGRIS
+  CLOUDFLARE_R2
+  AWS_S3
+}
+
+enum StorageRegion {
+  LATAM
+  US
+  EU
 }
 
 model File {
@@ -204,6 +233,7 @@ model File {
   // ^ auto-dates
   Asset                 Asset?     @relation(fields: [assetId], references: [id])
   assetId               String?    @db.ObjectId // deprecate!
+  storageProviderId     String?    @db.ObjectId
 }
 
 model Client {
@@ -234,6 +264,48 @@ model Review {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ApiKey {
+  id        String       @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  hashedKey String       @unique
+  prefix    String
+  scopes    ApiKeyScope[]
+  status    ApiKeyStatus @default(ACTIVE)
+  expiresAt DateTime?
+  userId    String       @db.ObjectId
+  user      User         @relation(fields: [userId], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Permission {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  granteeId    String   @db.ObjectId
+  grantee      User     @relation("PermissionGrantee", fields: [granteeId], references: [id])
+  grantedById  String   @db.ObjectId
+  grantedBy    User     @relation("PermissionGranter", fields: [grantedById], references: [id])
+  resourceType String
+  resourceId   String   @db.ObjectId
+  canRead      Boolean  @default(true)
+  canWrite     Boolean  @default(false)
+  canDelete    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StorageProvider {
+  id        String              @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  type      StorageProviderType
+  region    StorageRegion
+  isDefault Boolean             @default(false)
+  config    Json
+  userId    String              @db.ObjectId
+  user      User                @relation(fields: [userId], references: [id])
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
 }
 
 model TelemetryEvent {
