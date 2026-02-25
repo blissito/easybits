@@ -11,3 +11,5 @@ dist/
 /files/
 yarn.lock
 respaldo.json
+.mcp.json
+.claude/
