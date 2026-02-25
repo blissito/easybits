@@ -51,7 +51,7 @@ export async function getFile(ctx: AuthContext, fileId: string) {
   requireScope(ctx, "READ");
 
   const file = await db.file.findUnique({ where: { id: fileId } });
-  if (!file) {
+  if (!file || file.status === "DELETED") {
     throw new Error("File not found");
   }
   if (file.ownerId !== ctx.user.id) {
@@ -115,7 +115,7 @@ export async function uploadFile(
       ownerId: ctx.user.id,
       access: opts.access || "private",
       url: "",
-      status: "PENDING",
+      status: "DONE",
       storageProviderId: provider?.id ?? null,
       ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
     },

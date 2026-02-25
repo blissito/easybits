@@ -72,6 +72,8 @@ Common content types: image/png, image/jpeg, video/mp4, application/pdf, applica
   }
   if (object.status) {
     where.status = object.status;
+  } else {
+    where.status = { not: "DELETED" };
   }
 
   return db.file.findMany({
