@@ -5,6 +5,7 @@ const tabs = [
   { to: "/dash/developer/files", label: "Files" },
   { to: "/dash/developer/providers", label: "Providers" },
   { to: "/dash/developer/setup", label: "Setup" },
+  { to: "/dash/developer/websites", label: "Websites" },
 ];
 
 export default function DeveloperLayout() {

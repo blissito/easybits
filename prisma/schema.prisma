@@ -176,6 +176,7 @@ model User {
   grantedPermissions Permission[]   @relation("PermissionGranter")
   storageProviders StorageProvider[]
   aiKeys           UserAiKey[]
+  websites         Website[]
 }
 
 enum FileStatus {
@@ -325,6 +326,20 @@ model UserAiKey {
   updatedAt DateTime   @updatedAt
 
   @@unique([userId, provider])
+}
+
+model Website {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String   @unique
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id])
+  status    String   @default("ACTIVE")
+  prefix    String
+  fileCount Int      @default(0)
+  totalSize Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model TelemetryEvent {

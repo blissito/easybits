@@ -55,7 +55,6 @@ export default [
       route("compras", "routes/purchases.tsx"),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
-      route("websites", "routes/dash/websites.tsx"),
       // Developer dashboard
       layout("routes/dash/developer/developer.tsx", [
         ...prefix("developer", [
@@ -63,6 +62,7 @@ export default [
           route("files", "routes/dash/developer/files.tsx"),
           route("providers", "routes/dash/developer/providers.tsx"),
           route("setup", "routes/dash/developer/setup.tsx"),
+          route("websites", "routes/dash/developer/websites.tsx"),
         ]),
       ]),
       // Admin dashboard
@@ -88,6 +88,7 @@ export default [
     route("files", "routes/api/v2/files.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),
     route("files/:fileId/share", "routes/api/v2/fileShare.ts"),
+    route("websites/:websiteId", "routes/api/v2/websites.ts"),
     route("keys", "routes/api/v2/keys.ts"),
     route("keys/:keyId", "routes/api/v2/key.ts"),
   ]),
@@ -124,6 +125,9 @@ export default [
       route("success", "routes/api/v1/stripe/success.tsx"),
     ]),
   ]),
+
+  // Static site proxy
+  route("s/:slug/*", "routes/s.$slug.$.tsx"),
 
   route("/.well-known/*", "components/common/NoContent.tsx"),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
