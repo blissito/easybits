@@ -1,4 +1,5 @@
-import { useLoaderData, useSearchParams, useFetcher, data } from "react-router";
+import { useEffect } from "react";
+import { useLoaderData, useSearchParams, useFetcher, useRevalidator, data } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { deleteFile, restoreFile } from "~/.server/core/operations";
@@ -141,6 +142,17 @@ function RestoreButton({ fileId }: { fileId: string }) {
 export default function DevFilesPage() {
   const { items, nextCursor, trash } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
+
+  useEffect(() => {
+    const es = new EventSource("/api/sse/files");
+    es.onmessage = (event) => {
+      if (event.data === "changed") {
+        revalidator.revalidate();
+      }
+    };
+    return () => es.close();
+  }, [revalidator]);
 
   const toggleTrash = () => {
     const params = new URLSearchParams(searchParams);

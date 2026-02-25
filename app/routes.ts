@@ -79,6 +79,8 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // MCP
   route("api/mcp", "routes/api/mcp.ts"),
+  // SSE
+  route("api/sse/files", "routes/api/sse/files.ts"),
   // Cron
   route("api/cron/purge-files", "routes/api/cron/purge-files.ts"),
   // v2

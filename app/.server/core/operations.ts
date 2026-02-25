@@ -4,6 +4,7 @@ import { getClientForFile, resolveProvider, createStorageClient, getPlatformDefa
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
+import { fileEvents } from "./fileEvents";
 
 // --- List Files ---
 
@@ -121,6 +122,7 @@ export async function uploadFile(
     },
   });
 
+  fileEvents.emit("file:changed", ctx.user.id);
   return { file, putUrl };
 }
 
@@ -142,6 +144,7 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
     data: { status: "DELETED", deletedAt: new Date() },
   });
 
+  fileEvents.emit("file:changed", ctx.user.id);
   return { success: true };
 }
 
@@ -166,6 +169,7 @@ export async function restoreFile(ctx: AuthContext, fileId: string) {
     data: { status: "DONE", deletedAt: null },
   });
 
+  fileEvents.emit("file:changed", ctx.user.id);
   return { success: true };
 }
 

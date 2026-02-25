@@ -9,6 +9,7 @@ import {
 } from "../storage";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
+import { fileEvents } from "./fileEvents";
 
 export async function optimizeImage(
   ctx: AuthContext,
@@ -96,6 +97,8 @@ export async function optimizeImage(
   const savings = originalSize > 0
     ? Math.round((1 - optimizedSize / originalSize) * 100)
     : 0;
+
+  fileEvents.emit("file:changed", ctx.user.id);
 
   return {
     file: newFile,
