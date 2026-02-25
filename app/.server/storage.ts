@@ -127,6 +127,30 @@ function buildStorageClient(s3: S3Client, bucket: string): StorageClient {
   };
 }
 
+// --- Platform Default (Tigris via env vars) ---
+
+let _platformClient: StorageClient | null = null;
+
+export function getPlatformDefaultClient(): StorageClient {
+  if (_platformClient) return _platformClient;
+
+  const endpoint = process.env.AWS_ENDPOINT_URL_S3;
+  const bucket = process.env.BUCKET_NAME;
+  if (!endpoint || !bucket) {
+    throw new Error("Platform storage not configured (missing AWS_ENDPOINT_URL_S3 or BUCKET_NAME)");
+  }
+
+  const { s3, bucket: b } = createS3ClientFromConfig({
+    endpoint,
+    region: process.env.AWS_REGION || "auto",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    bucket,
+  });
+  _platformClient = buildStorageClient(s3, b);
+  return _platformClient;
+}
+
 // --- Public API ---
 
 export function createStorageClient(provider: StorageProvider): StorageClient {
@@ -166,7 +190,8 @@ export async function getClientForFile(storageProviderId?: string | null, userId
     if (provider) return createStorageClient(provider);
   }
 
-  throw new Error("No storage provider configured. Add one in Developer Dashboard > Providers.");
+  // Fallback: platform default (Tigris)
+  return getPlatformDefaultClient();
 }
 
 export async function resolveProvider(

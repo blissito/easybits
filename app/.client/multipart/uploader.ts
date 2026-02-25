@@ -1,5 +1,9 @@
-import type { CreateMultipartResponse } from "~/.server/tigris";
 import retry from "async-retry";
+
+type CreateMultipartResponse = {
+  uploadId: string;
+  key: string;
+};
 
 const MB = 1024 * 1024;
 const partSize = 8 * MB;

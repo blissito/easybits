@@ -7,21 +7,8 @@ import {
   deleteFile,
   shareFile,
 } from "../core/operations";
-import { resolveProvider } from "../storage";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
-
-async function catchResponseError<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (err instanceof Response) {
-      const body = await err.text();
-      throw new Error(body || `HTTP ${err.status}`);
-    }
-    throw err;
-  }
-}
 
 export function createMcpServer() {
   const server = new McpServer({
@@ -41,7 +28,7 @@ export function createMcpServer() {
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await catchResponseError(() => listFiles(ctx, params));
+      const result = await listFiles(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -56,7 +43,7 @@ export function createMcpServer() {
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await catchResponseError(() => getFile(ctx, params.fileId));
+      const result = await getFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -76,7 +63,7 @@ export function createMcpServer() {
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await catchResponseError(() => uploadFile(ctx, params));
+      const result = await uploadFile(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -91,7 +78,7 @@ export function createMcpServer() {
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await catchResponseError(() => deleteFile(ctx, params.fileId));
+      const result = await deleteFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -110,7 +97,7 @@ export function createMcpServer() {
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await catchResponseError(() => shareFile(ctx, params));
+      const result = await shareFile(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

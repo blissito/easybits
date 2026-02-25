@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { nanoid } from "nanoid";
-import { getClientForFile, resolveProvider, createStorageClient } from "../storage";
+import { getClientForFile, resolveProvider, createStorageClient, getPlatformDefaultClient } from "../storage";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
@@ -52,10 +52,7 @@ export async function getFile(ctx: AuthContext, fileId: string) {
 
   const file = await db.file.findUnique({ where: { id: fileId } });
   if (!file) {
-    throw new Response(JSON.stringify({ error: "File not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw new Error("File not found");
   }
   if (file.ownerId !== ctx.user.id) {
     // Check permissions
@@ -101,15 +98,8 @@ export async function uploadFile(
     region: opts.region,
   });
 
-  if (!provider) {
-    throw new Response(
-      JSON.stringify({ error: "No storage provider configured. Add one in Developer Dashboard > Providers." }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
   const storageKey = `${ctx.user.id}/${opts.assetId || "standalone"}/${nanoid(12)}`;
-  const client = createStorageClient(provider);
+  const client = provider ? createStorageClient(provider) : getPlatformDefaultClient();
 
   const putUrl = await client.getPutUrl(storageKey);
 
@@ -124,7 +114,7 @@ export async function uploadFile(
       access: opts.access || "private",
       url: "",
       status: "PENDING",
-      storageProviderId: provider?.id,
+      storageProviderId: provider?.id ?? null,
       ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
     },
   });
@@ -139,16 +129,10 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
 
   const file = await db.file.findUnique({ where: { id: fileId } });
   if (!file) {
-    throw new Response(JSON.stringify({ error: "File not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw new Error("File not found");
   }
   if (file.ownerId !== ctx.user.id) {
-    throw new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw new Error("Forbidden");
   }
 
   const client = await getClientForFile(file.storageProviderId, ctx.user.id);
@@ -172,20 +156,14 @@ export async function shareFile(
 
   const file = await db.file.findUnique({ where: { id: opts.fileId } });
   if (!file || file.ownerId !== ctx.user.id) {
-    throw new Response(JSON.stringify({ error: "File not found or not owner" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw new Error("File not found or not owner");
   }
 
   const targetUser = await db.user.findUnique({
     where: { email: opts.targetEmail },
   });
   if (!targetUser) {
-    throw new Response(JSON.stringify({ error: "Target user not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw new Error("Target user not found");
   }
 
   const permission = await db.permission.create({
