@@ -58,6 +58,8 @@ async function main() {
   const mcpUrl = `${getBaseUrl()}/api/mcp`;
 
   let sessionId: string | undefined;
+  let pending = 0;
+  let stdinEnded = false;
 
   console.error(`Easybits MCP proxy → ${mcpUrl}`);
 
@@ -76,17 +78,23 @@ async function main() {
 
       if (!line) continue;
 
-      // Fire and forget — handle each message
+      pending++;
       handleMessage(line, mcpUrl, apiKey, sessionId).then((newSessionId) => {
         if (newSessionId) sessionId = newSessionId;
       }).catch((err) => {
         console.error("Error handling message:", err);
+      }).finally(() => {
+        pending--;
+        if (stdinEnded && pending === 0) process.exit(0);
       });
     }
   });
 
   process.stdin.on("end", () => {
-    process.exit(0);
+    stdinEnded = true;
+    if (pending === 0) process.exit(0);
+    // Safety timeout so the process doesn't hang forever
+    setTimeout(() => process.exit(0), 30_000);
   });
 }
 
@@ -111,6 +119,7 @@ async function handleMessage(
       method: "POST",
       headers,
       body: line,
+      redirect: "follow", // TODO: experiment with 308 redirect on DNS/server to preserve POST method natively instead of relying on this
     });
 
     // Capture session ID from response
