@@ -7,7 +7,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")
     .map((e) => e.trim().toLowerCase());
-  if (!adminEmails.includes(user.email?.toLowerCase() || "")) {
+  const isSuperAdmin = adminEmails.includes(user.email?.toLowerCase() || "");
+  const isRoleAdmin = user.roles.includes("Admin");
+  if (!isSuperAdmin && !isRoleAdmin) {
     return redirect("/dash");
   }
   return null;

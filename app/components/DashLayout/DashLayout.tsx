@@ -15,7 +15,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const isEnrolled = user.roles.find((r) => r === "Enrolled");
   const isProd = process.env.NODE_ENV !== "development";
   const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase());
-  const isAdmin = adminEmails.includes(user.email?.toLowerCase() || "");
+  const isAdmin = adminEmails.includes(user.email?.toLowerCase() || "") || user.roles.includes("Admin");
   if (isProd && !isEnrolled && !isAdmin) {
     return redirect("/waitlist");
   }
