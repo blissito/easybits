@@ -12,7 +12,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageProvider, StorageRegion } from "@prisma/client";
 import { db } from "./db";
 
-const PREFIX = "API_EXPERIMENT/";
+const DEFAULT_PREFIX = "API_EXPERIMENT/";
 
 // --- Types ---
 
@@ -64,13 +64,13 @@ async function setCors(s3: S3Client, bucket: string) {
   );
 }
 
-function buildStorageClient(s3: S3Client, bucket: string): StorageClient {
+function buildStorageClient(s3: S3Client, bucket: string, prefix = DEFAULT_PREFIX): StorageClient {
   return {
     async getPutUrl(key, opts) {
       await setCors(s3, bucket);
       return getSignedUrl(
         s3,
-        new PutObjectCommand({ Bucket: bucket, Key: PREFIX + key }),
+        new PutObjectCommand({ Bucket: bucket, Key: prefix + key }),
         { expiresIn: opts?.timeout ?? 3600 }
       );
     },
@@ -79,20 +79,20 @@ function buildStorageClient(s3: S3Client, bucket: string): StorageClient {
       await setCors(s3, bucket);
       return getSignedUrl(
         s3,
-        new GetObjectCommand({ Bucket: bucket, Key: PREFIX + key }),
+        new GetObjectCommand({ Bucket: bucket, Key: prefix + key }),
         { expiresIn }
       );
     },
 
     async deleteObject(key) {
       await s3.send(
-        new DeleteObjectCommand({ Bucket: bucket, Key: PREFIX + key })
+        new DeleteObjectCommand({ Bucket: bucket, Key: prefix + key })
       );
     },
 
     async createMultipart(key) {
       const { UploadId } = await s3.send(
-        new CreateMultipartUploadCommand({ Bucket: bucket, Key: PREFIX + key })
+        new CreateMultipartUploadCommand({ Bucket: bucket, Key: prefix + key })
       );
       if (!UploadId) throw new Error("Failed to create multipart upload");
       return { uploadId: UploadId };
@@ -104,7 +104,7 @@ function buildStorageClient(s3: S3Client, bucket: string): StorageClient {
         s3,
         new UploadPartCommand({
           Bucket: bucket,
-          Key: PREFIX + key,
+          Key: prefix + key,
           UploadId: uploadId,
           PartNumber: partNumber,
         }),
@@ -116,7 +116,7 @@ function buildStorageClient(s3: S3Client, bucket: string): StorageClient {
       await s3.send(
         new CompleteMultipartUploadCommand({
           Bucket: bucket,
-          Key: PREFIX + key,
+          Key: prefix + key,
           UploadId: uploadId,
           MultipartUpload: {
             Parts: etags.map((ETag, i) => ({ ETag, PartNumber: i + 1 })),
@@ -129,15 +129,22 @@ function buildStorageClient(s3: S3Client, bucket: string): StorageClient {
 
 // --- Platform Default (Tigris via env vars) ---
 
-let _platformClient: StorageClient | null = null;
+const _platformClients = new Map<string, StorageClient>();
 
-export function getPlatformDefaultClient(): StorageClient {
-  if (_platformClient) return _platformClient;
+export function getPlatformDefaultClient(opts?: { bucket?: string; prefix?: string }): StorageClient {
+  const resolvedBucket = opts?.bucket || process.env.BUCKET_NAME;
+  const resolvedPrefix = opts?.prefix ?? "mcp/";
+  if (!resolvedBucket) {
+    throw new Error("Platform storage not configured (missing BUCKET_NAME)");
+  }
+
+  const cacheKey = `${resolvedBucket}:${resolvedPrefix}`;
+  const cached = _platformClients.get(cacheKey);
+  if (cached) return cached;
 
   const endpoint = process.env.AWS_ENDPOINT_URL_S3;
-  const bucket = process.env.BUCKET_NAME;
-  if (!endpoint || !bucket) {
-    throw new Error("Platform storage not configured (missing AWS_ENDPOINT_URL_S3 or BUCKET_NAME)");
+  if (!endpoint) {
+    throw new Error("Platform storage not configured (missing AWS_ENDPOINT_URL_S3)");
   }
 
   const { s3, bucket: b } = createS3ClientFromConfig({
@@ -145,10 +152,11 @@ export function getPlatformDefaultClient(): StorageClient {
     region: process.env.AWS_REGION || "auto",
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    bucket,
+    bucket: resolvedBucket,
   });
-  _platformClient = buildStorageClient(s3, b);
-  return _platformClient;
+  const client = buildStorageClient(s3, b, resolvedPrefix);
+  _platformClients.set(cacheKey, client);
+  return client;
 }
 
 // --- Public API ---

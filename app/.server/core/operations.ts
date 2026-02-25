@@ -98,7 +98,9 @@ export async function uploadFile(
     region: opts.region,
   });
 
-  const storageKey = `${ctx.user.id}/${opts.assetId || "standalone"}/${nanoid(12)}`;
+  const storageKey = opts.assetId
+    ? `${ctx.user.id}/${opts.assetId}/${nanoid(3)}`
+    : `${ctx.user.id}/${nanoid(3)}`;
   const client = provider ? createStorageClient(provider) : getPlatformDefaultClient();
 
   const putUrl = await client.getPutUrl(storageKey);
