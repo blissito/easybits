@@ -485,7 +485,10 @@ import { slugify } from "../utils/slugify";
 export async function listWebsites(ctx: AuthContext) {
   requireScope(ctx, "READ");
   const websites = await db.website.findMany({
-    where: { ownerId: ctx.user.id, deletedAt: null },
+    where: {
+      ownerId: ctx.user.id,
+      OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
+    },
     orderBy: { createdAt: "desc" },
   });
   return websites.map((w) => ({

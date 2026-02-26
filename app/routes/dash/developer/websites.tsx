@@ -15,7 +15,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
 
   const websites = await db.website.findMany({
-    where: { ownerId: user.id, deletedAt: null },
+    where: {
+      ownerId: user.id,
+      OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
+    },
     orderBy: { createdAt: "desc" },
   });
 
