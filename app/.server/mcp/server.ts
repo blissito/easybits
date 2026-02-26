@@ -11,6 +11,10 @@ import {
   listDeletedFiles,
   generateShareToken,
   listShareTokens,
+  listWebsites,
+  createWebsite,
+  getWebsite,
+  deleteWebsite,
 } from "../core/operations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -309,6 +313,66 @@ export function createMcpServer() {
       const results = await searchFilesWithAI(ctx.user.id, params.query);
       return {
         content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+      };
+    }
+  );
+
+  // --- Website Tools ---
+
+  server.tool(
+    "list_websites",
+    "List your websites (id, name, slug, status, fileCount, totalSize, createdAt, url).",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listWebsites(ctx);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "create_website",
+    "Create a new website with a name. Generates a slug automatically. Returns `{ website }` with id, slug, prefix, url.",
+    {
+      name: z.string().describe("Name for the website"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createWebsite(ctx, { name: params.name });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ website: result }, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "get_website",
+    "Get a website by ID with stats. Returns website object with url.",
+    {
+      websiteId: z.string().describe("The website ID"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getWebsite(ctx, params.websiteId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_website",
+    "Delete a website. Soft-deletes all associated files (recoverable for 7 days) and removes the website record.",
+    {
+      websiteId: z.string().describe("The website ID to delete"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteWebsite(ctx, params.websiteId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
   );

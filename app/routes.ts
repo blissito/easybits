@@ -88,6 +88,7 @@ export default [
     route("files", "routes/api/v2/files.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),
     route("files/:fileId/share", "routes/api/v2/fileShare.ts"),
+    route("websites", "routes/api/v2/websites-collection.ts"),
     route("websites/:websiteId", "routes/api/v2/websites.ts"),
     route("keys", "routes/api/v2/keys.ts"),
     route("keys/:keyId", "routes/api/v2/key.ts"),

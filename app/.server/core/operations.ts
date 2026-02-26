@@ -378,6 +378,102 @@ export async function listShareTokens(
   return { items, nextCursor };
 }
 
+// --- Website Operations ---
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export async function listWebsites(ctx: AuthContext) {
+  requireScope(ctx, "READ");
+  const websites = await db.website.findMany({
+    where: { ownerId: ctx.user.id },
+    orderBy: { createdAt: "desc" },
+  });
+  return websites.map((w) => ({
+    id: w.id,
+    name: w.name,
+    slug: w.slug,
+    status: w.status,
+    fileCount: w.fileCount,
+    totalSize: w.totalSize,
+    createdAt: w.createdAt,
+    url: `/s/${w.slug}`,
+  }));
+}
+
+export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
+  requireScope(ctx, "WRITE");
+  const name = opts.name.trim();
+  if (!name) throw new Error("Name required");
+
+  let slug = slugify(name);
+  const existing = await db.website.findUnique({ where: { slug } });
+  if (existing) {
+    slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
+  }
+
+  const website = await db.website.create({
+    data: { name, slug, ownerId: ctx.user.id, prefix: "" },
+  });
+
+  const updated = await db.website.update({
+    where: { id: website.id },
+    data: { prefix: `sites/${website.id}/` },
+  });
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    slug: updated.slug,
+    prefix: updated.prefix,
+    url: `/s/${updated.slug}`,
+  };
+}
+
+export async function getWebsite(ctx: AuthContext, websiteId: string) {
+  requireScope(ctx, "READ");
+  const website = await db.website.findUnique({ where: { id: websiteId } });
+  if (!website || website.ownerId !== ctx.user.id) {
+    throw new Error("Website not found");
+  }
+  return {
+    id: website.id,
+    name: website.name,
+    slug: website.slug,
+    status: website.status,
+    fileCount: website.fileCount,
+    totalSize: website.totalSize,
+    prefix: website.prefix,
+    createdAt: website.createdAt,
+    url: `/s/${website.slug}`,
+  };
+}
+
+export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
+  requireScope(ctx, "DELETE");
+  const website = await db.website.findUnique({ where: { id: websiteId } });
+  if (!website || website.ownerId !== ctx.user.id) {
+    throw new Error("Website not found");
+  }
+
+  await db.file.updateMany({
+    where: {
+      ownerId: ctx.user.id,
+      name: { startsWith: `sites/${websiteId}/` },
+    },
+    data: { status: "DELETED", deletedAt: new Date() },
+  });
+
+  await db.website.delete({ where: { id: websiteId } });
+  return { ok: true };
+}
+
 // --- List Deleted Files ---
 
 export async function listDeletedFiles(

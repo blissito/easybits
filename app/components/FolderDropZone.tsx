@@ -66,7 +66,6 @@ async function getFilesFromDrop(
   const files: FileEntry[] = [];
   const items = dataTransfer.items;
 
-  // Try webkitGetAsEntry for folder support
   const entries: FileSystemEntry[] = [];
   for (let i = 0; i < items.length; i++) {
     const entry = items[i].webkitGetAsEntry?.();
@@ -74,7 +73,6 @@ async function getFilesFromDrop(
   }
 
   if (entries.length > 0) {
-    // If top-level is a single directory, flatten it (don't include dir name in path)
     if (entries.length === 1 && entries[0].isDirectory) {
       const dirEntry = entries[0] as FileSystemDirectoryEntry;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,6 +89,11 @@ async function getFilesFromDrop(
   return files;
 }
 
+function getFolderName(dataTransfer: DataTransfer): string {
+  const entry = dataTransfer.items[0]?.webkitGetAsEntry?.();
+  return entry?.isDirectory ? entry.name : "mi-sitio";
+}
+
 type UploadProgress = {
   total: number;
   uploaded: number;
@@ -98,21 +101,33 @@ type UploadProgress = {
   errors: string[];
 };
 
+export type CreatedWebsite = {
+  id: string;
+  name: string;
+  slug: string;
+  prefix: string;
+};
+
 export function FolderDropZone({
   websiteId,
-  apiKey,
+  onWebsiteCreated,
   onComplete,
+  className,
+  compact,
 }: {
-  websiteId: string;
-  apiKey: string;
+  websiteId?: string;
+  onWebsiteCreated?: (website: CreatedWebsite) => void;
   onComplete?: (stats: { fileCount: number; totalSize: number }) => void;
+  className?: string;
+  compact?: boolean;
 }) {
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const dragCounter = useRef(0);
+  const resolvedWebsiteId = useRef<string | undefined>(websiteId);
 
   const handleUpload = useCallback(
-    async (fileEntries: FileEntry[]) => {
+    async (fileEntries: FileEntry[], folderName: string) => {
       if (fileEntries.length === 0) return;
 
       const state: UploadProgress = {
@@ -122,6 +137,33 @@ export function FolderDropZone({
         errors: [],
       };
       setProgress({ ...state });
+
+      // Create website if needed
+      let wId = resolvedWebsiteId.current;
+      if (!wId) {
+        try {
+          const res = await fetch("/api/v2/websites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: folderName }),
+          });
+          if (!res.ok) {
+            state.errors.push(`Error creando sitio: ${res.status}`);
+            setProgress({ ...state });
+            return;
+          }
+          const { website } = await res.json();
+          wId = website.id;
+          resolvedWebsiteId.current = wId;
+          onWebsiteCreated?.(website);
+        } catch (err) {
+          state.errors.push(
+            `Error creando sitio: ${err instanceof Error ? err.message : "Unknown"}`
+          );
+          setProgress({ ...state });
+          return;
+        }
+      }
 
       let totalSize = 0;
       const CONCURRENCY = 5;
@@ -137,15 +179,11 @@ export function FolderDropZone({
           try {
             const contentType = getMimeType(entry.file.name);
 
-            // Get presigned URL from our API
             const res = await fetch("/api/v2/files", {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                fileName: `sites/${websiteId}/${entry.path}`,
+                fileName: `sites/${wId}/${entry.path}`,
                 contentType,
                 size: entry.file.size,
                 access: "public",
@@ -159,7 +197,6 @@ export function FolderDropZone({
 
             const { putUrl } = await res.json();
 
-            // Upload to S3
             const uploadRes = await fetch(putUrl, {
               method: "PUT",
               body: entry.file,
@@ -183,19 +220,15 @@ export function FolderDropZone({
         }
       }
 
-      // Run concurrent uploads
       await Promise.all(
         Array.from({ length: Math.min(CONCURRENCY, fileEntries.length) }, next)
       );
 
       // Update website stats
       try {
-        await fetch(`/api/v2/websites/${websiteId}`, {
+        await fetch(`/api/v2/websites/${wId}`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             fileCount: state.uploaded,
             totalSize,
@@ -208,7 +241,7 @@ export function FolderDropZone({
 
       onComplete?.({ fileCount: state.uploaded, totalSize });
     },
-    [websiteId, apiKey, onComplete]
+    [websiteId, onWebsiteCreated, onComplete]
   );
 
   return (
@@ -228,14 +261,18 @@ export function FolderDropZone({
         e.preventDefault();
         dragCounter.current = 0;
         setDragging(false);
+        const folderName = getFolderName(e.dataTransfer);
         const files = await getFilesFromDrop(e.dataTransfer);
-        handleUpload(files);
+        handleUpload(files, folderName);
       }}
-      className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-        dragging
-          ? "border-brand-500 bg-brand-50"
-          : "border-gray-300 hover:border-gray-400"
-      }`}
+      className={
+        className ??
+        `border-2 border-dashed rounded-xl ${compact ? "p-4" : "p-8"} text-center transition-colors ${
+          dragging
+            ? "border-brand-500 bg-brand-50"
+            : "border-gray-300 hover:border-gray-400"
+        }`
+      }
     >
       {progress ? (
         <div className="space-y-3">
@@ -267,7 +304,7 @@ export function FolderDropZone({
         </div>
       ) : (
         <div>
-          <p className="text-lg font-bold mb-1">
+          <p className={`font-bold mb-1 ${compact ? "text-sm" : "text-lg"}`}>
             Arrastra tu carpeta de build aquí
           </p>
           <p className="text-sm text-gray-500">
