@@ -123,7 +123,15 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
       });
       if (website) {
         const splatPath = url.pathname === "/" ? "" : url.pathname.slice(1);
-        return redirect(`/s/${subdomain}/${splatPath}${url.search}`);
+        // Internal rewrite — proxy the static site route without redirecting
+        const internalUrl = new URL(`/s/${subdomain}/${splatPath}${url.search}`, url.origin);
+        const proxyRes = await fetch(internalUrl.toString(), {
+          headers: request.headers,
+        });
+        return new Response(proxyRes.body, {
+          status: proxyRes.status,
+          headers: proxyRes.headers,
+        });
       }
     }
   }
