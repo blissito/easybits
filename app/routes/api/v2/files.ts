@@ -37,6 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
       assetId: body.assetId,
       access: body.access,
       region: body.region,
+      source: body.source,
     });
     return Response.json(result, { status: 201 });
   }
