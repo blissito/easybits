@@ -131,7 +131,7 @@ function RestSection() {
     <>
       <Card
         title="SDK — TypeScript"
-        description="Usa @easybits.cloud/sdk para integrar desde tu app."
+        description={<>Usa @easybits.cloud/sdk para integrar desde tu app. <Link to="/docs#sdk" className="underline font-medium text-black hover:text-brand-500">Ver referencia completa del SDK</Link></>}
       >
         <CodeBlock language="bash" title="instalar" showLineNumbers={false}>
 {`npm install @easybits.cloud/sdk`}
@@ -256,7 +256,7 @@ function Card({
   children,
 }: {
   title: string;
-  description: string;
+  description: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
