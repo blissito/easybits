@@ -135,7 +135,7 @@ export default function DocsPage() {
 
       <div className="max-w-7xl mx-auto flex">
         {/* Sidebar */}
-        <aside className="hidden md:block w-56 shrink-0 border-r-2 border-black min-h-screen sticky top-[57px] self-start p-4">
+        <aside className="hidden md:block w-56 shrink-0 border-r-2 border-black sticky top-[57px] overflow-y-auto max-h-[calc(100vh-57px)] p-4">
           <h2 className="font-bold text-xs uppercase text-gray-500 mb-3">
             API Reference
           </h2>
@@ -158,7 +158,7 @@ export default function DocsPage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 px-6 md:px-12 py-10 max-w-4xl">
+        <main className="flex-1 min-w-0 px-6 md:px-12 py-10 max-w-4xl">
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
             <h1 className="text-3xl font-bold mb-2">API Documentation</h1>
@@ -805,11 +805,9 @@ function TabbedCode({ tabs }: { tabs: { label: string; code: string }[] }) {
           </button>
         ))}
       </div>
-      <div className="[&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:!rounded-none [&_.group>div:first-child]:hidden [&_.group>div:last-child]:!rounded-none">
-        <CodeBlock language={LANG_MAP[tabs[active].label.toLowerCase()] || "typescript"}>
-          {tabs[active].code}
-        </CodeBlock>
-      </div>
+      <CodeBlock bare language={LANG_MAP[tabs[active].label.toLowerCase()] || "typescript"}>
+        {tabs[active].code}
+      </CodeBlock>
     </div>
   );
 }
@@ -818,11 +816,13 @@ function CodeExample({ title, code }: { title: string; code: string }) {
   const lang = LANG_MAP[title.toLowerCase()] || "typescript";
   return (
     <div className="border-2 border-black rounded-xl overflow-hidden">
-      <div className="[&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:!rounded-t-none [&_.group>div:last-child]:!rounded-b-none">
-        <CodeBlock language={lang} title={title}>
-          {code}
-        </CodeBlock>
+      <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
+        <span className="text-white font-medium text-sm">{title}</span>
+        <span className="text-gray-400 text-xs uppercase font-mono">{lang}</span>
       </div>
+      <CodeBlock bare language={lang}>
+        {code}
+      </CodeBlock>
     </div>
   );
 }
@@ -874,16 +874,16 @@ function Endpoint({
         {response && (
           <div className="mt-3">
             <span className="text-xs font-bold text-gray-500 uppercase">Response</span>
-            <div className="mt-1 [&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:hidden">
-              <CodeBlock language="json">{response}</CodeBlock>
+            <div className="mt-1 rounded-lg overflow-hidden">
+              <CodeBlock bare language="json">{response}</CodeBlock>
             </div>
           </div>
         )}
         {sdk && (
           <div className="mt-3">
             <span className="text-xs font-bold text-purple-600 uppercase">SDK</span>
-            <div className="mt-1 [&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:hidden">
-              <CodeBlock language="typescript">{sdk}</CodeBlock>
+            <div className="mt-1 rounded-lg overflow-hidden">
+              <CodeBlock bare language="typescript">{sdk}</CodeBlock>
             </div>
           </div>
         )}

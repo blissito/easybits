@@ -7,6 +7,8 @@ interface CodeBlockProps {
   language?: string;
   title?: string;
   showLineNumbers?: boolean;
+  /** Render without wrapper margins, header, and border-radius — for embedding in custom containers */
+  bare?: boolean;
 }
 
 export function CodeBlock({
@@ -14,6 +16,7 @@ export function CodeBlock({
   className = "",
   language,
   title,
+  bare,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const [html, setHtml] = useState("");
@@ -48,6 +51,17 @@ export function CodeBlock({
       console.error("Failed to copy code:", err);
     }
   };
+
+  if (bare) {
+    return (
+      <div className="relative">
+        <div
+          className="overflow-hidden [&_pre]:!m-0 [&_pre]:!p-4 [&_pre]:!rounded-none [&_pre]:text-sm [&_pre]:font-mono"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative my-6 group">
