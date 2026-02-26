@@ -3,13 +3,47 @@ import type { Route } from "./+types/developers";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Footer } from "~/components/common/Footer";
 import { PLANS, formatPrice } from "~/lib/plans";
+import { CodeBlock } from "~/components/mdx/CodeBlock";
+import { useState } from "react";
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits para Developers — File Storage con IA",
+    title: "EasyBits para Developers — Agentic-First File Storage",
     description:
-      "Sube, optimiza y comparte archivos con una API simple. Búsqueda con IA, transformación de imágenes e integración MCP incluidos.",
+      "La infraestructura de archivos que tus agentes de IA ya saben usar. SDK tipado, 33+ herramientas MCP, REST API v2.",
   });
+
+const LANG_MAP: Record<string, string> = {
+  curl: "bash",
+  sdk: "typescript",
+  rest: "bash",
+};
+
+function TabbedCode({ tabs }: { tabs: { label: string; code: string }[] }) {
+  const [active, setActive] = useState(0);
+  return (
+    <div className="border-2 border-black rounded-xl overflow-hidden">
+      <div className="flex bg-gray-800">
+        {tabs.map((t, i) => (
+          <button
+            key={t.label}
+            onClick={() => setActive(i)}
+            className={`px-4 py-1.5 text-xs font-bold uppercase transition-colors ${
+              active === i
+                ? "bg-gray-950 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <CodeBlock bare language={LANG_MAP[tabs[active].label.toLowerCase()] || "typescript"}>
+        {tabs[active].code}
+      </CodeBlock>
+    </div>
+  );
+}
 
 export default function DevelopersPage() {
   return (
@@ -41,14 +75,14 @@ export default function DevelopersPage() {
       <div className="bg-white border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-20 md:py-28">
           <h1 className="text-4xl md:text-6xl font-bold max-w-3xl leading-tight">
-            File storage con{" "}
+            La infra de archivos que{" "}
             <span className="bg-yellow-300 px-2 -rotate-1 inline-block">
-              superpoderes de IA
+              tus agentes ya saben usar
             </span>
           </h1>
           <p className="text-xl md:text-2xl text-gray-600 mt-6 max-w-2xl">
-            Sube, optimiza, transforma y comparte archivos con una API simple.
-            Búsqueda con IA e integración MCP incluidos.
+            SDK tipado, 33+ herramientas MCP y REST API v2. Tus agentes suben,
+            optimizan y comparten archivos sin necesitar prompting.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
             <Link
@@ -67,18 +101,28 @@ export default function DevelopersPage() {
         </div>
       </div>
 
-      {/* Code comparison */}
+      {/* Code comparison — SDK vs REST */}
       <div className="bg-gray-50 border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-16">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-4">
             3 líneas, no 30
           </h2>
+          <p className="text-center text-gray-500 mb-12 max-w-xl mx-auto">
+            Sube un archivo con el SDK tipado o con curl. Sin configurar buckets, regiones ni credenciales de cloud.
+          </p>
           <div className="grid md:grid-cols-2 gap-8">
-            <CodeBlock
-              title="EasyBits SDK"
-              badge="3 líneas"
-              badgeColor="bg-green-200"
-              code={`import { EasybitsClient } from "@easybits.cloud/sdk";
+            <div>
+              <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                <span className="bg-green-200 text-green-900 text-xs px-2 py-0.5 rounded-full font-bold">
+                  EasyBits
+                </span>
+                SDK + REST
+              </h3>
+              <TabbedCode
+                tabs={[
+                  {
+                    label: "SDK",
+                    code: `import { EasybitsClient } from "@easybits.cloud/sdk";
 
 const eb = new EasybitsClient({ apiKey });
 const { file, putUrl } = await eb.uploadFile({
@@ -86,13 +130,32 @@ const { file, putUrl } = await eb.uploadFile({
   contentType: "image/jpeg",
   size: buffer.length,
 });
-await fetch(putUrl, { method: "PUT", body: buffer });`}
-            />
-            <CodeBlock
-              title="AWS S3"
-              badge="30+ líneas"
-              badgeColor="bg-red-200"
-              code={`import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+await fetch(putUrl, { method: "PUT", body: buffer });`,
+                  },
+                  {
+                    label: "cURL",
+                    code: `# 1. Crear registro y obtener URL presignada
+curl -X POST https://api.easybits.cloud/v2/files \\
+  -H "Authorization: Bearer eb_..." \\
+  -d '{"fileName":"photo.jpg","contentType":"image/jpeg","size":48120}'
+
+# 2. Subir el archivo
+curl -X PUT "<putUrl>" --data-binary @photo.jpg`,
+                  },
+                ]}
+              />
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                <span className="bg-red-200 text-red-900 text-xs px-2 py-0.5 rounded-full font-bold">
+                  AWS S3
+                </span>
+                30+ líneas de setup
+              </h3>
+              <div className="border-2 border-black rounded-xl overflow-hidden">
+                <CodeBlock bare language="typescript">
+                  {`import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const client = new S3Client({
@@ -108,8 +171,85 @@ const command = new PutObjectCommand({
   ContentType: "image/jpeg",
 });
 const url = await getSignedUrl(client, command);
-// + DB record, access control, CDN, ...`}
-            />
+// + DB record, access control, CDN config, ...`}
+                </CodeBlock>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MCP Section — before features, it's the main differentiator */}
+      <div className="bg-yellow-50 border-b-2 border-black">
+        <div className="max-w-6xl mx-auto px-6 py-16">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold mb-4">
+                Tu agente ya sabe usarlo
+              </h2>
+              <p className="text-lg text-gray-600 mb-6">
+                EasyBits incluye un servidor MCP con 33+ herramientas. Claude,
+                Cursor, ChatGPT y cualquier cliente MCP manejan tus archivos de
+                forma nativa — sin prompting, sin wrappers.
+              </p>
+              <div className="space-y-3 text-sm text-gray-700">
+                <div className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold mt-0.5">✓</span>
+                  <span>Subir, descargar, optimizar, transformar imágenes</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold mt-0.5">✓</span>
+                  <span>Compartir con links temporales y permisos granulares</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold mt-0.5">✓</span>
+                  <span>Búsqueda semántica con lenguaje natural</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-600 font-bold mt-0.5">✓</span>
+                  <span>Webhooks, sitios estáticos, bulk operations</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <TabbedCode
+                tabs={[
+                  {
+                    label: "SDK",
+                    code: `// Tu agente optimiza una imagen en 2 líneas
+const { file, originalSize, optimizedSize } =
+  await eb.optimizeImage({ fileId, format: "webp" });
+
+// Genera un link temporal para compartir
+const { url } = await eb.generateShareToken({
+  fileId: file.id,
+  expiresIn: 3600,
+});`,
+                  },
+                  {
+                    label: "cURL",
+                    code: `# Optimizar imagen a WebP
+curl -X POST https://api.easybits.cloud/v2/images/optimize \\
+  -H "Authorization: Bearer eb_..." \\
+  -d '{"fileId":"file_abc","format":"webp"}'
+
+# Generar link temporal (1 hora)
+curl -X POST https://api.easybits.cloud/v2/share-tokens \\
+  -H "Authorization: Bearer eb_..." \\
+  -d '{"fileId":"file_abc","expiresIn":3600}'`,
+                  },
+                ]}
+              />
+              <div className="mt-4 border-2 border-black rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
+                  <span className="text-white font-medium text-sm">MCP Setup</span>
+                  <span className="text-gray-400 text-xs uppercase font-mono">bash</span>
+                </div>
+                <CodeBlock bare language="bash">
+                  {`npx -y @easybits.cloud/mcp`}
+                </CodeBlock>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -117,56 +257,43 @@ const url = await getSignedUrl(client, command);
       {/* Features grid */}
       <div className="bg-white border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-16">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
-            Todo lo que necesitas, nada que no
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-4">
+            Todo lo que tu agente necesita
           </h2>
+          <p className="text-center text-gray-500 mb-12 max-w-xl mx-auto">
+            Cada feature tiene endpoint REST, método SDK y herramienta MCP.
+          </p>
           <div className="grid md:grid-cols-3 gap-6">
             <FeatureCard
               title="File Storage"
-              description="Sube archivos de hasta 5GB. Acceso público o privado. URLs presignadas para subidas seguras."
+              description="Archivos de hasta 5 GB. URLs presignadas, acceso público o privado, metadata custom."
+              badge="POST /v2/files"
             />
             <FeatureCard
-              title="Optimización de Imágenes"
-              description="Convierte a WebP/AVIF al vuelo. Redimensiona, recorta, rota, voltea y escala de grises."
+              title="Imágenes"
+              description="Optimiza a WebP/AVIF, redimensiona, rota, recorta y aplica grayscale. El original no se modifica."
+              badge="POST /v2/images/*"
             />
             <FeatureCard
-              title="Búsqueda con IA"
-              description="Busca archivos con lenguaje natural. Sin necesidad de tags manuales."
+              title="Búsqueda Semántica"
+              description="Busca archivos con lenguaje natural. Powered by tu propia API key de Anthropic u OpenAI."
+              badge="POST /v2/search"
             />
             <FeatureCard
-              title="Compartir"
-              description="Genera links temporales. Permisos granulares por archivo."
+              title="Sharing"
+              description="Links temporales con expiración configurable. Permisos granulares por usuario y archivo."
+              badge="POST /v2/share-tokens"
+            />
+            <FeatureCard
+              title="Webhooks"
+              description="Notificaciones en tiempo real con HMAC signing. Auto-pause tras 5 fallos consecutivos."
+              badge="POST /v2/webhooks"
             />
             <FeatureCard
               title="Sitios Estáticos"
-              description="Despliega sitios estáticos en tu-nombre.easybits.cloud en segundos."
+              description="Despliega HTML/CSS/JS en tu-slug.easybits.cloud. Ideal para landing pages y demos."
+              badge="POST /v2/websites"
             />
-            <FeatureCard
-              title="Papelera"
-              description="7 días de retención. Restaura archivos con una sola llamada a la API."
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* MCP Section */}
-      <div className="bg-yellow-50 border-b-2 border-black">
-        <div className="max-w-6xl mx-auto px-6 py-16">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">
-              Tu agente de IA ya sabe usarlo
-            </h2>
-            <p className="text-lg text-gray-600 mb-8">
-              EasyBits incluye un servidor Model Context Protocol (MCP). Claude,
-              Cursor y cualquier agente compatible con MCP puede manejar tus
-              archivos de forma nativa — sin prompting.
-            </p>
-            <div className="bg-black text-green-400 rounded-xl p-6 font-mono text-left text-sm">
-              <span className="text-gray-500">$</span> npx -y @easybits.cloud/mcp
-            </div>
-            <p className="text-sm text-gray-500 mt-4">
-              22 herramientas disponibles: subir, descargar, optimizar, transformar, compartir, buscar y más.
-            </p>
           </div>
         </div>
       </div>
@@ -207,18 +334,26 @@ const url = await getSignedUrl(client, command);
       <div className="bg-black text-white">
         <div className="max-w-6xl mx-auto px-6 py-16 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
-            Empieza a construir en minutos
+            Tu agente puede empezar a subir archivos en 2 minutos
           </h2>
           <p className="text-gray-400 mb-8 max-w-xl mx-auto">
-            Crea una cuenta, obtén tu API key y empieza a subir archivos.
+            Crea una cuenta, genera tu API key y conecta el SDK o el MCP server.
             Sin tarjeta de crédito.
           </p>
-          <Link
-            to="/login"
-            className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-white hover:translate-y-[-2px] transition-transform text-lg inline-block"
-          >
-            Empezar Gratis
-          </Link>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link
+              to="/login"
+              className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-white hover:translate-y-[-2px] transition-transform text-lg inline-block"
+            >
+              Empezar Gratis
+            </Link>
+            <Link
+              to="/docs"
+              className="bg-transparent text-white px-8 py-3 rounded-xl font-bold border-2 border-white hover:translate-y-[-2px] transition-transform text-lg inline-block"
+            >
+              Leer los Docs
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -227,42 +362,23 @@ const url = await getSignedUrl(client, command);
   );
 }
 
-function CodeBlock({
-  title,
-  badge,
-  badgeColor,
-  code,
-}: {
-  title: string;
-  badge: string;
-  badgeColor: string;
-  code: string;
-}) {
-  return (
-    <div className="border-2 border-black rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b-2 border-black">
-        <span className="font-bold text-sm">{title}</span>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${badgeColor}`}>
-          {badge}
-        </span>
-      </div>
-      <pre className="p-4 text-sm overflow-x-auto bg-gray-950 text-gray-300">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
-
 function FeatureCard({
   title,
   description,
+  badge,
 }: {
   title: string;
   description: string;
+  badge: string;
 }) {
   return (
     <div className="border-2 border-black rounded-xl p-6 hover:translate-y-[-2px] transition-transform">
-      <h3 className="font-bold text-lg mb-2">{title}</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-lg">{title}</h3>
+        <code className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-mono">
+          {badge}
+        </code>
+      </div>
       <p className="text-gray-600 text-sm">{description}</p>
     </div>
   );
