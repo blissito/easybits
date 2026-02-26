@@ -33,7 +33,14 @@ export const destroySession: typeof _sessionStorage.destroySession = (
   ...args
 ) => getSessionStorage().destroySession(...args);
 
-export const redirectCookie = createCookie("next", {
-  maxAge: 3600, // one hour
-  secrets: [getJwtSecret()],
-});
+let _redirectCookie: ReturnType<typeof createCookie>;
+
+export function getRedirectCookie() {
+  if (!_redirectCookie) {
+    _redirectCookie = createCookie("next", {
+      maxAge: 3600, // one hour
+      secrets: [getJwtSecret()],
+    });
+  }
+  return _redirectCookie;
+}

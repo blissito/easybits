@@ -3,7 +3,10 @@ import type { Route } from "./+types/login";
 import LoginComponent from "~/components/login/login-component";
 import { createStripeSession, getStripeURL } from "~/.server/stripe.getters";
 import { createGoogleSession, getGoogleURL } from "~/.server/google.getters";
-import { commitSession, redirectCookie } from "~/.server/sessions";
+import {
+  commitSession,
+  getRedirectCookie as redirectCookieFn,
+} from "~/.server/sessions";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import {
   sendConfrimation,
@@ -13,14 +16,14 @@ import {
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const setRedirectCookie = async (request: Request, next: string) => {
     const cookieHeader = request.headers.get("Cookie");
-    const cookie = (await redirectCookie.parse(cookieHeader)) || {};
+    const cookie = (await redirectCookieFn().parse(cookieHeader)) || {};
     cookie["next"] = next;
     return cookie as Cookie;
   };
 
   const getRedirectCookie = async (request: Request) => {
     const cookieHeader = request.headers.get("Cookie");
-    return (await redirectCookie.parse(cookieHeader)) || {};
+    return (await redirectCookieFn().parse(cookieHeader)) || {};
   };
 
   const url = new URL(request.url);
@@ -34,7 +37,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     cookie = await setRedirectCookie(request, next);
     return new Response(null, {
       headers: {
-        "Set-Cookie": await redirectCookie.serialize(cookie),
+        "Set-Cookie": await redirectCookieFn().serialize(cookie),
       },
     });
   }
@@ -58,7 +61,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
       cookie["next"] = undefined;
       throw redirect(next, {
         headers: {
-          "set-cookie": await redirectCookie.serialize(cookie),
+          "set-cookie": await redirectCookieFn().serialize(cookie),
           "Set-Cookie": await commitSession(session),
         },
       });
