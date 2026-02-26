@@ -1,5 +1,6 @@
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { useState } from "react";
+import { Link } from "react-router";
 
 const tabs = ["MCP", "REST API", "CLI"] as const;
 type Tab = (typeof tabs)[number];
@@ -16,7 +17,10 @@ export default function SetupPage() {
         </h2>
         <p className="text-gray-500 text-sm">
           Easybits expone tus archivos via REST, MCP y CLI.
-          Un solo API key para todo.
+          Un solo API key para todo.{" "}
+          <Link to="/docs" className="underline font-medium text-black hover:text-brand-500">
+            Ver documentación completa
+          </Link>
         </p>
       </div>
 
