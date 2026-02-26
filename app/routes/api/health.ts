@@ -1,7 +1,9 @@
 import { db } from "~/.server/db";
+import { initSentry } from "~/.server/sentry";
 
 // GET /api/health — public health check
 export async function loader() {
+  initSentry();
   let dbStatus = "disconnected";
   try {
     await db.user.findFirst({ select: { id: true } });

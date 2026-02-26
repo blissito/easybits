@@ -23,7 +23,12 @@ import { NotFound } from "./components/common/404";
 
 import { DevAdmin } from "./components/experimental/DevAdmin";
 import { UploadsProvider } from "./context";
-import * as Sentry from "@sentry/react";
+let Sentry: { captureException: (err: unknown) => void } | undefined;
+try {
+  Sentry = require("@sentry/react");
+} catch {
+  // Sentry not available
+}
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -172,7 +177,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         ? "The requested page could not be found."
         : error.statusText || details;
   } else if (error && error instanceof Error) {
-    Sentry.captureException(error);
+    Sentry?.captureException(error);
     if (import.meta.env.DEV) {
       details = error.message;
       stack = error.stack;
