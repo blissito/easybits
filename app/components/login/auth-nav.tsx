@@ -23,6 +23,10 @@ export const AuthNav = ({ user = {}, noCTA }: { user?: User }) => {
       title: "Blog",
       path: "/blog",
     },
+    {
+      title: "Docs",
+      path: "/docs",
+    },
   ];
 
   const toggleMenu = () => {
