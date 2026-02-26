@@ -342,7 +342,7 @@ curl -X POST https://api.easybits.cloud/v2/share-tokens \\
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link
-              to="/login"
+              to="/dash/developer"
               className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-white hover:translate-y-[-2px] transition-transform text-lg inline-block"
             >
               Empezar Gratis
