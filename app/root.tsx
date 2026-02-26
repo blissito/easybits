@@ -95,30 +95,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     return redirect("/tienda");
   }
 
-  // Subdomain website routing: slug.easybits.cloud → /s/slug/path
-  if (
-    url.hostname.endsWith(".easybits.cloud") &&
-    !url.hostname.startsWith("www")
-  ) {
-    const subdomain = url.hostname.split(".")[0];
-    // Skip known subdomains (app hosts, etc.)
-    if (subdomain && subdomain !== "www" && subdomain !== "api") {
-      const website = await db.website.findFirst({
-        where: { slug: subdomain, status: { not: "DELETED" } },
-        select: { id: true },
-      });
-      if (website) {
-        const splatPath = url.pathname === "/" ? "" : url.pathname.slice(1);
-        // Internal rewrite — call static site loader directly (no HTTP round-trip)
-        const { loader: siteLoader } = await import("~/routes/s.$slug.$.tsx");
-        return siteLoader({
-          params: { slug: subdomain, "*": splatPath || "index.html" },
-          request,
-          context: {},
-        } as any);
-      }
-    }
-  }
+  // Subdomain website routing handled in entry.server.tsx (before React render)
 
   // host
   const hostExist = await db.user.findFirst({

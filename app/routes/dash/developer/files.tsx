@@ -12,6 +12,7 @@ import { MdFolderZip } from "react-icons/md";
 import { GiMagicLamp } from "react-icons/gi";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
+import { AnimatePresence, motion } from "motion/react";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -172,7 +173,11 @@ export default function DevFilesPage() {
   };
 
   return (
-    <div>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       <div className="flex gap-2 mb-4">
         <input
           type="text"
@@ -187,8 +192,10 @@ export default function DevFilesPage() {
           }}
           className="border-2 border-black rounded-xl px-4 py-2 text-sm font-mono flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
         />
-        <button
+        <motion.button
           onClick={toggleTrash}
+          whileTap={{ scale: 0.95 }}
+          layout
           className={`px-4 py-2 rounded-xl border-2 border-black text-sm font-bold transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${
             trash
               ? "bg-brand-red text-white"
@@ -196,10 +203,13 @@ export default function DevFilesPage() {
           }`}
         >
           {trash ? "Ver archivos" : "Papelera"}
-        </button>
+        </motion.button>
       </div>
 
-      <div className="border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white">
+      <motion.div
+        layout
+        className="border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white"
+      >
         <table className="w-full text-sm">
           <thead className="bg-black text-white">
             <tr>
@@ -217,122 +227,143 @@ export default function DevFilesPage() {
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody>
-            {items.map((f) => (
-              <tr key={f.id} className="border-t-2 border-black hover:bg-brand-100 transition-colors">
-                <td className="px-4 py-3 max-w-[200px] truncate font-bold">
-                  <span className="flex items-center gap-2">
-                    {f.contentType.startsWith("image/") && f.url ? (
-                      <img src={f.url} alt="" className="w-8 h-8 rounded border border-black object-cover flex-shrink-0" />
+          <AnimatePresence mode="popLayout">
+            <tbody>
+              {items.map((f, i) => (
+                <motion.tr
+                  key={f.id}
+                  layout
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }}
+                  transition={{ duration: 0.3, delay: i * 0.03 }}
+                  className="border-t-2 border-black hover:bg-brand-100 transition-colors"
+                >
+                  <td className="px-4 py-3 max-w-[200px] truncate font-bold">
+                    <span className="flex items-center gap-2">
+                      {f.contentType.startsWith("image/") && f.url ? (
+                        <img src={f.url} alt="" className="w-8 h-8 rounded border border-black object-cover flex-shrink-0" />
+                      ) : null}
+                      <span className="truncate">{f.name}</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs">{formatSize(f.size)}</td>
+                  <td className="px-4 py-3">
+                    <IconRenderer
+                      fileName={f.name}
+                      type={f.contentType}
+                      icons={{
+                        video: <FaVideo />,
+                        image: <FaRegImage />,
+                        epub: <FaBook />,
+                        pdf: <FaRegFilePdf />,
+                        zip: <MdFolderZip />,
+                        audio: <FaMusic />,
+                        other: <GiMagicLamp />,
+                      }}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    {f.access === "private" ? (
+                      <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-full border border-black">Privado</span>
+                    ) : (
+                      <span className="bg-brand-yellow text-xs font-bold px-2 py-0.5 rounded-full border border-black">Público</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {f.access === "private" ? (
+                      <button
+                        className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
+                        onClick={() => setTokenFor(f)}
+                      >
+                        <img alt="keys" src="/icons/keys.svg" className="w-6" />
+                      </button>
+                    ) : f.url ? (
+                      <Copy mode="ghost" text={f.url} />
                     ) : null}
-                    <span className="truncate">{f.name}</span>
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">{formatSize(f.size)}</td>
-                <td className="px-4 py-3">
-                  <IconRenderer
-                    fileName={f.name}
-                    type={f.contentType}
-                    icons={{
-                      video: <FaVideo />,
-                      image: <FaRegImage />,
-                      epub: <FaBook />,
-                      pdf: <FaRegFilePdf />,
-                      zip: <MdFolderZip />,
-                      audio: <FaMusic />,
-                      other: <GiMagicLamp />,
-                    }}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  {f.access === "private" ? (
-                    <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-full border border-black">Privado</span>
-                  ) : (
-                    <span className="bg-brand-yellow text-xs font-bold px-2 py-0.5 rounded-full border border-black">Público</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {f.access === "private" ? (
-                    <button
-                      className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
-                      onClick={() => setTokenFor(f)}
-                    >
-                      <img alt="keys" src="/icons/keys.svg" className="w-6" />
-                    </button>
-                  ) : f.url ? (
-                    <Copy mode="ghost" text={f.url} />
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">
-                  {f.source ? (
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border border-black ${
-                      f.source === "mcp" ? "bg-purple-200" : f.source === "api" ? "bg-blue-200" : "bg-brand-yellow"
-                    }`}>
-                      {f.source}
+                  </td>
+                  <td className="px-4 py-3">
+                    {f.source ? (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border border-black ${
+                        f.source === "mcp" ? "bg-purple-200" : f.source === "api" ? "bg-blue-200" : "bg-brand-yellow"
+                      }`}>
+                        {f.source}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">
+                      {f.storageProviderId ? "Custom" : "Tigris"}
                     </span>
-                  ) : (
-                    <span className="text-xs text-gray-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">
-                    {f.storageProviderId ? "Custom" : "Tigris"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {trash ? (
-                    <span className="text-xs font-bold px-2 py-1 rounded-md border-2 border-black bg-brand-yellow">
-                      {daysUntilPurge(f.deletedAt)} days
-                    </span>
-                  ) : (
-                    <span
-                      className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
-                        f.status === "DONE"
-                          ? "bg-lime"
-                          : f.status === "ERROR"
-                          ? "bg-brand-red text-white"
-                          : "bg-brand-yellow"
-                      }`}
-                    >
-                      {f.status}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">
-                  {new Date(f.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3">
-                  {trash ? <RestoreButton fileId={f.id} /> : <DeleteButton fileId={f.id} />}
-                </td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
-                  {trash ? "La papelera esta vacia" : "Sube archivos via MCP, SDK o API"}
-                </td>
-              </tr>
-            )}
-          </tbody>
+                  </td>
+                  <td className="px-4 py-3">
+                    {trash ? (
+                      <span className="text-xs font-bold px-2 py-1 rounded-md border-2 border-black bg-brand-yellow">
+                        {daysUntilPurge(f.deletedAt)} days
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
+                          f.status === "DONE"
+                            ? "bg-lime"
+                            : f.status === "ERROR"
+                            ? "bg-brand-red text-white"
+                            : "bg-brand-yellow"
+                        }`}
+                      >
+                        {f.status}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {new Date(f.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    {trash ? <RestoreButton fileId={f.id} /> : <DeleteButton fileId={f.id} />}
+                  </td>
+                </motion.tr>
+              ))}
+              {items.length === 0 && (
+                <motion.tr
+                  key="empty"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <td colSpan={10} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
+                    {trash ? "La papelera esta vacia" : "Sube archivos via MCP, SDK o API"}
+                  </td>
+                </motion.tr>
+              )}
+            </tbody>
+          </AnimatePresence>
         </table>
-      </div>
+      </motion.div>
 
-      {nextCursor && (
-        <button
-          onClick={() => {
-            const params = new URLSearchParams(searchParams);
-            params.set("cursor", nextCursor);
-            setSearchParams(params);
-          }}
-          className="mt-4 group rounded-xl bg-black inline-block"
-        >
-          <span className="block bg-white px-4 py-2 rounded-xl border-2 border-black text-sm font-bold -translate-x-1 -translate-y-1 transition-all hover:-translate-x-1.5 hover:-translate-y-1.5 active:translate-x-0 active:translate-y-0">
-            Load more
-          </span>
-        </button>
-      )}
+      <AnimatePresence>
+        {nextCursor && (
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              const params = new URLSearchParams(searchParams);
+              params.set("cursor", nextCursor);
+              setSearchParams(params);
+            }}
+            className="mt-4 group rounded-xl bg-black inline-block"
+          >
+            <span className="block bg-white px-4 py-2 rounded-xl border-2 border-black text-sm font-bold -translate-x-1 -translate-y-1 transition-all hover:-translate-x-1.5 hover:-translate-y-1.5 active:translate-x-0 active:translate-y-0">
+              Load more
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
-    </div>
+    </motion.div>
   );
 }
