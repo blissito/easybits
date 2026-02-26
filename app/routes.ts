@@ -102,6 +102,7 @@ export default [
     route("providers", "routes/api/v2/providers.ts"),
     route("websites", "routes/api/v2/websites-collection.ts"),
     route("websites/:websiteId", "routes/api/v2/websites.ts"),
+    route("websites/:websiteId/files", "routes/api/v2/website-files.ts"),
     route("keys", "routes/api/v2/keys.ts"),
     route("keys/:keyId", "routes/api/v2/key.ts"),
   ]),

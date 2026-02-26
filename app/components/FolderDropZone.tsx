@@ -158,6 +158,17 @@ export function FolderDropZone({
         }
       }
 
+      // On re-deploy, soft-delete old files first
+      if (websiteId) {
+        try {
+          await fetch(`/api/v2/websites/${wId}/files`, {
+            method: "DELETE",
+          });
+        } catch {
+          // non-critical — old files will remain but won't break deploy
+        }
+      }
+
       let totalSize = 0;
       const CONCURRENCY = 5;
       let idx = 0;

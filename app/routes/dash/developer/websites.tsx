@@ -5,6 +5,7 @@ import {
   useRevalidator,
   data,
 } from "react-router";
+import { AnimatePresence, motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/websites";
@@ -66,9 +67,14 @@ export default function WebsitesPage() {
   const siteUrl = (slug: string) => `https://${slug}.easybits.cloud`;
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
       {/* Hero drop area */}
-      <div className="border-2 border-black rounded-xl p-6 space-y-4">
+      <div className="border-2 border-black rounded-xl p-6 space-y-4 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
         <div className="text-center mb-2">
           <h2 className="text-xl font-bold">Deploy a new site</h2>
           <p className="text-sm text-gray-600">
@@ -83,132 +89,174 @@ export default function WebsitesPage() {
             revalidator.revalidate();
           }}
         />
-        {newSite && (
-          <div className="flex items-center gap-3 bg-green-50 border-2 border-green-300 rounded-xl p-3 text-sm">
-            <span className="font-bold">{newSite.name}</span>
-            <a
-              href={siteUrl(newSite.slug)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
+        <AnimatePresence>
+          {newSite && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
             >
-              {newSite.slug}.easybits.cloud
-            </a>
-            <Copy text={siteUrl(newSite.slug)} mode="ghost" className="static p-0" />
-          </div>
-        )}
+              <div className="flex items-center gap-3 bg-lime border-2 border-black rounded-xl p-3 text-sm shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <span className="font-bold">{newSite.name}</span>
+                <a
+                  href={siteUrl(newSite.slug)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  {newSite.slug}.easybits.cloud
+                </a>
+                <Copy text={siteUrl(newSite.slug)} mode="ghost" className="static p-0" />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Websites list */}
       <div>
         <h2 className="text-xl font-bold mb-4">Tus sitios</h2>
         {websites.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="text-center py-12 text-gray-500"
+          >
             <p className="text-lg">No tienes sitios aún</p>
             <p className="text-sm mt-1">Arrastra una carpeta arriba para publicar</p>
-          </div>
+          </motion.div>
         ) : (
           <div className="space-y-4">
-            {websites.map((site) => {
-              const isDeleting =
-                deleteFetcher.state !== "idle" &&
-                deleteFetcher.formData?.get("websiteId") === site.id;
+            <AnimatePresence mode="popLayout">
+              {websites.map((site, i) => {
+                const isDeleting =
+                  deleteFetcher.state !== "idle" &&
+                  deleteFetcher.formData?.get("websiteId") === site.id;
 
-              return (
-                <div
-                  key={site.id}
-                  className={`border-2 border-black rounded-xl p-4 space-y-3 ${isDeleting ? "opacity-50" : ""}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-lg">{site.name}</h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <span className="relative inline-flex items-center gap-1">
-                          <a
-                            href={siteUrl(site.slug)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline"
-                          >
-                            {site.slug}.easybits.cloud
-                          </a>
-                          <Copy
-                            text={siteUrl(site.slug)}
-                            mode="ghost"
-                            className="static p-0"
-                          />
-                        </span>
-                        <span>·</span>
-                        <span>{site.fileCount} archivos</span>
-                        <span>·</span>
-                        <span>{formatSize(site.totalSize)}</span>
-                        <span>·</span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                            site.status === "ACTIVE"
-                              ? "bg-green-100 text-green-700"
-                              : site.status === "DEPLOYING"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
+                return (
+                  <motion.div
+                    key={site.id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
+                    transition={{ duration: 0.3, delay: i * 0.05 }}
+                    className={`border-2 border-black rounded-xl p-4 space-y-3 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isDeleting ? "opacity-50" : ""}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-lg">{site.name}</h3>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <span className="relative inline-flex items-center gap-1">
+                            <a
+                              href={siteUrl(site.slug)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              {site.slug}.easybits.cloud
+                            </a>
+                            <Copy
+                              text={siteUrl(site.slug)}
+                              mode="ghost"
+                              className="static p-0"
+                            />
+                          </span>
+                          <span>·</span>
+                          <span>{site.fileCount} archivos</span>
+                          <span>·</span>
+                          <span>{formatSize(site.totalSize)}</span>
+                          <span>·</span>
+                          <StatusBadge status={site.status} />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <motion.a
+                          href={siteUrl(site.slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          whileTap={{ scale: 0.95 }}
+                          className="px-3 py-1 border-2 border-black rounded-xl text-sm font-bold hover:bg-gray-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                         >
-                          {site.status}
-                        </span>
+                          Visitar
+                        </motion.a>
+                        <motion.button
+                          onClick={() =>
+                            setDeployingId(deployingId === site.id ? null : site.id)
+                          }
+                          whileTap={{ scale: 0.95 }}
+                          className="px-3 py-1 bg-brand-500 text-white border-2 border-black rounded-xl text-sm font-bold shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                        >
+                          Re-deploy
+                        </motion.button>
+                        <deleteFetcher.Form method="post">
+                          <input type="hidden" name="intent" value="delete" />
+                          <input type="hidden" name="websiteId" value={site.id} />
+                          <motion.button
+                            type="submit"
+                            disabled={isDeleting}
+                            whileTap={{ scale: 0.95 }}
+                            className="px-3 py-1 border-2 border-black text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 disabled:opacity-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                            onClick={(e) => {
+                              if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            {isDeleting ? "Eliminando..." : "Eliminar"}
+                          </motion.button>
+                        </deleteFetcher.Form>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <a
-                        href={siteUrl(site.slug)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 border-2 border-black rounded-xl text-sm font-bold hover:bg-gray-100"
-                      >
-                        Visitar
-                      </a>
-                      <button
-                        onClick={() =>
-                          setDeployingId(deployingId === site.id ? null : site.id)
-                        }
-                        className="px-3 py-1 bg-brand-500 text-white border-2 border-black rounded-xl text-sm font-bold"
-                      >
-                        Re-deploy
-                      </button>
-                      <deleteFetcher.Form method="post">
-                        <input type="hidden" name="intent" value="delete" />
-                        <input type="hidden" name="websiteId" value={site.id} />
-                        <button
-                          type="submit"
-                          disabled={isDeleting}
-                          className="px-3 py-1 border-2 border-red-400 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 disabled:opacity-50"
-                          onClick={(e) => {
-                            if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
-                              e.preventDefault();
-                            }
-                          }}
-                        >
-                          {isDeleting ? "Eliminando..." : "Eliminar"}
-                        </button>
-                      </deleteFetcher.Form>
-                    </div>
-                  </div>
 
-                  {deployingId === site.id && (
-                    <FolderDropZone
-                      websiteId={site.id}
-                      compact
-                      onComplete={() => {
-                        setDeployingId(null);
-                        revalidator.revalidate();
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
+                    <AnimatePresence>
+                      {deployingId === site.id && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="overflow-hidden"
+                        >
+                          <FolderDropZone
+                            websiteId={site.id}
+                            compact
+                            onComplete={() => {
+                              setDeployingId(null);
+                              revalidator.revalidate();
+                            }}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles =
+    status === "ACTIVE"
+      ? "bg-lime border-black text-black"
+      : status === "DEPLOYING"
+      ? "bg-brand-yellow border-black text-black"
+      : "bg-brand-red border-black text-white";
+
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full text-xs font-bold border-2 ${styles}`}
+    >
+      {status}
+    </span>
   );
 }
 
