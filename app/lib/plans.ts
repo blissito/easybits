@@ -3,7 +3,7 @@
  * Update prices here — they propagate to /developers, /planes, profile, etc.
  */
 
-export type PlanKey = "Gratis" | "Pro" | "Business";
+export type PlanKey = "Spark" | "Flow" | "Studio";
 
 export interface PlanConfig {
   /** Display name */
@@ -19,8 +19,8 @@ export interface PlanConfig {
 }
 
 export const PLANS: Record<PlanKey, PlanConfig> = {
-  Gratis: {
-    name: "Gratis",
+  Spark: {
+    name: "Spark",
     price: 0,
     storageGB: 1,
     stripeIntent: null,
@@ -31,11 +31,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Acceso MCP",
     ],
   },
-  Pro: {
-    name: "Pro",
+  Flow: {
+    name: "Flow",
     price: 199,
     storageGB: 50,
-    stripeIntent: "pro_plan",
+    stripeIntent: "flow_plan",
     features: [
       "50 GB de almacenamiento",
       "Subidas ilimitadas",
@@ -43,11 +43,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Proveedores custom",
     ],
   },
-  Business: {
-    name: "Business",
+  Studio: {
+    name: "Studio",
     price: 499,
     storageGB: 500,
-    stripeIntent: "business_plan",
+    stripeIntent: "studio_plan",
     features: [
       "500 GB de almacenamiento",
       "Soporte prioritario",

@@ -179,20 +179,20 @@ const url = await getSignedUrl(client, command);
           </h2>
           <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             <PricingCard
-              title={PLANS.Gratis.name}
-              price={formatPrice(PLANS.Gratis.price)}
-              features={PLANS.Gratis.features}
+              title={PLANS.Spark.name}
+              price={formatPrice(PLANS.Spark.price)}
+              features={PLANS.Spark.features}
             />
             <PricingCard
-              title={PLANS.Pro.name}
-              price={`${formatPrice(PLANS.Pro.price)} mxn/mes`}
-              features={PLANS.Pro.features}
+              title={PLANS.Flow.name}
+              price={`${formatPrice(PLANS.Flow.price)} mxn/mes`}
+              features={PLANS.Flow.features}
               highlighted
             />
             <PricingCard
-              title={PLANS.Business.name}
-              price={`${formatPrice(PLANS.Business.price)} mxn/mes`}
-              features={PLANS.Business.features}
+              title={PLANS.Studio.name}
+              price={`${formatPrice(PLANS.Studio.price)} mxn/mes`}
+              features={PLANS.Studio.features}
             />
           </div>
           <p className="text-center mt-8 text-gray-500">
