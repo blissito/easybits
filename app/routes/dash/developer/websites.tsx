@@ -15,7 +15,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
 
   const websites = await db.website.findMany({
-    where: { ownerId: user.id },
+    where: { ownerId: user.id, deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 
@@ -38,11 +38,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
       where: {
         ownerId: user.id,
         name: { startsWith: `sites/${websiteId}/` },
+        status: { not: "DELETED" },
       },
       data: { status: "DELETED", deletedAt: new Date() },
     });
 
-    await db.website.delete({ where: { id: websiteId } });
+    await db.website.update({
+      where: { id: websiteId },
+      data: { status: "DELETED", deletedAt: new Date() },
+    });
     return data({ ok: true });
   }
 
@@ -56,8 +60,7 @@ export default function WebsitesPage() {
   const deleteFetcher = useFetcher();
   const revalidator = useRevalidator();
 
-  const baseUrl =
-    typeof window !== "undefined" ? window.location.origin : "https://easybits.cloud";
+  const siteUrl = (slug: string) => `https://${slug}.easybits.cloud`;
 
   return (
     <div className="space-y-6">
@@ -81,14 +84,14 @@ export default function WebsitesPage() {
           <div className="flex items-center gap-3 bg-green-50 border-2 border-green-300 rounded-xl p-3 text-sm">
             <span className="font-bold">{newSite.name}</span>
             <a
-              href={`/s/${newSite.slug}`}
+              href={siteUrl(newSite.slug)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline"
             >
-              /s/{newSite.slug} ↗
+              {newSite.slug}.easybits.cloud
             </a>
-            <Copy text={`${baseUrl}/s/${newSite.slug}`} mode="ghost" className="static p-0" />
+            <Copy text={siteUrl(newSite.slug)} mode="ghost" className="static p-0" />
           </div>
         )}
       </div>
@@ -103,95 +106,102 @@ export default function WebsitesPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {websites.map((site) => (
-              <div
-                key={site.id}
-                className="border-2 border-black rounded-xl p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-lg">{site.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="relative inline-flex items-center gap-1">
-                        <a
-                          href={`/s/${site.slug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline"
+            {websites.map((site) => {
+              const isDeleting =
+                deleteFetcher.state !== "idle" &&
+                deleteFetcher.formData?.get("websiteId") === site.id;
+
+              return (
+                <div
+                  key={site.id}
+                  className={`border-2 border-black rounded-xl p-4 space-y-3 ${isDeleting ? "opacity-50" : ""}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-lg">{site.name}</h3>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="relative inline-flex items-center gap-1">
+                          <a
+                            href={siteUrl(site.slug)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                          >
+                            {site.slug}.easybits.cloud
+                          </a>
+                          <Copy
+                            text={siteUrl(site.slug)}
+                            mode="ghost"
+                            className="static p-0"
+                          />
+                        </span>
+                        <span>·</span>
+                        <span>{site.fileCount} archivos</span>
+                        <span>·</span>
+                        <span>{formatSize(site.totalSize)}</span>
+                        <span>·</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            site.status === "ACTIVE"
+                              ? "bg-green-100 text-green-700"
+                              : site.status === "DEPLOYING"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
                         >
-                          /s/{site.slug}
-                        </a>
-                        <Copy
-                          text={`${baseUrl}/s/${site.slug}`}
-                          mode="ghost"
-                          className="static p-0"
-                        />
-                      </span>
-                      <span>·</span>
-                      <span>{site.fileCount} archivos</span>
-                      <span>·</span>
-                      <span>{formatSize(site.totalSize)}</span>
-                      <span>·</span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                          site.status === "ACTIVE"
-                            ? "bg-green-100 text-green-700"
-                            : site.status === "DEPLOYING"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
+                          {site.status}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <a
+                        href={siteUrl(site.slug)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1 border-2 border-black rounded-xl text-sm font-bold hover:bg-gray-100"
                       >
-                        {site.status}
-                      </span>
+                        Visitar
+                      </a>
+                      <button
+                        onClick={() =>
+                          setDeployingId(deployingId === site.id ? null : site.id)
+                        }
+                        className="px-3 py-1 bg-brand-500 text-white border-2 border-black rounded-xl text-sm font-bold"
+                      >
+                        Re-deploy
+                      </button>
+                      <deleteFetcher.Form method="post">
+                        <input type="hidden" name="intent" value="delete" />
+                        <input type="hidden" name="websiteId" value={site.id} />
+                        <button
+                          type="submit"
+                          disabled={isDeleting}
+                          className="px-3 py-1 border-2 border-red-400 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 disabled:opacity-50"
+                          onClick={(e) => {
+                            if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          {isDeleting ? "Eliminando..." : "Eliminar"}
+                        </button>
+                      </deleteFetcher.Form>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <a
-                      href={`/s/${site.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1 border-2 border-black rounded-xl text-sm font-bold hover:bg-gray-100"
-                    >
-                      Visitar ↗
-                    </a>
-                    <button
-                      onClick={() =>
-                        setDeployingId(deployingId === site.id ? null : site.id)
-                      }
-                      className="px-3 py-1 bg-brand-500 text-white border-2 border-black rounded-xl text-sm font-bold"
-                    >
-                      Re-deploy
-                    </button>
-                    <deleteFetcher.Form method="post">
-                      <input type="hidden" name="intent" value="delete" />
-                      <input type="hidden" name="websiteId" value={site.id} />
-                      <button
-                        type="submit"
-                        className="px-3 py-1 border-2 border-red-400 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50"
-                        onClick={(e) => {
-                          if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        Eliminar
-                      </button>
-                    </deleteFetcher.Form>
-                  </div>
-                </div>
 
-                {deployingId === site.id && (
-                  <FolderDropZone
-                    websiteId={site.id}
-                    compact
-                    onComplete={() => {
-                      setDeployingId(null);
-                      revalidator.revalidate();
-                    }}
-                  />
-                )}
-              </div>
-            ))}
+                  {deployingId === site.id && (
+                    <FolderDropZone
+                      websiteId={site.id}
+                      compact
+                      onComplete={() => {
+                        setDeployingId(null);
+                        revalidator.revalidate();
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

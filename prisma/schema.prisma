@@ -331,17 +331,21 @@ model UserAiKey {
 }
 
 model Website {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
   name      String
-  slug      String   @unique
-  ownerId   String   @db.ObjectId
-  owner     User     @relation(fields: [ownerId], references: [id])
-  status    String   @default("ACTIVE")
+  slug      String
+  ownerId   String    @db.ObjectId
+  owner     User      @relation(fields: [ownerId], references: [id])
+  status    String    @default("ACTIVE")
   prefix    String
-  fileCount Int      @default(0)
-  totalSize Float    @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  fileCount Int       @default(0)
+  totalSize Float     @default(0)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([ownerId, slug])
+  @@index([ownerId])
 }
 
 model ShareToken {

@@ -1,6 +1,6 @@
 import type { Route } from "./+types/file";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { getFile, deleteFile } from "~/.server/core/operations";
+import { getFile, deleteFile, updateFile } from "~/.server/core/operations";
 
 // GET /api/v2/files/:fileId
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -9,12 +9,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   return Response.json(result);
 }
 
-// DELETE /api/v2/files/:fileId
+// DELETE or PATCH /api/v2/files/:fileId
 export async function action({ request, params }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
 
   if (request.method === "DELETE") {
     const result = await deleteFile(ctx, params.fileId!);
+    return Response.json(result);
+  }
+
+  if (request.method === "PATCH") {
+    const body = await request.json();
+    const result = await updateFile(ctx, {
+      fileId: params.fileId!,
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.access !== undefined ? { access: body.access } : {}),
+      ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
+      ...(body.status !== undefined ? { status: body.status } : {}),
+    });
     return Response.json(result);
   }
 

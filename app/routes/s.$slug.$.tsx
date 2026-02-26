@@ -1,40 +1,7 @@
 import type { Route } from "./+types/s.$slug.$";
 import { db } from "~/.server/db";
 import { getPlatformDefaultClient } from "~/.server/storage";
-
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".mjs": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".svg": "image/svg+xml",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".eot": "application/vnd.ms-fontobject",
-  ".map": "application/json",
-  ".txt": "text/plain; charset=utf-8",
-  ".xml": "application/xml; charset=utf-8",
-  ".webmanifest": "application/manifest+json",
-  ".pdf": "application/pdf",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mp3": "audio/mpeg",
-  ".wasm": "application/wasm",
-};
-
-function getContentType(path: string): string {
-  const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
-  return MIME_TYPES[ext] || "application/octet-stream";
-}
+import { getContentType } from "~/utils/mime";
 
 function isImmutable(path: string): boolean {
   return /\.(css|js|mjs|woff2?|ttf|eot|png|jpg|jpeg|gif|svg|webp|avif|ico|wasm)$/i.test(path);
@@ -44,7 +11,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   const { slug } = params;
   const splat = params["*"] || "index.html";
 
-  const website = await db.website.findUnique({ where: { slug } });
+  const website = await db.website.findFirst({ where: { slug } });
   if (!website || website.status === "DELETED") {
     throw new Response("Site not found", { status: 404 });
   }
@@ -60,7 +27,7 @@ export async function loader({ params }: Route.LoaderArgs) {
     where: {
       name: `sites/${website.id}/${splat}`,
       ownerId: website.ownerId,
-      status: { not: "DELETED" },
+      status: "DONE",
     },
   });
 
@@ -71,7 +38,7 @@ export async function loader({ params }: Route.LoaderArgs) {
       where: {
         name: `sites/${website.id}/${indexPath}`,
         ownerId: website.ownerId,
-        status: { not: "DELETED" },
+        status: "DONE",
       },
     });
   }
@@ -83,7 +50,7 @@ export async function loader({ params }: Route.LoaderArgs) {
         where: {
           name: `sites/${website.id}/index.html`,
           ownerId: website.ownerId,
-          status: { not: "DELETED" },
+          status: "DONE",
         },
       });
       if (file) {

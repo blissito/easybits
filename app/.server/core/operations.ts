@@ -144,7 +144,7 @@ export async function uploadFile(
       ownerId: ctx.user.id,
       access: opts.access || "private",
       url: "",
-      status: "DONE",
+      status: "PENDING",
       storageProviderId: provider?.id ?? null,
       ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
     },
@@ -302,6 +302,7 @@ export async function updateFile(
     name?: string;
     access?: "public" | "private";
     metadata?: Record<string, unknown>;
+    status?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -324,6 +325,11 @@ export async function updateFile(
 
   if (opts.name !== undefined) {
     updates.name = opts.name;
+  }
+
+  // Only allow PENDING → DONE transition
+  if (opts.status === "DONE" && file.status === "PENDING") {
+    updates.status = "DONE";
   }
 
   if (opts.metadata !== undefined) {
@@ -471,19 +477,12 @@ export async function listShareTokens(
 
 // --- Website Operations ---
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+import { slugify } from "../utils/slugify";
 
 export async function listWebsites(ctx: AuthContext) {
   requireScope(ctx, "READ");
   const websites = await db.website.findMany({
-    where: { ownerId: ctx.user.id },
+    where: { ownerId: ctx.user.id, deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
   return websites.map((w) => ({
@@ -494,7 +493,7 @@ export async function listWebsites(ctx: AuthContext) {
     fileCount: w.fileCount,
     totalSize: w.totalSize,
     createdAt: w.createdAt,
-    url: `/s/${w.slug}`,
+    url: `https://${w.slug}.easybits.cloud`,
   }));
 }
 
@@ -508,16 +507,25 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     });
   }
 
-  let slug = slugify(name);
+  const baseSlug = slugify(name);
+
+  let website;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const existing = await db.website.findUnique({ where: { slug } });
-    if (!existing) break;
-    slug = `${slugify(name)}-${nanoid(6)}`;
+    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${nanoid(6)}`;
+    try {
+      website = await db.website.create({
+        data: { name, slug, ownerId: ctx.user.id, prefix: "" },
+      });
+      break;
+    } catch (err: unknown) {
+      // Unique constraint violation — retry with different slug
+      const isPrismaUnique =
+        err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002";
+      if (!isPrismaUnique || attempt === 2) throw err;
+    }
   }
 
-  const website = await db.website.create({
-    data: { name, slug, ownerId: ctx.user.id, prefix: "" },
-  });
+  if (!website) throw new Error("Failed to create website");
 
   const updated = await db.website.update({
     where: { id: website.id },
@@ -529,7 +537,7 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     name: updated.name,
     slug: updated.slug,
     prefix: updated.prefix,
-    url: `/s/${updated.slug}`,
+    url: `https://${updated.slug}.easybits.cloud`,
   };
 }
 
@@ -551,8 +559,46 @@ export async function getWebsite(ctx: AuthContext, websiteId: string) {
     totalSize: website.totalSize,
     prefix: website.prefix,
     createdAt: website.createdAt,
-    url: `/s/${website.slug}`,
+    url: `https://${website.slug}.easybits.cloud`,
   };
+}
+
+export async function updateWebsite(
+  ctx: AuthContext,
+  websiteId: string,
+  opts: { name?: string; status?: string }
+) {
+  requireScope(ctx, "WRITE");
+  const website = await db.website.findUnique({ where: { id: websiteId } });
+  if (!website || website.ownerId !== ctx.user.id || website.deletedAt) {
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (opts.name !== undefined) updates.name = opts.name;
+  if (opts.status !== undefined) updates.status = opts.status;
+
+  // Compute authoritative stats from DB
+  const stats = await db.file.aggregate({
+    where: {
+      name: { startsWith: website.prefix },
+      ownerId: ctx.user.id,
+      status: "DONE",
+    },
+    _count: true,
+    _sum: { size: true },
+  });
+  updates.fileCount = stats._count;
+  updates.totalSize = stats._sum.size ?? 0;
+
+  const updated = await db.website.update({
+    where: { id: websiteId },
+    data: updates,
+  });
+  return updated;
 }
 
 export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
@@ -568,12 +614,16 @@ export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
   await db.file.updateMany({
     where: {
       ownerId: ctx.user.id,
-      storageKey: { startsWith: website.prefix },
+      name: { startsWith: website.prefix },
+      status: { not: "DELETED" },
     },
     data: { status: "DELETED", deletedAt: new Date() },
   });
 
-  await db.website.delete({ where: { id: websiteId } });
+  await db.website.update({
+    where: { id: websiteId },
+    data: { status: "DELETED", deletedAt: new Date() },
+  });
   return { ok: true };
 }
 

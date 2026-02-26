@@ -1,38 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".css": "text/css",
-  ".js": "application/javascript",
-  ".mjs": "application/javascript",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".svg": "image/svg+xml",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".eot": "application/vnd.ms-fontobject",
-  ".map": "application/json",
-  ".txt": "text/plain",
-  ".xml": "application/xml",
-  ".webmanifest": "application/manifest+json",
-  ".pdf": "application/pdf",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mp3": "audio/mpeg",
-  ".wasm": "application/wasm",
-};
-
-function getMimeType(fileName: string): string {
-  const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
-  return MIME_TYPES[ext] || "application/octet-stream";
-}
+import { getMimeType } from "~/utils/mime";
 
 type FileEntry = { path: string; file: File };
 
@@ -97,6 +64,7 @@ function getFolderName(dataTransfer: DataTransfer): string {
 type UploadProgress = {
   total: number;
   uploaded: number;
+  failed: number;
   currentFile: string;
   errors: string[];
 };
@@ -128,11 +96,37 @@ export function FolderDropZone({
 
   const handleUpload = useCallback(
     async (fileEntries: FileEntry[], folderName: string) => {
-      if (fileEntries.length === 0) return;
+      // Validate not empty
+      if (fileEntries.length === 0) {
+        setProgress({
+          total: 0, uploaded: 0, failed: 0, currentFile: "",
+          errors: ["La carpeta está vacía"],
+        });
+        return;
+      }
+
+      // Sanitize paths — reject traversal attempts
+      const sanitized = fileEntries.filter((e) => !e.path.includes(".."));
+      if (sanitized.length !== fileEntries.length) {
+        // Some paths had traversal — filter them out silently
+      }
+
+      // Validate index.html exists
+      const hasIndex = sanitized.some(
+        (e) => e.path === "index.html" || e.path.endsWith("/index.html")
+      );
+      if (!hasIndex) {
+        setProgress({
+          total: 0, uploaded: 0, failed: 0, currentFile: "",
+          errors: ["No se encontró index.html — se requiere para publicar un sitio"],
+        });
+        return;
+      }
 
       const state: UploadProgress = {
-        total: fileEntries.length,
+        total: sanitized.length,
         uploaded: 0,
+        failed: 0,
         currentFile: "",
         errors: [],
       };
@@ -170,15 +164,16 @@ export function FolderDropZone({
       let idx = 0;
 
       async function next() {
-        while (idx < fileEntries.length) {
+        while (idx < sanitized.length) {
           const i = idx++;
-          const entry = fileEntries[i];
+          const entry = sanitized[i];
           state.currentFile = entry.path;
           setProgress({ ...state });
 
           try {
             const contentType = getMimeType(entry.file.name);
 
+            // 1. Create file record (PENDING status)
             const res = await fetch("/api/v2/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -192,11 +187,13 @@ export function FolderDropZone({
 
             if (!res.ok) {
               state.errors.push(`${entry.path}: API error ${res.status}`);
+              state.failed++;
               continue;
             }
 
-            const { putUrl } = await res.json();
+            const { file, putUrl } = await res.json();
 
+            // 2. Upload to storage
             const uploadRes = await fetch(putUrl, {
               method: "PUT",
               body: entry.file,
@@ -205,14 +202,23 @@ export function FolderDropZone({
 
             if (!uploadRes.ok) {
               state.errors.push(`${entry.path}: Upload failed ${uploadRes.status}`);
+              state.failed++;
               continue;
             }
+
+            // 3. Confirm upload — mark DONE
+            await fetch(`/api/v2/files/${file.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "DONE" }),
+            });
 
             totalSize += entry.file.size;
           } catch (err) {
             state.errors.push(
               `${entry.path}: ${err instanceof Error ? err.message : "Unknown error"}`
             );
+            state.failed++;
           }
 
           state.uploaded++;
@@ -221,28 +227,28 @@ export function FolderDropZone({
       }
 
       await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, fileEntries.length) }, next)
+        Array.from({ length: Math.min(CONCURRENCY, sanitized.length) }, next)
       );
 
-      // Update website stats
+      // Update website stats (server computes authoritative counts)
       try {
         await fetch(`/api/v2/websites/${wId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            fileCount: state.uploaded,
-            totalSize,
-            status: state.errors.length > 0 ? "ERROR" : "ACTIVE",
+            status: state.failed > 0 ? "ERROR" : "ACTIVE",
           }),
         });
       } catch {
         // non-critical
       }
 
-      onComplete?.({ fileCount: state.uploaded, totalSize });
+      onComplete?.({ fileCount: state.uploaded - state.failed, totalSize });
     },
     [websiteId, onWebsiteCreated, onComplete]
   );
+
+  const isDone = progress && progress.uploaded === progress.total;
 
   return (
     <div
@@ -292,14 +298,24 @@ export function FolderDropZone({
           </p>
           {progress.errors.length > 0 && (
             <div className="text-red-600 text-sm text-left mt-2">
-              <p className="font-bold">{progress.errors.length} errores:</p>
+              <p className="font-bold">
+                {progress.failed} de {progress.total} archivos fallaron:
+              </p>
               {progress.errors.slice(0, 5).map((e, i) => (
                 <p key={i}>{e}</p>
               ))}
+              {progress.errors.length > 5 && (
+                <p>...y {progress.errors.length - 5} más</p>
+              )}
             </div>
           )}
-          {progress.uploaded === progress.total && (
+          {isDone && progress.failed === 0 && (
             <p className="text-green-600 font-bold">Deploy completado</p>
+          )}
+          {isDone && progress.failed > 0 && progress.failed < progress.total && (
+            <p className="text-yellow-600 font-bold">
+              Deploy parcial: {progress.uploaded - progress.failed} de {progress.total} archivos
+            </p>
           )}
         </div>
       ) : (

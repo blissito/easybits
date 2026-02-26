@@ -14,6 +14,7 @@ import {
   listWebsites,
   createWebsite,
   getWebsite,
+  updateWebsite,
   deleteWebsite,
 } from "../core/operations";
 import { db } from "../db";
@@ -356,6 +357,26 @@ export function createMcpServer() {
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getWebsite(ctx, params.websiteId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "update_website",
+    "Update a website's name or status. Stats (fileCount, totalSize) are recomputed automatically from the database.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      name: z.string().optional().describe("New name"),
+      status: z.string().optional().describe("New status (e.g. ACTIVE, ERROR)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await updateWebsite(ctx, params.websiteId, {
+        name: params.name,
+        status: params.status,
+      });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

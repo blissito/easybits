@@ -103,6 +103,25 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     return redirect("/tienda");
   }
 
+  // Subdomain website routing: slug.easybits.cloud → /s/slug/path
+  if (
+    url.hostname.endsWith(".easybits.cloud") &&
+    !url.hostname.startsWith("www")
+  ) {
+    const subdomain = url.hostname.split(".")[0];
+    // Skip known subdomains (app hosts, etc.)
+    if (subdomain && subdomain !== "www" && subdomain !== "api") {
+      const website = await db.website.findFirst({
+        where: { slug: subdomain, status: { not: "DELETED" } },
+        select: { id: true },
+      });
+      if (website) {
+        const splatPath = url.pathname === "/" ? "" : url.pathname.slice(1);
+        return redirect(`/s/${subdomain}/${splatPath}${url.search}`);
+      }
+    }
+  }
+
   // www & /tienda
   if (
     url.hostname.includes("easybits") &&
