@@ -1,6 +1,6 @@
 ---
 title: "Gestiona tus archivos digitales desde Claude con EasyBits"
-description: "Guía práctica de las 22 herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, busca con IA y más."
+description: "Guía práctica de las 33+ herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, webhooks, bulk ops y más."
 date: "2026-02-25"
 author: "EasyBits Team"
 tags: ["MCP", "herramientas", "archivos", "Claude"]
@@ -10,7 +10,7 @@ published: true
 
 # Gestiona tus archivos digitales desde Claude con EasyBits
 
-EasyBits MCP te da acceso a **22 herramientas** que puedes usar directamente desde Claude Desktop, Claude Code o Cursor. En esta guía exploramos cada una con ejemplos prácticos para que le saques el máximo provecho.
+EasyBits MCP te da acceso a **más de 30 herramientas** que puedes usar directamente desde Claude Desktop, Claude Code o Cursor. En esta guía exploramos cada una con ejemplos prácticos para que le saques el máximo provecho.
 
 <Callout type="info" title="¿Aún no configuraste MCP?">
 Revisa primero nuestra [guía de configuración](/blog/conecta-agente-ia-easybits-mcp) para conectar tu agente en 3 pasos.
@@ -158,6 +158,55 @@ Los archivos eliminados no desaparecen inmediatamente. Tienes **7 días** para r
 
 `restore_file` devuelve el archivo a estado activo inmediatamente.
 
+### Duplicar y permisos
+
+```
+"Duplica ese archivo PDF"
+```
+
+`duplicate_file` crea una copia completa del archivo (objeto de storage + registro en DB). Ideal para crear versiones sin perder el original.
+
+```
+"¿Quién tiene acceso a mi archivo?"
+```
+
+`list_permissions` muestra todos los permisos compartidos de un archivo: quién tiene acceso y con qué nivel (lectura, escritura, eliminación).
+
+## Operaciones en lote (Bulk)
+
+Cuando necesitas trabajar con múltiples archivos a la vez:
+
+```
+"Sube estos 10 archivos de una vez"
+```
+
+`bulk_upload_files` genera hasta **20 URLs de upload** en una sola operación, ahorrando tiempo y llamadas.
+
+```
+"Elimina todos los archivos de la carpeta temporal"
+```
+
+`bulk_delete_files` puede eliminar hasta **100 archivos** de golpe. Todos van a papelera con los mismos 7 días de recuperación.
+
+## Webhooks
+
+Recibe notificaciones en tiempo real cuando algo cambia en tus archivos:
+
+```
+"Crea un webhook que me notifique cuando se suba un archivo"
+```
+
+| Herramienta | Qué hace |
+|------------|----------|
+| `create_webhook` | Crea un webhook con URL, eventos y secreto HMAC |
+| `list_webhooks` | Lista todos tus webhooks con su estado |
+| `update_webhook` | Actualiza URL, eventos o estado |
+| `delete_webhook` | Elimina un webhook |
+
+Eventos disponibles: `file.created`, `file.updated`, `file.deleted`, `file.restored`, `website.created`, `website.deleted`.
+
+Los webhooks incluyen firma HMAC (`X-Easybits-Signature`) para verificar autenticidad. Si un webhook falla 5 veces consecutivas, se pausa automáticamente.
+
 ## Websites
 
 EasyBits también permite gestionar sitios web estáticos:
@@ -182,7 +231,23 @@ EasyBits también permite gestionar sitios web estáticos:
 
 `list_providers` muestra tus proveedores configurados. Por defecto, EasyBits usa Tigris como almacenamiento.
 
-## Referencia rápida: las 22 herramientas
+### Estadísticas de uso
+
+```
+"¿Cuánto storage estoy usando?"
+```
+
+`get_usage_stats` devuelve tu plan actual, storage usado/máximo, y conteo de archivos, websites y webhooks.
+
+## Documentación
+
+```
+"Muéstrame la documentación de la API"
+```
+
+`get_docs` devuelve la documentación completa de la API REST de EasyBits, ideal para que tu agente consulte endpoints y parámetros disponibles.
+
+## Referencia rápida: las 33 herramientas
 
 | # | Herramienta | Categoría | Descripción |
 |---|------------|-----------|-------------|
@@ -194,25 +259,35 @@ EasyBits también permite gestionar sitios web estáticos:
 | 6 | `restore_file` | Archivos | Restaurar archivo eliminado |
 | 7 | `list_deleted_files` | Archivos | Ver papelera con días hasta purga |
 | 8 | `search_files` | Archivos | Búsqueda con IA (lenguaje natural) |
-| 9 | `share_file` | Compartir | Compartir por email con permisos |
-| 10 | `generate_share_token` | Compartir | Link temporal (60s–7 días) |
-| 11 | `list_share_tokens` | Compartir | Ver tokens y expiración |
-| 12 | `optimize_image` | Imágenes | Convertir a WebP/AVIF |
-| 13 | `transform_image` | Imágenes | Resize, rotar, voltear, escala de grises |
-| 14 | `set_ai_key` | IA | Guardar key de Anthropic/OpenAI |
-| 15 | `list_ai_keys` | IA | Ver keys configuradas |
-| 16 | `delete_ai_key` | IA | Eliminar key de IA |
-| 17 | `list_providers` | Storage | Ver proveedores de almacenamiento |
-| 18 | `list_websites` | Websites | Listar sitios web |
-| 19 | `create_website` | Websites | Crear nuevo sitio |
-| 20 | `get_website` | Websites | Detalle de un sitio |
-| 21 | `update_website` | Websites | Actualizar nombre/estado |
-| 22 | `delete_website` | Websites | Eliminar sitio |
+| 9 | `duplicate_file` | Archivos | Duplicar archivo completo |
+| 10 | `list_permissions` | Archivos | Ver permisos compartidos de un archivo |
+| 11 | `share_file` | Compartir | Compartir por email con permisos |
+| 12 | `generate_share_token` | Compartir | Link temporal (60s–7 días) |
+| 13 | `list_share_tokens` | Compartir | Ver tokens y expiración |
+| 14 | `optimize_image` | Imágenes | Convertir a WebP/AVIF |
+| 15 | `transform_image` | Imágenes | Resize, rotar, voltear, escala de grises |
+| 16 | `bulk_upload_files` | Bulk | Subir hasta 20 archivos a la vez |
+| 17 | `bulk_delete_files` | Bulk | Eliminar hasta 100 archivos a la vez |
+| 18 | `list_webhooks` | Webhooks | Listar webhooks configurados |
+| 19 | `create_webhook` | Webhooks | Crear webhook con URL y eventos |
+| 20 | `update_webhook` | Webhooks | Actualizar webhook |
+| 21 | `delete_webhook` | Webhooks | Eliminar webhook |
+| 22 | `set_ai_key` | IA | Guardar key de Anthropic/OpenAI |
+| 23 | `list_ai_keys` | IA | Ver keys configuradas |
+| 24 | `delete_ai_key` | IA | Eliminar key de IA |
+| 25 | `list_providers` | Storage | Ver proveedores de almacenamiento |
+| 26 | `get_usage_stats` | Cuenta | Plan, storage y conteos |
+| 27 | `list_websites` | Websites | Listar sitios web |
+| 28 | `create_website` | Websites | Crear nuevo sitio |
+| 29 | `get_website` | Websites | Detalle de un sitio |
+| 30 | `update_website` | Websites | Actualizar nombre/estado |
+| 31 | `delete_website` | Websites | Eliminar sitio |
+| 32 | `get_docs` | Utilidades | Documentación de la API REST |
 
 ## Empieza ahora
 
 1. [Configura tu agente](/blog/conecta-agente-ia-easybits-mcp) en 3 pasos
 2. Prueba con: *"Muéstrame mis archivos"*
-3. Explora las 22 herramientas desde tu agente favorito
+3. Explora las 33 herramientas desde tu agente favorito
 
 ¿Dudas? Escríbenos en el chat de soporte o en [GitHub](https://github.com/easybits-cloud/easybits).

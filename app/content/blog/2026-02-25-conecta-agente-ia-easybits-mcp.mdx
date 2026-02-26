@@ -62,8 +62,8 @@ claude mcp add easybits -- npx -y @easybits.cloud/mcp
 
 Luego crea el archivo `~/.easybitsrc` con tu key:
 
-```
-EASYBITS_API_KEY=tu-api-key
+```json
+{"apiKey": "tu-api-key"}
 ```
 
 ### Cursor
@@ -99,16 +99,19 @@ Puedes encadenar acciones: "Sube este archivo, hazlo público y genera un link d
 
 ## ¿Qué herramientas están disponibles?
 
-EasyBits MCP incluye **21 herramientas** organizadas en 6 categorías:
+EasyBits MCP incluye **más de 30 herramientas** organizadas en 9 categorías:
 
 | Categoría | Herramientas | Qué puedes hacer |
 |-----------|-------------|-----------------|
-| **Archivos** | 8 tools | Listar, subir, actualizar, eliminar, restaurar, buscar |
+| **Archivos** | 10 tools | Listar, subir, actualizar, eliminar, restaurar, buscar, duplicar, permisos |
 | **Compartir** | 3 tools | Compartir por email, generar links temporales |
-| **Imágenes** | 1 tool | Convertir a WebP/AVIF con control de calidad |
+| **Imágenes** | 2 tools | Optimizar (WebP/AVIF) y transformar (resize, rotar, voltear) |
+| **Bulk** | 2 tools | Subir y eliminar archivos en lote |
+| **Webhooks** | 4 tools | Crear, listar, actualizar y eliminar webhooks |
 | **IA** | 3 tools | Configurar keys de Anthropic/OpenAI para búsqueda inteligente |
 | **Storage** | 1 tool | Ver proveedores de almacenamiento configurados |
 | **Websites** | 5 tools | Crear, listar, actualizar y eliminar sitios web estáticos |
+| **Utilidades** | 2 tools | Estadísticas de uso, documentación de la API |
 
 ## Próximos pasos
 
