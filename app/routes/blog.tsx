@@ -10,6 +10,40 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "gestiona-archivos-desde-claude-easybits",
+    filePath:
+      "app/content/blog/2026-02-25-gestiona-archivos-desde-claude-easybits.mdx",
+    title: "Gestiona tus archivos digitales desde Claude con EasyBits",
+    description:
+      "Guía práctica de las 21 herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, busca con IA y más.",
+    date: "2026-02-25",
+    author: "EasyBits Team",
+    tags: ["MCP", "herramientas", "archivos", "Claude"],
+    featuredImage:
+      "https://images.pexels.com/photos/17484970/pexels-photo-17484970.jpeg?auto=compress&w=800",
+    readingTime: 8,
+    excerpt:
+      "Guía práctica de las 21 herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, busca con IA y más.",
+    published: true,
+  },
+  {
+    slug: "conecta-agente-ia-easybits-mcp",
+    filePath:
+      "app/content/blog/2026-02-25-conecta-agente-ia-easybits-mcp.mdx",
+    title: "Conecta tu agente de IA a EasyBits con MCP",
+    description:
+      "Aprende a conectar Claude, Cursor y otros agentes de IA a EasyBits usando el protocolo MCP. Setup en 3 pasos.",
+    date: "2026-02-25",
+    author: "EasyBits Team",
+    tags: ["MCP", "IA", "Claude", "automatización"],
+    featuredImage:
+      "https://images.pexels.com/photos/17483874/pexels-photo-17483874.jpeg?auto=compress&w=800",
+    readingTime: 5,
+    excerpt:
+      "Aprende a conectar Claude, Cursor y otros agentes de IA a EasyBits usando el protocolo MCP. Setup en 3 pasos.",
+    published: true,
+  },
+  {
     slug: "como-conectar-stripe-onboarding",
     filePath: "app/content/blog/2025-01-20-como-conectar-stripe-onboarding.mdx",
     title:

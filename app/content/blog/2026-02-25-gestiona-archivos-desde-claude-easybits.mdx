@@ -1,0 +1,199 @@
+---
+title: "Gestiona tus archivos digitales desde Claude con EasyBits"
+description: "Guía práctica de las 21 herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, busca con IA y más."
+date: "2026-02-25"
+author: "EasyBits Team"
+tags: ["MCP", "herramientas", "archivos", "Claude"]
+featuredImage: "https://images.pexels.com/photos/17484970/pexels-photo-17484970.jpeg?auto=compress&w=800"
+published: true
+---
+
+# Gestiona tus archivos digitales desde Claude con EasyBits
+
+EasyBits MCP te da acceso a **21 herramientas** que puedes usar directamente desde Claude Desktop, Claude Code o Cursor. En esta guía exploramos cada una con ejemplos prácticos para que le saques el máximo provecho.
+
+<Callout type="info" title="¿Aún no configuraste MCP?">
+Revisa primero nuestra [guía de configuración](/blog/conecta-agente-ia-easybits-mcp) para conectar tu agente en 3 pasos.
+</Callout>
+
+## Subir y gestionar archivos
+
+El flujo básico de archivos es: **subir → organizar → compartir**.
+
+### Subir un archivo
+
+```
+"Sube un archivo llamado presentacion.pdf de 2MB, hazlo público"
+```
+
+La herramienta `upload_file` crea el registro y te devuelve una URL presigned para hacer el PUT con los bytes del archivo. Puedes elegir:
+
+- **Acceso**: `public` o `private`
+- **Región**: `LATAM`, `US` o `EU`
+- **Asset**: asociar el archivo a un asset existente
+
+### Listar archivos
+
+```
+"Muéstrame mis archivos"
+```
+
+`list_files` devuelve tus archivos con nombre, tamaño, tipo, acceso y fecha de creación. Soporta paginación con cursor para colecciones grandes.
+
+### Actualizar un archivo
+
+```
+"Cambia el nombre de ese archivo a 'Manual v2' y hazlo privado"
+```
+
+`update_file` puede cambiar nombre, nivel de acceso y metadata. Cuando cambias de público a privado (o viceversa), EasyBits copia el objeto entre buckets automáticamente.
+
+### Obtener detalles y URL de descarga
+
+```
+"Dame el link de descarga de mi archivo más reciente"
+```
+
+`get_file` devuelve toda la metadata del archivo más una URL firmada de descarga que expira en 1 hora.
+
+## Compartir contenido
+
+EasyBits ofrece dos formas de compartir: **por email** o **por link temporal**.
+
+### Compartir por email
+
+```
+"Comparte el archivo con juan@ejemplo.com con acceso de lectura"
+```
+
+`share_file` crea un permiso de acceso para otro usuario de EasyBits. Puedes configurar permisos granulares: lectura, escritura y/o eliminación.
+
+### Generar links temporales
+
+```
+"Genera un link de descarga que expire en 24 horas"
+```
+
+`generate_share_token` crea una URL presigned con expiración configurable entre 60 segundos y 7 días. Ideal para compartir con personas que no tienen cuenta en EasyBits.
+
+### Ver tokens activos
+
+```
+"Muéstrame todos los share tokens de ese archivo"
+```
+
+`list_share_tokens` muestra todos los tokens generados con su estado de expiración. Puedes filtrar por archivo específico.
+
+## Optimizar imágenes
+
+```
+"Optimiza esa imagen PNG a WebP con calidad 85"
+```
+
+`optimize_image` convierte imágenes a **WebP** o **AVIF**, creando un archivo nuevo (el original no se toca). Devuelve:
+
+- Tamaño original vs optimizado
+- Porcentaje de ahorro
+- El nuevo archivo con su ID
+
+<Callout type="tip" title="Valores por defecto">
+Si no especificas calidad, usa 80 para WebP y 50 para AVIF. Ambos ofrecen excelente relación calidad/tamaño.
+</Callout>
+
+## Búsqueda con IA
+
+Para usar búsqueda inteligente, primero configura una API key de Anthropic u OpenAI:
+
+```
+"Configura mi key de Anthropic para búsqueda de archivos"
+```
+
+Una vez configurada, puedes buscar con lenguaje natural:
+
+```
+"Busca todos los PDFs que tengan que ver con facturas"
+```
+
+`search_files` usa IA para entender tu consulta y devuelve hasta 20 archivos relevantes, ordenados por fecha.
+
+### Gestionar keys de IA
+
+| Herramienta | Qué hace |
+|------------|----------|
+| `set_ai_key` | Guarda una key de Anthropic u OpenAI (encriptada) |
+| `list_ai_keys` | Muestra las keys configuradas (valores enmascarados) |
+| `delete_ai_key` | Elimina una key almacenada |
+
+## Papelera y recuperación
+
+Los archivos eliminados no desaparecen inmediatamente. Tienes **7 días** para recuperarlos.
+
+```
+"Muéstrame los archivos eliminados"
+```
+
+`list_deleted_files` muestra cada archivo con los días que faltan para la purga definitiva.
+
+```
+"Restaura ese archivo que borré ayer"
+```
+
+`restore_file` devuelve el archivo a estado activo inmediatamente.
+
+## Websites
+
+EasyBits también permite gestionar sitios web estáticos:
+
+```
+"Crea un website llamado 'Mi Portfolio'"
+```
+
+| Herramienta | Qué hace |
+|------------|----------|
+| `create_website` | Crea un sitio con slug automático |
+| `list_websites` | Lista todos los sitios con stats |
+| `get_website` | Detalle de un sitio (archivos, tamaño total) |
+| `update_website` | Cambia nombre o estado |
+| `delete_website` | Elimina el sitio (archivos van a papelera 7 días) |
+
+## Storage
+
+```
+"¿Qué proveedor de storage estoy usando?"
+```
+
+`list_providers` muestra tus proveedores configurados. Por defecto, EasyBits usa Tigris como almacenamiento.
+
+## Referencia rápida: las 21 herramientas
+
+| # | Herramienta | Categoría | Descripción |
+|---|------------|-----------|-------------|
+| 1 | `list_files` | Archivos | Listar archivos con paginación |
+| 2 | `get_file` | Archivos | Metadata + URL de descarga |
+| 3 | `upload_file` | Archivos | Crear registro + URL de upload |
+| 4 | `update_file` | Archivos | Actualizar nombre, acceso, metadata |
+| 5 | `delete_file` | Archivos | Soft-delete (7 días de recuperación) |
+| 6 | `restore_file` | Archivos | Restaurar archivo eliminado |
+| 7 | `list_deleted_files` | Archivos | Ver papelera con días hasta purga |
+| 8 | `search_files` | Archivos | Búsqueda con IA (lenguaje natural) |
+| 9 | `share_file` | Compartir | Compartir por email con permisos |
+| 10 | `generate_share_token` | Compartir | Link temporal (60s–7 días) |
+| 11 | `list_share_tokens` | Compartir | Ver tokens y expiración |
+| 12 | `optimize_image` | Imágenes | Convertir a WebP/AVIF |
+| 13 | `set_ai_key` | IA | Guardar key de Anthropic/OpenAI |
+| 14 | `list_ai_keys` | IA | Ver keys configuradas |
+| 15 | `delete_ai_key` | IA | Eliminar key de IA |
+| 16 | `list_providers` | Storage | Ver proveedores de almacenamiento |
+| 17 | `list_websites` | Websites | Listar sitios web |
+| 18 | `create_website` | Websites | Crear nuevo sitio |
+| 19 | `get_website` | Websites | Detalle de un sitio |
+| 20 | `update_website` | Websites | Actualizar nombre/estado |
+| 21 | `delete_website` | Websites | Eliminar sitio |
+
+## Empieza ahora
+
+1. [Configura tu agente](/blog/conecta-agente-ia-easybits-mcp) en 3 pasos
+2. Prueba con: *"Muéstrame mis archivos"*
+3. Explora las 21 herramientas desde tu agente favorito
+
+¿Dudas? Escríbenos en el chat de soporte o en [GitHub](https://github.com/easybits-cloud/easybits).

@@ -10,6 +10,10 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "conecta-agente-ia-easybits-mcp":
+    "app/content/blog/2026-02-25-conecta-agente-ia-easybits-mcp.mdx",
+  "gestiona-archivos-desde-claude-easybits":
+    "app/content/blog/2026-02-25-gestiona-archivos-desde-claude-easybits.mdx",
   "como-conectar-stripe-onboarding":
     "app/content/blog/2025-01-20-como-conectar-stripe-onboarding.mdx",
   "tendencias-economia-creadores-2025":
@@ -26,6 +30,16 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "conecta-agente-ia-easybits-mcp",
+    featuredImage:
+      "https://images.pexels.com/photos/17483874/pexels-photo-17483874.jpeg?auto=compress&w=800",
+  },
+  {
+    slug: "gestiona-archivos-desde-claude-easybits",
+    featuredImage:
+      "https://images.pexels.com/photos/17484970/pexels-photo-17484970.jpeg?auto=compress&w=800",
+  },
   {
     slug: "como-conectar-stripe-onboarding",
     featuredImage:

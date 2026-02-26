@@ -1,0 +1,119 @@
+---
+title: "Conecta tu agente de IA a EasyBits con MCP"
+description: "Aprende a conectar Claude, Cursor y otros agentes de IA a EasyBits usando el protocolo MCP. Setup en 3 pasos."
+date: "2026-02-25"
+author: "EasyBits Team"
+tags: ["MCP", "IA", "Claude", "automatización"]
+featuredImage: "https://images.pexels.com/photos/17483874/pexels-photo-17483874.jpeg?auto=compress&w=800"
+published: true
+---
+
+# Conecta tu agente de IA a EasyBits con MCP
+
+Si usas Claude Desktop, Claude Code, Cursor u otro agente de IA compatible con MCP (Model Context Protocol), ahora puedes gestionar tus archivos, compartir contenido y optimizar imágenes en EasyBits directamente desde tu agente favorito.
+
+En esta guía te mostramos cómo configurarlo en menos de 5 minutos.
+
+## ¿Qué es MCP?
+
+MCP (Model Context Protocol) es un estándar abierto que permite a los agentes de IA conectarse con servicios externos a través de "herramientas". En lugar de copiar y pegar entre pestañas, tu agente puede interactuar directamente con EasyBits: subir archivos, generar links de descarga, optimizar imágenes y más.
+
+EasyBits publica su servidor MCP como paquete npm: `@easybits.cloud/mcp`.
+
+## Paso 1: Obtén tu API Key
+
+1. Inicia sesión en [easybits.cloud](https://www.easybits.cloud)
+2. Ve a tu **Dashboard de Desarrollador** → **API Keys**
+3. Crea una nueva API key y cópiala
+
+<Callout type="warning" title="Guarda tu key">
+La API key solo se muestra una vez. Guárdala en un lugar seguro.
+</Callout>
+
+## Paso 2: Configura tu cliente
+
+### Claude Desktop
+
+Abre tu archivo de configuración `claude_desktop_config.json` y agrega:
+
+```json
+{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "tu-api-key"
+      }
+    }
+  }
+}
+```
+
+Reinicia Claude Desktop y verás las herramientas de EasyBits disponibles.
+
+### Claude Code
+
+Desde tu terminal:
+
+```bash
+claude mcp add easybits -- npx -y @easybits.cloud/mcp
+```
+
+Luego crea el archivo `~/.easybitsrc` con tu key:
+
+```
+EASYBITS_API_KEY=tu-api-key
+```
+
+### Cursor
+
+Agrega la misma configuración JSON en los settings de MCP de Cursor:
+
+```json
+{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "tu-api-key"
+      }
+    }
+  }
+}
+```
+
+## Paso 3: Prueba la conexión
+
+Una vez configurado, prueba con alguno de estos prompts:
+
+- **"Muéstrame mis archivos recientes"** — lista tus archivos con metadata
+- **"Sube este PDF y hazlo público"** — crea un registro y te da URL de upload
+- **"Genera un link de descarga para mi último archivo"** — crea un share token temporal
+- **"Optimiza esa imagen a WebP"** — convierte y comprime automáticamente
+
+<Callout type="tip" title="Pro tip">
+Puedes encadenar acciones: "Sube este archivo, hazlo público y genera un link de descarga que expire en 24 horas".
+</Callout>
+
+## ¿Qué herramientas están disponibles?
+
+EasyBits MCP incluye **21 herramientas** organizadas en 6 categorías:
+
+| Categoría | Herramientas | Qué puedes hacer |
+|-----------|-------------|-----------------|
+| **Archivos** | 8 tools | Listar, subir, actualizar, eliminar, restaurar, buscar |
+| **Compartir** | 3 tools | Compartir por email, generar links temporales |
+| **Imágenes** | 1 tool | Convertir a WebP/AVIF con control de calidad |
+| **IA** | 3 tools | Configurar keys de Anthropic/OpenAI para búsqueda inteligente |
+| **Storage** | 1 tool | Ver proveedores de almacenamiento configurados |
+| **Websites** | 5 tools | Crear, listar, actualizar y eliminar sitios web estáticos |
+
+## Próximos pasos
+
+- Explora todas las herramientas en detalle en nuestra [guía completa de herramientas](/blog/gestiona-archivos-desde-claude-easybits)
+- Visita el [Dashboard de Desarrollador](https://www.easybits.cloud/dash/developer) para gestionar tus API keys
+- El paquete npm: [@easybits.cloud/mcp](https://www.npmjs.com/package/@easybits.cloud/mcp)
+
+¿Tienes preguntas? Escríbenos en el chat de soporte o en [GitHub](https://github.com/easybits-cloud/easybits).
