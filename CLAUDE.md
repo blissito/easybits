@@ -1,6 +1,6 @@
 # EasyBits
 
-Digital asset marketplace built with React Router v7 (ex-Remix), Prisma (MongoDB), Fly.io, and Stripe.
+Digital asset marketplace built with React Router v7 (ex-Remix), Prisma (MongoDB), Fly.io, and Stripe. **Now accepting paying users** — treat all changes as production-critical.
 
 ## Commands
 - `npm run dev` — local dev server
@@ -56,9 +56,8 @@ Digital asset marketplace built with React Router v7 (ex-Remix), Prisma (MongoDB
 ## Testing
 - Unit: Vitest (`test/` dir) — covers API auth, IAM, storage, Stripe, price validation, MDX, blog
 - E2E: Playwright (`test/e2e-purchase.spec.ts`) — purchase flow (WIP)
-- **Missing test coverage**: Stripe webhook edge cases, free_subscription, purge cron, IDOR scenarios
+- **Missing test coverage**: Stripe webhook edge cases, free_subscription, IDOR scenarios
 
 ## TODOs & Technical Debt
-- Audit tracker: `memory/audit-todos.md` — most critical/high items resolved
-- **Remaining**: credentials encryption at rest (StorageProvider, AiKey), storage quota enforcement per tier, persistent rate limiter (Redis/Upstash)
-- API v1 is a monolithic switch — consider separation by concern
+- Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
+- **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
