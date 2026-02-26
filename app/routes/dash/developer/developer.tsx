@@ -3,9 +3,8 @@ import { NavLink, Outlet } from "react-router";
 const tabs = [
   { to: "/dash/developer", label: "API Keys", end: true },
   { to: "/dash/developer/files", label: "Files" },
-  { to: "/dash/developer/providers", label: "Providers" },
-  { to: "/dash/developer/setup", label: "Setup" },
   { to: "/dash/developer/websites", label: "Websites" },
+  { to: "/dash/developer/setup", label: "Setup" },
 ];
 
 export default function DeveloperLayout() {
