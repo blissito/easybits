@@ -33,12 +33,12 @@ const BLOG_POSTS_LIST = [
   {
     slug: "conecta-agente-ia-easybits-mcp",
     featuredImage:
-      "https://images.pexels.com/photos/17483874/pexels-photo-17483874.jpeg?auto=compress&w=800",
+      "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&auto=format",
   },
   {
     slug: "gestiona-archivos-desde-claude-easybits",
     featuredImage:
-      "https://images.pexels.com/photos/17484970/pexels-photo-17484970.jpeg?auto=compress&w=800",
+      "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&auto=format",
   },
   {
     slug: "como-conectar-stripe-onboarding",

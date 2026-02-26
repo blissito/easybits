@@ -20,7 +20,7 @@ const BLOG_POSTS = [
     author: "EasyBits Team",
     tags: ["MCP", "herramientas", "archivos", "Claude"],
     featuredImage:
-      "https://images.pexels.com/photos/17484970/pexels-photo-17484970.jpeg?auto=compress&w=800",
+      "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&auto=format",
     readingTime: 8,
     excerpt:
       "Guía práctica de las 21 herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, busca con IA y más.",
@@ -37,7 +37,7 @@ const BLOG_POSTS = [
     author: "EasyBits Team",
     tags: ["MCP", "IA", "Claude", "automatización"],
     featuredImage:
-      "https://images.pexels.com/photos/17483874/pexels-photo-17483874.jpeg?auto=compress&w=800",
+      "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&auto=format",
     readingTime: 5,
     excerpt:
       "Aprende a conectar Claude, Cursor y otros agentes de IA a EasyBits usando el protocolo MCP. Setup en 3 pasos.",
