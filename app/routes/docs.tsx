@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 
 export const meta = () => [
@@ -27,7 +27,21 @@ const SECTIONS = [
 ] as const;
 
 export default function DocsPage() {
-  const [activeSection, setActiveSection] = useState("quickstart");
+  const [activeSection, setActiveSection] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      if (SECTIONS.some((s) => s.id === hash)) return hash;
+    }
+    return "quickstart";
+  });
+
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (hash && SECTIONS.some((s) => s.id === hash)) {
+      setActiveSection(hash);
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
 
   return (
     <section className="min-h-screen bg-white">
