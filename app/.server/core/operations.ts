@@ -37,7 +37,6 @@ export async function listFiles(
     select: {
       id: true,
       name: true,
-      storageKey: true,
       size: true,
       contentType: true,
       status: true,
@@ -62,7 +61,10 @@ export async function getFile(ctx: AuthContext, fileId: string) {
 
   const file = await db.file.findUnique({ where: { id: fileId } });
   if (!file || file.status === "DELETED") {
-    throw new Error("File not found");
+    throw new Response(JSON.stringify({ error: "File not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (file.ownerId !== ctx.user.id) {
     // Check permissions
@@ -103,6 +105,23 @@ export async function uploadFile(
 ) {
   requireScope(ctx, "WRITE");
 
+  if (opts.size <= 0 || opts.size > 5_368_709_120) {
+    throw new Response(JSON.stringify({ error: "Invalid file size (must be 1 byte to 5GB)" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const fileCount = await db.file.count({
+    where: { ownerId: ctx.user.id, status: { not: "DELETED" } },
+  });
+  if (fileCount >= 10_000) {
+    throw new Response(JSON.stringify({ error: "File limit exceeded (max 10,000)" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const provider = await resolveProvider(ctx.user.id, {
     access: opts.access,
     region: opts.region,
@@ -142,10 +161,16 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
 
   const file = await db.file.findUnique({ where: { id: fileId } });
   if (!file) {
-    throw new Error("File not found");
+    throw new Response(JSON.stringify({ error: "File not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (file.ownerId !== ctx.user.id) {
-    throw new Error("Forbidden");
+    throw new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   await db.file.update({
@@ -164,13 +189,22 @@ export async function restoreFile(ctx: AuthContext, fileId: string) {
 
   const file = await db.file.findUnique({ where: { id: fileId } });
   if (!file) {
-    throw new Error("File not found");
+    throw new Response(JSON.stringify({ error: "File not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (file.ownerId !== ctx.user.id) {
-    throw new Error("Forbidden");
+    throw new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (file.status !== "DELETED") {
-    throw new Error("File is not deleted");
+    throw new Response(JSON.stringify({ error: "File is not deleted" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   await db.file.update({
@@ -214,27 +248,47 @@ export async function shareFile(
 
   const file = await db.file.findUnique({ where: { id: opts.fileId } });
   if (!file || file.ownerId !== ctx.user.id) {
-    throw new Error("File not found or not owner");
+    throw new Response(JSON.stringify({ error: "File not found or not owner" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const targetUser = await db.user.findUnique({
     where: { email: opts.targetEmail },
   });
   if (!targetUser) {
-    throw new Error("Target user not found");
+    throw new Response(JSON.stringify({ error: "Share operation failed" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const permission = await db.permission.create({
-    data: {
+  const existing = await db.permission.findFirst({
+    where: {
       granteeId: targetUser.id,
-      grantedById: ctx.user.id,
       resourceType: "file",
       resourceId: file.id,
-      canRead: opts.canRead ?? true,
-      canWrite: opts.canWrite ?? false,
-      canDelete: opts.canDelete ?? false,
     },
   });
+
+  const permData = {
+    canRead: opts.canRead ?? true,
+    canWrite: opts.canWrite ?? false,
+    canDelete: opts.canDelete ?? false,
+  };
+
+  const permission = existing
+    ? await db.permission.update({ where: { id: existing.id }, data: permData })
+    : await db.permission.create({
+        data: {
+          granteeId: targetUser.id,
+          grantedById: ctx.user.id,
+          resourceType: "file",
+          resourceId: file.id,
+          ...permData,
+        },
+      });
 
   return permission;
 }
@@ -254,10 +308,16 @@ export async function updateFile(
 
   const file = await db.file.findUnique({ where: { id: opts.fileId } });
   if (!file || file.ownerId !== ctx.user.id) {
-    throw new Error("File not found or not owner");
+    throw new Response(JSON.stringify({ error: "File not found or not owner" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (file.status === "DELETED") {
-    throw new Error("Cannot update a deleted file");
+    throw new Response(JSON.stringify({ error: "Cannot update a deleted file" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const updates: Record<string, unknown> = {};
@@ -268,26 +328,50 @@ export async function updateFile(
 
   if (opts.metadata !== undefined) {
     const existing = (file.metadata as Record<string, unknown>) || {};
-    updates.metadata = { ...existing, ...opts.metadata };
+    const merged = { ...existing, ...opts.metadata };
+    if (JSON.stringify(merged).length > 10_240) {
+      throw new Response(JSON.stringify({ error: "Metadata too large (max 10KB)" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    updates.metadata = merged;
   }
 
   if (opts.access !== undefined && opts.access !== file.access) {
     if (file.storageProviderId !== null) {
-      throw new Error("Access change is only supported for platform-stored files (no custom provider)");
+      throw new Response(JSON.stringify({ error: "Access change is only supported for platform-stored files (no custom provider)" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
     }
 
     const s3Key = `mcp/${file.storageKey}`;
 
-    if (opts.access === "public") {
-      await copyObjectAcrossBuckets({ fromBucket: PRIVATE_BUCKET, toBucket: PUBLIC_BUCKET, key: s3Key });
-      await deleteObjectFromBucket({ bucket: PRIVATE_BUCKET, key: s3Key });
-      updates.access = "public";
-      updates.url = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${s3Key}`;
-    } else {
-      await copyObjectAcrossBuckets({ fromBucket: PUBLIC_BUCKET, toBucket: PRIVATE_BUCKET, key: s3Key });
-      await deleteObjectFromBucket({ bucket: PUBLIC_BUCKET, key: s3Key });
-      updates.access = "private";
-      updates.url = "";
+    const fromBucket = opts.access === "public" ? PRIVATE_BUCKET : PUBLIC_BUCKET;
+    const toBucket = opts.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
+
+    await copyObjectAcrossBuckets({ fromBucket, toBucket, key: s3Key });
+
+    updates.access = opts.access;
+    updates.url = opts.access === "public"
+      ? `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${s3Key}`
+      : "";
+
+    // Update DB first; if it fails, clean up the copy
+    try {
+      const updated = await db.file.update({
+        where: { id: opts.fileId },
+        data: updates,
+      });
+      // DB succeeded — safe to delete from source bucket
+      await deleteObjectFromBucket({ bucket: fromBucket, key: s3Key }).catch(() => {});
+      fileEvents.emit("file:changed", ctx.user.id);
+      return updated;
+    } catch (err) {
+      // Rollback: delete the copy we just made
+      await deleteObjectFromBucket({ bucket: toBucket, key: s3Key }).catch(() => {});
+      throw err;
     }
   }
 
@@ -312,13 +396,20 @@ export async function generateShareToken(
 ) {
   requireScope(ctx, "READ");
 
-  const expiresIn = opts.expiresIn ?? 3600;
+  const raw = opts.expiresIn ?? 3600;
+  const expiresIn = Math.max(60, Math.min(raw, 604800));
   const file = await db.file.findUnique({ where: { id: opts.fileId } });
   if (!file || file.status === "DELETED") {
-    throw new Error("File not found");
+    throw new Response(JSON.stringify({ error: "File not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   if (file.ownerId !== ctx.user.id) {
-    throw new Error("Forbidden");
+    throw new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const client = await getClientForFile(file.storageProviderId, ctx.user.id);
@@ -410,12 +501,18 @@ export async function listWebsites(ctx: AuthContext) {
 export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim();
-  if (!name) throw new Error("Name required");
+  if (!name) {
+    throw new Response(JSON.stringify({ error: "Name required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   let slug = slugify(name);
-  const existing = await db.website.findUnique({ where: { slug } });
-  if (existing) {
-    slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const existing = await db.website.findUnique({ where: { slug } });
+    if (!existing) break;
+    slug = `${slugify(name)}-${nanoid(6)}`;
   }
 
   const website = await db.website.create({
@@ -440,7 +537,10 @@ export async function getWebsite(ctx: AuthContext, websiteId: string) {
   requireScope(ctx, "READ");
   const website = await db.website.findUnique({ where: { id: websiteId } });
   if (!website || website.ownerId !== ctx.user.id) {
-    throw new Error("Website not found");
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   return {
     id: website.id,
@@ -459,13 +559,16 @@ export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
   requireScope(ctx, "DELETE");
   const website = await db.website.findUnique({ where: { id: websiteId } });
   if (!website || website.ownerId !== ctx.user.id) {
-    throw new Error("Website not found");
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   await db.file.updateMany({
     where: {
       ownerId: ctx.user.id,
-      name: { startsWith: `sites/${websiteId}/` },
+      storageKey: { startsWith: website.prefix },
     },
     data: { status: "DELETED", deletedAt: new Date() },
   });

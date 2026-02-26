@@ -64,8 +64,8 @@ export function createMcpServer() {
     "Create a file record and get a presigned upload URL. Returns `{ file, putUrl }`. Upload bytes via PUT to `putUrl`. The file is created with status DONE immediately.",
     {
       fileName: z.string().describe("Name of the file"),
-      contentType: z.string().describe("MIME type"),
-      size: z.number().describe("File size in bytes"),
+      contentType: z.string().regex(/^[\w\-]+\/[\w\-\.\+]+$/).describe("MIME type"),
+      size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
       assetId: z.string().optional().describe("Associate with an asset"),
       access: z.enum(["public", "private"]).optional().describe("Access level"),
       region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
@@ -114,7 +114,7 @@ export function createMcpServer() {
     "Share a file with another user by email. Creates a permission record. canRead defaults to true, canWrite/canDelete to false. Target user must exist.",
     {
       fileId: z.string().describe("The file ID to share"),
-      targetEmail: z.string().describe("Email of the user to share with"),
+      targetEmail: z.string().email().describe("Email of the user to share with"),
       canRead: z.boolean().optional().describe("Grant read access (default true)"),
       canWrite: z.boolean().optional().describe("Grant write access"),
       canDelete: z.boolean().optional().describe("Grant delete access"),
@@ -269,7 +269,7 @@ export function createMcpServer() {
     "Generate a presigned download URL for a file and record it as a ShareToken. Returns `{ url, token }`. Default expiration: 1 hour (3600s).",
     {
       fileId: z.string().describe("The file ID"),
-      expiresIn: z.number().optional().describe("Expiration in seconds (default 3600)"),
+      expiresIn: z.number().min(60).max(604800).optional().describe("Expiration in seconds (default 3600, min 60, max 604800)"),
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
