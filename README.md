@@ -1,8 +1,16 @@
 # EasyBits
 
-Sell digital assets with zero friction.
+File storage and management for AI agents.
 
 [easybits.cloud](https://www.easybits.cloud)
+
+## MCP Server
+
+```bash
+npx -y @easybits.cloud/mcp
+```
+
+Give your AI agent the ability to upload, transform, optimize and serve files — images, documents, websites and more.
 
 ## Stack
 
