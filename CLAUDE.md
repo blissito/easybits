@@ -40,11 +40,11 @@ Digital asset marketplace built with React Router v7 (ex-Remix), Prisma (MongoDB
 - Rate limiting: `app/.server/rateLimiter.ts` — in-memory LRU, `applyRateLimit()` middleware
 - CAPTCHA: Turnstile integration (`app/.server/turnstile.ts`)
 - Session cookie: must have `secure: true` in production
-- Credentials (StorageProvider, AiKey): stored in MongoDB — encrypt at rest
+- Credentials (StorageProvider, AiKey): stored in MongoDB (plaintext — accepted risk, not prioritized)
 - CSRF: React Router actions have implicit protection; raw API endpoints need explicit tokens
 - Webhook verification: Stripe uses signature verification; other webhooks need HMAC
 - **Resolved**: IDOR downloads, endpoint auth, session cookie, Stripe signature verification, asset dedup, DB indexes
-- **Remaining**: encrypt StorageProvider/AiKey credentials at rest, persistent rate limiter
+- **Won't fix**: credentials encryption at rest, persistent rate limiter, storage quota enforcement — accepted as non-critical
 
 ## Observability & Health
 - Health check: `app/routes/api/health.ts` — checks DB connectivity, returns 200/503

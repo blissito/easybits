@@ -72,7 +72,6 @@ export default [
       layout("routes/dash/admin/admin.tsx", [
         ...prefix("admin", [
           index("routes/dash/admin/users.tsx"),
-          route("waitlist", "routes/dash/admin/waitlist.tsx"),
         ]),
       ]),
     ]),
@@ -146,7 +145,6 @@ export default [
   route("/.well-known/*", "components/common/NoContent.tsx"),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
-  route("waitlist", "routes/waitlist.tsx"),
 
   // Plugin APIs
   route("/kit/*", "routes/api/v1/kit/kit_endpoint.tsx"),
