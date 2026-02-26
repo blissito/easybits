@@ -28,7 +28,7 @@ export const useMarquee = (reversed: boolean = false) => {
   );
   const move = () => {
     // Magic 🎩🪄
-    const factor = reversed ? direction * -1 : direction;
+    const factor = reversed ? direction.current * -1 : direction.current;
     const moveBy = factor * -velocityFactor.get();
     const rect1 = ref.current?.getBoundingClientRect();
     const v = x.get();

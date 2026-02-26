@@ -1,15 +1,15 @@
 import { useMotionValueEvent, useScroll } from "motion/react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 export const useScrollDirection = () => {
   const prev = useRef(0);
-  const [direction, setDirection] = useState(1);
+  const direction = useRef(1);
   const { scrollY } = useScroll();
   useMotionValueEvent(scrollY, "change", (val) => {
     if (val < prev.current) {
-      setDirection(-1);
+      direction.current = -1;
     } else if (val > prev.current) {
-      setDirection(1);
+      direction.current = 1;
     }
     prev.current = val;
   });
