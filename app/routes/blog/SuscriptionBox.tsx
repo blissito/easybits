@@ -94,14 +94,12 @@ export const Turnstile = ({
   };
 
   useScript("https://challenges.cloudflare.com/turnstile/v0/api.js", () => {
-    //@ts-ignore
-    window.turnstile?.ready(() => {
+    (window as any).turnstile?.ready(() => {
       if (ref.current?.id) return;
       ref.current!.id = "loaded"; // avoiding duplication
 
       try {
-        // @ts-ignore
-        window.turnstile?.render(ref.current, {
+        (window as any).turnstile?.render(ref.current, {
           callback: enable,
           "error-callback": onError,
           "expired-callback": onExpired,

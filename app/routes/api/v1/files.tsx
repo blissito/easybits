@@ -4,7 +4,7 @@ import slugify from "slugify";
 import { nanoid } from "nanoid";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/assets";
-// @ts-ignore
+// @ts-expect-error - no type declarations for react-hook-multipart
 import { deleteObject, getPutFileUrl } from "react-hook-multipart";
 import { createStorageKey } from "~/.server/files";
 import { createURLFromStorageKey } from "~/utils/urlConstructors";

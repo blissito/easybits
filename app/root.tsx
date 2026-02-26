@@ -49,7 +49,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useHotjar();
   useTagManager();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -123,15 +123,13 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
       });
       if (website) {
         const splatPath = url.pathname === "/" ? "" : url.pathname.slice(1);
-        // Internal rewrite — proxy the static site route without redirecting
-        const internalUrl = new URL(`/s/${subdomain}/${splatPath}${url.search}`, url.origin);
-        const proxyRes = await fetch(internalUrl.toString(), {
-          headers: request.headers,
-        });
-        return new Response(proxyRes.body, {
-          status: proxyRes.status,
-          headers: proxyRes.headers,
-        });
+        // Internal rewrite — call static site loader directly (no HTTP round-trip)
+        const { loader: siteLoader } = await import("~/routes/s.$slug.$.tsx");
+        return siteLoader({
+          params: { slug: subdomain, "*": splatPath || "index.html" },
+          request,
+          context: {},
+        } as any);
       }
     }
   }

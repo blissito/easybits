@@ -109,10 +109,11 @@ async function assignAssetToUser(
       throw new Error("User not found");
     }
 
-    // Actualizar el usuario con el asset
+    // Actualizar el usuario con el asset (dedup)
+    const newAssetIds = [...new Set([...(user.assetIds || []), assetId])];
     await db.user.update({
       where: { email },
-      data: { assetIds: [...(user.assetIds || []), assetId] }
+      data: { assetIds: newAssetIds }
     });
 
     await logAssetAssignmentAttempt(
@@ -150,9 +151,10 @@ async function assignAssetToUser(
           throw new Error("User not found in fallback");
         }
 
+        const fallbackAssetIds = [...new Set([...(user.assetIds || []), fallbackAssetId])];
         await db.user.update({
           where: { email },
-          data: { assetIds: [...(user.assetIds || []), fallbackAssetId] }
+          data: { assetIds: fallbackAssetIds }
         });
 
         await logAssetAssignmentAttempt(

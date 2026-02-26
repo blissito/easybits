@@ -119,7 +119,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
   // @todo is this ok in here? good question, is comfortable, yes...
   if (intent === "free_subscription") {
-    const email = formData.get("email") as string;
+    const rawEmail = formData.get("email") as string;
+    const email = rawEmail?.toLowerCase().trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Response("Invalid email", { status: 400 });
+    }
     const displayName = formData.get("displayName") as string;
     const assetId = formData.get("assetId") as string;
     const initialNewsletterData = {
@@ -142,7 +146,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         data: {
           displayName,
           newsletters: [initialNewsletterData],
-          email: email.toLowerCase(),
+          email,
           assetIds: [assetId],
         },
       });
@@ -191,8 +195,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     await scheduleNext({ userId: user.id, assetId }); // @todo revisit, improve
     // Schedule ask_for_review_send
     await scheduleReview({
-      // @ts-ignore
-      asset,
+      asset: asset as typeof asset & { user: typeof asset.user },
       user,
     });
     return { success: true };
@@ -211,10 +214,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "update_trained") {
-    const userId = formData.get("userId") as string;
+    const user = await getUserOrRedirect(request);
     await db.user.update({
       where: {
-        id: userId,
+        id: user.id,
       },
       data: {
         trained: true,
@@ -228,7 +231,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "update_domain") {
-    const userId = formData.get("userId") as string;
+    const user = await getUserOrRedirect(request);
     const domain = formData.get("domain") as string;
     const exists = await db.user.findFirst({
       where: {
@@ -238,16 +241,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (exists) {
       // return { error: "Este dominio ya está en uso, intenta con otro" };
     }
-    const user = await getUserOrNull(request);
     user?.domain && (await removeHost(user.domain));
     const domainResult = (await createHost(domain)) as CertificateResponse;
-
-    // const domainResult: any = await showHost(domain);
 
     if (domainResult) {
       await db.user.update({
         where: {
-          id: userId,
+          id: user.id,
         },
         data: { domain, dnsConfig: domainResult.addCertificate.certificate },
       });

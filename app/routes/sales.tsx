@@ -23,9 +23,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { FaStripeS } from "react-icons/fa";
 import { getAccountCapabilities } from "~/.server/stripe_v2";
 
-// @todo remove from here
-const publishableKey =
-  "pk_test_51RVduVRAAmJagW3o2m5Yy2UU8nXaIiZ7bmN8WYs15OstmjapDoJ7N2HgJeVxvBwt5Ga4PRVH5XAqN6BiK3lFylt800bhGCu9nF";
+const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || "";
 const LAYOUT_PADDING = "py-16 md:py-10"; // to not set padding at layout level (so brendi's design can be acomplished)
 
 export const loader = async ({ request }: Route.LoaderArgs) => {

@@ -223,7 +223,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   }
 
   if (intent === "update_asset") {
-    // @validation, only owner can update?
     const data = JSON.parse(formData.get("data") as string);
     const s3ObjectsToDelete = data.s3ObjectsToDelete;
     delete data.s3ObjectsToDelete;
@@ -232,7 +231,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
     // @todo validation?
     let asset = await db.asset.findUnique({ where: { id: data.id } });
-    if (!asset) throw new Response("Asset not found::", { status: 404 });
+    if (!asset) throw new Response("Asset not found", { status: 404 });
+    if (asset.userId !== user.id) throw new Response("Forbidden", { status: 403 });
 
     const oldPrice = asset.price || 0;
     const newPrice = Number(data.price);
@@ -312,9 +312,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
   }
 
-  if (intent === "delete_asset") {
-  }
-
   if (intent === "remove_asset_action") {
     const actionIndex = Number(formData.get("actionIndex"));
     const assetId = formData.get("assetId") as string;
@@ -326,6 +323,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
 
     if (!asset) throw new Response("Asset not found", { status: 404 });
+    if (asset.userId !== user.id) throw new Response("Forbidden", { status: 403 });
 
     const actions = asset.actions as Action[];
 

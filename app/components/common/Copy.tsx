@@ -34,6 +34,7 @@ export const Copy = ({
 
   return (
     <button
+      aria-label="Copiar al portapapeles"
       onClick={trigger}
       className={cn(
         "w-max h-max",

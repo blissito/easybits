@@ -15,6 +15,7 @@ import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
+import { PLANS, type PlanKey } from "~/lib/plans";
 
 // --- List Files ---
 
@@ -122,6 +123,26 @@ export async function uploadFile(
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Storage quota check
+  const userRoles = (ctx.user as any).roles as string[] | undefined;
+  const planKey: PlanKey = userRoles?.includes("Studio")
+    ? "Studio"
+    : userRoles?.includes("Flow")
+      ? "Flow"
+      : "Spark";
+  const maxBytes = PLANS[planKey].storageGB * 1024 * 1024 * 1024;
+  const usage = await db.file.aggregate({
+    where: { ownerId: ctx.user.id, status: { not: "DELETED" } },
+    _sum: { size: true },
+  });
+  const currentUsage = usage._sum.size ?? 0;
+  if (currentUsage + opts.size > maxBytes) {
+    throw new Response(
+      JSON.stringify({ error: `Storage quota exceeded. Plan ${planKey}: ${PLANS[planKey].storageGB}GB limit` }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   const provider = await resolveProvider(ctx.user.id, {

@@ -54,14 +54,12 @@ export const AssetForm = ({
 
   return (
     <fetcher.Form
-      // @ts-ignore
-      onSubmit={handleSubmit(submit)}
+      onSubmit={handleSubmit(submit) as unknown as React.FormEventHandler<HTMLFormElement>}
       className="flex flex-col h-max "
     >
       <br />
       <Input
         pattern=".{3,}"
-        // @ts-ignore
         onChange={(e: ChangeEvent<HTMLInputElement>) =>
           handleChange("title", e.currentTarget.value)
         }

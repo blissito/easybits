@@ -22,14 +22,13 @@ export const gmailTransport = nodemailer.createTransport({
   },
 });
 
-let sesClient;
+let sesClient: SESClient;
 const getSesClient = () => {
-  // @ts-ignore
   sesClient ??= new SESClient({
     region: process.env.SES_REGION,
     credentials: {
-      accessKeyId: process.env.SES_KEY,
-      secretAccessKey: process.env.SES_SECRET,
+      accessKeyId: process.env.SES_KEY!,
+      secretAccessKey: process.env.SES_SECRET!,
     },
   });
   return sesClient;

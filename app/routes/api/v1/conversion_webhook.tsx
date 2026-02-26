@@ -1,7 +1,6 @@
 import type { File } from "@prisma/client";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/conversion_webhook";
-// @ts-ignore
 import { deleteObject } from "react-hook-multipart";
 
 const CONVERTION_TOKEN = process.env.CONVERTION_TOKEN;

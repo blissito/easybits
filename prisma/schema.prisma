@@ -72,6 +72,8 @@ model Asset {
   updatedAt     DateTime               @updatedAt
   Order         Order[]
   Review        Review[]
+
+  @@index([userId])
 }
 
 model Order {
@@ -96,6 +98,10 @@ model Order {
   // dates
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([merchantId])
+  @@index([customerId])
+  @@index([assetId])
 }
 
 type NewsLetter {
@@ -245,6 +251,8 @@ model File {
   assetId               String?    @db.ObjectId // deprecate!
   storageProviderId     String?    @db.ObjectId
   shareTokens           ShareToken[]
+
+  @@index([ownerId])
 }
 
 model Client {
@@ -262,6 +270,8 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   // ^ auto-dates
+
+  @@index([userId])
 }
 
 model Review {

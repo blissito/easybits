@@ -101,8 +101,7 @@ export const scheduleNext = async (options: {
     await sendNewsLetter({
       subject: firstAction.name, // @revisit name used as subject
       email: user.email,
-      // @ts-ignore
-      getTemplate: () => interpolateStyles(firstAction.markdown),
+      getTemplate: () => interpolateStyles((firstAction as any).markdown),
     });
     // nld.next = 0; // 🪄✨ ???
   }
@@ -144,8 +143,7 @@ getAgenda().define("send_newsletter", async (job: Job) => {
   const result = await sendNewsLetter({
     subject: action.name,
     email: user.email, // @todo bulk
-    //@ts-ignore
-    getTemplate: () => interpolateStyles(action.markdown),
+    getTemplate: () => interpolateStyles((action as any).markdown),
     // @todo el token?
     // @todo avoid if already current is grater
   });

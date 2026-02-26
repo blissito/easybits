@@ -1,6 +1,7 @@
 import { fetchOpenRouter } from "~/.server/llms/openRouter";
 import { webFetchToolDefinition, handleWebFetch } from "~/.server/llms/tools/fetchWebTool";
 import { webSearchToolDefinition, handleWebSearch } from "~/.server/llms/tools/webSearchTool";
+import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/chat";
 
 type Message = {
@@ -201,6 +202,7 @@ async function processToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
 
 export const action = async ({ request }: Route.ActionArgs) => {
   try {
+    await getUserOrRedirect(request);
     // 1. Parse request body once
     const requestData = await request.json();
 

@@ -252,7 +252,28 @@ export class BlogSEOService {
     const posts = await BlogDataService.getAllPosts();
     const currentDate = new Date().toISOString().split("T")[0];
 
+    const staticPages = [
+      { path: "/", priority: "1.0", changefreq: "weekly" },
+      { path: "/planes", priority: "0.9", changefreq: "monthly" },
+      { path: "/developers", priority: "0.8", changefreq: "monthly" },
+      { path: "/funcionalidades", priority: "0.8", changefreq: "monthly" },
+      { path: "/docs", priority: "0.7", changefreq: "monthly" },
+      { path: "/login", priority: "0.5", changefreq: "yearly" },
+      { path: "/terminos-y-condiciones", priority: "0.3", changefreq: "yearly" },
+      { path: "/aviso-de-privacidad", priority: "0.3", changefreq: "yearly" },
+    ];
+
     const sitemapEntries = [
+      // Static pages
+      ...staticPages.map(
+        (page) => `  <url>
+    <loc>${this.SITE_URL}${page.path}</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>`
+      ),
+
       // Blog index page
       `  <url>
     <loc>${this.SITE_URL}/blog</loc>

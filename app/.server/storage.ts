@@ -57,7 +57,12 @@ async function setCors(s3: S3Client, bucket: string) {
         CORSRules: [
           {
             MaxAgeSeconds: 3600,
-            AllowedOrigins: ["*"],
+            AllowedOrigins: [
+              "https://www.easybits.cloud",
+              "https://easybits.cloud",
+              "https://*.easybits.cloud",
+              ...(process.env.NODE_ENV !== "production" ? ["http://localhost:*"] : []),
+            ],
             AllowedHeaders: ["*"],
             ExposeHeaders: ["ETag"],
             AllowedMethods: ["PUT", "DELETE", "GET"],

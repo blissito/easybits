@@ -17,6 +17,7 @@ function getSessionStorage() {
         maxAge: 3600 * 24 * 7 * 4,
         path: "/",
         sameSite: "lax",
+        secure: true,
         secrets: [getJwtSecret()],
       },
     });
@@ -34,5 +35,5 @@ export const destroySession: typeof _sessionStorage.destroySession = (
 
 export const redirectCookie = createCookie("next", {
   maxAge: 3600, // one hour
-  // secrets: ["blissmo", "easybits.cloud"],
+  secrets: [getJwtSecret()],
 });
