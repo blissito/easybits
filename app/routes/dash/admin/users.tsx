@@ -7,6 +7,11 @@ import { TablePagination } from "~/components/common/pagination/TablePagination"
 import type { Route } from "./+types/users";
 import { useState } from "react";
 
+export const meta = () => [
+  { title: "Usuarios — EasyBits" },
+  { name: "robots", content: "noindex" },
+];
+
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url, `http://${request.headers.get("host")}`);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -115,12 +120,12 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
                 <table className="w-full text-sm border-2 border-black">
                   <thead>
                     <tr className="bg-black text-white text-left">
-                      <th className="px-4 py-2"></th>
-                      <th className="px-4 py-2">Email</th>
-                      <th className="px-4 py-2">Nombre</th>
-                      <th className="px-4 py-2">Roles</th>
-                      <th className="px-4 py-2">Registro</th>
-                      <th className="px-4 py-2">Acciones</th>
+                      <th scope="col" className="px-4 py-2"></th>
+                      <th scope="col" className="px-4 py-2">Email</th>
+                      <th scope="col" className="px-4 py-2">Nombre</th>
+                      <th scope="col" className="px-4 py-2">Roles</th>
+                      <th scope="col" className="px-4 py-2">Registro</th>
+                      <th scope="col" className="px-4 py-2">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -135,7 +140,9 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
           )}
         </PaginatedTable>
       ) : (
-        <p className="text-gray-500 font-mono">No se encontraron usuarios.</p>
+        <div className="border-2 border-black rounded-xl p-12 text-center bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <p className="font-bold text-gray-400 uppercase tracking-wider">No se encontraron usuarios.</p>
+        </div>
       )}
     </div>
   );
@@ -204,7 +211,15 @@ function UserRow({ user }: { user: any }) {
               className="px-2 py-0.5 bg-brand-100 text-brand-700 text-xs font-bold rounded-md border border-brand-300 inline-flex items-center gap-1"
             >
               {role}
-              <fetcher.Form method="post" className="inline">
+              <fetcher.Form
+                method="post"
+                className="inline"
+                onSubmit={(e) => {
+                  if (!confirm(`¿Quitar el rol "${role}" de ${user.email}?`)) {
+                    e.preventDefault();
+                  }
+                }}
+              >
                 <input type="hidden" name="intent" value="removeRole" />
                 <input type="hidden" name="userId" value={user.id} />
                 <input type="hidden" name="role" value={role} />
@@ -261,7 +276,14 @@ function UserRow({ user }: { user: any }) {
             </button>
           </fetcher.Form>
         ) : (
-          <fetcher.Form method="post">
+          <fetcher.Form
+            method="post"
+            onSubmit={(e) => {
+              if (!confirm(`¿Deshabilitar a ${user.email}? Se le quitarán todos los roles.`)) {
+                e.preventDefault();
+              }
+            }}
+          >
             <input type="hidden" name="intent" value="disable" />
             <input type="hidden" name="userId" value={user.id} />
             <button

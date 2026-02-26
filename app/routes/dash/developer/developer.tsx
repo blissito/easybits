@@ -1,5 +1,10 @@
 import { NavLink, Outlet } from "react-router";
 
+export const meta = () => [
+  { title: "Developer — EasyBits" },
+  { name: "robots", content: "noindex" },
+];
+
 const tabs = [
   { to: "/dash/developer", label: "API Keys", end: true },
   { to: "/dash/developer/files", label: "Files" },
@@ -13,7 +18,7 @@ export default function DeveloperLayout() {
       <h1 className="text-3xl font-black tracking-tight mb-6 uppercase">
         Developer Dashboard
       </h1>
-      <nav className="flex gap-2 mb-8">
+      <nav className="flex gap-2 mb-8" aria-label="Secciones de desarrollador">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}

@@ -5,6 +5,11 @@ import { createApiKey, revokeApiKey } from "~/.server/iam";
 import { useState } from "react";
 import type { Route } from "./+types/keys";
 
+export const meta = () => [
+  { title: "API Keys — EasyBits" },
+  { name: "robots", content: "noindex" },
+];
+
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const keys = await listApiKeys(user.id);
@@ -57,9 +62,9 @@ export default function KeysPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="create-key-title">
           <div className="bg-white border-3 border-black rounded-xl p-6 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-            <h3 className="text-lg font-black uppercase mb-4">Create API Key</h3>
+            <h3 id="create-key-title" className="text-lg font-black uppercase mb-4">Create API Key</h3>
             <fetcher.Form method="post" onSubmit={() => setShowCreate(false)}>
               <input type="hidden" name="intent" value="create" />
               <label className="block mb-4">
@@ -110,12 +115,12 @@ export default function KeysPage() {
         <table className="w-full text-sm">
           <thead className="bg-black text-white">
             <tr>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Name</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Prefix</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Scopes</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Status</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Created</th>
-              <th className="px-4 py-3"></th>
+              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Name</th>
+              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Prefix</th>
+              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Scopes</th>
+              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Status</th>
+              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Created</th>
+              <th scope="col" className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -151,11 +156,21 @@ export default function KeysPage() {
                 </td>
                 <td className="px-4 py-3">
                   {k.status === "ACTIVE" && (
-                    <fetcher.Form method="post">
+                    <fetcher.Form
+                      method="post"
+                      onSubmit={(e) => {
+                        if (!confirm("¿Revocar la API key \"" + k.name + "\"? Esta acción no se puede deshacer.")) {
+                          e.preventDefault();
+                        }
+                      }}
+                    >
                       <input type="hidden" name="intent" value="revoke" />
                       <input type="hidden" name="keyId" value={k.id} />
-                      <button className="text-xs font-bold px-3 py-1 border-2 border-black rounded-lg bg-brand-red text-white hover:bg-red-700 transition-colors">
-                        Revoke
+                      <button
+                        className="text-xs font-bold px-3 py-1 border-2 border-black rounded-lg bg-brand-red text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                        disabled={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
+                      >
+                        {fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id ? "Revocando..." : "Revoke"}
                       </button>
                     </fetcher.Form>
                   )}

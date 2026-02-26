@@ -5,6 +5,11 @@ import { db } from "~/.server/db";
 import { deleteFile, restoreFile } from "~/.server/core/operations";
 import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
+
+export const meta = () => [
+  { title: "Archivos — EasyBits" },
+  { name: "robots", content: "noindex" },
+];
 import { IconRenderer } from "~/routes/files/IconRenderer";
 import { Copy } from "~/components/common/Copy";
 import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic, FaBook } from "react-icons/fa6";

@@ -9,6 +9,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/websites";
+
+export const meta = () => [
+  { title: "Sitios Web — EasyBits" },
+  { name: "robots", content: "noindex" },
+];
 import { FolderDropZone, type CreatedWebsite } from "~/components/FolderDropZone";
 import { Copy } from "~/components/common/Copy";
 

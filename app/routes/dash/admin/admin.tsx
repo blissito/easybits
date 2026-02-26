@@ -1,4 +1,9 @@
 import { NavLink, Outlet, redirect } from "react-router";
+
+export const meta = () => [
+  { title: "Admin — EasyBits" },
+  { name: "robots", content: "noindex" },
+];
 import { getUserOrRedirect } from "~/.server/getters";
 import type { Route } from "./+types/admin";
 
@@ -25,7 +30,7 @@ export default function AdminLayout() {
       <h1 className="text-3xl font-black tracking-tight mb-6 uppercase">
         Admin
       </h1>
-      <nav className="flex gap-2 mb-8">
+      <nav className="flex gap-2 mb-8" aria-label="Secciones de administración">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
