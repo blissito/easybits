@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { ImageGallery } from "~/components/mdx/ImageGallery";
 import { Callout } from "~/components/mdx/Callout";
@@ -186,6 +187,7 @@ export const PostContent = ({ post }: PostContentProps) => {
             return (
               <ReactMarkdown
                 key={index}
+                remarkPlugins={[remarkGfm]}
                 components={{
                   // Remove H1 titles to avoid duplication with post header
                   h1: () => null,
