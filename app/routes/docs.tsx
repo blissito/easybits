@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState } from "react";
+import { CodeBlock } from "~/components/mdx/CodeBlock";
 
 export const meta = () =>
   getBasicMetaTags({
@@ -695,41 +696,52 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
 
 // ─── Components ──────────────────────────────────────────────────
 
+const LANG_MAP: Record<string, string> = {
+  curl: "bash",
+  sdk: "typescript",
+  header: "http",
+  "node.js": "javascript",
+  json: "json",
+  install: "bash",
+};
+
 function TabbedCode({ tabs }: { tabs: { label: string; code: string }[] }) {
   const [active, setActive] = useState(0);
   return (
     <div className="border-2 border-black rounded-xl overflow-hidden">
-      <div className="flex border-b-2 border-black bg-gray-100">
+      <div className="flex bg-gray-800">
         {tabs.map((t, i) => (
           <button
             key={t.label}
             onClick={() => setActive(i)}
-            className={`px-4 py-1.5 text-xs font-bold uppercase ${
+            className={`px-4 py-1.5 text-xs font-bold uppercase transition-colors ${
               active === i
                 ? "bg-gray-950 text-white"
-                : "text-gray-500 hover:text-gray-800"
+                : "text-gray-400 hover:text-white"
             }`}
           >
             {t.label}
           </button>
         ))}
       </div>
-      <pre className="p-4 bg-gray-950 text-gray-300 text-sm overflow-x-auto">
-        <code>{tabs[active].code}</code>
-      </pre>
+      <div className="[&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:!rounded-none [&_.group>div:first-child]:hidden [&_.group>div:last-child]:!rounded-none">
+        <CodeBlock language={LANG_MAP[tabs[active].label.toLowerCase()] || "typescript"}>
+          {tabs[active].code}
+        </CodeBlock>
+      </div>
     </div>
   );
 }
 
 function CodeExample({ title, code }: { title: string; code: string }) {
+  const lang = LANG_MAP[title.toLowerCase()] || "typescript";
   return (
     <div className="border-2 border-black rounded-xl overflow-hidden">
-      <div className="px-4 py-1.5 bg-gray-100 border-b-2 border-black text-xs font-bold uppercase text-gray-500">
-        {title}
+      <div className="[&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:!rounded-t-none [&_.group>div:last-child]:!rounded-b-none">
+        <CodeBlock language={lang} title={title}>
+          {code}
+        </CodeBlock>
       </div>
-      <pre className="p-4 bg-gray-950 text-gray-300 text-sm overflow-x-auto">
-        <code>{code}</code>
-      </pre>
     </div>
   );
 }
@@ -781,17 +793,17 @@ function Endpoint({
         {response && (
           <div className="mt-3">
             <span className="text-xs font-bold text-gray-500 uppercase">Response</span>
-            <pre className="mt-1 bg-gray-100 rounded-lg p-3 text-xs font-mono overflow-x-auto">
-              {response}
-            </pre>
+            <div className="mt-1 [&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:hidden">
+              <CodeBlock language="json">{response}</CodeBlock>
+            </div>
           </div>
         )}
         {sdk && (
           <div className="mt-3">
             <span className="text-xs font-bold text-purple-600 uppercase">SDK</span>
-            <pre className="mt-1 bg-gray-950 text-gray-300 rounded-lg p-3 text-xs font-mono overflow-x-auto">
-              {sdk}
-            </pre>
+            <div className="mt-1 [&_.group]:!my-0 [&_>div]:!my-0 [&_.group>div:first-child]:hidden">
+              <CodeBlock language="typescript">{sdk}</CodeBlock>
+            </div>
           </div>
         )}
         {note && (
