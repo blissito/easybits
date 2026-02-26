@@ -2,12 +2,13 @@ import { Link } from "react-router";
 import type { Route } from "./+types/developers";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Footer } from "~/components/common/Footer";
+import { PLANS, formatPrice } from "~/lib/plans";
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits for Developers — File Storage with AI Superpowers",
+    title: "EasyBits para Developers — File Storage con IA",
     description:
-      "Store, optimize, and share files with a simple API. AI-powered search, image transforms, and MCP integration built in.",
+      "Sube, optimiza y comparte archivos con una API simple. Búsqueda con IA, transformación de imágenes e integración MCP incluidos.",
   });
 
 export default function DevelopersPage() {
@@ -30,7 +31,7 @@ export default function DevelopersPage() {
               to="/login"
               className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold border-2 border-black hover:translate-y-[-2px] transition-transform"
             >
-              Get API Key
+              Obtener API Key
             </Link>
           </div>
         </div>
@@ -40,27 +41,27 @@ export default function DevelopersPage() {
       <div className="bg-white border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-20 md:py-28">
           <h1 className="text-4xl md:text-6xl font-bold max-w-3xl leading-tight">
-            File storage with{" "}
+            File storage con{" "}
             <span className="bg-yellow-300 px-2 -rotate-1 inline-block">
-              AI superpowers
+              superpoderes de IA
             </span>
           </h1>
           <p className="text-xl md:text-2xl text-gray-600 mt-6 max-w-2xl">
-            Upload, optimize, transform, and share files with a simple API.
-            AI-powered search and MCP integration built in.
+            Sube, optimiza, transforma y comparte archivos con una API simple.
+            Búsqueda con IA e integración MCP incluidos.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
             <Link
               to="/docs"
               className="bg-black text-white px-8 py-3 rounded-xl font-bold border-2 border-black hover:translate-y-[-2px] transition-transform text-lg"
             >
-              Read the Docs
+              Leer los Docs
             </Link>
             <Link
               to="/login"
               className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-black hover:translate-y-[-2px] transition-transform text-lg"
             >
-              Get Started Free
+              Empezar Gratis
             </Link>
           </div>
         </div>
@@ -70,12 +71,12 @@ export default function DevelopersPage() {
       <div className="bg-gray-50 border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
-            3 lines, not 30
+            3 líneas, no 30
           </h2>
           <div className="grid md:grid-cols-2 gap-8">
             <CodeBlock
               title="EasyBits SDK"
-              badge="3 lines"
+              badge="3 líneas"
               badgeColor="bg-green-200"
               code={`import { EasybitsClient } from "@easybits.cloud/sdk";
 
@@ -89,7 +90,7 @@ await fetch(putUrl, { method: "PUT", body: buffer });`}
             />
             <CodeBlock
               title="AWS S3"
-              badge="30+ lines"
+              badge="30+ líneas"
               badgeColor="bg-red-200"
               code={`import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -117,32 +118,32 @@ const url = await getSignedUrl(client, command);
       <div className="bg-white border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
-            Everything you need, nothing you don't
+            Todo lo que necesitas, nada que no
           </h2>
           <div className="grid md:grid-cols-3 gap-6">
             <FeatureCard
               title="File Storage"
-              description="Upload up to 5GB per file. Public or private access. Presigned URLs for secure uploads."
+              description="Sube archivos de hasta 5GB. Acceso público o privado. URLs presignadas para subidas seguras."
             />
             <FeatureCard
-              title="Image Optimization"
-              description="Convert to WebP/AVIF on the fly. Resize, crop, rotate, flip, and grayscale."
+              title="Optimización de Imágenes"
+              description="Convierte a WebP/AVIF al vuelo. Redimensiona, recorta, rota, voltea y escala de grises."
             />
             <FeatureCard
-              title="AI Search"
-              description="Search files with natural language. No manual tagging needed."
+              title="Búsqueda con IA"
+              description="Busca archivos con lenguaje natural. Sin necesidad de tags manuales."
             />
             <FeatureCard
-              title="Sharing"
-              description="Generate temporary share links. Grant granular permissions per file."
+              title="Compartir"
+              description="Genera links temporales. Permisos granulares por archivo."
             />
             <FeatureCard
-              title="Static Websites"
-              description="Deploy static sites to your-name.easybits.cloud in seconds."
+              title="Sitios Estáticos"
+              description="Despliega sitios estáticos en tu-nombre.easybits.cloud en segundos."
             />
             <FeatureCard
-              title="Soft Delete"
-              description="7-day trash retention. Restore files with a single API call."
+              title="Papelera"
+              description="7 días de retención. Restaura archivos con una sola llamada a la API."
             />
           </div>
         </div>
@@ -153,18 +154,18 @@ const url = await getSignedUrl(client, command);
         <div className="max-w-6xl mx-auto px-6 py-16">
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">
-              Your AI agent already knows how to use it
+              Tu agente de IA ya sabe usarlo
             </h2>
             <p className="text-lg text-gray-600 mb-8">
-              EasyBits ships with a Model Context Protocol (MCP) server. Claude,
-              Cursor, and any MCP-compatible agent can manage your files
-              natively — no prompting required.
+              EasyBits incluye un servidor Model Context Protocol (MCP). Claude,
+              Cursor y cualquier agente compatible con MCP puede manejar tus
+              archivos de forma nativa — sin prompting.
             </p>
             <div className="bg-black text-green-400 rounded-xl p-6 font-mono text-left text-sm">
               <span className="text-gray-500">$</span> npx -y @easybits.cloud/mcp
             </div>
             <p className="text-sm text-gray-500 mt-4">
-              22 tools available: upload, download, optimize, transform, share, search, and more.
+              22 herramientas disponibles: subir, descargar, optimizar, transformar, compartir, buscar y más.
             </p>
           </div>
         </div>
@@ -174,25 +175,29 @@ const url = await getSignedUrl(client, command);
       <div className="bg-white border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
-            Simple pricing
+            Precios simples
           </h2>
           <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            <PricingCard title="Free" price="$0" features={["1 GB storage", "100 uploads/day", "AI search", "MCP access"]} />
             <PricingCard
-              title="Pro"
-              price="$9/mo"
-              features={["50 GB storage", "Unlimited uploads", "Image transforms", "Custom providers"]}
+              title={PLANS.Gratis.name}
+              price={formatPrice(PLANS.Gratis.price)}
+              features={PLANS.Gratis.features}
+            />
+            <PricingCard
+              title={PLANS.Pro.name}
+              price={`${formatPrice(PLANS.Pro.price)} mxn/mes`}
+              features={PLANS.Pro.features}
               highlighted
             />
             <PricingCard
-              title="Business"
-              price="$29/mo"
-              features={["500 GB storage", "Priority support", "Extended trash retention", "Custom domains"]}
+              title={PLANS.Business.name}
+              price={`${formatPrice(PLANS.Business.price)} mxn/mes`}
+              features={PLANS.Business.features}
             />
           </div>
           <p className="text-center mt-8 text-gray-500">
             <Link to="/planes" className="underline hover:text-black">
-              View full pricing details
+              Ver todos los detalles de precios
             </Link>
           </p>
         </div>
@@ -202,17 +207,17 @@ const url = await getSignedUrl(client, command);
       <div className="bg-black text-white">
         <div className="max-w-6xl mx-auto px-6 py-16 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
-            Start building in minutes
+            Empieza a construir en minutos
           </h2>
           <p className="text-gray-400 mb-8 max-w-xl mx-auto">
-            Create an account, grab your API key, and start uploading files.
-            No credit card required.
+            Crea una cuenta, obtén tu API key y empieza a subir archivos.
+            Sin tarjeta de crédito.
           </p>
           <Link
             to="/login"
             className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-white hover:translate-y-[-2px] transition-transform text-lg inline-block"
           >
-            Get Started Free
+            Empezar Gratis
           </Link>
         </div>
       </div>

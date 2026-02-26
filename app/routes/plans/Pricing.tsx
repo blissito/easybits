@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
 import { cn } from "~/utils/cn";
+import { PLANS } from "~/lib/plans";
 
 export const Pricing = () => {
   return (
@@ -31,36 +32,22 @@ export const Pricing = () => {
       <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 lg:mt-20 flex flex-wrap gap-12 justify-center">
         <PlanCard
           badge="/home/foco.svg"
-          planName="Starter"
+          planName={PLANS.Gratis.name}
+          price={PLANS.Gratis.price}
           classNameButton="bg-[#F6DB7F] w-full"
-          perks={[
-            "1 asset en venta",
-            "Landing page personalizable para tu asset",
-            "Website propio personalizable ",
-            "Sistema de venta en línea con integración Stripe ",
-            "500 mb de almacenamiento",
-          ]}
+          perks={PLANS.Gratis.features}
         />
         <div className="mt-0 xl:-mt-6">
           <PlanCard
             badge="/home/rocket.svg"
-            planName="Creative"
-            price={199}
+            planName={PLANS.Pro.name}
+            price={PLANS.Pro.price}
             classNameButton="bg-[#A1CCE5] w-full"
-            perks={[
-              "Assets ilimitados",
-              "Landing page personalizable para cada uno de tus assets",
-              "Landing page personalizable para tu asset",
-              "Website propio personalizable ",
-              "Sistema de venta en línea con integración Stripe ",
-              "Configuración de tu propio dominio ",
-              "50 GB de almacenamiento ",
-              "AI Features",
-            ]}
+            perks={PLANS.Pro.features}
             cta={
               <PlanForm
-                id="creative_plan"
-                intent="creative_plan"
+                id="pro_plan"
+                intent="pro_plan"
                 buttonClassName="bg-[#A1CCE5]"
               />
             }
@@ -69,16 +56,10 @@ export const Pricing = () => {
         <PlanCard
           classNameButton="w-full"
           badge="/home/coder.svg"
-          planName="Expert"
-          price={299}
-          perks={[
-            "Todo lo del plan Creative",
-            "+150 GB de almacenamiento (200 GB en total)",
-            "API para subida/visualización de archivos ",
-            "Iframes PRO de video y audio para la visualización del contenido en tu web",
-            "Optimización del contenido (HSL / webp)",
-          ]}
-          cta={<PlanForm id="expert_plan" intent="expert_plan" />}
+          planName={PLANS.Business.name}
+          price={PLANS.Business.price}
+          perks={PLANS.Business.features}
+          cta={<PlanForm id="business_plan" intent="business_plan" />}
         />
       </div>
     </section>

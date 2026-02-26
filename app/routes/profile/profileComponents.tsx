@@ -10,13 +10,8 @@ import { useEscape } from "~/hooks/useEscape";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Switch } from "../../components/forms/Switch";
 
-export const plans: {
-  [x: string]: Record<string, number>;
-} = {
-  Starter: { price: 0, max: 0.5 },
-  Creative: { price: 199, max: 50 },
-  Expert: { price: 299, max: 200 },
-};
+import { plansLegacy } from "~/lib/plans";
+export const plans = plansLegacy;
 
 export const DEFAULT_PIC =
   "/logo-default.svg";
