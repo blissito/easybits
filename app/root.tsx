@@ -95,20 +95,6 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     return redirect("/tienda");
   }
 
-  // host
-  const hostExist = await db.user.findFirst({
-    where: {
-      host: url.host.split(".")[0],
-    },
-  });
-  if (
-    (url.pathname === "/" || url.pathname === "/login") &&
-    hostExist &&
-    (url.hostname.includes("easybits") || url.hostname.includes("localhost"))
-  ) {
-    return redirect("/tienda");
-  }
-
   // Subdomain website routing: slug.easybits.cloud → /s/slug/path
   if (
     url.hostname.endsWith(".easybits.cloud") &&
@@ -132,6 +118,20 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
         } as any);
       }
     }
+  }
+
+  // host
+  const hostExist = await db.user.findFirst({
+    where: {
+      host: url.host.split(".")[0],
+    },
+  });
+  if (
+    (url.pathname === "/" || url.pathname === "/login") &&
+    hostExist &&
+    (url.hostname.includes("easybits") || url.hostname.includes("localhost"))
+  ) {
+    return redirect("/tienda");
   }
 
   // www & /tienda
