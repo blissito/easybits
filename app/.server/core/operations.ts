@@ -13,6 +13,7 @@ import {
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
+import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
 
 // --- List Files ---
@@ -533,6 +534,13 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     where: { id: website.id },
     data: { prefix: `sites/${website.id}/` },
   });
+
+  // Create SSL cert for the subdomain (non-blocking — Fly retries automatically)
+  try {
+    await createHost(`${updated.slug}.easybits.cloud`);
+  } catch (err) {
+    console.error(`Failed to create cert for ${updated.slug}.easybits.cloud:`, err);
+  }
 
   return {
     id: updated.id,

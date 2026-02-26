@@ -137,6 +137,7 @@ export function createMcpServer() {
       name: z.string().optional().describe("New file name"),
       access: z.enum(["public", "private"]).optional().describe("Change access level (copies object between buckets)"),
       metadata: z.record(z.unknown()).optional().describe("Metadata to shallow-merge with existing"),
+      status: z.enum(["DONE"]).optional().describe("Mark file as DONE after upload"),
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
