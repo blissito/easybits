@@ -1,6 +1,13 @@
 import type { Route } from "./+types/websites-collection";
 import { authenticateRequest, requireAuth, requireScope } from "~/.server/apiAuth";
-import { createWebsite } from "~/.server/core/operations";
+import { createWebsite, listWebsites } from "~/.server/core/operations";
+
+// GET /api/v2/websites — list websites
+export async function loader({ request }: Route.LoaderArgs) {
+  const ctx = requireAuth(await authenticateRequest(request));
+  const websites = await listWebsites(ctx);
+  return Response.json({ items: websites });
+}
 
 // POST /api/v2/websites — create a website
 export async function action({ request }: Route.ActionArgs) {

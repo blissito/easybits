@@ -23,6 +23,9 @@ export default [
   route("/onboarding", "routes/onboarding/onboarding.tsx"),
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
+  route("/developers", "routes/developers.tsx"),
+  route("/docs", "routes/docs.tsx"),
+  route("/status", "routes/status.tsx"),
   route("/blog", "routes/blog.tsx"),
   route("/blog/:slug", "routes/blog.$slug.tsx"),
   route("/sitemap.xml", "routes/sitemap.xml.tsx"),
@@ -83,11 +86,20 @@ export default [
   route("api/sse/files", "routes/api/sse/files.ts"),
   // Cron
   route("api/cron/purge-files", "routes/api/cron/purge-files.ts"),
+  // Health
+  route("api/health", "routes/api/health.ts"),
   // v2
   ...prefix("api/v2", [
     route("files", "routes/api/v2/files.ts"),
+    route("files/search", "routes/api/v2/file-search.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),
     route("files/:fileId/share", "routes/api/v2/fileShare.ts"),
+    route("files/:fileId/restore", "routes/api/v2/file-restore.ts"),
+    route("files/:fileId/transform", "routes/api/v2/file-transform.ts"),
+    route("files/:fileId/optimize", "routes/api/v2/file-optimize.ts"),
+    route("files/:fileId/share-token", "routes/api/v2/file-share-token.ts"),
+    route("share-tokens", "routes/api/v2/share-tokens.ts"),
+    route("providers", "routes/api/v2/providers.ts"),
     route("websites", "routes/api/v2/websites-collection.ts"),
     route("websites/:websiteId", "routes/api/v2/websites.ts"),
     route("keys", "routes/api/v2/keys.ts"),

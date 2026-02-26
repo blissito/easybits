@@ -2,6 +2,7 @@ import type { Route } from "./+types/files";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import {
   listFiles,
+  listDeletedFiles,
   uploadFile,
 } from "~/.server/core/operations";
 
@@ -12,6 +13,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const assetId = url.searchParams.get("assetId") || undefined;
   const limit = Number(url.searchParams.get("limit")) || 50;
   const cursor = url.searchParams.get("cursor") || undefined;
+
+  const status = url.searchParams.get("status");
+  if (status === "DELETED") {
+    const result = await listDeletedFiles(ctx, { limit, cursor });
+    return Response.json(result);
+  }
 
   const result = await listFiles(ctx, { assetId, limit, cursor });
   return Response.json(result);

@@ -56,6 +56,13 @@ export interface UploadFileResponse {
   putUrl: string;
 }
 
+export interface UpdateFileParams {
+  name?: string;
+  access?: "public" | "private";
+  metadata?: Record<string, unknown>;
+  status?: string;
+}
+
 export interface OptimizeImageParams {
   fileId: string;
   format?: "webp" | "avif";
@@ -67,6 +74,25 @@ export interface OptimizeImageResponse {
   originalSize: number;
   optimizedSize: number;
   savings: string;
+}
+
+export interface TransformImageParams {
+  fileId: string;
+  width?: number;
+  height?: number;
+  fit?: "cover" | "contain" | "fill" | "inside" | "outside";
+  format?: "webp" | "avif" | "png" | "jpeg";
+  quality?: number;
+  rotate?: number;
+  flip?: boolean;
+  grayscale?: boolean;
+}
+
+export interface TransformImageResponse {
+  file: EasybitsFile;
+  originalSize: number;
+  transformedSize: number;
+  transforms: string[];
 }
 
 export interface ShareFileParams {
@@ -84,6 +110,72 @@ export interface ShareFileResponse {
   canRead: boolean;
   canWrite: boolean;
   canDelete: boolean;
+}
+
+export interface ShareToken {
+  id: string;
+  fileId: string;
+  source: string;
+  expiresAt: string;
+  createdAt: string;
+  expired?: boolean;
+}
+
+export interface GenerateShareTokenResponse {
+  url: string;
+  token: ShareToken;
+}
+
+export interface ListShareTokensParams {
+  fileId?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ListShareTokensResponse {
+  items: (ShareToken & { file?: { name: string } })[];
+  nextCursor?: string | null;
+}
+
+export interface DeletedFile extends EasybitsFile {
+  daysUntilPurge: number;
+  deletedAt: string;
+}
+
+export interface ListDeletedFilesParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ListDeletedFilesResponse {
+  items: DeletedFile[];
+  nextCursor?: string | null;
+}
+
+export interface Website {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  fileCount?: number;
+  totalSize?: number;
+  prefix?: string;
+  createdAt: string;
+  url: string;
+}
+
+export interface UpdateWebsiteParams {
+  name?: string;
+  status?: string;
+}
+
+export interface StorageProvider {
+  id: string;
+  name: string;
+  type: string;
+  region: string;
+  isDefault: boolean;
+  createdAt: string;
 }
 
 export interface ApiKey {
@@ -161,11 +253,33 @@ export class EasybitsClient {
     });
   }
 
+  async updateFile(fileId: string, params: UpdateFileParams): Promise<EasybitsFile> {
+    return this.request<EasybitsFile>(`/files/${fileId}`, {
+      method: "PATCH",
+      body: JSON.stringify(params),
+    });
+  }
+
   async deleteFile(fileId: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/files/${fileId}`, {
       method: "DELETE",
     });
   }
+
+  async restoreFile(fileId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/files/${fileId}/restore`, {
+      method: "POST",
+    });
+  }
+
+  async listDeletedFiles(params?: ListDeletedFilesParams): Promise<ListDeletedFilesResponse> {
+    const search = new URLSearchParams({ status: "DELETED" });
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.cursor) search.set("cursor", params.cursor);
+    return this.request<ListDeletedFilesResponse>(`/files?${search}`);
+  }
+
+  // ── Images ──────────────────────────────────────────────────
 
   async optimizeImage(params: OptimizeImageParams): Promise<OptimizeImageResponse> {
     const { fileId, ...body } = params;
@@ -175,12 +289,80 @@ export class EasybitsClient {
     });
   }
 
+  async transformImage(params: TransformImageParams): Promise<TransformImageResponse> {
+    const { fileId, ...body } = params;
+    return this.request<TransformImageResponse>(`/files/${fileId}/transform`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // ── Sharing ─────────────────────────────────────────────────
+
   async shareFile(params: ShareFileParams): Promise<ShareFileResponse> {
     const { fileId, ...body } = params;
     return this.request<ShareFileResponse>(`/files/${fileId}/share`, {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  async generateShareToken(fileId: string, expiresIn?: number): Promise<GenerateShareTokenResponse> {
+    return this.request<GenerateShareTokenResponse>(`/files/${fileId}/share-token`, {
+      method: "POST",
+      body: JSON.stringify({ expiresIn }),
+    });
+  }
+
+  async listShareTokens(params?: ListShareTokensParams): Promise<ListShareTokensResponse> {
+    const search = new URLSearchParams();
+    if (params?.fileId) search.set("fileId", params.fileId);
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.cursor) search.set("cursor", params.cursor);
+    const qs = search.toString();
+    return this.request<ListShareTokensResponse>(`/share-tokens${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Search ──────────────────────────────────────────────────
+
+  async searchFiles(query: string): Promise<{ items: EasybitsFile[] }> {
+    return this.request<{ items: EasybitsFile[] }>(`/files/search?q=${encodeURIComponent(query)}`);
+  }
+
+  // ── Websites ────────────────────────────────────────────────
+
+  async listWebsites(): Promise<{ items: Website[] }> {
+    return this.request<{ items: Website[] }>("/websites");
+  }
+
+  async createWebsite(name: string): Promise<{ website: Website }> {
+    return this.request<{ website: Website }>("/websites", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async getWebsite(websiteId: string): Promise<Website> {
+    return this.request<Website>(`/websites/${websiteId}`);
+  }
+
+  async updateWebsite(websiteId: string, params: UpdateWebsiteParams): Promise<{ ok: boolean; website: Website }> {
+    return this.request<{ ok: boolean; website: Website }>(`/websites/${websiteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteWebsite(websiteId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/websites/${websiteId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // ── Providers ───────────────────────────────────────────────
+
+  async listProviders(): Promise<{ providers: StorageProvider[]; defaultProvider?: { type: string; note: string } }> {
+    return this.request(`/providers`);
   }
 
   // ── Keys ────────────────────────────────────────────────────

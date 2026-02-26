@@ -11,6 +11,14 @@ primary_region = 'dfw'
   min_machines_running = 0
   processes = ['app']
 
+[[services.http_checks]]
+  interval = 30000
+  grace_period = "10s"
+  method = "GET"
+  path = "/api/health"
+  protocol = "https"
+  timeout = 5000
+
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '512mb'
