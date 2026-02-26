@@ -23,12 +23,20 @@ jobs:
             fi
           fi
 
-      - uses: actions/setup-node@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
         with:
-          node-version: 20
-          cache: 'npm'
+          context: .
+          push: false
+          load: true
+          tags: easybits:deploy
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --local-only --image easybits:deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

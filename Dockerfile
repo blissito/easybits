@@ -1,10 +1,12 @@
+# syntax=docker/dockerfile:1
+
 # Build stage
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 # 1. Copy only dependency files first (cached layer)
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # 2. Copy prisma schema and generate (cached if schema unchanged)
 COPY prisma ./prisma
@@ -15,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # 4. Prune dev dependencies
-RUN npm prune --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm prune --omit=dev
 
 # Production stage
 FROM node:20-alpine AS runner
