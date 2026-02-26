@@ -181,11 +181,14 @@ const eb = await createClientFromEnv();` },
 
             <SdkMethodTable title="Websites" methods={[
               ["listWebsites()", "List static websites"],
-              ["createWebsite(name)", "Create website"],
+              ["createWebsite(name)", "Create website, get id + URL"],
               ["getWebsite(websiteId)", "Get website details"],
               ["updateWebsite(websiteId, params)", "Update name/status"],
               ["deleteWebsite(websiteId)", "Delete website + files"],
             ]} />
+            <p className="text-xs text-gray-500 -mt-4 mb-6">
+              Deploy files by uploading with <code className="bg-gray-100 px-1 rounded">fileName: "sites/&#123;websiteId&#125;/path"</code> — see <a href="#websites" className="underline">Websites section</a> for full example.
+            </p>
 
             <SdkMethodTable title="Account" methods={[
               ["getUsageStats()", "Storage, file counts, plan info"],
@@ -547,6 +550,44 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
           {/* Websites */}
           <section id="websites" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Websites</h2>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm space-y-2">
+              <strong>How website deploys work:</strong>
+              <ol className="list-decimal list-inside space-y-1 text-gray-700">
+                <li>Create a website — you get an <code className="bg-gray-100 px-1 rounded">id</code> and a URL like <code className="bg-gray-100 px-1 rounded">https://my-site.easybits.cloud</code></li>
+                <li>Upload files with <code className="bg-gray-100 px-1 rounded">fileName</code> set to <code className="bg-gray-100 px-1 rounded">{`sites/{websiteId}/path`}</code> (e.g. <code className="bg-gray-100 px-1 rounded">{`sites/{id}/index.html`}</code>)</li>
+                <li>PUT the bytes to each <code className="bg-gray-100 px-1 rounded">putUrl</code>, then set status to DONE</li>
+                <li>Your site is live — SPA fallback to <code className="bg-gray-100 px-1 rounded">index.html</code> is built-in</li>
+              </ol>
+            </div>
+
+            <h3 className="text-lg font-bold mb-4">Deploy Example</h3>
+            <CodeExample
+              title="SDK"
+              code={`// 1. Create website
+const { website } = await eb.createWebsite("my-docs");
+
+// 2. Upload files with the website prefix
+const files = [
+  { path: "index.html", content: htmlBuffer, type: "text/html" },
+  { path: "style.css", content: cssBuffer, type: "text/css" },
+  { path: "app.js", content: jsBuffer, type: "application/javascript" },
+];
+
+for (const f of files) {
+  const { file, putUrl } = await eb.uploadFile({
+    fileName: \`sites/\${website.id}/\${f.path}\`,
+    contentType: f.type,
+    size: f.content.byteLength,
+  });
+  await fetch(putUrl, { method: "PUT", body: f.content });
+  await eb.updateFile(file.id, { status: "DONE" });
+}
+
+// 3. Live at: https://my-docs.easybits.cloud`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Endpoints</h3>
 
             <Endpoint
               method="GET"
