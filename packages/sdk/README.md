@@ -1,6 +1,8 @@
 # @easybits.cloud/sdk
 
-Official TypeScript SDK for the [EasyBits](https://www.easybits.cloud) API — file storage with AI superpowers.
+Agentic-first file storage SDK — the typed HTTP client for AI agents to manage, share, and transform files.
+
+EasyBits is the platform where AI agents store, manage, and consume digital assets via SDK, MCP, and REST API.
 
 ## Install
 
@@ -58,6 +60,10 @@ const eb = await createClientFromEnv();
 | `restoreFile(fileId)` | Restore a soft-deleted file |
 | `listDeletedFiles(params?)` | List deleted files with days until purge |
 | `searchFiles(query)` | AI-powered natural language file search |
+| `bulkUploadFiles(items)` | Create up to 20 file records + upload URLs |
+| `bulkDeleteFiles(fileIds)` | Soft-delete up to 100 files at once |
+| `duplicateFile(fileId, name?)` | Copy an existing file (new storage object) |
+| `listPermissions(fileId)` | List sharing permissions for a file |
 
 ### Images
 
@@ -74,6 +80,16 @@ const eb = await createClientFromEnv();
 | `generateShareToken(fileId, expiresIn?)` | Generate a temporary download URL |
 | `listShareTokens(params?)` | List share tokens (paginated) |
 
+### Webhooks
+
+| Method | Description |
+|--------|-------------|
+| `listWebhooks()` | List your configured webhooks |
+| `createWebhook(params)` | Create a webhook (returns secret, shown once) |
+| `getWebhook(webhookId)` | Get webhook details |
+| `updateWebhook(webhookId, params)` | Update URL, events, or status |
+| `deleteWebhook(webhookId)` | Permanently delete a webhook |
+
 ### Websites
 
 | Method | Description |
@@ -84,53 +100,108 @@ const eb = await createClientFromEnv();
 | `updateWebsite(websiteId, params)` | Update website name/status |
 | `deleteWebsite(websiteId)` | Delete website and its files |
 
-### Config
+### Account
 
 | Method | Description |
 |--------|-------------|
+| `getUsageStats()` | Storage used/limit, file counts, plan info |
 | `listProviders()` | List storage providers |
 | `listKeys()` | List your API keys |
 
+## Webhooks
+
+EasyBits sends POST requests to your URL when events occur. Payloads are signed with HMAC SHA-256.
+
+```ts
+// Create a webhook
+const webhook = await eb.createWebhook({
+  url: "https://your-server.com/webhooks/easybits",
+  events: ["file.created", "file.deleted"],
+});
+
+// Save the secret — it's only shown once
+console.log(webhook.secret); // whsec_...
+```
+
+### Events
+
+| Event | Trigger |
+|-------|---------|
+| `file.created` | File uploaded or duplicated |
+| `file.updated` | File name, access, or metadata changed |
+| `file.deleted` | File soft-deleted |
+| `file.restored` | File restored from trash |
+| `website.created` | Website created |
+| `website.deleted` | Website deleted |
+
+### Verifying signatures
+
+```ts
+import { createHmac } from "crypto";
+
+function verifyWebhook(body: string, signature: string, secret: string): boolean {
+  const expected = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  return signature === expected;
+}
+
+// In your webhook handler:
+const signature = req.headers["x-easybits-signature"];
+const event = req.headers["x-easybits-event"];
+const isValid = verifyWebhook(rawBody, signature, webhook.secret);
+```
+
+### Payload format
+
+```json
+{
+  "event": "file.created",
+  "timestamp": "2026-02-26T12:00:00.000Z",
+  "data": {
+    "id": "abc123",
+    "name": "photo.jpg",
+    "size": 1024000,
+    "contentType": "image/jpeg",
+    "access": "private"
+  }
+}
+```
+
+### Auto-pause
+
+Webhooks are automatically paused after 5 consecutive delivery failures. Reactivate with:
+
+```ts
+await eb.updateWebhook(webhookId, { status: "ACTIVE" });
+```
+
 ## Examples
 
-### List and filter files
+### Bulk upload files
 
 ```ts
-const { items, nextCursor } = await eb.listFiles({ limit: 10 });
+const { items } = await eb.bulkUploadFiles([
+  { fileName: "a.pdf", contentType: "application/pdf", size: 50000 },
+  { fileName: "b.png", contentType: "image/png", size: 120000 },
+]);
+
+for (const { file, putUrl } of items) {
+  await fetch(putUrl, { method: "PUT", body: buffers[file.name] });
+  await eb.updateFile(file.id, { status: "DONE" });
+}
 ```
 
-### Transform an image
+### Check account usage
 
 ```ts
-const result = await eb.transformImage({
-  fileId: "abc123",
-  width: 800,
-  height: 600,
-  fit: "cover",
-  format: "webp",
-  quality: 85,
-});
+const stats = await eb.getUsageStats();
+console.log(`${stats.storage.usedGB}/${stats.storage.maxGB} GB used`);
+console.log(`${stats.counts.files} files, ${stats.counts.webhooks} webhooks`);
 ```
 
-### Generate a temporary share link
+### Duplicate a file
 
 ```ts
-const { url } = await eb.generateShareToken("abc123", 3600); // 1 hour
-```
-
-### Search files with natural language
-
-```ts
-const { items } = await eb.searchFiles("all PDF files uploaded recently");
-```
-
-### Deploy a static website
-
-```ts
-const { website } = await eb.createWebsite("my-docs");
-// Upload files with the website prefix, then:
-await eb.updateWebsite(website.id, { status: "DEPLOYED" });
-// Access at: https://my-docs.easybits.cloud
+const copy = await eb.duplicateFile("abc123", "photo-backup.jpg");
 ```
 
 ## Error Handling
@@ -150,7 +221,7 @@ try {
 
 ## MCP Integration
 
-EasyBits also provides an MCP server for AI agents:
+EasyBits also provides an MCP server with 30+ tools for AI agents:
 
 ```bash
 npx -y @easybits.cloud/mcp

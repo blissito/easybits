@@ -254,12 +254,13 @@ export async function copyObjectAcrossBuckets(opts: {
   fromBucket: string;
   toBucket: string;
   key: string;
+  destKey?: string;
 }) {
   const s3 = getPlatformS3();
   await s3.send(
     new CopyObjectCommand({
       Bucket: opts.toBucket,
-      Key: opts.key,
+      Key: opts.destKey || opts.key,
       CopySource: `/${opts.fromBucket}/${opts.key}`,
     })
   );

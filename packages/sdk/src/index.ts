@@ -1,5 +1,8 @@
 /**
- * @easybits.cloud/sdk — Official HTTP client for the Easybits API v2
+ * @easybits.cloud/sdk — Agentic-first file storage SDK
+ *
+ * The typed HTTP client for AI agents to manage, share, and transform files
+ * via the Easybits API v2. Includes webhooks, bulk operations, and more.
  *
  * @example
  * ```ts
@@ -188,6 +191,77 @@ export interface ApiKey {
   expiresAt?: string | null;
 }
 
+// ─── Webhook Types ─────────────────────────────────────────────
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  status: string;
+  failCount: number;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWebhookParams {
+  url: string;
+  events: string[];
+}
+
+export interface CreateWebhookResponse extends Webhook {
+  secret: string;
+}
+
+export interface UpdateWebhookParams {
+  url?: string;
+  events?: string[];
+  status?: "ACTIVE" | "PAUSED";
+}
+
+// ─── Usage Stats Types ─────────────────────────────────────────
+
+export interface UsageStats {
+  plan: string;
+  storage: {
+    usedBytes: number;
+    maxBytes: number;
+    usedGB: number;
+    maxGB: number;
+    percentUsed: number;
+  };
+  counts: {
+    files: number;
+    deletedFiles: number;
+    websites: number;
+    webhooks: number;
+  };
+}
+
+// ─── Bulk Types ────────────────────────────────────────────────
+
+export interface BulkUploadItem {
+  fileName: string;
+  contentType: string;
+  size: number;
+  access?: "public" | "private";
+}
+
+export interface BulkDeleteResponse {
+  deleted: number;
+  ids: string[];
+}
+
+export interface Permission {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
+  createdAt: string;
+}
+
 export class EasybitsError extends Error {
   constructor(
     public status: number,
@@ -369,6 +443,67 @@ export class EasybitsClient {
 
   async listKeys(): Promise<{ keys: ApiKey[] }> {
     return this.request<{ keys: ApiKey[] }>("/keys");
+  }
+
+  // ── Webhooks ───────────────────────────────────────────────
+
+  async listWebhooks(): Promise<{ items: Webhook[] }> {
+    return this.request<{ items: Webhook[] }>("/webhooks");
+  }
+
+  async createWebhook(params: CreateWebhookParams): Promise<CreateWebhookResponse> {
+    return this.request<CreateWebhookResponse>("/webhooks", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getWebhook(webhookId: string): Promise<Webhook> {
+    return this.request<Webhook>(`/webhooks/${webhookId}`);
+  }
+
+  async updateWebhook(webhookId: string, params: UpdateWebhookParams): Promise<Webhook> {
+    return this.request<Webhook>(`/webhooks/${webhookId}`, {
+      method: "PATCH",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteWebhook(webhookId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/webhooks/${webhookId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // ── Usage & Bulk ───────────────────────────────────────────
+
+  async getUsageStats(): Promise<UsageStats> {
+    return this.request<UsageStats>("/usage");
+  }
+
+  async bulkDeleteFiles(fileIds: string[]): Promise<BulkDeleteResponse> {
+    return this.request<BulkDeleteResponse>("/files/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ fileIds }),
+    });
+  }
+
+  async bulkUploadFiles(items: BulkUploadItem[]): Promise<{ items: UploadFileResponse[] }> {
+    return this.request<{ items: UploadFileResponse[] }>("/files/bulk-upload", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async listPermissions(fileId: string): Promise<{ items: Permission[] }> {
+    return this.request<{ items: Permission[] }>(`/files/${fileId}/permissions`);
+  }
+
+  async duplicateFile(fileId: string, name?: string): Promise<EasybitsFile> {
+    return this.request<EasybitsFile>(`/files/${fileId}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
   }
 
   // ── Config helpers ──────────────────────────────────────────

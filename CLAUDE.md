@@ -1,6 +1,8 @@
-# EasyBits
+# EasyBits — Agentic-First File Storage
 
-Digital asset marketplace built with React Router v7 (ex-Remix), Prisma (MongoDB), Fly.io, and Stripe. **Now accepting paying users** — treat all changes as production-critical.
+The digital asset platform where AI agents can store, manage, and consume files via SDK and MCP. Built with React Router v7 (ex-Remix), Prisma (MongoDB), Fly.io, and Stripe. **Now accepting paying users** — treat all changes as production-critical.
+
+**Positioning**: Agentic-first file storage. AI agents interact with files through 30+ MCP tools, a typed SDK (`@easybits.cloud/sdk`), and a REST API v2. Webhooks notify external systems of file events in real time.
 
 ## Commands
 - `npm run dev` — local dev server
@@ -33,6 +35,14 @@ Digital asset marketplace built with React Router v7 (ex-Remix), Prisma (MongoDB
 - `ADMIN_EMAILS` env var: comma-separated superuser emails
 - `Admin` role in DB: managed from the admin panel itself
 - Both grant access to `/dash/admin`
+
+## Webhooks
+- Model: `Webhook` in Prisma (url, events[], secret HMAC, status, failCount)
+- Engine: `app/.server/webhooks.ts` — fire-and-forget dispatch, HMAC `X-Easybits-Signature`, auto-pause after 5 fails
+- Operations: `app/.server/core/webhookOperations.ts` — CRUD
+- Events: `file.created`, `file.updated`, `file.deleted`, `file.restored`, `website.created`, `website.deleted`
+- API: `GET/POST /api/v2/webhooks`, `GET/PATCH/DELETE /api/v2/webhooks/:id`
+- MCP tools: `list_webhooks`, `create_webhook`, `update_webhook`, `delete_webhook`
 
 ## Security & Hardening
 - Auth: `getUserOrRedirect(request)` — MUST be used on every protected route/endpoint

@@ -91,7 +91,11 @@ export default [
   ...prefix("api/v2", [
     route("files", "routes/api/v2/files.ts"),
     route("files/search", "routes/api/v2/file-search.ts"),
+    route("files/bulk-delete", "routes/api/v2/files-bulk-delete.ts"),
+    route("files/bulk-upload", "routes/api/v2/files-bulk-upload.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),
+    route("files/:fileId/permissions", "routes/api/v2/file-permissions.ts"),
+    route("files/:fileId/duplicate", "routes/api/v2/file-duplicate.ts"),
     route("files/:fileId/share", "routes/api/v2/fileShare.ts"),
     route("files/:fileId/restore", "routes/api/v2/file-restore.ts"),
     route("files/:fileId/transform", "routes/api/v2/file-transform.ts"),
@@ -104,6 +108,9 @@ export default [
     route("websites/:websiteId/files", "routes/api/v2/website-files.ts"),
     route("keys", "routes/api/v2/keys.ts"),
     route("keys/:keyId", "routes/api/v2/key.ts"),
+    route("webhooks", "routes/api/v2/webhooks.ts"),
+    route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
+    route("usage", "routes/api/v2/usage.ts"),
   ]),
   // v1
   ...prefix("api/v1", [

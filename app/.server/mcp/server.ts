@@ -16,7 +16,19 @@ import {
   getWebsite,
   updateWebsite,
   deleteWebsite,
+  getUsageStats,
+  bulkDeleteFiles,
+  bulkUploadFiles,
+  listPermissions,
+  duplicateFile,
 } from "../core/operations";
+import {
+  listWebhooks,
+  createWebhook,
+  getWebhook,
+  updateWebhookConfig,
+  deleteWebhookById,
+} from "../core/webhookOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 
@@ -420,6 +432,137 @@ export function createMcpServer() {
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
+    }
+  );
+
+  // --- Webhook Tools ---
+
+  server.tool(
+    "list_webhooks",
+    "List your configured webhooks (id, url, events, status, failCount, lastError).",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listWebhooks(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "create_webhook",
+    "Create a webhook to receive event notifications. Returns the webhook with its secret (shown only once). Events: file.created, file.updated, file.deleted, file.restored, website.created, website.deleted.",
+    {
+      url: z.string().describe("HTTPS URL to receive POST notifications"),
+      events: z.array(z.string()).describe("Events to subscribe to (e.g. ['file.created', 'file.deleted'])"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createWebhook(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "update_webhook",
+    "Update a webhook's URL, events, or status (ACTIVE/PAUSED). Reactivating resets the fail counter.",
+    {
+      webhookId: z.string().describe("The webhook ID"),
+      url: z.string().optional().describe("New HTTPS URL"),
+      events: z.array(z.string()).optional().describe("New events list"),
+      status: z.enum(["ACTIVE", "PAUSED"]).optional().describe("Set status"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await updateWebhookConfig(ctx, params.webhookId, {
+        url: params.url,
+        events: params.events,
+        status: params.status,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "delete_webhook",
+    "Permanently delete a webhook.",
+    {
+      webhookId: z.string().describe("The webhook ID to delete"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteWebhookById(ctx, params.webhookId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // --- Utility Tools ---
+
+  server.tool(
+    "get_usage_stats",
+    "Get account usage statistics: storage used/limit, file counts, plan info.",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getUsageStats(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "bulk_delete_files",
+    "Soft-delete multiple files at once (max 100). Returns count of deleted files.",
+    {
+      fileIds: z.array(z.string()).describe("Array of file IDs to delete (1-100)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await bulkDeleteFiles(ctx, params.fileIds);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "bulk_upload_files",
+    "Create multiple file records and get presigned upload URLs (max 20). Returns array of `{ file, putUrl }`.",
+    {
+      items: z.array(z.object({
+        fileName: z.string().describe("Name of the file"),
+        contentType: z.string().describe("MIME type"),
+        size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
+        access: z.enum(["public", "private"]).optional().describe("Access level"),
+      })).describe("Array of files to upload (1-20)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await bulkUploadFiles(ctx, params.items);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "list_permissions",
+    "List sharing permissions for a file. Shows who has access and their permission levels.",
+    {
+      fileId: z.string().describe("The file ID"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listPermissions(ctx, params.fileId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "duplicate_file",
+    "Create a copy of an existing file (new storage object). Returns the new file record.",
+    {
+      fileId: z.string().describe("The file ID to duplicate"),
+      name: z.string().optional().describe("Name for the copy (defaults to 'Copy of ...')"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await duplicateFile(ctx, params.fileId, params.name);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
   );
 

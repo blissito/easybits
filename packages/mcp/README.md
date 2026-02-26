@@ -1,12 +1,12 @@
 # EasyBits MCP Server
 
-Connect your AI agents to [EasyBits](https://www.easybits.cloud) — a digital asset marketplace for creators. Upload files, share content, optimize images, manage websites, and more — all through natural language.
+Agentic-first file storage for AI agents. Connect your AI to [EasyBits](https://www.easybits.cloud) — upload files, manage webhooks, optimize images, deploy websites, and more — all through natural language.
 
 ## Quick Start
 
 ### 1. Get your API key
 
-Sign up at [easybits.cloud](https://www.easybits.cloud) and generate an API key from your [developer dashboard](https://www.easybits.cloud/dash/developer/api-keys).
+Sign up at [easybits.cloud](https://www.easybits.cloud) and generate an API key from your [developer dashboard](https://www.easybits.cloud/dash/developer).
 
 ### 2. Configure your client
 
@@ -63,12 +63,13 @@ Add to your Cursor MCP settings:
 Ask your AI agent things like:
 
 - *"Upload this PDF and make it public"*
-- *"Show me my recent files"*
+- *"Show me my storage usage"*
 - *"Optimize that PNG to WebP"*
-- *"Create a share link for my latest file"*
-- *"Search my files for invoices"*
+- *"Set up a webhook for file uploads"*
+- *"Bulk delete all my temp files"*
+- *"Duplicate that config file"*
 
-## Tools (22)
+## Tools (31)
 
 ### Files
 
@@ -82,6 +83,10 @@ Ask your AI agent things like:
 | `restore_file` | Restore a soft-deleted file |
 | `list_deleted_files` | List deleted files with days until permanent purge |
 | `search_files` | AI-powered natural language file search (requires AI key) |
+| `bulk_upload_files` | Create up to 20 file records with presigned upload URLs |
+| `bulk_delete_files` | Soft-delete up to 100 files at once |
+| `duplicate_file` | Copy an existing file (creates new storage object) |
+| `list_permissions` | List sharing permissions for a file |
 
 ### Sharing
 
@@ -97,6 +102,25 @@ Ask your AI agent things like:
 |------|-------------|
 | `optimize_image` | Convert images to WebP or AVIF with quality control |
 | `transform_image` | Resize, rotate, flip, convert format, or apply grayscale |
+
+### Webhooks
+
+| Tool | Description |
+|------|-------------|
+| `list_webhooks` | List your configured webhooks |
+| `create_webhook` | Create a webhook for file/website events (returns secret) |
+| `update_webhook` | Update URL, events, or status (ACTIVE/PAUSED) |
+| `delete_webhook` | Permanently delete a webhook |
+
+**Events**: `file.created`, `file.updated`, `file.deleted`, `file.restored`, `website.created`, `website.deleted`
+
+Payloads are signed with HMAC SHA-256 via `X-Easybits-Signature` header. Webhooks auto-pause after 5 consecutive failures.
+
+### Account
+
+| Tool | Description |
+|------|-------------|
+| `get_usage_stats` | Storage used/limit, file counts, plan info |
 
 ### AI Configuration
 
@@ -133,6 +157,19 @@ You can also set these in a `~/.easybitsrc` file:
 
 ```
 EASYBITS_API_KEY=eb_your_key_here
+```
+
+## SDK
+
+For programmatic access, use the typed SDK:
+
+```bash
+npm install @easybits.cloud/sdk
+```
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
 ```
 
 ## Transport

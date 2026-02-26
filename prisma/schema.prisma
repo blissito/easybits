@@ -184,6 +184,7 @@ model User {
   storageProviders StorageProvider[]
   aiKeys           UserAiKey[]
   websites         Website[]
+  webhooks         Webhook[]
 }
 
 enum FileStatus {
@@ -380,6 +381,29 @@ model ShareToken {
   @@index([ownerId])
   @@index([fileId])
   @@index([expiresAt])
+}
+
+enum WebhookStatus {
+  ACTIVE
+  PAUSED
+  FAILED
+}
+
+model Webhook {
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  url       String
+  events    String[]
+  secret    String
+  status    WebhookStatus @default(ACTIVE)
+  failCount Int           @default(0)
+  lastError String?
+  userId    String        @db.ObjectId
+  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
 }
 
 model TelemetryEvent {

@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/mcp",
-  "version": "0.1.8",
-  "description": "Easybits MCP server — stdio transport that proxies to the Easybits Streamable HTTP endpoint",
+  "version": "0.2.0",
+  "description": "Agentic-first MCP server for Easybits — 30+ tools for AI agents to manage files, webhooks, and storage",
   "type": "module",
   "bin": {
     "easybits-mcp": "./dist/index.js"

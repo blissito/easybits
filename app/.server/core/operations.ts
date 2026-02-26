@@ -16,6 +16,7 @@ import type { StorageRegion } from "@prisma/client";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
 import { PLANS, type PlanKey } from "~/lib/plans";
+import { dispatchWebhooks } from "../webhooks";
 
 // --- List Files ---
 
@@ -175,6 +176,7 @@ export async function uploadFile(
   });
 
   fileEvents.emit("file:changed", ctx.user.id);
+  dispatchWebhooks(ctx.user.id, "file.created", { id: file.id, name: file.name, size: file.size, contentType: file.contentType, access: file.access });
   return { file, putUrl };
 }
 
@@ -203,6 +205,7 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
   });
 
   fileEvents.emit("file:changed", ctx.user.id);
+  dispatchWebhooks(ctx.user.id, "file.deleted", { id: file.id, name: file.name });
   return { success: true };
 }
 
@@ -237,6 +240,7 @@ export async function restoreFile(ctx: AuthContext, fileId: string) {
   });
 
   fileEvents.emit("file:changed", ctx.user.id);
+  dispatchWebhooks(ctx.user.id, "file.restored", { id: file.id, name: file.name });
   return { success: true };
 }
 
@@ -397,6 +401,7 @@ export async function updateFile(
       // DB succeeded — safe to delete from source bucket
       await deleteObjectFromBucket({ bucket: fromBucket, key: s3Key }).catch(() => {});
       fileEvents.emit("file:changed", ctx.user.id);
+      dispatchWebhooks(ctx.user.id, "file.updated", { id: updated.id, name: updated.name, access: updated.access });
       return updated;
     } catch (err) {
       // Rollback: delete the copy we just made
@@ -415,6 +420,7 @@ export async function updateFile(
   });
 
   fileEvents.emit("file:changed", ctx.user.id);
+  dispatchWebhooks(ctx.user.id, "file.updated", { id: updated.id, name: updated.name });
   return updated;
 }
 
@@ -566,13 +572,15 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     console.error(`Failed to create cert for ${updated.slug}.easybits.cloud:`, err);
   }
 
-  return {
+  const result = {
     id: updated.id,
     name: updated.name,
     slug: updated.slug,
     prefix: updated.prefix,
     url: `https://${updated.slug}.easybits.cloud`,
   };
+  dispatchWebhooks(ctx.user.id, "website.created", result);
+  return result;
 }
 
 export async function getWebsite(ctx: AuthContext, websiteId: string) {
@@ -658,7 +666,193 @@ export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
     where: { id: websiteId },
     data: { status: "DELETED", deletedAt: new Date() },
   });
+  dispatchWebhooks(ctx.user.id, "website.deleted", { id: website.id, name: website.name, slug: website.slug });
   return { ok: true };
+}
+
+// --- Usage Stats ---
+
+export async function getUsageStats(ctx: AuthContext) {
+  requireScope(ctx, "READ");
+
+  const userRoles = (ctx.user as any).roles as string[] | undefined;
+  const planKey: PlanKey = userRoles?.includes("Studio")
+    ? "Studio"
+    : userRoles?.includes("Flow")
+      ? "Flow"
+      : "Spark";
+
+  const [fileStats, deletedCount, websiteCount, webhookCount] = await Promise.all([
+    db.file.aggregate({
+      where: { ownerId: ctx.user.id, status: { not: "DELETED" } },
+      _count: true,
+      _sum: { size: true },
+    }),
+    db.file.count({ where: { ownerId: ctx.user.id, status: "DELETED" } }),
+    db.website.count({ where: { ownerId: ctx.user.id, deletedAt: null } }),
+    db.webhook.count({ where: { userId: ctx.user.id } }),
+  ]);
+
+  const usedBytes = fileStats._sum.size ?? 0;
+  const maxBytes = PLANS[planKey].storageGB * 1024 * 1024 * 1024;
+
+  return {
+    plan: planKey,
+    storage: {
+      usedBytes,
+      maxBytes,
+      usedGB: +(usedBytes / (1024 * 1024 * 1024)).toFixed(3),
+      maxGB: PLANS[planKey].storageGB,
+      percentUsed: +((usedBytes / maxBytes) * 100).toFixed(1),
+    },
+    counts: {
+      files: fileStats._count,
+      deletedFiles: deletedCount,
+      websites: websiteCount,
+      webhooks: webhookCount,
+    },
+  };
+}
+
+// --- Bulk Delete Files ---
+
+export async function bulkDeleteFiles(ctx: AuthContext, fileIds: string[]) {
+  requireScope(ctx, "DELETE");
+
+  if (fileIds.length === 0 || fileIds.length > 100) {
+    throw new Response(JSON.stringify({ error: "Provide 1-100 file IDs" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const files = await db.file.findMany({
+    where: { id: { in: fileIds }, ownerId: ctx.user.id, status: { not: "DELETED" } },
+    select: { id: true, name: true },
+  });
+
+  if (files.length === 0) {
+    return { deleted: 0, ids: [] };
+  }
+
+  await db.file.updateMany({
+    where: { id: { in: files.map((f) => f.id) } },
+    data: { status: "DELETED", deletedAt: new Date() },
+  });
+
+  fileEvents.emit("file:changed", ctx.user.id);
+  for (const f of files) {
+    dispatchWebhooks(ctx.user.id, "file.deleted", { id: f.id, name: f.name });
+  }
+
+  return { deleted: files.length, ids: files.map((f) => f.id) };
+}
+
+// --- Bulk Upload Files ---
+
+export async function bulkUploadFiles(
+  ctx: AuthContext,
+  items: Array<{
+    fileName: string;
+    contentType: string;
+    size: number;
+    access?: "public" | "private";
+  }>
+) {
+  requireScope(ctx, "WRITE");
+
+  if (items.length === 0 || items.length > 20) {
+    throw new Response(JSON.stringify({ error: "Provide 1-20 files" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const results = [];
+  for (const item of items) {
+    const result = await uploadFile(ctx, { ...item, source: "sdk" });
+    results.push(result);
+  }
+
+  return { items: results };
+}
+
+// --- List Permissions ---
+
+export async function listPermissions(ctx: AuthContext, fileId: string) {
+  requireScope(ctx, "READ");
+
+  const file = await db.file.findUnique({ where: { id: fileId } });
+  if (!file || file.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "File not found or not owner" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const permissions = await db.permission.findMany({
+    where: { resourceType: "file", resourceId: fileId },
+    include: {
+      grantee: { select: { email: true, displayName: true } },
+    },
+  });
+
+  return {
+    items: permissions.map((p) => ({
+      id: p.id,
+      email: p.grantee.email,
+      displayName: p.grantee.displayName,
+      canRead: p.canRead,
+      canWrite: p.canWrite,
+      canDelete: p.canDelete,
+      createdAt: p.createdAt,
+    })),
+  };
+}
+
+// --- Duplicate File ---
+
+export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: string) {
+  requireScope(ctx, "WRITE");
+
+  const file = await db.file.findUnique({ where: { id: fileId } });
+  if (!file || file.ownerId !== ctx.user.id || file.status === "DELETED") {
+    throw new Response(JSON.stringify({ error: "File not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Create a new storage key and copy the object
+  const newStorageKey = `${ctx.user.id}/${nanoid(3)}`;
+  const client = await getClientForFile(file.storageProviderId, ctx.user.id);
+
+  const bucket = file.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
+  const srcKey = file.storageProviderId ? file.storageKey : `mcp/${file.storageKey}`;
+  const dstKey = file.storageProviderId ? newStorageKey : `mcp/${newStorageKey}`;
+
+  await copyObjectAcrossBuckets({ fromBucket: bucket, toBucket: bucket, key: srcKey, destKey: dstKey });
+
+  const copy = await db.file.create({
+    data: {
+      name: newName || `Copy of ${file.name}`,
+      storageKey: newStorageKey,
+      slug: newStorageKey,
+      size: file.size,
+      contentType: file.contentType,
+      ownerId: ctx.user.id,
+      access: file.access,
+      url: file.access === "public" ? `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${dstKey}` : "",
+      status: "DONE",
+      storageProviderId: file.storageProviderId,
+      metadata: file.metadata,
+      source: "duplicate",
+    },
+  });
+
+  fileEvents.emit("file:changed", ctx.user.id);
+  dispatchWebhooks(ctx.user.id, "file.created", { id: copy.id, name: copy.name, size: copy.size, contentType: copy.contentType, access: copy.access });
+  return copy;
 }
 
 // --- List Deleted Files ---

@@ -5,18 +5,20 @@ import { useState } from "react";
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits API Docs",
-    description: "Complete API reference for the EasyBits REST API v2",
+    title: "EasyBits API Docs — Agentic-First File Storage",
+    description: "Complete API reference for the EasyBits REST API v2. 30+ endpoints for AI agents to manage files, webhooks, and storage.",
   });
 
 const SECTIONS = [
   { id: "quickstart", label: "Quick Start" },
   { id: "auth", label: "Authentication" },
   { id: "files", label: "Files" },
+  { id: "bulk", label: "Bulk Operations" },
   { id: "images", label: "Images" },
   { id: "sharing", label: "Sharing" },
+  { id: "webhooks", label: "Webhooks" },
   { id: "websites", label: "Websites" },
-  { id: "config", label: "Config" },
+  { id: "account", label: "Account & Usage" },
   { id: "errors", label: "Errors & Rate Limits" },
 ] as const;
 
@@ -76,10 +78,16 @@ export default function DocsPage() {
         <main className="flex-1 px-6 md:px-12 py-10 max-w-4xl">
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
-            <h1 className="text-3xl font-bold mb-4">API Documentation</h1>
-            <p className="text-gray-600 mb-6">
+            <h1 className="text-3xl font-bold mb-2">API Documentation</h1>
+            <p className="text-gray-500 mb-4 text-sm">Agentic-first file storage for AI agents and developers</p>
+            <p className="text-gray-600 mb-4">
               Base URL: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
             </p>
+            <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
+              <strong>MCP &amp; SDK:</strong> Besides the REST API, you can use our{" "}
+              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">MCP server</a> (30+ tools) or{" "}
+              <a href="https://www.npmjs.com/package/@easybits.cloud/sdk" className="underline font-medium" target="_blank" rel="noreferrer">typed SDK</a> for programmatic access.
+            </div>
 
             <h2 className="text-xl font-bold mb-4">Quick Start</h2>
             <ol className="list-decimal list-inside space-y-3 text-gray-700 mb-6">
@@ -191,6 +199,49 @@ const { items } = await eb.listFiles();`}
               params={[{ name: "q", type: "string", desc: "Natural language query (required)" }]}
               response={`{ "items": [...] }`}
             />
+
+            <Endpoint
+              method="POST"
+              path="/files/:fileId/duplicate"
+              description="Create a copy of an existing file (new storage object)"
+              body={[
+                { name: "name", type: "string", desc: "Name for the copy (optional, defaults to 'Copy of ...')" },
+              ]}
+              response={`{ "id": "...", "name": "Copy of photo.jpg", ... }`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/files/:fileId/permissions"
+              description="List sharing permissions for a file"
+              response={`{ "items": [{ "email": "...", "canRead": true, "canWrite": false, ... }] }`}
+            />
+          </section>
+
+          {/* Bulk Operations */}
+          <section id="bulk" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Bulk Operations</h2>
+
+            <Endpoint
+              method="POST"
+              path="/files/bulk-upload"
+              description="Create multiple file records and get presigned upload URLs (max 20)"
+              body={[
+                { name: "items", type: "array", desc: "Array of { fileName, contentType, size, access? }" },
+              ]}
+              response={`{ "items": [{ "file": {...}, "putUrl": "https://..." }, ...] }`}
+              note="Each file must be uploaded via PUT to its putUrl, then status set to DONE."
+            />
+
+            <Endpoint
+              method="POST"
+              path="/files/bulk-delete"
+              description="Soft-delete multiple files at once (max 100)"
+              body={[
+                { name: "fileIds", type: "string[]", desc: "Array of file IDs to delete" },
+              ]}
+              response={`{ "deleted": 5, "ids": ["...", "..."] }`}
+            />
           </section>
 
           {/* Images */}
@@ -264,6 +315,95 @@ const { items } = await eb.listFiles();`}
             />
           </section>
 
+          {/* Webhooks */}
+          <section id="webhooks" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Webhooks</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Receive real-time POST notifications when events occur. Payloads are signed with HMAC SHA-256 via the{" "}
+              <code className="bg-gray-100 px-1 rounded">X-Easybits-Signature</code> header. Webhooks auto-pause after 5 consecutive delivery failures.
+            </p>
+
+            <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
+              <strong>Events:</strong>{" "}
+              <code>file.created</code>, <code>file.updated</code>, <code>file.deleted</code>, <code>file.restored</code>, <code>website.created</code>, <code>website.deleted</code>
+            </div>
+
+            <Endpoint
+              method="GET"
+              path="/webhooks"
+              description="List your configured webhooks"
+              response={`{ "items": [{ "id": "...", "url": "https://...", "events": [...], "status": "ACTIVE" }] }`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/webhooks"
+              description="Create a webhook. The secret is only returned on creation — save it."
+              body={[
+                { name: "url", type: "string", desc: "HTTPS URL to receive POST notifications (required)" },
+                { name: "events", type: "string[]", desc: "Events to subscribe to (required)" },
+              ]}
+              response={`{ "id": "...", "url": "...", "events": [...], "secret": "whsec_...", "status": "ACTIVE" }`}
+              note="Max 10 webhooks per account. URL must use HTTPS."
+            />
+
+            <Endpoint
+              method="GET"
+              path="/webhooks/:webhookId"
+              description="Get webhook details (excluding secret)"
+            />
+
+            <Endpoint
+              method="PATCH"
+              path="/webhooks/:webhookId"
+              description="Update webhook URL, events, or status"
+              body={[
+                { name: "url", type: "string", desc: "New HTTPS URL" },
+                { name: "events", type: "string[]", desc: "New events list" },
+                { name: "status", type: "string", desc: "'ACTIVE' or 'PAUSED'. Reactivating resets fail counter." },
+              ]}
+            />
+
+            <Endpoint
+              method="DELETE"
+              path="/webhooks/:webhookId"
+              description="Permanently delete a webhook"
+              response={`{ "success": true }`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Verifying Signatures</h3>
+            <CodeExample
+              title="Node.js"
+              code={`import { createHmac } from "crypto";
+
+function verifyWebhook(body, signature, secret) {
+  const expected = \`sha256=\${createHmac("sha256", secret)
+    .update(body).digest("hex")}\`;
+  return signature === expected;
+}
+
+// In your handler:
+const sig = req.headers["x-easybits-signature"];
+const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Payload Format</h3>
+            <CodeExample
+              title="JSON"
+              code={`{
+  "event": "file.created",
+  "timestamp": "2026-02-26T12:00:00.000Z",
+  "data": {
+    "id": "abc123",
+    "name": "photo.jpg",
+    "size": 1024000,
+    "contentType": "image/jpeg",
+    "access": "private"
+  }
+}`}
+            />
+          </section>
+
           {/* Websites */}
           <section id="websites" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Websites</h2>
@@ -293,9 +433,16 @@ const { items } = await eb.listFiles();`}
             />
           </section>
 
-          {/* Config */}
-          <section id="config" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Config</h2>
+          {/* Account & Usage */}
+          <section id="account" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Account & Usage</h2>
+
+            <Endpoint
+              method="GET"
+              path="/usage"
+              description="Get account usage statistics: storage, file counts, plan info"
+              response={`{ "plan": "Spark", "storage": { "usedGB": 0.5, "maxGB": 1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
+            />
 
             <Endpoint
               method="GET"
