@@ -4,11 +4,13 @@ import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 
-export const meta = () =>
-  getBasicMetaTags({
+export const meta = () => [
+  ...getBasicMetaTags({
     title: "EasyBits API Docs — Agentic-First File Storage",
     description: "Complete API reference for the EasyBits REST API v2. 30+ endpoints for AI agents to manage files, webhooks, and storage.",
-  });
+  }),
+  { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/docs" },
+];
 
 const SECTIONS = [
   { id: "quickstart", label: "Quick Start" },
@@ -29,6 +31,71 @@ export default function DocsPage() {
 
   return (
     <section className="min-h-screen bg-white">
+      {/* JSON-LD: WebAPI + SoftwareApplication for LLM/search discovery */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "WebAPI",
+                name: "EasyBits API",
+                description: "Agentic-first file storage REST API. 30+ endpoints for AI agents to manage, share, and transform files.",
+                url: "https://www.easybits.cloud/docs",
+                documentation: "https://www.easybits.cloud/docs",
+                provider: {
+                  "@type": "Organization",
+                  name: "EasyBits",
+                  url: "https://www.easybits.cloud",
+                },
+                termsOfService: "https://www.easybits.cloud/terminos-y-condiciones",
+                category: ["File Storage", "AI Agent Tools", "MCP Server"],
+              },
+              {
+                "@type": "SoftwareApplication",
+                name: "@easybits.cloud/sdk",
+                applicationCategory: "DeveloperApplication",
+                operatingSystem: "Node.js, Bun, Deno",
+                description: "Typed SDK for AI agents to manage files via the EasyBits API v2. Includes webhooks, bulk operations, image transforms, and static site hosting.",
+                url: "https://www.npmjs.com/package/@easybits.cloud/sdk",
+                offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+                provider: {
+                  "@type": "Organization",
+                  name: "EasyBits",
+                  url: "https://www.easybits.cloud",
+                },
+              },
+              {
+                "@type": "SoftwareApplication",
+                name: "@easybits.cloud/mcp",
+                applicationCategory: "DeveloperApplication",
+                description: "MCP server with 30+ tools for AI agents to store, manage, and consume files. Works with Claude, ChatGPT, and any MCP-compatible client.",
+                url: "https://www.npmjs.com/package/@easybits.cloud/mcp",
+                offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+                provider: {
+                  "@type": "Organization",
+                  name: "EasyBits",
+                  url: "https://www.easybits.cloud",
+                },
+              },
+              {
+                "@type": "TechArticle",
+                headline: "EasyBits API Documentation",
+                description: "Complete API reference for the EasyBits REST API v2. Files, webhooks, websites, bulk operations, image transforms, and SDK.",
+                url: "https://www.easybits.cloud/docs",
+                author: { "@type": "Organization", name: "EasyBits" },
+                about: [
+                  { "@type": "Thing", name: "File Storage API" },
+                  { "@type": "Thing", name: "MCP Server" },
+                  { "@type": "Thing", name: "AI Agent Tools" },
+                ],
+              },
+            ],
+          }),
+        }}
+      />
+
       {/* Nav */}
       <nav className="border-b-2 border-black px-6 py-4 sticky top-0 bg-white z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

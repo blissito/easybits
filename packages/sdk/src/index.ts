@@ -513,6 +513,16 @@ export class EasybitsClient {
     return this.baseUrl;
   }
 
+  /** Get the EasyBits API reference documentation */
+  async getDocs(section?: string): Promise<string> {
+    const qs = section ? `?section=${encodeURIComponent(section)}` : "";
+    const res = await fetch(`${this.baseUrl}/api/v2/docs${qs}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) throw new Error(`getDocs failed: ${res.status}`);
+    return res.text();
+  }
+
   /** Returns the MCP endpoint URL */
   getMcpUrl(): string {
     return `${this.baseUrl}/api/mcp`;

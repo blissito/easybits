@@ -30,6 +30,7 @@ export default [
   route("/blog/:slug", "routes/blog.$slug.tsx"),
   route("/sitemap.xml", "routes/sitemap.xml.tsx"),
   route("/robots.txt", "routes/robots.txt.tsx"),
+  route("/llms.txt", "routes/llms.txt.ts"),
   route("/terminos-y-condiciones", "routes/terminos.tsx"),
   route("/aviso-de-privacidad", "routes/aviso.tsx"),
   // public video link @todo revisit private only? tokens?
@@ -111,6 +112,7 @@ export default [
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),
+    route("docs", "routes/api/v2/docs.ts"),
   ]),
   // v1
   ...prefix("api/v1", [

@@ -22,6 +22,7 @@ import {
   listPermissions,
   duplicateFile,
 } from "../core/operations";
+import { getDocsMarkdown, VALID_SECTIONS } from "../docs/reference";
 import {
   listWebhooks,
   createWebhook,
@@ -563,6 +564,18 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await duplicateFile(ctx, params.fileId, params.name);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "get_docs",
+    "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section.",
+    {
+      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: quickstart, files, bulk, images, sharing, webhooks, websites, account, sdk, errors"),
+    },
+    async (params) => {
+      const markdown = getDocsMarkdown(params.section);
+      return { content: [{ type: "text", text: markdown }] };
     }
   );
 
