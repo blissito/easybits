@@ -17,8 +17,7 @@ async function traverseEntry(
     files.push({ path, file });
   } else if (entry.isDirectory) {
     const dirEntry = entry as FileSystemDirectoryEntry;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reader = (dirEntry as any).createDirectoryReader();
+    const reader = dirEntry.createReader();
     const entries = await new Promise<FileSystemEntry[]>((resolve, reject) =>
       reader.readEntries(resolve, reject)
     );
@@ -43,7 +42,7 @@ async function getFilesFromDrop(
     if (entries.length === 1 && entries[0].isDirectory) {
       const dirEntry = entries[0] as FileSystemDirectoryEntry;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const reader = (dirEntry as any).createDirectoryReader();
+      const reader = dirEntry.createReader();
       const children = await new Promise<FileSystemEntry[]>(
         (resolve, reject) => reader.readEntries(resolve, reject)
       );
