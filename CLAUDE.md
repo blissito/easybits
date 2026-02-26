@@ -71,3 +71,4 @@ The digital asset platform where AI agents can store, manage, and consume files 
 ## TODOs & Technical Debt
 - Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
+- **Planned**: RAG as a Service — allow agents to index and query files via retrieval-augmented generation
