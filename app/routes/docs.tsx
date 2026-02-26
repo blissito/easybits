@@ -12,6 +12,7 @@ export const meta = () =>
 const SECTIONS = [
   { id: "quickstart", label: "Quick Start" },
   { id: "auth", label: "Authentication" },
+  { id: "sdk", label: "SDK" },
   { id: "files", label: "Files" },
   { id: "bulk", label: "Bulk Operations" },
   { id: "images", label: "Images" },
@@ -84,9 +85,8 @@ export default function DocsPage() {
               Base URL: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
             </p>
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
-              <strong>MCP &amp; SDK:</strong> Besides the REST API, you can use our{" "}
-              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">MCP server</a> (30+ tools) or{" "}
-              <a href="https://www.npmjs.com/package/@easybits.cloud/sdk" className="underline font-medium" target="_blank" rel="noreferrer">typed SDK</a> for programmatic access.
+              <strong>3 ways to integrate:</strong> REST API (below), <a href="#sdk" className="underline font-medium">typed SDK</a> ({`npm i @easybits.cloud/sdk`}), or{" "}
+              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">MCP server</a> (30+ tools for AI agents).
             </div>
 
             <h2 className="text-xl font-bold mb-4">Quick Start</h2>
@@ -95,20 +95,16 @@ export default function DocsPage() {
               <li>Go to <Link to="/dash/developer" className="underline font-medium">Developer Dashboard</Link> and create an API key</li>
               <li>Make your first request:</li>
             </ol>
-            <CodeExample
-              title="curl"
-              code={`curl -H "Authorization: Bearer eb_sk_live_YOUR_KEY" \\
-  https://www.easybits.cloud/api/v2/files`}
-            />
-            <div className="mt-4">
-              <CodeExample
-                title="SDK"
-                code={`import { EasybitsClient } from "@easybits.cloud/sdk";
+            <TabbedCode
+              tabs={[
+                { label: "curl", code: `curl -H "Authorization: Bearer eb_sk_live_YOUR_KEY" \\
+  https://www.easybits.cloud/api/v2/files` },
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
 
 const eb = new EasybitsClient({ apiKey: "eb_sk_live_YOUR_KEY" });
-const { items } = await eb.listFiles();`}
-              />
-            </div>
+const { items } = await eb.listFiles();` },
+              ]}
+            />
           </section>
 
           {/* Authentication */}
@@ -117,14 +113,97 @@ const { items } = await eb.listFiles();`}
             <p className="text-gray-600 mb-4">
               All API requests require a Bearer token in the Authorization header.
             </p>
-            <CodeExample
-              title="Header"
-              code={`Authorization: Bearer eb_sk_live_YOUR_API_KEY`}
+            <TabbedCode
+              tabs={[
+                { label: "Header", code: `Authorization: Bearer eb_sk_live_YOUR_API_KEY` },
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
+
+// Explicit
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// From env (EASYBITS_API_KEY) or ~/.easybitsrc
+import { createClientFromEnv } from "@easybits.cloud/sdk";
+const eb = await createClientFromEnv();` },
+              ]}
             />
             <div className="mt-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
               <strong>Scopes:</strong> API keys can have READ, WRITE, DELETE, or ADMIN scopes.
               Operations require the appropriate scope.
             </div>
+          </section>
+
+          {/* SDK */}
+          <section id="sdk" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">SDK</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              The typed SDK wraps the entire REST API. Install and use it in any Node.js/Bun/Deno project.
+            </p>
+            <CodeExample title="Install" code="npm install @easybits.cloud/sdk" />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">All Methods</h3>
+
+            <SdkMethodTable title="Files" methods={[
+              ["listFiles(params?)", "List files (paginated)"],
+              ["getFile(fileId)", "Get file + download URL"],
+              ["uploadFile(params)", "Create file + get upload URL"],
+              ["updateFile(fileId, params)", "Update name, access, metadata, status"],
+              ["deleteFile(fileId)", "Soft-delete (7-day retention)"],
+              ["restoreFile(fileId)", "Restore from trash"],
+              ["listDeletedFiles(params?)", "List trash with days until purge"],
+              ["searchFiles(query)", "AI-powered natural language search"],
+              ["duplicateFile(fileId, name?)", "Copy file (new storage object)"],
+              ["listPermissions(fileId)", "List sharing permissions"],
+            ]} />
+
+            <SdkMethodTable title="Bulk Operations" methods={[
+              ["bulkUploadFiles(items)", "Upload up to 20 files at once"],
+              ["bulkDeleteFiles(fileIds)", "Delete up to 100 files at once"],
+            ]} />
+
+            <SdkMethodTable title="Images" methods={[
+              ["optimizeImage(params)", "Convert to WebP/AVIF"],
+              ["transformImage(params)", "Resize, rotate, flip, convert, grayscale"],
+            ]} />
+
+            <SdkMethodTable title="Sharing" methods={[
+              ["shareFile(params)", "Share with another user by email"],
+              ["generateShareToken(fileId, expiresIn?)", "Temporary download URL"],
+              ["listShareTokens(params?)", "List tokens (paginated)"],
+            ]} />
+
+            <SdkMethodTable title="Webhooks" methods={[
+              ["listWebhooks()", "List configured webhooks"],
+              ["createWebhook(params)", "Create webhook (returns secret once)"],
+              ["getWebhook(webhookId)", "Get webhook details"],
+              ["updateWebhook(webhookId, params)", "Update URL, events, or status"],
+              ["deleteWebhook(webhookId)", "Delete permanently"],
+            ]} />
+
+            <SdkMethodTable title="Websites" methods={[
+              ["listWebsites()", "List static websites"],
+              ["createWebsite(name)", "Create website"],
+              ["getWebsite(websiteId)", "Get website details"],
+              ["updateWebsite(websiteId, params)", "Update name/status"],
+              ["deleteWebsite(websiteId)", "Delete website + files"],
+            ]} />
+
+            <SdkMethodTable title="Account" methods={[
+              ["getUsageStats()", "Storage, file counts, plan info"],
+              ["listProviders()", "Storage providers"],
+              ["listKeys()", "API keys"],
+            ]} />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Error Handling</h3>
+            <CodeExample title="SDK" code={`import { EasybitsError } from "@easybits.cloud/sdk";
+
+try {
+  await eb.getFile("nonexistent");
+} catch (err) {
+  if (err instanceof EasybitsError) {
+    console.log(err.status); // 404
+    console.log(err.body);   // '{"error":"File not found"}'
+  }
+}`} />
           </section>
 
           {/* Files */}
@@ -142,6 +221,7 @@ const { items } = await eb.listFiles();`}
                 { name: "status", type: "string", desc: "Set to 'DELETED' to list deleted files" },
               ]}
               response={`{ "items": [...], "nextCursor": "..." }`}
+              sdk={`const { items, nextCursor } = await eb.listFiles({ limit: 10 });`}
             />
 
             <Endpoint
@@ -149,6 +229,8 @@ const { items } = await eb.listFiles();`}
               path="/files/:fileId"
               description="Get file details with a temporary download URL"
               response={`{ "id": "...", "name": "photo.jpg", "readUrl": "https://..." }`}
+              sdk={`const file = await eb.getFile("file_id");
+console.log(file.readUrl); // presigned URL (1h)`}
             />
 
             <Endpoint
@@ -164,6 +246,13 @@ const { items } = await eb.listFiles();`}
               ]}
               response={`{ "file": {...}, "putUrl": "https://..." }`}
               note="Upload bytes via PUT to putUrl, then PATCH the file status to 'DONE'."
+              sdk={`const { file, putUrl } = await eb.uploadFile({
+  fileName: "photo.jpg",
+  contentType: "image/jpeg",
+  size: 1024000,
+});
+await fetch(putUrl, { method: "PUT", body: buffer });
+await eb.updateFile(file.id, { status: "DONE" });`}
             />
 
             <Endpoint
@@ -176,6 +265,11 @@ const { items } = await eb.listFiles();`}
                 { name: "metadata", type: "object", desc: "Key-value pairs (merged, max 10KB)" },
                 { name: "status", type: "string", desc: "Only 'DONE' (from PENDING)" },
               ]}
+              sdk={`await eb.updateFile("file_id", {
+  name: "renamed.jpg",
+  access: "public",
+  metadata: { tag: "avatar" },
+});`}
             />
 
             <Endpoint
@@ -183,6 +277,7 @@ const { items } = await eb.listFiles();`}
               path="/files/:fileId"
               description="Soft-delete a file (7-day retention)"
               response={`{ "success": true }`}
+              sdk={`await eb.deleteFile("file_id");`}
             />
 
             <Endpoint
@@ -190,6 +285,7 @@ const { items } = await eb.listFiles();`}
               path="/files/:fileId/restore"
               description="Restore a soft-deleted file"
               response={`{ "success": true }`}
+              sdk={`await eb.restoreFile("file_id");`}
             />
 
             <Endpoint
@@ -198,6 +294,7 @@ const { items } = await eb.listFiles();`}
               description="AI-powered natural language file search (requires AI key)"
               params={[{ name: "q", type: "string", desc: "Natural language query (required)" }]}
               response={`{ "items": [...] }`}
+              sdk={`const { items } = await eb.searchFiles("all PDF invoices");`}
             />
 
             <Endpoint
@@ -208,6 +305,7 @@ const { items } = await eb.listFiles();`}
                 { name: "name", type: "string", desc: "Name for the copy (optional, defaults to 'Copy of ...')" },
               ]}
               response={`{ "id": "...", "name": "Copy of photo.jpg", ... }`}
+              sdk={`const copy = await eb.duplicateFile("file_id", "backup.jpg");`}
             />
 
             <Endpoint
@@ -215,6 +313,7 @@ const { items } = await eb.listFiles();`}
               path="/files/:fileId/permissions"
               description="List sharing permissions for a file"
               response={`{ "items": [{ "email": "...", "canRead": true, "canWrite": false, ... }] }`}
+              sdk={`const { items } = await eb.listPermissions("file_id");`}
             />
           </section>
 
@@ -231,6 +330,14 @@ const { items } = await eb.listFiles();`}
               ]}
               response={`{ "items": [{ "file": {...}, "putUrl": "https://..." }, ...] }`}
               note="Each file must be uploaded via PUT to its putUrl, then status set to DONE."
+              sdk={`const { items } = await eb.bulkUploadFiles([
+  { fileName: "a.pdf", contentType: "application/pdf", size: 50000 },
+  { fileName: "b.png", contentType: "image/png", size: 120000 },
+]);
+for (const { file, putUrl } of items) {
+  await fetch(putUrl, { method: "PUT", body: buffers[file.name] });
+  await eb.updateFile(file.id, { status: "DONE" });
+}`}
             />
 
             <Endpoint
@@ -241,6 +348,8 @@ const { items } = await eb.listFiles();`}
                 { name: "fileIds", type: "string[]", desc: "Array of file IDs to delete" },
               ]}
               response={`{ "deleted": 5, "ids": ["...", "..."] }`}
+              sdk={`const result = await eb.bulkDeleteFiles(["id1", "id2", "id3"]);
+console.log(result.deleted); // 3`}
             />
           </section>
 
@@ -257,6 +366,12 @@ const { items } = await eb.listFiles();`}
                 { name: "quality", type: "number", desc: "1–100 (default: 80 webp, 50 avif)" },
               ]}
               response={`{ "file": {...}, "originalSize": 1024000, "optimizedSize": 256000, "savings": "75%" }`}
+              sdk={`const result = await eb.optimizeImage({
+  fileId: "file_id",
+  format: "webp",
+  quality: 80,
+});
+console.log(result.savings); // "75%"`}
             />
 
             <Endpoint
@@ -274,6 +389,13 @@ const { items } = await eb.listFiles();`}
                 { name: "grayscale", type: "boolean", desc: "Convert to grayscale" },
               ]}
               response={`{ "file": {...}, "originalSize": ..., "transformedSize": ..., "transforms": [...] }`}
+              sdk={`const result = await eb.transformImage({
+  fileId: "file_id",
+  width: 800,
+  height: 600,
+  fit: "cover",
+  format: "webp",
+});`}
             />
           </section>
 
@@ -291,6 +413,11 @@ const { items } = await eb.listFiles();`}
                 { name: "canWrite", type: "boolean", desc: "Default: false" },
                 { name: "canDelete", type: "boolean", desc: "Default: false" },
               ]}
+              sdk={`await eb.shareFile({
+  fileId: "file_id",
+  targetEmail: "coworker@example.com",
+  canWrite: true,
+});`}
             />
 
             <Endpoint
@@ -301,6 +428,8 @@ const { items } = await eb.listFiles();`}
                 { name: "expiresIn", type: "number", desc: "Seconds (60–604800, default 3600)" },
               ]}
               response={`{ "url": "https://...", "token": { "id": "...", "expiresAt": "..." } }`}
+              sdk={`const { url } = await eb.generateShareToken("file_id", 3600);
+// url is a presigned download link valid for 1 hour`}
             />
 
             <Endpoint
@@ -312,6 +441,7 @@ const { items } = await eb.listFiles();`}
                 { name: "limit", type: "number", desc: "Max results" },
                 { name: "cursor", type: "string", desc: "Pagination cursor" },
               ]}
+              sdk={`const { items } = await eb.listShareTokens({ fileId: "file_id" });`}
             />
           </section>
 
@@ -333,6 +463,7 @@ const { items } = await eb.listFiles();`}
               path="/webhooks"
               description="List your configured webhooks"
               response={`{ "items": [{ "id": "...", "url": "https://...", "events": [...], "status": "ACTIVE" }] }`}
+              sdk={`const { items } = await eb.listWebhooks();`}
             />
 
             <Endpoint
@@ -345,12 +476,18 @@ const { items } = await eb.listFiles();`}
               ]}
               response={`{ "id": "...", "url": "...", "events": [...], "secret": "whsec_...", "status": "ACTIVE" }`}
               note="Max 10 webhooks per account. URL must use HTTPS."
+              sdk={`const webhook = await eb.createWebhook({
+  url: "https://your-server.com/hooks/easybits",
+  events: ["file.created", "file.deleted"],
+});
+console.log(webhook.secret); // save this — shown only once`}
             />
 
             <Endpoint
               method="GET"
               path="/webhooks/:webhookId"
               description="Get webhook details (excluding secret)"
+              sdk={`const webhook = await eb.getWebhook("webhook_id");`}
             />
 
             <Endpoint
@@ -362,6 +499,8 @@ const { items } = await eb.listFiles();`}
                 { name: "events", type: "string[]", desc: "New events list" },
                 { name: "status", type: "string", desc: "'ACTIVE' or 'PAUSED'. Reactivating resets fail counter." },
               ]}
+              sdk={`// Reactivate a paused webhook
+await eb.updateWebhook("webhook_id", { status: "ACTIVE" });`}
             />
 
             <Endpoint
@@ -369,6 +508,7 @@ const { items } = await eb.listFiles();`}
               path="/webhooks/:webhookId"
               description="Permanently delete a webhook"
               response={`{ "success": true }`}
+              sdk={`await eb.deleteWebhook("webhook_id");`}
             />
 
             <h3 className="text-lg font-bold mt-8 mb-4">Verifying Signatures</h3>
@@ -408,15 +548,27 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
           <section id="websites" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Websites</h2>
 
-            <Endpoint method="GET" path="/websites" description="List your static websites" />
+            <Endpoint
+              method="GET"
+              path="/websites"
+              description="List your static websites"
+              sdk={`const { items } = await eb.listWebsites();`}
+            />
             <Endpoint
               method="POST"
               path="/websites"
               description="Create a new website"
               body={[{ name: "name", type: "string", desc: "Website name (required)" }]}
               response={`{ "website": { "id": "...", "slug": "my-site", "url": "https://my-site.easybits.cloud" } }`}
+              sdk={`const { website } = await eb.createWebsite("my-docs");
+console.log(website.url); // https://my-docs.easybits.cloud`}
             />
-            <Endpoint method="GET" path="/websites/:websiteId" description="Get website details" />
+            <Endpoint
+              method="GET"
+              path="/websites/:websiteId"
+              description="Get website details"
+              sdk={`const site = await eb.getWebsite("website_id");`}
+            />
             <Endpoint
               method="PATCH"
               path="/websites/:websiteId"
@@ -425,11 +577,13 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
                 { name: "name", type: "string", desc: "New name" },
                 { name: "status", type: "string", desc: "e.g. 'DEPLOYED'" },
               ]}
+              sdk={`await eb.updateWebsite("website_id", { name: "new-name" });`}
             />
             <Endpoint
               method="DELETE"
               path="/websites/:websiteId"
               description="Delete website and soft-delete all its files"
+              sdk={`await eb.deleteWebsite("website_id");`}
             />
           </section>
 
@@ -442,6 +596,8 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
               path="/usage"
               description="Get account usage statistics: storage, file counts, plan info"
               response={`{ "plan": "Spark", "storage": { "usedGB": 0.5, "maxGB": 1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
+              sdk={`const stats = await eb.getUsageStats();
+console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             />
 
             <Endpoint
@@ -449,9 +605,15 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
               path="/providers"
               description="List your configured storage providers"
               response={`{ "providers": [...], "defaultProvider": { "type": "TIGRIS" } }`}
+              sdk={`const { providers } = await eb.listProviders();`}
             />
 
-            <Endpoint method="GET" path="/keys" description="List your API keys (session auth only)" />
+            <Endpoint
+              method="GET"
+              path="/keys"
+              description="List your API keys (session auth only)"
+              sdk={`const { keys } = await eb.listKeys();`}
+            />
           </section>
 
           {/* Errors */}
@@ -490,6 +652,34 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
   );
 }
 
+// ─── Components ──────────────────────────────────────────────────
+
+function TabbedCode({ tabs }: { tabs: { label: string; code: string }[] }) {
+  const [active, setActive] = useState(0);
+  return (
+    <div className="border-2 border-black rounded-xl overflow-hidden">
+      <div className="flex border-b-2 border-black bg-gray-100">
+        {tabs.map((t, i) => (
+          <button
+            key={t.label}
+            onClick={() => setActive(i)}
+            className={`px-4 py-1.5 text-xs font-bold uppercase ${
+              active === i
+                ? "bg-gray-950 text-white"
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <pre className="p-4 bg-gray-950 text-gray-300 text-sm overflow-x-auto">
+        <code>{tabs[active].code}</code>
+      </pre>
+    </div>
+  );
+}
+
 function CodeExample({ title, code }: { title: string; code: string }) {
   return (
     <div className="border-2 border-black rounded-xl overflow-hidden">
@@ -517,6 +707,7 @@ function Endpoint({
   body,
   response,
   note,
+  sdk,
 }: {
   method: string;
   path: string;
@@ -525,6 +716,7 @@ function Endpoint({
   body?: ParamDef[];
   response?: string;
   note?: string;
+  sdk?: string;
 }) {
   const methodColors: Record<string, string> = {
     GET: "bg-green-200 text-green-900",
@@ -553,6 +745,14 @@ function Endpoint({
             </pre>
           </div>
         )}
+        {sdk && (
+          <div className="mt-3">
+            <span className="text-xs font-bold text-purple-600 uppercase">SDK</span>
+            <pre className="mt-1 bg-gray-950 text-gray-300 rounded-lg p-3 text-xs font-mono overflow-x-auto">
+              {sdk}
+            </pre>
+          </div>
+        )}
         {note && (
           <p className="mt-3 text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
             {note}
@@ -578,6 +778,32 @@ function ParamTable({ title, items }: { title: string; items: ParamDef[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SdkMethodTable({ title, methods }: { title: string; methods: [string, string][] }) {
+  return (
+    <div className="mb-6">
+      <h4 className="text-sm font-bold text-gray-700 mb-2">{title}</h4>
+      <div className="border-2 border-black rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-100 border-b border-gray-200">
+            <tr>
+              <th className="text-left px-4 py-2 font-bold text-xs uppercase text-gray-500">Method</th>
+              <th className="text-left px-4 py-2 font-bold text-xs uppercase text-gray-500">Description</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {methods.map(([method, desc]) => (
+              <tr key={method}>
+                <td className="px-4 py-1.5 font-mono text-xs text-purple-700 font-medium">{method}</td>
+                <td className="px-4 py-1.5 text-xs text-gray-600">{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
