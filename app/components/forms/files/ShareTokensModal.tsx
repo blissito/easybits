@@ -144,7 +144,7 @@ export const ShareTokensModal = ({
                 className="w-full bg-transparent text-xs text-gray-700 px-4 py-3 pr-10 rounded-xl select-all focus:outline-none font-mono"
                 onFocus={(e) => e.target.select()}
               />
-              <div className="absolute right-2">
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
                 <Copy text={url} />
               </div>
             </div>
