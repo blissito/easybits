@@ -91,6 +91,7 @@ export async function optimizeImage(
       status: "DONE",
       storageProviderId: provider?.id ?? null,
       ...(file.assetIds?.length ? { assetIds: file.assetIds } : {}),
+      source: "mcp",
     },
   });
 
@@ -105,5 +106,146 @@ export async function optimizeImage(
     originalSize,
     optimizedSize,
     savings: `${savings}%`,
+  };
+}
+
+export async function transformImage(
+  ctx: AuthContext,
+  params: {
+    fileId: string;
+    width?: number;
+    height?: number;
+    fit?: "cover" | "contain" | "fill" | "inside" | "outside";
+    format?: "webp" | "avif" | "png" | "jpeg";
+    quality?: number;
+    rotate?: number;
+    flip?: boolean;
+    grayscale?: boolean;
+  }
+) {
+  requireScope(ctx, "WRITE");
+
+  const file = await db.file.findUnique({ where: { id: params.fileId } });
+  if (!file || file.status === "DELETED") {
+    throw new Error("File not found");
+  }
+  if (file.ownerId !== ctx.user.id) {
+    throw new Error("Forbidden");
+  }
+  if (!file.contentType.startsWith("image/")) {
+    throw new Error("File is not an image");
+  }
+
+  // Download original
+  const sourceClient = await getClientForFile(file.storageProviderId, ctx.user.id);
+  const readUrl = await sourceClient.getReadUrl(file.storageKey);
+  const response = await fetch(readUrl);
+  if (!response.ok) {
+    throw new Error("Failed to download source image");
+  }
+  const sourceBuffer = Buffer.from(await response.arrayBuffer());
+  const originalSize = sourceBuffer.length;
+
+  // Build sharp pipeline
+  let pipeline = sharp(sourceBuffer);
+  const transforms: string[] = [];
+
+  if (params.width || params.height) {
+    pipeline = pipeline.resize({
+      width: params.width,
+      height: params.height,
+      fit: params.fit ?? "inside",
+    });
+    transforms.push(`resize:${params.width ?? "auto"}x${params.height ?? "auto"}`);
+  }
+
+  if (params.rotate !== undefined) {
+    pipeline = pipeline.rotate(params.rotate);
+    transforms.push(`rotate:${params.rotate}`);
+  }
+
+  if (params.flip) {
+    pipeline = pipeline.flip();
+    transforms.push("flip");
+  }
+
+  if (params.grayscale) {
+    pipeline = pipeline.grayscale();
+    transforms.push("grayscale");
+  }
+
+  // Determine output format
+  const format = params.format;
+  const contentTypeMap = {
+    webp: "image/webp",
+    avif: "image/avif",
+    png: "image/png",
+    jpeg: "image/jpeg",
+  } as const;
+
+  if (format) {
+    const quality = params.quality;
+    if (format === "webp") pipeline = pipeline.webp({ quality });
+    else if (format === "avif") pipeline = pipeline.avif({ quality });
+    else if (format === "png") pipeline = pipeline.png();
+    else if (format === "jpeg") pipeline = pipeline.jpeg({ quality });
+    transforms.push(`format:${format}`);
+  } else if (params.quality) {
+    // Apply quality to original format if possible
+    if (file.contentType === "image/webp") pipeline = pipeline.webp({ quality: params.quality });
+    else if (file.contentType === "image/jpeg") pipeline = pipeline.jpeg({ quality: params.quality });
+    else if (file.contentType === "image/avif") pipeline = pipeline.avif({ quality: params.quality });
+  }
+
+  const transformedBuffer = await pipeline.toBuffer();
+  const transformedSize = transformedBuffer.length;
+
+  // Resolve storage
+  const provider = await resolveProvider(ctx.user.id);
+  const storageKey = file.assetIds?.length
+    ? `${ctx.user.id}/${file.assetIds[0]}/${nanoid(3)}`
+    : `${ctx.user.id}/${nanoid(3)}`;
+  const client = provider ? createStorageClient(provider) : getPlatformDefaultClient();
+
+  const newContentType = format ? contentTypeMap[format] : file.contentType;
+  const putUrl = await client.getPutUrl(storageKey);
+  const putResponse = await fetch(putUrl, {
+    method: "PUT",
+    body: transformedBuffer,
+    headers: { "Content-Type": newContentType },
+  });
+  if (!putResponse.ok) {
+    throw new Error("Failed to upload transformed image");
+  }
+
+  // Build new filename
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const ext = format ?? file.name.split(".").pop() ?? "img";
+  const newName = `${baseName}_transformed.${ext}`;
+
+  const newFile = await db.file.create({
+    data: {
+      name: newName,
+      storageKey,
+      slug: storageKey,
+      size: transformedSize,
+      contentType: newContentType,
+      ownerId: ctx.user.id,
+      access: file.access,
+      url: "",
+      status: "DONE",
+      storageProviderId: provider?.id ?? null,
+      source: "mcp",
+      ...(file.assetIds?.length ? { assetIds: file.assetIds } : {}),
+    },
+  });
+
+  fileEvents.emit("file:changed", ctx.user.id);
+
+  return {
+    file: newFile,
+    originalSize,
+    transformedSize,
+    transforms,
   };
 }

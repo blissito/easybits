@@ -68,7 +68,7 @@ Ask your AI agent things like:
 - *"Create a share link for my latest file"*
 - *"Search my files for invoices"*
 
-## Tools (21)
+## Tools (22)
 
 ### Files
 
@@ -96,6 +96,7 @@ Ask your AI agent things like:
 | Tool | Description |
 |------|-------------|
 | `optimize_image` | Convert images to WebP or AVIF with quality control |
+| `transform_image` | Resize, rotate, flip, convert format, or apply grayscale |
 
 ### AI Configuration
 

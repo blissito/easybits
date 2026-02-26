@@ -33,6 +33,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         ownerId: user.id,
         status: "DONE",
         url: "",
+        source: "dashboard",
       },
     });
   }

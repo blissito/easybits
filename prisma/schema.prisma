@@ -237,6 +237,7 @@ model File {
   actionId              String?
   // ^ relations
   createdAt             DateTime   @default(now())
+  source                String?
   deletedAt             DateTime?
   updatedAt             DateTime   @updatedAt
   // ^ auto-dates

@@ -73,7 +73,7 @@ export function createMcpServer() {
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await uploadFile(ctx, params);
+      const result = await uploadFile(ctx, { ...params, source: "mcp" });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -259,6 +259,30 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { optimizeImage } = await import("../core/imageOperations");
       const result = await optimizeImage(ctx, params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "transform_image",
+    "Resize, rotate, flip, convert, or apply grayscale to an image. Creates a new file (original unchanged). Returns `{ file, originalSize, transformedSize, transforms }`.",
+    {
+      fileId: z.string().describe("ID of the image file to transform"),
+      width: z.number().optional().describe("Target width in pixels"),
+      height: z.number().optional().describe("Target height in pixels"),
+      fit: z.enum(["cover", "contain", "fill", "inside", "outside"]).default("inside").describe("How to fit the image when resizing"),
+      format: z.enum(["webp", "avif", "png", "jpeg"]).optional().describe("Output format (keeps original if not specified)"),
+      quality: z.number().min(1).max(100).optional().describe("Quality 1-100"),
+      rotate: z.number().optional().describe("Rotation in degrees"),
+      flip: z.boolean().optional().describe("Flip vertically"),
+      grayscale: z.boolean().optional().describe("Convert to grayscale"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { transformImage } = await import("../core/imageOperations");
+      const result = await transformImage(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

@@ -45,6 +45,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       url: true,
       status: true,
       storageProviderId: true,
+      source: true,
       deletedAt: true,
       createdAt: true,
     },
@@ -207,6 +208,7 @@ export default function DevFilesPage() {
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Type</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Acceso</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Link</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Fuente</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Provider</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">
                 {trash ? "Purge in" : "Status"}
@@ -262,6 +264,17 @@ export default function DevFilesPage() {
                   ) : null}
                 </td>
                 <td className="px-4 py-3">
+                  {f.source ? (
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border border-black ${
+                      f.source === "mcp" ? "bg-purple-200" : f.source === "api" ? "bg-blue-200" : "bg-brand-yellow"
+                    }`}>
+                      {f.source}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
                   <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">
                     {f.storageProviderId ? "Custom" : "Tigris"}
                   </span>
@@ -295,7 +308,7 @@ export default function DevFilesPage() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
+                <td colSpan={10} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
                   {trash ? "La papelera esta vacia" : "Sube archivos via MCP, SDK o API"}
                 </td>
               </tr>

@@ -101,6 +101,7 @@ export async function uploadFile(
     assetId?: string;
     access?: "public" | "private";
     region?: StorageRegion;
+    source?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -146,6 +147,7 @@ export async function uploadFile(
       url: "",
       status: "PENDING",
       storageProviderId: provider?.id ?? null,
+      ...(opts.source ? { source: opts.source } : {}),
       ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
     },
   });

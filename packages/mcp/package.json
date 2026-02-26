@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Easybits MCP server — stdio transport that proxies to the Easybits Streamable HTTP endpoint",
   "type": "module",
   "bin": {

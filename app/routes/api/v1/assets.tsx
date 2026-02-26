@@ -170,6 +170,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         contentType: formData.get("contentType") as string,
         size: +formData.get("size")!,
         url: "",
+        source: "dashboard",
       },
     });
 

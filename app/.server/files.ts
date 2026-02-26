@@ -16,6 +16,7 @@ export type FileCreationPayload = {
   assetIds?: string[];
   actionId?: string;
   status: "PENDING" | "WORKING" | "DONE" | "ERROR" | "DELETED";
+  source?: string;
 };
 export const createFile = async (data: FileCreationPayload) => {
   return await db.file.create({
