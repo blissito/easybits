@@ -1,6 +1,14 @@
 import { useEffect, type ReactNode } from "react";
 import { Footer } from "~/components/common/Footer";
 import { AuthNav } from "~/components/login/auth-nav";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
+
+export const meta = () =>
+  getBasicMetaTags({
+    title: "Aviso de Privacidad | EasyBits",
+    description:
+      "Aviso de privacidad y protección de datos personales de EasyBits Cloud.",
+  });
 
 export default function Index() {
   useEffect(() => {

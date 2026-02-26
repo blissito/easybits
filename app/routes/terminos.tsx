@@ -1,6 +1,14 @@
 import { useEffect, type ReactNode } from "react";
 import { Footer } from "~/components/common/Footer";
 import { AuthNav } from "~/components/login/auth-nav";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
+
+export const meta = () =>
+  getBasicMetaTags({
+    title: "Términos y Condiciones | EasyBits",
+    description:
+      "Términos y condiciones de uso de la plataforma EasyBits Cloud.",
+  });
 
 export default function Index() {
   useEffect(() => {
