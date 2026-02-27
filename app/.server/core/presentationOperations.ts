@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { getPlatformDefaultClient } from "../storage";
+import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
 import { buildRevealHtml, type Slide } from "~/lib/buildRevealHtml";
 import { removeHost } from "~/lib/fly_certs/certs_getters";
@@ -120,8 +120,9 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   }
 
   // Upload index.html via presigned URL
-  const client = getPlatformDefaultClient();
+  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
   const storageKey = `${ctx.user.id}/${nanoid(6)}`;
+  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
   const putUrl = await client.getPutUrl(storageKey);
 
   const uploadRes = await fetch(putUrl, {
@@ -140,7 +141,7 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   if (existingFile) {
     await db.file.update({
       where: { id: existingFile.id },
-      data: { storageKey, size: htmlBuffer.length, status: "DONE" },
+      data: { storageKey, size: htmlBuffer.length, status: "DONE", url: publicUrl },
     });
   } else {
     await db.file.create({
@@ -152,7 +153,7 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
         contentType: "text/html",
         ownerId: ctx.user.id,
         access: "public",
-        url: "",
+        url: publicUrl,
         status: "DONE",
       },
     });

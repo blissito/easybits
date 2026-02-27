@@ -5,7 +5,7 @@ import { db } from "./db";
 export interface TelemetryEvent {
   ownerId: string;
   assetId?: string;
-  linkType: "store" | "assetDetail";
+  linkType: "store" | "assetDetail" | "website";
   eventType: "visit";
   timestamp: Date;
   sessionId?: string;
@@ -17,7 +17,7 @@ export interface TelemetryEvent {
 export const TelemetryEventSchema = z.object({
   ownerId: z.string(),
   assetId: z.string().optional(),
-  linkType: z.union([z.literal("store"), z.literal("assetDetail")]),
+  linkType: z.union([z.literal("store"), z.literal("assetDetail"), z.literal("website")]),
   eventType: z.literal("visit"),
   timestamp: z.coerce.date(),
   sessionId: z.string().optional(),
@@ -32,7 +32,7 @@ export async function trackTelemetryVisit({
 }: {
   asset: { ownerId: string; id?: string };
   request: Request | { headers: any; url: string };
-  linkType?: "assetDetail" | "store";
+  linkType?: "assetDetail" | "store" | "website";
 }) {
   try {
     const headers = request.headers;

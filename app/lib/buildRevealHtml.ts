@@ -251,6 +251,10 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
 ${sections}
     </div>
   </div>
+  <a href="https://easybits.cloud" target="_blank" rel="noopener"
+     style="position:fixed;bottom:12px;right:16px;z-index:9999;font-family:system-ui,sans-serif;font-size:11px;color:rgba(255,255,255,0.45);text-decoration:none;letter-spacing:0.02em;pointer-events:auto;"
+     onmouseover="this.style.color='rgba(255,255,255,0.8)'" onmouseout="this.style.color='rgba(255,255,255,0.45)'"
+  >Powered by EasyBits</a>
   <script src="${REVEAL_CDN}/dist/reveal.js"><\/script>
   <script>
     Reveal.initialize({ hash: true, transition: 'slide' });
