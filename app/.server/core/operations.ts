@@ -382,7 +382,7 @@ export async function updateFile(
 
     const s3Key = `mcp/${file.storageKey}`;
 
-    const fromBucket = opts.access === "public" ? PRIVATE_BUCKET : PUBLIC_BUCKET;
+    const fromBucket = file.access === "private" ? PRIVATE_BUCKET : PUBLIC_BUCKET;
     const toBucket = opts.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
 
     await copyObjectAcrossBuckets({ fromBucket, toBucket, key: s3Key });

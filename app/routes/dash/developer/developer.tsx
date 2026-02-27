@@ -14,7 +14,7 @@ const tabs = [
 
 export default function DeveloperLayout() {
   return (
-    <article className="pt-20 px-8 md:pl-36 w-full">
+    <article className="pt-20 px-8 pb-24 md:pl-36 w-full">
       <h1 className="text-3xl font-black tracking-tight mb-6 uppercase">
         Developer Dashboard
       </h1>
