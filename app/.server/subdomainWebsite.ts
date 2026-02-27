@@ -33,7 +33,9 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
     select: { id: true, ownerId: true },
   });
 
-  if (!website) return null;
+  if (!website) {
+    return new Response("Site not found", { status: 404 });
+  }
 
   const splat = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
 
