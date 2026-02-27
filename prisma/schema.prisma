@@ -185,6 +185,7 @@ model User {
   aiKeys           UserAiKey[]
   websites         Website[]
   webhooks         Webhook[]
+  presentations    Presentation[]
 }
 
 enum FileStatus {
@@ -404,6 +405,22 @@ model Webhook {
 
   @@index([userId])
   @@index([userId, status])
+}
+
+model Presentation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  prompt    String
+  slides    Json     // { id, html, order }[]
+  theme     String   @default("black")
+  status    String   @default("DRAFT") // DRAFT | PUBLISHED
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id])
+  websiteId String?  @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
 
 model TelemetryEvent {

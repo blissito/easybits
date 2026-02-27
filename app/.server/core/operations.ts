@@ -566,10 +566,16 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
   });
 
   // Create SSL cert for the subdomain (non-blocking — Fly retries automatically)
+  const hostname = `${updated.slug}.easybits.cloud`;
   try {
-    await createHost(`${updated.slug}.easybits.cloud`);
+    if (!process.env.FLY_API_TOKEN) {
+      console.warn(`[createWebsite] FLY_API_TOKEN missing — skipping cert for ${hostname}`);
+    } else {
+      const result = await createHost(hostname);
+      console.info(`[createWebsite] cert created for ${hostname}:`, JSON.stringify(result));
+    }
   } catch (err) {
-    console.error(`Failed to create cert for ${updated.slug}.easybits.cloud:`, err);
+    console.error(`[createWebsite] Failed to create cert for ${hostname}:`, err);
   }
 
   const result = {

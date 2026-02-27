@@ -57,6 +57,12 @@ export default [
       route("clientes", "routes/clients.tsx"),
 
       route("compras", "routes/purchases.tsx"),
+      // Presentations
+      ...prefix("presentations", [
+        index("routes/dash/presentations/list.tsx"),
+        route("new", "routes/dash/presentations/new.tsx"),
+        route(":id", "routes/dash/presentations/editor.tsx"),
+      ]),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
       // Developer dashboard
@@ -109,6 +115,13 @@ export default [
     route("websites/:websiteId/files", "routes/api/v2/website-files.ts"),
     route("keys", "routes/api/v2/keys.ts"),
     route("keys/:keyId", "routes/api/v2/key.ts"),
+    route("presentations", "routes/api/v2/presentations.ts"),
+    route("presentations/:id", "routes/api/v2/presentation.ts"),
+    route("presentations/:id/deploy", "routes/api/v2/presentation-deploy.ts"),
+    route("presentations/:id/generate", "routes/api/v2/presentation-generate.ts"),
+    route("presentations/:id/outline", "routes/api/v2/presentation-outline.ts"),
+    route("presentations/:id/variant", "routes/api/v2/presentation-variant.ts"),
+    route("presentations/:id/add-slide", "routes/api/v2/presentation-add-slide.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),

@@ -41,6 +41,18 @@ export const ITEMS = {
 
   sectionItems: [
     {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <path d="M8 21h8" />
+          <path d="M12 17v4" />
+        </svg>
+      ),
+      path: "/dash/presentations",
+      title: "Presentaciones",
+      index: 4,
+    },
+    {
       icon: <img className="scale" src="/images/storage.svg" />,
       path: "/dash/archivos",
       title: "Archivos",
