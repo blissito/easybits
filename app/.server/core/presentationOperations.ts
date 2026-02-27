@@ -112,7 +112,7 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   }
 
   if (!websiteId) {
-    const website = await createWebsite(ctx, { name: `Pres: ${p.name}` });
+    const website = await createWebsite(ctx, { name: p.name });
     websiteId = website.id;
     slug = website.slug;
   } else {

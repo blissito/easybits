@@ -509,6 +509,17 @@ export async function listShareTokens(
 
 import { slugify } from "../utils/slugify";
 
+const ADJECTIVES = [
+  "bright", "swift", "bold", "calm", "cool", "crisp", "deft", "fair",
+  "keen", "lush", "neat", "pure", "rare", "slim", "soft", "vast",
+  "warm", "wild", "wise", "vivid", "fresh", "grand", "prime", "sharp",
+  "noble", "lucid", "gentle", "clever", "agile", "serene",
+];
+
+function randomAdjective(): string {
+  return ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+}
+
 export async function listWebsites(ctx: AuthContext) {
   requireScope(ctx, "READ");
   const websites = await db.website.findMany({
@@ -544,7 +555,7 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
 
   let website;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${nanoid(6)}`;
+    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${randomAdjective()}`;
     try {
       website = await db.website.create({
         data: { name, slug, ownerId: ctx.user.id, prefix: "" },
