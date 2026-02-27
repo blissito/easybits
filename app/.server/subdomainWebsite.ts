@@ -19,6 +19,8 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.hostname;
   const hostname = host.split(":")[0]; // strip port
 
+  console.log(`[subdomain] url.hostname=${url.hostname} host-header=${host} resolved=${hostname}`);
+
   if (!hostname.endsWith(".easybits.cloud") || hostname.startsWith("www")) {
     return null;
   }
