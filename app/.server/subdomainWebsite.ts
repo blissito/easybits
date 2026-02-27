@@ -15,11 +15,15 @@ function isImmutable(path: string): boolean {
 export async function handleSubdomainWebsite(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
 
-  if (!url.hostname.endsWith(".easybits.cloud") || url.hostname.startsWith("www")) {
+  // Fly.io may not set the hostname in request.url — use Host header as primary source
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.hostname;
+  const hostname = host.split(":")[0]; // strip port
+
+  if (!hostname.endsWith(".easybits.cloud") || hostname.startsWith("www")) {
     return null;
   }
 
-  const subdomain = url.hostname.split(".")[0];
+  const subdomain = hostname.split(".")[0];
   if (!subdomain || subdomain === "www" || subdomain === "api") {
     return null;
   }
