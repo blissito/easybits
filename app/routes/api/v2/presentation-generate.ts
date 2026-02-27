@@ -11,6 +11,7 @@ import {
 } from "~/.server/prompts/presentation";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { searchImage } from "~/.server/images/pexels";
+import { SCENE_EFFECT_IDS } from "~/lib/buildRevealHtml";
 
 interface OutlineItem {
   title: string;
@@ -18,6 +19,15 @@ interface OutlineItem {
   imageQuery?: string;
   type?: "2d" | "3d";
 }
+
+const sceneEffectSchema = z.object({
+  effect: z.enum(SCENE_EFFECT_IDS as unknown as [string, ...string[]]),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  speed: z.number().optional(),
+  density: z.number().optional(),
+  backgroundColor: z.string().optional(),
+});
 
 // POST /api/v2/presentations/:id/generate
 export async function action({ request, params }: Route.ActionArgs) {
@@ -72,10 +82,10 @@ export async function action({ request, params }: Route.ActionArgs) {
           id: nanoid(8),
           order: i,
           type: "3d" as const,
-          sceneObjects: match?.sceneObjects || [],
+          sceneEffect: match?.sceneEffect,
           title: match?.title || item.title,
           subtitle: match?.subtitle,
-          backgroundColor: match?.backgroundColor,
+          backgroundColor: match?.sceneEffect?.backgroundColor,
         };
       } else {
         const match = slides2D.find((s) => s.originalIdx === i);
@@ -139,7 +149,7 @@ async function generate2DSlides(
     prompt: `Generate reveal.js HTML slides for this outline:\n\n${outlineText}`,
   });
 
-  return object.slides.map((html, i) => ({
+  return object.slides.slice(0, items.length).map((html, i) => ({
     html,
     originalIdx: items[i].originalIdx,
   }));
@@ -151,28 +161,15 @@ async function generate3DSlides(
 ) {
   if (items.length === 0) return [];
 
-  const sceneObjectSchema = z.object({
-    geometry: z.enum(["box", "sphere", "torus", "cylinder", "dodecahedron"]),
-    position: z.array(z.number()).describe("[x, y, z]").optional(),
-    rotation: z.array(z.number()).describe("[x, y, z]").optional(),
-    scale: z.array(z.number()).describe("[x, y, z]").optional(),
-    color: z.string().optional(),
-    metalness: z.number().optional(),
-    roughness: z.number().optional(),
-    animation: z.enum(["none", "float", "rotate"]).optional(),
-    speed: z.number().optional(),
-  });
-
-  // Generate each 3D slide independently (they need individual context)
+  // Generate each 3D slide independently
   const results = await Promise.all(
     items.map(async (entry) => {
       const { object } = await generateObject({
         model: anthropic("claude-haiku-4-5-20251001"),
         schema: z.object({
-          sceneObjects: z.array(sceneObjectSchema),
+          sceneEffect: sceneEffectSchema,
           title: z.string().optional(),
           subtitle: z.string().optional(),
-          backgroundColor: z.string().optional(),
         }),
         system: SCENE_SYSTEM_PROMPT,
         prompt: `Create a 3D scene for a presentation slide about: "${entry.item.title}"\nContext: ${entry.item.bullets.join(", ")}`,
@@ -180,10 +177,9 @@ async function generate3DSlides(
 
       return {
         originalIdx: entry.originalIdx,
-        sceneObjects: object.sceneObjects,
+        sceneEffect: object.sceneEffect,
         title: object.title,
         subtitle: object.subtitle,
-        backgroundColor: object.backgroundColor,
       };
     })
   );

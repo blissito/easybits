@@ -295,7 +295,8 @@ export default function PresentationEditor() {
           i === editingIdx
             ? {
                 ...s,
-                sceneObjects: parsed.sceneObjects ?? parsed,
+                sceneEffect: parsed.sceneEffect ?? s.sceneEffect,
+                sceneObjects: parsed.sceneObjects ?? s.sceneObjects,
                 title: parsed.title ?? s.title,
                 subtitle: parsed.subtitle ?? s.subtitle,
                 backgroundColor: parsed.backgroundColor ?? s.backgroundColor,
@@ -463,7 +464,7 @@ export default function PresentationEditor() {
     slides.length > 0 ? buildRevealHtml(slides, theme) : "";
 
   return (
-    <article className="pt-20 px-4 pb-4 md:pl-36 w-full h-screen flex flex-col overflow-hidden">
+    <article className="pt-20 px-4 pb-4 md:pl-36 w-full h-screen flex flex-col overflow-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-3 shrink-0">
         <div className="flex items-center gap-3">
@@ -738,17 +739,18 @@ export default function PresentationEditor() {
                         } else {
                           setEditingIdx(idx);
                           if (slide.type === "3d") {
+                            const jsonData: Record<string, unknown> = {
+                              title: slide.title,
+                              subtitle: slide.subtitle,
+                              backgroundColor: slide.backgroundColor,
+                            };
+                            if (slide.sceneEffect) {
+                              jsonData.sceneEffect = slide.sceneEffect;
+                            } else if (slide.sceneObjects) {
+                              jsonData.sceneObjects = slide.sceneObjects;
+                            }
                             setEditJson(
-                              JSON.stringify(
-                                {
-                                  sceneObjects: slide.sceneObjects || [],
-                                  title: slide.title,
-                                  subtitle: slide.subtitle,
-                                  backgroundColor: slide.backgroundColor,
-                                },
-                                null,
-                                2
-                              )
+                              JSON.stringify(jsonData, null, 2)
                             );
                           } else {
                             setEditHtml(slide.html || "");

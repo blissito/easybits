@@ -10,6 +10,16 @@ import {
   SCENE_SYSTEM_PROMPT,
 } from "~/.server/prompts/presentation";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
+import { SCENE_EFFECT_IDS } from "~/lib/buildRevealHtml";
+
+const sceneEffectSchema = z.object({
+  effect: z.enum(SCENE_EFFECT_IDS as unknown as [string, ...string[]]),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  speed: z.number().optional(),
+  density: z.number().optional(),
+  backgroundColor: z.string().optional(),
+});
 
 // POST /api/v2/presentations/:id/add-slide
 export async function action({ request, params }: Route.ActionArgs) {
@@ -37,18 +47,6 @@ export async function action({ request, params }: Route.ActionArgs) {
     ? createAnthropic({ apiKey: userKey })
     : createAnthropic();
 
-  const sceneObjectSchema = z.object({
-    geometry: z.enum(["box", "sphere", "torus", "cylinder", "dodecahedron"]),
-    position: z.array(z.number()).describe("[x, y, z]").optional(),
-    rotation: z.array(z.number()).describe("[x, y, z]").optional(),
-    scale: z.array(z.number()).describe("[x, y, z]").optional(),
-    color: z.string().optional(),
-    metalness: z.number().optional(),
-    roughness: z.number().optional(),
-    animation: z.enum(["none", "float", "rotate"]).optional(),
-    speed: z.number().optional(),
-  });
-
   try {
     // Generate 2x 2D variants + 1x 3D in parallel
     const [variant2D, variant3D] = await Promise.all([
@@ -65,10 +63,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       generateObject({
         model: anthropic("claude-haiku-4-5-20251001"),
         schema: z.object({
-          sceneObjects: z.array(sceneObjectSchema),
+          sceneEffect: sceneEffectSchema,
           title: z.string().optional(),
           subtitle: z.string().optional(),
-          backgroundColor: z.string().optional(),
         }),
         system: SCENE_SYSTEM_PROMPT,
         prompt: `Create a 3D scene for a presentation slide about: "${prompt.trim()}"\nPresentation topic: ${presentation.prompt}`,
@@ -95,10 +92,10 @@ export async function action({ request, params }: Route.ActionArgs) {
         id: nanoid(8),
         order: 0,
         type: "3d" as const,
-        sceneObjects: variant3D.object.sceneObjects,
+        sceneEffect: variant3D.object.sceneEffect,
         title: variant3D.object.title,
         subtitle: variant3D.object.subtitle,
-        backgroundColor: variant3D.object.backgroundColor,
+        backgroundColor: variant3D.object.sceneEffect.backgroundColor,
       },
     ];
 
