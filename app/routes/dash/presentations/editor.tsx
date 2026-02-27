@@ -463,9 +463,9 @@ export default function PresentationEditor() {
     slides.length > 0 ? buildRevealHtml(slides, theme) : "";
 
   return (
-    <article className="pt-20 px-4 pb-24 md:pl-36 w-full">
+    <article className="pt-20 px-4 pb-4 md:pl-36 w-full h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <Link
             to="/dash/presentations"
@@ -478,6 +478,33 @@ export default function PresentationEditor() {
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          {deployUrl && (
+            <div className="inline-flex w-fit items-center gap-2 px-3 py-1.5 bg-lime border-2 border-black rounded-xl text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+              <span className="font-bold">Live:</span>
+              <a
+                href={deployUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline truncate max-w-[200px]"
+              >
+                {deployUrl}
+              </a>
+              <Copy text={deployUrl} mode="ghost" className="static p-0" />
+              <button
+                onClick={() => {
+                  setUnpublishing(true);
+                  unpublishFetcher.submit(
+                    { intent: "unpublish" },
+                    { method: "post" }
+                  );
+                }}
+                disabled={unpublishing}
+                className="px-2 py-0.5 text-xs font-bold text-red-600 border-2 border-red-400 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                {unpublishing ? "..." : "Despublicar"}
+              </button>
+            </div>
+          )}
           <select
             value={theme}
             onChange={(e) => handleThemeChange(e.target.value)}
@@ -531,35 +558,6 @@ export default function PresentationEditor() {
           </BrutalButton>
         </div>
       </div>
-
-      {/* Deploy URL */}
-      {deployUrl && (
-        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-lime border-2 border-black rounded-xl text-sm shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-          <span className="font-bold">Live:</span>
-          <a
-            href={deployUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline"
-          >
-            {deployUrl}
-          </a>
-          <Copy text={deployUrl} mode="ghost" className="static p-0" />
-          <button
-            onClick={() => {
-              setUnpublishing(true);
-              unpublishFetcher.submit(
-                { intent: "unpublish" },
-                { method: "post" }
-              );
-            }}
-            disabled={unpublishing}
-            className="ml-auto px-3 py-0.5 text-xs font-bold text-red-600 border-2 border-red-400 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
-          >
-            {unpublishing ? "Despublicando..." : "Despublicar"}
-          </button>
-        </div>
-      )}
 
       {error && (
         <div className="mb-4 px-3 py-2 bg-red-100 border-2 border-red-500 rounded-xl text-sm text-red-700">
@@ -687,10 +685,10 @@ export default function PresentationEditor() {
 
       {/* Editor: slides panel + preview */}
       {slides.length > 0 && !outline && (
-        <div className="flex gap-4 flex-col lg:flex-row">
+        <div className="flex gap-4 flex-col lg:flex-row flex-1 min-h-0">
           {/* Slides panel */}
           <div
-            className="lg:w-[40%] grid grid-cols-3 gap-2 pr-2 content-start"
+            className="lg:w-[35%] lg:h-full grid grid-cols-3 gap-2 pr-2 content-start overflow-y-auto"
           >
             {slides
               .sort((a, b) => a.order - b.order)
@@ -702,7 +700,7 @@ export default function PresentationEditor() {
                   onDragOver={(e) => handleDragOver(e)}
                   onDrop={() => handleDrop(idx)}
                   onClick={() => setSelectedSlideIdx(idx)}
-                  className={`border-2 rounded-xl bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] cursor-grab active:cursor-grabbing transition-all ${
+                  className={`border-2 rounded-xl bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] cursor-grab active:cursor-grabbing transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
                     dragIdx === idx ? "opacity-50" : ""
                   } ${selectedSlideIdx === idx ? "border-brand-500 ring-2 ring-brand-500" : "border-black"} ${editingIdx === idx ? "ring-2 ring-brand-500" : ""}`}
                 >
@@ -826,12 +824,12 @@ export default function PresentationEditor() {
           </div>
 
           {/* Preview */}
-          <div className="lg:w-[60%] border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <div className="lg:w-[65%] lg:h-full border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <iframe
               ref={previewIframeRef}
               srcDoc={previewHtml}
               sandbox="allow-scripts"
-              className="w-full h-[70vh]"
+              className="w-full h-full"
               title="Preview"
             />
           </div>
