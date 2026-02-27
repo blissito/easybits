@@ -30,6 +30,15 @@ import {
   updateWebhookConfig,
   deleteWebhookById,
 } from "../core/webhookOperations";
+import {
+  listPresentations,
+  getPresentation,
+  createPresentation,
+  updatePresentation,
+  deletePresentation,
+  deployPresentation,
+  unpublishPresentation,
+} from "../core/presentationOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 
@@ -496,6 +505,115 @@ export function createMcpServer() {
     }
   );
 
+  // --- Presentation Tools ---
+
+  server.tool(
+    "list_presentations",
+    "List your presentations (id, name, prompt, theme, status, websiteId, createdAt).",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listPresentations(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "get_presentation",
+    "Get a presentation by ID with full slide data.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "create_presentation",
+    "Create a new presentation. Slides are optional — you can add them later via update_presentation. Each slide has: { id, order, html }.",
+    {
+      name: z.string().describe("Presentation name"),
+      prompt: z.string().describe("Description or prompt for the presentation"),
+      slides: z.array(z.object({
+        id: z.string().describe("Unique slide ID"),
+        order: z.number().describe("Slide order (0-based)"),
+        type: z.enum(["2d", "3d"]).optional().describe("Slide type (default: 2d)"),
+        html: z.string().optional().describe("HTML content of the slide"),
+      })).optional().describe("Array of slides"),
+      theme: z.string().optional().describe("Reveal.js theme (default: black). Options: black, white, league, beige, night, serif, simple, solarized, moon, dracula, sky, blood"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createPresentation(ctx, params as any);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "update_presentation",
+    "Update a presentation's name, slides, theme, or prompt. Each slide has: { id, order, html }.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      name: z.string().optional().describe("New name"),
+      prompt: z.string().optional().describe("New prompt/description"),
+      slides: z.array(z.object({
+        id: z.string().describe("Unique slide ID"),
+        order: z.number().describe("Slide order (0-based)"),
+        type: z.enum(["2d", "3d"]).optional().describe("Slide type"),
+        html: z.string().optional().describe("HTML content of the slide"),
+      })).optional().describe("Replace all slides"),
+      theme: z.string().optional().describe("Reveal.js theme"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { presentationId, ...opts } = params;
+      const result = await updatePresentation(ctx, presentationId, opts as any);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "delete_presentation",
+    "Delete a presentation permanently.",
+    {
+      presentationId: z.string().describe("The presentation ID to delete"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deletePresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "deploy_presentation",
+    "Publish a presentation as a live website. Returns the public URL (slug.easybits.cloud). Requires at least one slide.",
+    {
+      presentationId: z.string().describe("The presentation ID to deploy"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deployPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "unpublish_presentation",
+    "Unpublish a presentation, removing its website and reverting to draft status.",
+    {
+      presentationId: z.string().describe("The presentation ID to unpublish"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await unpublishPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
   // --- Utility Tools ---
 
   server.tool(
@@ -571,7 +689,7 @@ export function createMcpServer() {
     "get_docs",
     "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
     {
-      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, account, sdk, errors"),
+      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, presentations, account, sdk, errors"),
     },
     async (params) => {
       const markdown = getDocsMarkdown(params.section);

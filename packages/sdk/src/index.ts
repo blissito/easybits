@@ -262,6 +262,47 @@ export interface Permission {
   createdAt: string;
 }
 
+// ─── Presentation Types ───────────────────────────────────────
+
+export interface PresentationSlide {
+  id: string;
+  order: number;
+  type?: "2d" | "3d";
+  html?: string;
+}
+
+export interface Presentation {
+  id: string;
+  name: string;
+  prompt: string;
+  slides: PresentationSlide[];
+  theme: string;
+  status: string;
+  websiteId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePresentationParams {
+  name: string;
+  prompt: string;
+  slides?: PresentationSlide[];
+  theme?: string;
+}
+
+export interface UpdatePresentationParams {
+  name?: string;
+  prompt?: string;
+  slides?: PresentationSlide[];
+  theme?: string;
+}
+
+export interface DeployPresentationResponse {
+  url: string;
+  websiteId: string;
+  slug: string;
+}
+
 export class EasybitsError extends Error {
   constructor(
     public status: number,
@@ -503,6 +544,48 @@ export class EasybitsClient {
     return this.request<EasybitsFile>(`/files/${fileId}/duplicate`, {
       method: "POST",
       body: JSON.stringify({ name }),
+    });
+  }
+
+  // ── Presentations ──────────────────────────────────────────
+
+  async listPresentations(): Promise<{ items: Presentation[] }> {
+    return this.request<{ items: Presentation[] }>("/presentations");
+  }
+
+  async getPresentation(presentationId: string): Promise<Presentation> {
+    return this.request<Presentation>(`/presentations/${presentationId}`);
+  }
+
+  async createPresentation(params: CreatePresentationParams): Promise<Presentation> {
+    return this.request<Presentation>("/presentations", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async updatePresentation(presentationId: string, params: UpdatePresentationParams): Promise<Presentation> {
+    return this.request<Presentation>(`/presentations/${presentationId}`, {
+      method: "PATCH",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deletePresentation(presentationId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/presentations/${presentationId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async deployPresentation(presentationId: string): Promise<DeployPresentationResponse> {
+    return this.request<DeployPresentationResponse>(`/presentations/${presentationId}/deploy`, {
+      method: "POST",
+    });
+  }
+
+  async unpublishPresentation(presentationId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/presentations/${presentationId}/unpublish`, {
+      method: "POST",
     });
   }
 
