@@ -5,7 +5,7 @@ import { requireScope } from "../apiAuth";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
 import { buildRevealHtml, type Slide } from "~/lib/buildRevealHtml";
-import { removeHost } from "~/lib/fly_certs/certs_getters";
+import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
 
 function throwJson(error: string, status: number): never {
@@ -180,8 +180,18 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
     data: { status: "PUBLISHED", websiteId },
   });
 
+  // Ensure SSL cert exists (idempotent — Fly deduplicates)
+  const hostname = `${slug}.easybits.cloud`;
+  try {
+    if (process.env.FLY_API_TOKEN) {
+      await createHost(hostname);
+    }
+  } catch (err) {
+    console.error(`[deployPresentation] cert creation failed for ${hostname}:`, err);
+  }
+
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  const url = `${proto}://${slug}.easybits.cloud`;
+  const url = `${proto}://${hostname}`;
   return { url, websiteId, slug };
 }
 
