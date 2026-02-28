@@ -516,7 +516,7 @@ function buildEffectScripts(slides: Slide[]): string {
 
   if (effectDefs.length === 0) return "";
 
-  // Build per-effect init code
+  // Build per-effect lazy init — defer WebGLRenderer until slide is visible
   const initBlocks = effectDefs.map((def) => {
     const sp = def.effect.speed ?? 1.0;
     const dn = def.effect.density ?? 1.0;
@@ -524,20 +524,22 @@ function buildEffectScripts(slides: Slide[]): string {
     const idx = ${def.idx};
     const canvas = document.getElementById('three-canvas-' + idx);
     if (canvas) {
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
-      const w = rc.width || 960, h = rc.height || 700;
-      renderer.setSize(w, h);
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
-      camera.position.z = 5;
-      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-      const dl = new THREE.DirectionalLight(0xffffff, 0.8);
-      dl.position.set(3, 4, 5);
-      scene.add(dl);
-      const tickFn = ${buildEffectCode(def.effect)}(scene, camera, renderer, mouse, ${sp}, ${dn});
-      scenes[idx] = { renderer, scene, camera, active: false, raf: null, tickFn };
+      scenes[idx] = { canvas, active: false, raf: null, initialized: false, initFn: function() {
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
+        const w = rc.width || 960, h = rc.height || 700;
+        renderer.setSize(w, h);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
+        camera.position.z = 5;
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+        dl.position.set(3, 4, 5);
+        scene.add(dl);
+        const tickFn = ${buildEffectCode(def.effect)}(scene, camera, renderer, mouse, ${sp}, ${dn});
+        Object.assign(scenes[idx], { renderer, scene, camera, tickFn, initialized: true });
+      }};
     }
   }`;
   }).join("\n  ");
@@ -571,6 +573,7 @@ function animate(idx) {
 function startScene(idx) {
   const s = scenes[idx];
   if (!s || s.active) return;
+  if (!s.initialized) s.initFn();
   s.active = true;
   const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
   const w = rc.width || 960, h = rc.height || 700;
@@ -590,7 +593,7 @@ function stopScene(idx) {
 Reveal.on('slidechanged', (e) => {
   for (const idx of Object.keys(scenes)) stopScene(Number(idx));
   const el = e.currentSlide.querySelector('.three-slide');
-  if (el) startScene(Number(el.dataset.sceneIdx));
+  if (el) setTimeout(() => startScene(Number(el.dataset.sceneIdx)), 100);
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -602,7 +605,7 @@ window.addEventListener('resize', () => {
   const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
   const w = rc.width || 960, h = rc.height || 700;
   for (const [idx, s] of Object.entries(scenes)) {
-    if (s.active) {
+    if (s.active && s.initialized) {
       s.renderer.setSize(w, h);
       s.camera.aspect = w / h;
       s.camera.updateProjectionMatrix();
@@ -646,41 +649,43 @@ function initScene(def) {
   const canvas = document.getElementById('three-canvas-' + def.idx);
   if (!canvas) return;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  const revealConfig = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
-  const w = revealConfig.width || 960;
-  const h = revealConfig.height || 700;
-  renderer.setSize(w, h);
+  scenes[def.idx] = { canvas, active: false, raf: null, initialized: false, def: def, initFn: function() {
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const revealConfig = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
+    const w = revealConfig.width || 960;
+    const h = revealConfig.height || 700;
+    renderer.setSize(w, h);
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
-  camera.position.z = 5;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
+    camera.position.z = 5;
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-  const dl = new THREE.DirectionalLight(0xffffff, 0.8);
-  dl.position.set(3, 4, 5);
-  scene.add(dl);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+    dl.position.set(3, 4, 5);
+    scene.add(dl);
 
-  const meshes = [];
-  for (const obj of def.objects) {
-    const geo = createGeometry(obj.geometry);
-    const mat = new THREE.MeshStandardMaterial({
-      color: obj.color || '#00d4aa',
-      metalness: obj.metalness ?? 0.3,
-      roughness: obj.roughness ?? 0.4,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    if (obj.position) mesh.position.set(...obj.position);
-    if (obj.rotation) mesh.rotation.set(...obj.rotation);
-    if (obj.scale) mesh.scale.set(...obj.scale);
-    mesh.userData.animation = obj.animation || 'none';
-    mesh.userData.speed = obj.speed || 1;
-    scene.add(mesh);
-    meshes.push(mesh);
-  }
+    const meshes = [];
+    for (const obj of def.objects) {
+      const geo = createGeometry(obj.geometry);
+      const mat = new THREE.MeshStandardMaterial({
+        color: obj.color || '#00d4aa',
+        metalness: obj.metalness ?? 0.3,
+        roughness: obj.roughness ?? 0.4,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      if (obj.position) mesh.position.set(...obj.position);
+      if (obj.rotation) mesh.rotation.set(...obj.rotation);
+      if (obj.scale) mesh.scale.set(...obj.scale);
+      mesh.userData.animation = obj.animation || 'none';
+      mesh.userData.speed = obj.speed || 1;
+      scene.add(mesh);
+      meshes.push(mesh);
+    }
 
-  scenes[def.idx] = { renderer, scene, camera, meshes, active: false, raf: null, mouse: { x: 0, y: 0 }, baseCamera: { x: camera.position.x, y: camera.position.y } };
+    Object.assign(scenes[def.idx], { renderer, scene, camera, meshes, initialized: true });
+  }};
 }
 
 const mouse = { x: 0, y: 0 };
@@ -714,6 +719,7 @@ function animate(idx) {
 function startScene(idx) {
   const s = scenes[idx];
   if (!s || s.active) return;
+  if (!s.initialized) s.initFn();
   s.active = true;
   const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
   const w = rc.width || 960;
@@ -736,7 +742,7 @@ for (const def of sceneDefs) initScene(def);
 Reveal.on('slidechanged', (e) => {
   for (const idx of Object.keys(scenes)) stopScene(Number(idx));
   const el = e.currentSlide.querySelector('.three-slide');
-  if (el) startScene(Number(el.dataset.sceneIdx));
+  if (el) setTimeout(() => startScene(Number(el.dataset.sceneIdx)), 100);
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -749,7 +755,7 @@ window.addEventListener('resize', () => {
   const w = rc.width || 960;
   const h = rc.height || 700;
   for (const [idx, s] of Object.entries(scenes)) {
-    if (s.active) {
+    if (s.active && s.initialized) {
       s.renderer.setSize(w, h);
       s.camera.aspect = w / h;
       s.camera.updateProjectionMatrix();
@@ -800,7 +806,7 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
     .reveal section:not(:has(.three-slide)) * { min-height: unset !important; background: unset !important; padding: revert !important; margin: revert !important; }
     .reveal section:not(:has(.three-slide)) *[style] { font-size: inherit !important; color: inherit !important; }
     /* 3D slides fill the entire section */
-    .reveal section:has(.three-slide) { padding: 0 !important; position: relative !important; overflow: hidden !important; }
+    .reveal section:has(.three-slide) { padding: 0 !important; overflow: hidden !important; background: transparent !important; }
 
     /* Layout utilities */
     .columns { display: flex; gap: 2rem; align-items: center; text-align: left; }
