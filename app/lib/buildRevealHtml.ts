@@ -58,7 +58,6 @@ function normalizeSlide(s: Slide): Slide {
 }
 
 function build3DSection(slide: Slide, idx: number): string {
-  const bg = slide.backgroundColor || "transparent";
   const overlayHtml = [
     slide.title ? `<h1 style="margin:0;font-size:2.5em;font-weight:900;">${slide.title}</h1>` : "",
     slide.subtitle ? `<p style="margin:0.3em 0 0;font-size:1.2em;opacity:0.8;">${slide.subtitle}</p>` : "",
@@ -66,11 +65,9 @@ function build3DSection(slide: Slide, idx: number): string {
     .filter(Boolean)
     .join("\n");
 
-  return `<div class="three-slide" data-scene-idx="${idx}" style="position:relative;width:960px;height:700px;background:${bg};">
-  <canvas id="three-canvas-${idx}" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
-  <div style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:inherit;pointer-events:none;">
-    ${overlayHtml}
-  </div>
+  // Canvas is rendered outside .reveal as a fixed element; section only has text overlay + marker
+  return `<div class="three-slide" data-scene-idx="${idx}" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;width:100%;height:100%;">
+  ${overlayHtml}
 </div>`;
 }
 
@@ -506,6 +503,16 @@ function buildEffectCode(effect: SceneEffect3D): string {
   }
 }
 
+function buildEffectCanvases(slides: Slide[]): string {
+  return slides
+    .map((s, i) => {
+      if (s.type !== "3d" || !s.sceneEffect) return "";
+      return `<canvas id="three-canvas-${i}" class="three-canvas-fx"></canvas>`;
+    })
+    .filter(Boolean)
+    .join("\n  ");
+}
+
 function buildEffectScripts(slides: Slide[]): string {
   const effectDefs = slides
     .map((s, i) => {
@@ -516,7 +523,7 @@ function buildEffectScripts(slides: Slide[]): string {
 
   if (effectDefs.length === 0) return "";
 
-  // Build per-effect lazy init — defer WebGLRenderer until slide is visible
+  // Build per-effect lazy init — canvas is fixed outside .reveal, uses viewport size
   const initBlocks = effectDefs.map((def) => {
     const sp = def.effect.speed ?? 1.0;
     const dn = def.effect.density ?? 1.0;
@@ -527,8 +534,7 @@ function buildEffectScripts(slides: Slide[]): string {
       scenes[idx] = { canvas, active: false, raf: null, initialized: false, initFn: function() {
         const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
-        const w = rc.width || 960, h = rc.height || 700;
+        const w = window.innerWidth, h = window.innerHeight;
         renderer.setSize(w, h);
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
@@ -575,11 +581,11 @@ function startScene(idx) {
   if (!s || s.active) return;
   if (!s.initialized) s.initFn();
   s.active = true;
-  const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
-  const w = rc.width || 960, h = rc.height || 700;
+  const w = window.innerWidth, h = window.innerHeight;
   s.renderer.setSize(w, h);
   s.camera.aspect = w / h;
   s.camera.updateProjectionMatrix();
+  s.canvas.classList.add('active');
   animate(idx);
 }
 
@@ -587,6 +593,7 @@ function stopScene(idx) {
   const s = scenes[idx];
   if (!s) return;
   s.active = false;
+  s.canvas.classList.remove('active');
   if (s.raf) cancelAnimationFrame(s.raf);
 }
 
@@ -602,8 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('resize', () => {
-  const rc = typeof Reveal !== 'undefined' ? Reveal.getConfig() : {};
-  const w = rc.width || 960, h = rc.height || 700;
+  const w = window.innerWidth, h = window.innerHeight;
   for (const [idx, s] of Object.entries(scenes)) {
     if (s.active && s.initialized) {
       s.renderer.setSize(w, h);
@@ -778,6 +784,7 @@ function buildThreeScripts(slides: Slide[]): string {
 export function buildRevealHtml(slides: Slide[], theme = "black"): string {
   const sorted = [...slides].map(normalizeSlide).sort((a, b) => a.order - b.order);
   const has3D = sorted.some((s) => s.type === "3d");
+  const hasEffects = sorted.some((s) => s.type === "3d" && s.sceneEffect);
   const hasThreeBg = sorted.some((s) => s.type === "2d" && (s.html || "").includes("three-bg"));
 
   const sections = sorted
@@ -828,10 +835,14 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
     /* Three.js background (legacy 2D particle bg) */
     #three-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
     #three-canvas.active { opacity: 1; }
+    /* 3D effect canvases (fixed, outside reveal) */
+    .three-canvas-fx { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
+    .three-canvas-fx.active { opacity: 1; }
   </style>
 </head>
 <body>
   ${hasThreeBg ? '<canvas id="three-canvas"></canvas>' : ""}
+  ${hasEffects ? buildEffectCanvases(sorted) : ""}
   <div class="reveal">
     <div class="slides">
 ${sections}
