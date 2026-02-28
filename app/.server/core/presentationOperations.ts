@@ -95,7 +95,7 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   const slides = (p.slides as unknown as Slide[]) || [];
   if (slides.length === 0) throwJson("No slides to deploy", 400);
 
-  const html = buildRevealHtml(slides, p.theme);
+  const html = buildRevealHtml(slides, p.theme, (p as any).paletteId);
   const htmlBuffer = Buffer.from(html, "utf-8");
 
   // Create or reuse website
@@ -192,7 +192,7 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
 
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
   const url = `${proto}://${hostname}`;
-  return { url, websiteId, slug };
+  return { url, cdnUrl: publicUrl, websiteId, slug };
 }
 
 export async function unpublishPresentation(ctx: AuthContext, id: string) {

@@ -9,7 +9,7 @@ import {
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { buildRevealHtml, SCENE_EFFECT_IDS, type Slide } from "~/lib/buildRevealHtml";
+import { buildRevealHtml, SCENE_EFFECT_IDS, PRESENTATION_PALETTES, getPalette, type Slide } from "~/lib/buildRevealHtml";
 import { Copy } from "~/components/common/Copy";
 import type { Route } from "./+types/editor";
 
@@ -28,15 +28,28 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   }
 
   let websiteUrl: string | null = null;
+  let cdnUrl: string | null = null;
   if (presentation.websiteId) {
     const website = await db.website.findUnique({
       where: { id: presentation.websiteId },
     });
     const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-    if (website) websiteUrl = `${proto}://${website.slug}.easybits.cloud`;
+    if (website) {
+      websiteUrl = `${proto}://${website.slug}.easybits.cloud`;
+      // Find the file to get CDN URL
+      const file = await db.file.findFirst({
+        where: {
+          name: `sites/${website.id}/index.html`,
+          ownerId: user.id,
+          status: "DONE",
+        },
+        select: { url: true },
+      });
+      if (file?.url) cdnUrl = file.url;
+    }
   }
 
-  return { presentation, websiteUrl };
+  return { presentation, websiteUrl, cdnUrl };
 };
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
@@ -65,6 +78,16 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     await db.presentation.update({
       where: { id: params.id },
       data: { theme },
+    });
+    return { ok: true };
+  }
+
+  if (intent === "update-palette") {
+    const paletteId = String(formData.get("paletteId"));
+    const palette = getPalette(paletteId);
+    await db.presentation.update({
+      where: { id: params.id },
+      data: { paletteId, theme: palette.baseTheme },
     });
     return { ok: true };
   }
@@ -106,10 +129,12 @@ function SlideThumbnail({
   slide,
   theme,
   idx,
+  paletteId,
 }: {
   slide: Slide;
   theme: string;
   idx: number;
+  paletteId?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
@@ -124,7 +149,7 @@ function SlideThumbnail({
     return () => ro.disconnect();
   }, []);
 
-  const srcDoc = buildRevealHtml([{ ...slide, order: 0 }], theme);
+  const srcDoc = buildRevealHtml([{ ...slide, order: 0 }], theme, paletteId);
 
   return (
     <div
@@ -149,22 +174,9 @@ function SlideThumbnail({
   );
 }
 
-const THEMES = [
-  "black",
-  "white",
-  "league",
-  "beige",
-  "sky",
-  "night",
-  "serif",
-  "simple",
-  "solarized",
-  "moon",
-  "dracula",
-];
 
 export default function PresentationEditor() {
-  const { presentation, websiteUrl } = useLoaderData<typeof loader>();
+  const { presentation, websiteUrl, cdnUrl: initialCdnUrl } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const isGenerating = searchParams.get("generating") === "1";
   const slideCount = Number(searchParams.get("slideCount") || 8);
@@ -176,12 +188,14 @@ export default function PresentationEditor() {
     { title: string; bullets: string[]; imageQuery: string; type?: "2d" | "3d" }[] | null
   >(null);
   const [theme, setTheme] = useState(presentation.theme);
+  const [paletteId, setPaletteId] = useState<string | null>((presentation as any).paletteId || null);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editHtml, setEditHtml] = useState("");
   const [editJson, setEditJson] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatingSlides, setGeneratingSlides] = useState(false);
   const [deployUrl, setDeployUrl] = useState<string | null>(websiteUrl);
+  const [deployCdnUrl, setDeployCdnUrl] = useState<string | null>(initialCdnUrl);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -195,20 +209,25 @@ export default function PresentationEditor() {
   const [addSlidePrompt, setAddSlidePrompt] = useState("");
   const [addSlideProposals, setAddSlideProposals] = useState<Slide[] | null>(null);
   const [generatingAddSlide, setGeneratingAddSlide] = useState(false);
+  const [showPostGenCTA, setShowPostGenCTA] = useState(false);
 
   const navigate = useNavigate();
   const saveFetcher = useFetcher();
   const themeFetcher = useFetcher();
+  const paletteFetcher = useFetcher();
   const unpublishFetcher = useFetcher();
   const deleteFetcher = useFetcher();
   const [unpublishing, setUnpublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const [paletteMenuOpen, setPaletteMenuOpen] = useState(false);
+  const paletteMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (unpublishFetcher.data && (unpublishFetcher.data as any).unpublished) {
       setDeployUrl(null);
+      setDeployCdnUrl(null);
       setUnpublishing(false);
     }
   }, [unpublishFetcher.data]);
@@ -218,6 +237,17 @@ export default function PresentationEditor() {
       navigate("/dash/presentations");
     }
   }, [deleteFetcher.data, navigate]);
+
+  useEffect(() => {
+    if (!paletteMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (paletteMenuRef.current && !paletteMenuRef.current.contains(e.target as Node)) {
+        setPaletteMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [paletteMenuOpen]);
 
   useEffect(() => {
     if (!exportMenuOpen) return;
@@ -234,7 +264,11 @@ export default function PresentationEditor() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (addSlideOpen) {
+      if (showPostGenCTA) {
+        setShowPostGenCTA(false);
+      } else if (paletteMenuOpen) {
+        setPaletteMenuOpen(false);
+      } else if (addSlideOpen) {
         setAddSlideOpen(false);
         setAddSlidePrompt("");
         setAddSlideProposals(null);
@@ -248,7 +282,7 @@ export default function PresentationEditor() {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [addSlideOpen, variantIdx, editingIdx]);
+  }, [addSlideOpen, variantIdx, editingIdx, paletteMenuOpen, showPostGenCTA]);
 
   // Navigate preview iframe to selected slide
   useEffect(() => {
@@ -282,6 +316,7 @@ export default function PresentationEditor() {
   async function generateOutline() {
     setGenerating(true);
     setError(null);
+    setOutline([]);
     try {
       const res = await fetch(
         `/api/v2/presentations/${presentation.id}/outline`,
@@ -291,25 +326,64 @@ export default function PresentationEditor() {
           body: JSON.stringify({ slideCount }),
         }
       );
-      const data = await res
-        .json()
-        .catch(() => ({ error: "Respuesta inválida del servidor" }));
       if (!res.ok) {
-        throw new Error(data.error || "Error generando outline");
+        const text = await res.text();
+        let msg = "Error generando outline";
+        try { msg = JSON.parse(text).error || msg; } catch {}
+        throw new Error(msg);
       }
-      setOutline(data.outline);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const accumulated: typeof outline = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = "";
+        let eventType = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7);
+          } else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === "slide") {
+              accumulated[data.index] = data.item;
+              setOutline([...accumulated.filter(Boolean)]);
+            } else if (eventType === "done") {
+              setOutline(data.outline);
+            } else if (eventType === "error") {
+              throw new Error(data.error);
+            }
+            eventType = "";
+          } else if (line !== "") {
+            buffer = line;
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message);
+      setOutline(null);
     } finally {
       setGenerating(false);
     }
   }
 
-  // Step 2: Generate slides from confirmed outline
+  const [genProgress, setGenProgress] = useState("");
+
+  // Step 2: Generate slides from confirmed outline (SSE stream)
   async function generateSlidesFromOutline() {
     if (!outline) return;
     setGeneratingSlides(true);
     setError(null);
+    setSlides([]);
+    setOutline(null);
+    setGenProgress("Iniciando generación...");
     try {
       const res = await fetch(
         `/api/v2/presentations/${presentation.id}/generate`,
@@ -320,22 +394,55 @@ export default function PresentationEditor() {
         }
       );
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error generando slides");
+        const text = await res.text();
+        let msg = "Error generando slides";
+        try { msg = JSON.parse(text).error || msg; } catch {}
+        throw new Error(msg);
       }
-      const data = await res.json();
-      const newSlides: Slide[] = data.slides;
-      setSlides(newSlides);
-      setOutline(null);
-      // Auto-save
-      saveFetcher.submit(
-        { intent: "update-slides", slides: JSON.stringify(newSlides) },
-        { method: "post" }
-      );
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const accumulated: Slide[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const lines = buffer.split("\n");
+        buffer = "";
+        let eventType = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7);
+          } else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === "slide") {
+              accumulated[data.index] = data.slide;
+              const received = accumulated.filter(Boolean).length;
+              setSlides([...accumulated.filter(Boolean)]);
+              setGenProgress(`Slide ${received} de ${data.total}...`);
+            } else if (eventType === "done") {
+              setSlides(data.slides);
+              setShowPostGenCTA(true);
+            } else if (eventType === "error") {
+              throw new Error(data.error);
+            }
+            eventType = "";
+          } else if (line !== "") {
+            // incomplete line, keep in buffer
+            buffer = line;
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setGeneratingSlides(false);
+      setGenProgress("");
     }
   }
 
@@ -400,6 +507,16 @@ export default function PresentationEditor() {
     setTheme(newTheme);
     themeFetcher.submit(
       { intent: "update-theme", theme: newTheme },
+      { method: "post" }
+    );
+  }
+
+  function handlePaletteChange(newPaletteId: string) {
+    const palette = getPalette(newPaletteId);
+    setPaletteId(newPaletteId);
+    setTheme(palette.baseTheme);
+    paletteFetcher.submit(
+      { intent: "update-palette", paletteId: newPaletteId },
       { method: "post" }
     );
   }
@@ -479,6 +596,7 @@ export default function PresentationEditor() {
       }
       const data = await res.json();
       setDeployUrl(data.url);
+      setDeployCdnUrl(data.cdnUrl || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -535,12 +653,12 @@ export default function PresentationEditor() {
   }
 
   const previewHtml =
-    slides.length > 0 ? buildRevealHtml(slides, theme) : "";
+    slides.length > 0 ? buildRevealHtml(slides, theme, paletteId) : "";
 
   return (
     <article className="pt-20 px-4 pb-4 md:pl-36 w-full h-screen flex flex-col overflow-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-3 shrink-0">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-3 shrink-0 relative z-20">
         <div className="flex items-center gap-3">
           <Link
             to="/dash/presentations"
@@ -562,9 +680,20 @@ export default function PresentationEditor() {
                 rel="noopener noreferrer"
                 className="underline truncate max-w-[200px]"
               >
-                {deployUrl}
+                {deployUrl.replace(/^https?:\/\//, "")}
               </a>
               <Copy text={deployUrl} mode="ghost" className="static p-0" />
+              {deployCdnUrl && (
+                <a
+                  href={deployCdnUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200 transition-colors"
+                  title="URL directa CDN (funciona si el servidor está caído)"
+                >
+                  CDN
+                </a>
+              )}
               <button
                 onClick={() => {
                   setUnpublishing(true);
@@ -580,17 +709,31 @@ export default function PresentationEditor() {
               </button>
             </div>
           )}
-          <select
-            value={theme}
-            onChange={(e) => handleThemeChange(e.target.value)}
-            className="px-3 py-1.5 border-2 border-black rounded-xl text-sm font-bold shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] bg-white"
-          >
-            {THEMES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <div className="relative" ref={paletteMenuRef}>
+            <button
+              onClick={() => setPaletteMenuOpen(v => !v)}
+              className="px-3 py-1.5 border-2 border-black rounded-xl text-sm font-bold shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-2"
+            >
+              <span className="w-4 h-4 rounded-full border border-black" style={{ background: getPalette(paletteId).vars.accent }} />
+              {getPalette(paletteId).name} ▾
+            </button>
+            {paletteMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-3 grid grid-cols-3 gap-2 max-h-[50vh] overflow-y-auto">
+                {PRESENTATION_PALETTES.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { handlePaletteChange(p.id); setPaletteMenuOpen(false); }}
+                    className={`rounded-lg p-2 text-left transition-all border-2 ${paletteId === p.id ? 'border-brand-500 ring-2 ring-brand-500' : 'border-transparent hover:border-gray-300'}`}
+                  >
+                    <div className="h-8 rounded-md mb-1 flex items-end" style={{ background: p.vars.bg }}>
+                      <div className="h-2 w-full rounded-b-md" style={{ background: p.vars.accent }} />
+                    </div>
+                    <span className="text-[10px] font-bold truncate block">{p.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div ref={exportRef} className="relative">
             <button
               onClick={() => setExportMenuOpen((v) => !v)}
@@ -665,26 +808,34 @@ export default function PresentationEditor() {
       )}
 
       {/* Outline review step */}
-      {outline && (
-        <div className="mb-6 border-2 border-black rounded-xl p-6 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <h2 className="text-lg font-bold mb-4">
-            Outline generado — revisa antes de generar slides
+      {outline && outline.length > 0 && (
+        <div className="mb-6 pb-20">
+          <h2 className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wide flex items-center gap-2">
+            Outline — {outline.length} diapositiva{outline.length !== 1 ? "s" : ""}
+            {generating && <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />}
           </h2>
-          <div className="space-y-3 mb-6">
+          <div className="max-w-3xl mx-auto space-y-2">
             {outline.map((slide, i) => (
-              <div key={i} className="border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-2">
+              <div
+                key={i}
+                className="bg-white border-2 border-black rounded-xl p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all group"
+              >
+                {/* Title row: number + title + toggle */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-7 h-7 rounded-lg bg-[#F3EFFE] text-[#7C4DFF] flex items-center justify-center font-bold text-xs shrink-0">
+                    {i + 1}
+                  </div>
                   <input
+                    data-outline-title
                     value={slide.title}
                     onChange={(e) => {
                       const updated = [...outline];
                       updated[i] = { ...updated[i], title: e.target.value };
                       setOutline(updated);
                     }}
-                    className="font-bold text-sm flex-1 border-b border-gray-200 pb-1 focus:outline-none"
+                    className="font-bold text-sm flex-1 bg-transparent border border-transparent rounded-md px-1 -ml-1 focus:outline-none focus:border-gray-300 transition-colors min-w-0"
                   />
-                  {/* Type toggle pill */}
-                  <div className="flex border-2 border-black rounded-full overflow-hidden text-[10px] font-bold shrink-0">
+                  <div className="flex border border-gray-200 rounded-full overflow-hidden text-[9px] font-semibold shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => {
                         const updated = [...outline];
@@ -693,8 +844,8 @@ export default function PresentationEditor() {
                       }}
                       className={`px-2 py-0.5 transition-colors ${
                         (slide.type || "2d") === "2d"
-                          ? "bg-black text-white"
-                          : "bg-white text-black hover:bg-gray-100"
+                          ? "bg-gray-900 text-white"
+                          : "bg-white text-gray-500 hover:bg-gray-50"
                       }`}
                     >
                       2D
@@ -707,18 +858,19 @@ export default function PresentationEditor() {
                       }}
                       className={`px-2 py-0.5 transition-colors ${
                         slide.type === "3d"
-                          ? "bg-black text-white"
-                          : "bg-white text-black hover:bg-gray-100"
+                          ? "bg-gray-900 text-white"
+                          : "bg-white text-gray-500 hover:bg-gray-50"
                       }`}
                     >
                       3D
                     </button>
                   </div>
                 </div>
-                <ul className="text-xs text-gray-600 space-y-1">
+                {/* Bullets */}
+                <div className="space-y-0.5 mb-1.5 pl-9">
                   {slide.bullets.map((b, j) => (
-                    <li key={j} className="flex items-start gap-1">
-                      <span className="text-gray-400">•</span>
+                    <div key={j} className="flex items-start gap-1">
+                      <span className="text-gray-300 text-xs leading-5">•</span>
                       <input
                         value={b}
                         onChange={(e) => {
@@ -728,13 +880,14 @@ export default function PresentationEditor() {
                           updated[i] = { ...updated[i], bullets };
                           setOutline(updated);
                         }}
-                        className="flex-1 focus:outline-none"
+                        className="flex-1 text-xs text-gray-600 bg-transparent border border-transparent rounded px-1 -ml-1 focus:outline-none focus:border-gray-300 transition-colors"
                       />
-                    </li>
+                    </div>
                   ))}
-                </ul>
-                <div className="flex items-center gap-1 mt-2">
-                  <span className="text-[10px] text-gray-400">img:</span>
+                </div>
+                {/* Image query */}
+                <div className="flex items-center gap-1 pl-9 opacity-40 group-hover:opacity-70 transition-opacity">
+                  <span className="text-[10px]">🔍</span>
                   <input
                     value={slide.imageQuery || ""}
                     onChange={(e) => {
@@ -746,28 +899,56 @@ export default function PresentationEditor() {
                       setOutline(updated);
                     }}
                     placeholder="english keywords for photo..."
-                    className="flex-1 text-[10px] text-gray-500 focus:outline-none border-b border-dashed border-gray-200"
+                    className="flex-1 text-[10px] text-gray-400 bg-transparent border border-transparent rounded px-1 -ml-1 focus:outline-none focus:border-gray-300 transition-colors"
                   />
                 </div>
               </div>
             ))}
+
+            {/* Add slide button */}
+            <button
+              onClick={() => {
+                const updated = [
+                  ...outline,
+                  { title: "", bullets: [""], imageQuery: "", type: "2d" as const },
+                ];
+                setOutline(updated);
+                setTimeout(() => {
+                  const cards = document.querySelectorAll<HTMLInputElement>(
+                    "[data-outline-title]"
+                  );
+                  cards[cards.length - 1]?.focus();
+                }, 50);
+              }}
+              className="w-full border-2 border-dashed border-gray-300 rounded-xl py-2.5 text-xs text-gray-400 font-medium hover:border-[#7C4DFF] hover:text-[#7C4DFF] transition-colors cursor-pointer"
+            >
+              + Añadir diapositiva
+            </button>
           </div>
-          <div className="flex gap-3">
-            <BrutalButton
-              onClick={generateSlidesFromOutline}
-              isLoading={generatingSlides}
-              isDisabled={generatingSlides}
-            >
-              Generar slides
-            </BrutalButton>
-            <BrutalButton
-              onClick={generateOutline}
-              isLoading={generating}
-              isDisabled={generating}
-              mode="ghost"
-            >
-              Regenerar outline
-            </BrutalButton>
+
+          {/* Sticky footer */}
+          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-t border-gray-200 px-6 py-3">
+            <div className="max-w-3xl mx-auto flex items-center justify-between">
+              <span className="text-sm text-gray-500">
+                {outline.length} diapositiva{outline.length !== 1 ? "s" : ""}
+              </span>
+              <div className="flex gap-3">
+                <button
+                  onClick={generateOutline}
+                  disabled={generating}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {generating ? "Regenerando..." : "↻ Regenerar"}
+                </button>
+                <BrutalButton
+                  onClick={generateSlidesFromOutline}
+                  isLoading={generatingSlides}
+                  isDisabled={generatingSlides}
+                >
+                  ✨ Generar slides
+                </BrutalButton>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -782,8 +963,16 @@ export default function PresentationEditor() {
         </div>
       )}
 
+      {/* Streaming progress bar */}
+      {generatingSlides && genProgress && (
+        <div className="mb-3 px-3 py-2 bg-brand-50 border-2 border-brand-300 rounded-xl text-sm font-bold text-brand-700 flex items-center gap-2 shrink-0">
+          <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          {genProgress}
+        </div>
+      )}
+
       {/* Editor: slides panel + preview */}
-      {slides.length > 0 && !outline && (
+      {(slides.length > 0 || generatingSlides) && !outline && (
         <div className="flex gap-4 flex-col lg:flex-row flex-1 min-h-0">
           {/* Slides panel */}
           <div
@@ -804,7 +993,7 @@ export default function PresentationEditor() {
                   } ${selectedSlideIdx === idx ? "border-brand-500 ring-2 ring-brand-500" : "border-black"} ${editingIdx === idx ? "ring-2 ring-brand-500" : ""}`}
                 >
                   {/* Iframe thumbnail */}
-                  <SlideThumbnail slide={slide} theme={theme} idx={idx} />
+                  <SlideThumbnail slide={slide} theme={theme} idx={idx} paletteId={paletteId} />
 
                   {/* Action bar */}
                   <div className="flex items-center gap-1 px-2 py-1 border-t-2 border-black">
@@ -968,7 +1157,7 @@ export default function PresentationEditor() {
                 <iframe
                   srcDoc={buildRevealHtml(
                     [{ id: "preview", html: variantHtml, order: 0 }],
-                    theme
+                    theme, paletteId
                   )}
                   sandbox="allow-scripts allow-same-origin"
                   className="w-full h-64 border-2 border-gray-200 rounded-lg mb-4"
@@ -1054,15 +1243,15 @@ export default function PresentationEditor() {
                               subtitle: parsed.subtitle ?? slide.subtitle,
                               backgroundColor: parsed.backgroundColor ?? slide.backgroundColor,
                             }],
-                            theme
+                            theme, paletteId
                           );
                         } catch {
-                          return buildRevealHtml([{ ...slide, order: 0 }], theme);
+                          return buildRevealHtml([{ ...slide, order: 0 }], theme, paletteId);
                         }
                       }
                       return buildRevealHtml(
                         [{ ...slide, order: 0, html: editHtml }],
-                        theme
+                        theme, paletteId
                       );
                     })()}
                     sandbox="allow-scripts allow-same-origin"
@@ -1140,6 +1329,7 @@ export default function PresentationEditor() {
                         slide={proposal}
                         theme={theme}
                         idx={i}
+                        paletteId={paletteId}
                       />
                       <div className="px-2 py-1.5 border-t border-gray-200 flex items-center gap-1.5">
                         <span className="text-[10px] font-bold text-gray-500 group-hover:text-black">
@@ -1209,6 +1399,38 @@ export default function PresentationEditor() {
           <BrutalButton onClick={generateOutline}>
             Generar con AI
           </BrutalButton>
+        </div>
+      )}
+
+      {/* Post-generation CTA */}
+      {showPostGenCTA && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] px-5 py-3 flex items-center gap-4">
+            <span className="text-sm font-bold">¿Cómo quedaron?</span>
+            <div className="flex gap-2">
+              {[
+                { emoji: "🔥", label: "Geniales" },
+                { emoji: "👍", label: "Bien" },
+                { emoji: "😕", label: "Mejorar" },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => setTimeout(() => setShowPostGenCTA(false), 800)}
+                  className="px-3 py-1.5 text-sm border-2 border-black rounded-lg hover:bg-gray-100 hover:translate-x-[1px] hover:translate-y-[1px] transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]"
+                  title={opt.label}
+                >
+                  {opt.emoji}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowPostGenCTA(false)}
+              className="text-gray-400 hover:text-black text-lg font-bold ml-1"
+              title="Cerrar"
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
     </article>

@@ -29,6 +29,14 @@ const sceneEffectSchema = z.object({
   backgroundColor: z.string().optional(),
 });
 
+const SINGLE_SLIDE_SYSTEM_PROMPT = SLIDES_SYSTEM_PROMPT.replace(
+  "Output ONLY a valid JSON array of HTML strings, no markdown fences",
+  "Output ONLY a single HTML string (the inner HTML of one <section>), no markdown fences"
+).replace(
+  'slides: z\n        .array(z.string())',
+  'html: z.string()'
+);
+
 // POST /api/v2/presentations/:id/generate
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -55,145 +63,116 @@ export async function action({ request, params }: Route.ActionArgs) {
     ? createAnthropic({ apiKey: userKey })
     : createAnthropic();
 
-  // Split by type
-  const items2D: { item: OutlineItem; originalIdx: number }[] = [];
-  const items3D: { item: OutlineItem; originalIdx: number }[] = [];
+  const encoder = new TextEncoder();
+  const allSlides: any[] = new Array(outline.length).fill(null);
 
-  outline.forEach((item, i) => {
-    if (item.type === "3d") {
-      items3D.push({ item, originalIdx: i });
-    } else {
-      items2D.push({ item, originalIdx: i });
-    }
-  });
-
-  try {
-    // Run 2D and 3D generation in parallel
-    const [slides2D, slides3D] = await Promise.all([
-      generate2DSlides(items2D, anthropic),
-      generate3DSlides(items3D, anthropic),
-    ]);
-
-    // Merge back in original order
-    const slides = outline.map((item, i) => {
-      if (item.type === "3d") {
-        const match = slides3D.find((s) => s.originalIdx === i);
-        return {
-          id: nanoid(8),
-          order: i,
-          type: "3d" as const,
-          sceneEffect: match?.sceneEffect,
-          title: match?.title || item.title,
-          subtitle: match?.subtitle,
-        };
-      } else {
-        const match = slides2D.find((s) => s.originalIdx === i);
-        return {
-          id: nanoid(8),
-          order: i,
-          type: "2d" as const,
-          html: match?.html || "",
-        };
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(event: string, data: any) {
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        );
       }
-    });
 
-    await db.presentation.update({
-      where: { id: params.id },
-      data: { slides: slides as any },
-    });
+      try {
+        // Fetch all images in parallel upfront
+        const imageResults = await Promise.all(
+          outline.map((item) =>
+            item.imageQuery && item.type !== "3d"
+              ? searchImage(item.imageQuery)
+              : Promise.resolve(null)
+          )
+        );
 
-    return Response.json({ slides });
-  } catch (err: any) {
-    console.error("Slide generation error:", err);
-    return Response.json(
-      { error: err.message || "Failed to generate slides" },
-      { status: 500 }
-    );
-  }
-}
+        // Generate 3D slides in parallel (they're fast with Haiku)
+        const items3D = outline
+          .map((item, i) => ({ item, idx: i }))
+          .filter((e) => e.item.type === "3d");
 
-async function generate2DSlides(
-  items: { item: OutlineItem; originalIdx: number }[],
-  anthropic: ReturnType<typeof createAnthropic>
-) {
-  if (items.length === 0) return [];
+        const usedEffects: string[] = [];
+        for (const entry of items3D) {
+          const avoidNote =
+            usedEffects.length > 0
+              ? `\nALREADY USED effects (do NOT pick these): ${usedEffects.join(", ")}`
+              : "";
 
-  // Fetch images in parallel
-  const imageResults = await Promise.all(
-    items.map((e) =>
-      e.item.imageQuery
-        ? searchImage(e.item.imageQuery)
-        : Promise.resolve(null)
-    )
-  );
+          const { object } = await generateObject({
+            model: anthropic("claude-haiku-4-5-20251001"),
+            schema: z.object({
+              sceneEffect: sceneEffectSchema,
+              title: z.string().optional(),
+              subtitle: z.string().optional(),
+            }),
+            system: SCENE_SYSTEM_PROMPT,
+            prompt: `Create a 3D scene for a presentation slide about: "${entry.item.title}"\nContext: ${entry.item.bullets.join(", ")}${avoidNote}`,
+          });
 
-  const outlineText = items
-    .map((e, i) => {
-      let text = `Slide ${i + 1}: ${e.item.title}\n${e.item.bullets.map((b) => `  - ${b}`).join("\n")}`;
-      const img = imageResults[i];
-      if (img)
-        text += `\n  Image URL: ${img.url} (alt: ${img.alt}, credit: ${img.photographer})`;
-      return text;
-    })
-    .join("\n\n");
+          usedEffects.push(object.sceneEffect.effect);
+          const slide = {
+            id: nanoid(8),
+            order: entry.idx,
+            type: "3d" as const,
+            sceneEffect: object.sceneEffect,
+            title: object.title || entry.item.title,
+            subtitle: object.subtitle,
+          };
+          allSlides[entry.idx] = slide;
+          send("slide", { index: entry.idx, slide, total: outline.length });
+        }
 
-  const { object } = await generateObject({
-    model: anthropic("claude-sonnet-4-6"),
-    schema: z.object({
-      slides: z
-        .array(z.string())
-        .describe("Array of HTML strings, one per slide"),
-    }),
-    system: SLIDES_SYSTEM_PROMPT,
-    prompt: `Generate reveal.js HTML slides for this outline:\n\n${outlineText}`,
+        // Generate 2D slides one at a time
+        const items2D = outline
+          .map((item, i) => ({ item, idx: i }))
+          .filter((e) => e.item.type !== "3d");
+
+        for (const entry of items2D) {
+          const img = imageResults[entry.idx];
+          let slideText = `Slide: ${entry.item.title}\n${entry.item.bullets.map((b) => `  - ${b}`).join("\n")}`;
+          if (img) {
+            slideText += `\n  Image URL: ${img.url} (alt: ${img.alt}, credit: ${img.photographer})`;
+          }
+
+          const { object } = await generateObject({
+            model: anthropic("claude-sonnet-4-6"),
+            schema: z.object({
+              html: z.string().describe("HTML string for this single slide"),
+            }),
+            system: SLIDES_SYSTEM_PROMPT,
+            prompt: `Generate reveal.js HTML for this single slide:\n\n${slideText}`,
+          });
+
+          const slide = {
+            id: nanoid(8),
+            order: entry.idx,
+            type: "2d" as const,
+            html: object.html,
+          };
+          allSlides[entry.idx] = slide;
+          send("slide", { index: entry.idx, slide, total: outline.length });
+        }
+
+        // Save all slides to DB
+        const finalSlides = allSlides.filter(Boolean);
+        await db.presentation.update({
+          where: { id: params.id },
+          data: { slides: finalSlides as any },
+        });
+
+        send("done", { slides: finalSlides });
+        controller.close();
+      } catch (err: any) {
+        console.error("Slide generation error:", err);
+        send("error", { error: err.message || "Failed to generate slides" });
+        controller.close();
+      }
+    },
   });
 
-  return object.slides.slice(0, items.length).map((html, i) => ({
-    html,
-    originalIdx: items[i].originalIdx,
-  }));
-}
-
-async function generate3DSlides(
-  items: { item: OutlineItem; originalIdx: number }[],
-  anthropic: ReturnType<typeof createAnthropic>
-) {
-  if (items.length === 0) return [];
-
-  // Generate sequentially so each slide knows which effects are already used
-  const results: {
-    originalIdx: number;
-    sceneEffect: z.infer<typeof sceneEffectSchema>;
-    title?: string;
-    subtitle?: string;
-  }[] = [];
-  const usedEffects: string[] = [];
-
-  for (const entry of items) {
-    const avoidNote =
-      usedEffects.length > 0
-        ? `\nALREADY USED effects (do NOT pick these): ${usedEffects.join(", ")}`
-        : "";
-
-    const { object } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
-      schema: z.object({
-        sceneEffect: sceneEffectSchema,
-        title: z.string().optional(),
-        subtitle: z.string().optional(),
-      }),
-      system: SCENE_SYSTEM_PROMPT,
-      prompt: `Create a 3D scene for a presentation slide about: "${entry.item.title}"\nContext: ${entry.item.bullets.join(", ")}${avoidNote}`,
-    });
-
-    usedEffects.push(object.sceneEffect.effect);
-    results.push({
-      originalIdx: entry.originalIdx,
-      sceneEffect: object.sceneEffect,
-      title: object.title,
-      subtitle: object.subtitle,
-    });
-  }
-
-  return results;
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

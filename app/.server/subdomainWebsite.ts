@@ -101,23 +101,11 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
     return new Response("Not found", { status: 404 });
   }
 
-  // Public file with CDN URL → redirect (no proxy overhead)
-  if (file.access === "public" && file.url) {
-    const cacheControl = isImmutable(splat)
-      ? "public, max-age=31536000, immutable"
-      : "no-cache, no-store, must-revalidate";
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: file.url,
-        "Cache-Control": cacheControl,
-      },
-    });
-  }
-
-  // Private file → proxy through presigned URL
+  // Proxy all files (no 302 redirects — avoids CORS/iframe issues)
   const client = getPlatformDefaultClient();
-  const readUrl = await client.getReadUrl(file.storageKey);
+  const readUrl = file.access === "public" && file.url
+    ? file.url
+    : await client.getReadUrl(file.storageKey);
   const upstream = await fetch(readUrl);
   const contentType = getContentType(splat);
   const cacheControl = isImmutable(splat)
@@ -128,6 +116,7 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
     headers: {
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }

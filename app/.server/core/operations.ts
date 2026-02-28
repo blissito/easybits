@@ -563,7 +563,7 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
 
   let website;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const slug = [randomAdjective(), randomAdjective(), randomNoun()].join("-");
+    const slug = [randomNoun(), randomAdjective(), "y", randomAdjective()].join("-");
     try {
       website = await db.website.create({
         data: { name, slug, ownerId: ctx.user.id, prefix: "" },

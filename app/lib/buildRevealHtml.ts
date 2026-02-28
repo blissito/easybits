@@ -48,6 +48,46 @@ export interface Slide {
   backgroundColor?: string;
 }
 
+export interface PresentationPalette {
+  id: string;
+  name: string;
+  baseTheme: string;
+  vars: {
+    heading: string;
+    body: string;
+    accent: string;
+    bg: string;
+    cardBg: string;
+    border: string;
+    kpi: string;
+    dot: string;
+  };
+  fontHeading?: string;
+  fontBody?: string;
+}
+
+export const PRESENTATION_PALETTES: PresentationPalette[] = [
+  { id: "midnight", name: "Midnight", baseTheme: "black", vars: { heading: "#ffffff", body: "#e0e0e0", accent: "#00d4aa", bg: "#111111", cardBg: "rgba(255,255,255,0.08)", border: "rgba(255,255,255,0.15)", kpi: "#00d4aa", dot: "#00d4aa" } },
+  { id: "ocean", name: "Ocean", baseTheme: "black", vars: { heading: "#e0f7fa", body: "#b2ebf2", accent: "#00bcd4", bg: "#0a1628", cardBg: "rgba(0,188,212,0.08)", border: "rgba(0,188,212,0.2)", kpi: "#00e5ff", dot: "#00bcd4" }, fontHeading: "Outfit" },
+  { id: "forest", name: "Forest", baseTheme: "black", vars: { heading: "#e8f5e9", body: "#c8e6c9", accent: "#66bb6a", bg: "#0d1f0d", cardBg: "rgba(102,187,106,0.08)", border: "rgba(102,187,106,0.2)", kpi: "#69f0ae", dot: "#66bb6a" }, fontHeading: "DM Sans" },
+  { id: "corporate", name: "Corporate", baseTheme: "white", vars: { heading: "#1a237e", body: "#37474f", accent: "#1565c0", bg: "#ffffff", cardBg: "#f5f7fa", border: "#e0e0e0", kpi: "#1565c0", dot: "#1565c0" }, fontHeading: "Inter", fontBody: "Inter" },
+  { id: "neon", name: "Neon", baseTheme: "black", vars: { heading: "#e0ff00", body: "#cccccc", accent: "#ff00ff", bg: "#0a0a0a", cardBg: "rgba(255,0,255,0.06)", border: "rgba(255,0,255,0.25)", kpi: "#e0ff00", dot: "#ff00ff" }, fontHeading: "Space Grotesk" },
+  { id: "sunset", name: "Sunset", baseTheme: "black", vars: { heading: "#fff3e0", body: "#ffe0b2", accent: "#ff7043", bg: "#1a0e0a", cardBg: "rgba(255,112,67,0.08)", border: "rgba(255,112,67,0.2)", kpi: "#ff7043", dot: "#ffab40" }, fontHeading: "Sora" },
+  { id: "slate", name: "Slate", baseTheme: "black", vars: { heading: "#eceff1", body: "#b0bec5", accent: "#78909c", bg: "#1c1f26", cardBg: "rgba(120,144,156,0.1)", border: "rgba(120,144,156,0.2)", kpi: "#90a4ae", dot: "#78909c" } },
+  { id: "rose", name: "Rosé", baseTheme: "black", vars: { heading: "#fce4ec", body: "#f8bbd0", accent: "#f06292", bg: "#1a0a12", cardBg: "rgba(240,98,146,0.08)", border: "rgba(240,98,146,0.2)", kpi: "#f06292", dot: "#f48fb1" }, fontHeading: "Playfair Display" },
+  { id: "sand", name: "Sand", baseTheme: "beige", vars: { heading: "#3e2723", body: "#5d4037", accent: "#8d6e63", bg: "#f5f0e8", cardBg: "rgba(141,110,99,0.08)", border: "rgba(141,110,99,0.2)", kpi: "#6d4c41", dot: "#8d6e63" }, fontHeading: "Lora", fontBody: "Lora" },
+  { id: "aurora", name: "Aurora", baseTheme: "black", vars: { heading: "#e8eaf6", body: "#c5cae9", accent: "#7c4dff", bg: "#0d0d1a", cardBg: "rgba(124,77,255,0.08)", border: "rgba(124,77,255,0.2)", kpi: "#b388ff", dot: "#7c4dff" }, fontHeading: "Outfit" },
+  { id: "galaxy", name: "Galaxy", baseTheme: "black", vars: { heading: "#ede7f6", body: "#d1c4e9", accent: "#9870ed", bg: "#0a0520", cardBg: "rgba(152,112,237,0.08)", border: "rgba(152,112,237,0.2)", kpi: "#9870ed", dot: "#b39ddb" }, fontHeading: "Space Grotesk" },
+  { id: "easybits", name: "EasyBits", baseTheme: "black", vars: { heading: "#ffffff", body: "#e0e0e0", accent: "#9870ed", bg: "#111111", cardBg: "rgba(152,112,237,0.08)", border: "rgba(152,112,237,0.2)", kpi: "#00d4aa", dot: "#9870ed" }, fontHeading: "DM Sans" },
+  { id: "minimal", name: "Minimal", baseTheme: "white", vars: { heading: "#212121", body: "#616161", accent: "#000000", bg: "#fafafa", cardBg: "#f0f0f0", border: "#e0e0e0", kpi: "#212121", dot: "#212121" }, fontHeading: "Inter", fontBody: "Inter" },
+  { id: "brutal", name: "Brutal", baseTheme: "white", vars: { heading: "#000000", body: "#333333", accent: "#ff3d00", bg: "#ffffff", cardBg: "#fff9c4", border: "#000000", kpi: "#ff3d00", dot: "#ff3d00" }, fontHeading: "Space Grotesk" },
+  { id: "retro", name: "Retro", baseTheme: "black", vars: { heading: "#ffcc02", body: "#f0e6d3", accent: "#ff6b35", bg: "#1a1a2e", cardBg: "rgba(255,107,53,0.08)", border: "rgba(255,204,2,0.2)", kpi: "#ffcc02", dot: "#ff6b35" }, fontHeading: "Sora" },
+];
+
+export function getPalette(paletteId?: string | null): PresentationPalette {
+  return PRESENTATION_PALETTES.find(p => p.id === paletteId) || PRESENTATION_PALETTES[0];
+}
+
 const REVEAL_CDN = "https://cdn.jsdelivr.net/npm/reveal.js@5.1.0";
 const THREE_CDN =
   "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js";
@@ -795,7 +835,9 @@ function buildThreeScripts(slides: Slide[]): string {
   return result;
 }
 
-export function buildRevealHtml(slides: Slide[], theme = "black"): string {
+export function buildRevealHtml(slides: Slide[], theme = "black", paletteId?: string | null): string {
+  const palette = getPalette(paletteId);
+  const resolvedTheme = palette.baseTheme;
   const sorted = [...slides].map(normalizeSlide).sort((a, b) => a.order - b.order);
   const has3D = sorted.some((s) => s.type === "3d");
   const hasEffects = sorted.some((s) => s.type === "3d" && s.sceneEffect);
@@ -816,24 +858,53 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
     })
     .join("\n");
 
+  // Google Fonts link if palette has custom fonts
+  const fonts = [palette.fontHeading, palette.fontBody].filter(Boolean) as string[];
+  const uniqueFonts = [...new Set(fonts)];
+  const fontLink = uniqueFonts.length > 0
+    ? `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?${uniqueFonts.map(f => `family=${f.replace(/\s+/g, '+')}:wght@400;700;900`).join('&')}&display=swap" rel="stylesheet">`
+    : "";
+
+  const paletteVars = `:root {
+      --eb-heading: ${palette.vars.heading};
+      --eb-body: ${palette.vars.body};
+      --eb-accent: ${palette.vars.accent};
+      --eb-bg: ${palette.vars.bg};
+      --eb-card-bg: ${palette.vars.cardBg};
+      --eb-border: ${palette.vars.border};
+      --eb-kpi: ${palette.vars.kpi};
+      --eb-dot: ${palette.vars.dot};
+      ${palette.fontHeading ? `--eb-font-heading: '${palette.fontHeading}', sans-serif;` : ''}
+      ${palette.fontBody ? `--eb-font-body: '${palette.fontBody}', sans-serif;` : ''}
+    }`;
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Presentation</title>
+  ${fontLink}
   <link rel="stylesheet" href="${REVEAL_CDN}/dist/reset.css" />
   <link rel="stylesheet" href="${REVEAL_CDN}/dist/reveal.css" />
-  <link rel="stylesheet" href="${REVEAL_CDN}/dist/theme/${theme}.css" />
+  <link rel="stylesheet" href="${REVEAL_CDN}/dist/theme/${resolvedTheme}.css" />
   <style>
-    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    ${paletteVars}
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; ${palette.fontHeading ? 'font-family: var(--eb-font-heading);' : ''} }
+    ${palette.fontBody ? '.reveal { font-family: var(--eb-font-body); }' : ''}
     .reveal ul { text-align: left; }
     .reveal img { max-width: 100%; max-height: 50vh; border-radius: 8px; object-fit: cover; }
-    /* Override any inline styles the LLM may sneak in (exclude 3D slides) */
-    .reveal section:not(:has(.three-slide)) * { min-height: unset !important; background: unset !important; padding: revert !important; margin: revert !important; }
+    /* Override any inline styles the LLM may sneak in (exclude 3D slides and styled components) */
+    .reveal section:not(:has(.three-slide)) *:not(.card):not(.vs-left):not(.vs-right):not(.blockquote-card):not(.pill):not(.progress-bar):not(.progress-fill) { min-height: unset !important; background: unset !important; padding: revert !important; margin: revert !important; }
     .reveal section:not(:has(.three-slide)) *[style] { font-size: inherit !important; color: inherit !important; }
     /* 3D slides fill the entire section */
     .reveal section:has(.three-slide) { padding: 0 !important; overflow: hidden !important; background: transparent !important; }
+    /* Contain content within slide bounds */
+    .reveal section { overflow: hidden !important; box-sizing: border-box; }
+    .reveal section h1 { font-size: 1.8em !important; }
+    .reveal section h2 { font-size: 1.4em !important; }
+    .reveal section h3 { font-size: 1.1em !important; }
+    .reveal section p, .reveal section li { font-size: 0.75em; }
 
     /* Layout utilities */
     .columns { display: flex; gap: 2rem; align-items: center; text-align: left; }
@@ -842,13 +913,74 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
     .stat { text-align: center; }
     .stat h3 { font-size: 2.5em; font-weight: 900; margin: 0; }
     .stat p { font-size: 0.8em; opacity: 0.7; margin: 0.3em 0 0; }
-    .accent { color: #00d4aa; }
+    .accent { color: var(--eb-accent, #00d4aa); }
     .img-right, .img-left { display: flex; gap: 2rem; align-items: center; text-align: left; }
     .img-left { flex-direction: row-reverse; }
     .img-right img, .img-left img { max-width: 45%; }
     .quote-slide { display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .quote-slide blockquote { font-size: 1.3em; font-style: italic; border-left: 4px solid #00d4aa; padding-left: 1em; margin: 0; }
+    .quote-slide blockquote { font-size: 1.3em; font-style: italic; border-left: 4px solid var(--eb-accent, #00d4aa); padding-left: 1em; margin: 0; }
     .centered { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 60vh; }
+
+    /* Card grid */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin-top: 0.8rem; text-align: left; }
+    .card { background: var(--eb-card-bg, rgba(255,255,255,0.08)) !important; border: 1px solid var(--eb-border, rgba(255,255,255,0.15)); border-radius: 12px; padding: 0.8rem !important; }
+    .card-icon { font-size: 1.5em; margin-bottom: 0.3em; display: block; }
+
+    /* Timeline */
+    .timeline { position: relative; padding-left: 2rem; text-align: left; margin-top: 1rem; }
+    .timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 3px; background: var(--eb-dot, #00d4aa); border-radius: 2px; }
+    .timeline-item { position: relative; margin-bottom: 1.2rem; }
+    .timeline-dot { position: absolute; left: -2rem; top: 0.3em; width: 14px; height: 14px; background: var(--eb-dot, #00d4aa); border-radius: 50%; border: 3px solid rgba(0,0,0,0.3); }
+    .tl-content { padding-left: 0.5rem; }
+    .tl-content h4 { margin: 0 0 0.2em; font-size: 1em; font-weight: 700; }
+    .tl-content p { margin: 0; font-size: 0.85em; opacity: 0.8; }
+
+    /* KPI / Big numbers */
+    .kpi-row { display: flex; gap: 2rem; justify-content: center; margin-top: 1.5rem; flex-wrap: wrap; }
+    .kpi { text-align: center; flex: 1; min-width: 120px; }
+    .kpi-value { font-size: 2.2em; font-weight: 900; line-height: 1; color: var(--eb-kpi, #00d4aa); margin: 0; }
+    .kpi-label { font-size: 0.8em; opacity: 0.7; margin-top: 0.3em; }
+
+    /* Quote enhanced */
+    .blockquote-card { background: var(--eb-card-bg, rgba(255,255,255,0.06)) !important; border-left: 5px solid var(--eb-accent, #00d4aa); border-radius: 12px; padding: 1rem 1.5rem !important; margin: 0.8rem 0; font-size: 0.95em; font-style: italic; }
+    .cite { font-size: 0.7em; opacity: 0.6; font-style: normal; margin-top: 0.8em; display: block; }
+
+    /* Comparison VS */
+    .vs-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5rem; align-items: start; margin-top: 1rem; text-align: left; }
+    .vs-left, .vs-right { background: var(--eb-card-bg, rgba(255,255,255,0.06)) !important; border-radius: 12px; padding: 1.2rem !important; }
+    .vs-left { border-top: 4px solid #ff6b6b; }
+    .vs-right { border-top: 4px solid #00d4aa; }
+    .vs-divider { display: flex; align-items: center; justify-content: center; font-size: 1.8em; font-weight: 900; opacity: 0.4; padding-top: 1rem; }
+
+    /* Pills / tags */
+    .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; justify-content: center; }
+    .pill { display: inline-block; padding: 0.3em 0.9em !important; border-radius: 999px; font-size: 0.75em; font-weight: 600; background: rgba(255,255,255,0.1) !important; border: 1px solid rgba(255,255,255,0.2); }
+    .pill.accent { background: rgba(0,212,170,0.2) !important; border-color: rgba(0,212,170,0.4); color: var(--eb-accent, #00d4aa); }
+
+    /* Icon list */
+    .icon-list { list-style: none; padding: 0; margin: 0.8rem 0; text-align: left; }
+    .icon-list li { display: flex; align-items: center; gap: 0.6em; margin-bottom: 0.6em; font-size: 0.95em; }
+    .icon { font-size: 1.3em; flex-shrink: 0; }
+
+    /* Data table */
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.85em; }
+    .data-table th { text-align: left; padding: 0.6em 0.8em !important; border-bottom: 2px solid var(--eb-accent, #00d4aa); font-weight: 700; opacity: 0.9; }
+    .data-table td { padding: 0.5em 0.8em !important; border-bottom: 1px solid rgba(255,255,255,0.1); }
+
+    /* Progress bars */
+    .progress-bar { background: rgba(255,255,255,0.1) !important; border-radius: 999px; height: 1.2em; overflow: hidden; margin: 0.4em 0; position: relative; }
+    .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--eb-accent, #00d4aa), var(--eb-kpi, #9870ed)); transition: width 0.6s; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.75em; margin-bottom: 0.2em; }
+
+    /* SVG containers */
+    .diagram { display: flex; justify-content: center; margin: 1rem 0; }
+    .diagram svg { max-width: 100%; height: auto; }
+    .diagram-full { width: 100%; margin: 1rem 0; }
+    .diagram-full svg { width: 100%; height: auto; }
+
+    /* Video embed */
+    .embed-video { position: relative; width: 100%; padding-bottom: 56.25%; margin: 1rem 0; border-radius: 12px; overflow: hidden; }
+    .embed-video iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 
     /* Three.js background (legacy 2D particle bg) */
     #three-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 0.8s; }
@@ -872,7 +1004,7 @@ ${sections}
   >Powered by EasyBits</a>
   <script src="${REVEAL_CDN}/dist/reveal.js"><\/script>
   <script>
-    Reveal.initialize({ hash: true, transition: 'slide' });
+    Reveal.initialize({ hash: true, transition: 'slide', width: 960, height: 540, margin: 0.04, minScale: 0.2, maxScale: 1.4 });
     window.addEventListener('message', function(e) {
       if (e.data && e.data.type === 'goToSlide' && typeof e.data.index === 'number') {
         Reveal.slide(e.data.index);
