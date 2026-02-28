@@ -8,7 +8,7 @@ import {
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { buildRevealHtml, type Slide } from "~/lib/buildRevealHtml";
+import { buildRevealHtml, SCENE_EFFECT_IDS, type Slide } from "~/lib/buildRevealHtml";
 import { Copy } from "~/components/common/Copy";
 import type { Route } from "./+types/editor";
 
@@ -116,7 +116,7 @@ function SlideThumbnail({
       {scale > 0 && (
         <iframe
           srcDoc={srcDoc}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin"
           className="pointer-events-none border-0 absolute top-0 left-0"
           title={`Slide ${idx + 1}`}
           style={{
@@ -203,13 +203,48 @@ export default function PresentationEditor() {
     return () => document.removeEventListener("mousedown", handler);
   }, [exportMenuOpen]);
 
+  // Close modals on ESC
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (addSlideOpen) {
+        setAddSlideOpen(false);
+        setAddSlidePrompt("");
+        setAddSlideProposals(null);
+      } else if (variantIdx !== null) {
+        setVariantIdx(null);
+        setVariantHtml(null);
+        setVariantInstruction("");
+      } else if (editingIdx !== null) {
+        setEditingIdx(null);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [addSlideOpen, variantIdx, editingIdx]);
+
   // Navigate preview iframe to selected slide
   useEffect(() => {
     if (selectedSlideIdx === null) return;
     const iframe = previewIframeRef.current;
     if (!iframe?.contentWindow) return;
-    iframe.contentWindow.postMessage({ type: "goToSlide", index: selectedSlideIdx }, "*");
-  }, [selectedSlideIdx]);
+
+    // Send immediately (Reveal may already be ready)
+    iframe.contentWindow.postMessage(
+      { type: "goToSlide", index: selectedSlideIdx }, "*"
+    );
+
+    // Also listen for revealReady in case iframe is still loading
+    function onReady(e: MessageEvent) {
+      if (e.data?.type === "revealReady") {
+        iframe!.contentWindow?.postMessage(
+          { type: "goToSlide", index: selectedSlideIdx }, "*"
+        );
+      }
+    }
+    window.addEventListener("message", onReady);
+    return () => window.removeEventListener("message", onReady);
+  }, [selectedSlideIdx, slides.length]);
 
   // Step 1: Generate outline on mount
   useEffect(() => {
@@ -322,6 +357,16 @@ export default function PresentationEditor() {
       .filter((_, i) => i !== idx)
       .map((s, i) => ({ ...s, order: i }));
     saveSlides(updated);
+    // Adjust selected slide index after deletion
+    if (selectedSlideIdx !== null) {
+      if (idx === selectedSlideIdx) {
+        // Deleted the selected slide: select previous, or first, or null
+        setSelectedSlideIdx(updated.length === 0 ? null : Math.min(idx, updated.length - 1));
+      } else if (idx < selectedSlideIdx) {
+        // Deleted a slide before the selected one: shift index down
+        setSelectedSlideIdx(selectedSlideIdx - 1);
+      }
+    }
   }
 
   function handleThemeChange(newTheme: string) {
@@ -441,6 +486,7 @@ export default function PresentationEditor() {
     const newSlide = { ...proposal, id: proposal.id, order: slides.length };
     const updated = [...slides, newSlide];
     saveSlides(updated);
+    setSelectedSlideIdx(slides.length);
     setAddSlideOpen(false);
     setAddSlidePrompt("");
     setAddSlideProposals(null);
@@ -455,6 +501,7 @@ export default function PresentationEditor() {
     };
     const updated = [...slides, blank];
     saveSlides(updated);
+    setSelectedSlideIdx(slides.length);
     setAddSlideOpen(false);
     setAddSlidePrompt("");
     setAddSlideProposals(null);
@@ -712,9 +759,36 @@ export default function PresentationEditor() {
                   <div className="flex items-center gap-1 px-2 py-1 border-t-2 border-black">
                     <span className="font-bold text-[11px]">{idx + 1}.</span>
                     {slide.type === "3d" && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-purple-100 text-purple-700 border border-purple-200">
-                        3D
-                      </span>
+                      <>
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                          3D
+                        </span>
+                        <select
+                          value={slide.sceneEffect?.effect || "particleField"}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const updated = slides.map((s, i) =>
+                              i === idx
+                                ? {
+                                    ...s,
+                                    sceneEffect: {
+                                      ...s.sceneEffect,
+                                      effect: e.target.value,
+                                    },
+                                    sceneObjects: undefined,
+                                  }
+                                : s
+                            );
+                            saveSlides(updated);
+                          }}
+                          className="text-[9px] font-bold border border-purple-200 rounded-full px-1.5 py-0.5 bg-purple-50 text-purple-700"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {SCENE_EFFECT_IDS.map((id) => (
+                            <option key={id} value={id}>{id}</option>
+                          ))}
+                        </select>
+                      </>
                     )}
                     <div className="flex-1" />
                     {slide.type !== "3d" && (
@@ -774,35 +848,6 @@ export default function PresentationEditor() {
                     </button>
                   </div>
 
-                  {/* Editor textarea */}
-                  {editingIdx === idx && (
-                    <div className="border-t-2 border-black p-3 space-y-2">
-                      <textarea
-                        value={slide.type === "3d" ? editJson : editHtml}
-                        onChange={(e) =>
-                          slide.type === "3d"
-                            ? setEditJson(e.target.value)
-                            : setEditHtml(e.target.value)
-                        }
-                        rows={slide.type === "3d" ? 12 : 6}
-                        className="w-full text-xs font-mono border border-gray-300 rounded p-2 focus:outline-none"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleEditSave}
-                          className="px-3 py-1 bg-brand-500 text-white border border-black rounded-lg text-xs font-bold"
-                        >
-                          Guardar
-                        </button>
-                        <button
-                          onClick={() => setEditingIdx(null)}
-                          className="px-3 py-1 border border-black rounded-lg text-xs font-bold"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ))}
             {/* Add slide button */}
@@ -828,9 +873,10 @@ export default function PresentationEditor() {
           {/* Preview */}
           <div className="lg:w-[65%] lg:h-full border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <iframe
+              key={slides.map(s => s.id).join(",")}
               ref={previewIframeRef}
               srcDoc={previewHtml}
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-same-origin"
               className="w-full h-full"
               title="Preview"
             />
@@ -873,7 +919,7 @@ export default function PresentationEditor() {
                     [{ id: "preview", html: variantHtml, order: 0 }],
                     theme
                   )}
-                  sandbox="allow-scripts"
+                  sandbox="allow-scripts allow-same-origin"
                   className="w-full h-64 border-2 border-gray-200 rounded-lg mb-4"
                   title="Variant preview"
                 />
@@ -895,6 +941,92 @@ export default function PresentationEditor() {
                 Cerrar
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit HTML/JSON Modal */}
+      {editingIdx !== null && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border-2 border-black rounded-xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] p-6 max-w-5xl w-full h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4 shrink-0">
+              <div>
+                <h3 className="font-bold text-lg">
+                  {slides[editingIdx]?.type === "3d"
+                    ? `Editar JSON — Slide ${editingIdx + 1}`
+                    : `Editar HTML — Slide ${editingIdx + 1}`}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {slides[editingIdx]?.type === "3d"
+                    ? "JSON — sceneEffect, sceneObjects, title, subtitle, backgroundColor"
+                    : "HTML — se renderiza dentro de una <section> de reveal.js"}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingIdx(null)}
+                className="text-gray-400 hover:text-black text-xl font-bold"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="flex gap-4 flex-1 min-h-0">
+              {/* Editor */}
+              <div className="w-1/2 flex flex-col min-h-0">
+                <textarea
+                  value={slides[editingIdx]?.type === "3d" ? editJson : editHtml}
+                  onChange={(e) =>
+                    slides[editingIdx]?.type === "3d"
+                      ? setEditJson(e.target.value)
+                      : setEditHtml(e.target.value)
+                  }
+                  className="flex-1 w-full font-mono text-sm p-3 border-2 border-black rounded-xl resize-none"
+                  spellCheck={false}
+                />
+              </div>
+              {/* Live preview */}
+              <div className="w-1/2 flex flex-col min-h-0">
+                <div className="flex-1 border-2 border-black rounded-xl overflow-hidden bg-gray-900">
+                  <iframe
+                    srcDoc={(() => {
+                      const slide = slides[editingIdx];
+                      if (!slide) return "";
+                      if (slide.type === "3d") {
+                        try {
+                          const parsed = JSON.parse(editJson);
+                          return buildRevealHtml(
+                            [{
+                              ...slide,
+                              order: 0,
+                              sceneEffect: parsed.sceneEffect ?? slide.sceneEffect,
+                              sceneObjects: parsed.sceneObjects ?? slide.sceneObjects,
+                              title: parsed.title ?? slide.title,
+                              subtitle: parsed.subtitle ?? slide.subtitle,
+                              backgroundColor: parsed.backgroundColor ?? slide.backgroundColor,
+                            }],
+                            theme
+                          );
+                        } catch {
+                          return buildRevealHtml([{ ...slide, order: 0 }], theme);
+                        }
+                      }
+                      return buildRevealHtml(
+                        [{ ...slide, order: 0, html: editHtml }],
+                        theme
+                      );
+                    })()}
+                    sandbox="allow-scripts allow-same-origin"
+                    className="w-full h-full"
+                    title="Edit preview"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4 shrink-0">
+              <BrutalButton onClick={handleEditSave}>Guardar</BrutalButton>
+              <BrutalButton onClick={() => setEditingIdx(null)} mode="ghost">
+                Cancelar
+              </BrutalButton>
+            </div>
           </div>
         </div>
       )}
@@ -1007,6 +1139,12 @@ export default function PresentationEditor() {
               <div className="text-center py-8 text-gray-400 text-sm">
                 <p>Describe el contenido y la AI generará 3 propuestas</p>
                 <p className="text-xs mt-1">2 variantes 2D + 1 variante 3D</p>
+                <button
+                  onClick={handleAddBlankSlide}
+                  className="mt-4 px-4 py-2 text-sm font-bold text-black border-2 border-black rounded-xl hover:bg-gray-100 transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                >
+                  + Añadir vacía
+                </button>
               </div>
             )}
           </div>
