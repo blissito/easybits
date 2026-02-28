@@ -95,7 +95,6 @@ export async function action({ request, params }: Route.ActionArgs) {
         sceneEffect: variant3D.object.sceneEffect,
         title: variant3D.object.title,
         subtitle: variant3D.object.subtitle,
-        backgroundColor: variant3D.object.sceneEffect.backgroundColor,
       },
     ];
 

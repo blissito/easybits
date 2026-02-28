@@ -58,7 +58,7 @@ function normalizeSlide(s: Slide): Slide {
 }
 
 function build3DSection(slide: Slide, idx: number): string {
-  const bg = slide.backgroundColor || slide.sceneEffect?.backgroundColor || "#111111";
+  const bg = slide.backgroundColor || "transparent";
   const overlayHtml = [
     slide.title ? `<h1 style="margin:0;font-size:2.5em;font-weight:900;">${slide.title}</h1>` : "",
     slide.subtitle ? `<p style="margin:0.3em 0 0;font-size:1.2em;opacity:0.8;">${slide.subtitle}</p>` : "",
@@ -68,7 +68,7 @@ function build3DSection(slide: Slide, idx: number): string {
 
   return `<div class="three-slide" data-scene-idx="${idx}" style="position:relative;width:960px;height:700px;background:${bg};">
   <canvas id="three-canvas-${idx}" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
-  <div style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:#fff;pointer-events:none;">
+  <div style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:inherit;pointer-events:none;">
     ${overlayHtml}
   </div>
 </div>`;
@@ -783,7 +783,9 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
   const sections = sorted
     .map((s, i) => {
       if (s.type === "3d") {
-        return `        <section data-background-color="${s.backgroundColor || s.sceneEffect?.backgroundColor || "#111111"}">${build3DSection(s, i)}</section>`;
+        const bgColor = s.backgroundColor;
+        const bgAttr = bgColor ? ` data-background-color="${bgColor}"` : '';
+        return `        <section${bgAttr}>${build3DSection(s, i)}</section>`;
       }
       return `        <section>${s.html || ""}</section>`;
     })

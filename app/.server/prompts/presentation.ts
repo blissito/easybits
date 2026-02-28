@@ -102,7 +102,6 @@ Rules:
 - Pick primaryColor and secondaryColor as hex strings that complement each other and match the topic
 - speed: 0.5 (calm) to 2.0 (energetic), default 1.0
 - density: 0.5 (sparse) to 2.0 (dense), default 1.0
-- backgroundColor: dark hex color for the slide background (default "#111111")
 - VARY effects across slides — don't use the same effect twice in a presentation
 - Also return optional title and subtitle for the text overlay
 
@@ -113,8 +112,7 @@ Output format:
     "primaryColor": "#00d4aa",
     "secondaryColor": "#9870ed",
     "speed": 1.0,
-    "density": 1.0,
-    "backgroundColor": "#0a0a1a"
+    "density": 1.0
   },
   "title": "Optional Title",
   "subtitle": "Optional subtitle"

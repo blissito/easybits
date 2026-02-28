@@ -85,7 +85,6 @@ export async function action({ request, params }: Route.ActionArgs) {
           sceneEffect: match?.sceneEffect,
           title: match?.title || item.title,
           subtitle: match?.subtitle,
-          backgroundColor: match?.sceneEffect?.backgroundColor,
         };
       } else {
         const match = slides2D.find((s) => s.originalIdx === i);
@@ -161,28 +160,40 @@ async function generate3DSlides(
 ) {
   if (items.length === 0) return [];
 
-  // Generate each 3D slide independently
-  const results = await Promise.all(
-    items.map(async (entry) => {
-      const { object } = await generateObject({
-        model: anthropic("claude-haiku-4-5-20251001"),
-        schema: z.object({
-          sceneEffect: sceneEffectSchema,
-          title: z.string().optional(),
-          subtitle: z.string().optional(),
-        }),
-        system: SCENE_SYSTEM_PROMPT,
-        prompt: `Create a 3D scene for a presentation slide about: "${entry.item.title}"\nContext: ${entry.item.bullets.join(", ")}`,
-      });
+  // Generate sequentially so each slide knows which effects are already used
+  const results: {
+    originalIdx: number;
+    sceneEffect: z.infer<typeof sceneEffectSchema>;
+    title?: string;
+    subtitle?: string;
+  }[] = [];
+  const usedEffects: string[] = [];
 
-      return {
-        originalIdx: entry.originalIdx,
-        sceneEffect: object.sceneEffect,
-        title: object.title,
-        subtitle: object.subtitle,
-      };
-    })
-  );
+  for (const entry of items) {
+    const avoidNote =
+      usedEffects.length > 0
+        ? `\nALREADY USED effects (do NOT pick these): ${usedEffects.join(", ")}`
+        : "";
+
+    const { object } = await generateObject({
+      model: anthropic("claude-haiku-4-5-20251001"),
+      schema: z.object({
+        sceneEffect: sceneEffectSchema,
+        title: z.string().optional(),
+        subtitle: z.string().optional(),
+      }),
+      system: SCENE_SYSTEM_PROMPT,
+      prompt: `Create a 3D scene for a presentation slide about: "${entry.item.title}"\nContext: ${entry.item.bullets.join(", ")}${avoidNote}`,
+    });
+
+    usedEffects.push(object.sceneEffect.effect);
+    results.push({
+      originalIdx: entry.originalIdx,
+      sceneEffect: object.sceneEffect,
+      title: object.title,
+      subtitle: object.subtitle,
+    });
+  }
 
   return results;
 }
