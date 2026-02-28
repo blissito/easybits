@@ -16,6 +16,7 @@ export const meta = () => [
 ];
 import { FolderDropZone, type CreatedWebsite } from "~/components/FolderDropZone";
 import { Copy } from "~/components/common/Copy";
+import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -179,40 +180,42 @@ export default function WebsitesPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <motion.a
+                        <a
                           href={siteUrl(site.slug)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          whileTap={{ scale: 0.95 }}
-                          className="px-3 py-1 border-2 border-black rounded-xl text-sm font-bold hover:bg-gray-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                         >
-                          Visitar
-                        </motion.a>
-                        <motion.button
+                          <BrutalButton mode="ghost" size="chip" className="text-sm">
+                            Visitar
+                          </BrutalButton>
+                        </a>
+                        <BrutalButton
+                          size="chip"
                           onClick={() =>
                             setDeployingId(deployingId === site.id ? null : site.id)
                           }
-                          whileTap={{ scale: 0.95 }}
-                          className="px-3 py-1 bg-brand-500 text-white border-2 border-black rounded-xl text-sm font-bold shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                          className="text-sm"
                         >
                           Re-deploy
-                        </motion.button>
-                        <deleteFetcher.Form method="post">
+                        </BrutalButton>
+                        <deleteFetcher.Form
+                          method="post"
+                          onSubmit={(e) => {
+                            if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
                           <input type="hidden" name="intent" value="delete" />
                           <input type="hidden" name="websiteId" value={site.id} />
-                          <motion.button
+                          <BrutalButton
+                            mode="danger"
                             type="submit"
-                            disabled={isDeleting}
-                            whileTap={{ scale: 0.95 }}
-                            className="px-3 py-1 border-2 border-black text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 disabled:opacity-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
-                            onClick={(e) => {
-                              if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
-                                e.preventDefault();
-                              }
-                            }}
+                            isLoading={isDeleting}
+                            className="!h-auto !min-w-0 text-sm px-3 py-1"
                           >
-                            {isDeleting ? "Eliminando..." : "Eliminar"}
-                          </motion.button>
+                            Eliminar
+                          </BrutalButton>
                         </deleteFetcher.Form>
                       </div>
                     </div>

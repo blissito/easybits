@@ -408,17 +408,19 @@ model Webhook {
 }
 
 model Presentation {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  prompt    String
-  slides    Json     // { id, html, order }[]
-  theme     String   @default("black")
-  status    String   @default("DRAFT") // DRAFT | PUBLISHED
-  ownerId   String   @db.ObjectId
-  owner     User     @relation(fields: [ownerId], references: [id])
-  websiteId String?  @db.ObjectId
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  prompt       String
+  slides       Json     // { id, html, order }[]
+  theme        String   @default("black")
+  paletteId    String?  // reference to PRESENTATION_PALETTES
+  customColors Json?    // color overrides (future)
+  status       String   @default("DRAFT") // DRAFT | PUBLISHED
+  ownerId      String   @db.ObjectId
+  owner        User     @relation(fields: [ownerId], references: [id])
+  websiteId    String?  @db.ObjectId
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([ownerId])
 }

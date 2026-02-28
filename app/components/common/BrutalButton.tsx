@@ -11,6 +11,7 @@ interface BrutalButtonProps {
   isLoading?: boolean;
   onClick?: () => void;
   mode?: "ghost" | "brand" | "danger" | "landing" | "inverted";
+  size?: "default" | "chip";
   type?: "button" | "submit";
   style?: React.CSSProperties;
   [x: string]: unknown;
@@ -19,6 +20,7 @@ interface BrutalButtonProps {
 export const BrutalButton = ({
   id,
   mode = "brand",
+  size = "default",
   children,
   onClick,
   className,
@@ -29,14 +31,20 @@ export const BrutalButton = ({
   style,
   ...props
 }: BrutalButtonProps) => {
+  const isChip = size === "chip";
   return (
     <button
       onClick={onClick}
       disabled={isDisabled || isLoading}
-      className={cn("group rounded-xl h-12 bg-black", containerClassName, {
-        "bg-black/70": isDisabled || isLoading,
-        "w-full": mode === "landing",
-      })}
+      className={cn(
+        "group rounded-xl bg-black",
+        isChip ? "h-auto rounded-lg" : "h-12",
+        containerClassName,
+        {
+          "bg-black/70": isDisabled || isLoading,
+          "w-full": mode === "landing",
+        }
+      )}
       type={type}
       {...props}
     >
@@ -44,11 +52,12 @@ export const BrutalButton = ({
         id={id}
         className={cn(
           "w-max",
-          "min-w-32 h-12 px-4",
+          isChip
+            ? "px-3 py-1 text-xs font-bold rounded-lg border-[2px]"
+            : "min-w-32 h-12 px-4 text-lg font-semibold rounded-xl border-[2px]",
           "grid place-content-center",
-          "block", // así podemos usar translate
-          "text-lg font-semibold",
-          "rounded-xl border-[2px] border-black bg-brand-500",
+          "block",
+          "border-black bg-brand-500",
           "transition-all ",
           className,
           {

@@ -18,6 +18,7 @@ import { GiMagicLamp } from "react-icons/gi";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
 import { AnimatePresence, motion } from "motion/react";
+import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -120,13 +121,9 @@ function DeleteButton({ fileId }: { fileId: string }) {
     >
       <input type="hidden" name="intent" value="delete" />
       <input type="hidden" name="fileId" value={fileId} />
-      <button
-        type="submit"
-        disabled={isDeleting}
-        className="text-xs font-bold text-brand-red hover:bg-brand-red hover:text-white px-2 py-1 rounded-md border-2 border-brand-red transition-colors disabled:opacity-50"
-      >
-        {isDeleting ? "Eliminando..." : "Eliminar"}
-      </button>
+      <BrutalButton mode="danger" size="chip" type="submit" isLoading={isDeleting}>
+        Eliminar
+      </BrutalButton>
     </fetcher.Form>
   );
 }
@@ -139,13 +136,9 @@ function RestoreButton({ fileId }: { fileId: string }) {
     <fetcher.Form method="post">
       <input type="hidden" name="intent" value="restore" />
       <input type="hidden" name="fileId" value={fileId} />
-      <button
-        type="submit"
-        disabled={isRestoring}
-        className="text-xs font-bold text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-md border-2 border-emerald-600 transition-colors disabled:opacity-50"
-      >
-        {isRestoring ? "Restaurando..." : "Restaurar"}
-      </button>
+      <BrutalButton mode="ghost" size="chip" type="submit" isLoading={isRestoring}>
+        Restaurar
+      </BrutalButton>
     </fetcher.Form>
   );
 }
@@ -349,22 +342,25 @@ export default function DevFilesPage() {
 
       <AnimatePresence>
         {nextCursor && (
-          <motion.button
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              const params = new URLSearchParams(searchParams);
-              params.set("cursor", nextCursor);
-              setSearchParams(params);
-            }}
-            className="mt-4 group rounded-xl bg-black inline-block"
+            className="mt-4"
           >
-            <span className="block bg-white px-4 py-2 rounded-xl border-2 border-black text-sm font-bold -translate-x-1 -translate-y-1 transition-all hover:-translate-x-1.5 hover:-translate-y-1.5 active:translate-x-0 active:translate-y-0">
+            <BrutalButton
+              mode="ghost"
+              size="chip"
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                params.set("cursor", nextCursor);
+                setSearchParams(params);
+              }}
+              className="text-sm px-4 py-1.5"
+            >
               Load more
-            </span>
-          </motion.button>
+            </BrutalButton>
+          </motion.div>
         )}
       </AnimatePresence>
 

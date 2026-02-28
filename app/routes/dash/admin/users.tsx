@@ -6,6 +6,7 @@ import { PaginatedTable } from "~/components/common/pagination/PaginatedTable";
 import { TablePagination } from "~/components/common/pagination/TablePagination";
 import type { Route } from "./+types/users";
 import { useState } from "react";
+import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const meta = () => [
   { title: "Usuarios — EasyBits" },
@@ -99,12 +100,9 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
             placeholder="Buscar por email..."
             className="px-4 py-2 border-2 border-black rounded-xl font-mono text-sm w-full max-w-md"
           />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-black text-white font-bold rounded-xl border-2 border-black text-sm hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform"
-          >
+          <BrutalButton size="chip" type="submit" className="text-sm px-4 py-2">
             Buscar
-          </button>
+          </BrutalButton>
         </div>
       </form>
 
@@ -179,19 +177,12 @@ function UserRow({ user }: { user: any }) {
               className="px-2 py-0.5 border-2 border-black rounded text-xs w-28"
               autoFocus
             />
-            <button
-              type="submit"
-              className="text-xs font-bold bg-black text-white px-2 rounded"
-            >
+            <BrutalButton size="chip" type="submit">
               OK
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="text-xs font-bold px-2"
-            >
+            </BrutalButton>
+            <BrutalButton size="chip" mode="ghost" onClick={() => setEditing(false)}>
               X
-            </button>
+            </BrutalButton>
           </fetcher.Form>
         ) : (
           <button
@@ -223,13 +214,14 @@ function UserRow({ user }: { user: any }) {
                 <input type="hidden" name="intent" value="removeRole" />
                 <input type="hidden" name="userId" value={user.id} />
                 <input type="hidden" name="role" value={role} />
-                <button
+                <BrutalButton
+                  size="chip"
+                  mode="danger"
                   type="submit"
-                  className="text-brand-500 hover:text-red-600 font-black text-xs leading-none"
-                  title={`Quitar ${role}`}
+                  className="px-1.5 py-0"
                 >
                   x
-                </button>
+                </BrutalButton>
               </fetcher.Form>
             </span>
           ))}
@@ -248,12 +240,9 @@ function UserRow({ user }: { user: any }) {
               className="px-1 py-0.5 border border-black rounded text-xs w-16"
             />
             {newRole && (
-              <button
-                type="submit"
-                className="text-xs font-bold bg-brand-500 text-white px-1.5 rounded"
-              >
+              <BrutalButton size="chip" type="submit" className="px-1.5 py-0">
                 +
-              </button>
+              </BrutalButton>
             )}
           </fetcher.Form>
         </div>
@@ -267,13 +256,9 @@ function UserRow({ user }: { user: any }) {
             <input type="hidden" name="intent" value="addRole" />
             <input type="hidden" name="role" value="Enrolled" />
             <input type="hidden" name="userId" value={user.id} />
-            <button
-              type="submit"
-              disabled={busy}
-              className="px-2 py-1 bg-green-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
-            >
+            <BrutalButton size="chip" type="submit" isDisabled={busy}>
               Habilitar
-            </button>
+            </BrutalButton>
           </fetcher.Form>
         ) : (
           <fetcher.Form
@@ -286,13 +271,9 @@ function UserRow({ user }: { user: any }) {
           >
             <input type="hidden" name="intent" value="disable" />
             <input type="hidden" name="userId" value={user.id} />
-            <button
-              type="submit"
-              disabled={busy}
-              className="px-2 py-1 bg-red-600 text-white font-bold text-xs rounded-lg border-2 border-black hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform disabled:opacity-50"
-            >
+            <BrutalButton mode="danger" size="chip" type="submit" isDisabled={busy}>
               Deshabilitar
-            </button>
+            </BrutalButton>
           </fetcher.Form>
         )}
       </td>

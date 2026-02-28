@@ -1,4 +1,4 @@
-import { Form, redirect, useFetcher, useNavigation } from "react-router";
+import { Form, Link, redirect, useFetcher, useNavigation } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -7,6 +7,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import Spinner from "~/components/common/Spinner";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
+import { PRESENTATION_PALETTES, getPalette } from "~/lib/buildRevealHtml";
 import type { Route } from "./+types/new";
 
 export const meta = () => [
@@ -39,7 +40,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const name = String(formData.get("name") || "").trim();
   const prompt = String(formData.get("prompt") || "").trim();
   const slideCount = Number(formData.get("slideCount") || 8);
-  const theme = String(formData.get("theme") || "black");
+  const paletteId = String(formData.get("paletteId") || "midnight");
+  const palette = getPalette(paletteId);
 
   if (!name || !prompt) {
     return { error: "Nombre y prompt son requeridos" };
@@ -50,7 +52,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
       name,
       prompt,
       slides: [],
-      theme,
+      theme: palette.baseTheme,
+      paletteId,
       ownerId: user.id,
     },
   });
@@ -60,10 +63,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
   );
 };
 
-const THEMES = [
-  "black", "white", "league", "beige", "sky",
-  "night", "serif", "simple", "solarized", "moon", "dracula",
-];
 
 const brutalInput =
   "w-full px-4 py-2 border-2 border-black rounded-xl bg-white transition-all duration-150 -translate-x-1 -translate-y-1 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:-translate-x-0 focus:-translate-y-0 focus:outline-none";
@@ -82,6 +81,7 @@ export default function NewPresentation() {
   const suggestFetcher = useFetcher<{ suggestion?: string }>();
   const [nameValue, setNameValue] = useState("");
   const [promptValue, setPromptValue] = useState("");
+  const [selectedPalette, setSelectedPalette] = useState("midnight");
   const lastSuggestion = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -120,9 +120,17 @@ export default function NewPresentation() {
 
   return (
     <article className="pt-20 px-8 pb-24 md:pl-36 w-full max-w-2xl">
-      <h1 className="text-3xl font-black tracking-tight mb-8 uppercase">
-        Nueva Presentación
-      </h1>
+      <div className="flex items-center gap-3 mb-8">
+        <Link
+          to="/dash/presentations"
+          className="text-sm font-bold hover:underline"
+        >
+          &larr; Volver
+        </Link>
+        <h1 className="text-3xl font-black tracking-tight uppercase">
+          Nueva Presentación
+        </h1>
+      </div>
 
       <Form method="post" className="space-y-6">
         <div>
@@ -164,41 +172,46 @@ export default function NewPresentation() {
           </div>
         </div>
 
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <label className="block text-sm font-bold mb-1">Slides</label>
-            <BrutalField>
-              <select
-                name="slideCount"
-                defaultValue="8"
-                className={brutalInput}
-              >
-                <option value="3">3 slides</option>
-                <option value="5">5 slides</option>
-                <option value="8">8 slides</option>
-                <option value="10">10 slides</option>
-                <option value="12">12 slides</option>
-              </select>
-            </BrutalField>
-          </div>
+        <div>
+          <label className="block text-sm font-bold mb-1">Slides</label>
+          <BrutalField>
+            <select
+              name="slideCount"
+              defaultValue="8"
+              className={brutalInput}
+            >
+              <option value="3">3 slides</option>
+              <option value="5">5 slides</option>
+              <option value="8">8 slides</option>
+              <option value="10">10 slides</option>
+              <option value="12">12 slides</option>
+            </select>
+          </BrutalField>
+        </div>
 
-          <div className="flex-1">
-            <label className="block text-sm font-bold mb-1">Tema</label>
-            <BrutalField>
-              <select
-                name="theme"
-                defaultValue="black"
-                className={brutalInput}
+        <div>
+          <label className="block text-sm font-bold mb-2">Estilo visual</label>
+          <input type="hidden" name="paletteId" value={selectedPalette} />
+          <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+            {PRESENTATION_PALETTES.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedPalette(p.id)}
+                className={`shrink-0 w-16 rounded-lg p-1.5 transition-all border-2 ${
+                  selectedPalette === p.id
+                    ? 'border-brand-500 ring-2 ring-brand-500'
+                    : 'border-transparent hover:border-gray-300'
+                }`}
               >
-                {THEMES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </BrutalField>
-            <p className="text-xs text-gray-500 mt-1">Puedes cambiarlo despues en el editor</p>
+                <div className="h-7 rounded-md mb-1 flex items-end" style={{ background: p.vars.bg }}>
+                  <div className="h-1.5 w-full rounded-b-md" style={{ background: p.vars.accent }} />
+                </div>
+                <span className="text-[9px] font-bold truncate block text-center">{p.name}</span>
+              </button>
+            ))}
           </div>
+          <p className="text-xs text-gray-500 mt-1">Puedes cambiarlo después en el editor</p>
         </div>
 
         <BrutalButton

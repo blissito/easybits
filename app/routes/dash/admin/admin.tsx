@@ -1,4 +1,5 @@
 import { NavLink, Outlet, redirect } from "react-router";
+import { BrutalButton } from "~/components/common/BrutalButton";
 
 export const meta = () => [
   { title: "Admin — EasyBits" },
@@ -32,26 +33,15 @@ export default function AdminLayout() {
       </h1>
       <nav className="flex gap-2 mb-8" aria-label="Secciones de administración">
         {tabs.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.end}
-            className={({ isActive }) =>
-              isActive
-                ? "group rounded-xl bg-black"
-                : "group rounded-xl bg-transparent"
-            }
-          >
+          <NavLink key={tab.to} to={tab.to} end={tab.end} className="contents">
             {({ isActive }) => (
-              <span
-                className={`block px-4 py-2 text-sm font-bold rounded-xl border-2 border-black transition-all ${
-                  isActive
-                    ? "bg-brand-500 text-white -translate-x-1 -translate-y-1"
-                    : "bg-white hover:-translate-x-1 hover:-translate-y-1"
-                }`}
+              <BrutalButton
+                size="chip"
+                mode={isActive ? "inverted" : "ghost"}
+                className="text-sm px-4 py-2"
               >
                 {tab.label}
-              </span>
+              </BrutalButton>
             )}
           </NavLink>
         ))}

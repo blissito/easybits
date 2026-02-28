@@ -3,6 +3,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { listApiKeys } from "~/.server/iam";
 import { createApiKey, revokeApiKey } from "~/.server/iam";
 import { useState } from "react";
+import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Route } from "./+types/keys";
 
 export const meta = () => [
@@ -50,14 +51,9 @@ export default function KeysPage() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-black uppercase tracking-tight">API Keys</h2>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="group rounded-xl bg-black"
-        >
-          <span className="block bg-brand-yellow px-4 py-2 rounded-xl border-2 border-black text-sm font-bold -translate-x-1 -translate-y-1 transition-all hover:-translate-x-1.5 hover:-translate-y-1.5 active:translate-x-0 active:translate-y-0">
-            + Create Key
-          </span>
-        </button>
+        <BrutalButton size="chip" onClick={() => setShowCreate(true)} className="text-sm px-4 py-1.5">
+          + Create Key
+        </BrutalButton>
       </div>
 
       {/* Create modal */}
@@ -77,21 +73,21 @@ export default function KeysPage() {
                 />
               </label>
               <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
+                <BrutalButton
+                  mode="ghost"
+                  size="chip"
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-sm font-bold border-2 border-black rounded-xl hover:bg-gray-100 transition-colors"
+                  className="text-sm px-4 py-1.5"
                 >
                   Cancel
-                </button>
-                <button
+                </BrutalButton>
+                <BrutalButton
                   type="submit"
-                  className="group rounded-xl bg-black"
+                  size="chip"
+                  className="text-sm px-4 py-1.5"
                 >
-                  <span className="block bg-brand-500 text-white px-4 py-2 rounded-xl border-2 border-black text-sm font-bold -translate-x-1 -translate-y-1 transition-all hover:-translate-x-1.5 hover:-translate-y-1.5 active:translate-x-0 active:translate-y-0">
-                    Create
-                  </span>
-                </button>
+                  Create
+                </BrutalButton>
               </div>
             </fetcher.Form>
           </div>
@@ -166,12 +162,14 @@ export default function KeysPage() {
                     >
                       <input type="hidden" name="intent" value="revoke" />
                       <input type="hidden" name="keyId" value={k.id} />
-                      <button
-                        className="text-xs font-bold px-3 py-1 border-2 border-black rounded-lg bg-brand-red text-white hover:bg-red-700 transition-colors disabled:opacity-50"
-                        disabled={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
+                      <BrutalButton
+                        mode="danger"
+                        size="chip"
+                        type="submit"
+                        isLoading={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
                       >
-                        {fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id ? "Revocando..." : "Revoke"}
-                      </button>
+                        Revoke
+                      </BrutalButton>
                     </fetcher.Form>
                   )}
                 </td>
