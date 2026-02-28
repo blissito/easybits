@@ -4,7 +4,7 @@ import { db } from "~/.server/db";
 import { streamObject } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { OUTLINE_SYSTEM_PROMPT } from "~/.server/prompts/presentation";
+import { OUTLINE_SYSTEM_PROMPT } from "~/lib/presentationPrompts";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 
 // POST /api/v2/presentations/:id/outline

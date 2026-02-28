@@ -8,7 +8,7 @@ import { nanoid } from "nanoid";
 import {
   SLIDES_SYSTEM_PROMPT,
   SCENE_SYSTEM_PROMPT,
-} from "~/.server/prompts/presentation";
+} from "~/lib/presentationPrompts";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { SCENE_EFFECT_IDS } from "~/lib/buildRevealHtml";
 
