@@ -58,6 +58,7 @@ function normalizeSlide(s: Slide): Slide {
 }
 
 function build3DSection(slide: Slide, idx: number): string {
+  const bg = slide.backgroundColor || "transparent";
   const overlayHtml = [
     slide.title ? `<h1 style="margin:0;font-size:2.5em;font-weight:900;">${slide.title}</h1>` : "",
     slide.subtitle ? `<p style="margin:0.3em 0 0;font-size:1.2em;opacity:0.8;">${slide.subtitle}</p>` : "",
@@ -65,9 +66,19 @@ function build3DSection(slide: Slide, idx: number): string {
     .filter(Boolean)
     .join("\n");
 
-  // Canvas is rendered outside .reveal as a fixed element; section only has text overlay + marker
-  return `<div class="three-slide" data-scene-idx="${idx}" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;width:100%;height:100%;">
+  if (slide.sceneEffect) {
+    // Effect slides: canvas is fixed outside .reveal; section only has text overlay + marker
+    return `<div class="three-slide" data-scene-idx="${idx}" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;width:100%;height:100%;">
   ${overlayHtml}
+</div>`;
+  }
+
+  // Legacy slides: canvas inline inside the section
+  return `<div class="three-slide" data-scene-idx="${idx}" style="position:relative;width:960px;height:700px;background:${bg};">
+  <canvas id="three-canvas-${idx}" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+  <div style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:inherit;pointer-events:none;">
+    ${overlayHtml}
+  </div>
 </div>`;
 }
 
@@ -175,9 +186,12 @@ function buildEffectCode(effect: SceneEffect3D): string {
   // Core glow
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshBasicMaterial({ color: '${pc}', transparent: true, opacity: 0.6 }));
   scene.add(core);
-  camera.position.set(0, 3, 5);
+  pts.rotation.x = Math.PI * 0.15;
+  core.rotation.x = Math.PI * 0.15;
+  camera.position.set(0, 2, 6);
+  camera.lookAt(0, 0, 0);
   return function(t) {
-    pts.rotation.y += 0.002 * sp;
+    pts.rotation.z += 0.002 * sp;
     core.scale.setScalar(1 + Math.sin(t * sp * 2) * 0.1);
   };
 })`;
@@ -790,8 +804,12 @@ export function buildRevealHtml(slides: Slide[], theme = "black"): string {
   const sections = sorted
     .map((s, i) => {
       if (s.type === "3d") {
-        const bgColor = s.backgroundColor;
-        const bgAttr = bgColor ? ` data-background-color="${bgColor}"` : '';
+        // Effect slides: transparent bg so fixed canvas shows through
+        // Legacy slides: keep their backgroundColor
+        const isEffect = !!s.sceneEffect;
+        const bgAttr = isEffect
+          ? ' data-background-color="transparent"'
+          : (s.backgroundColor ? ` data-background-color="${s.backgroundColor}"` : '');
         return `        <section${bgAttr}>${build3DSection(s, i)}</section>`;
       }
       return `        <section>${s.html || ""}</section>`;
