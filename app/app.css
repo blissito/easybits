@@ -6,6 +6,21 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  [type="text"]:focus,
+  [type="email"]:focus,
+  [type="url"]:focus,
+  [type="password"]:focus,
+  [type="number"]:focus,
+  [type="date"]:focus,
+  [type="search"]:focus,
+  textarea:focus,
+  select:focus {
+    --tw-ring-color: #9870ED;
+    border-color: #9870ED;
+  }
+}
+
 @font-face {
   font-family: "Satoshi";
   src: url("/fonts/Satoshi-Regular.ttf") format("truetype");

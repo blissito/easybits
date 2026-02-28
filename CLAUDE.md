@@ -68,6 +68,29 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - E2E: Playwright (`test/e2e-purchase.spec.ts`) — purchase flow (WIP)
 - **Missing test coverage**: Stripe webhook edge cases, free_subscription, IDOR scenarios
 
+## Presentations
+- Editor: `app/routes/dash/presentations/editor.tsx` (textarea HTML/JSON, drag&drop, iframe preview)
+- Types & HTML builder: `app/lib/buildRevealHtml.ts` (Slide, SceneObject3D, buildRevealHtml)
+- Operations: `app/.server/core/presentationOperations.ts` (CRUD + deploy/unpublish)
+- Images: `app/.server/images/pexels.ts` (Pexels stock photos)
+- AI: Haiku 4.5 (outline/3D/variants) + Sonnet 4.6 (HTML slides)
+- MCP: 7 tools (list/get/create/update/delete/deploy/unpublish)
+- SDK: `@easybits.cloud/sdk` v0.4.0 — presentation methods
+- 3D: Three.js v0.170, 5 geometries, 3 animations (float/rotate/none)
+- Themes: 11 reveal.js standard themes
+- Deploy: static HTML to `slug.easybits.cloud`
+
+## Presentations Roadmap (ordered by priority)
+1. **P0 — Editor inline (TipTap)**: Replace textarea with rich text editor. TipTap + ProseMirror, output HTML compatible with reveal.js. New `app/components/presentations/SlideEditor.tsx`
+2. **P1 — Slide layouts**: 8 pro layouts (Title, Title+Body, Two Column, Image+Text, Image Full, Quote, Stats, Comparison). `app/lib/slideLayouts.ts`. AI suggests layout in outline
+3. **P2 — Image sources**: Improve Pexels (3-5 results), add IconScout API (we have account), Unsplash. AI image gen (DALL-E/FLUX/RunPod) — evaluate later
+4. **P2 — Custom themes**: 5 EasyBits themes (brutalist, neon, corporate, minimal, glassmorphism) + custom colors/font. `app/lib/presentationThemes.ts`
+5. **P2 — 3D enhanced**: More geometries (cone, torusKnot, etc), animations (pulse, bounce, orbit), predefined scenes, GLTF models
+6. **P3 — Short-banners**: Vertical 9:16 estilo PostMyWall, modelo Banner propio, editor dedicado `app/routes/dash/banners/`, video export (Remotion/FFmpeg/Creatomate)
+7. **P3 — Slide transitions**: Reveal.js transitions (fade, convex, concave, zoom), per-slide or global
+8. **P3 — Drag & drop**: Upgrade to `@dnd-kit/core` (low priority)
+9. **P3 — Evaluate generation model**: 4o-mini vs Sonnet for HTML slides (low priority, Sonnet works well)
+
 ## TODOs & Technical Debt
 - Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure

@@ -507,17 +507,27 @@ export async function listShareTokens(
 
 // --- Website Operations ---
 
-import { slugify } from "../utils/slugify";
-
 const ADJECTIVES = [
-  "bright", "swift", "bold", "calm", "cool", "crisp", "deft", "fair",
-  "keen", "lush", "neat", "pure", "rare", "slim", "soft", "vast",
-  "warm", "wild", "wise", "vivid", "fresh", "grand", "prime", "sharp",
-  "noble", "lucid", "gentle", "clever", "agile", "serene",
+  "audaz", "bravo", "calmo", "claro", "denso", "dulce", "firme", "forte",
+  "grato", "habil", "justo", "libre", "lucido", "noble", "pleno", "puro",
+  "rapido", "recto", "sabio", "suave", "veloz", "vasto", "vivaz", "astuto",
+  "digno", "fiero", "gentil", "limpio", "magno", "neto", "primo", "regio",
+  "sutil", "tenaz", "unico", "agudo", "feliz", "leal", "fino", "brioso",
+];
+
+const NOUNS = [
+  "rio", "sol", "luna", "monte", "lago", "cielo", "bosque", "piedra",
+  "fuego", "viento", "ola", "rayo", "nube", "flor", "arbol", "campo",
+  "torre", "puente", "isla", "cumbre", "estrella", "aurora", "cristal",
+  "oceano", "volcan", "selva", "costa", "pradera", "colina", "cascada",
 ];
 
 function randomAdjective(): string {
   return ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+}
+
+function randomNoun(): string {
+  return NOUNS[Math.floor(Math.random() * NOUNS.length)];
 }
 
 export async function listWebsites(ctx: AuthContext) {
@@ -551,11 +561,9 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     });
   }
 
-  const baseSlug = slugify(name);
-
   let website;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${randomAdjective()}`;
+    const slug = [randomAdjective(), randomAdjective(), randomNoun()].join("-");
     try {
       website = await db.website.create({
         data: { name, slug, ownerId: ctx.user.id, prefix: "" },
