@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   useLoaderData,
   useFetcher,
@@ -425,8 +426,10 @@ export default function PresentationEditor() {
               const received = accumulated.filter(Boolean).length;
               setSlides([...accumulated.filter(Boolean)]);
               setGenProgress(`Slide ${received} de ${data.total}...`);
+              setSelectedSlideIdx(received - 1);
             } else if (eventType === "done") {
               setSlides(data.slides);
+              setSelectedSlideIdx(data.slides.length - 1);
               setShowPostGenCTA(true);
             } else if (eventType === "error") {
               throw new Error(data.error);
@@ -808,16 +811,26 @@ export default function PresentationEditor() {
       )}
 
       {/* Outline review step */}
+      <AnimatePresence>
       {outline && outline.length > 0 && (
-        <div className="mb-6 pb-20">
+        <motion.div
+          className="mb-6 pb-20"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3 }}
+        >
           <h2 className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wide flex items-center gap-2">
             Outline — {outline.length} diapositiva{outline.length !== 1 ? "s" : ""}
             {generating && <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />}
           </h2>
           <div className="max-w-3xl mx-auto space-y-2">
             {outline.map((slide, i) => (
-              <div
+              <motion.div
                 key={i}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.06 }}
                 className="bg-white border-2 border-black rounded-xl p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all group"
               >
                 {/* Title row: number + title + toggle */}
@@ -902,7 +915,7 @@ export default function PresentationEditor() {
                     className="flex-1 text-[10px] text-gray-400 bg-transparent border border-transparent rounded px-1 -ml-1 focus:outline-none focus:border-gray-300 transition-colors"
                   />
                 </div>
-              </div>
+              </motion.div>
             ))}
 
             {/* Add slide button */}
@@ -950,8 +963,9 @@ export default function PresentationEditor() {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Generating spinner */}
       {generating && !outline && (
