@@ -15,6 +15,7 @@ Rules:
 - Return ONLY the modified HTML for this section — no full page, no <html>/<head>/<body> tags
 - You may use Tailwind CSS classes (loaded via CDN on the page)
 - You may use inline styles
+- The page uses CSS custom properties for theming: var(--landing-bg), var(--landing-accent), var(--landing-text), var(--landing-accent-text). Use these variables in your HTML to stay consistent with the page theme. The actual resolved color values will be provided in the prompt.
 - You may add <style> tags for keyframe animations or custom CSS
 - You may add <script> tags for interactive behavior (counters, marquees, animations)
 - Preserve the overall structure unless the user explicitly asks to change it

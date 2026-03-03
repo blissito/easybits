@@ -1,11 +1,22 @@
 import { type LandingSection, renderSection, getThemeVars } from "./landingCatalog";
 
-export function buildLandingHtml(sections: LandingSection[], theme: string): string {
-  const t = getThemeVars(theme);
+export type CustomColors = { bg: string; accent: string; text: string };
+
+export function buildLandingHtml(
+  sections: LandingSection[],
+  theme: string,
+  customColors?: CustomColors | null,
+  { preview = false }: { preview?: boolean } = {},
+): string {
+  const t = customColors ?? getThemeVars(theme);
   const body = sections
     .sort((a, b) => a.order - b.order)
-    .map((s) => `<div id="section-${s.id}">${s.html || renderSection(s, theme)}</div>`)
+    .map((s) => `<div id="section-${s.id}">${s.html || renderSection(s)}</div>`)
     .join("\n");
+
+  // Compute a contrasting accent-text color (white or black) for readability on accent bg
+  const accentLum = hexLuminance(t.accent);
+  const accentText = accentLum > 0.4 ? "#000000" : "#ffffff";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -15,15 +26,16 @@ export function buildLandingHtml(sections: LandingSection[], theme: string): str
 <title>Landing Page</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
+  :root{--landing-bg:${t.bg};--landing-accent:${t.accent};--landing-text:${t.text};--landing-accent-text:${accentText}}
   *{margin:0;padding:0;box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{font-family:system-ui,-apple-system,sans-serif;background:${t.bg};color:${t.text}}
+  body{font-family:system-ui,-apple-system,sans-serif;background:var(--landing-bg);color:var(--landing-text)}
   details summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
 ${body}
-<script>
+${preview ? `<script>
 window.addEventListener("message",function(e){
   if(e.data&&e.data.type==="scrollToSection"){
     var el=document.getElementById("section-"+e.data.id);
@@ -34,7 +46,15 @@ document.addEventListener("click",function(e){
   var a=e.target.closest("a");
   if(a){e.preventDefault();e.stopPropagation();}
 },true);
-</script>
+</script>` : ""}
 </body>
 </html>`;
+}
+
+function hexLuminance(hex: string): number {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.substring(0, 2), 16) / 255;
+  const g = parseInt(c.substring(2, 4), 16) / 255;
+  const b = parseInt(c.substring(4, 6), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
 }

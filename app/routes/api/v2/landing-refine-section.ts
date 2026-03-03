@@ -5,7 +5,7 @@ import { generateText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { SECTION_REFINE_PROMPT } from "~/lib/landingPrompts";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
-import { renderSection, type LandingSection } from "~/lib/landingCatalog";
+import { renderSection, getThemeVars, type LandingSection } from "~/lib/landingCatalog";
 
 // POST /api/v2/landing-refine-section
 export async function action({ request }: Route.ActionArgs) {
@@ -35,19 +35,28 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Section not found" }, { status: 404 });
   }
 
-  const currentHtml = section.html || renderSection(section, landing.theme || "modern");
+  const currentHtml = section.html || renderSection(section);
+
+  // Resolve theme colors so the AI knows what the CSS vars mean
+  const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
+  const themeVars = customColors ?? getThemeVars(landing.theme || "modern");
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const anthropic = userKey
     ? createAnthropic({ apiKey: userKey })
     : createAnthropic();
 
-  const model = anthropic("claude-haiku-4-5-20251001");
+  const model = anthropic("claude-sonnet-4-6");
 
   const result = await generateText({
     model,
     system: SECTION_REFINE_PROMPT,
-    prompt: `Current HTML:\n\`\`\`html\n${currentHtml}\n\`\`\`\n\nInstruction: ${instruction}`,
+    prompt: `CSS Variables in use on this page:
+--landing-bg: ${themeVars.bg}
+--landing-accent: ${themeVars.accent}
+--landing-text: ${themeVars.text}
+
+Current HTML:\n\`\`\`html\n${currentHtml}\n\`\`\`\n\nInstruction: ${instruction}`,
   });
 
   let html = result.text.trim();

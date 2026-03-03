@@ -431,8 +431,9 @@ model Landing {
   name      String
   prompt    String
   sections  Json     // LandingSection[]
-  theme     String   @default("modern")
-  status    String   @default("DRAFT") // DRAFT | PUBLISHED
+  theme        String   @default("modern")
+  customColors Json?    // { bg, accent, text } hex colors
+  status       String   @default("DRAFT") // DRAFT | PUBLISHED
   ownerId   String   @db.ObjectId
   owner     User     @relation(fields: [ownerId], references: [id])
   websiteId String?  @db.ObjectId

@@ -25,7 +25,8 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   const sections = (landing.sections as unknown as LandingSection[]) || [];
   if (sections.length === 0) throwJson("No sections to deploy", 400);
 
-  const html = buildLandingHtml(sections, landing.theme);
+  const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
+  const html = buildLandingHtml(sections, landing.theme, customColors);
   const htmlBuffer = Buffer.from(html, "utf-8");
 
   // Create or reuse website

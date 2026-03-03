@@ -19,7 +19,7 @@ import {
   LANDING_THEMES,
   renderSection,
 } from "~/lib/landingCatalog";
-import { buildLandingHtml } from "~/lib/buildLandingHtml";
+import { buildLandingHtml, type CustomColors } from "~/lib/buildLandingHtml";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -69,9 +69,11 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "update-theme") {
     const theme = String(formData.get("theme"));
+    const rawColors = formData.get("customColors");
+    const customColors = rawColors ? JSON.parse(String(rawColors)) : null;
     await db.landing.update({
       where: { id: params.id },
-      data: { theme },
+      data: { theme, customColors },
     });
     return { ok: true };
   }
@@ -118,6 +120,19 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   return { error: "Intent desconocido" };
 };
 
+// ── Viewport presets ──
+const VIEWPORTS = [
+  { id: "desktop", width: "100%", label: "Desktop", icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+  )},
+  { id: "tablet", width: "768px", label: "Tablet", icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+  )},
+  { id: "mobile", width: "375px", label: "Mobile", icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+  )},
+] as const;
+
 export default function LandingEditor() {
   const { landing, websiteUrl } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -131,13 +146,25 @@ export default function LandingEditor() {
     return Array.isArray(raw) ? (raw as unknown as LandingSection[]) : [];
   });
   const [theme, setTheme] = useState(landing.theme || "modern");
+  const [customColors, setCustomColors] = useState<CustomColors | null>(() => {
+    const raw = landing.customColors;
+    if (raw && typeof raw === "object" && "bg" in (raw as any)) {
+      return raw as unknown as CustomColors;
+    }
+    return null;
+  });
+  const isCustomTheme = theme === "custom";
+
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(
     searchParams.get("generating") === "1"
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
+  const [previewWidth, setPreviewWidth] = useState<string>("100%");
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
 
   // Handle redirect from delete + clear active intent
   useEffect(() => {
@@ -162,6 +189,30 @@ export default function LandingEditor() {
     generateSections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Close overflow on outside click
+  useEffect(() => {
+    if (!overflowOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setOverflowOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [overflowOpen]);
+
+  // ESC to deselect / close overflow
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (overflowOpen) setOverflowOpen(false);
+        else setSelectedSection(null);
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [overflowOpen]);
 
   async function generateSections() {
     setIsGenerating(true);
@@ -195,10 +246,37 @@ export default function LandingEditor() {
     );
   }
 
-  function saveTheme(newTheme: string) {
+  function saveTheme(newTheme: string, colors?: CustomColors | null) {
     setTheme(newTheme);
+    const c = newTheme === "custom" ? (colors ?? customColors) : null;
+    if (newTheme === "custom" && !c) {
+      // Initialize custom colors from current theme
+      const current = LANDING_THEMES.find((t) => t.id === theme) ?? LANDING_THEMES[0];
+      const init: CustomColors = { bg: current.bg, accent: current.accent, text: current.text };
+      setCustomColors(init);
+      saveFetcher.submit(
+        { intent: "update-theme", theme: newTheme, customColors: JSON.stringify(init) },
+        { method: "post" }
+      );
+      return;
+    }
+    setCustomColors(c ?? null);
     saveFetcher.submit(
-      { intent: "update-theme", theme: newTheme },
+      {
+        intent: "update-theme",
+        theme: newTheme,
+        ...(c ? { customColors: JSON.stringify(c) } : {}),
+      },
+      { method: "post" }
+    );
+  }
+
+  function updateCustomColor(key: keyof CustomColors, value: string) {
+    const updated = { ...(customColors ?? { bg: "#ffffff", accent: "#6366f1", text: "#111827" }), [key]: value };
+    setCustomColors(updated);
+    // Debounce save via theme
+    saveFetcher.submit(
+      { intent: "update-theme", theme: "custom", customColors: JSON.stringify(updated) },
       { method: "post" }
     );
   }
@@ -245,28 +323,22 @@ export default function LandingEditor() {
   }
 
   // Build preview HTML
-  const previewHtml = useMemo(() => buildLandingHtml(sections, theme), [sections, theme]);
+  const previewHtml = useMemo(
+    () => buildLandingHtml(sections, theme, isCustomTheme ? customColors : null, { preview: true }),
+    [sections, theme, customColors, isCustomTheme]
+  );
   const initialHtmlRef = useRef(previewHtml);
   const iframeReady = useRef(false);
 
-  // Update iframe content without reloading
+  // Update iframe content on any change
   useEffect(() => {
-    if (!iframeReady.current) return; // skip first render, srcDoc handles it
+    if (!iframeReady.current) return;
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
     doc.open();
     doc.write(previewHtml);
     doc.close();
   }, [previewHtml]);
-
-  // ESC to deselect
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelectedSection(null);
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, []);
 
   const [refineInstruction, setRefineInstruction] = useState("");
   const [isRefining, setIsRefining] = useState(false);
@@ -354,74 +426,84 @@ export default function LandingEditor() {
                 {t.name}
               </option>
             ))}
+            <option value="custom">Personalizado</option>
           </select>
 
-          <BrutalButton
-            size="chip"
-            mode="ghost"
-            onClick={generateSections}
-            isLoading={isGenerating}
-            isDisabled={isGenerating}
-          >
-            Regenerar
-          </BrutalButton>
-
-          {liveUrl ? (
-            <>
-              <BrutalButton
-                size="chip"
-                onClick={() => {
-                  setActiveIntent("deploy");
-                  deployFetcher.submit({ intent: "deploy" }, { method: "post" });
-                }}
-                isLoading={activeIntent === "deploy"}
-                isDisabled={sections.length === 0 || activeIntent !== null}
-              >
-                Actualizar
-              </BrutalButton>
-              <BrutalButton
-                size="chip"
-                mode="danger"
-                onClick={() => {
-                  setActiveIntent("unpublish");
-                  deployFetcher.submit(
-                    { intent: "unpublish" },
-                    { method: "post" }
-                  );
-                }}
-                isLoading={activeIntent === "unpublish"}
-                isDisabled={activeIntent !== null}
-              >
-                Despublicar
-              </BrutalButton>
-            </>
-          ) : (
-            <BrutalButton
-              size="chip"
-              onClick={() => {
-                setActiveIntent("deploy");
-                deployFetcher.submit({ intent: "deploy" }, { method: "post" });
-              }}
-              isLoading={activeIntent === "deploy"}
-              isDisabled={sections.length === 0 || activeIntent !== null}
-            >
-              Publicar
-            </BrutalButton>
+          {/* Custom color pickers */}
+          {isCustomTheme && customColors && (
+            <div className="flex items-center gap-1.5">
+              <ColorPicker label="Fondo" value={customColors.bg} onChange={(v) => updateCustomColor("bg", v)} />
+              <ColorPicker label="Acento" value={customColors.accent} onChange={(v) => updateCustomColor("accent", v)} />
+              <ColorPicker label="Texto" value={customColors.text} onChange={(v) => updateCustomColor("text", v)} />
+            </div>
           )}
 
+          {/* Primary action */}
           <BrutalButton
             size="chip"
-            mode="danger"
             onClick={() => {
-              if (!confirm("¿Eliminar esta landing?")) return;
-              setActiveIntent("delete");
-              deployFetcher.submit({ intent: "delete" }, { method: "post" });
+              setActiveIntent("deploy");
+              deployFetcher.submit({ intent: "deploy" }, { method: "post" });
             }}
-            isLoading={activeIntent === "delete"}
-            isDisabled={activeIntent !== null}
+            isLoading={activeIntent === "deploy"}
+            isDisabled={sections.length === 0 || activeIntent !== null}
           >
-            Eliminar
+            {liveUrl ? "Actualizar" : "Publicar"}
           </BrutalButton>
+
+          {/* Overflow menu */}
+          <div ref={overflowRef} className="relative">
+            <button
+              onClick={() => setOverflowOpen((p) => !p)}
+              className="flex items-center justify-center w-8 h-8 rounded-lg border-2 border-black bg-white font-black text-sm hover:bg-gray-50 transition-colors"
+              title="Más acciones"
+            >
+              ···
+            </button>
+            {overflowOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    generateSections();
+                  }}
+                  disabled={isGenerating}
+                  className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                  Regenerar
+                </button>
+                {liveUrl && (
+                  <button
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      setActiveIntent("unpublish");
+                      deployFetcher.submit({ intent: "unpublish" }, { method: "post" });
+                    }}
+                    disabled={activeIntent !== null}
+                    className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                    Despublicar
+                  </button>
+                )}
+                <div className="border-t border-gray-200 my-1" />
+                <button
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    if (!confirm("¿Eliminar esta landing?")) return;
+                    setActiveIntent("delete");
+                    deployFetcher.submit({ intent: "delete" }, { method: "post" });
+                  }}
+                  disabled={activeIntent !== null}
+                  className="w-full text-left px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  Eliminar
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -573,18 +655,54 @@ export default function LandingEditor() {
         </div>
 
         {/* Right: preview */}
-        <div className="flex-1 border-2 border-black rounded-xl overflow-hidden bg-white">
-          <iframe
-            ref={iframeRef}
-            srcDoc={initialHtmlRef.current}
-            onLoad={() => { iframeReady.current = true; }}
-            className="w-full h-full border-0"
-            sandbox="allow-scripts allow-same-origin"
-            title="Landing preview"
-          />
+        <div className="flex-1 flex flex-col border-2 border-black rounded-xl overflow-hidden bg-gray-100">
+          {/* Viewport bar */}
+          <div className="flex items-center gap-1 px-3 py-1.5 bg-white border-b-2 border-black shrink-0">
+            {VIEWPORTS.map((vp) => (
+              <button
+                key={vp.id}
+                onClick={() => setPreviewWidth(vp.width)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  previewWidth === vp.width
+                    ? "bg-black text-white"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+                title={vp.label}
+              >
+                {vp.icon}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-hidden flex justify-center bg-gray-100">
+            <iframe
+              ref={iframeRef}
+              srcDoc={initialHtmlRef.current}
+              onLoad={() => { iframeReady.current = true; }}
+              className="h-full border-0 bg-white transition-all duration-300"
+              style={{ width: previewWidth, maxWidth: "100%" }}
+              sandbox="allow-scripts allow-same-origin"
+              title="Landing preview"
+            />
+          </div>
         </div>
       </div>
     </article>
+  );
+}
+
+// ── Color Picker ──
+
+function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="flex items-center gap-1 cursor-pointer" title={label}>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-6 h-6 rounded border border-black cursor-pointer p-0"
+      />
+      <span className="text-[10px] font-bold text-gray-500">{label}</span>
+    </label>
   );
 }
 
@@ -646,7 +764,6 @@ function SectionPropsEditor({
 }) {
   const props = section.props || {};
 
-  // Bind helper — not a component, just shorthand for JSX
   const f = (label: string, field: string, multiline?: boolean) => (
     <TextField
       key={`${section.id}-${field}`}
@@ -658,7 +775,6 @@ function SectionPropsEditor({
     />
   );
 
-  // Common fields based on section type
   switch (section.type) {
     case "hero":
       return (
