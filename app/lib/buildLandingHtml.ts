@@ -4,7 +4,7 @@ export function buildLandingHtml(sections: LandingSection[], theme: string): str
   const t = getThemeVars(theme);
   const body = sections
     .sort((a, b) => a.order - b.order)
-    .map((s) => s.html || renderSection(s, theme))
+    .map((s) => `<div id="section-${s.id}">${s.html || renderSection(s, theme)}</div>`)
     .join("\n");
 
   return `<!DOCTYPE html>
@@ -23,6 +23,18 @@ export function buildLandingHtml(sections: LandingSection[], theme: string): str
 </head>
 <body>
 ${body}
+<script>
+window.addEventListener("message",function(e){
+  if(e.data&&e.data.type==="scrollToSection"){
+    var el=document.getElementById("section-"+e.data.id);
+    if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+});
+document.addEventListener("click",function(e){
+  var a=e.target.closest("a");
+  if(a){e.preventDefault();e.stopPropagation();}
+},true);
+</script>
 </body>
 </html>`;
 }

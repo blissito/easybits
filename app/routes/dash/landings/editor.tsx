@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   useLoaderData,
@@ -97,7 +97,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     );
     const ctx = requireAuth(await authenticateRequest(request));
     await unpublishLanding(ctx, params.id);
-    return { ok: true };
+    return { unpublished: true };
   }
 
   if (intent === "delete") {
@@ -123,7 +123,7 @@ export default function LandingEditor() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const saveFetcher = useFetcher();
-  const deployFetcher = useFetcher<{ url?: string; redirect?: string }>();
+  const deployFetcher = useFetcher<{ url?: string; redirect?: string; unpublished?: boolean }>();
 
   const [sections, setSections] = useState<LandingSection[]>(() => {
     const raw = landing.sections;
@@ -145,6 +145,9 @@ export default function LandingEditor() {
     }
     if (deployFetcher.data?.url) {
       setLiveUrl(deployFetcher.data.url);
+    }
+    if (deployFetcher.data?.unpublished) {
+      setLiveUrl(null);
     }
   }, [deployFetcher.data, navigate]);
 
@@ -240,7 +243,19 @@ export default function LandingEditor() {
   }
 
   // Build preview HTML
-  const previewHtml = buildLandingHtml(sections, theme);
+  const previewHtml = useMemo(() => buildLandingHtml(sections, theme), [sections, theme]);
+  const initialHtmlRef = useRef(previewHtml);
+  const iframeReady = useRef(false);
+
+  // Update iframe content without reloading
+  useEffect(() => {
+    if (!iframeReady.current) return; // skip first render, srcDoc handles it
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+    doc.open();
+    doc.write(previewHtml);
+    doc.close();
+  }, [previewHtml]);
 
   // ESC to deselect
   useEffect(() => {
@@ -307,20 +322,32 @@ export default function LandingEditor() {
             Regenerar
           </BrutalButton>
 
-          {landing.status === "PUBLISHED" ? (
-            <BrutalButton
-              size="chip"
-              mode="danger"
-              onClick={() =>
-                deployFetcher.submit(
-                  { intent: "unpublish" },
-                  { method: "post" }
-                )
-              }
-              isLoading={deployFetcher.state !== "idle"}
-            >
-              Despublicar
-            </BrutalButton>
+          {liveUrl ? (
+            <>
+              <BrutalButton
+                size="chip"
+                onClick={() =>
+                  deployFetcher.submit({ intent: "deploy" }, { method: "post" })
+                }
+                isLoading={deployFetcher.state !== "idle"}
+                isDisabled={sections.length === 0}
+              >
+                Actualizar
+              </BrutalButton>
+              <BrutalButton
+                size="chip"
+                mode="danger"
+                onClick={() =>
+                  deployFetcher.submit(
+                    { intent: "unpublish" },
+                    { method: "post" }
+                  )
+                }
+                isLoading={deployFetcher.state !== "idle"}
+              >
+                Despublicar
+              </BrutalButton>
+            </>
           ) : (
             <BrutalButton
               size="chip"
@@ -371,11 +398,16 @@ export default function LandingEditor() {
                           ? "border-brand-500 bg-brand-50"
                           : "border-transparent hover:bg-gray-50"
                       }`}
-                      onClick={() =>
-                        setSelectedSection(
-                          selectedSection === section.id ? null : section.id
-                        )
-                      }
+                      onClick={() => {
+                        const next = selectedSection === section.id ? null : section.id;
+                        setSelectedSection(next);
+                        if (next && iframeRef.current?.contentWindow) {
+                          iframeRef.current.contentWindow.postMessage(
+                            { type: "scrollToSection", id: next },
+                            "*"
+                          );
+                        }
+                      }}
                     >
                       <span className="text-xs font-bold text-gray-400 w-5 text-center">
                         {section.order + 1}
@@ -449,14 +481,62 @@ export default function LandingEditor() {
         <div className="flex-1 border-2 border-black rounded-xl overflow-hidden bg-white">
           <iframe
             ref={iframeRef}
-            srcDoc={previewHtml}
+            srcDoc={initialHtmlRef.current}
+            onLoad={() => { iframeReady.current = true; }}
             className="w-full h-full border-0"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             title="Landing preview"
           />
         </div>
       </div>
     </article>
+  );
+}
+
+// ── TextField (stable component — must be outside SectionPropsEditor) ──
+
+function TextField({
+  label,
+  field,
+  value: initialValue,
+  onUpdate,
+  multiline,
+}: {
+  label: string;
+  field: string;
+  value: string;
+  onUpdate: (props: Record<string, any>) => void;
+  multiline?: boolean;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  function handleChange(val: string) {
+    setValue(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => onUpdate({ [field]: val }), 500);
+  }
+
+  return (
+    <div className="mb-3">
+      <label className="block text-xs font-bold text-gray-500 mb-1">
+        {label}
+      </label>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(e) => handleChange(e.target.value)}
+          rows={3}
+          className="w-full text-sm border rounded-lg px-2 py-1 resize-none"
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => handleChange(e.target.value)}
+          className="w-full text-sm border rounded-lg px-2 py-1"
+        />
+      )}
+    </div>
   );
 }
 
@@ -471,65 +551,35 @@ function SectionPropsEditor({
 }) {
   const props = section.props || {};
 
-  // Generic text field editor
-  function TextField({
-    label,
-    field,
-    multiline,
-  }: {
-    label: string;
-    field: string;
-    multiline?: boolean;
-  }) {
-    const [value, setValue] = useState(props[field] || "");
-    const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-    function handleChange(val: string) {
-      setValue(val);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => onUpdate({ [field]: val }), 500);
-    }
-
-    return (
-      <div className="mb-3">
-        <label className="block text-xs font-bold text-gray-500 mb-1">
-          {label}
-        </label>
-        {multiline ? (
-          <textarea
-            value={value}
-            onChange={(e) => handleChange(e.target.value)}
-            rows={3}
-            className="w-full text-sm border rounded-lg px-2 py-1 resize-none"
-          />
-        ) : (
-          <input
-            value={value}
-            onChange={(e) => handleChange(e.target.value)}
-            className="w-full text-sm border rounded-lg px-2 py-1"
-          />
-        )}
-      </div>
-    );
-  }
+  // Bind helper — not a component, just shorthand for JSX
+  const f = (label: string, field: string, multiline?: boolean) => (
+    <TextField
+      key={`${section.id}-${field}`}
+      label={label}
+      field={field}
+      value={props[field] || ""}
+      onUpdate={onUpdate}
+      multiline={multiline}
+    />
+  );
 
   // Common fields based on section type
   switch (section.type) {
     case "hero":
       return (
         <>
-          <TextField label="Título" field="headline" />
-          <TextField label="Subtítulo" field="subtitle" multiline />
-          <TextField label="Texto del botón" field="ctaText" />
-          <TextField label="URL del botón" field="ctaUrl" />
-          <TextField label="URL de imagen" field="imageUrl" />
+          {f("Título", "headline")}
+          {f("Subtítulo", "subtitle", true)}
+          {f("Texto del botón", "ctaText")}
+          {f("URL del botón", "ctaUrl")}
+          {f("URL de imagen", "imageUrl")}
         </>
       );
     case "features":
       return (
         <>
-          <TextField label="Título" field="title" />
-          <TextField label="Subtítulo" field="subtitle" />
+          {f("Título", "title")}
+          {f("Subtítulo", "subtitle")}
           <p className="text-xs text-gray-400 mt-2">
             Las características se editan en el JSON por ahora.
           </p>
@@ -538,41 +588,37 @@ function SectionPropsEditor({
     case "howItWorks":
       return (
         <>
-          <TextField label="Título" field="title" />
+          {f("Título", "title")}
           <p className="text-xs text-gray-400 mt-2">
             Los pasos se editan en el JSON por ahora.
           </p>
         </>
       );
     case "testimonials":
-      return (
-        <>
-          <TextField label="Título" field="title" />
-        </>
-      );
+      return <>{f("Título", "title")}</>;
     case "pricing":
       return (
         <>
-          <TextField label="Título" field="title" />
-          <TextField label="Subtítulo" field="subtitle" />
+          {f("Título", "title")}
+          {f("Subtítulo", "subtitle")}
         </>
       );
     case "stats":
-      return <TextField label="Título" field="title" />;
+      return <>{f("Título", "title")}</>;
     case "faq":
-      return <TextField label="Título" field="title" />;
+      return <>{f("Título", "title")}</>;
     case "cta":
       return (
         <>
-          <TextField label="Título" field="headline" />
-          <TextField label="Subtítulo" field="subtitle" />
-          <TextField label="Texto del botón" field="ctaText" />
+          {f("Título", "headline")}
+          {f("Subtítulo", "subtitle")}
+          {f("Texto del botón", "ctaText")}
         </>
       );
     case "logoCloud":
-      return <TextField label="Título" field="title" />;
+      return <>{f("Título", "title")}</>;
     case "footer":
-      return <TextField label="Nombre de empresa" field="companyName" />;
+      return <>{f("Nombre de empresa", "companyName")}</>;
     default:
       return (
         <p className="text-xs text-gray-400">
@@ -581,3 +627,4 @@ function SectionPropsEditor({
       );
   }
 }
+
