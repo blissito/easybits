@@ -124,6 +124,7 @@ export default function LandingEditor() {
   const [searchParams] = useSearchParams();
   const saveFetcher = useFetcher();
   const deployFetcher = useFetcher<{ url?: string; redirect?: string; unpublished?: boolean }>();
+  const [activeIntent, setActiveIntent] = useState<string | null>(null);
 
   const [sections, setSections] = useState<LandingSection[]>(() => {
     const raw = landing.sections;
@@ -138,8 +139,9 @@ export default function LandingEditor() {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Handle redirect from delete
+  // Handle redirect from delete + clear active intent
   useEffect(() => {
+    if (deployFetcher.state === "idle") setActiveIntent(null);
     if (deployFetcher.data?.redirect) {
       navigate(deployFetcher.data.redirect);
     }
@@ -149,7 +151,7 @@ export default function LandingEditor() {
     if (deployFetcher.data?.unpublished) {
       setLiveUrl(null);
     }
-  }, [deployFetcher.data, navigate]);
+  }, [deployFetcher.state, deployFetcher.data, navigate]);
 
   // Auto-generate on mount
   useEffect(() => {
@@ -266,6 +268,48 @@ export default function LandingEditor() {
     return () => document.removeEventListener("keydown", handleKey);
   }, []);
 
+  const [refineInstruction, setRefineInstruction] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+
+  async function refineSection(sectionId: string, instruction: string) {
+    setIsRefining(true);
+    try {
+      const res = await fetch("/api/v2/landing-refine-section", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          landingId: landing.id,
+          sectionId,
+          instruction,
+        }),
+      });
+      if (!res.ok) throw new Error("Refine failed");
+      const { html } = await res.json();
+      setSections((prev) => {
+        const updated = prev.map((s) =>
+          s.id === sectionId ? { ...s, html } : s
+        );
+        saveSections(updated);
+        return updated;
+      });
+      setRefineInstruction("");
+    } catch (err) {
+      console.error("Refine error:", err);
+    } finally {
+      setIsRefining(false);
+    }
+  }
+
+  function resetSectionToTemplate(id: string) {
+    setSections((prev) => {
+      const updated = prev.map((s) =>
+        s.id === id ? { ...s, html: undefined } : s
+      );
+      saveSections(updated);
+      return updated;
+    });
+  }
+
   const selected = sections.find((s) => s.id === selectedSection);
 
   return (
@@ -326,24 +370,27 @@ export default function LandingEditor() {
             <>
               <BrutalButton
                 size="chip"
-                onClick={() =>
-                  deployFetcher.submit({ intent: "deploy" }, { method: "post" })
-                }
-                isLoading={deployFetcher.state !== "idle"}
-                isDisabled={sections.length === 0}
+                onClick={() => {
+                  setActiveIntent("deploy");
+                  deployFetcher.submit({ intent: "deploy" }, { method: "post" });
+                }}
+                isLoading={activeIntent === "deploy"}
+                isDisabled={sections.length === 0 || activeIntent !== null}
               >
                 Actualizar
               </BrutalButton>
               <BrutalButton
                 size="chip"
                 mode="danger"
-                onClick={() =>
+                onClick={() => {
+                  setActiveIntent("unpublish");
                   deployFetcher.submit(
                     { intent: "unpublish" },
                     { method: "post" }
-                  )
-                }
-                isLoading={deployFetcher.state !== "idle"}
+                  );
+                }}
+                isLoading={activeIntent === "unpublish"}
+                isDisabled={activeIntent !== null}
               >
                 Despublicar
               </BrutalButton>
@@ -351,11 +398,12 @@ export default function LandingEditor() {
           ) : (
             <BrutalButton
               size="chip"
-              onClick={() =>
-                deployFetcher.submit({ intent: "deploy" }, { method: "post" })
-              }
-              isLoading={deployFetcher.state !== "idle"}
-              isDisabled={sections.length === 0}
+              onClick={() => {
+                setActiveIntent("deploy");
+                deployFetcher.submit({ intent: "deploy" }, { method: "post" });
+              }}
+              isLoading={activeIntent === "deploy"}
+              isDisabled={sections.length === 0 || activeIntent !== null}
             >
               Publicar
             </BrutalButton>
@@ -366,8 +414,11 @@ export default function LandingEditor() {
             mode="danger"
             onClick={() => {
               if (!confirm("¿Eliminar esta landing?")) return;
+              setActiveIntent("delete");
               deployFetcher.submit({ intent: "delete" }, { method: "post" });
             }}
+            isLoading={activeIntent === "delete"}
+            isDisabled={activeIntent !== null}
           >
             Eliminar
           </BrutalButton>
@@ -415,6 +466,11 @@ export default function LandingEditor() {
                       <span className="text-sm font-bold flex-1 truncate">
                         {SECTION_LABELS[section.type] || section.type}
                       </span>
+                      {section.html && (
+                        <span className="text-[10px] font-black bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-md">
+                          IA
+                        </span>
+                      )}
                       <div className="flex gap-0.5">
                         <button
                           onClick={(e) => {
@@ -470,6 +526,45 @@ export default function LandingEditor() {
                         updateSection(selected.id, newProps)
                       }
                     />
+
+                    {/* Refine with AI */}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <label className="block text-xs font-bold text-gray-500 mb-1">
+                        Refinar con IA
+                      </label>
+                      <textarea
+                        value={refineInstruction}
+                        onChange={(e) => setRefineInstruction(e.target.value)}
+                        placeholder="Describe el cambio... ej: hazlo más oscuro, agrega una animación, cambia el layout a dos columnas"
+                        rows={2}
+                        className="w-full text-sm border rounded-lg px-2 py-1 resize-none mb-2"
+                      />
+                      <div className="flex gap-2">
+                        <BrutalButton
+                          size="chip"
+                          onClick={() =>
+                            refineSection(selected.id, refineInstruction)
+                          }
+                          isLoading={isRefining}
+                          isDisabled={
+                            isRefining || !refineInstruction.trim()
+                          }
+                        >
+                          Aplicar
+                        </BrutalButton>
+                        {selected.html && (
+                          <BrutalButton
+                            size="chip"
+                            mode="ghost"
+                            onClick={() =>
+                              resetSectionToTemplate(selected.id)
+                            }
+                          >
+                            Restablecer
+                          </BrutalButton>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -129,6 +129,7 @@ export default [
     route("presentations/:id/variant", "routes/api/v2/presentation-variant.ts"),
     route("presentations/:id/add-slide", "routes/api/v2/presentation-add-slide.ts"),
     route("landing-generate", "routes/api/v2/landing-generate.ts"),
+    route("landing-refine-section", "routes/api/v2/landing-refine-section.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),
