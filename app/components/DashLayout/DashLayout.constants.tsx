@@ -50,6 +50,18 @@ export const ITEMS = {
       ),
       path: "/dash/presentations",
       title: "Presentaciones",
+      index: 5,
+    },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18" />
+          <path d="M9 21V9" />
+        </svg>
+      ),
+      path: "/dash/landings",
+      title: "Landings",
       index: 4,
     },
     {

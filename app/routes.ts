@@ -63,6 +63,12 @@ export default [
         route("new", "routes/dash/presentations/new.tsx"),
         route(":id", "routes/dash/presentations/editor.tsx"),
       ]),
+      // Landings
+      ...prefix("landings", [
+        index("routes/dash/landings/list.tsx"),
+        route("new", "routes/dash/landings/new.tsx"),
+        route(":id", "routes/dash/landings/editor.tsx"),
+      ]),
       route("archivos", "routes/files.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
       // Developer dashboard
@@ -122,6 +128,7 @@ export default [
     route("presentations/:id/outline", "routes/api/v2/presentation-outline.ts"),
     route("presentations/:id/variant", "routes/api/v2/presentation-variant.ts"),
     route("presentations/:id/add-slide", "routes/api/v2/presentation-add-slide.ts"),
+    route("landing-generate", "routes/api/v2/landing-generate.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),

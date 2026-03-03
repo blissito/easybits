@@ -34,7 +34,7 @@ const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
     ? [ITEMS.adminItem, ...ITEMS.bottomItems]
     : ITEMS.bottomItems;
   return (
-    <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-50 py-2 flex-col gap-4">
+    <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-50 py-2 flex-col gap-4 overflow-y-auto">
       <SideBarItem isLogo />
       <ul className="flex flex-col gap-3 pt-2 pb-0 items-center">
         {ITEMS.navItems.map((item, key) => (
@@ -162,7 +162,7 @@ const FoldMenu = () => {
               .concat(ITEMS.bottomItems)
               .filter(
                 (item) =>
-                  item.index !== 3  && item.index !== 4
+                  item.index !== 3
               )
               .map((item, key) => (
                 <FoldMenuItem key={key} {...item} />

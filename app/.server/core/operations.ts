@@ -507,12 +507,20 @@ export async function listShareTokens(
 
 // --- Website Operations ---
 
-const ADJECTIVES = [
-  "audaz", "bravo", "calmo", "claro", "denso", "dulce", "firme", "forte",
-  "grato", "habil", "justo", "libre", "lucido", "noble", "pleno", "puro",
-  "rapido", "recto", "sabio", "suave", "veloz", "vasto", "vivaz", "astuto",
-  "digno", "fiero", "gentil", "limpio", "magno", "neto", "primo", "regio",
-  "sutil", "tenaz", "unico", "agudo", "feliz", "leal", "fino", "brioso",
+// Participios pasados (past participles as adjectives)
+const PARTICIPLES_PAST = [
+  "abrumado", "encendido", "perdido", "dormido", "callado", "hundido",
+  "grabado", "torcido", "velado", "fundido", "tejido", "tallado",
+  "forjado", "labrado", "templado", "pulido", "trazado", "marcado",
+  "cerrado", "bordado", "pintado", "sellado", "curado", "cifrado",
+];
+
+// Participios presentes / gerundivos (present participles as adjectives)
+const PARTICIPLES_PRESENT = [
+  "durmiente", "creciente", "brillante", "ardiente", "naciente", "errante",
+  "flotante", "vibrante", "latente", "rugiente", "silente", "distante",
+  "reinante", "cortante", "radiante", "sonriente", "crujiente", "palpitante",
+  "resonante", "cambiante", "danzante", "centelleante", "susurrante", "fulgurante",
 ];
 
 const NOUNS = [
@@ -522,12 +530,8 @@ const NOUNS = [
   "oceano", "volcan", "selva", "costa", "pradera", "colina", "cascada",
 ];
 
-function randomAdjective(): string {
-  return ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-}
-
-function randomNoun(): string {
-  return NOUNS[Math.floor(Math.random() * NOUNS.length)];
+function randomFrom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 export async function listWebsites(ctx: AuthContext) {
@@ -563,7 +567,7 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
 
   let website;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const slug = [randomNoun(), randomAdjective(), "y", randomAdjective()].join("-");
+    const slug = [randomFrom(PARTICIPLES_PAST), randomFrom(PARTICIPLES_PRESENT), randomFrom(NOUNS)].join("-");
     try {
       website = await db.website.create({
         data: { name, slug, ownerId: ctx.user.id, prefix: "" },

@@ -186,6 +186,7 @@ model User {
   websites         Website[]
   webhooks         Webhook[]
   presentations    Presentation[]
+  landings         Landing[]
 }
 
 enum FileStatus {
@@ -421,6 +422,22 @@ model Presentation {
   websiteId    String?  @db.ObjectId
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model Landing {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  prompt    String
+  sections  Json     // LandingSection[]
+  theme     String   @default("modern")
+  status    String   @default("DRAFT") // DRAFT | PUBLISHED
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id])
+  websiteId String?  @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([ownerId])
 }
