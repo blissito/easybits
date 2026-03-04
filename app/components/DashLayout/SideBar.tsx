@@ -15,6 +15,7 @@ interface MenuItemProps {
   end?: boolean;
   index?: number;
   isCurrentActive?: boolean;
+  external?: boolean;
 }
 
 export const SideBar = ({ isAdmin = false }: { isAdmin?: boolean }) => {
@@ -58,6 +59,16 @@ const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
           <SideBarItem key={key} {...item} />
         ))}
       </ul>
+      {ITEMS.externalItems.length > 0 && (
+        <>
+          <hr className="bg-white opacity-20 h-[1px] w-full" />
+          <ul className="flex flex-col gap-3 py-0 items-center">
+            {ITEMS.externalItems.map((item, key) => (
+              <SideBarItem key={key} {...item} external />
+            ))}
+          </ul>
+        </>
+      )}
       <ul className="flex flex-col items-center pb-0 gap-3 w-full mt-auto">
         {bottomItems.map((item, key) => (
           <SideBarItem key={key} {...item} />
@@ -73,6 +84,7 @@ const SideBarItem = ({
   path = "/inicio",
   icon,
   isLogo,
+  external,
 }: MenuItemProps) => {
   const location = useLocation();
   const [isActive, setIsActive] = useState(false);
@@ -93,45 +105,53 @@ const SideBarItem = ({
   const handleMouseLeave = () => {
     animate(scope.current, { opacity: 0, scale: 0.0 });
   };
-  return (
-    <Link to={path}>
-      <div className="relative group w-full ">
-        <div
-          className="w-full flex justify-center relative"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          {isLogo ? (
-            <img className="w-14 mx-auto py-4" src={Logo} alt="EasyBits Logo" />
-          ) : (
-            <motion.div
-              className={cn(
-                "p-[6px] relative flex justify-center items-center hover:bg-white/15 rounded-lg"
-              )}
-            >
-              {isActive ? (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ bounce: 2 }}
-                  className="w-full h-full bg-brand-500 rounded-lg  absolute"
-                ></motion.div>
-              ) : null}
-              <span className="relative z-20 pointer-events-none">{icon}</span>
-            </motion.div>
-          )}
-        </div>{" "}
-        {isLogo ? null : (
-          <button
-            ref={scope}
-            className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+  const content = (
+    <div className="relative group w-full ">
+      <div
+        className="w-full flex justify-center relative"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {isLogo ? (
+          <img className="w-14 mx-auto py-4" src={Logo} alt="EasyBits Logo" />
+        ) : (
+          <motion.div
+            className={cn(
+              "p-[6px] relative flex justify-center items-center hover:bg-white/15 rounded-lg"
+            )}
           >
-            <span className="whitespace-nowrap ">{title}</span>
-          </button>
+            {isActive ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ bounce: 2 }}
+                className="w-full h-full bg-brand-500 rounded-lg  absolute"
+              ></motion.div>
+            ) : null}
+            <span className="relative z-20 pointer-events-none">{icon}</span>
+          </motion.div>
         )}
       </div>{" "}
-    </Link>
+      {isLogo ? null : (
+        <button
+          ref={scope}
+          className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+        >
+          <span className="whitespace-nowrap ">{title}</span>
+        </button>
+      )}
+    </div>
   );
+
+  if (external) {
+    return (
+      <a href={path} target="_blank" rel="noopener noreferrer">
+        {content}
+      </a>
+    );
+  }
+
+  return <Link to={path}>{content}</Link>;
 };
 
 const FoldMenu = () => {
@@ -159,6 +179,7 @@ const FoldMenu = () => {
           <>
             {ITEMS.navItems
               .concat(ITEMS.sectionItems)
+              .concat(ITEMS.externalItems.map(i => ({ ...i, external: true })))
               .concat(ITEMS.bottomItems)
               .filter(
                 (item) =>
@@ -177,18 +198,30 @@ const FoldMenu = () => {
   );
 };
 
-const FoldMenuItem = ({ path = "", icon, end, index = 1 }: MenuItemProps) => {
+const FoldMenuItem = ({ path = "", icon, end, index = 1, external }: MenuItemProps) => {
+  const button = (
+    <motion.button
+      initial={{ filter: "blur(4px)", y: 10, opacity: 0 }}
+      animate={{ filter: "blur(0px)", y: 0, opacity: 1 }}
+      exit={{ filter: "blur(4px)", y: 10, opacity: 0 }}
+      transition={{ delay: 0.04 * index }}
+      className="w-12 h-12 rounded-full bg-black grid place-content-center "
+    >
+      {icon}
+    </motion.button>
+  );
+
+  if (external) {
+    return (
+      <a href={path} target="_blank" rel="noopener noreferrer" className="w-fit h-fit flex items-center">
+        {button}
+      </a>
+    );
+  }
+
   return (
     <NavLink end={end} to={path} className="w-fit h-fit  flex items-center">
-      <motion.button
-        initial={{ filter: "blur(4px)", y: 10, opacity: 0 }}
-        animate={{ filter: "blur(0px)", y: 0, opacity: 1 }}
-        exit={{ filter: "blur(4px)", y: 10, opacity: 0 }}
-        transition={{ delay: 0.04 * index }}
-        className="w-12 h-12 rounded-full bg-black grid place-content-center "
-      >
-        {icon}
-      </motion.button>
+      {button}
     </NavLink>
   );
 };
