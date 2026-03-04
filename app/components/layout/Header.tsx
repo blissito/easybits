@@ -27,7 +27,7 @@ export const Header = ({
   return (
     <nav
       className={cn(
-        "flex justify-between min-h-12 flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-8  ",
+        "flex justify-between min-h-12 flex-wrap md:flex-nowrap items-center relative mb-6 md:mb-8 overflow-hidden",
         className
       )}
     >
