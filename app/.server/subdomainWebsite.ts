@@ -24,7 +24,13 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
     return null;
   }
 
-  const subdomain = hostname.split(".")[0];
+  // Only match single-level subdomains: <slug>.easybits.cloud
+  const parts = hostname.split(".");
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const subdomain = parts[0];
   if (!subdomain || subdomain === "www" || subdomain === "api") {
     return null;
   }

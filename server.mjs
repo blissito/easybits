@@ -31,6 +31,10 @@ const BOT_PROBE_PATTERNS = [
   /^\/__debug/,
   /^\/__cve/,
   /^\/wp-/,
+  /\/wp-includes\//,
+  /\/wp-content\//,
+  /\/wp-json\//,
+  /wlwmanifest\.xml/,
   /^\/wordpress/i,
   /^\/\.env/,
   /^\/\.git/,
@@ -81,10 +85,7 @@ async function run() {
   app.use(build.publicPath, express.static(build.assetsBuildDirectory));
   app.use(express.static("public", { maxAge: "1h" }));
 
-  // Logging
-  app.use(morgan("tiny"));
-
-  // Block bot/scanner probes before they hit React Router
+  // Block bot/scanner probes before logging or React Router
   app.use((req, res, next) => {
     if (BOT_PROBE_PATTERNS.some((p) => p.test(req.path))) {
       res.status(404).end();
@@ -92,6 +93,9 @@ async function run() {
     }
     next();
   });
+
+  // Logging (after bot filter so probes don't pollute logs)
+  app.use(morgan("tiny"));
 
   // React Router handler
   app.all("*", createRequestHandler({ build, mode: process.env.NODE_ENV }));

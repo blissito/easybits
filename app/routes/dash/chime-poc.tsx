@@ -221,7 +221,7 @@ export default function ChimePoc() {
   // Lobby
   if (!session) {
     return (
-      <div className="p-6 max-w-lg mx-auto space-y-6">
+      <div className="pt-16 pb-10 md:py-10 px-4 md:pl-28 md:pr-8 max-w-lg mx-auto space-y-6">
         <h1 className="text-2xl font-bold">Chime POC - Video Calls</h1>
         <p className="text-gray-600 text-sm">
           Hola {user.name || user.email}. Crea una sala o unete con un Meeting ID.
@@ -285,13 +285,22 @@ export default function ChimePoc() {
   }
 
   // In-meeting
+  const tileArray = Array.from(tiles.keys());
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">En llamada</h1>
+    <div className="min-h-svh pt-16 pb-24 md:py-10 md:pb-24 px-4 md:pl-28 md:pr-8 flex flex-col">
+      {/* Header */}
+      <div className="max-w-5xl mx-auto w-full flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+          </span>
+          <h1 className="text-xl font-bold">En llamada</h1>
+        </div>
         <button
           onClick={copyMeetingId}
-          className="text-sm border-2 border-black rounded-lg px-3 py-1 hover:bg-gray-100 transition-colors"
+          className="text-sm border-2 border-black rounded-lg px-3 py-1.5 hover:bg-gray-100 transition-colors font-mono"
         >
           {copied ? "Copiado!" : `ID: ${meetingId.slice(0, 8)}...`}
         </button>
@@ -299,58 +308,78 @@ export default function ChimePoc() {
 
       <audio ref={audioRef} style={{ display: "none" }} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from(tiles.keys()).map((tileId) => (
+      {/* Video grid */}
+      <div className="max-w-5xl mx-auto w-full flex-1 flex items-center justify-center">
+        {tileArray.length > 0 ? (
           <div
-            key={tileId}
-            className="border-2 border-black rounded-xl overflow-hidden bg-gray-900 aspect-video"
+            className={`w-full grid gap-4 ${
+              tileArray.length === 1
+                ? "grid-cols-1 max-w-3xl mx-auto"
+                : "grid-cols-1 sm:grid-cols-2"
+            }`}
           >
-            <video
-              ref={(el) => {
-                if (el) {
-                  videoRefs.current.set(tileId, el);
-                  session.audioVideo.bindVideoElement(tileId, el);
-                } else {
-                  videoRefs.current.delete(tileId);
-                }
-              }}
-              className="w-full h-full object-cover"
-              autoPlay
-              playsInline
-            />
+            {tileArray.map((tileId) => (
+              <div
+                key={tileId}
+                className="border-2 border-black rounded-xl overflow-hidden bg-gray-900 aspect-video"
+              >
+                <video
+                  ref={(el) => {
+                    if (el) {
+                      videoRefs.current.set(tileId, el);
+                      session.audioVideo.bindVideoElement(tileId, el);
+                    } else {
+                      videoRefs.current.delete(tileId);
+                    }
+                  }}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  playsInline
+                />
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div className="border-2 border-black rounded-xl p-12 text-center bg-gray-900 max-w-md w-full">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                </svg>
+              </div>
+              <p className="text-gray-400 font-medium">En llamada (solo audio)</p>
+              <p className="text-gray-500 text-sm">La camara esta apagada o no disponible</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {tiles.size === 0 && (
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center text-gray-400">
-          Esperando video...
+      {/* Controls — sticky bottom */}
+      <div className="fixed bottom-0 left-0 right-0 md:left-20 z-30 bg-white/80 backdrop-blur-md border-t border-gray-200">
+        <div className="flex justify-center gap-3 py-3 px-4">
+          <button
+            onClick={toggleMute}
+            className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] ${
+              muted ? "bg-red-500 text-white" : "bg-white"
+            }`}
+          >
+            {muted ? "Unmute" : "Mute"}
+          </button>
+          <button
+            onClick={toggleCamera}
+            className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] ${
+              !cameraOn ? "bg-red-500 text-white" : "bg-white"
+            }`}
+          >
+            {cameraOn ? "Cam Off" : "Cam On"}
+          </button>
+          <button
+            onClick={leave}
+            className="px-4 py-2 rounded-lg border-2 border-black font-semibold bg-red-600 text-white hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] transition-all"
+          >
+            Salir
+          </button>
         </div>
-      )}
-
-      <div className="flex justify-center gap-3 pt-4">
-        <button
-          onClick={toggleMute}
-          className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] ${
-            muted ? "bg-red-500 text-white" : "bg-white"
-          }`}
-        >
-          {muted ? "Unmute" : "Mute"}
-        </button>
-        <button
-          onClick={toggleCamera}
-          className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] ${
-            !cameraOn ? "bg-red-500 text-white" : "bg-white"
-          }`}
-        >
-          {cameraOn ? "Cam Off" : "Cam On"}
-        </button>
-        <button
-          onClick={leave}
-          className="px-4 py-2 rounded-lg border-2 border-black font-semibold bg-red-600 text-white hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] transition-all"
-        >
-          Salir
-        </button>
       </div>
     </div>
   );
