@@ -18,7 +18,7 @@ const BLOG_POSTS = [
       "Guía práctica de las 21 herramientas del MCP de EasyBits: sube archivos, comparte links, optimiza imágenes, busca con IA y más.",
     date: "2026-02-25",
     author: "EasyBits Team",
-    tags: ["MCP", "herramientas", "archivos", "Claude"],
+    tags: ["MCP", "herramientas", "IA"],
     featuredImage:
       "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&auto=format",
     readingTime: 8,
@@ -35,7 +35,7 @@ const BLOG_POSTS = [
       "Aprende a conectar Claude, Cursor y otros agentes de IA a EasyBits usando el protocolo MCP. Setup en 3 pasos.",
     date: "2026-02-25",
     author: "EasyBits Team",
-    tags: ["MCP", "IA", "Claude", "automatización"],
+    tags: ["MCP", "IA"],
     featuredImage:
       "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&auto=format",
     readingTime: 5,
@@ -52,7 +52,7 @@ const BLOG_POSTS = [
       "Aprende a integrar Stripe Connect en tu proceso de onboarding para monetizar tu conocimiento de forma profesional y segura.",
     date: "2025-01-20",
     author: "EasyBits Team",
-    tags: ["stripe", "onboarding", "monetización", "creadores"],
+    tags: ["stripe", "monetización", "creadores"],
     featuredImage:
       "https://images.pexels.com/photos/4968391/pexels-photo-4968391.jpeg?auto=compress&w=800",
     readingTime: 8,
@@ -70,7 +70,7 @@ const BLOG_POSTS = [
       "Descubre las principales tendencias que están moldeando la economía de creadores en 2025 y cómo aprovecharlas.",
     date: "2025-01-16",
     author: "EasyBits Team",
-    tags: ["tendencias", "economía", "creadores", "2025"],
+    tags: ["creadores", "monetización"],
     featuredImage:
       "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&w=800",
     readingTime: 12,
@@ -86,7 +86,7 @@ const BLOG_POSTS = [
       "Guía práctica para convertir tu experiencia en ingresos sostenibles a través de diferentes canales digitales.",
     date: "2025-01-14",
     author: "EasyBits Team",
-    tags: ["monetización", "conocimiento", "online", "estrategias"],
+    tags: ["monetización", "marketing"],
     featuredImage:
       "https://images.pexels.com/photos/4386375/pexels-photo-4386375.jpeg?auto=compress&w=800",
     readingTime: 10,
@@ -103,7 +103,7 @@ const BLOG_POSTS = [
       "Aprende las mejores estrategias de marketing digital para hacer crecer tu audiencia y monetizar tu contenido.",
     date: "2025-01-12",
     author: "EasyBits Team",
-    tags: ["marketing", "digital", "creadores", "estrategias"],
+    tags: ["marketing", "creadores"],
     featuredImage:
       "https://images.pexels.com/photos/3861964/pexels-photo-3861964.jpeg?auto=compress&w=800",
     readingTime: 7,
@@ -120,7 +120,7 @@ const BLOG_POSTS = [
       "Descubre el proceso completo para crear y vender assets digitales que generen ingresos pasivos.",
     date: "2025-01-10",
     author: "EasyBits Team",
-    tags: ["assets", "digitales", "creadores", "ventas"],
+    tags: ["assets digitales", "creadores"],
     featuredImage:
       "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&w=800",
     readingTime: 6,
@@ -137,7 +137,7 @@ const BLOG_POSTS = [
       "Descubre las herramientas más importantes que todo creador necesita para crecer en 2025.",
     date: "2025-01-18",
     author: "EasyBits Team",
-    tags: ["herramientas", "creadores", "2025", "productividad"],
+    tags: ["herramientas", "creadores"],
     featuredImage:
       "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&w=800",
     readingTime: 15,

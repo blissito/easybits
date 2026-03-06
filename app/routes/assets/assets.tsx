@@ -60,11 +60,9 @@ export default function Assets({ loaderData }: Route.ComponentProps) {
     <section className="max-w-7xl w-full mx-auto min-h-svh  box-border pt-16 pb-10 md:py-10 px-4 md:pl-28 md:pr-8  2xl:px-0">
       <Header
         cta={
-          assets.length > 0 && (
-            <BrutalButton id="CrearAsset" onClick={() => setShowModal(true)}>
-              Crear asset
-            </BrutalButton>
-          )
+          <BrutalButton id="CrearAsset" onClick={() => setShowModal(true)}>
+            Crear asset
+          </BrutalButton>
         }
         title="Mis Assets digitales"
         className="mt-[6px] gap-y-2"

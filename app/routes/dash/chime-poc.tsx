@@ -73,6 +73,7 @@ export default function ChimePoc() {
   const [cameraOn, setCameraOn] = useState(true);
   const [tiles, setTiles] = useState<Map<number, boolean>>(new Map());
   const [copied, setCopied] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const audioRef = useRef<HTMLAudioElement>(null);
   const sessionRef = useRef<MeetingSession | null>(null);
@@ -85,52 +86,78 @@ export default function ChimePoc() {
     setMeetingId(d.meeting.MeetingId);
 
     (async () => {
-      const chime = await import("amazon-chime-sdk-js");
-      const logger = new chime.ConsoleLogger("ChimePOC", chime.LogLevel.WARN);
-      const deviceController = new chime.DefaultDeviceController(logger);
-      const config = new chime.MeetingSessionConfiguration(
-        d.meeting,
-        d.attendee
-      );
-      const meetingSession = new chime.DefaultMeetingSession(
-        config,
-        logger,
-        deviceController
-      );
+      try {
+        // Check browser support
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setMediaError("Tu navegador no soporta acceso a cámara/micrófono.");
+          return;
+        }
 
-      const av = meetingSession.audioVideo;
-
-      const observer = {
-        videoTileDidUpdate: (tileState: { tileId?: number }) => {
-          if (tileState.tileId != null) {
-            setTiles((prev) => new Map(prev).set(tileState.tileId!, true));
+        // Request permissions explicitly before Chime init
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          stream.getTracks().forEach((t) => t.stop());
+        } catch (permErr: any) {
+          if (permErr.name === "NotAllowedError") {
+            setMediaError("Permisos de cámara/micrófono denegados. Habilítalos en la configuración del navegador.");
+          } else if (permErr.name === "NotFoundError") {
+            setMediaError("No se encontró cámara o micrófono en este dispositivo.");
+          } else {
+            setMediaError(`Error al acceder a dispositivos: ${permErr.message}`);
           }
-        },
-        videoTileWasRemoved: (tileId: number) => {
-          setTiles((prev) => {
-            const next = new Map(prev);
-            next.delete(tileId);
-            return next;
-          });
-        },
-      };
-      av.addObserver(observer);
+          return;
+        }
 
-      const audioInputs = await av.listAudioInputDevices();
-      const videoInputs = await av.listVideoInputDevices();
-      if (audioInputs.length) await av.startAudioInput(audioInputs[0].deviceId);
-      if (videoInputs.length) await av.startVideoInput(videoInputs[0].deviceId);
+        const chime = await import("amazon-chime-sdk-js");
+        const logger = new chime.ConsoleLogger("ChimePOC", chime.LogLevel.WARN);
+        const deviceController = new chime.DefaultDeviceController(logger);
+        const config = new chime.MeetingSessionConfiguration(
+          d.meeting,
+          d.attendee
+        );
+        const meetingSession = new chime.DefaultMeetingSession(
+          config,
+          logger,
+          deviceController
+        );
 
-      if (audioRef.current) {
-        await av.bindAudioElement(audioRef.current);
+        const av = meetingSession.audioVideo;
+
+        const observer = {
+          videoTileDidUpdate: (tileState: { tileId?: number }) => {
+            if (tileState.tileId != null) {
+              setTiles((prev) => new Map(prev).set(tileState.tileId!, true));
+            }
+          },
+          videoTileWasRemoved: (tileId: number) => {
+            setTiles((prev) => {
+              const next = new Map(prev);
+              next.delete(tileId);
+              return next;
+            });
+          },
+        };
+        av.addObserver(observer);
+
+        const audioInputs = await av.listAudioInputDevices();
+        const videoInputs = await av.listVideoInputDevices();
+        if (audioInputs.length) await av.startAudioInput(audioInputs[0].deviceId);
+        if (videoInputs.length) await av.startVideoInput(videoInputs[0].deviceId);
+
+        if (audioRef.current) {
+          await av.bindAudioElement(audioRef.current);
+        }
+
+        av.start();
+        av.startLocalVideoTile();
+
+        const s = meetingSession as unknown as MeetingSession;
+        sessionRef.current = s;
+        setSession(s);
+      } catch (err: any) {
+        console.error("Chime session error:", err);
+        setMediaError(`Error al iniciar la sesión: ${err.message}`);
       }
-
-      av.start();
-      av.startLocalVideoTile();
-
-      const s = meetingSession as unknown as MeetingSession;
-      sessionRef.current = s;
-      setSession(s);
     })();
   }, [fetcher.data, session]);
 
@@ -237,6 +264,18 @@ export default function ChimePoc() {
           <p className="text-red-600 text-sm font-medium">
             {(fetcher.data as any).error}
           </p>
+        )}
+
+        {mediaError && (
+          <div className="border-2 border-red-500 rounded-xl p-4 bg-red-50 space-y-2">
+            <p className="text-red-700 text-sm font-medium">{mediaError}</p>
+            <button
+              onClick={() => setMediaError(null)}
+              className="text-red-600 text-xs underline hover:no-underline"
+            >
+              Cerrar
+            </button>
+          </div>
         )}
       </div>
     );
