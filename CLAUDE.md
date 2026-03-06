@@ -96,3 +96,22 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
 - **Planned**: RAG as a Service — allow agents to index and query files via retrieval-augmented generation
 - **Planned**: YouTube-style "Video Elements" section — A dark card/section with a heading ("Elementos del vídeo"), a subtitle description, and a list of action rows. Each row has: a left icon (inside a rounded dark container), a title + subtitle stacked vertically, and a right-side action area (either a pill/chip showing a selected value + "Editar" button, or a ghost "Añadir" button if empty). Rows are separated by subtle borders, rounded corners on the card. Inspired by YouTube Studio's "Elementos del vídeo" panel (related video, subtitles, end screens, cards). Reusable pattern for any settings section with optional linked items.
+
+## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos
+**Estrategia**: Hacer que cada feature existente funcione clase S antes de añadir cosas nuevas. Búsqueda semántica y RAG se posponen — son features de escala, no de early adopters.
+
+**Prioridad 1 — Previews de archivos inline (table stakes, HACER PRIMERO)**:
+- Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
+- Sin esto la plataforma se siente como un S3 con UI. Nadie confía en un file storage donde no puede ver sus archivos
+
+**Prioridad 2 — Presentaciones clase S (moat del producto)**:
+- TipTap editor inline (P0) — reemplazar textarea, es lo que hace que la gente quiera usar esto vs Google Slides
+- Slide layouts pro (P1) — 8 layouts que eleven la calidad visual
+
+**Prioridad 3 — Experiencia de plataforma**:
+- Logs de actividad — qué hizo mi agente, cuándo, qué archivos tocó. Crítico para auditoría/debugging de agentes
+- Dashboard con métricas reales — storage usado, requests/día, archivos por tipo
+
+**Prioridad 4 — DX/Onboarding para agentes**:
+- Quickstart claro: conectar agente y usar EasyBits en 2 minutos
+- Errores útiles en SDK/API — mensajes que digan qué hacer, no solo qué falló
