@@ -115,7 +115,7 @@ const Layout = ({
               Almacenamiento de archivos
             </h2>
             <p>
-              Usado: <strong>{used.toFixed(2)} GB</strong> de{" "}
+              Usado: <strong>{used < 1 ? `${(used * 1024).toFixed(1)} MB` : `${used.toFixed(2)} GB`}</strong> de{" "}
               <strong>{plans[plan].max} GB </strong>(Plan {plan}){" "}
               <Link to="/planes" className="text-xs underline text-brand-500">
                 Mejorar plan

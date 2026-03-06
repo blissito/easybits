@@ -1,7 +1,8 @@
-import { useEffect, useCallback, type ReactNode } from "react";
+import { useEffect, useCallback, useId, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 import { BrutalButtonClose } from "./BrutalButtonClose";
+import { Portal } from "./Portal";
 
 export const Modal = ({
   noCloseButton,
@@ -26,6 +27,8 @@ export const Modal = ({
   children?: ReactNode;
   title?: ReactNode;
 }) => {
+  const titleId = useId();
+
   const keyDownHandler = useCallback((event: KeyboardEvent) => {
     if (event.key === "Escape") {
       onClose?.();
@@ -103,13 +106,17 @@ export const Modal = ({
   };
 
   return (
+    <Portal>
     <AnimatePresence mode="wait" onExitComplete={() => {
       document.body.style.overflow = "";
     }}>
       {isOpen ? (
         <article
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
           className={cn(
-            "z-[90] relative", // try to not go further than 30
+            "z-[90]",
             "grid place-content-center px-4 md:px-[5%] xl:px-0",
             "fixed overflow-hidden",
 
@@ -167,6 +174,7 @@ export const Modal = ({
               />
             )}
             <h2
+              id={titleId}
               className={cn("text-2xl md:text-3xl font-semibold  ", {
                 "mb-1": mode === "naked",
                 "mb-4": mode === "drawer",
@@ -184,5 +192,6 @@ export const Modal = ({
         </article>
       ) : null}
     </AnimatePresence>
+    </Portal>
   );
 };

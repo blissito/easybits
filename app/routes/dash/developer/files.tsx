@@ -21,6 +21,7 @@ import { FilePreviewModal } from "~/components/files/FilePreviewModal";
 import type { File } from "@prisma/client";
 import { AnimatePresence, motion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { Modal } from "~/components/common/Modal";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -126,26 +127,46 @@ function daysUntilPurge(deletedAt: string | null) {
 function DeleteButton({ fileId }: { fileId: string }) {
   const fetcher = useFetcher();
   const isDeleting = fetcher.state !== "idle";
+  const [showConfirm, setShowConfirm] = useState(false);
 
   return (
-    <fetcher.Form
-      method="post"
-      onSubmit={(e) => {
-        if (!confirm("¿Mover a la papelera?")) {
-          e.preventDefault();
-        }
-      }}
-    >
-      <input type="hidden" name="intent" value="delete" />
-      <input type="hidden" name="fileId" value={fileId} />
+    <>
       <button
-        type="submit"
+        type="button"
         disabled={isDeleting}
+        onClick={() => setShowConfirm(true)}
         className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 active:scale-95 transition-colors disabled:opacity-50"
       >
         <MdDeleteOutline className="text-xl" />
       </button>
-    </fetcher.Form>
+      <Modal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        title="Mover a la papelera?"
+        className="min-h-0 max-w-sm"
+        footer={
+          <>
+            <BrutalButton mode="ghost" onClick={() => setShowConfirm(false)}>
+              Cancelar
+            </BrutalButton>
+            <BrutalButton
+              className="bg-brand-pink"
+              onClick={() => {
+                setShowConfirm(false);
+                fetcher.submit(
+                  { intent: "delete", fileId },
+                  { method: "post" }
+                );
+              }}
+            >
+              Eliminar
+            </BrutalButton>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600">El archivo se movera a la papelera por 7 dias antes de ser eliminado permanentemente.</p>
+      </Modal>
+    </>
   );
 }
 

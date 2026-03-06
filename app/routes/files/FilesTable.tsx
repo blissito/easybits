@@ -137,7 +137,8 @@ export const FilesTable = ({
               <span className="">
                 <input
                   type="checkbox"
-                  className="text-brand-500 border rounded focus:outline-brand-500 border-black"
+                  aria-label={`Seleccionar ${file.name}`}
+                  className="text-brand-500 border rounded border-black"
                 />
               </span>
               <button
@@ -145,6 +146,7 @@ export const FilesTable = ({
                   onDetail?.(file);
                 }}
                 className="truncate font-semibold col-span-2 text-left flex flex-col"
+                title={file.name}
               >
                 {file.name}
                 <span className="text-brand-gray block md:hidden">
