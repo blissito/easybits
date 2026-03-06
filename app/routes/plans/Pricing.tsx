@@ -29,7 +29,7 @@ export const Pricing = () => {
           Planes flexibles para cada etapa de tu negocio creativo
         </p>
       </TextBlurEffect>
-      <div className="mx-auto mt-12 lg:mt-20 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-6 items-stretch">
+      <div className="mx-auto mt-12 lg:mt-20 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-6 items-stretch max-w-5xl">
         <PlanCard
           badge="/home/foco.svg"
           planName={PLANS.Spark.name}
@@ -120,7 +120,7 @@ export const PlanCard = ({
   );
   return (
     <section className="h-full rounded-xl group max-w-[340px] md:max-w-none mx-auto">
-      <div className={cn("bg-white border-2 border-black rounded-xl py-6 text-left shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all h-full", className)}>
+      <div className={cn("bg-white border-2 border-black rounded-xl py-6 text-left shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all h-full flex flex-col", className)}>
         <div className="px-6 border-b-2 border-black pb-4">
           <img alt="foco" src={badge} />
           <h3 className="text-2xl font-semibold mt-4 mb-2">{planName}</h3>
@@ -129,14 +129,14 @@ export const PlanCard = ({
             <span className="text-base text-iron font-light">/ mes</span>{" "}
           </p>
         </div>
-        <div className="pt-4 px-6  ">
-          <div className="min-h-[308px] ">
+        <div className="pt-4 px-6 flex flex-col flex-1">
+          <div className="flex-1">
             <p className="font-semibold mb-3">¿Qué incluye?</p>
             {perks.map((perk, index) => (
               <PerkItem perk={perk} key={index} />
             ))}
           </div>
-          <div className="mt-6">{button} </div>
+          <div className="mt-6">{button}</div>
         </div>
       </div>
     </section>

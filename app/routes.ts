@@ -70,6 +70,7 @@ export default [
         route(":id", "routes/dash/landings/editor.tsx"),
       ]),
       route("archivos", "routes/files.tsx"),
+      route("chime-poc", "routes/dash/chime-poc.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
       // Developer dashboard
       layout("routes/dash/developer/developer.tsx", [
