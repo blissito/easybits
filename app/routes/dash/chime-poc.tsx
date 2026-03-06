@@ -348,10 +348,10 @@ export default function ChimePoc() {
       <div className="w-full flex-1 flex items-center justify-center">
         {tileArray.length > 0 ? (
           <div
-            className={`w-full ${
-              tileArray.length === 1
-                ? "max-w-4xl mx-auto"
-                : "grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-5xl mx-auto"
+            className={`w-full max-w-5xl mx-auto grid gap-4 place-items-center ${
+              tileArray.length === 1 ? "grid-cols-1 max-w-3xl" :
+              tileArray.length <= 4 ? "grid-cols-1 sm:grid-cols-2" :
+              "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
             }`}
           >
             {tileArray.map((tileId) => (
