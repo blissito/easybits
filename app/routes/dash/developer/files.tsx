@@ -3,6 +3,7 @@ import { useLoaderData, useSearchParams, useFetcher, useRevalidator, data } from
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { deleteFile, restoreFile } from "~/.server/core/operations";
+import { getClientForFile } from "~/.server/storage";
 import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
 
@@ -13,9 +14,10 @@ export const meta = () => [
 import { IconRenderer } from "~/routes/files/IconRenderer";
 import { Copy } from "~/components/common/Copy";
 import { FaVideo, FaRegImage, FaRegFilePdf, FaMusic, FaBook } from "react-icons/fa6";
-import { MdFolderZip } from "react-icons/md";
+import { MdFolderZip, MdCloudDone, MdDeleteOutline } from "react-icons/md";
 import { GiMagicLamp } from "react-icons/gi";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
+import { FilePreviewModal } from "~/components/files/FilePreviewModal";
 import type { File } from "@prisma/client";
 import { AnimatePresence, motion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -34,6 +36,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   } else {
     where.status = { not: "DELETED" };
   }
+  where.NOT = { name: { startsWith: "sites/" } };
   if (search) {
     where.name = { contains: search, mode: "insensitive" };
   }
@@ -42,7 +45,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     where,
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    orderBy: { createdAt: "desc" },
+    orderBy: trash ? { deletedAt: "desc" } : { createdAt: "desc" },
     select: {
       id: true,
       name: true,
@@ -52,6 +55,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       url: true,
       status: true,
       storageProviderId: true,
+      storageKey: true,
       source: true,
       deletedAt: true,
       createdAt: true,
@@ -89,6 +93,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return { ok: true };
   }
 
+  if (intent === "preview") {
+    const fileId = formData.get("fileId") as string;
+    if (!fileId) throw data({ error: "Missing fileId" }, { status: 400 });
+    const file = await db.file.findFirst({
+      where: { id: fileId, ownerId: user.id },
+      select: { storageKey: true, storageProviderId: true },
+    });
+    if (!file) throw data({ error: "File not found" }, { status: 404 });
+    const client = await getClientForFile(file.storageProviderId, user.id);
+    const previewUrl = await client.getReadUrl(file.storageKey, 3600);
+    return { previewUrl };
+  }
+
   throw data({ error: "Invalid intent" }, { status: 400 });
 };
 
@@ -121,9 +138,13 @@ function DeleteButton({ fileId }: { fileId: string }) {
     >
       <input type="hidden" name="intent" value="delete" />
       <input type="hidden" name="fileId" value={fileId} />
-      <BrutalButton mode="danger" size="chip" type="submit" isLoading={isDeleting}>
-        Eliminar
-      </BrutalButton>
+      <button
+        type="submit"
+        disabled={isDeleting}
+        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 active:scale-95 transition-colors disabled:opacity-50"
+      >
+        <MdDeleteOutline className="text-xl" />
+      </button>
     </fetcher.Form>
   );
 }
@@ -148,6 +169,7 @@ export default function DevFilesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const [tokenFor, setTokenFor] = useState<Pick<File, "id" | "name"> | null>(null);
+  const [previewFile, setPreviewFile] = useState<(typeof items)[number] | null>(null);
 
   useEffect(() => {
     const es = new EventSource("/api/sse/files");
@@ -213,15 +235,15 @@ export default function DevFilesPage() {
             <tr>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Name</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Size</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Type</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider hidden lg:table-cell">Type</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Acceso</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Link</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Fuente</th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Provider</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider hidden lg:table-cell">Link</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider hidden xl:table-cell">Fuente</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider hidden xl:table-cell">Provider</th>
               <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">
                 {trash ? "Purge in" : "Status"}
               </th>
-              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Created</th>
+              <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider hidden lg:table-cell">Created</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -235,7 +257,12 @@ export default function DevFilesPage() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }}
                   transition={{ duration: 0.3, delay: i * 0.03 }}
-                  className="border-t-2 border-black hover:bg-brand-100 transition-colors"
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest("button, a, form")) return;
+                    setPreviewFile(f);
+                  }}
+                  className="group border-t-2 border-black hover:bg-brand-100 transition-colors cursor-pointer"
                 >
                   <td className="px-4 py-3 max-w-[200px] truncate font-bold">
                     <span className="flex items-center gap-2">
@@ -246,7 +273,7 @@ export default function DevFilesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">{formatSize(f.size)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden lg:table-cell">
                     <IconRenderer
                       fileName={f.name}
                       type={f.contentType}
@@ -268,7 +295,7 @@ export default function DevFilesPage() {
                       <span className="bg-brand-yellow text-xs font-bold px-2 py-0.5 rounded-full border border-black">Público</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden lg:table-cell">
                     {f.access === "private" ? (
                       <button
                         className="p-1 rounded-lg active:scale-95 hover:shadow active:shadow-inner bg-white"
@@ -280,7 +307,7 @@ export default function DevFilesPage() {
                       <Copy mode="ghost" text={f.url} />
                     ) : null}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden xl:table-cell">
                     {f.source ? (
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full border border-black ${
                         f.source === "mcp" ? "bg-purple-200" : f.source === "api" ? "bg-blue-200" : "bg-brand-yellow"
@@ -291,22 +318,24 @@ export default function DevFilesPage() {
                       <span className="text-xs text-gray-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden xl:table-cell">
                     <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">
                       {f.storageProviderId ? "Custom" : "Tigris"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     {trash ? (
-                      <span className="text-xs font-bold px-2 py-1 rounded-md border-2 border-black bg-brand-yellow">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
+                        (daysUntilPurge(f.deletedAt) ?? 0) <= 1 ? "bg-brand-red text-white" : "bg-brand-yellow"
+                      }`}>
                         {daysUntilPurge(f.deletedAt)} days
                       </span>
+                    ) : f.status === "DONE" ? (
+                      <MdCloudDone className="text-xl text-green-600" title="Subido" />
                     ) : (
                       <span
                         className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
-                          f.status === "DONE"
-                            ? "bg-lime"
-                            : f.status === "ERROR"
+                          f.status === "ERROR"
                             ? "bg-brand-red text-white"
                             : "bg-brand-yellow"
                         }`}
@@ -315,10 +344,10 @@ export default function DevFilesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs">
+                  <td className="px-4 py-3 font-mono text-xs hidden lg:table-cell">
                     {new Date(f.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     {trash ? <RestoreButton fileId={f.id} /> : <DeleteButton fileId={f.id} />}
                   </td>
                 </motion.tr>
@@ -365,6 +394,7 @@ export default function DevFilesPage() {
       </AnimatePresence>
 
       <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </motion.div>
   );
 }

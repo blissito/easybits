@@ -1,0 +1,14 @@
+name: Purge deleted files
+on:
+  schedule:
+    - cron: '0 6 */7 * *'
+  workflow_dispatch: {}
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call purge endpoint
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/purge-files
