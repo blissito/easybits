@@ -78,6 +78,7 @@ export default function ChimePoc() {
   const [tiles, setTiles] = useState<Map<number, boolean>>(new Map());
   const [copied, setCopied] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [hasCamera, setHasCamera] = useState(true);
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const audioRef = useRef<HTMLAudioElement>(null);
   const sessionRef = useRef<MeetingSession | null>(null);
@@ -149,14 +150,20 @@ export default function ChimePoc() {
         const audioInputs = await av.listAudioInputDevices();
         const videoInputs = await av.listVideoInputDevices();
         if (audioInputs.length) await av.startAudioInput(audioInputs[0].deviceId);
-        if (videoInputs.length) await av.startVideoInput(videoInputs[0].deviceId);
+        const hasVideoDevice = videoInputs.length > 0;
+        setHasCamera(hasVideoDevice);
+        if (hasVideoDevice) {
+          await av.startVideoInput(videoInputs[0].deviceId);
+        } else {
+          setCameraOn(false);
+        }
 
         if (audioRef.current) {
           await av.bindAudioElement(audioRef.current);
         }
 
         av.start();
-        av.startLocalVideoTile();
+        if (hasVideoDevice) av.startLocalVideoTile();
 
         const s = meetingSession as unknown as MeetingSession;
         sessionRef.current = s;
@@ -348,10 +355,10 @@ export default function ChimePoc() {
       <div className="w-full flex-1 flex items-center justify-center">
         {tileArray.length > 0 ? (
           <div
-            className={`w-full max-w-5xl mx-auto grid gap-4 place-items-center ${
+            className={`w-full mx-auto grid gap-4 ${
               tileArray.length === 1 ? "grid-cols-1 max-w-3xl" :
-              tileArray.length <= 4 ? "grid-cols-1 sm:grid-cols-2" :
-              "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+              tileArray.length <= 4 ? "grid-cols-1 sm:grid-cols-2 max-w-5xl" :
+              "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 max-w-5xl"
             }`}
           >
             {tileArray.map((tileId) => (
@@ -403,11 +410,15 @@ export default function ChimePoc() {
           </button>
           <button
             onClick={toggleCamera}
-            className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] ${
-              !cameraOn ? "bg-red-500 text-white" : "bg-white"
+            disabled={!hasCamera}
+            className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              !hasCamera ? "bg-gray-300 text-gray-500" :
+              !cameraOn ? "bg-red-500 text-white hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000]" :
+              "bg-white hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000]"
             }`}
+            title={!hasCamera ? "No se detectó cámara" : undefined}
           >
-            {cameraOn ? "Cam Off" : "Cam On"}
+            {!hasCamera ? "Sin cámara" : cameraOn ? "Cam Off" : "Cam On"}
           </button>
           <button
             onClick={leave}
