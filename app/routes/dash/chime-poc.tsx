@@ -93,18 +93,21 @@ export default function ChimePoc() {
           return;
         }
 
-        // Request permissions explicitly before Chime init
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-          stream.getTracks().forEach((t) => t.stop());
-        } catch (permErr: any) {
-          if (permErr.name === "NotAllowedError") {
-            setMediaError("Permisos de cámara/micrófono denegados. Habilítalos en la configuración del navegador.");
-          } else if (permErr.name === "NotFoundError") {
-            setMediaError("No se encontró cámara o micrófono en este dispositivo.");
-          } else {
-            setMediaError(`Error al acceder a dispositivos: ${permErr.message}`);
+        // Request permissions — try audio and video independently
+        let hasAudio = false;
+        let hasVideo = false;
+        for (const constraint of [{ audio: true }, { video: true }]) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraint);
+            stream.getTracks().forEach((t) => t.stop());
+            if ("audio" in constraint) hasAudio = true;
+            if ("video" in constraint) hasVideo = true;
+          } catch {
+            // Device not available or permission denied — continue
           }
+        }
+        if (!hasAudio && !hasVideo) {
+          setMediaError("No se pudo acceder a cámara ni micrófono. Verifica los permisos del navegador.");
           return;
         }
 
