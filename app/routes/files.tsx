@@ -4,13 +4,14 @@ import { EmptyFiles } from "./files/EmptyFiles";
 import { FilesFormModal } from "~/components/forms/files/FilesFormModal";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
+import { getClientForFile } from "~/.server/storage";
 import { FilesTable } from "./files/FilesTable";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
-import { FileDetailModal } from "~/components/forms/files/FileDetailModal";
+import { FilePreviewModal } from "~/components/files/FilePreviewModal";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { plans } from "./profile/profileComponents";
-import { Link } from "react-router";
+import { Link, data, useFetcher } from "react-router";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -26,10 +27,31 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   return { plan, files, total };
 };
 
+export const action = async ({ request }: Route.ActionArgs) => {
+  const user = await getUserOrRedirect(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "preview") {
+    const fileId = formData.get("fileId") as string;
+    if (!fileId) throw data({ error: "Missing fileId" }, { status: 400 });
+    const file = await db.file.findFirst({
+      where: { id: fileId, ownerId: user.id },
+      select: { storageKey: true, storageProviderId: true },
+    });
+    if (!file) throw data({ error: "File not found" }, { status: 404 });
+    const client = await getClientForFile(file.storageProviderId, user.id);
+    const previewUrl = await client.getReadUrl(file.storageKey, 3600);
+    return { previewUrl };
+  }
+
+  throw data({ error: "Invalid intent" }, { status: 400 });
+};
+
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { files, plan = "Spark", total } = loaderData;
   const [showModal, setShowModal] = useState(false);
-  const [detailFile, setDetailFile] = useState<null | File>(null);
+  const [previewFile, setPreviewFile] = useState<null | File>(null);
   const open = () => setShowModal(true);
   // tokens
   const [tokenFor, setTokenFor] = useState<File | null>(null);
@@ -58,17 +80,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             onTokenClick={openTokensModal}
             files={files}
             onDetail={(file: File) => {
-              setDetailFile(file);
+              setPreviewFile(file);
             }}
           />
         )}
       </Layout>
       <FilesFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
       <ShareTokensModal tokenFor={tokenFor} onClose={() => setTokenFor(null)} />
-      <FileDetailModal
-        onClose={() => setDetailFile(null)}
-        isOpen={!!detailFile}
-        file={detailFile}
+      <FilePreviewModal
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
       />
     </>
   );

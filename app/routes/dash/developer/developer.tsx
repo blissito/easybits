@@ -27,7 +27,7 @@ export default function DeveloperLayout() {
             className={({ isActive }) =>
               isActive
                 ? "group rounded-xl bg-black"
-                : "group rounded-xl bg-transparent"
+                : "group rounded-xl bg-black"
             }
           >
             {({ isActive }) => (

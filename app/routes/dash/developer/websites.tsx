@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   useLoaderData,
   useFetcher,
@@ -179,45 +179,15 @@ export default function WebsitesPage() {
                           <StatusBadge status={site.status} />
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <a
-                          href={siteUrl(site.slug)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <BrutalButton mode="ghost" size="chip" className="text-sm">
-                            Visitar
-                          </BrutalButton>
-                        </a>
-                        <BrutalButton
-                          size="chip"
-                          onClick={() =>
-                            setDeployingId(deployingId === site.id ? null : site.id)
-                          }
-                          className="text-sm"
-                        >
-                          Re-deploy
-                        </BrutalButton>
-                        <deleteFetcher.Form
-                          method="post"
-                          onSubmit={(e) => {
-                            if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
-                              e.preventDefault();
-                            }
-                          }}
-                        >
-                          <input type="hidden" name="intent" value="delete" />
-                          <input type="hidden" name="websiteId" value={site.id} />
-                          <BrutalButton
-                            mode="danger"
-                            type="submit"
-                            isLoading={isDeleting}
-                            className="!h-auto !min-w-0 text-sm px-3 py-1"
-                          >
-                            Eliminar
-                          </BrutalButton>
-                        </deleteFetcher.Form>
-                      </div>
+                      <SiteMenu
+                        siteId={site.id}
+                        siteUrl={siteUrl(site.slug)}
+                        isDeleting={isDeleting}
+                        deleteFetcher={deleteFetcher}
+                        onRedeploy={() =>
+                          setDeployingId(deployingId === site.id ? null : site.id)
+                        }
+                      />
                     </div>
 
                     <AnimatePresence>
@@ -248,6 +218,93 @@ export default function WebsitesPage() {
         )}
       </div>
     </motion.div>
+  );
+}
+
+function SiteMenu({
+  siteId,
+  siteUrl,
+  isDeleting,
+  deleteFetcher,
+  onRedeploy,
+}: {
+  siteId: string;
+  siteUrl: string;
+  isDeleting: boolean;
+  deleteFetcher: ReturnType<typeof useFetcher>;
+  onRedeploy: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-8 h-8 flex items-center justify-center rounded-lg border-2 border-black bg-white hover:bg-gray-100 font-bold text-lg leading-none"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-44 border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <a
+            href={siteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-4 py-2.5 text-sm font-bold hover:bg-brand-100 transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Visitar
+          </a>
+          <button
+            className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-brand-100 transition-colors border-t-2 border-black"
+            onClick={() => {
+              setOpen(false);
+              onRedeploy();
+            }}
+          >
+            Re-deploy
+          </button>
+          <deleteFetcher.Form
+            method="post"
+            onSubmit={(e) => {
+              if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
+                e.preventDefault();
+              }
+              setOpen(false);
+            }}
+          >
+            <input type="hidden" name="intent" value="delete" />
+            <input type="hidden" name="websiteId" value={siteId} />
+            <button
+              type="submit"
+              disabled={isDeleting}
+              className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors border-t-2 border-black"
+            >
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </button>
+          </deleteFetcher.Form>
+        </div>
+      )}
+    </div>
   );
 }
 
