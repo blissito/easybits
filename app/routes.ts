@@ -79,6 +79,7 @@ export default [
           route("providers", "routes/dash/developer/providers.tsx"),
           route("setup", "routes/dash/developer/setup.tsx"),
           route("websites", "routes/dash/developer/websites.tsx"),
+          route("webhooks", "routes/dash/developer/webhooks.tsx"),
         ]),
       ]),
       // Admin dashboard

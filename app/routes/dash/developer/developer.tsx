@@ -9,6 +9,7 @@ const tabs = [
   { to: "/dash/developer", label: "API Keys", end: true },
   { to: "/dash/developer/files", label: "Files" },
   { to: "/dash/developer/websites", label: "Websites" },
+  { to: "/dash/developer/webhooks", label: "Webhooks" },
   { to: "/dash/developer/setup", label: "Setup" },
 ];
 

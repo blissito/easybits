@@ -116,7 +116,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           },
           {
             src: "/client.png",
-            text: "Antes hacía mis webinars juntando contactos por whatsapp, y enviando links de zoom, ahora construyo mi comunidad unicamente con EasyBits, y sus fabulosas herramientas para Webinar. No necesito ningúna otra app más.",
+            text: "Antes armaba landing pages con herramientas caras y complicadas. Con EasyBits creo mis landings en minutos, comparto el link y listo. Rápido, bonito y sin complicaciones.",
             name: "Karla Ocampo",
           },
         ]}

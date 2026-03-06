@@ -29,7 +29,7 @@ export const Pricing = () => {
           Planes flexibles para cada etapa de tu negocio creativo
         </p>
       </TextBlurEffect>
-      <div className="max-w-7xl mx-auto px-4 md:px-[5%] xl:px-0 mt-12 lg:mt-20 flex flex-wrap gap-12 justify-center">
+      <div className="mx-auto mt-12 lg:mt-20 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-6 items-stretch">
         <PlanCard
           badge="/home/foco.svg"
           planName={PLANS.Spark.name}
@@ -37,22 +37,21 @@ export const Pricing = () => {
           classNameButton="bg-[#F6DB7F] w-full"
           perks={PLANS.Spark.features}
         />
-        <div className="mt-0 xl:-mt-6">
-          <PlanCard
-            badge="/home/rocket.svg"
-            planName={PLANS.Flow.name}
-            price={PLANS.Flow.price}
-            classNameButton="bg-[#A1CCE5] w-full"
-            perks={PLANS.Flow.features}
-            cta={
-              <PlanForm
-                id="flow_plan"
-                intent="flow_plan"
-                buttonClassName="bg-[#A1CCE5]"
-              />
-            }
-          />{" "}
-        </div>
+        <PlanCard
+          badge="/home/rocket.svg"
+          planName={PLANS.Flow.name}
+          price={PLANS.Flow.price}
+          classNameButton="bg-[#A1CCE5] w-full"
+          perks={PLANS.Flow.features}
+          className="lg:-mt-6"
+          cta={
+            <PlanForm
+              id="flow_plan"
+              intent="flow_plan"
+              buttonClassName="bg-[#A1CCE5]"
+            />
+          }
+        />
         <PlanCard
           classNameButton="w-full"
           badge="/home/coder.svg"
@@ -99,6 +98,7 @@ export const PlanCard = ({
   price,
   perks = [],
   classNameButton,
+  className,
   cta,
 }: {
   badge: string;
@@ -106,6 +106,7 @@ export const PlanCard = ({
   price?: number;
   perks: string[];
   classNameButton?: string;
+  className?: string;
   cta?: ReactNode;
 }) => {
   const button = cta || (
@@ -118,8 +119,8 @@ export const PlanCard = ({
     </BrutalButton>
   );
   return (
-    <section className="bg-black h-full max-w-[340px] rounded-xl group ">
-      <div className="bg-white border-2 border-black rounded-xl py-6 text-left group-hover:-translate-x-2 group-hover:-translate-y-2 transition-all">
+    <section className="h-full rounded-xl group max-w-[340px] md:max-w-none mx-auto">
+      <div className={cn("bg-white border-2 border-black rounded-xl py-6 text-left shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all h-full", className)}>
         <div className="px-6 border-b-2 border-black pb-4">
           <img alt="foco" src={badge} />
           <h3 className="text-2xl font-semibold mt-4 mb-2">{planName}</h3>
@@ -146,7 +147,7 @@ export const PerkItem = ({ perk }: { perk?: string }) => {
   return (
     <div className="flex w-full items-start gap-2 my-2">
       <img alt="bullet" src="/home/bullet.svg" className="mt-[2px]" />
-      <span>{perk}</span>
+      <span className="text-sm">{perk}</span>
     </div>
   );
 };

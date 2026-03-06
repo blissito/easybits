@@ -31,18 +31,18 @@ export default function Planes({ loaderData }: Route.ComponentProps) {
         items={[
           {
             src: "/client.png",
-            text: "quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem. Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur ",
-            name: "pelusina",
+            text: "Conecté mi agente de IA a EasyBits con el MCP y en minutos ya estaba subiendo y organizando archivos automáticamente. Es el storage que siempre quise para mis workflows de AI.",
+            name: "Daniel R. — AI Developer",
           },
           {
             src: "/client.png",
-            text: " consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere Lorem ipsum dolor sit amet inventore illo sunt consequuntur exercitationem,",
-            name: "pelusino",
+            text: "Usamos EasyBits como backend de archivos para nuestra app. El SDK es limpio, los webhooks nos notifican al instante, y el streaming HLS resolvió nuestro problema de video sin complicaciones.",
+            name: "Mariana L. — CTO, Startup SaaS",
           },
           {
             src: "/client.png",
-            text: "Lorem ipsum dolor sit amet consectetur adipisicing elit. Sed cum pariatur quam voluptas. Illum dolor dignissimos rerum explicabo facere inventore illo sunt consequuntur exercitationem, libero corrupti sequi voluptas provident rem.",
-            name: "pelusine",
+            text: "Antes usaba Cloudinary y pagaba de más por features que no necesitaba. Con EasyBits subo archivos, genero links de descarga y tengo preview inline, todo desde la API. Simple y funcional.",
+            name: "Carlos V. — Fullstack Engineer",
           },
         ]}
       />
