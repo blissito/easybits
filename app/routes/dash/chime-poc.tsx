@@ -309,13 +309,13 @@ export default function ChimePoc() {
       <audio ref={audioRef} style={{ display: "none" }} />
 
       {/* Video grid */}
-      <div className="max-w-5xl mx-auto w-full flex-1 flex items-center justify-center">
+      <div className="w-full flex-1 flex items-center justify-center">
         {tileArray.length > 0 ? (
           <div
-            className={`w-full grid gap-4 ${
+            className={`w-full ${
               tileArray.length === 1
-                ? "grid-cols-1 max-w-3xl mx-auto"
-                : "grid-cols-1 sm:grid-cols-2"
+                ? "max-w-4xl mx-auto"
+                : "grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-5xl mx-auto"
             }`}
           >
             {tileArray.map((tileId) => (
@@ -356,7 +356,7 @@ export default function ChimePoc() {
 
       {/* Controls — sticky bottom */}
       <div className="fixed bottom-0 left-0 right-0 md:left-20 z-30 bg-white/80 backdrop-blur-md border-t border-gray-200">
-        <div className="flex justify-center gap-3 py-3 px-4">
+        <div className="flex items-center justify-center gap-3 py-3 px-4">
           <button
             onClick={toggleMute}
             className={`px-4 py-2 rounded-lg border-2 border-black font-semibold transition-all hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] ${
