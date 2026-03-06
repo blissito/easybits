@@ -11,7 +11,9 @@ import type { Route } from "./+types/chime-poc";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await getUserOrRedirect(request);
-  return data({ user: { id: user.id, name: user.name, email: user.email } });
+  const url = new URL(request.url);
+  const initialMeetingId = url.searchParams.get("meetingId") || "";
+  return data({ user: { id: user.id, name: user.name, email: user.email }, initialMeetingId });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -64,11 +66,13 @@ type MeetingSession = {
 };
 
 export default function ChimePoc() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, initialMeetingId } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [session, setSession] = useState<MeetingSession | null>(null);
   const [meetingId, setMeetingId] = useState("");
-  const [joinMeetingId, setJoinMeetingId] = useState("");
+  const [joinMeetingId, setJoinMeetingId] = useState(initialMeetingId);
+  const [showManualJoin, setShowManualJoin] = useState(false);
+  const autoJoinTriggered = useRef(false);
   const [muted, setMuted] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
   const [tiles, setTiles] = useState<Map<number, boolean>>(new Map());
@@ -210,11 +214,23 @@ export default function ChimePoc() {
     setTiles(new Map());
   }, [session]);
 
-  const copyMeetingId = useCallback(() => {
-    navigator.clipboard.writeText(meetingId);
+  const copyShareLink = useCallback(() => {
+    const link = `${window.location.origin}/dash/chime-poc?meetingId=${meetingId}`;
+    navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [meetingId]);
+
+  // Auto-join when meetingId comes from URL
+  useEffect(() => {
+    if (initialMeetingId && !autoJoinTriggered.current && !session) {
+      autoJoinTriggered.current = true;
+      fetcher.submit(
+        { intent: "join", meetingId: initialMeetingId },
+        { method: "post" }
+      );
+    }
+  }, [initialMeetingId]);
 
   const isLoading = fetcher.state !== "idle";
 
@@ -243,24 +259,44 @@ export default function ChimePoc() {
 
         <div className="border-2 border-black rounded-xl p-4 space-y-3 bg-white">
           <h2 className="font-semibold">Unirse a sala</h2>
-          <fetcher.Form method="post" className="space-y-3">
-            <input type="hidden" name="intent" value="join" />
-            <input
-              type="text"
-              name="meetingId"
-              placeholder="Meeting ID"
-              value={joinMeetingId}
-              onChange={(e) => setJoinMeetingId(e.target.value)}
-              className="w-full border-2 border-black rounded-lg px-3 py-2"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !joinMeetingId}
-              className="w-full bg-brand-500 text-white font-semibold py-2 px-4 rounded-lg border-2 border-black hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] transition-all disabled:opacity-50"
-            >
-              {isLoading ? "Uniendose..." : "Unirse"}
-            </button>
-          </fetcher.Form>
+          {initialMeetingId ? (
+            <p className="text-sm text-gray-600">
+              {isLoading ? "Uniendose a la sala..." : "Uniendose via link compartido..."}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500">
+                Pide un link compartido al creador de la sala.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowManualJoin(!showManualJoin)}
+                className="text-sm text-brand-500 underline hover:no-underline"
+              >
+                {showManualJoin ? "Ocultar" : "Unirse con Meeting ID"}
+              </button>
+              {showManualJoin && (
+                <fetcher.Form method="post" className="space-y-3">
+                  <input type="hidden" name="intent" value="join" />
+                  <input
+                    type="text"
+                    name="meetingId"
+                    placeholder="Meeting ID"
+                    value={joinMeetingId}
+                    onChange={(e) => setJoinMeetingId(e.target.value)}
+                    className="w-full border-2 border-black rounded-lg px-3 py-2"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading || !joinMeetingId}
+                    className="w-full bg-brand-500 text-white font-semibold py-2 px-4 rounded-lg border-2 border-black hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000] transition-all disabled:opacity-50"
+                  >
+                    {isLoading ? "Uniendose..." : "Unirse"}
+                  </button>
+                </fetcher.Form>
+              )}
+            </>
+          )}
         </div>
 
         {(fetcher.data as any)?.error && (
@@ -299,10 +335,10 @@ export default function ChimePoc() {
           <h1 className="text-xl font-bold">En llamada</h1>
         </div>
         <button
-          onClick={copyMeetingId}
-          className="text-sm border-2 border-black rounded-lg px-3 py-1.5 hover:bg-gray-100 transition-colors font-mono"
+          onClick={copyShareLink}
+          className="text-sm border-2 border-black rounded-lg px-3 py-1.5 hover:bg-gray-100 transition-colors font-semibold"
         >
-          {copied ? "Copiado!" : `ID: ${meetingId.slice(0, 8)}...`}
+          {copied ? "Copiado!" : "Compartir link"}
         </button>
       </div>
 
