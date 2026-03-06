@@ -27,7 +27,7 @@ const tabs = [
 
 export default function AdminLayout() {
   return (
-    <article className="pt-20 px-8 md:pl-36 w-full">
+    <article className="pt-20 px-4 md:px-8 md:pl-36 w-full">
       <h1 className="text-3xl font-black tracking-tight mb-6 uppercase">
         Admin
       </h1>

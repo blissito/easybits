@@ -108,8 +108,7 @@ export const FilesTable = ({
           <span className="col-span-2">Nombre</span>
           <span className="hidden md:block">Tamaño</span>
           <span className="col-span-2 md:col-span-1">Fecha</span>
-          {/* <span className="">Fuente</span> */}
-          <span className="hidden md:block">Asset</span>
+          <span className="hidden md:block"></span>
           <span>Tipo</span>
           <span className="col-span-2  lg:col-span-1 ">Privacidad</span>
           <span className="col-span-2 hidden lg:block">HLS</span>
@@ -163,8 +162,7 @@ export const FilesTable = ({
                   day: "numeric",
                 })}
               </span>
-              {/* <span className="text-brand-gray">Directa</span> */}
-              <span className="text-brand-gray hidden md:block">---</span>
+              <span className="hidden md:block"></span>
               <span className=" items-center flex">
                 <IconRenderer
                   fileName={file.name}
