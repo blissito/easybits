@@ -1,0 +1,81 @@
+---
+title: "MCP Apps UI — EasyBits como laboratorio abierto"
+description: "Construimos 3 interfaces inline para MCP Apps UI antes de que ningun cliente las soporte. Asi nos preparamos para el futuro del protocolo."
+date: "2026-03-07"
+author: "EasyBits Team"
+tags: ["MCP", "Apps UI", "Build in Public"]
+featuredImage: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format"
+published: true
+---
+
+# MCP Apps UI — EasyBits como laboratorio abierto
+
+## Que es MCP Apps UI
+
+El **Model Context Protocol** (MCP) permite que agentes de IA se conecten a servicios externos a traves de herramientas estandarizadas. Pero hasta ahora, toda la interaccion es texto: el agente llama una herramienta y recibe datos en JSON.
+
+**MCP Apps UI** es una extension de la spec que cambia esto. Permite que los servidores MCP registren interfaces visuales — HTML/CSS/JS completo — que los clientes pueden renderizar inline. En vez de solo leer un JSON con metadata de archivo, el usuario ve un preview real con imagen, controles de audio o video.
+
+## Por que nadie la soporta aun
+
+La spec es nueva. Los clientes MCP (Claude Desktop, Cursor, VS Code Copilot) aun no implementan el rendering de Apps UI. Esto significa que hoy, estas UIs estan "dormidas" — registradas en el servidor pero sin un cliente que las despierte.
+
+Para muchos, esto es razon para esperar. Para nosotros, es razon para construir.
+
+## Que construimos
+
+En EasyBits registramos **3 interfaces inline** usando `@modelcontextprotocol/ext-apps@1.2.0`:
+
+### 1. File Preview
+Se activa con el tool `get_file`. Renderiza una card con preview del archivo:
+- **Imagenes**: muestra la imagen real con metadata
+- **Video/Audio**: reproductor inline con controles
+- **PDF**: iframe embebido
+- **Otros**: icono + metadata (nombre, tipo, tamano, fecha)
+
+### 2. File Browser
+Se activa con `list_files`. Muestra una lista interactiva con:
+- Icono por tipo de archivo
+- Nombre, tamano, tipo MIME, fecha
+- Badges de acceso (public/private)
+- Click en un archivo para ver su preview
+
+### 3. File Upload
+Se activa con `upload_file`. Un dropzone completo:
+- Drag & drop o click para seleccionar
+- Progress bar con porcentaje real
+- Estado de exito con opcion de subir otro
+
+## Nuestro approach: Build in Public
+
+No esperamos a que la spec este "lista". Construimos las UIs con el CSS de produccion, las registramos en nuestro servidor MCP, y las publicamos como demos standalone en [/mcp/apps](/mcp/apps).
+
+Cada demo usa el HTML real de produccion con datos mock, asi que lo que ves es exactamente lo que veran los usuarios cuando los clientes soporten la spec.
+
+### Que aprendimos
+
+1. **La spec es elegante pero joven.** `PostMessageTransport` funciona bien para comunicacion iframe-host, pero la API de `callServerTool` necesita mas documentacion.
+
+2. **El CSS importa.** Estas UIs se renderizan dentro de otros productos. Tener un look propio (dark theme, brand color `#9870ED`) es importante para que el usuario sepa que esta interactuando con EasyBits.
+
+3. **Los demos venden.** Aunque ningun cliente soporte la spec, poder ver las UIs funcionando con datos reales genera confianza y curiosidad.
+
+## Que viene
+
+- **Mas Apps UI**: explorar UIs para websites, presentaciones y webhooks
+- **Colaboracion con la comunidad MCP**: feedback en el repo de la spec
+- **Prepararnos para el dia D**: cuando Claude Desktop o Cursor activen el rendering, nuestras UIs estaran listas
+
+## Experimenta con nosotros
+
+Si estas construyendo sobre MCP y quieres explorar Apps UI:
+
+1. [Ve los demos live](/mcp/apps)
+2. [Conecta EasyBits a tu agente](/mcp) en un comando
+3. [Lee la documentacion](/docs) de nuestras 40+ herramientas MCP
+
+La spec va a evolucionar. Los clientes van a soportarla. Y cuando eso pase, queremos que EasyBits sea la referencia de como se hace bien.
+
+---
+
+*EasyBits es la plataforma de file storage donde los agentes AI gestionan archivos via MCP, SDK y API. [Empieza gratis](/login).*

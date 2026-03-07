@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "mcp-apps-ui-easybits-laboratorio",
+    filePath:
+      "app/content/blog/2026-03-07-mcp-apps-ui-easybits-laboratorio.mdx",
+    title: "MCP Apps UI — EasyBits como laboratorio abierto",
+    description:
+      "Construimos 3 interfaces inline para MCP Apps UI antes de que ningun cliente las soporte. Asi nos preparamos para el futuro del protocolo.",
+    date: "2026-03-07",
+    author: "EasyBits Team",
+    tags: ["MCP", "Apps UI", "Build in Public"],
+    featuredImage:
+      "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format",
+    readingTime: 6,
+    excerpt:
+      "Construimos 3 interfaces inline para MCP Apps UI antes de que ningun cliente las soporte. Asi nos preparamos para el futuro del protocolo.",
+    published: true,
+  },
+  {
     slug: "gestiona-archivos-desde-claude-easybits",
     filePath:
       "app/content/blog/2026-02-25-gestiona-archivos-desde-claude-easybits.mdx",

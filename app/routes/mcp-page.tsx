@@ -109,6 +109,9 @@ export default function McpPage() {
             <Link to="/developers" className="text-sm font-medium hover:underline">
               Developers
             </Link>
+            <Link to="/blog" className="text-sm font-medium hover:underline">
+              Blog
+            </Link>
             <Link
               to="/login"
               className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold border-2 border-black hover:translate-y-[-2px] transition-transform"
@@ -202,6 +205,9 @@ export default function McpPage() {
               </a>
               <Link to="/developers" className="font-medium underline hover:no-underline">
                 API Reference
+              </Link>
+              <Link to="/mcp/apps" className="font-medium underline hover:no-underline">
+                MCP Apps
               </Link>
               <Link to="/blog" className="font-medium underline hover:no-underline">
                 Blog

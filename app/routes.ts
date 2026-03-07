@@ -25,6 +25,8 @@ export default [
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/developers", "routes/developers.tsx"),
   route("/mcp", "routes/mcp-page.tsx"),
+  route("/mcp/apps", "routes/mcp-apps.tsx"),
+  route("/mcp/apps/:appName", "routes/mcp-apps-demo.tsx"),
   route("/docs", "routes/docs.tsx"),
   route("/status", "routes/status.tsx"),
   route("/blog", "routes/blog.tsx"),
