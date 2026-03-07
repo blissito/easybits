@@ -24,6 +24,7 @@ const SECTIONS = [
   { id: "websites", label: "Websites" },
   { id: "account", label: "Account & Usage" },
   { id: "errors", label: "Errors & Rate Limits" },
+  { id: "mcp-apps", label: "MCP Apps UI" },
 ] as const;
 
 export default function DocsPage() {
@@ -773,6 +774,67 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
               </p>
             </div>
           </section>
+
+          {/* MCP Apps UI */}
+          <section id="mcp-apps" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">MCP Apps UI</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              EasyBits registers 3 inline UIs using the <code className="bg-gray-100 px-1 rounded">@modelcontextprotocol/ext-apps</code> spec.
+              These are visual interfaces that MCP clients can render alongside tool results.
+            </p>
+
+            <div className="mb-6 bg-purple-50 border-2 border-purple-300 rounded-xl p-4 text-sm">
+              <strong>Status: Experimental.</strong> No MCP client supports rendering Apps UI yet. The UIs are registered and ready — when clients implement the spec, they'll work automatically.{" "}
+              <Link to="/mcp/apps" className="underline font-medium">See live demos</Link>.
+            </div>
+
+            <div className="space-y-4">
+              <AppCard
+                name="File Preview"
+                tool="get_file"
+                uri="easybits://apps/file-preview"
+                description="Renders a rich preview card for any file: images, video, audio, PDF with inline player/viewer, or icon + metadata fallback."
+              />
+              <AppCard
+                name="File Browser"
+                tool="list_files"
+                uri="easybits://apps/file-list"
+                description="Interactive file list with icons, metadata, access badges. Click a file to trigger get_file and see its preview."
+              />
+              <AppCard
+                name="File Upload"
+                tool="upload_file"
+                uri="easybits://apps/file-upload"
+                description="Drag & drop dropzone with real-time progress bar. Handles the full upload flow: get presigned URL, PUT bytes, show success."
+              />
+            </div>
+
+            <h3 className="text-lg font-bold mt-8 mb-4">How It Works</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Each app is an HTML document that uses <code className="bg-gray-100 px-1 rounded">PostMessageTransport</code> to communicate with the MCP client.
+              When a tool is called, the client can render the app's UI inline and pass tool results to it.
+            </p>
+            <CodeExample
+              title="App Registration"
+              code={`// In the MCP server, apps are registered as resources:
+{
+  uri: "easybits://apps/file-preview",
+  name: "EasyBitsFilePreview",
+  mimeType: "text/html",
+  // HTML served inline with PostMessageTransport
+}`}
+            />
+
+            <div className="mt-6 text-sm text-gray-500">
+              <Link to="/mcp/apps" className="font-medium underline hover:no-underline">
+                View interactive demos
+              </Link>
+              {" · "}
+              <Link to="/blog/mcp-apps-ui-easybits-laboratorio" className="font-medium underline hover:no-underline">
+                Read the blog post
+              </Link>
+            </div>
+          </section>
         </main>
       </div>
     </section>
@@ -916,6 +978,24 @@ function ParamTable({ title, items }: { title: string; items: ParamDef[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function AppCard({ name, tool, uri, description }: { name: string; tool: string; uri: string; description: string }) {
+  return (
+    <div className="border-2 border-black rounded-xl p-4">
+      <div className="flex items-start justify-between mb-2">
+        <h4 className="font-bold">{name}</h4>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-purple-100 text-purple-700 rounded border border-purple-300 shrink-0">
+          Experimental
+        </span>
+      </div>
+      <p className="text-sm text-gray-600 mb-3">{description}</p>
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
+        <span>Tool: <code className="font-mono text-gray-700">{tool}</code></span>
+        <span>URI: <code className="font-mono text-gray-700">{uri}</code></span>
+      </div>
     </div>
   );
 }
