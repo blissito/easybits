@@ -196,6 +196,238 @@ await app.connect(transport);
 </body>
 </html>`;
 
+export const fileListHtml = /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EasyBits File List</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0a;
+    color: #e5e5e5;
+    padding: 16px;
+  }
+  .container { max-width: 640px; }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .header h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fafafa;
+  }
+  .count {
+    font-size: 12px;
+    color: #737373;
+  }
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #171717;
+    border: 1px solid #262626;
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .file-row:hover {
+    border-color: #9870ED;
+    background: #1a1525;
+  }
+  .file-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+    width: 32px;
+    text-align: center;
+  }
+  .file-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #fafafa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-meta {
+    font-size: 12px;
+    color: #737373;
+    display: flex;
+    gap: 10px;
+    margin-top: 2px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .badge-public { background: #065f46; color: #6ee7b7; }
+  .badge-private { background: #78350f; color: #fbbf24; }
+  .load-more {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    background: #171717;
+    border: 1px solid #262626;
+    border-radius: 10px;
+    color: #9870ED;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s;
+  }
+  .load-more:hover { border-color: #9870ED; }
+  .empty {
+    text-align: center;
+    color: #525252;
+    padding: 32px 16px;
+    font-size: 14px;
+  }
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+    color: #737373;
+  }
+</style>
+</head>
+<body>
+<div class="container" id="root"><div class="loading">Loading files...</div></div>
+<script type="module">
+import { App, PostMessageTransport } from "https://esm.sh/@modelcontextprotocol/ext-apps@1.2.0?bundle-deps";
+
+const app = new App({ name: "EasyBitsFileList", version: "1.0.0" });
+const root = document.getElementById("root");
+
+function formatSize(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + " " + units[i];
+}
+
+function formatDate(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function getFileIcon(contentType) {
+  if (!contentType) return "\\u{1F4C4}";
+  if (contentType.startsWith("image/")) return "\\u{1F5BC}";
+  if (contentType.startsWith("video/")) return "\\u{1F3AC}";
+  if (contentType.startsWith("audio/")) return "\\u{1F3B5}";
+  if (contentType.includes("pdf")) return "\\u{1F4D1}";
+  if (contentType.includes("zip") || contentType.includes("tar") || contentType.includes("gz")) return "\\u{1F4E6}";
+  if (contentType.includes("json") || contentType.includes("xml") || contentType.includes("text")) return "\\u{1F4DD}";
+  return "\\u{1F4C4}";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function render(data) {
+  const items = data.items || [];
+  if (items.length === 0) {
+    root.innerHTML = '<div class="empty">No files found</div>';
+    return;
+  }
+
+  let html = '<div class="header"><h2>Files</h2><span class="count">' + items.length + ' file' + (items.length !== 1 ? 's' : '') + '</span></div>';
+  html += '<div class="file-list">';
+
+  for (const f of items) {
+    const badge = f.access
+      ? '<span class="badge ' + (f.access === "public" ? "badge-public" : "badge-private") + '">' + escapeHtml(f.access) + '</span>'
+      : "";
+    html +=
+      '<div class="file-row" data-id="' + escapeHtml(f.id) + '">' +
+        '<div class="file-icon">' + getFileIcon(f.contentType) + '</div>' +
+        '<div class="file-info">' +
+          '<div class="file-name">' + escapeHtml(f.name || "Untitled") + '</div>' +
+          '<div class="file-meta">' +
+            '<span>' + formatSize(f.size) + '</span>' +
+            '<span>' + escapeHtml(f.contentType || "") + '</span>' +
+            '<span>' + formatDate(f.createdAt) + '</span>' +
+          '</div>' +
+        '</div>' +
+        badge +
+      '</div>';
+  }
+
+  html += '</div>';
+
+  if (data.nextCursor) {
+    html += '<button class="load-more" id="loadMore">Load more</button>';
+  }
+
+  root.innerHTML = html;
+
+  root.querySelectorAll(".file-row").forEach(row => {
+    row.addEventListener("click", async () => {
+      const fileId = row.getAttribute("data-id");
+      if (fileId) {
+        try { await app.callServerTool({ name: "get_file", arguments: { fileId } }); } catch {}
+      }
+    });
+  });
+
+  const loadBtn = document.getElementById("loadMore");
+  if (loadBtn) {
+    loadBtn.addEventListener("click", async () => {
+      loadBtn.textContent = "Loading...";
+      try { await app.callServerTool({ name: "list_files", arguments: { cursor: data.nextCursor } }); } catch {}
+    });
+  }
+}
+
+app.ontoolresult = (params) => {
+  if (params.structuredContent) {
+    if (params.structuredContent.items) {
+      render(params.structuredContent);
+    }
+    // If it's a get_file result (single file), the file-preview app handles it
+  } else if (params.content) {
+    try {
+      const text = params.content.find(c => c.type === "text");
+      if (text) {
+        const parsed = JSON.parse(text.text);
+        if (parsed.items) render(parsed);
+      }
+    } catch {}
+  }
+};
+
+app.ontoolinput = () => {};
+
+const transport = new PostMessageTransport();
+await app.connect(transport);
+<\\/script>
+</body>
+</html>`;
+
 export const fileUploadHtml = /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>

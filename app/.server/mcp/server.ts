@@ -5,7 +5,7 @@ import {
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { filePreviewHtml, fileUploadHtml } from "./apps/html";
+import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import {
   listFiles,
   getFile,
@@ -87,21 +87,40 @@ export function createMcpServer() {
     })
   );
 
+  registerAppResource(
+    server,
+    "File List",
+    "ui://easybits/file-list",
+    { description: "Interactive file list with click-to-preview" },
+    async () => ({
+      contents: [{
+        uri: "ui://easybits/file-list",
+        mimeType: RESOURCE_MIME_TYPE,
+        text: fileListHtml,
+      }],
+    })
+  );
+
   // --- Tools ---
 
-  server.tool(
+  registerAppTool(
+    server,
     "list_files",
-    "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor }`. Pass `nextCursor` as `cursor` to get the next page. Excludes deleted files.",
     {
-      assetId: z.string().optional().describe("Filter by asset ID"),
-      limit: z.number().optional().describe("Max results (default 50)"),
-      cursor: z.string().optional().describe("Pagination cursor"),
+      description: "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor }`. Pass `nextCursor` as `cursor` to get the next page. Excludes deleted files.",
+      inputSchema: {
+        assetId: z.string().optional().describe("Filter by asset ID"),
+        limit: z.number().optional().describe("Max results (default 50)"),
+        cursor: z.string().optional().describe("Pagination cursor"),
+      },
+      _meta: { ui: { resourceUri: "ui://easybits/file-list" } },
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listFiles(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result as Record<string, unknown>,
       };
     }
   );
