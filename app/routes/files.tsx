@@ -20,6 +20,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     orderBy: { createdAt: "desc" },
     where: {
       ownerId: user.id,
+      status: { not: "DELETED" },
+      NOT: { name: { startsWith: "sites/" } },
     },
   });
   const total = files.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024 / 1024; // GB
