@@ -148,6 +148,13 @@ export default function McpPage() {
               </div>
             </div>
 
+            <p className="text-sm text-gray-500 mb-6 text-center">
+              O pídele a tu agente:{" "}
+              <span className="italic text-gray-700">
+                "Abre mi configuración de MCPs y añade el servidor de EasyBits"
+              </span>
+            </p>
+
             {/* Installation accordions */}
             <div className="space-y-3 mb-6">
               {INSTALL_OPTIONS.map((opt) => (
