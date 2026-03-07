@@ -103,7 +103,7 @@ SDK: \`eb.searchFiles(query)\`
 
 ### Bulk upload
 \`POST /files/bulk-upload\`
-Body: \`{ items: [{ fileName, contentType, size, access? }] }\` (max 20)
+Body: \`{ items: [{ fileName, contentType, size, access?, assetId?, region? }] }\` (max 20)
 Returns: \`{ items: [{ file, putUrl }] }\`
 SDK: \`eb.bulkUploadFiles(items)\`
 
@@ -152,10 +152,22 @@ SDK: \`eb.generateShareToken(fileId, expiresIn?)\`
 Returns: \`{ items: ShareToken[] }\` with \`expired\` boolean.
 SDK: \`eb.listShareTokens({ fileId?, limit?, cursor? })\`
 
+### Revoke share token
+\`DELETE /share-tokens/:tokenId\`
+Deletes the token, invalidating its URL.
+SDK: \`eb.revokeShareToken(tokenId)\`
+MCP: \`revoke_share_token({ tokenId })\`
+
 ### List permissions
 \`GET /files/:fileId/permissions\`
 Returns: \`{ items: Permission[] }\`
 SDK: \`eb.listPermissions(fileId)\`
+
+### Revoke permission
+\`DELETE /permissions/:permissionId\`
+Removes a sharing permission. You must own the file.
+SDK: \`eb.revokePermission(permissionId)\`
+MCP: \`revoke_permission({ permissionId })\`
 `,
 
   webhooks: `## Webhooks
@@ -246,6 +258,12 @@ SDK: \`eb.getWebsite(websiteId)\`
 Body: \`{ name?, status? }\`
 SDK: \`eb.updateWebsite(websiteId, { name?, status? })\`
 
+### List website files
+\`GET /websites/:websiteId/files?limit=&cursor=\`
+Returns: \`{ items: File[], nextCursor? }\`
+SDK: \`eb.listWebsiteFiles(websiteId, { limit?, cursor? })\`
+MCP: \`list_website_files({ websiteId, limit?, cursor? })\`
+
 ### Delete website
 \`DELETE /websites/:websiteId\`
 Soft-deletes all associated files (recoverable 7 days).
@@ -306,12 +324,15 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`shareFile(params)\` | Share with another user |
 | \`generateShareToken(fileId, expiresIn?)\` | Create presigned URL |
 | \`listShareTokens(params?)\` | List share tokens |
+| \`revokeShareToken(tokenId)\` | Revoke a share token |
 | \`listPermissions(fileId)\` | List file permissions |
+| \`revokePermission(permissionId)\` | Revoke a permission |
 | \`listWebsites()\` | List websites |
 | \`createWebsite(name)\` | Create a website |
 | \`getWebsite(websiteId)\` | Get website details |
 | \`updateWebsite(websiteId, params)\` | Update website |
 | \`deleteWebsite(websiteId)\` | Delete website + files |
+| \`listWebsiteFiles(websiteId, params?)\` | List files in a website |
 | \`listWebhooks()\` | List webhooks |
 | \`createWebhook(params)\` | Create webhook |
 | \`getWebhook(webhookId)\` | Get webhook |
@@ -456,7 +477,7 @@ None of these give an agent a complete file storage toolkit out of the box.
 
 | Feature | EasyBits | S3/R2/GCS | Filesystem MCP | Fast.io |
 |---------|----------|-----------|----------------|---------|
-| MCP tools | 33+ | None | ~10 (local only) | ~250 (broad) |
+| MCP tools | 40+ | None | ~10 (local only) | ~250 (broad) |
 | Setup | 1 API key | Buckets + IAM + CORS | Local paths | Account + workspace |
 | Image processing | Built-in | DIY (Lambda/Sharp) | No | No |
 | Static hosting | Yes | DIY (CloudFront) | No | No |
