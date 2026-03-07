@@ -147,6 +147,7 @@ export default function Landing2Editor() {
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const streamEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (deployFetcher.state === "idle") setActiveIntent(null);
@@ -228,6 +229,9 @@ export default function Landing2Editor() {
               const data = JSON.parse(payload);
               if (eventType === "block") {
                 setBlocks((prev) => [...prev, data]);
+                requestAnimationFrame(() => {
+                  streamEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+                });
               }
             } catch { /* skip malformed */ }
             eventType = "";
@@ -465,7 +469,7 @@ export default function Landing2Editor() {
           <>
             <BlockEditor blocks={blocks} onChange={isGenerating ? undefined : handleBlocksChange} theme={theme} customColors={customColors} />
             {isGenerating && (
-              <div className="flex items-center gap-2 py-4 px-2">
+              <div ref={streamEndRef} className="flex items-center gap-2 py-4 px-2">
                 <Spinner />
                 <p className="text-sm text-gray-400">Generando mas bloques...</p>
               </div>
