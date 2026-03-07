@@ -51,8 +51,9 @@ export default function DevelopersPage() {
       {/* Nav */}
       <nav className="border-b-2 border-black px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link to="/inicio" className="font-bold text-xl">
-            EasyBits
+          <Link to="/inicio" className="flex items-center gap-2">
+            <img src="/icons/easybits-logo.svg" alt="EasyBits" className="w-8 h-8" />
+            <span className="font-bold text-xl">EasyBits</span>
           </Link>
           <div className="flex items-center gap-6">
             <Link to="/docs" className="text-sm font-medium hover:underline">
@@ -60,6 +61,9 @@ export default function DevelopersPage() {
             </Link>
             <Link to="/status" className="text-sm font-medium hover:underline">
               Status
+            </Link>
+            <Link to="/blog" className="text-sm font-medium hover:underline">
+              Blog
             </Link>
             <Link
               to="/login"
