@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { nanoid } from "nanoid";
 import type { LandingBlock, BlockType } from "~/lib/landing2/blockTypes";
 import { BLOCK_DEFAULTS } from "~/lib/landing2/blockDefaults";
@@ -9,6 +9,16 @@ import { TextBlock } from "./blocks/TextBlock";
 import { ImageTextBlock } from "./blocks/ImageTextBlock";
 import { CtaBlock } from "./blocks/CtaBlock";
 import { FooterBlock } from "./blocks/FooterBlock";
+import { getThemeVars } from "~/lib/landingCatalog";
+import type { CustomColors } from "~/lib/buildLandingHtml";
+
+function hexLuminance(hex: string): number {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.substring(0, 2), 16) / 255;
+  const g = parseInt(c.substring(2, 4), 16) / 255;
+  const b = parseInt(c.substring(4, 6), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
 
 function renderBlockComponent(
   block: LandingBlock,
@@ -33,10 +43,25 @@ function renderBlockComponent(
 export function BlockEditor({
   blocks,
   onChange,
+  theme = "modern",
+  customColors,
 }: {
   blocks: LandingBlock[];
   onChange: (blocks: LandingBlock[]) => void;
+  theme?: string;
+  customColors?: CustomColors | null;
 }) {
+  const cssVars = useMemo(() => {
+    const t = customColors ?? getThemeVars(theme);
+    const accentLum = hexLuminance(t.accent);
+    const accentText = accentLum > 0.4 ? "#000000" : "#ffffff";
+    return {
+      "--landing-bg": t.bg,
+      "--landing-accent": t.accent,
+      "--landing-text": t.text,
+      "--landing-accent-text": accentText,
+    } as React.CSSProperties;
+  }, [theme, customColors]);
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
 
   const addBlock = useCallback(
@@ -106,7 +131,7 @@ export function BlockEditor({
   );
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto" style={cssVars}>
       {/* Add block at the top if empty */}
       <AddBlockMenu onAdd={(type) => addBlock(type, -1)} />
 

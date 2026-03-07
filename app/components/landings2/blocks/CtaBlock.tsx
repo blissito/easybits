@@ -9,8 +9,11 @@ export function CtaBlock({
 }) {
   const c = block.content;
   return (
-    <div className="py-16 px-6 bg-gray-900 text-white rounded-2xl mx-4 my-2">
-      <div className="max-w-3xl mx-auto text-center">
+    <div
+      style={{ background: "var(--landing-accent)", color: "var(--landing-accent-text)" }}
+      className="py-20"
+    >
+      <div className="max-w-4xl mx-auto px-6 text-center">
         <h2
           contentEditable
           suppressContentEditableWarning
@@ -27,16 +30,24 @@ export function CtaBlock({
         >
           {c.subtitle || "Subtítulo"}
         </p>
-        <div className="mt-8">
+        <div className="mt-10">
           <span
             contentEditable
             suppressContentEditableWarning
             onBlur={(e) => onUpdate({ ctaText: e.currentTarget.textContent || "" })}
-            className="inline-block bg-white text-gray-900 px-6 py-3 rounded-lg font-bold text-lg cursor-text outline-none focus:ring-2 focus:ring-brand-500/30"
+            style={{ background: "var(--landing-bg)", color: "var(--landing-accent)" }}
+            className="inline-block px-8 py-4 rounded-lg font-bold text-lg cursor-text outline-none focus:ring-2 focus:ring-brand-500/30 shadow-lg"
           >
             {c.ctaText || "Empezar gratis"}
           </span>
         </div>
+        <input
+          type="text"
+          value={c.ctaUrl || ""}
+          onChange={(e) => onUpdate({ ctaUrl: e.target.value })}
+          placeholder="URL del botón (ej: https://...)"
+          className="mt-3 text-xs bg-white/80 backdrop-blur border rounded-lg px-2 py-1 w-full max-w-xs mx-auto"
+        />
       </div>
     </div>
   );

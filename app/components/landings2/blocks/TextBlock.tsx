@@ -41,8 +41,11 @@ export function TextBlock({
   });
 
   return (
-    <div className="py-16 px-6">
-      <div className="max-w-3xl mx-auto">
+    <div
+      style={{ background: "var(--landing-bg)", color: "var(--landing-text)" }}
+      className="py-20"
+    >
+      <div className="max-w-3xl mx-auto px-6">
         <h2
           contentEditable
           suppressContentEditableWarning

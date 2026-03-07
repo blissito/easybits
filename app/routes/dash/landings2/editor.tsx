@@ -434,7 +434,7 @@ export default function Landing2Editor() {
             </p>
           </div>
         ) : (
-          <BlockEditor blocks={blocks} onChange={handleBlocksChange} />
+          <BlockEditor blocks={blocks} onChange={handleBlocksChange} theme={theme} customColors={customColors} />
         )}
       </div>
     </article>

@@ -40,17 +40,21 @@ function renderBlock(block: LandingBlock): string {
     }
     case "text": {
       const title = esc(c.title || "");
-      const body = esc(c.body || "");
+      const body = c.body || "";
+      const isHtml = body.startsWith("<");
+      const bodyHtml = isHtml ? body : body.split("\n").map((p: string) => `<p>${esc(p)}</p>`).join("");
       return `<section style="background:var(--landing-bg);color:var(--landing-text)" class="py-20">
   <div class="max-w-3xl mx-auto px-6">
     ${title ? `<h2 class="text-3xl lg:text-4xl font-extrabold mb-6">${title}</h2>` : ""}
-    <div class="text-lg leading-relaxed opacity-80 space-y-4">${body.split("\n").map((p) => `<p>${p}</p>`).join("")}</div>
+    <div class="text-lg leading-relaxed opacity-80 space-y-4">${bodyHtml}</div>
   </div>
 </section>`;
     }
     case "imageText": {
       const title = esc(c.title || "");
-      const body = esc(c.body || "");
+      const body = c.body || "";
+      const isHtml = body.startsWith("<");
+      const bodyHtml = isHtml ? body : `<p>${esc(body)}</p>`;
       const imageUrl = esc(c.imageUrl || "");
       const imgLeft = c.imagePosition === "left";
       return `<section style="background:var(--landing-bg);color:var(--landing-text)" class="py-20">
@@ -60,7 +64,7 @@ function renderBlock(block: LandingBlock): string {
     </div>
     <div class="flex-1">
       ${title ? `<h2 class="text-3xl lg:text-4xl font-extrabold mb-4">${title}</h2>` : ""}
-      <p class="text-lg opacity-80 leading-relaxed">${body}</p>
+      <div class="text-lg opacity-80 leading-relaxed">${bodyHtml}</div>
     </div>
   </div>
 </section>`;
