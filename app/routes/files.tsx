@@ -42,7 +42,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       select: { storageKey: true, storageProviderId: true, access: true, url: true },
     });
     if (!file) throw data({ error: "File not found" }, { status: 404 });
-    if (file.access === "public" && file.url) {
+    if (file.access !== "private" && file.url) {
       return { previewUrl: file.url };
     }
     const client = await getClientForFile(file.storageProviderId, user.id);
