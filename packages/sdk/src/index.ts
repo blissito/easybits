@@ -245,6 +245,8 @@ export interface BulkUploadItem {
   contentType: string;
   size: number;
   access?: "public" | "private";
+  assetId?: string;
+  region?: "LATAM" | "US" | "EU";
 }
 
 export interface BulkDeleteResponse {
@@ -438,6 +440,12 @@ export class EasybitsClient {
     return this.request<ListShareTokensResponse>(`/share-tokens${qs ? `?${qs}` : ""}`);
   }
 
+  async revokeShareToken(tokenId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/share-tokens/${tokenId}`, {
+      method: "DELETE",
+    });
+  }
+
   // ── Search ──────────────────────────────────────────────────
 
   async searchFiles(query: string): Promise<{ items: EasybitsFile[] }> {
@@ -472,6 +480,14 @@ export class EasybitsClient {
     return this.request<{ ok: boolean }>(`/websites/${websiteId}`, {
       method: "DELETE",
     });
+  }
+
+  async listWebsiteFiles(websiteId: string, params?: { limit?: number; cursor?: string }): Promise<ListFilesResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.cursor) search.set("cursor", params.cursor);
+    const qs = search.toString();
+    return this.request<ListFilesResponse>(`/websites/${websiteId}/files${qs ? `?${qs}` : ""}`);
   }
 
   // ── Providers ───────────────────────────────────────────────
@@ -538,6 +554,12 @@ export class EasybitsClient {
 
   async listPermissions(fileId: string): Promise<{ items: Permission[] }> {
     return this.request<{ items: Permission[] }>(`/files/${fileId}/permissions`);
+  }
+
+  async revokePermission(permissionId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/permissions/${permissionId}`, {
+      method: "DELETE",
+    });
   }
 
   async duplicateFile(fileId: string, name?: string): Promise<EasybitsFile> {

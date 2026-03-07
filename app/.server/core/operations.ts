@@ -884,6 +884,95 @@ export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: 
   return copy;
 }
 
+// --- Revoke Share Token ---
+
+export async function revokeShareToken(ctx: AuthContext, tokenId: string) {
+  requireScope(ctx, "DELETE");
+
+  const token = await db.shareToken.findUnique({ where: { id: tokenId } });
+  if (!token || token.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Share token not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  await db.shareToken.delete({ where: { id: tokenId } });
+  return { success: true };
+}
+
+// --- Revoke Permission ---
+
+export async function revokePermission(ctx: AuthContext, permissionId: string) {
+  requireScope(ctx, "DELETE");
+
+  const permission = await db.permission.findUnique({ where: { id: permissionId } });
+  if (!permission) {
+    throw new Response(JSON.stringify({ error: "Permission not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Verify ownership of the file
+  const file = await db.file.findUnique({ where: { id: permission.resourceId } });
+  if (!file || file.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Permission not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  await db.permission.delete({ where: { id: permissionId } });
+  return { success: true };
+}
+
+// --- List Website Files ---
+
+export async function listWebsiteFiles(
+  ctx: AuthContext,
+  websiteId: string,
+  opts?: { limit?: number; cursor?: string }
+) {
+  requireScope(ctx, "READ");
+
+  const website = await db.website.findUnique({ where: { id: websiteId } });
+  if (!website || website.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const limit = Math.min(opts?.limit ?? 50, 100);
+
+  const files = await db.file.findMany({
+    where: {
+      ownerId: ctx.user.id,
+      name: { startsWith: website.prefix },
+      status: { not: "DELETED" },
+    },
+    take: limit + 1,
+    ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      size: true,
+      contentType: true,
+      status: true,
+      access: true,
+      createdAt: true,
+    },
+  });
+
+  const hasMore = files.length > limit;
+  const items = hasMore ? files.slice(0, limit) : files;
+  const nextCursor = hasMore ? items[items.length - 1].id : undefined;
+
+  return { items, nextCursor };
+}
+
 // --- List Deleted Files ---
 
 export async function listDeletedFiles(

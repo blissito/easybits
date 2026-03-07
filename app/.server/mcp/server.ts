@@ -21,6 +21,9 @@ import {
   bulkUploadFiles,
   listPermissions,
   duplicateFile,
+  revokeShareToken,
+  revokePermission,
+  listWebsiteFiles,
 } from "../core/operations";
 import { getDocsMarkdown, VALID_SECTIONS } from "../docs/reference";
 import {
@@ -416,7 +419,7 @@ export function createMcpServer() {
     {
       websiteId: z.string().describe("The website ID"),
       name: z.string().optional().describe("New name"),
-      status: z.string().optional().describe("New status (e.g. ACTIVE, ERROR)"),
+      status: z.enum(["ACTIVE", "ERROR"]).optional().describe("New status"),
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -448,6 +451,19 @@ export function createMcpServer() {
   // --- Webhook Tools ---
 
   server.tool(
+    "get_webhook",
+    "Get a webhook by ID with status, events, fail count, and last error.",
+    {
+      webhookId: z.string().describe("The webhook ID"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getWebhook(ctx, params.webhookId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
     "list_webhooks",
     "List your configured webhooks (id, url, events, status, failCount, lastError).",
     {},
@@ -463,7 +479,7 @@ export function createMcpServer() {
     "Create a webhook to receive event notifications. Returns the webhook with its secret (shown only once). Events: file.created, file.updated, file.deleted, file.restored, website.created, website.deleted.",
     {
       url: z.string().describe("HTTPS URL to receive POST notifications"),
-      events: z.array(z.string()).describe("Events to subscribe to (e.g. ['file.created', 'file.deleted'])"),
+      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted"])).describe("Events to subscribe to"),
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -478,7 +494,7 @@ export function createMcpServer() {
     {
       webhookId: z.string().describe("The webhook ID"),
       url: z.string().optional().describe("New HTTPS URL"),
-      events: z.array(z.string()).optional().describe("New events list"),
+      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted"])).optional().describe("New events list"),
       status: z.enum(["ACTIVE", "PAUSED"]).optional().describe("Set status"),
     },
     async (params, extra) => {
@@ -649,6 +665,8 @@ export function createMcpServer() {
         contentType: z.string().describe("MIME type"),
         size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
         access: z.enum(["public", "private"]).optional().describe("Access level"),
+        assetId: z.string().optional().describe("Associate with an asset"),
+        region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
       })).describe("Array of files to upload (1-20)"),
     },
     async (params, extra) => {
@@ -681,6 +699,48 @@ export function createMcpServer() {
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await duplicateFile(ctx, params.fileId, params.name);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "list_website_files",
+    "List files belonging to a website. Returns `{ items, nextCursor }`.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      limit: z.number().optional().describe("Max results (default 50)"),
+      cursor: z.string().optional().describe("Pagination cursor"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { websiteId, ...opts } = params;
+      const result = await listWebsiteFiles(ctx, websiteId, opts);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "revoke_share_token",
+    "Revoke (delete) a share token, invalidating its URL.",
+    {
+      tokenId: z.string().describe("The share token ID to revoke"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await revokeShareToken(ctx, params.tokenId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "revoke_permission",
+    "Revoke a file sharing permission by ID. You must own the file.",
+    {
+      permissionId: z.string().describe("The permission ID to revoke"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await revokePermission(ctx, params.permissionId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
   );

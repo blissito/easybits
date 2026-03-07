@@ -47,7 +47,7 @@ export const FilesFormModal = ({
         key="progress"
         block={false}
         isOpen={tasks.length > 0}
-        title={<span className="text-xl">Subiendo...</span>}
+        title={<span className="text-xl">{tasks.length > 0 && tasks.every((t) => t.status === "Done") ? "Listo" : "Subiendo..."}</span>}
         mode="naked"
         noCloseButton={!tasks.every((t) => t.status === "Done")}
         onClose={handleClearAllTasks}
