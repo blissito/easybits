@@ -1,5 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  registerAppTool,
+  registerAppResource,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { filePreviewHtml, fileUploadHtml } from "./apps/html";
 import {
   listFiles,
   getFile,
@@ -51,6 +57,36 @@ export function createMcpServer() {
     version: "1.0.0",
   });
 
+  // --- UI Resources (MCP Apps) ---
+
+  registerAppResource(
+    server,
+    "File Preview",
+    "ui://easybits/file-preview",
+    { description: "Inline file preview with media player" },
+    async () => ({
+      contents: [{
+        uri: "ui://easybits/file-preview",
+        mimeType: RESOURCE_MIME_TYPE,
+        text: filePreviewHtml,
+      }],
+    })
+  );
+
+  registerAppResource(
+    server,
+    "File Upload",
+    "ui://easybits/file-upload",
+    { description: "Drag and drop file upload" },
+    async () => ({
+      contents: [{
+        uri: "ui://easybits/file-upload",
+        mimeType: RESOURCE_MIME_TYPE,
+        text: fileUploadHtml,
+      }],
+    })
+  );
+
   // --- Tools ---
 
   server.tool(
@@ -70,37 +106,47 @@ export function createMcpServer() {
     }
   );
 
-  server.tool(
+  registerAppTool(
+    server,
     "get_file",
-    "Get file metadata and a signed download URL. Returns file object with a `readUrl` field containing a presigned GET URL (expires in 1h).",
     {
-      fileId: z.string().describe("The file ID"),
+      description: "Get file metadata and a signed download URL. Returns file object with a `readUrl` field containing a presigned GET URL (expires in 1h).",
+      inputSchema: {
+        fileId: z.string().describe("The file ID"),
+      },
+      _meta: { ui: { resourceUri: "ui://easybits/file-preview" } },
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result as Record<string, unknown>,
       };
     }
   );
 
-  server.tool(
+  registerAppTool(
+    server,
     "upload_file",
-    "Create a file record and get a presigned upload URL. Returns `{ file, putUrl }`. Upload bytes via PUT to `putUrl`. The file is created with status DONE immediately.",
     {
-      fileName: z.string().describe("Name of the file"),
-      contentType: z.string().regex(/^[\w\-]+\/[\w\-\.\+]+$/).describe("MIME type"),
-      size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
-      assetId: z.string().optional().describe("Associate with an asset"),
-      access: z.enum(["public", "private"]).optional().describe("Access level"),
-      region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
+      description: "Create a file record and get a presigned upload URL. Returns `{ file, putUrl }`. Upload bytes via PUT to `putUrl`. The file is created with status DONE immediately.",
+      inputSchema: {
+        fileName: z.string().describe("Name of the file"),
+        contentType: z.string().regex(/^[\w\-]+\/[\w\-\.\+]+$/).describe("MIME type"),
+        size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
+        assetId: z.string().optional().describe("Associate with an asset"),
+        access: z.enum(["public", "private"]).optional().describe("Access level"),
+        region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
+      },
+      _meta: { ui: { resourceUri: "ui://easybits/file-upload" } },
     },
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await uploadFile(ctx, { ...params, source: "mcp" });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result as Record<string, unknown>,
       };
     }
   );

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EasyBits File Upload</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0a;
+    color: #e5e5e5;
+    padding: 16px;
+  }
+  .container { max-width: 480px; }
+  .dropzone {
+    border: 2px dashed #404040;
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: #171717;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: #9870ED;
+    background: #1a1525;
+  }
+  .dropzone-icon { font-size: 36px; margin-bottom: 12px; }
+  .dropzone-text { font-size: 15px; color: #a3a3a3; }
+  .dropzone-text strong { color: #9870ED; }
+  .dropzone-hint { font-size: 12px; color: #525252; margin-top: 8px; }
+  input[type="file"] { display: none; }
+
+  .progress-container {
+    background: #171717;
+    border: 1px solid #262626;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #fafafa;
+    margin-bottom: 4px;
+    word-break: break-all;
+  }
+  .file-meta {
+    font-size: 12px;
+    color: #737373;
+    margin-bottom: 12px;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #262626;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: #9870ED;
+    border-radius: 3px;
+    transition: width 0.2s;
+    width: 0%;
+  }
+  .progress-text {
+    font-size: 12px;
+    color: #a3a3a3;
+    text-align: right;
+  }
+
+  .success {
+    background: #171717;
+    border: 1px solid #065f46;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  .success-icon { font-size: 36px; margin-bottom: 8px; }
+  .success-name { font-size: 15px; font-weight: 600; color: #6ee7b7; margin-bottom: 4px; }
+  .success-meta { font-size: 12px; color: #737373; margin-bottom: 12px; }
+  .btn-upload-more {
+    display: inline-block;
+    padding: 8px 16px;
+    background: transparent;
+    color: #9870ED;
+    border: 1px solid #9870ED;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-upload-more:hover { background: #1a1525; }
+
+  .error {
+    background: #171717;
+    border: 1px solid #7f1d1d;
+    border-radius: 12px;
+    padding: 16px;
+    color: #fca5a5;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="container" id="root">
+  <div class="dropzone" id="dropzone">
+    <div class="dropzone-icon">&#x2B06;</div>
+    <div class="dropzone-text"><strong>Drop a file</strong> or click to browse</div>
+    <div class="dropzone-hint">Max 5 GB</div>
+    <input type="file" id="fileInput">
+  </div>
+</div>
+<script type="module">
+import { App, PostMessageTransport } from "https://esm.sh/@modelcontextprotocol/ext-apps@1.2.0?bundle-deps";
+
+const app = new App({ name: "EasyBitsFileUpload", version: "1.0.0" });
+const root = document.getElementById("root");
+
+function formatSize(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+}
+
+function showError(msg) {
+  const existing = document.querySelector(".error");
+  if (existing) existing.remove();
+  root.insertAdjacentHTML("beforeend", `<div class="error">${msg}</div>`);
+}
+
+function showProgress(fileName, fileSize) {
+  root.innerHTML = `
+    <div class="progress-container">
+      <div class="file-name">${fileName}</div>
+      <div class="file-meta">${formatSize(fileSize)}</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">Preparing upload...</div>
+    </div>
+  `;
+}
+
+function showSuccess(fileName, fileSize) {
+  root.innerHTML = `
+    <div class="success">
+      <div class="success-icon">&#x2705;</div>
+      <div class="success-name">${fileName}</div>
+      <div class="success-meta">${formatSize(fileSize)} uploaded</div>
+      <button class="btn-upload-more" onclick="location.reload()">Upload another</button>
+    </div>
+  `;
+}
+
+async function handleFile(file) {
+  showProgress(file.name, file.size);
+
+  try {
+    const result = await app.callServerTool({
+      name: "upload_file",
+      arguments: {
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      },
+    });
+
+    let putUrl = null;
+    let fileData = null;
+
+    if (result.structuredContent) {
+      putUrl = result.structuredContent.putUrl;
+      fileData = result.structuredContent.file;
+    } else if (result.content) {
+      const text = result.content.find(c => c.type === "text");
+      if (text) {
+        const parsed = JSON.parse(text.text);
+        putUrl = parsed.putUrl;
+        fileData = parsed.file;
+      }
+    }
+
+    if (!putUrl) {
+      showError("Failed to get upload URL from server.");
+      return;
+    }
+
+    // Upload via XHR for progress tracking
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", putUrl);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          document.getElementById("progressFill").style.width = pct + "%";
+          document.getElementById("progressText").textContent = `${pct}% - ${formatSize(e.loaded)} / ${formatSize(e.total)}`;
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`Upload failed: HTTP ${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed: network error"));
+      xhr.send(file);
+    });
+
+    showSuccess(file.name, file.size);
+
+  } catch (err) {
+    showError(`Upload error: ${err.message}`);
+  }
+}
+
+// Drag & drop
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+
+dropzone.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+dropzone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dropzone.classList.add("dragover");
+});
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropzone.classList.remove("dragover");
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+const transport = new PostMessageTransport();
+await app.connect(transport);
+</script>
+</body>
+</html>

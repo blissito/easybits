@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EasyBits File Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0a;
+    color: #e5e5e5;
+    padding: 16px;
+    min-height: 100px;
+  }
+  .card {
+    background: #171717;
+    border: 1px solid #262626;
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 560px;
+  }
+  .preview {
+    background: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    max-height: 400px;
+    overflow: hidden;
+  }
+  .preview img, .preview video {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+  }
+  .preview audio { width: 100%; padding: 24px 16px; }
+  .info {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fafafa;
+    word-break: break-all;
+  }
+  .meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: #a3a3a3;
+  }
+  .meta span { white-space: nowrap; }
+  .actions { padding: 0 16px 16px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #9870ED;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #7c5acc; }
+  .icon-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    font-size: 48px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge-public { background: #065f46; color: #6ee7b7; }
+  .badge-private { background: #78350f; color: #fbbf24; }
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    color: #737373;
+  }
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">Loading file preview...</div></div>
+<script type="module">
+import { App, PostMessageTransport } from "https://esm.sh/@modelcontextprotocol/ext-apps@1.2.0?bundle-deps";
+
+const app = new App({ name: "EasyBitsFilePreview", version: "1.0.0" });
+
+function formatSize(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+}
+
+function formatDate(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function getFileIcon(contentType) {
+  if (!contentType) return "\u{1F4C4}";
+  if (contentType.startsWith("image/")) return "\u{1F5BC}";
+  if (contentType.startsWith("video/")) return "\u{1F3AC}";
+  if (contentType.startsWith("audio/")) return "\u{1F3B5}";
+  if (contentType.includes("pdf")) return "\u{1F4D1}";
+  if (contentType.includes("zip") || contentType.includes("tar") || contentType.includes("gz")) return "\u{1F4E6}";
+  if (contentType.includes("json") || contentType.includes("xml") || contentType.includes("text")) return "\u{1F4DD}";
+  return "\u{1F4C4}";
+}
+
+function render(file) {
+  const ct = file.contentType || "";
+  const isImage = ct.startsWith("image/");
+  const isVideo = ct.startsWith("video/");
+  const isAudio = ct.startsWith("audio/");
+  const isPdf = ct.includes("pdf");
+  const url = file.readUrl || file.url || "";
+
+  let previewHtml = "";
+  if (isImage && url) {
+    previewHtml = `<div class="preview"><img src="${url}" alt="${file.name || ""}"></div>`;
+  } else if (isVideo && url) {
+    previewHtml = `<div class="preview"><video src="${url}" controls preload="metadata"></video></div>`;
+  } else if (isAudio && url) {
+    previewHtml = `<div class="preview"><audio src="${url}" controls preload="metadata"></audio></div>`;
+  } else if (isPdf && url) {
+    previewHtml = `<div class="preview" style="min-height:400px"><iframe src="${url}" style="width:100%;height:400px;border:none"></iframe></div>`;
+  } else {
+    previewHtml = `<div class="preview"><div class="icon-card">${getFileIcon(ct)}</div></div>`;
+  }
+
+  const accessBadge = file.access
+    ? `<span class="badge ${file.access === "public" ? "badge-public" : "badge-private"}">${file.access}</span>`
+    : "";
+
+  document.getElementById("root").innerHTML = `
+    <div class="card">
+      ${previewHtml}
+      <div class="info">
+        <div class="name">${file.name || "Untitled"} ${accessBadge}</div>
+        <div class="meta">
+          <span>${ct || "Unknown type"}</span>
+          <span>${formatSize(file.size)}</span>
+          <span>${formatDate(file.createdAt)}</span>
+        </div>
+      </div>
+      ${url ? `<div class="actions"><a class="btn" href="${url}" target="_blank" rel="noopener">&#x2B07; Download</a></div>` : ""}
+    </div>
+  `;
+}
+
+app.ontoolresult = (params) => {
+  if (params.structuredContent) {
+    render(params.structuredContent);
+  } else if (params.content) {
+    try {
+      const text = params.content.find(c => c.type === "text");
+      if (text) render(JSON.parse(text.text));
+    } catch {}
+  }
+};
+
+app.ontoolinput = (params) => {
+  // Tool input contains arguments — we just wait for the result
+};
+
+const transport = new PostMessageTransport();
+await app.connect(transport);
+</script>
+</body>
+</html>
