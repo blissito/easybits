@@ -97,6 +97,7 @@ export default [
       layout("routes/dash/admin/admin.tsx", [
         ...prefix("admin", [
           index("routes/dash/admin/users.tsx"),
+          route("certs", "routes/dash/admin/certs.tsx"),
         ]),
       ]),
     ]),
@@ -110,6 +111,7 @@ export default [
   route("api/sse/files", "routes/api/sse/files.ts"),
   // Cron
   route("api/cron/purge-files", "routes/api/cron/purge-files.ts"),
+  route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
   // Health
   route("api/health", "routes/api/health.ts"),
   // v2

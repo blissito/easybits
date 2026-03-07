@@ -191,6 +191,7 @@ export default function Landing2Editor() {
 
   async function generateBlocks() {
     setIsGenerating(true);
+    setBlocks([]);
     try {
       const res = await fetch("/api/v2/landing2-generate", {
         method: "POST",
@@ -202,9 +203,36 @@ export default function Landing2Editor() {
         }),
       });
       if (!res.ok) throw new Error("Generation failed");
-      const result = await res.json();
-      if (result.blocks) {
-        setBlocks(result.blocks);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No stream");
+
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+
+        let eventType = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            const payload = line.slice(6);
+            try {
+              const data = JSON.parse(payload);
+              if (eventType === "block") {
+                setBlocks((prev) => [...prev, data]);
+              }
+            } catch { /* skip malformed */ }
+            eventType = "";
+          }
+        }
       }
     } catch (err) {
       console.error("Generation error:", err);
@@ -426,7 +454,7 @@ export default function Landing2Editor() {
 
       {/* Main editor */}
       <div className="flex-1 overflow-y-auto">
-        {isGenerating ? (
+        {isGenerating && blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24">
             <Spinner />
             <p className="text-sm text-gray-500 mt-4">
@@ -434,7 +462,15 @@ export default function Landing2Editor() {
             </p>
           </div>
         ) : (
-          <BlockEditor blocks={blocks} onChange={handleBlocksChange} theme={theme} customColors={customColors} />
+          <>
+            <BlockEditor blocks={blocks} onChange={isGenerating ? undefined : handleBlocksChange} theme={theme} customColors={customColors} />
+            {isGenerating && (
+              <div className="flex items-center gap-2 py-4 px-2">
+                <Spinner />
+                <p className="text-sm text-gray-400">Generando mas bloques...</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </article>

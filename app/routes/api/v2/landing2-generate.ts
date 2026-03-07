@@ -1,7 +1,7 @@
 import type { Route } from "./+types/landing2-generate";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { nanoid } from "nanoid";
 import { LANDING_SYSTEM_PROMPT } from "~/lib/landingPrompts";
@@ -13,6 +13,88 @@ const VALID_TYPES = new Set<string>([
   "features", "callout", "video", "testimonials", "logoCloud", "team",
   "stats", "pricing", "faq", "comparison", "chart", "diagram", "timeline", "gallery",
 ]);
+
+const PROMPT_SUFFIX = `
+
+Respond with a JSON object containing a "blocks" array. Each block has "type" and "content".
+
+Available block types and their content:
+- hero: { headline, subtitle, ctaText, ctaUrl, imageUrl? }
+- text: { title, body } (body is HTML string with <p>, <strong>, <em>, <ul>, <li>)
+- imageText: { title, body, imageUrl, imagePosition ("left"|"right") }
+- cta: { headline, subtitle, ctaText, ctaUrl }
+- footer: { companyName, links: [{label, url}] }
+- features: { title, subtitle, variant ("cards"|"cards-icon"|"bordered"|"minimal"), columns (2|3|4), items: [{icon, title, desc}] }
+- callout: { type ("info"|"warning"|"success"|"question"), title, body }
+- video: { title, videoUrl (YouTube/Vimeo URL), description }
+- testimonials: { title, variant ("cards"|"quote-large"), items: [{quote, author, role, avatarUrl?}] }
+- logoCloud: { title, variant ("grid"|"row"), logos: [{imageUrl, alt, url}] }
+- team: { title, variant ("grid"|"cards"), members: [{name, role, imageUrl, bio?}] }
+- stats: { title, variant ("big-numbers"|"cards"|"inline"), items: [{value, label, desc?}] }
+- pricing: { title, variant ("cards"|"table"), plans: [{name, price, period, features: [string], ctaText, highlighted: bool}] }
+- faq: { title, variant ("accordion"|"two-col"), items: [{question, answer}] }
+- comparison: { title, headers: [string], rows: [{label, values: [string]}], highlightCol: number }
+- chart: { title, chartType ("bar"|"line"|"pie"|"doughnut"|"area"), labels: [string], datasets: [{label, data: [number], color?}] }
+- diagram: { title, diagramType ("funnel"|"venn"|"roadmap"|"puzzle"|"versus"|"target"|"pyramid"|"cycle"), items: [{label, value?, color?}] }
+- timeline: { title, variant ("vertical"|"steps"|"horizontal"), events: [{date, title, desc}] }
+- gallery: { title, variant ("grid"|"masonry"), columns (2|3|4), images: [{url, alt, caption?}] }
+
+Create 6-10 blocks. Always start with "hero" and end with "footer". Use diverse block types — don't just use hero+text+cta+footer. Include at least 2-3 of the richer blocks (features, stats, testimonials, pricing, faq, etc.) based on the prompt context. All text in Spanish.
+
+IMPORTANT: Output each block as a COMPLETE JSON object on its own line (NDJSON format). Do NOT wrap in an outer object or array. Each line must be a valid JSON object like:
+{"type": "hero", "content": {"headline": "...", "subtitle": "...", "ctaText": "...", "ctaUrl": "#"}}
+{"type": "features", "content": {"title": "...", "items": [...]}}
+
+No markdown fences, no trailing commas, no wrapper. One valid JSON object per line.`;
+
+/**
+ * Extract complete JSON objects from accumulated text.
+ * Returns [extractedObjects[], remainingText]
+ */
+function extractJsonObjects(text: string): [any[], string] {
+  const objects: any[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    remaining = remaining.trimStart();
+    if (!remaining.startsWith("{")) {
+      // Skip non-JSON prefixes (markdown fences, commas, brackets, whitespace)
+      const nextBrace = remaining.indexOf("{");
+      if (nextBrace === -1) break;
+      remaining = remaining.slice(nextBrace);
+      continue;
+    }
+
+    // Try to find a complete JSON object by tracking brace depth
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let end = -1;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const ch = remaining[i];
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === "{") depth++;
+      if (ch === "}") { depth--; if (depth === 0) { end = i; break; } }
+    }
+
+    if (end === -1) break; // incomplete object, wait for more data
+
+    const candidate = remaining.slice(0, end + 1);
+    remaining = remaining.slice(end + 1);
+
+    try {
+      objects.push(JSON.parse(candidate));
+    } catch {
+      // malformed, skip
+    }
+  }
+
+  return [objects, remaining];
+}
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -42,89 +124,88 @@ export async function action({ request }: Route.ActionArgs) {
 
   const model = anthropic("claude-haiku-4-5-20251001");
 
-  const result = await generateText({
+  const result = streamText({
     model,
     system: LANDING_SYSTEM_PROMPT,
-    prompt: `Generate a landing page using BLOCKS for: ${prompt}
-Style: ${theme || "modern"}
-
-Respond with a JSON object containing a "blocks" array. Each block has "type" and "content".
-
-Available block types and their content:
-- hero: { headline, subtitle, ctaText, ctaUrl, imageUrl? }
-- text: { title, body } (body is HTML string with <p>, <strong>, <em>, <ul>, <li>)
-- imageText: { title, body, imageUrl, imagePosition ("left"|"right") }
-- cta: { headline, subtitle, ctaText, ctaUrl }
-- footer: { companyName, links: [{label, url}] }
-- features: { title, subtitle, variant ("cards"|"cards-icon"|"bordered"|"minimal"), columns (2|3|4), items: [{icon, title, desc}] }
-- callout: { type ("info"|"warning"|"success"|"question"), title, body }
-- video: { title, videoUrl (YouTube/Vimeo URL), description }
-- testimonials: { title, variant ("cards"|"quote-large"), items: [{quote, author, role, avatarUrl?}] }
-- logoCloud: { title, variant ("grid"|"row"), logos: [{imageUrl, alt, url}] }
-- team: { title, variant ("grid"|"cards"), members: [{name, role, imageUrl, bio?}] }
-- stats: { title, variant ("big-numbers"|"cards"|"inline"), items: [{value, label, desc?}] }
-- pricing: { title, variant ("cards"|"table"), plans: [{name, price, period, features: [string], ctaText, highlighted: bool}] }
-- faq: { title, variant ("accordion"|"two-col"), items: [{question, answer}] }
-- comparison: { title, headers: [string], rows: [{label, values: [string]}], highlightCol: number }
-- chart: { title, chartType ("bar"|"line"|"pie"|"doughnut"|"area"), labels: [string], datasets: [{label, data: [number], color?}] }
-- diagram: { title, diagramType ("funnel"|"venn"|"roadmap"|"puzzle"|"versus"|"target"|"pyramid"|"cycle"), items: [{label, value?, color?}] }
-- timeline: { title, variant ("vertical"|"steps"|"horizontal"), events: [{date, title, desc}] }
-- gallery: { title, variant ("grid"|"masonry"), columns (2|3|4), images: [{url, alt, caption?}] }
-
-Create 6-10 blocks. Always start with "hero" and end with "footer". Use diverse block types — don't just use hero+text+cta+footer. Include at least 2-3 of the richer blocks (features, stats, testimonials, pricing, faq, etc.) based on the prompt context. All text in Spanish.
-
-Example:
-{
-  "blocks": [
-    { "type": "hero", "content": { "headline": "...", "subtitle": "...", "ctaText": "...", "ctaUrl": "#" } },
-    { "type": "features", "content": { "title": "...", "subtitle": "...", "variant": "cards-icon", "columns": 3, "items": [{"icon": "⚡", "title": "...", "desc": "..."}] } },
-    { "type": "stats", "content": { "title": "...", "variant": "big-numbers", "items": [{"value": "10K+", "label": "..."}] } },
-    { "type": "testimonials", "content": { "title": "...", "variant": "cards", "items": [{"quote": "...", "author": "...", "role": "..."}] } },
-    { "type": "pricing", "content": { "title": "...", "variant": "cards", "plans": [{"name": "...", "price": "$0", "period": "/mes", "features": ["..."], "ctaText": "...", "highlighted": false}] } },
-    { "type": "faq", "content": { "title": "...", "variant": "accordion", "items": [{"question": "...", "answer": "..."}] } },
-    { "type": "cta", "content": { "headline": "...", "subtitle": "...", "ctaText": "..." } },
-    { "type": "footer", "content": { "companyName": "...", "links": [{"label": "Inicio", "url": "#"}] } }
-  ]
-}
-
-Return ONLY valid JSON, no markdown fences.`,
+    prompt: `Generate a landing page using BLOCKS for: ${prompt}\nStyle: ${theme || "modern"}${PROMPT_SUFFIX}`,
   });
 
-  let raw = result.text.trim();
-  if (raw.startsWith("```")) {
-    raw = raw.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  }
+  const allBlocks: LandingBlock[] = [];
+  let blockOrder = 0;
+  let buffer = "";
 
-  let parsed: any;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return Response.json(
-      { error: "Failed to parse AI response", raw },
-      { status: 502 }
-    );
-  }
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
 
-  if (!parsed.blocks || !Array.isArray(parsed.blocks)) {
-    return Response.json(
-      { error: "Invalid AI response: missing blocks array", raw: parsed },
-      { status: 502 }
-    );
-  }
+      const send = (event: string, data: any) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
 
-  const blocks: LandingBlock[] = parsed.blocks
-    .filter((b: any) => b.type && VALID_TYPES.has(b.type))
-    .map((b: any, i: number) => ({
-      id: nanoid(8),
-      type: b.type as BlockType,
-      order: i,
-      content: b.content || {},
-    }));
+      try {
+        for await (const chunk of result.textStream) {
+          buffer += chunk;
 
-  await db.landing.update({
-    where: { id: landingId },
-    data: { sections: blocks as any },
+          const [objects, remaining] = extractJsonObjects(buffer);
+          buffer = remaining;
+
+          for (const obj of objects) {
+            if (!obj.type || !VALID_TYPES.has(obj.type)) continue;
+
+            const block: LandingBlock = {
+              id: nanoid(8),
+              type: obj.type as BlockType,
+              order: blockOrder++,
+              content: obj.content || {},
+            };
+
+            allBlocks.push(block);
+            send("block", block);
+          }
+        }
+
+        // Try to parse any remaining buffer
+        if (buffer.trim()) {
+          let cleaned = buffer.trim();
+          if (cleaned.startsWith("```")) {
+            cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+          }
+          const [lastObjects] = extractJsonObjects(cleaned);
+          for (const obj of lastObjects) {
+            if (!obj.type || !VALID_TYPES.has(obj.type)) continue;
+            const block: LandingBlock = {
+              id: nanoid(8),
+              type: obj.type as BlockType,
+              order: blockOrder++,
+              content: obj.content || {},
+            };
+            allBlocks.push(block);
+            send("block", block);
+          }
+        }
+
+        // Save all blocks to DB
+        if (allBlocks.length > 0) {
+          await db.landing.update({
+            where: { id: landingId },
+            data: { sections: allBlocks as any },
+          });
+        }
+
+        send("done", { total: allBlocks.length });
+        controller.close();
+      } catch (err: any) {
+        send("error", { message: err.message || "Generation failed" });
+        controller.close();
+      }
+    },
   });
 
-  return Response.json({ blocks });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

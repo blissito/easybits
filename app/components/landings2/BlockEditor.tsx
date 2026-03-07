@@ -89,7 +89,7 @@ export function BlockEditor({
   customColors,
 }: {
   blocks: LandingBlock[];
-  onChange: (blocks: LandingBlock[]) => void;
+  onChange?: (blocks: LandingBlock[]) => void;
   theme?: string;
   customColors?: CustomColors | null;
 }) {
@@ -106,8 +106,11 @@ export function BlockEditor({
   }, [theme, customColors]);
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
 
+  const readOnly = !onChange;
+
   const addBlock = useCallback(
     (type: BlockType, afterIndex: number) => {
+      if (!onChange) return;
       const newBlock: LandingBlock = {
         id: nanoid(8),
         type,
@@ -126,6 +129,7 @@ export function BlockEditor({
 
   const updateBlock = useCallback(
     (id: string, content: Record<string, any>) => {
+      if (!onChange) return;
       onChange(
         sorted.map((b) =>
           b.id === id ? { ...b, content: { ...b.content, ...content } } : b
@@ -137,6 +141,7 @@ export function BlockEditor({
 
   const moveBlock = useCallback(
     (id: string, direction: "up" | "down") => {
+      if (!onChange) return;
       const idx = sorted.findIndex((b) => b.id === id);
       if (idx < 0) return;
       const swap = direction === "up" ? idx - 1 : idx + 1;
@@ -150,6 +155,7 @@ export function BlockEditor({
 
   const duplicateBlock = useCallback(
     (id: string) => {
+      if (!onChange) return;
       const idx = sorted.findIndex((b) => b.id === id);
       if (idx < 0) return;
       const source = sorted[idx];
@@ -167,6 +173,7 @@ export function BlockEditor({
 
   const deleteBlock = useCallback(
     (id: string) => {
+      if (!onChange) return;
       onChange(sorted.filter((b) => b.id !== id).map((b, i) => ({ ...b, order: i })));
     },
     [sorted, onChange]
@@ -175,24 +182,26 @@ export function BlockEditor({
   return (
     <div className="w-full max-w-5xl mx-auto" style={cssVars}>
       {/* Add block at the top if empty */}
-      <AddBlockMenu onAdd={(type) => addBlock(type, -1)} />
+      {!readOnly && <AddBlockMenu onAdd={(type) => addBlock(type, -1)} />}
 
       {sorted.map((block, i) => (
-        <div key={block.id}>
+        <div key={block.id} className="animate-fade-in">
           <div className="relative group border-2 border-transparent hover:border-brand-300 rounded-2xl transition-colors">
-            <BlockToolbar
-              block={block}
-              index={i}
-              total={sorted.length}
-              onMove={(dir) => moveBlock(block.id, dir)}
-              onDuplicate={() => duplicateBlock(block.id)}
-              onDelete={() => deleteBlock(block.id)}
-            />
+            {!readOnly && (
+              <BlockToolbar
+                block={block}
+                index={i}
+                total={sorted.length}
+                onMove={(dir) => moveBlock(block.id, dir)}
+                onDuplicate={() => duplicateBlock(block.id)}
+                onDelete={() => deleteBlock(block.id)}
+              />
+            )}
             {renderBlockComponent(block, (content) =>
               updateBlock(block.id, content)
             )}
           </div>
-          <AddBlockMenu onAdd={(type) => addBlock(type, i)} />
+          {!readOnly && <AddBlockMenu onAdd={(type) => addBlock(type, i)} />}
         </div>
       ))}
     </div>

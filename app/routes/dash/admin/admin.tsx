@@ -23,6 +23,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 const tabs = [
   { to: "/dash/admin", label: "Usuarios", end: true },
+  { to: "/dash/admin/certs", label: "Certificados", end: false },
 ];
 
 export default function AdminLayout() {
