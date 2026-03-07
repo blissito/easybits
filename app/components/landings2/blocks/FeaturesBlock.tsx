@@ -70,8 +70,10 @@ export function FeaturesBlock({
           className="grid gap-6"
           style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
         >
-          {items.map((item, i) => (
-            <div key={i} className="relative group border-2 border-black/10 rounded-xl p-6">
+          {items.map((item, i) => {
+            const variant = c.variant || "cards";
+
+            const removeBtn = (
               <button
                 type="button"
                 onClick={() => removeItem(i)}
@@ -79,31 +81,93 @@ export function FeaturesBlock({
               >
                 &times;
               </button>
+            );
+
+            const iconInput = (extraClass = "") => (
               <input
                 type="text"
                 value={item.icon || ""}
                 onChange={(e) => updateItem(i, "icon", e.target.value)}
-                className="text-2xl bg-transparent border-none outline-none w-12 mb-2"
+                className={`bg-transparent border-none outline-none ${extraClass}`}
                 placeholder="⚡"
               />
+            );
+
+            const titleEl = (extraClass = "") => (
               <h3
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => updateItem(i, "title", e.currentTarget.textContent || "")}
-                className="font-bold text-lg outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1"
+                className={`font-bold text-lg outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1 ${extraClass}`}
               >
                 {item.title || "Feature"}
               </h3>
+            );
+
+            const descEl = (extraClass = "") => (
               <p
                 contentEditable
                 suppressContentEditableWarning
                 onBlur={(e) => updateItem(i, "desc", e.currentTarget.textContent || "")}
-                className="mt-2 text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1"
+                className={`text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1 ${extraClass}`}
               >
                 {item.desc || "Descripción"}
               </p>
-            </div>
-          ))}
+            );
+
+            if (variant === "cards-icon") {
+              return (
+                <div key={i} className="relative group rounded-2xl p-8 border-2 transition-shadow hover:shadow-lg" style={{ borderColor: "color-mix(in srgb, var(--landing-text) 10%, transparent)", background: "var(--landing-bg)" }}>
+                  {removeBtn}
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 text-2xl" style={{ background: "var(--landing-accent)", color: "var(--landing-accent-text)" }}>
+                    {iconInput("text-2xl w-14 text-center")}
+                  </div>
+                  {titleEl("text-xl")}
+                  {descEl("mt-3")}
+                </div>
+              );
+            }
+
+            if (variant === "bordered") {
+              return (
+                <div key={i} className="relative group pl-6 py-5 pr-4 border-l-[5px] rounded-r-xl transition-colors" style={{ borderColor: "var(--landing-accent)", background: "color-mix(in srgb, var(--landing-accent) 5%, var(--landing-bg))" }}>
+                  {removeBtn}
+                  <div className="text-3xl mb-2">
+                    {iconInput("text-3xl w-12")}
+                  </div>
+                  {titleEl("text-xl")}
+                  {descEl("mt-2")}
+                </div>
+              );
+            }
+
+            if (variant === "minimal") {
+              return (
+                <div key={i} className="relative group flex items-start gap-5 py-5 px-4 rounded-xl transition-colors hover:bg-black/[0.03]">
+                  {removeBtn}
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "color-mix(in srgb, var(--landing-accent) 15%, var(--landing-bg))", color: "var(--landing-accent)" }}>
+                    {iconInput("text-2xl w-12 text-center")}
+                  </div>
+                  <div className="pt-0.5">
+                    {titleEl("text-lg")}
+                    {descEl("mt-1")}
+                  </div>
+                </div>
+              );
+            }
+
+            /* variant === "cards" (default) */
+            return (
+              <div key={i} className="relative group rounded-2xl p-8 shadow-sm transition-shadow hover:shadow-md" style={{ background: "color-mix(in srgb, var(--landing-bg) 92%, var(--landing-text) 8%)" }}>
+                {removeBtn}
+                <div className="text-3xl mb-4">
+                  {iconInput("text-3xl w-12")}
+                </div>
+                {titleEl("text-xl")}
+                {descEl("mt-3")}
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-6 text-center">
