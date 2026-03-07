@@ -42,63 +42,118 @@ export function TeamBlock({
           >
             {c.title || "Nuestro equipo"}
           </h2>
-          <div
-            className={
-              c.variant === "cards"
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
-                : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-8"
-            }
-          >
-            {members.map((m: any, i: number) => (
-              <div key={i} className="relative group border border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => removeItem(i)}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+          {(c.variant || "grid") === "grid" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-8">
+              {members.map((m: any, i: number) => (
+                <div key={i} className="relative group flex flex-col items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i)}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    x
+                  </button>
+                  {m.imageUrl ? (
+                    <img src={m.imageUrl} alt={m.name || ""} className="w-24 h-24 rounded-full object-cover" />
+                  ) : (
+                    <div
+                      className="w-24 h-24 rounded-full flex items-center justify-center text-2xl font-bold"
+                      style={{ background: "color-mix(in srgb, var(--landing-accent) 15%, var(--landing-bg))", color: "var(--landing-accent)" }}
+                    >
+                      {(m.name || "?")[0]}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    value={m.imageUrl || ""}
+                    onChange={(e) => updateItem(i, "imageUrl", e.target.value)}
+                    placeholder="URL avatar"
+                    className="text-xs bg-white/80 border rounded px-2 py-1 w-full"
+                  />
+                  <h3
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateItem(i, "name", e.currentTarget.textContent || "")}
+                    className="font-bold text-lg outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
+                  >
+                    {m.name || "Nombre"}
+                  </h3>
+                  <p
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateItem(i, "role", e.currentTarget.textContent || "")}
+                    className="text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
+                    style={{ color: "var(--landing-accent)" }}
+                  >
+                    {m.role || "Rol"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              {members.map((m: any, i: number) => (
+                <div
+                  key={i}
+                  className="relative group rounded-xl p-6 flex flex-col items-center gap-3"
+                  style={{
+                    border: "2px solid color-mix(in srgb, var(--landing-text) 12%, transparent)",
+                    boxShadow: "4px 4px 0 color-mix(in srgb, var(--landing-text) 8%, transparent)",
+                  }}
                 >
-                  x
-                </button>
-                {m.imageUrl ? (
-                  <img src={m.imageUrl} alt={m.name || ""} className="w-20 h-20 rounded-full object-cover" />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-2xl font-bold">
-                    {(m.name || "?")[0]}
-                  </div>
-                )}
-                <input
-                  type="text"
-                  value={m.imageUrl || ""}
-                  onChange={(e) => updateItem(i, "imageUrl", e.target.value)}
-                  placeholder="URL avatar"
-                  className="text-xs bg-white/80 border rounded px-2 py-1 w-full"
-                />
-                <h3
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => updateItem(i, "name", e.currentTarget.textContent || "")}
-                  className="font-bold text-lg outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
-                >
-                  {m.name || "Nombre"}
-                </h3>
-                <p
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => updateItem(i, "role", e.currentTarget.textContent || "")}
-                  className="text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
-                >
-                  {m.role || "Rol"}
-                </p>
-                <p
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => updateItem(i, "bio", e.currentTarget.textContent || "")}
-                  className="text-xs opacity-60 outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
-                >
-                  {m.bio || "Bio"}
-                </p>
-              </div>
-            ))}
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i)}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    x
+                  </button>
+                  {m.imageUrl ? (
+                    <img src={m.imageUrl} alt={m.name || ""} className="w-20 h-20 rounded-full object-cover" />
+                  ) : (
+                    <div
+                      className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold"
+                      style={{ background: "color-mix(in srgb, var(--landing-accent) 15%, var(--landing-bg))", color: "var(--landing-accent)" }}
+                    >
+                      {(m.name || "?")[0]}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    value={m.imageUrl || ""}
+                    onChange={(e) => updateItem(i, "imageUrl", e.target.value)}
+                    placeholder="URL avatar"
+                    className="text-xs bg-white/80 border rounded px-2 py-1 w-full"
+                  />
+                  <h3
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateItem(i, "name", e.currentTarget.textContent || "")}
+                    className="font-bold text-lg outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
+                  >
+                    {m.name || "Nombre"}
+                  </h3>
+                  <p
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateItem(i, "role", e.currentTarget.textContent || "")}
+                    className="text-sm outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
+                    style={{ color: "var(--landing-accent)" }}
+                  >
+                    {m.role || "Rol"}
+                  </p>
+                  <p
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateItem(i, "bio", e.currentTarget.textContent || "")}
+                    className="text-xs opacity-60 outline-none focus:ring-2 focus:ring-brand-500/30 rounded px-1 text-center"
+                  >
+                    {m.bio || "Bio"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="text-center mt-6">
             <button
               type="button"

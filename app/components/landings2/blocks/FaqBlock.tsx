@@ -42,35 +42,76 @@ export function FaqBlock({
           {c.title || "Preguntas frecuentes"}
         </h2>
 
-        <div className="space-y-4">
-          {items.map((item, i) => (
-            <div key={i} className="relative group border-2 border-black/10 rounded-xl p-5">
-              <button
-                type="button"
-                onClick={() => removeItem(i)}
-                className="absolute top-3 right-3 text-xs opacity-0 group-hover:opacity-60 hover:!opacity-100 bg-red-100 text-red-600 rounded-full w-5 h-5 flex items-center justify-center"
+        {(c.variant || "accordion") === "accordion" ? (
+          <div className="space-y-4">
+            {items.map((item, i) => (
+              <details
+                key={i}
+                className="relative group rounded-xl overflow-hidden"
+                style={{ border: "2px solid color-mix(in srgb, var(--landing-text) 15%, transparent)" }}
               >
-                &times;
-              </button>
-              <h3
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={(e) => updateItem(i, "question", e.currentTarget.textContent || "")}
-                className="font-bold text-base outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1"
-              >
-                {item.question || "Pregunta frecuente"}
-              </h3>
-              <p
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={(e) => updateItem(i, "answer", e.currentTarget.textContent || "")}
-                className="mt-2 text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1"
-              >
-                {item.answer || "Respuesta aquí"}
-              </p>
-            </div>
-          ))}
-        </div>
+                <button
+                  type="button"
+                  onClick={() => removeItem(i)}
+                  className="absolute top-3 right-3 z-10 text-xs opacity-0 group-hover:opacity-60 hover:!opacity-100 bg-red-100 text-red-600 rounded-full w-5 h-5 flex items-center justify-center"
+                >
+                  &times;
+                </button>
+                <summary className="cursor-pointer font-bold text-base px-5 py-4 select-none list-none flex items-center justify-between outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg">
+                  <span
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => updateItem(i, "question", e.currentTarget.textContent || "")}
+                    className="outline-none flex-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {item.question || "Pregunta frecuente"}
+                  </span>
+                  <span className="ml-3 text-xs opacity-40">&#9660;</span>
+                </summary>
+                <p
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(e) => updateItem(i, "answer", e.currentTarget.textContent || "")}
+                  className="px-5 pb-4 text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg"
+                  style={{ borderTop: "1px solid color-mix(in srgb, var(--landing-text) 10%, transparent)" }}
+                >
+                  {item.answer || "Respuesta aquí"}
+                </p>
+              </details>
+            ))}
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-x-12 gap-y-8">
+            {items.map((item, i) => (
+              <div key={i} className="relative group">
+                <button
+                  type="button"
+                  onClick={() => removeItem(i)}
+                  className="absolute -top-2 -right-2 text-xs opacity-0 group-hover:opacity-60 hover:!opacity-100 bg-red-100 text-red-600 rounded-full w-5 h-5 flex items-center justify-center"
+                >
+                  &times;
+                </button>
+                <h3
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(e) => updateItem(i, "question", e.currentTarget.textContent || "")}
+                  className="font-bold text-base outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1"
+                >
+                  {item.question || "Pregunta frecuente"}
+                </h3>
+                <p
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(e) => updateItem(i, "answer", e.currentTarget.textContent || "")}
+                  className="mt-2 text-sm opacity-70 outline-none focus:ring-2 focus:ring-brand-500/30 rounded-lg px-1"
+                >
+                  {item.answer || "Respuesta aquí"}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-6 text-center">
           <button
