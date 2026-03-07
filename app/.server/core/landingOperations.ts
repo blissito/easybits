@@ -124,7 +124,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     data: { status: "PUBLISHED", websiteId },
   });
 
-  // SSL cert
+  // SSL cert for easybits.cloud
   const hostname = `${slug}.easybits.cloud`;
   try {
     if (process.env.FLY_API_TOKEN) {
@@ -137,9 +137,28 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     );
   }
 
+  // Also create cert for custom domain if linked
+  const website = await db.website.findUnique({
+    where: { id: websiteId },
+    include: { customDomain: true },
+  });
+  let customUrl: string | undefined;
+  if (website?.customDomain?.verified) {
+    const customHostname = `${slug}.${website.customDomain.domain}`;
+    try {
+      if (process.env.FLY_API_TOKEN) {
+        await createHost(customHostname);
+      }
+      const proto = process.env.NODE_ENV === "production" ? "https" : "http";
+      customUrl = `${proto}://${customHostname}`;
+    } catch (err) {
+      console.error(`[deployLanding] custom domain cert failed for ${customHostname}:`, err);
+    }
+  }
+
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
   const url = `${proto}://${hostname}`;
-  return { url, websiteId, slug };
+  return { url, websiteId, slug, customUrl };
 }
 
 export async function unpublishLanding(ctx: AuthContext, id: string) {

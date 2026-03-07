@@ -90,6 +90,7 @@ export default [
           route("setup", "routes/dash/developer/setup.tsx"),
           route("websites", "routes/dash/developer/websites.tsx"),
           route("webhooks", "routes/dash/developer/webhooks.tsx"),
+          route("domains", "routes/dash/developer/domains.tsx"),
         ]),
       ]),
       // Admin dashboard
@@ -147,6 +148,8 @@ export default [
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),
     route("docs", "routes/api/v2/docs.ts"),
+    route("domains", "routes/api/v2/domains.ts"),
+    route("domains/:domainId/verify", "routes/api/v2/domain-verify.ts"),
   ]),
   // v1
   ...prefix("api/v1", [

@@ -187,6 +187,7 @@ model User {
   webhooks         Webhook[]
   presentations    Presentation[]
   landings         Landing[]
+  customDomains    CustomDomain[]
 }
 
 enum FileStatus {
@@ -352,20 +353,36 @@ model UserAiKey {
 }
 
 model Website {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  slug           String
+  ownerId        String        @db.ObjectId
+  owner          User          @relation(fields: [ownerId], references: [id])
+  status         String        @default("ACTIVE")
+  prefix         String
+  fileCount      Int           @default(0)
+  totalSize      Float         @default(0)
+  customDomainId String?       @db.ObjectId
+  customDomain   CustomDomain? @relation(fields: [customDomainId], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([ownerId, slug])
+  @@index([ownerId])
+}
+
+model CustomDomain {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  slug      String
+  domain    String    @unique
   ownerId   String    @db.ObjectId
   owner     User      @relation(fields: [ownerId], references: [id])
-  status    String    @default("ACTIVE")
-  prefix    String
-  fileCount Int       @default(0)
-  totalSize Float     @default(0)
-  deletedAt DateTime?
+  verified  Boolean   @default(false)
+  txtToken  String
+  websites  Website[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([ownerId, slug])
   @@index([ownerId])
 }
 

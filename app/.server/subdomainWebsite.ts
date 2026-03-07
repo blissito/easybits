@@ -20,7 +20,12 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.hostname;
   const hostname = host.split(":")[0]; // strip port
 
-  if (!hostname.endsWith(".easybits.cloud") || hostname.startsWith("www")) {
+  // Check custom domain first (anything not .easybits.cloud)
+  if (!hostname.endsWith(".easybits.cloud") && hostname !== "easybits.cloud") {
+    return handleCustomDomain(request, hostname, url);
+  }
+
+  if (hostname.startsWith("www")) {
     return null;
   }
 
@@ -108,6 +113,122 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
   }
 
   // Proxy all files (no 302 redirects — avoids CORS/iframe issues)
+  const client = getPlatformDefaultClient();
+  const readUrl = file.access === "public" && file.url
+    ? file.url
+    : await client.getReadUrl(file.storageKey);
+  const upstream = await fetch(readUrl);
+  const contentType = getContentType(splat);
+  const cacheControl = isImmutable(splat)
+    ? "public, max-age=31536000, immutable"
+    : "no-cache, no-store, must-revalidate";
+
+  return new Response(upstream.body, {
+    headers: {
+      "Content-Type": contentType,
+      "Cache-Control": cacheControl,
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+/**
+ * Handle requests to custom domains (e.g., slug.userdomain.com).
+ * Looks up verified CustomDomain, extracts slug from subdomain, finds Website.
+ */
+async function handleCustomDomain(request: Request, hostname: string, url: URL): Promise<Response | null> {
+  const parts = hostname.split(".");
+  if (parts.length < 3) {
+    // Bare domain (e.g., userdomain.com) — not a subdomain website
+    return null;
+  }
+
+  // Extract slug (first part) and root domain (rest)
+  const slug = parts[0];
+  const rootDomain = parts.slice(1).join(".");
+
+  // Find verified custom domain
+  const customDomain = await db.customDomain.findFirst({
+    where: { domain: rootDomain, verified: true },
+    select: { id: true, ownerId: true },
+  });
+
+  if (!customDomain) {
+    return null;
+  }
+
+  // Find website by slug + owner
+  const website = await db.website.findFirst({
+    where: {
+      slug,
+      ownerId: customDomain.ownerId,
+      status: { not: "DELETED" },
+    },
+    select: { id: true, ownerId: true },
+  });
+
+  if (!website) {
+    return new Response("Site not found", { status: 404 });
+  }
+
+  // Reuse the same file serving logic
+  const splat = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+
+  if (!isImmutable(splat)) {
+    trackTelemetryVisit({
+      asset: { ownerId: website.ownerId, id: website.id },
+      request,
+      linkType: "website",
+    }).catch(() => {});
+  }
+
+  let file = await db.file.findFirst({
+    where: {
+      name: `sites/${website.id}/${splat}`,
+      ownerId: website.ownerId,
+      status: "DONE",
+    },
+    select: { url: true, storageKey: true, access: true },
+  });
+
+  if (!file && !splat.includes(".")) {
+    file = await db.file.findFirst({
+      where: {
+        name: `sites/${website.id}/${splat}/index.html`,
+        ownerId: website.ownerId,
+        status: "DONE",
+      },
+      select: { url: true, storageKey: true, access: true },
+    });
+  }
+
+  if (!file && splat !== "index.html") {
+    file = await db.file.findFirst({
+      where: {
+        name: `sites/${website.id}/index.html`,
+        ownerId: website.ownerId,
+        status: "DONE",
+      },
+      select: { url: true, storageKey: true, access: true },
+    });
+    if (file) {
+      const client = getPlatformDefaultClient();
+      const readUrl = await client.getReadUrl(file.storageKey);
+      const upstream = await fetch(readUrl);
+      return new Response(upstream.body, {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      });
+    }
+    return new Response("Not found", { status: 404 });
+  }
+
+  if (!file) {
+    return new Response("Not found", { status: 404 });
+  }
+
   const client = getPlatformDefaultClient();
   const readUrl = file.access === "public" && file.url
     ? file.url

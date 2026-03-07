@@ -9,6 +9,20 @@ import { TextBlock } from "./blocks/TextBlock";
 import { ImageTextBlock } from "./blocks/ImageTextBlock";
 import { CtaBlock } from "./blocks/CtaBlock";
 import { FooterBlock } from "./blocks/FooterBlock";
+import { FeaturesBlock } from "./blocks/FeaturesBlock";
+import { CalloutBlock } from "./blocks/CalloutBlock";
+import { VideoBlock } from "./blocks/VideoBlock";
+import { TestimonialsBlock } from "./blocks/TestimonialsBlock";
+import { LogoCloudBlock } from "./blocks/LogoCloudBlock";
+import { TeamBlock } from "./blocks/TeamBlock";
+import { StatsBlock } from "./blocks/StatsBlock";
+import { PricingBlock } from "./blocks/PricingBlock";
+import { FaqBlock } from "./blocks/FaqBlock";
+import { ComparisonBlock } from "./blocks/ComparisonBlock";
+import { ChartBlock } from "./blocks/ChartBlock";
+import { DiagramBlock } from "./blocks/DiagramBlock";
+import { TimelineBlock } from "./blocks/TimelineBlock";
+import { GalleryBlock } from "./blocks/GalleryBlock";
 import { getThemeVars } from "~/lib/landingCatalog";
 import type { CustomColors } from "~/lib/buildLandingHtml";
 
@@ -35,6 +49,34 @@ function renderBlockComponent(
       return <CtaBlock block={block} onUpdate={onUpdate} />;
     case "footer":
       return <FooterBlock block={block} onUpdate={onUpdate} />;
+    case "features":
+      return <FeaturesBlock block={block} onUpdate={onUpdate} />;
+    case "callout":
+      return <CalloutBlock block={block} onUpdate={onUpdate} />;
+    case "video":
+      return <VideoBlock block={block} onUpdate={onUpdate} />;
+    case "testimonials":
+      return <TestimonialsBlock block={block} onUpdate={onUpdate} />;
+    case "logoCloud":
+      return <LogoCloudBlock block={block} onUpdate={onUpdate} />;
+    case "team":
+      return <TeamBlock block={block} onUpdate={onUpdate} />;
+    case "stats":
+      return <StatsBlock block={block} onUpdate={onUpdate} />;
+    case "pricing":
+      return <PricingBlock block={block} onUpdate={onUpdate} />;
+    case "faq":
+      return <FaqBlock block={block} onUpdate={onUpdate} />;
+    case "comparison":
+      return <ComparisonBlock block={block} onUpdate={onUpdate} />;
+    case "chart":
+      return <ChartBlock block={block} onUpdate={onUpdate} />;
+    case "diagram":
+      return <DiagramBlock block={block} onUpdate={onUpdate} />;
+    case "timeline":
+      return <TimelineBlock block={block} onUpdate={onUpdate} />;
+    case "gallery":
+      return <GalleryBlock block={block} onUpdate={onUpdate} />;
     default:
       return <div className="p-8 text-center text-gray-400">Bloque desconocido</div>;
   }

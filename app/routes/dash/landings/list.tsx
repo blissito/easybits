@@ -50,6 +50,26 @@ export default function LandingsList() {
 
   return (
     <article className="pt-20 px-8 pb-24 md:pl-36 w-full max-w-7xl">
+      {/* Deprecation alert */}
+      <div className="mb-8 p-6 bg-yellow-50 border-4 border-yellow-400 rounded-2xl shadow-[4px_4px_0_#000]">
+        <div className="flex items-start gap-4">
+          <span className="text-4xl">&#9888;&#65039;</span>
+          <div>
+            <h2 className="text-2xl font-black text-yellow-800 mb-2">
+              Landings v1 sera descontinuado
+            </h2>
+            <p className="text-yellow-700 font-bold">
+              Esta version del editor de landings sera eliminada proximamente.
+              Los trabajos guardados aqui <strong>NO se migraran</strong> a la nueva version.
+            </p>
+            <p className="text-yellow-700 mt-2">
+              Usa <a href="/dash/landings2" className="underline font-black text-yellow-900 hover:text-black">Landings v2</a> para
+              crear nuevas landings con 18+ bloques, charts, diagramas SVG y mas.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-10">
         <div>
           <h1 className="text-4xl font-black tracking-tight uppercase">

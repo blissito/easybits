@@ -386,6 +386,14 @@ export default function LandingEditor() {
 
   return (
     <article className="pt-16 px-4 pb-8 md:pl-32 w-full h-screen flex flex-col">
+      {/* Deprecation banner */}
+      <div className="mb-3 p-3 bg-yellow-50 border-2 border-yellow-400 rounded-xl flex items-center gap-3 shrink-0">
+        <span className="text-2xl">&#9888;&#65039;</span>
+        <p className="text-sm font-bold text-yellow-800">
+          Landings v1 sera descontinuado. Tus trabajos <strong>NO se migraran</strong>.{" "}
+          <a href="/dash/landings2" className="underline text-yellow-900 hover:text-black">Usa Landings v2</a>
+        </p>
+      </div>
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 mb-4 shrink-0">
         <div className="flex items-center gap-3">
