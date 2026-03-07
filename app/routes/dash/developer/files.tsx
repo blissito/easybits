@@ -3,7 +3,7 @@ import { useLoaderData, useSearchParams, useFetcher, useRevalidator, data } from
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { deleteFile, restoreFile } from "~/.server/core/operations";
-import { getClientForFile } from "~/.server/storage";
+import { getClientForFile, getPlatformDefaultClient } from "~/.server/storage";
 import type { AuthContext } from "~/.server/apiAuth";
 import type { Route } from "./+types/files";
 
@@ -102,10 +102,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
       select: { storageKey: true, storageProviderId: true, access: true, url: true },
     });
     if (!file) throw data({ error: "File not found" }, { status: 404 });
+    // Public files: use direct URL
     if (file.access !== "private" && file.url) {
       return { previewUrl: file.url };
     }
-    const client = await getClientForFile(file.storageProviderId, user.id);
+    // Custom provider: use its client (has its own prefix)
+    if (file.storageProviderId) {
+      const client = await getClientForFile(file.storageProviderId, user.id);
+      const previewUrl = await client.getReadUrl(file.storageKey, 3600);
+      return { previewUrl };
+    }
+    // Platform files: UI uploads live at storageKey directly, MCP/API uploads at mcp/storageKey
+    const isMcpFile = !file.url || file.url.includes("/mcp/");
+    const client = getPlatformDefaultClient({ prefix: isMcpFile ? "mcp/" : "" });
     const previewUrl = await client.getReadUrl(file.storageKey, 3600);
     return { previewUrl };
   }

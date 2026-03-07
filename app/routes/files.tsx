@@ -4,7 +4,7 @@ import { EmptyFiles } from "./files/EmptyFiles";
 import { FilesFormModal } from "~/components/forms/files/FilesFormModal";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { getClientForFile } from "~/.server/storage";
+import { getClientForFile, getPlatformDefaultClient } from "~/.server/storage";
 import { FilesTable } from "./files/FilesTable";
 import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
@@ -42,10 +42,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
       select: { storageKey: true, storageProviderId: true, access: true, url: true },
     });
     if (!file) throw data({ error: "File not found" }, { status: 404 });
+    // Public files: use direct URL
     if (file.access !== "private" && file.url) {
       return { previewUrl: file.url };
     }
-    const client = await getClientForFile(file.storageProviderId, user.id);
+    // Custom provider: use its client (has its own prefix)
+    if (file.storageProviderId) {
+      const client = await getClientForFile(file.storageProviderId, user.id);
+      const previewUrl = await client.getReadUrl(file.storageKey, 3600);
+      return { previewUrl };
+    }
+    // Platform files: UI uploads live at storageKey directly, MCP/API uploads at mcp/storageKey.
+    // UI files have a non-empty url pointing to the bucket; MCP private files have url "".
+    const isMcpFile = !file.url || file.url.includes("/mcp/");
+    const client = getPlatformDefaultClient({ prefix: isMcpFile ? "mcp/" : "" });
     const previewUrl = await client.getReadUrl(file.storageKey, 3600);
     return { previewUrl };
   }
