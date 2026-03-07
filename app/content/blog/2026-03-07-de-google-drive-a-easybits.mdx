@@ -1,0 +1,88 @@
+---
+title: "De Google Drive a EasyBits: por qué tu agente AI necesita su propio file storage"
+description: "Google Drive no fue diseñado para agentes AI. EasyBits ofrece 40+ herramientas MCP, SDK tipado, webhooks y API keys simples para que tus agentes gestionen archivos sin fricción."
+date: "2026-03-07"
+author: "Equipo EasyBits"
+tags: ["mcp", "agentes-ai", "file-storage", "google-drive"]
+featuredImage: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format"
+published: true
+---
+
+# De Google Drive a EasyBits: por qué tu agente AI necesita su propio file storage
+
+Tienes un agente AI que genera reportes, procesa imágenes o gestiona documentos. Necesita guardar y recuperar archivos. La opción obvia es Google Drive... pero rápidamente descubres que no fue diseñado para esto.
+
+## El problema con Google Drive para agentes
+
+**OAuth complejo**: Para que tu agente acceda a Google Drive necesitas configurar OAuth 2.0, manejar refresh tokens, consent screens y scopes. Un proceso diseñado para humanos, no para agentes.
+
+**Sin MCP nativo**: Google Drive no expone herramientas MCP. Si quieres que Claude o Cursor interactúen con tus archivos, necesitas construir un puente custom.
+
+**Rate limits agresivos**: Las APIs de Google tienen límites estrictos que no distinguen entre un humano navegando y un agente procesando 500 archivos.
+
+**Sin webhooks nativos para archivos**: Quieres que tu agente reaccione cuando se sube un archivo? Google Drive no tiene un sistema de webhooks simple para eventos de archivos.
+
+**Sin SDK tipado para agentes**: Las librerías de Google son genéricas. No hay un SDK pensado para el flujo de trabajo de un agente AI.
+
+## La alternativa: EasyBits
+
+EasyBits es file storage diseñado desde cero para agentes AI:
+
+- **40+ herramientas MCP** — tu agente puede subir, buscar, compartir, optimizar y transformar archivos directamente
+- **SDK tipado** (`@easybits.cloud/sdk`) — TypeScript-first, con autocompletado para cada operación
+- **API key simple** — una key, sin OAuth, sin refresh tokens
+- **Webhooks** — recibe notificaciones en tiempo real cuando un archivo se crea, actualiza o elimina
+- **Storage dedicado** — cada cuenta tiene su espacio, sin compartir quotas con Gmail o Google Photos
+
+## Código real
+
+### Subir un archivo con el SDK
+
+```typescript
+import EasyBits from "@easybits.cloud/sdk";
+
+const eb = new EasyBits({ apiKey: "eb_live_..." });
+
+const file = await eb.files.upload({
+  name: "reporte-marzo.pdf",
+  contentType: "application/pdf",
+});
+
+// file.putUrl → sube el contenido con PUT
+// file.id → referencia para tu agente
+```
+
+### Usar MCP desde Claude
+
+Desde Claude Desktop o Claude Code, tu agente puede hacer esto directamente:
+
+```
+"Sube el archivo reporte.pdf a EasyBits y compártelo con acceso público"
+```
+
+Claude usa las herramientas MCP `upload_file` y `share_file` automáticamente. Sin código, sin configuración extra.
+
+### Recibir webhooks
+
+```json
+// POST a tu endpoint cuando se crea un archivo
+{
+  "event": "file.created",
+  "data": {
+    "id": "abc123",
+    "name": "reporte-marzo.pdf",
+    "contentType": "application/pdf",
+    "size": 245000
+  },
+  "timestamp": "2026-03-07T10:30:00Z"
+}
+```
+
+Configura webhooks desde el dashboard, la API o directamente desde tu agente via MCP.
+
+## Empieza en 2 minutos
+
+1. **Conecta tu agente** — visita [/mcp](/mcp) para el comando de instalación
+2. **Explora la API** — revisa la [documentación completa](/docs)
+
+Tu agente AI merece un file storage que hable su idioma.
