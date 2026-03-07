@@ -13,9 +13,80 @@ export const meta = () =>
 
 const MCP_COMMAND = "claude mcp add easybits -- npx -y @easybits.cloud/mcp";
 
+const INSTALL_OPTIONS = [
+  {
+    id: "claude-desktop",
+    label: "Claude Desktop",
+    filename: "claude_desktop_config.json",
+    code: `{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "eb_sk_live_TU_API_KEY"
+      }
+    }
+  }
+}`,
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    filename: ".cursor/mcp.json",
+    code: `{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "eb_sk_live_TU_API_KEY"
+      }
+    }
+  }
+}`,
+  },
+  {
+    id: "windsurf",
+    label: "Windsurf",
+    filename: "~/.codeium/windsurf/mcp_config.json",
+    code: `{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "eb_sk_live_TU_API_KEY"
+      }
+    }
+  }
+}`,
+  },
+  {
+    id: "vscode",
+    label: "VS Code / Copilot",
+    filename: ".vscode/mcp.json",
+    code: `{
+  "servers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "eb_sk_live_TU_API_KEY"
+      }
+    }
+  }
+}`,
+  },
+];
+
 export default function McpPage() {
   const [copied, setCopied] = useState(false);
-  const [showDesktop, setShowDesktop] = useState(false);
+  const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+
+  function toggleAccordion(id: string) {
+    setOpenAccordion(openAccordion === id ? null : id);
+  }
 
   function handleCopy() {
     navigator.clipboard.writeText(MCP_COMMAND);
@@ -77,37 +148,36 @@ export default function McpPage() {
               </div>
             </div>
 
-            {/* Claude Desktop accordion */}
-            <div className="border-2 border-black rounded-xl overflow-hidden mb-6">
-              <button
-                onClick={() => setShowDesktop(!showDesktop)}
-                className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-              >
-                <span className="text-sm font-bold">Claude Desktop (JSON)</span>
-                <svg
-                  className={`w-4 h-4 transition-transform ${showDesktop ? "rotate-180" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {showDesktop && (
-                <div className="bg-gray-950 px-4 py-4">
-                  <p className="text-xs text-gray-400 mb-2 font-mono">
-                    claude_desktop_config.json
-                  </p>
-                  <pre className="text-sm text-green-400 font-mono whitespace-pre overflow-x-auto">{`{
-  "mcpServers": {
-    "easybits": {
-      "command": "npx",
-      "args": ["-y", "@easybits.cloud/mcp"]
-    }
-  }
-}`}</pre>
+            {/* Installation accordions */}
+            <div className="space-y-3 mb-6">
+              {INSTALL_OPTIONS.map((opt) => (
+                <div key={opt.id} className="border-2 border-black rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => toggleAccordion(opt.id)}
+                    className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <span className="text-sm font-bold">{opt.label}</span>
+                    <svg
+                      className={`w-4 h-4 transition-transform ${openAccordion === opt.id ? "rotate-180" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {openAccordion === opt.id && (
+                    <div className="bg-gray-950 px-4 py-4">
+                      <p className="text-xs text-gray-400 mb-2 font-mono">
+                        {opt.filename}
+                      </p>
+                      <pre className="text-sm text-green-400 font-mono whitespace-pre overflow-x-auto">
+                        {opt.code}
+                      </pre>
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
 
             {/* Links */}
