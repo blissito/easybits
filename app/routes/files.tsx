@@ -39,9 +39,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (!fileId) throw data({ error: "Missing fileId" }, { status: 400 });
     const file = await db.file.findFirst({
       where: { id: fileId, ownerId: user.id },
-      select: { storageKey: true, storageProviderId: true },
+      select: { storageKey: true, storageProviderId: true, access: true, url: true },
     });
     if (!file) throw data({ error: "File not found" }, { status: 404 });
+    if (file.access === "public" && file.url) {
+      return { previewUrl: file.url };
+    }
     const client = await getClientForFile(file.storageProviderId, user.id);
     const previewUrl = await client.getReadUrl(file.storageKey, 3600);
     return { previewUrl };
