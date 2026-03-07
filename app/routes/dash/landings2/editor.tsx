@@ -232,6 +232,14 @@ export default function Landing2Editor() {
                 requestAnimationFrame(() => {
                   streamEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
                 });
+              } else if (eventType === "block-update") {
+                setBlocks((prev) =>
+                  prev.map((b) =>
+                    b.id === data.id
+                      ? { ...b, content: { ...b.content, ...data.content } }
+                      : b
+                  )
+                );
               }
             } catch { /* skip malformed */ }
             eventType = "";

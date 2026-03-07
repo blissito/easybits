@@ -18,7 +18,7 @@ export async function searchImage(query: string): Promise<PexelsResult | null> {
     const photo = data.photos?.[0];
     if (!photo) return null;
     return {
-      url: photo.src.medium,
+      url: photo.src.large,
       photographer: photo.photographer,
       alt: photo.alt || query,
     };

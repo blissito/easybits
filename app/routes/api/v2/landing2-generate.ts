@@ -7,6 +7,9 @@ import { nanoid } from "nanoid";
 import { LANDING_SYSTEM_PROMPT } from "~/lib/landingPrompts";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import type { LandingBlock, BlockType } from "~/lib/landing2/blockTypes";
+import { searchImage } from "~/.server/images/pexels";
+
+const IMAGE_BLOCK_TYPES = new Set(["hero", "imageText"]);
 
 const VALID_TYPES = new Set<string>([
   "hero", "text", "imageText", "cta", "footer",
@@ -19,9 +22,9 @@ const PROMPT_SUFFIX = `
 Respond with a JSON object containing a "blocks" array. Each block has "type" and "content".
 
 Available block types and their content:
-- hero: { headline, subtitle, ctaText, ctaUrl, imageUrl? }
+- hero: { headline, subtitle, ctaText, ctaUrl, imageSearchQuery } (imageSearchQuery: SHORT English keywords for stock photo search, e.g. "modern office workspace", "team collaboration")
 - text: { title, body } (body is HTML string with <p>, <strong>, <em>, <ul>, <li>)
-- imageText: { title, body, imageUrl, imagePosition ("left"|"right") }
+- imageText: { title, body, imageSearchQuery, imagePosition ("left"|"right") } (imageSearchQuery: SHORT English keywords for stock photo)
 - cta: { headline, subtitle, ctaText, ctaUrl }
 - footer: { companyName, links: [{label, url}] }
 - features: { title, subtitle, variant ("cards"|"cards-icon"|"bordered"|"minimal"), columns (2|3|4), items: [{icon, title, desc}] }
@@ -131,6 +134,7 @@ export async function action({ request }: Route.ActionArgs) {
   });
 
   const allBlocks: LandingBlock[] = [];
+  const imagePromises: Promise<void>[] = [];
   let blockOrder = 0;
   let buffer = "";
 
@@ -161,6 +165,18 @@ export async function action({ request }: Route.ActionArgs) {
 
             allBlocks.push(block);
             send("block", block);
+
+            // Enrich with real stock image (non-blocking)
+            if (IMAGE_BLOCK_TYPES.has(block.type)) {
+              const query = block.content.imageSearchQuery || block.content.headline || block.content.title || prompt;
+              imagePromises.push(
+                searchImage(query).then((img) => {
+                  if (!img) return;
+                  block.content.imageUrl = img.url;
+                  send("block-update", { id: block.id, content: { imageUrl: img.url } });
+                }).catch(() => {})
+              );
+            }
           }
         }
 
@@ -184,7 +200,10 @@ export async function action({ request }: Route.ActionArgs) {
           }
         }
 
-        // Save all blocks to DB
+        // Wait for image enrichment to finish
+        await Promise.allSettled(imagePromises);
+
+        // Save all blocks to DB (with enriched images)
         if (allBlocks.length > 0) {
           await db.landing.update({
             where: { id: landingId },
