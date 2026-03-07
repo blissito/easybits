@@ -15,6 +15,7 @@ const MCP_COMMAND = "claude mcp add easybits -- npx -y @easybits.cloud/mcp";
 
 export default function McpPage() {
   const [copied, setCopied] = useState(false);
+  const [showDesktop, setShowDesktop] = useState(false);
 
   function handleCopy() {
     navigator.clipboard.writeText(MCP_COMMAND);
@@ -74,6 +75,39 @@ export default function McpPage() {
                   {MCP_COMMAND}
                 </code>
               </div>
+            </div>
+
+            {/* Claude Desktop accordion */}
+            <div className="border-2 border-black rounded-xl overflow-hidden mb-6">
+              <button
+                onClick={() => setShowDesktop(!showDesktop)}
+                className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+              >
+                <span className="text-sm font-bold">Claude Desktop (JSON)</span>
+                <svg
+                  className={`w-4 h-4 transition-transform ${showDesktop ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showDesktop && (
+                <div className="bg-gray-950 px-4 py-4">
+                  <p className="text-xs text-gray-400 mb-2 font-mono">
+                    claude_desktop_config.json
+                  </p>
+                  <pre className="text-sm text-green-400 font-mono whitespace-pre overflow-x-auto">{`{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"]
+    }
+  }
+}`}</pre>
+                </div>
+              )}
             </div>
 
             {/* Links */}
