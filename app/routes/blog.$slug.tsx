@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "mcp-apps-ui-easybits-laboratorio":
+    "app/content/blog/2026-03-07-mcp-apps-ui-easybits-laboratorio.mdx",
   "conecta-agente-ia-easybits-mcp":
     "app/content/blog/2026-02-25-conecta-agente-ia-easybits-mcp.mdx",
   "gestiona-archivos-desde-claude-easybits":
@@ -30,6 +32,11 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "mcp-apps-ui-easybits-laboratorio",
+    featuredImage:
+      "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format",
+  },
   {
     slug: "conecta-agente-ia-easybits-mcp",
     featuredImage:
