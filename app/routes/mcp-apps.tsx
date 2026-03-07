@@ -36,7 +36,22 @@ function makeDemoHtml(template: string, demoScript: string): string {
   const idx = template.indexOf("<script");
   if (idx === -1) return template;
   const beforeScript = template.substring(0, idx);
-  return beforeScript + "<script>" + demoScript + "<\/script>\n</body>\n</html>";
+  let html = beforeScript + "<script>" + demoScript + "<\/script>\n</body>\n</html>";
+  // Fix unicode escapes → real emojis
+  html = html.replace(/\\u\{2B06\}/g, '⬆').replace(/\\u\{2705\}/g, '✅')
+    .replace(/\\u\{1F4C4\}/g, '📄').replace(/\\u\{1F5BC\}/g, '🖼')
+    .replace(/\\u\{1F3AC\}/g, '🎬').replace(/\\u\{1F3B5\}/g, '🎵')
+    .replace(/\\u\{1F4D1\}/g, '📑').replace(/\\u\{1F4E6\}/g, '📦')
+    .replace(/\\u\{1F4DD\}/g, '📝').replace(/\\u2B07/g, '⬇');
+  // Center container
+  html = html.replace('.container { max-width: 480px;', '.container { max-width: 480px; margin: 0 auto;');
+  html = html.replace('.container { max-width: 640px;', '.container { max-width: 640px; margin: 0 auto;');
+  // Translate static HTML text to Spanish
+  html = html.replace('Drop a file', 'Suelta un archivo');
+  html = html.replace('or click to browse', 'o haz clic para buscar');
+  html = html.replace('Loading file preview...', 'Cargando vista previa...');
+  html = html.replace('Loading files...', 'Cargando archivos...');
+  return html;
 }
 
 const FILE_PREVIEW_DEMO = `
@@ -69,7 +84,7 @@ function render(file) {
     '<div class="card">' + previewHtml +
     '<div class="info"><div class="name">' + (safeName || "Untitled") + ' ' + accessBadge + '</div>' +
     '<div class="meta"><span>' + escapeHtml(ct) + '</span><span>' + formatSize(file.size) + '</span><span>' + formatDate(file.createdAt) + '</span></div></div>' +
-    (url ? '<div class="actions"><a class="btn" href="' + safeUrl + '" target="_blank" rel="noopener">\\u2B07 Download</a></div>' : "") +
+    (url ? '<div class="actions"><a class="btn" href="' + safeUrl + '" target="_blank" rel="noopener">\\u2B07 Descargar</a></div>' : "") +
     '</div>';
 }
 render({
@@ -108,7 +123,7 @@ function escapeHtml(s) {
 function render(data) {
   const items = data.items || [];
   const root = document.getElementById("root");
-  let html = '<div class="header"><h2>Files</h2><span class="count">' + items.length + ' files</span></div>';
+  let html = '<div class="header"><h2>Archivos</h2><span class="count">' + items.length + ' archivos</span></div>';
   html += '<div class="file-list">';
   for (const f of items) {
     const badge = f.access ? '<span class="badge ' + (f.access === "public" ? "badge-public" : "badge-private") + '">' + escapeHtml(f.access) + '</span>' : "";
@@ -149,7 +164,7 @@ function showProgress(name, size) {
       '<div class="file-name">' + escapeHtml(name) + '</div>' +
       '<div class="file-meta">' + formatSize(size) + '</div>' +
       '<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>' +
-      '<div class="progress-text" id="progressText">Uploading...</div>' +
+      '<div class="progress-text" id="progressText">Subiendo...</div>' +
     '</div>';
 }
 
@@ -158,8 +173,8 @@ function showSuccess(name, size) {
     '<div class="success">' +
       '<div class="success-icon">\\u2705</div>' +
       '<div class="success-name">' + escapeHtml(name) + '</div>' +
-      '<div class="success-meta">' + formatSize(size) + ' uploaded</div>' +
-      '<button class="btn-upload-more" onclick="location.reload()">Upload another</button>' +
+      '<div class="success-meta">' + formatSize(size) + ' subido</div>' +
+      '<button class="btn-upload-more" onclick="location.reload()">Subir otro</button>' +
     '</div>';
 }
 

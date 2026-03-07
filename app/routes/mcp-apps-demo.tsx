@@ -1,4 +1,4 @@
-import { Link, data } from "react-router";
+import { Link, data, isRouteErrorResponse, useRouteError } from "react-router";
 import type { Route } from "./+types/mcp-apps-demo";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Footer } from "~/components/common/Footer";
@@ -29,7 +29,22 @@ function makeDemoHtml(template: string, demoScript: string): string {
   const idx = template.indexOf("<script");
   if (idx === -1) return template;
   const beforeScript = template.substring(0, idx);
-  return beforeScript + "<script>" + demoScript + "<\/script>\n</body>\n</html>";
+  let html = beforeScript + "<script>" + demoScript + "<\/script>\n</body>\n</html>";
+  // Fix unicode escapes → real emojis
+  html = html.replace(/\\u\{2B06\}/g, '⬆').replace(/\\u\{2705\}/g, '✅')
+    .replace(/\\u\{1F4C4\}/g, '📄').replace(/\\u\{1F5BC\}/g, '🖼')
+    .replace(/\\u\{1F3AC\}/g, '🎬').replace(/\\u\{1F3B5\}/g, '🎵')
+    .replace(/\\u\{1F4D1\}/g, '📑').replace(/\\u\{1F4E6\}/g, '📦')
+    .replace(/\\u\{1F4DD\}/g, '📝').replace(/\\u2B07/g, '⬇');
+  // Center container
+  html = html.replace('.container { max-width: 480px;', '.container { max-width: 480px; margin: 0 auto;');
+  html = html.replace('.container { max-width: 640px;', '.container { max-width: 640px; margin: 0 auto;');
+  // Translate static HTML text to Spanish
+  html = html.replace('Drop a file', 'Suelta un archivo');
+  html = html.replace('or click to browse', 'o haz clic para buscar');
+  html = html.replace('Loading file preview...', 'Cargando vista previa...');
+  html = html.replace('Loading files...', 'Cargando archivos...');
+  return html;
 }
 
 const FILE_PREVIEW_DEMO = `
@@ -62,7 +77,7 @@ function render(file) {
     '<div class="card">' + previewHtml +
     '<div class="info"><div class="name">' + (safeName || "Untitled") + ' ' + accessBadge + '</div>' +
     '<div class="meta"><span>' + escapeHtml(ct) + '</span><span>' + formatSize(file.size) + '</span><span>' + formatDate(file.createdAt) + '</span></div></div>' +
-    (url ? '<div class="actions"><a class="btn" href="' + safeUrl + '" target="_blank" rel="noopener">\\u2B07 Download</a></div>' : "") +
+    (url ? '<div class="actions"><a class="btn" href="' + safeUrl + '" target="_blank" rel="noopener">\\u2B07 Descargar</a></div>' : "") +
     '</div>';
 }
 render({
@@ -101,7 +116,7 @@ function escapeHtml(s) {
 function render(data) {
   const items = data.items || [];
   const root = document.getElementById("root");
-  let html = '<div class="header"><h2>Files</h2><span class="count">' + items.length + ' files</span></div>';
+  let html = '<div class="header"><h2>Archivos</h2><span class="count">' + items.length + ' archivos</span></div>';
   html += '<div class="file-list">';
   for (const f of items) {
     const badge = f.access ? '<span class="badge ' + (f.access === "public" ? "badge-public" : "badge-private") + '">' + escapeHtml(f.access) + '</span>' : "";
@@ -142,7 +157,7 @@ function showProgress(name, size) {
       '<div class="file-name">' + escapeHtml(name) + '</div>' +
       '<div class="file-meta">' + formatSize(size) + '</div>' +
       '<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>' +
-      '<div class="progress-text" id="progressText">Uploading...</div>' +
+      '<div class="progress-text" id="progressText">Subiendo...</div>' +
     '</div>';
 }
 
@@ -151,8 +166,8 @@ function showSuccess(name, size) {
     '<div class="success">' +
       '<div class="success-icon">\\u2705</div>' +
       '<div class="success-name">' + escapeHtml(name) + '</div>' +
-      '<div class="success-meta">' + formatSize(size) + ' uploaded</div>' +
-      '<button class="btn-upload-more" onclick="location.reload()">Upload another</button>' +
+      '<div class="success-meta">' + formatSize(size) + ' subido</div>' +
+      '<button class="btn-upload-more" onclick="location.reload()">Subir otro</button>' +
     '</div>';
 }
 
@@ -350,6 +365,39 @@ export default function McpAppsDemo({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
+      <Footer />
+    </section>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const is404 = isRouteErrorResponse(error) && error.status === 404;
+
+  return (
+    <section className="overflow-hidden w-full min-h-screen flex flex-col bg-white">
+      <nav className="border-b-2 border-black px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <Link to="/inicio" className="flex items-center gap-2">
+            <img src="/icons/easybits-logo.svg" alt="EasyBits" className="w-8 h-8" />
+            <span className="font-bold text-xl">EasyBits</span>
+          </Link>
+        </div>
+      </nav>
+      <div className="flex-1 flex items-center justify-center px-6">
+        <div className="text-center">
+          <h1 className="text-6xl font-bold mb-4">{is404 ? "404" : "Error"}</h1>
+          <p className="text-lg text-gray-600 mb-8">
+            {is404 ? "Esta app no existe." : "Algo salio mal."}
+          </p>
+          <Link
+            to="/mcp/apps"
+            className="inline-block bg-black text-white px-6 py-3 rounded-xl text-sm font-bold border-2 border-black hover:translate-y-[-2px] transition-transform"
+          >
+            Ver todas las Apps
+          </Link>
+        </div>
+      </div>
       <Footer />
     </section>
   );
