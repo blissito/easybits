@@ -5,7 +5,9 @@ import { requireScope } from "../apiAuth";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
+import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
 import type { LandingSection } from "~/lib/landingCatalog";
+import type { LandingBlock } from "~/lib/landing2/blockTypes";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
 
@@ -22,11 +24,13 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   if (!landing || landing.ownerId !== ctx.user.id)
     throwJson("Landing not found", 404);
 
-  const sections = (landing.sections as unknown as LandingSection[]) || [];
+  const sections = (landing.sections as unknown as any[]) || [];
   if (sections.length === 0) throwJson("No sections to deploy", 400);
 
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
-  const html = buildLandingHtml(sections, landing.theme, customColors);
+  const html = landing.version === 2
+    ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
+    : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);
   const htmlBuffer = Buffer.from(html, "utf-8");
 
   // Create or reuse website

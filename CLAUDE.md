@@ -95,6 +95,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
 - **Planned**: RAG as a Service — allow agents to index and query files via retrieval-augmented generation
+- **Planned**: Video Calls 1:1 + Recording — AWS Chime SDK, llamadas 1:1 entre usuarios, grabación automática que se sube como archivo a EasyBits. Costo estimado ~$0.41 USD/hr (audio+video) + recording pipeline. Ya existe POC en el proyecto.
 - **Planned**: YouTube-style "Video Elements" section — A dark card/section with a heading ("Elementos del vídeo"), a subtitle description, and a list of action rows. Each row has: a left icon (inside a rounded dark container), a title + subtitle stacked vertically, and a right-side action area (either a pill/chip showing a selected value + "Editar" button, or a ghost "Añadir" button if empty). Rows are separated by subtle borders, rounded corners on the card. Inspired by YouTube Studio's "Elementos del vídeo" panel (related video, subtitles, end screens, cards). Reusable pattern for any settings section with optional linked items.
 
 ## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos

@@ -69,6 +69,12 @@ export default [
         route("new", "routes/dash/landings/new.tsx"),
         route(":id", "routes/dash/landings/editor.tsx"),
       ]),
+      // Landings v2
+      ...prefix("landings2", [
+        index("routes/dash/landings2/list.tsx"),
+        route("new", "routes/dash/landings2/new.tsx"),
+        route(":id", "routes/dash/landings2/editor.tsx"),
+      ]),
       route("archivos", "routes/files.tsx"),
       route("chime-poc", "routes/dash/chime-poc.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
@@ -132,6 +138,8 @@ export default [
     route("presentations/:id/add-slide", "routes/api/v2/presentation-add-slide.ts"),
     route("landing-generate", "routes/api/v2/landing-generate.ts"),
     route("landing-refine-section", "routes/api/v2/landing-refine-section.ts"),
+    route("landing2-generate", "routes/api/v2/landing2-generate.ts"),
+    route("landing2-refine-block", "routes/api/v2/landing2-refine-block.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),
