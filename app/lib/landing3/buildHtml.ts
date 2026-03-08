@@ -25,12 +25,12 @@ export function buildPreviewHtml(sections: Section3[], theme?: string): string {
 ${css}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{font-family:system-ui,-apple-system,sans-serif}
+body{font-family:system-ui,-apple-system,sans-serif;background-color:var(--color-surface);color:var(--color-on-surface)}
 img{max-width:100%}
 [contenteditable="true"]{cursor:text}
 </style>
 </head>
-<body>
+<body class="bg-surface text-on-surface">
 ${body}
 <script>${getIframeScript()}</script>
 </body>
@@ -68,10 +68,10 @@ export function buildDeployHtml(sections: Section3[], theme?: string, customColo
 ${baseCss}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{font-family:system-ui,-apple-system,sans-serif}
+body{font-family:system-ui,-apple-system,sans-serif;background-color:var(--color-surface);color:var(--color-on-surface)}
 </style>
 </head>
-<body>
+<body class="bg-surface text-on-surface">
 ${body}
 </body>
 </html>`;

@@ -20,8 +20,9 @@ RULES:
 
 COLOR SYSTEM — CRITICAL:
 - Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted, bg-secondary, text-secondary, bg-accent, text-accent
-- NEVER use hardcoded Tailwind color classes like bg-indigo-600, text-blue-500, etc.
-- Only use gray-* for subtle borders/dividers. All main colors MUST use semantic tokens.
+- NEVER use hardcoded colors: NO bg-gray-*, bg-black, bg-white, text-gray-*, text-black, text-white, etc.
+- The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
+- CONTRAST RULE: on bg-primary/bg-primary-dark → text-on-primary. On bg-surface/bg-surface-alt → text-on-surface/text-on-surface-muted. Never mismatch.
 
 TAILWIND v3 NOTES:
 - Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)

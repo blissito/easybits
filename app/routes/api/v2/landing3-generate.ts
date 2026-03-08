@@ -25,10 +25,13 @@ IMAGES — CRITICAL:
 - NEVER include a src attribute — the system auto-replaces data-image-query with a real image URL
 - For avatar-like elements, use colored divs with initials instead of img tags (e.g. <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">JD</div>)
 
-COLOR SYSTEM — CRITICAL:
+COLOR SYSTEM — CRITICAL (READ CAREFULLY):
 - Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted, bg-secondary, text-secondary, bg-accent, text-accent
-- NEVER use hardcoded Tailwind color classes like bg-indigo-600, text-blue-500, bg-purple-700, etc.
-- Only use gray-* for subtle borders/dividers. All main colors MUST use semantic tokens.
+- NEVER use hardcoded Tailwind color classes: NO bg-gray-*, bg-black, bg-white, bg-indigo-*, bg-blue-*, bg-purple-*, text-gray-*, text-black, text-white, etc.
+- The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
+- ALL backgrounds MUST use: bg-primary, bg-primary-dark, bg-surface, bg-surface-alt
+- ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-primary, text-accent
+- CONTRAST RULE: on bg-primary or bg-primary-dark → use text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface or text-on-surface-muted. NEVER put text-on-surface on bg-primary or vice versa.
 - For gradients: from-primary to-primary-dark, from-surface to-surface-alt
 - For hover: hover:bg-primary-dark, hover:bg-primary-light
 
