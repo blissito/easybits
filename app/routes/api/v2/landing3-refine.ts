@@ -61,7 +61,10 @@ export async function action({ request }: Route.ActionArgs) {
     ? createAnthropic({ apiKey: userKey })
     : createAnthropic();
 
-  const model = anthropic("claude-sonnet-4-6");
+  // Use Haiku for speed — refine/variant is a focused HTML edit, not complex generation
+  const model = referenceImage
+    ? anthropic("claude-sonnet-4-6") // Vision needs Sonnet for quality
+    : anthropic("claude-haiku-4-5-20251001");
 
   // Build content (supports multimodal with reference image)
   const content: any[] = [];

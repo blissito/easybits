@@ -175,20 +175,25 @@ export function FloatingToolbar({
           </button>
         </form>
 
-        {/* Divider */}
+        {/* Variante button */}
         <div className="w-px h-5 bg-gray-700" />
-
-        {/* Variante button — always visible */}
         <button
-          onClick={() => onRefine("Genera una variante completamente diferente de esta sección. Mantén el mismo contenido/información pero cambia radicalmente el layout, la estructura visual, y el estilo. Sorpréndeme con un diseño creativo e inesperado.", refImage || undefined)}
+          onClick={() => {
+            const tag = selection.tagName?.toLowerCase();
+            const text = selection.text?.substring(0, 80);
+            const prompt = selection.isSectionRoot
+              ? "Genera una variante completamente diferente de esta sección. Mantén el mismo contenido/información pero cambia radicalmente el layout, la estructura visual, y el estilo. Sorpréndeme con un diseño creativo e inesperado."
+              : `Modifica SOLO el elemento <${tag}> que contiene "${text}". Genera una variante visual diferente de ESE elemento (diferente estilo, layout, tipografía). NO modifiques ningún otro elemento de la sección.`;
+            onRefine(prompt, refImage || undefined);
+          }}
           disabled={isRefining}
           className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-30 transition-colors whitespace-nowrap shrink-0"
-          title="Generar variante diferente"
+          title="Generar variante"
         >
           ✦ Variante
         </button>
 
-        {/* Section-level actions */}
+        {/* Section-level actions (move/delete) */}
         {selection.isSectionRoot && (
           <>
             <div className="w-px h-5 bg-gray-700" />

@@ -16,7 +16,7 @@ import { SectionList } from "~/components/landings3/SectionList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildCustomThemeCss } from "~/lib/landing3/themes";
+import { buildCustomThemeCss, type CustomColors } from "~/lib/landing3/themes";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -81,12 +81,14 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "update-theme") {
     const newTheme = String(formData.get("theme") || "default");
-    const customColorVal = formData.get("customColor") ? String(formData.get("customColor")) : undefined;
+    const customColorsRaw = formData.get("customColors") ? String(formData.get("customColors")) : undefined;
     await withRetry(async () => {
       const fresh = await db.landing.findUnique({ where: { id: params.id } });
       const existing = (fresh?.metadata as Record<string, unknown>) || {};
       const meta: Record<string, unknown> = { ...existing, theme: newTheme };
-      if (customColorVal) meta.customColor = customColorVal;
+      if (customColorsRaw) {
+        try { meta.customColors = JSON.parse(customColorsRaw); } catch { /* ignore */ }
+      }
       return db.landing.update({
         where: { id: params.id },
         data: { metadata: meta as any },
@@ -96,15 +98,20 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   }
 
   if (intent === "deploy") {
-    const { deployLanding } = await import(
-      "~/.server/core/landingOperations"
-    );
-    const { authenticateRequest, requireAuth } = await import(
-      "~/.server/apiAuth"
-    );
-    const ctx = requireAuth(await authenticateRequest(request));
-    const result = await deployLanding(ctx, params.id);
-    return result;
+    try {
+      const { deployLanding } = await import(
+        "~/.server/core/landingOperations"
+      );
+      const { authenticateRequest, requireAuth } = await import(
+        "~/.server/apiAuth"
+      );
+      const ctx = requireAuth(await authenticateRequest(request));
+      const result = await deployLanding(ctx, params.id);
+      return result;
+    } catch (err: any) {
+      console.error("Deploy error:", err);
+      return { error: err?.message || "Error al publicar" };
+    }
   }
 
   if (intent === "unpublish") {
@@ -164,9 +171,14 @@ export default function Landing3Editor() {
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [customColor, setCustomColor] = useState<string>(() => {
+  const [customColors, setCustomColors] = useState<CustomColors>(() => {
     const meta = landing.metadata as Record<string, unknown> | null;
-    return (meta?.customColor as string) || "#6366f1";
+    const saved = meta?.customColors as CustomColors | undefined;
+    // Migrate from old single customColor
+    if (!saved && meta?.customColor) {
+      return { primary: meta.customColor as string };
+    }
+    return saved || { primary: "#6366f1" };
   });
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -207,12 +219,12 @@ export default function Landing3Editor() {
     if (theme === "custom") {
       canvasRef.current?.postMessage({
         action: "set-custom-css",
-        css: buildCustomThemeCss(customColor),
+        css: buildCustomThemeCss(customColors),
       });
     } else {
       canvasRef.current?.postMessage({ action: "set-custom-css", css: "" });
     }
-  }, [theme, customColor]);
+  }, [theme, customColors]);
 
   // Auto-generate on mount
   useEffect(() => {
@@ -409,6 +421,7 @@ export default function Landing3Editor() {
       const section = sections.find((s) => s.id === selection.sectionId);
       if (!section) return;
       const sectionId = selection.sectionId;
+
       const res = await fetch("/api/v2/landing3-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -492,7 +505,7 @@ export default function Landing3Editor() {
     if (!addPrompt.trim() || isAddingSection) return;
     setIsAddingSection(true);
     const newId = Math.random().toString(36).slice(2, 10);
-    const label = addPrompt.slice(0, 30);
+    const label = "Nueva sección";
     try {
       const res = await fetch("/api/v2/landing3-refine", {
         method: "POST",
@@ -563,18 +576,24 @@ export default function Landing3Editor() {
     );
   }
 
-  function handleCustomColorChange(color: string) {
-    setCustomColor(color);
+  const colorSaveTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  function handleCustomColorChange(partial: Partial<CustomColors>) {
+    const merged = { ...customColors, ...partial };
+    setCustomColors(merged);
     setTheme("custom");
-    // Inject custom CSS into iframe
     canvasRef.current?.postMessage({
       action: "set-custom-css",
-      css: buildCustomThemeCss(color),
+      css: buildCustomThemeCss(merged),
     });
-    saveFetcher.submit(
-      { intent: "update-theme", theme: "custom", customColor: color },
-      { method: "post" }
-    );
+    // Debounce DB save — color pickers fire rapidly
+    if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
+    colorSaveTimer.current = setTimeout(() => {
+      saveFetcher.submit(
+        { intent: "update-theme", theme: "custom", customColors: JSON.stringify(merged) },
+        { method: "post" }
+      );
+    }, 400);
   }
 
   function handleUpdateAttribute(sectionId: string, elementPath: string, attr: string, value: string) {
@@ -635,6 +654,8 @@ export default function Landing3Editor() {
           <BrutalButton
             size="chip"
             onClick={() => {
+              // Cancel any pending debounced color save to avoid write conflicts
+              if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
               setActiveIntent("deploy");
               deployFetcher.submit({ intent: "deploy" }, { method: "post" });
             }}
@@ -710,7 +731,7 @@ export default function Landing3Editor() {
             sections={sections}
             selectedSectionId={selection?.sectionId ?? null}
             theme={theme}
-            customColor={customColor}
+            customColors={customColors}
             onThemeChange={handleThemeChange}
             onCustomColorChange={handleCustomColorChange}
             onSelect={(id) => {
@@ -720,6 +741,18 @@ export default function Landing3Editor() {
               handleOpenCode(id);
             }}
             onReorder={handleReorder}
+            onDelete={(id) => {
+              const updated = sections
+                .filter((s) => s.id !== id)
+                .map((s, i) => ({ ...s, order: i }));
+              handleSectionsChange(updated);
+            }}
+            onRename={(id, label) => {
+              const updated = sections.map((s) =>
+                s.id === id ? { ...s, label } : s
+              );
+              handleSectionsChange(updated);
+            }}
             onAdd={() => setShowAddPrompt(true)}
           />
         )}
@@ -933,15 +966,16 @@ export default function Landing3Editor() {
               }}
             />
             <div className="flex gap-2 mt-4 justify-end">
-              <button
+              <BrutalButton
+                size="chip"
+                mode="ghost"
                 onClick={() => {
                   setShowAddPrompt(false);
                   setAddPrompt("");
                 }}
-                className="px-4 py-2 text-sm font-bold rounded-lg hover:bg-gray-100 transition-colors"
               >
                 Cancelar
-              </button>
+              </BrutalButton>
               <BrutalButton
                 size="chip"
                 onClick={handleAddSection}
