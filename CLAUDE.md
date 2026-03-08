@@ -72,13 +72,29 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Editor: `app/routes/dash/presentations/editor.tsx` (textarea HTML/JSON, drag&drop, iframe preview)
 - Types & HTML builder: `app/lib/buildRevealHtml.ts` (Slide, SceneObject3D, buildRevealHtml)
 - Operations: `app/.server/core/presentationOperations.ts` (CRUD + deploy/unpublish)
-- Images: `app/.server/images/pexels.ts` (Pexels stock photos)
+- Images: `app/.server/images/pexels.ts` (Pexels stock photos, returns `large` size)
 - AI: Haiku 4.5 (outline/3D/variants) + Sonnet 4.6 (HTML slides)
 - MCP: 7 tools (list/get/create/update/delete/deploy/unpublish)
 - SDK: `@easybits.cloud/sdk` v0.4.0 — presentation methods
 - 3D: Three.js v0.170, 5 geometries, 3 animations (float/rotate/none)
 - Themes: 11 reveal.js standard themes
 - Deploy: static HTML to `slug.easybits.cloud`
+
+## Landings v2
+- Editor: `app/routes/dash/landings2/editor.tsx` — block-based, inline editing
+- Block components: `app/components/landings2/blocks/` — 18 block types with visual variants
+- Generation: `app/routes/api/v2/landing2-generate.ts` — **streaming SSE** (streamText + NDJSON parsing)
+- AI: Haiku 4.5 generates blocks, each streamed to editor as it completes
+- Images: hero/imageText blocks auto-enriched with Pexels stock photos (non-blocking, via `block-update` SSE event)
+- Block variants: features (cards/cards-icon/bordered/minimal), stats (big-numbers/cards/inline), testimonials (cards/quote-large), FAQ (accordion/two-col), pricing (cards/table), team (grid/cards)
+- `BlockEditor` supports `onChange?: undefined` for read-only mode during streaming
+- CSS animation `animate-fade-in` + auto-scroll to latest block during generation
+
+## Cert Management
+- Audit + cleanup: `app/.server/core/certOperations.ts` — compares Fly certs vs DB (websites, customDomains, users)
+- Cron: `GET /api/cron/purge-certs` (same CRON_SECRET auth as purge-files)
+- Admin UI: `/dash/admin/certs` — view valid/orphaned/protected, bulk delete orphans
+- Protected hostnames: easybits.cloud, www.easybits.cloud, easybits.fly.dev (never deleted)
 
 ## Presentations Roadmap (ordered by priority)
 1. **P0 — Editor inline (TipTap)**: Replace textarea with rich text editor. TipTap + ProseMirror, output HTML compatible with reveal.js. New `app/components/presentations/SlideEditor.tsx`
@@ -96,23 +112,39 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
 - **Planned**: RAG as a Service — allow agents to index and query files via retrieval-augmented generation
 - **Planned**: Video Calls 1:1 + Recording — AWS Chime SDK, llamadas 1:1 entre usuarios, grabación automática que se sube como archivo a EasyBits. Costo estimado ~$0.41 USD/hr (audio+video) + recording pipeline. Ya existe POC en el proyecto.
-- **Planned**: YouTube-style "Video Elements" section — A dark card/section with a heading ("Elementos del vídeo"), a subtitle description, and a list of action rows. Each row has: a left icon (inside a rounded dark container), a title + subtitle stacked vertically, and a right-side action area (either a pill/chip showing a selected value + "Editar" button, or a ghost "Añadir" button if empty). Rows are separated by subtle borders, rounded corners on the card. Inspired by YouTube Studio's "Elementos del vídeo" panel (related video, subtitles, end screens, cards). Reusable pattern for any settings section with optional linked items.
+- **Planned**: YouTube-style "Video Elements" section — reusable dark card/section with action rows, inspired by YouTube Studio
+- **URGENTE — Streaming para presentaciones**: Igual que landings v2, convertir generación de slides a streaming SSE para que el usuario vea slides aparecer una a una en vez de esperar todas
+- **Configurar cron purge-certs en Fly/GitHub Actions**: El endpoint existe pero no hay cron schedule aún. Añadir junto al cron de purge-files
+- **Landings v2 — gallery/timeline/logoCloud variants**: Estos bloques tienen variantes definidas en BLOCK_VARIANTS pero aún no implementan estilos distintos (como features antes del fix)
+- **Landings v2 — mejorar prompt de generación**: Pedir al modelo que use más variantes diversas y que no repita patrones
+- **Imagen de referencia para bloques**: El usuario sube/pega una imagen y la AI genera el bloque replicando ese diseño (Claude vision). Aplica a landings y presentaciones
 
 ## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos
 **Estrategia**: Hacer que cada feature existente funcione clase S antes de añadir cosas nuevas. Búsqueda semántica y RAG se posponen — son features de escala, no de early adopters.
 
-**Prioridad 1 — Previews de archivos inline (table stakes, HACER PRIMERO)**:
-- Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
-- Sin esto la plataforma se siente como un S3 con UI. Nadie confía en un file storage donde no puede ver sus archivos
+**DONE (Mar 7)**:
+- Cert management system (audit, cleanup, admin UI, cron endpoint)
+- Landings v2 streaming generation (SSE, block-by-block con animación + auto-scroll)
+- Pexels stock photos automáticas en hero/imageText blocks
+- Variantes visuales para 6 tipos de bloque (features, stats, testimonials, FAQ, pricing, team)
 
-**Prioridad 2 — Presentaciones clase S (moat del producto)**:
-- TipTap editor inline (P0) — reemplazar textarea, es lo que hace que la gente quiera usar esto vs Google Slides
+**Prioridad 1 — Landings v2 clase S (SIGUIENTE)**:
+- Variantes faltantes: gallery, timeline, logoCloud (ya tienen opciones en UI pero no cambian visualmente)
+- Streaming para presentaciones (mismo patrón SSE que landings v2)
+- Imagen de referencia: usuario sube imagen → AI replica el diseño como bloque
+
+**Prioridad 2 — Previews de archivos inline (table stakes)**:
+- Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
+- Sin esto la plataforma se siente como un S3 con UI
+
+**Prioridad 3 — Presentaciones clase S (moat del producto)**:
+- TipTap editor inline (P0) — reemplazar textarea
 - Slide layouts pro (P1) — 8 layouts que eleven la calidad visual
 
-**Prioridad 3 — Experiencia de plataforma**:
-- Logs de actividad — qué hizo mi agente, cuándo, qué archivos tocó. Crítico para auditoría/debugging de agentes
+**Prioridad 4 — Experiencia de plataforma**:
+- Logs de actividad — qué hizo mi agente, cuándo, qué archivos tocó
 - Dashboard con métricas reales — storage usado, requests/día, archivos por tipo
 
-**Prioridad 4 — DX/Onboarding para agentes**:
+**Prioridad 5 — DX/Onboarding para agentes**:
 - Quickstart claro: conectar agente y usar EasyBits en 2 minutos
 - Errores útiles en SDK/API — mensajes que digan qué hacer, no solo qué falló
