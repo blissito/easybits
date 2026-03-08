@@ -29,7 +29,8 @@ const file = await eb.files.upload({ name: "photo.jpg", contentType: "image/jpeg
 - **File management** — upload, transform, optimize, soft-delete with trash retention
 - **Websites** — deploy static sites to `slug.easybits.cloud` with custom domains
 - **Presentations** — AI-generated reveal.js slides with 3D scenes, deploy to subdomain
-- **Landing pages** — AI-generated block-based pages with streaming SSE, stock photos, visual variants
+- **Landing pages v2** — AI-generated block-based pages with streaming SSE, stock photos, visual variants
+- **Landing pages v3** — free-form HTML canvas editor, Sonnet generation, Haiku refine, semantic color themes, code editor
 - **Webhooks** — real-time event notifications with HMAC signatures
 - **IAM** — scoped API keys (READ, WRITE, DELETE, ADMIN), file-level sharing
 
