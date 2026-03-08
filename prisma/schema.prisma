@@ -450,6 +450,7 @@ model Landing {
   sections  Json     // LandingSection[]
   theme        String   @default("modern")
   customColors Json?    // { bg, accent, text } hex colors
+  metadata     Json?    // { theme, ... } extensible metadata
   version      Int      @default(1)
   status       String   @default("DRAFT") // DRAFT | PUBLISHED
   ownerId   String   @db.ObjectId

@@ -114,37 +114,64 @@ export const LANDING_THEMES: LandingTheme[] = [
   },
 ];
 
+export interface CustomColors {
+  primary: string;
+  secondary?: string;
+  accent?: string;
+  surface?: string;
+}
+
+function parseHex(hex: string) {
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+function toHex(r: number, g: number, b: number) {
+  return `#${[r, g, b].map((c) => Math.max(0, Math.min(255, c)).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function luminance(hex: string) {
+  const { r, g, b } = parseHex(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+function lighten(hex: string, amount = 40) {
+  const { r, g, b } = parseHex(hex);
+  return toHex(r + amount, g + amount, b + amount);
+}
+
+function darken(hex: string, amount = 40) {
+  const { r, g, b } = parseHex(hex);
+  return toHex(r - amount, g - amount, b - amount);
+}
+
 /**
- * Build a custom theme from a primary color hex.
- * Derives light/dark variants and picks complementary secondary/accent.
+ * Build a custom theme from user-chosen colors.
+ * Derives light/dark variants and on-* contrast colors automatically.
  */
-export function buildCustomTheme(primary: string): LandingTheme {
-  const r = parseInt(primary.slice(1, 3), 16);
-  const g = parseInt(primary.slice(3, 5), 16);
-  const b = parseInt(primary.slice(5, 7), 16);
+export function buildCustomTheme(colors: CustomColors): LandingTheme {
+  const { primary, secondary = "#f59e0b", accent = "#06b6d4", surface = "#ffffff" } = colors;
 
-  const lighter = (c: number) => Math.min(255, c + 40);
-  const darker = (c: number) => Math.max(0, c - 40);
-  const hex = (r: number, g: number, b: number) =>
-    `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-
-  // Luminance check for on-primary contrast
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  const onPrimary = lum > 0.5 ? "#111827" : "#ffffff";
+  const onPrimary = luminance(primary) > 0.5 ? "#111827" : "#ffffff";
+  const surfaceLum = luminance(surface);
+  const isDarkSurface = surfaceLum < 0.5;
 
   return {
     id: "custom",
     label: "Custom",
     colors: {
       primary,
-      "primary-light": hex(lighter(r), lighter(g), lighter(b)),
-      "primary-dark": hex(darker(r), darker(g), darker(b)),
-      secondary: "#f59e0b",
-      accent: "#06b6d4",
-      surface: "#ffffff",
-      "surface-alt": "#f9fafb",
-      "on-surface": "#111827",
-      "on-surface-muted": "#6b7280",
+      "primary-light": lighten(primary),
+      "primary-dark": darken(primary),
+      secondary,
+      accent,
+      surface,
+      "surface-alt": isDarkSurface ? lighten(surface, 20) : darken(surface, 5),
+      "on-surface": isDarkSurface ? "#f1f5f9" : "#111827",
+      "on-surface-muted": isDarkSurface ? "#94a3b8" : "#6b7280",
       "on-primary": onPrimary,
     },
   };
@@ -153,8 +180,8 @@ export function buildCustomTheme(primary: string): LandingTheme {
 /**
  * Build CSS for a custom theme (used in preview — injected as override for [data-theme="custom"]).
  */
-export function buildCustomThemeCss(primary: string): string {
-  const theme = buildCustomTheme(primary);
+export function buildCustomThemeCss(colors: CustomColors): string {
+  const theme = buildCustomTheme(colors);
   return `[data-theme="custom"] {\n${buildCssVars(theme.colors)}\n}`;
 }
 

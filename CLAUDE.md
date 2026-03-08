@@ -25,6 +25,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Tab layouts: NavLink-based tabs with brutalist styling (see developer/admin layouts)
 - Inline mutations: `useFetcher` with `intent` field in POST forms
 - API responses: use `data()` from `react-router` (NOT `json()` — deprecated)
+- AI generation: ALWAYS use `streamText` + SSE (never `generateText`) — users must see progress in real time
 
 ## Deploy
 - Auto-deploys on push to `main` via GitHub Actions → Fly.io

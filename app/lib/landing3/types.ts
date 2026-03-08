@@ -15,7 +15,8 @@ export interface IframeMessage {
     | "element-selected"
     | "text-edited"
     | "element-deselected"
-    | "ready";
+    | "ready"
+    | "section-html-updated";
   sectionId?: string;
   tagName?: string;
   rect?: { top: number; left: number; width: number; height: number };
@@ -24,4 +25,6 @@ export interface IframeMessage {
   openTag?: string;
   newText?: string;
   isSectionRoot?: boolean;
+  attrs?: Record<string, string>;
+  sectionHtml?: string;
 }
