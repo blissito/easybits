@@ -97,20 +97,22 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     return { ok: true };
   }
 
+  // Build auth context from session user (no API key needed for dashboard actions)
+  const ctx = { user, scopes: ["ADMIN" as const] };
+
   if (intent === "deploy") {
     try {
       const { deployLanding } = await import(
         "~/.server/core/landingOperations"
       );
-      const { authenticateRequest, requireAuth } = await import(
-        "~/.server/apiAuth"
-      );
-      const ctx = requireAuth(await authenticateRequest(request));
-      const result = await deployLanding(ctx, params.id);
+      const result = await deployLanding(ctx as any, params.id);
       return result;
     } catch (err: any) {
       console.error("Deploy error:", err);
-      return { error: err?.message || "Error al publicar" };
+      const msg = err instanceof Response
+        ? (await err.json().catch(() => ({}))).error || "Error al publicar"
+        : err?.message || "Error al publicar";
+      return { error: msg };
     }
   }
 
@@ -118,11 +120,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     const { unpublishLanding } = await import(
       "~/.server/core/landingOperations"
     );
-    const { authenticateRequest, requireAuth } = await import(
-      "~/.server/apiAuth"
-    );
-    const ctx = requireAuth(await authenticateRequest(request));
-    await unpublishLanding(ctx, params.id);
+    await unpublishLanding(ctx as any, params.id);
     return { unpublished: true };
   }
 
@@ -131,11 +129,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
       const { unpublishLanding } = await import(
         "~/.server/core/landingOperations"
       );
-      const { authenticateRequest, requireAuth } = await import(
-        "~/.server/apiAuth"
-      );
-      const ctx = requireAuth(await authenticateRequest(request));
-      await unpublishLanding(ctx, params.id);
+      await unpublishLanding(ctx as any, params.id);
     }
     await db.landing.delete({ where: { id: params.id } });
     return { redirect: "/dash/landings3" };
