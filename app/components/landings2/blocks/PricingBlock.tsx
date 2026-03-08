@@ -223,7 +223,7 @@ export function PricingBlock({
                 </tr>
                 {(() => {
                   const allFeatures = plans.reduce<string[]>((acc, p) => {
-                    const feats = (p.features || "").split("\n").filter(Boolean);
+                    const feats = (Array.isArray(p.features) ? p.features : String(p.features || "").split("\n")).filter(Boolean);
                     feats.forEach((f) => { if (!acc.includes(f)) acc.push(f); });
                     return acc;
                   }, []);
@@ -236,7 +236,7 @@ export function PricingBlock({
                         {feat}
                       </td>
                       {plans.map((plan, pi) => {
-                        const planFeats = (plan.features || "").split("\n").filter(Boolean);
+                        const planFeats = (Array.isArray(plan.features) ? plan.features : String(plan.features || "").split("\n")).filter(Boolean);
                         return (
                           <td
                             key={pi}
