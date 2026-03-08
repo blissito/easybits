@@ -115,5 +115,13 @@ export async function enrichImages(html: string): Promise<string> {
   });
 
   await Promise.allSettled(promises);
+
+  // Catch any remaining <img> tags without src (AI didn't follow instructions)
+  result = result.replace(/<img\s(?![^>]*\bsrc=)([^>]*?)>/gi, (_match, attrs) => {
+    const altMatch = attrs.match(/alt="([^"]*?)"/);
+    const query = altMatch?.[1] || "professional image";
+    return `<img src="https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(query.slice(0, 30))}" ${attrs}>`;
+  });
+
   return result;
 }
