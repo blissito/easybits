@@ -30,6 +30,17 @@ COLOR SYSTEM — CRITICAL:
 - For gradients use semantic colors: from-primary to-primary-dark, from-surface to-surface-alt, etc.
 - For hover states: hover:bg-primary-dark, hover:bg-primary-light, etc.
 
+HERO SECTION — MUST be impressive:
+- Use a bento-grid or asymmetric layout: large headline block on the left, smaller stat/metric cards on the right
+- Include real-looking social proof: "2,847+ users", avatar stack, star ratings, trust badges
+- Use a bold, oversized headline (text-5xl/6xl/7xl font-black) with tight line height (leading-none or leading-tight)
+- Add a subtitle with a tag/breadcrumb above the headline (e.g. "NO-CODE · DISEÑO · FUTURO")
+- Include 2 CTAs: one primary (bg-primary, large, with arrow →) and one secondary (outlined/ghost)
+- Add a real image with data-image-query relevant to the product/service
+- Use overlapping elements, rounded-2xl cards, subtle shadows, and depth via layering
+- The hero should feel like a premium SaaS dashboard, NOT a generic centered headline
+- Min height: min-h-[80vh] or min-h-screen with good vertical padding
+
 TAILWIND v3 NOTES:
 - Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)
 - Borders: border + border-gray-200 for visible borders`;
