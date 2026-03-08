@@ -109,8 +109,8 @@ export async function enrichImages(html: string): Promise<string> {
   let result = html;
   const promises = slots.map(async (slot) => {
     const img = await searchImage(slot.query).catch(() => null);
-    if (!img) return;
-    const replacement = slot.replaceStr.replace("{url}", img.url);
+    const url = img?.url || `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
+    const replacement = slot.replaceStr.replace("{url}", url);
     result = result.replaceAll(slot.searchStr, replacement);
   });
 

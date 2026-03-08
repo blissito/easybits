@@ -197,8 +197,9 @@ export async function action({ request }: Route.ActionArgs) {
                 (async () => {
                   const results = await Promise.allSettled(
                     slotsSnapshot.map(async (slot) => {
-                      const img = await searchImage(slot.query);
-                      return img ? { slot, url: img.url } : null;
+                      const img = await searchImage(slot.query).catch(() => null);
+                      const url = img?.url || `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
+                      return { slot, url };
                     })
                   );
                   let html = sectionRef.html;
