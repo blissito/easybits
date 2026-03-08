@@ -78,6 +78,19 @@ export const ITEMS = {
       index: 3.5,
     },
     {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M7 8h10" />
+          <path d="M7 12h6" />
+          <path d="M7 16h8" />
+        </svg>
+      ),
+      path: "/dash/landings3",
+      title: "Landings v3",
+      index: 3.4,
+    },
+    {
       icon: <img className="scale" src="/images/storage.svg" />,
       path: "/dash/archivos",
       title: "Archivos",

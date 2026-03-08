@@ -6,8 +6,10 @@ import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
+import { buildDeployHtml } from "~/lib/landing3/buildHtml";
 import type { LandingSection } from "~/lib/landingCatalog";
 import type { LandingBlock } from "~/lib/landing2/blockTypes";
+import type { Section3 } from "~/lib/landing3/types";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
 
@@ -28,7 +30,9 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   if (sections.length === 0) throwJson("No sections to deploy", 400);
 
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
-  const html = landing.version === 2
+  const html = landing.version === 3
+    ? buildDeployHtml(sections as Section3[])
+    : landing.version === 2
     ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
     : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);
   const htmlBuffer = Buffer.from(html, "utf-8");
