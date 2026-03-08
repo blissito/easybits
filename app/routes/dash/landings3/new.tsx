@@ -269,7 +269,7 @@ export default function NewLanding3() {
           className="w-full"
           containerClassName="w-full"
         >
-          <HiSparkles className="inline -mt-0.5" /> Crear y generar con AI
+          <HiSparkles className="inline -mt-0.5" /> Generar con IA
         </BrutalButton>
       </Form>
     </article>
