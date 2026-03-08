@@ -1,6 +1,6 @@
 # EasyBits
 
-File storage and management for AI agents.
+Agentic-first file storage — AI agents store, manage, and consume files via SDK, MCP, and REST API.
 
 [easybits.cloud](https://www.easybits.cloud)
 
@@ -10,7 +10,28 @@ File storage and management for AI agents.
 npx -y @easybits.cloud/mcp
 ```
 
-Give your AI agent the ability to upload, transform, optimize and serve files — images, documents, websites and more.
+30+ tools for uploading, transforming, optimizing and serving files — images, documents, websites, presentations, landing pages and more.
+
+## SDK
+
+```bash
+npm install @easybits.cloud/sdk
+```
+
+```typescript
+import { EasyBits } from "@easybits.cloud/sdk";
+const eb = new EasyBits({ apiKey: "eb_..." });
+const file = await eb.files.upload({ name: "photo.jpg", contentType: "image/jpeg" });
+```
+
+## Features
+
+- **File management** — upload, transform, optimize, soft-delete with trash retention
+- **Websites** — deploy static sites to `slug.easybits.cloud` with custom domains
+- **Presentations** — AI-generated reveal.js slides with 3D scenes, deploy to subdomain
+- **Landing pages** — AI-generated block-based pages with streaming SSE, stock photos, visual variants
+- **Webhooks** — real-time event notifications with HMAC signatures
+- **IAM** — scoped API keys (READ, WRITE, DELETE, ADMIN), file-level sharing
 
 ## Stack
 
@@ -21,6 +42,16 @@ React Router v7 · Prisma (MongoDB) · Stripe · Fly.io
 ```bash
 npx prisma generate
 npm run dev
+```
+
+## Commands
+
+```bash
+npm run dev        # local dev server
+npm run build      # production build
+npm run typecheck   # TypeScript check
+npm test           # vitest
+npm run e2e        # Playwright e2e tests
 ```
 
 ## Authors
