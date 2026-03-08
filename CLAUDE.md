@@ -86,13 +86,13 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Generation: `app/routes/api/v2/landing2-generate.ts` — **streaming SSE** (streamText + NDJSON parsing)
 - AI: Haiku 4.5 generates blocks, each streamed to editor as it completes
 - Images: hero/imageText blocks auto-enriched with Pexels stock photos (non-blocking, via `block-update` SSE event)
-- Block variants: features (cards/cards-icon/bordered/minimal), stats (big-numbers/cards/inline), testimonials (cards/quote-large), FAQ (accordion/two-col), pricing (cards/table), team (grid/cards)
+- Block variants: features (cards/cards-icon/bordered/minimal), stats (big-numbers/cards/inline), testimonials (cards/quote-large), FAQ (accordion/two-col), pricing (cards/table), team (grid/cards), gallery (grid/masonry), timeline (vertical/horizontal/steps)
 - `BlockEditor` supports `onChange?: undefined` for read-only mode during streaming
 - CSS animation `animate-fade-in` + auto-scroll to latest block during generation
 
 ## Cert Management
 - Audit + cleanup: `app/.server/core/certOperations.ts` — compares Fly certs vs DB (websites, customDomains, users)
-- Cron: `GET /api/cron/purge-certs` (same CRON_SECRET auth as purge-files)
+- Cron: `GET /api/cron/purge-certs` — runs in `.github/workflows/purge-cron.yml` alongside purge-files (every 7 days)
 - Admin UI: `/dash/admin/certs` — view valid/orphaned/protected, bulk delete orphans
 - Protected hostnames: easybits.cloud, www.easybits.cloud, easybits.fly.dev (never deleted)
 
