@@ -4,15 +4,17 @@ import { buildPreviewHtml } from "~/lib/landing3/buildHtml";
 
 export interface CanvasHandle {
   scrollToSection: (id: string) => void;
+  postMessage: (msg: Record<string, unknown>) => void;
 }
 
 interface CanvasProps {
   sections: Section3[];
+  theme?: string;
   onMessage: (msg: IframeMessage) => void;
   iframeRectRef: React.MutableRefObject<DOMRect | null>;
 }
 
-export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ sections, onMessage, iframeRectRef }, ref) {
+export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ sections, theme, onMessage, iframeRectRef }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   // Track what the iframe currently has so we can diff
@@ -27,6 +29,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
   useImperativeHandle(ref, () => ({
     scrollToSection(id: string) {
       postToIframe({ action: "scroll-to-section", id });
+    },
+    postMessage(msg: Record<string, unknown>) {
+      postToIframe(msg);
     },
   }), [postToIframe]);
 
@@ -91,6 +96,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     }
   }, [sections, ready, postToIframe]);
 
+  // Send theme changes to iframe
+  useEffect(() => {
+    if (!ready) return;
+    postToIframe({ action: "set-theme", theme: theme || "default" });
+  }, [theme, ready, postToIframe]);
+
   // Update iframe rect on resize/scroll
   const updateRect = useCallback(() => {
     if (iframeRef.current) {
@@ -120,7 +131,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
       }
 
       if (
-        ["element-selected", "text-edited", "element-deselected"].includes(
+        ["element-selected", "text-edited", "element-deselected", "section-html-updated"].includes(
           data.type
         )
       ) {

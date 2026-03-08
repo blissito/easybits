@@ -16,6 +16,7 @@ import { SectionList } from "~/components/landings3/SectionList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
+import { buildCustomThemeCss } from "~/lib/landing3/themes";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -44,6 +45,19 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   return { landing, websiteUrl };
 };
 
+/** Retry a DB operation on write conflict (P2034) */
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (err?.code === "P2034" && i < retries - 1) continue;
+      throw err;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 export const action = async ({ request, params }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
   const landing = await db.landing.findUnique({ where: { id: params.id } });
@@ -56,9 +70,27 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "update-sections") {
     const sections = JSON.parse(String(formData.get("sections") || "[]"));
-    await db.landing.update({
-      where: { id: params.id },
-      data: { sections },
+    await withRetry(() =>
+      db.landing.update({
+        where: { id: params.id },
+        data: { sections },
+      })
+    );
+    return { ok: true };
+  }
+
+  if (intent === "update-theme") {
+    const newTheme = String(formData.get("theme") || "default");
+    const customColorVal = formData.get("customColor") ? String(formData.get("customColor")) : undefined;
+    await withRetry(async () => {
+      const fresh = await db.landing.findUnique({ where: { id: params.id } });
+      const existing = (fresh?.metadata as Record<string, unknown>) || {};
+      const meta: Record<string, unknown> = { ...existing, theme: newTheme };
+      if (customColorVal) meta.customColor = customColorVal;
+      return db.landing.update({
+        where: { id: params.id },
+        data: { metadata: meta as any },
+      });
     });
     return { ok: true };
   }
@@ -122,10 +154,20 @@ export default function Landing3Editor() {
     return Array.isArray(raw) ? (raw as unknown as Section3[]) : [];
   });
 
+  const [theme, setTheme] = useState<string>(() => {
+    const meta = landing.metadata as Record<string, unknown> | null;
+    return (meta?.theme as string) || "default";
+  });
+
   const [isGenerating, setIsGenerating] = useState(
     searchParams.get("generating") === "1"
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
+  const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [customColor, setCustomColor] = useState<string>(() => {
+    const meta = landing.metadata as Record<string, unknown> | null;
+    return (meta?.customColor as string) || "#6366f1";
+  });
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const streamEndRef = useRef<HTMLDivElement>(null);
@@ -144,6 +186,10 @@ export default function Landing3Editor() {
   const [addPrompt, setAddPrompt] = useState("");
   const [isAddingSection, setIsAddingSection] = useState(false);
 
+  // Regenerate prompt modal
+  const [showRegenPrompt, setShowRegenPrompt] = useState(false);
+  const [regenPrompt, setRegenPrompt] = useState("");
+
   // Code view
   const [codeViewSectionId, setCodeViewSectionId] = useState<string | null>(null);
   const [codeValue, setCodeValue] = useState("");
@@ -155,6 +201,18 @@ export default function Landing3Editor() {
     if (deployFetcher.data?.url) setLiveUrl(deployFetcher.data.url);
     if (deployFetcher.data?.unpublished) setLiveUrl(null);
   }, [deployFetcher.state, deployFetcher.data, navigate]);
+
+  // Inject custom theme CSS when theme is "custom"
+  useEffect(() => {
+    if (theme === "custom") {
+      canvasRef.current?.postMessage({
+        action: "set-custom-css",
+        css: buildCustomThemeCss(customColor),
+      });
+    } else {
+      canvasRef.current?.postMessage({ action: "set-custom-css", css: "" });
+    }
+  }, [theme, customColor]);
 
   // Auto-generate on mount
   useEffect(() => {
@@ -187,6 +245,8 @@ export default function Landing3Editor() {
       if (e.key === "Escape") {
         if (codeViewSectionId) {
           setCodeViewSectionId(null);
+        } else if (showRegenPrompt) {
+          setShowRegenPrompt(false);
         } else if (showAddPrompt) {
           setShowAddPrompt(false);
         } else if (overflowOpen) {
@@ -198,14 +258,14 @@ export default function Landing3Editor() {
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [overflowOpen, selection, codeViewSectionId, showAddPrompt]);
+  }, [overflowOpen, selection, codeViewSectionId, showAddPrompt, showRegenPrompt]);
 
   function stopGeneration() {
     abortRef.current?.abort();
     setIsGenerating(false);
   }
 
-  async function generateSections() {
+  async function generateSections(extraInstructions?: string) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -230,6 +290,7 @@ export default function Landing3Editor() {
           landingId: landing.id,
           prompt: landing.prompt,
           referenceImage,
+          ...(extraInstructions ? { extraInstructions } : {}),
         }),
         signal: controller.signal,
       });
@@ -280,18 +341,26 @@ export default function Landing3Editor() {
         }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return; // Silently ignore — user cancelled or effect re-ran
+      }
       console.error("Generation error:", err);
     } finally {
-      setIsGenerating(false);
+      if (abortRef.current === controller) {
+        setIsGenerating(false);
+      }
     }
   }
 
   const saveSections = useCallback(
     (s: Section3[]) => {
-      saveFetcher.submit(
-        { intent: "update-sections", sections: JSON.stringify(s) },
-        { method: "post" }
-      );
+      // Defer to avoid setState-during-render when called from setSections updaters
+      queueMicrotask(() => {
+        saveFetcher.submit(
+          { intent: "update-sections", sections: JSON.stringify(s) },
+          { method: "post" }
+        );
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -312,7 +381,6 @@ export default function Landing3Editor() {
     } else if (msg.type === "element-deselected") {
       setSelection(null);
     } else if (msg.type === "text-edited" && msg.sectionId) {
-      // Use full section innerHTML sent from iframe
       const sectionHtml = (msg as any).sectionHtml;
       if (sectionHtml) {
         setSections((prev) => {
@@ -323,33 +391,67 @@ export default function Landing3Editor() {
           return updated;
         });
       }
+    } else if (msg.type === "section-html-updated" && msg.sectionId && msg.sectionHtml) {
+      setSections((prev) => {
+        const updated = prev.map((s) =>
+          s.id === msg.sectionId ? { ...s, html: msg.sectionHtml! } : s
+        );
+        saveSections(updated);
+        return updated;
+      });
     }
   }, [saveSections]);
 
-  async function handleRefine(instruction: string) {
+  async function handleRefine(instruction: string, referenceImage?: string) {
     if (!selection?.sectionId) return;
     setIsRefining(true);
     try {
       const section = sections.find((s) => s.id === selection.sectionId);
       if (!section) return;
+      const sectionId = selection.sectionId;
       const res = await fetch("/api/v2/landing3-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           landingId: landing.id,
-          sectionId: selection.sectionId,
+          sectionId,
           instruction,
           currentHtml: section.html,
+          ...(referenceImage && { referenceImage }),
         }),
       });
       if (!res.ok) throw new Error("Refine failed");
-      const data = await res.json();
-      if (data.html) {
-        const updated = sections.map((s) =>
-          s.id === selection.sectionId ? { ...s, html: data.html } : s
-        );
-        handleSectionsChange(updated);
-        setSelection(null);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+
+        let event = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (event === "chunk" && data.html) {
+              setSections((prev) =>
+                prev.map((s) => (s.id === sectionId ? { ...s, html: data.html } : s))
+              );
+            } else if (event === "done" && data.html) {
+              // API endpoint already saved to DB — just update local state
+              setSections((prev) =>
+                prev.map((s) => (s.id === sectionId ? { ...s, html: data.html } : s))
+              );
+              setSelection(null);
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Refine error:", err);
@@ -389,6 +491,8 @@ export default function Landing3Editor() {
   async function handleAddSection() {
     if (!addPrompt.trim() || isAddingSection) return;
     setIsAddingSection(true);
+    const newId = Math.random().toString(36).slice(2, 10);
+    const label = addPrompt.slice(0, 30);
     try {
       const res = await fetch("/api/v2/landing3-refine", {
         method: "POST",
@@ -401,23 +505,87 @@ export default function Landing3Editor() {
         }),
       });
       if (!res.ok) throw new Error("Add section failed");
-      const data = await res.json();
-      if (data.html) {
-        const newSection: Section3 = {
-          id: Math.random().toString(36).slice(2, 10),
-          order: sections.length,
-          html: data.html,
-          label: addPrompt.slice(0, 30),
-        };
-        handleSectionsChange([...sections, newSection]);
-        setShowAddPrompt(false);
-        setAddPrompt("");
+
+      // Add placeholder section immediately
+      setSections((prev) => [
+        ...prev,
+        { id: newId, order: prev.length, html: "<section></section>", label },
+      ]);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+
+        let event = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (event === "chunk" && data.html) {
+              setSections((prev) =>
+                prev.map((s) => (s.id === newId ? { ...s, html: data.html } : s))
+              );
+            } else if (event === "done" && data.html) {
+              setSections((prev) => {
+                const updated = prev.map((s) =>
+                  s.id === newId ? { ...s, html: data.html } : s
+                );
+                saveSections(updated);
+                return updated;
+              });
+            }
+          }
+        }
       }
+
+      setShowAddPrompt(false);
+      setAddPrompt("");
     } catch (err) {
       console.error("Add section error:", err);
     } finally {
       setIsAddingSection(false);
     }
+  }
+
+  function handleThemeChange(newTheme: string) {
+    setTheme(newTheme);
+    saveFetcher.submit(
+      { intent: "update-theme", theme: newTheme },
+      { method: "post" }
+    );
+  }
+
+  function handleCustomColorChange(color: string) {
+    setCustomColor(color);
+    setTheme("custom");
+    // Inject custom CSS into iframe
+    canvasRef.current?.postMessage({
+      action: "set-custom-css",
+      css: buildCustomThemeCss(color),
+    });
+    saveFetcher.submit(
+      { intent: "update-theme", theme: "custom", customColor: color },
+      { method: "post" }
+    );
+  }
+
+  function handleUpdateAttribute(sectionId: string, elementPath: string, attr: string, value: string) {
+    canvasRef.current?.postMessage({
+      action: "update-attribute",
+      sectionId,
+      elementPath,
+      tagName: selection?.tagName || "*",
+      attr,
+      value,
+    });
   }
 
   function handleOpenCode(sectionId: string) {
@@ -489,7 +657,7 @@ export default function Landing3Editor() {
                 <button
                   onClick={() => {
                     setOverflowOpen(false);
-                    generateSections();
+                    setShowRegenPrompt(true);
                   }}
                   disabled={isGenerating}
                   className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-gray-50 disabled:opacity-50"
@@ -541,6 +709,10 @@ export default function Landing3Editor() {
           <SectionList
             sections={sections}
             selectedSectionId={selection?.sectionId ?? null}
+            theme={theme}
+            customColor={customColor}
+            onThemeChange={handleThemeChange}
+            onCustomColorChange={handleCustomColorChange}
             onSelect={(id) => {
               canvasRef.current?.scrollToSection(id);
             }}
@@ -564,7 +736,6 @@ export default function Landing3Editor() {
                   s.id === codeViewSectionId ? { ...s, html: newCode } : s
                 );
                 handleSectionsChange(updated);
-                setCodeViewSectionId(null);
               }}
               onClose={() => setCodeViewSectionId(null)}
             />
@@ -572,19 +743,53 @@ export default function Landing3Editor() {
         )}
 
         {/* Canvas */}
-        <div className={`${codeViewSectionId ? "w-1/2" : "flex-1"} overflow-auto relative`}>
+        <div className={`${codeViewSectionId ? "w-1/2" : "flex-1"} overflow-auto relative flex flex-col`}>
+          {/* Viewport buttons */}
+          <div className="flex items-center justify-center gap-1 py-2 shrink-0 bg-gray-50 border-b border-gray-200">
+            {([
+              { id: "desktop" as const, label: "Desktop", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v8.5A2.25 2.25 0 0115.75 15h-3.105a3.501 3.501 0 001.1 1.677A.75.75 0 0113.26 18H6.74a.75.75 0 01-.484-1.323A3.501 3.501 0 007.355 15H4.25A2.25 2.25 0 012 12.75v-8.5zm1.5 0a.75.75 0 01.75-.75h11.5a.75.75 0 01.75.75v8.5a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-8.5z" clipRule="evenodd"/></svg> },
+              { id: "tablet" as const, label: "Tablet", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 1a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2H5zm0 1.5h10a.5.5 0 01.5.5v14a.5.5 0 01-.5.5H5a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5zm4 14a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd"/></svg> },
+              { id: "mobile" as const, label: "Mobile", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm0 1.5h8a.5.5 0 01.5.5v12a.5.5 0 01-.5.5H6a.5.5 0 01-.5-.5V4a.5.5 0 01.5-.5zm3 13a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd"/></svg> },
+            ]).map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setViewport(v.id)}
+                title={v.label}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  viewport === v.id
+                    ? "bg-brand-100 text-brand-700"
+                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                {v.icon}
+              </button>
+            ))}
+          </div>
+
+          {/* Canvas area with viewport sizing */}
+          <div className={`flex-1 overflow-auto relative ${viewport !== "desktop" ? "flex justify-center bg-gray-100" : ""}`}>
+          <div
+            className={viewport !== "desktop" ? "transition-all duration-300 h-full shrink-0" : "h-full"}
+            style={viewport === "tablet" ? { width: 768 } : viewport === "mobile" ? { width: 375 } : undefined}
+          >
           {isGenerating && sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24">
-              <Spinner />
-              <p className="text-sm text-gray-500 mt-4">
-                Generando secciones con AI...
+              <div className="flex gap-1.5 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-brand-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-brand-300 animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+              <p className="text-sm font-bold text-gray-700">
+                Generando tu landing con AI...
               </p>
-              <button
-                onClick={stopGeneration}
-                className="mt-4 px-4 py-1.5 text-xs font-bold rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
-              >
-                Detener
-              </button>
+              <p className="text-xs text-gray-400 mt-1">
+                ~6-10 secciones, esto toma unos segundos
+              </p>
+              <div className="mt-5">
+                <BrutalButton size="chip" mode="ghost" onClick={stopGeneration}>
+                  Detener
+                </BrutalButton>
+              </div>
             </div>
           ) : sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24">
@@ -595,28 +800,34 @@ export default function Landing3Editor() {
               <Canvas
                 ref={canvasRef}
                 sections={sections}
+                theme={theme}
                 onMessage={handleIframeMessage}
                 iframeRectRef={iframeRectRef}
               />
               {isGenerating && (
                 <div
                   ref={streamEndRef}
-                  className="flex items-center gap-3 py-4 px-4"
+                  className="flex items-center gap-3 py-4 px-6"
                 >
-                  <Spinner />
-                  <p className="text-sm text-gray-400">
-                    Generando mas secciones...
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-300 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                  <p className="text-sm font-bold text-gray-500">
+                    Generando sección {sections.length + 1} de ~8...
                   </p>
-                  <button
-                    onClick={stopGeneration}
-                    className="px-3 py-1 text-xs font-bold rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
-                  >
-                    Detener
-                  </button>
+                  <div className="ml-2">
+                    <BrutalButton size="chip" mode="ghost" onClick={stopGeneration}>
+                      Detener
+                    </BrutalButton>
+                  </div>
                 </div>
               )}
             </>
           )}
+          </div>
+          </div>
         </div>
 
         {/* Floating toolbar */}
@@ -633,9 +844,71 @@ export default function Landing3Editor() {
               handleOpenCode(selection.sectionId);
             }
           }}
+          onUpdateAttribute={handleUpdateAttribute}
           isRefining={isRefining}
         />
       </div>
+
+      {/* Regenerate modal */}
+      {showRegenPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-black mb-3">Regenerar landing</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Instrucciones adicionales (opcional)
+            </p>
+            <textarea
+              value={regenPrompt}
+              onChange={(e) => setRegenPrompt(e.target.value)}
+              placeholder="Ej: Usa tonos oscuros, agrega una sección de FAQ, hazlo más minimalista..."
+              rows={3}
+              className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  setShowRegenPrompt(false);
+                  generateSections(regenPrompt.trim() || undefined);
+                  setRegenPrompt("");
+                }
+              }}
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <BrutalButton
+                size="chip"
+                mode="ghost"
+                onClick={() => {
+                  setShowRegenPrompt(false);
+                  setRegenPrompt("");
+                }}
+              >
+                Cancelar
+              </BrutalButton>
+              <BrutalButton
+                size="chip"
+                mode="ghost"
+                onClick={() => {
+                  setShowRegenPrompt(false);
+                  generateSections();
+                  setRegenPrompt("");
+                }}
+              >
+                Sin instrucciones
+              </BrutalButton>
+              <BrutalButton
+                size="chip"
+                onClick={() => {
+                  setShowRegenPrompt(false);
+                  generateSections(regenPrompt.trim() || undefined);
+                  setRegenPrompt("");
+                }}
+              >
+                Regenerar
+              </BrutalButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add section modal */}
       {showAddPrompt && (

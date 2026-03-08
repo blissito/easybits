@@ -42,7 +42,7 @@ export function getIframeScript(): string {
   }
 
   function isTextElement(el) {
-    var textTags = ['H1','H2','H3','H4','H5','H6','P','SPAN','LI','A','BLOCKQUOTE','LABEL','TD','TH','FIGCAPTION'];
+    var textTags = ['H1','H2','H3','H4','H5','H6','P','SPAN','LI','A','BLOCKQUOTE','LABEL','TD','TH','FIGCAPTION','BUTTON'];
     return textTags.indexOf(el.tagName) !== -1;
   }
 
@@ -99,6 +99,14 @@ export function getIframeScript(): string {
     el.style.outlineOffset = '-2px';
 
     var rect = el.getBoundingClientRect();
+    var attrs = {};
+    if (el.tagName === 'IMG') {
+      attrs = { src: el.getAttribute('src') || '', alt: el.getAttribute('alt') || '' };
+    }
+    if (el.tagName === 'A') {
+      attrs = { href: el.getAttribute('href') || '', target: el.getAttribute('target') || '' };
+    }
+
     window.parent.postMessage({
       type: 'element-selected',
       sectionId: getSectionId(el),
@@ -108,6 +116,7 @@ export function getIframeScript(): string {
       openTag: openTag,
       elementPath: getElementPath(el),
       isSectionRoot: el.dataset && el.dataset.sectionId ? true : false,
+      attrs: attrs,
     }, '*');
   }, true);
 
@@ -184,6 +193,49 @@ export function getIframeScript(): string {
         var el = getSectionElement(order[i]);
         if (el) { document.body.appendChild(el); }
       }
+    }
+
+    if (msg.action === 'update-attribute') {
+      var sectionEl = getSectionElement(msg.sectionId);
+      if (sectionEl) {
+        var target = null;
+        if (msg.elementPath) {
+          // Find element by matching path
+          var allEls = sectionEl.querySelectorAll(msg.tagName || '*');
+          for (var i = 0; i < allEls.length; i++) {
+            if (getElementPath(allEls[i]) === msg.elementPath) {
+              target = allEls[i];
+              break;
+            }
+          }
+        }
+        if (target) {
+          target.setAttribute(msg.attr, msg.value);
+          window.parent.postMessage({
+            type: 'section-html-updated',
+            sectionId: msg.sectionId,
+            sectionHtml: sectionEl.innerHTML,
+          }, '*');
+        }
+      }
+    }
+
+    if (msg.action === 'set-theme') {
+      if (msg.theme && msg.theme !== 'default') {
+        document.documentElement.setAttribute('data-theme', msg.theme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    }
+
+    if (msg.action === 'set-custom-css') {
+      var customStyle = document.getElementById('custom-theme-css');
+      if (!customStyle) {
+        customStyle = document.createElement('style');
+        customStyle.id = 'custom-theme-css';
+        document.head.appendChild(customStyle);
+      }
+      customStyle.textContent = msg.css || '';
     }
 
     if (msg.action === 'scroll-to-section') {

@@ -13,7 +13,7 @@ const SYSTEM_PROMPT = `You are an elite web designer. You generate stunning, cre
 
 RULES:
 - Each section is a complete <section> tag with Tailwind CSS classes
-- Use Tailwind CDN classes ONLY (no custom CSS, no @apply, no @tailwind directives)
+- Use Tailwind CDN classes ONLY (no custom CSS, no @apply, no @import, no @tailwind directives)
 - Design must be creative, modern, and visually striking — NOT generic Bootstrap-like layouts
 - Use creative gradients, asymmetric layouts, overlapping elements, subtle animations via Tailwind classes
 - Images: NEVER use src with fake/placeholder URLs. Instead use <img data-image-query="english search query" alt="description" class="..."/> — the system will auto-replace data-image-query with a real src. Do NOT include a src attribute when using data-image-query.
@@ -21,7 +21,18 @@ RULES:
 - NO JavaScript, only HTML+Tailwind
 - Each section must be independent and self-contained
 - Use real-looking content (not Lorem ipsum) — make it specific to the prompt
-- All text content in Spanish unless the prompt specifies otherwise`;
+- All text content in Spanish unless the prompt specifies otherwise
+
+COLOR SYSTEM — CRITICAL:
+- Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted, bg-secondary, text-secondary, bg-accent, text-accent
+- NEVER use hardcoded Tailwind color classes like bg-indigo-600, text-blue-500, bg-purple-700, etc.
+- Only use gray-* for subtle borders and dividers (e.g. border-gray-200). All main colors MUST use semantic tokens.
+- For gradients use semantic colors: from-primary to-primary-dark, from-surface to-surface-alt, etc.
+- For hover states: hover:bg-primary-dark, hover:bg-primary-light, etc.
+
+TAILWIND v3 NOTES:
+- Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)
+- Borders: border + border-gray-200 for visible borders`;
 
 const PROMPT_SUFFIX = `
 
@@ -85,7 +96,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, referenceImage } = body;
+  const { landingId, prompt, referenceImage, extraInstructions } = body;
 
   if (!landingId || !prompt) {
     return Response.json(
@@ -104,9 +115,10 @@ export async function action({ request }: Route.ActionArgs) {
     ? createAnthropic({ apiKey: userKey })
     : createAnthropic();
 
-  const model = anthropic("claude-sonnet-4-6");
+  const model = anthropic("claude-haiku-4-5-20251001");
 
   // Build prompt content (supports multimodal with reference image)
+  const extra = extraInstructions ? `\n\nAdditional instructions: ${extraInstructions}` : "";
   const content: any[] = [];
   if (referenceImage) {
     content.push({
@@ -115,12 +127,12 @@ export async function action({ request }: Route.ActionArgs) {
     });
     content.push({
       type: "text",
-      text: `Generate a landing page inspired by this reference image for: ${prompt}${PROMPT_SUFFIX}`,
+      text: `Generate a landing page inspired by this reference image for: ${prompt}${extra}${PROMPT_SUFFIX}`,
     });
   } else {
     content.push({
       type: "text",
-      text: `Generate a landing page for: ${prompt}${PROMPT_SUFFIX}`,
+      text: `Generate a landing page for: ${prompt}${extra}${PROMPT_SUFFIX}`,
     });
   }
 

@@ -1,8 +1,14 @@
+import { useRef } from "react";
 import type { Section3 } from "~/lib/landing3/types";
+import { LANDING_THEMES } from "~/lib/landing3/themes";
 
 interface SectionListProps {
   sections: Section3[];
   selectedSectionId: string | null;
+  theme: string;
+  customColor?: string;
+  onThemeChange: (themeId: string) => void;
+  onCustomColorChange?: (color: string) => void;
   onSelect: (id: string) => void;
   onOpenCode: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -12,15 +18,64 @@ interface SectionListProps {
 export function SectionList({
   sections,
   selectedSectionId,
+  theme,
+  customColor,
+  onThemeChange,
+  onCustomColorChange,
   onSelect,
   onOpenCode,
   onReorder,
   onAdd,
 }: SectionListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
+  const colorInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="w-56 shrink-0 flex flex-col bg-white border-r-2 border-gray-200 overflow-y-auto">
+      <div className="p-3 border-b border-gray-200">
+        <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">
+          Tema
+        </h3>
+        <div className="flex gap-1.5 flex-wrap">
+          {LANDING_THEMES.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onThemeChange(t.id)}
+              title={t.label}
+              className={`w-6 h-6 rounded-full border-2 transition-all ${
+                theme === t.id
+                  ? "border-black scale-110 shadow-sm"
+                  : "border-gray-300 hover:border-gray-400"
+              }`}
+              style={{ backgroundColor: t.colors.primary }}
+            />
+          ))}
+          {/* Custom color picker */}
+          <button
+            onClick={() => colorInputRef.current?.click()}
+            title="Color personalizado"
+            className={`w-6 h-6 rounded-full border-2 transition-all relative overflow-hidden ${
+              theme === "custom"
+                ? "border-black scale-110 shadow-sm"
+                : "border-gray-300 hover:border-gray-400"
+            }`}
+            style={theme === "custom" && customColor ? { backgroundColor: customColor } : undefined}
+          >
+            {theme !== "custom" && (
+              <span className="absolute inset-0 bg-gradient-conic from-red-500 via-yellow-500 via-green-500 via-blue-500 to-red-500 rounded-full"
+                style={{ background: "conic-gradient(#ef4444, #eab308, #22c55e, #3b82f6, #a855f7, #ef4444)" }}
+              />
+            )}
+          </button>
+          <input
+            ref={colorInputRef}
+            type="color"
+            value={customColor || "#6366f1"}
+            onChange={(e) => onCustomColorChange?.(e.target.value)}
+            className="sr-only"
+          />
+        </div>
+      </div>
       <div className="p-3 border-b border-gray-200">
         <h3 className="text-xs font-black uppercase tracking-wider text-gray-500">
           Secciones

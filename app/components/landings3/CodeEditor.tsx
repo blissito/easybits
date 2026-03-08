@@ -3,7 +3,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLi
 import { EditorState } from "@codemirror/state";
 import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { bracketMatching, foldGutter, foldKeymap } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
@@ -103,6 +103,7 @@ export function CodeEditor({ code, label, scrollToText, onSave, onClose }: CodeE
         highlightSelectionMatches(),
         html(),
         oneDark,
+        history(),
         EditorView.lineWrapping,
         keymap.of([
           { key: "Mod-s", run: (v) => { onSaveRef.current(v.state.doc.toString()); return true; } },
@@ -111,6 +112,7 @@ export function CodeEditor({ code, label, scrollToText, onSave, onClose }: CodeE
           ...closeBracketsKeymap,
           ...searchKeymap,
           ...foldKeymap,
+          ...historyKeymap,
           ...defaultKeymap,
         ]),
         EditorView.updateListener.of((update) => {

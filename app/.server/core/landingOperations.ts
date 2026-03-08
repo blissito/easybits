@@ -30,8 +30,9 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   if (sections.length === 0) throwJson("No sections to deploy", 400);
 
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
+  const landingMeta = (landing.metadata as Record<string, unknown>) || {};
   const html = landing.version === 3
-    ? buildDeployHtml(sections as Section3[])
+    ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColor as string) || undefined)
     : landing.version === 2
     ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
     : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);
