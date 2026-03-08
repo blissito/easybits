@@ -114,7 +114,6 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **Planned**: Video Calls 1:1 + Recording — AWS Chime SDK, llamadas 1:1 entre usuarios, grabación automática que se sube como archivo a EasyBits. Costo estimado ~$0.41 USD/hr (audio+video) + recording pipeline. Ya existe POC en el proyecto.
 - **Planned**: YouTube-style "Video Elements" section — reusable dark card/section with action rows, inspired by YouTube Studio
 - **URGENTE — Streaming para presentaciones**: Igual que landings v2, convertir generación de slides a streaming SSE para que el usuario vea slides aparecer una a una en vez de esperar todas
-- **Landings v2 — logoCloud variants**: logoCloud tiene variantes definidas pero no implementa estilos distintos aún
 - **Imagen de referencia para bloques**: El usuario sube/pega una imagen y la AI genera el bloque replicando ese diseño (Claude vision). Aplica a landings y presentaciones
 
 ## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos
@@ -128,9 +127,9 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Cron purge-certs en GitHub Actions (junto a purge-files)
 - Gallery masonry variant + Timeline steps variant
 - Prompt de generación mejorado (diversidad de bloques, variantes, imageSearchQuery obligatorio)
+- logoCloud variantes visuales (grid=corporate cards, row=grayscale strip con hover)
 
 **Prioridad 1 — Landings v2 clase S (SIGUIENTE)**:
-- Variante faltante: logoCloud (ya tiene opciones en UI pero no cambia visualmente)
 - Streaming para presentaciones (mismo patrón SSE que landings v2)
 - Imagen de referencia: usuario sube imagen → AI replica el diseño como bloque
 
