@@ -610,8 +610,15 @@ export default function Landing3Editor() {
   function handleOpenCode(sectionId: string) {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
-    setCodeScrollTarget(selection?.openTag || selection?.text?.substring(0, 40) || undefined);
-    setCodeViewSectionId(sectionId);
+    const target = selection?.openTag || selection?.text?.substring(0, 40) || undefined;
+    // If editor is already open on this section, force a scroll update by toggling
+    if (codeViewSectionId === sectionId) {
+      setCodeScrollTarget(undefined);
+      requestAnimationFrame(() => setCodeScrollTarget(target));
+    } else {
+      setCodeScrollTarget(target);
+      setCodeViewSectionId(sectionId);
+    }
     setCodeValue(section.html);
     setSelection(null);
   }

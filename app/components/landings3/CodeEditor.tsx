@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, Decoration, type DecorationSet } from "@codemirror/view";
+import { EditorState, StateField, StateEffect } from "@codemirror/state";
 import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
@@ -38,7 +38,29 @@ function formatHtml(html: string): string {
   return output.join("\n");
 }
 
-// TODO: revisar que el scroll-to-code funcione bien en todos los casos (tags partidos, atributos largos, etc.)
+// Flash highlight effect for scroll-to-code
+const flashLineEffect = StateEffect.define<{ from: number; to: number }>();
+const clearFlashEffect = StateEffect.define<null>();
+
+const flashLineDeco = Decoration.line({ class: "cm-flash-line" });
+
+const flashLineField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decos, tr) {
+    for (const e of tr.effects) {
+      if (e.is(flashLineEffect)) {
+        return Decoration.set([flashLineDeco.range(e.value.from)]);
+      }
+      if (e.is(clearFlashEffect)) {
+        return Decoration.none;
+      }
+    }
+    return decos;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+
 function scrollToTarget(view: EditorView, target?: string) {
   if (!target) return;
   const docText = view.state.doc.toString();
@@ -67,8 +89,15 @@ function scrollToTarget(view: EditorView, target?: string) {
     const line = view.state.doc.lineAt(idx);
     view.dispatch({
       selection: { anchor: line.from },
-      effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+      effects: [
+        EditorView.scrollIntoView(line.from, { y: "center" }),
+        flashLineEffect.of({ from: line.from, to: line.to }),
+      ],
     });
+    // Clear flash after 2s
+    setTimeout(() => {
+      view.dispatch({ effects: clearFlashEffect.of(null) });
+    }, 2000);
   }
 }
 
@@ -120,11 +149,13 @@ export function CodeEditor({ code, label, scrollToText, onSave, onClose }: CodeE
             updateStats(update.state.doc);
           }
         }),
+        flashLineField,
         EditorView.theme({
           "&": { height: "100%", fontSize: "13px" },
           ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace" },
           ".cm-content": { padding: "8px 0" },
           ".cm-gutters": { borderRight: "1px solid #21262d" },
+          ".cm-flash-line": { backgroundColor: "rgba(250, 204, 21, 0.25)", transition: "background-color 2s ease-out" },
         }),
       ],
     });

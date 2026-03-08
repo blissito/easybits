@@ -75,13 +75,15 @@ export function FloatingToolbar({
 
   if (!selection || !selection.rect || !iframeRect) return null;
 
+  const toolbarWidth = toolbarRef.current?.offsetWidth || 480;
+  const toolbarHeight = toolbarRef.current?.offsetHeight || 60;
   const top = iframeRect.top + selection.rect.top + selection.rect.height + 8;
   const left = iframeRect.left + selection.rect.left;
-  const clampedLeft = Math.max(8, Math.min(left, window.innerWidth - 400));
-  const showAbove = top + 60 > window.innerHeight;
-  const finalTop = showAbove
-    ? iframeRect.top + selection.rect.top - 56
-    : top;
+  const clampedLeft = Math.max(8, Math.min(left, window.innerWidth - toolbarWidth - 8));
+  const showAbove = top + toolbarHeight + 8 > window.innerHeight;
+  const finalTop = Math.max(8, showAbove
+    ? iframeRect.top + selection.rect.top - toolbarHeight - 8
+    : top);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

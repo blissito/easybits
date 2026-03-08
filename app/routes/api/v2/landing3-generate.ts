@@ -126,7 +126,7 @@ export async function action({ request }: Route.ActionArgs) {
     ? createAnthropic({ apiKey: userKey })
     : createAnthropic();
 
-  const model = anthropic("claude-haiku-4-5-20251001");
+  const model = anthropic("claude-sonnet-4-6");
 
   // Build prompt content (supports multimodal with reference image)
   const extra = extraInstructions ? `\n\nAdditional instructions: ${extraInstructions}` : "";
