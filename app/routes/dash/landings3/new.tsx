@@ -1,4 +1,4 @@
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { Form, Link, redirect, useFetcher, useNavigation } from "react-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { HiSparkles } from "react-icons/hi2";
 import { data } from "react-router";
@@ -15,6 +15,23 @@ export const meta = () => [
 export const action = async ({ request }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
   const formData = await request.formData();
+  const intent = String(formData.get("intent") || "create");
+
+  if (intent === "suggest-prompt") {
+    const name = String(formData.get("name") || "").trim();
+    if (!name || name.length < 3) return data({ suggestion: "" });
+
+    const { generateText } = await import("ai");
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
+    const anthropic = createAnthropic();
+    const { text } = await generateText({
+      model: anthropic("claude-haiku-4-5-20251001"),
+      system:
+        "Genera una descripción breve (2-3 oraciones) para una landing page con el título dado. La descripción debe servir como prompt para un AI que generará las secciones HTML. Incluye el público objetivo, el tono y los elementos clave. Responde solo la descripción, sin comillas.",
+      prompt: name,
+    });
+    return data({ suggestion: text });
+  }
 
   const name = String(formData.get("name") || "").trim();
   const prompt = String(formData.get("prompt") || "").trim();
@@ -46,11 +63,42 @@ function BrutalField({ children }: { children: React.ReactNode }) {
 export default function NewLanding3() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const suggestFetcher = useFetcher<{ suggestion?: string }>();
+  const [nameValue, setNameValue] = useState("");
+  const [promptValue, setPromptValue] = useState("");
+  const lastSuggestion = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Auto-suggest description when name changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (nameValue.trim().length < 3) return;
+    debounceRef.current = setTimeout(() => {
+      suggestFetcher.submit(
+        { intent: "suggest-prompt", name: nameValue },
+        { method: "post" }
+      );
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameValue]);
+
+  // Populate textarea when suggestion arrives
+  useEffect(() => {
+    const suggestion = suggestFetcher.data?.suggestion;
+    if (!suggestion) return;
+    if (!promptValue || promptValue === lastSuggestion.current) {
+      setPromptValue(suggestion);
+      lastSuggestion.current = suggestion;
+    }
+  }, [suggestFetcher.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isSuggesting = suggestFetcher.state !== "idle";
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") return;
@@ -99,6 +147,8 @@ export default function NewLanding3() {
             <input
               name="name"
               required
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
               placeholder="Ej: Lanzamiento app, Evento tech..."
               className={brutalInput}
             />
@@ -108,12 +158,19 @@ export default function NewLanding3() {
         <div>
           <label className="block text-sm font-bold mb-1">
             &iquest;De qu&eacute; trata?
+            {isSuggesting && (
+              <span className="ml-2 text-xs font-normal text-brand-500 animate-pulse">
+                generando descripción...
+              </span>
+            )}
           </label>
           <BrutalField>
             <textarea
               name="prompt"
               required
-              rows={4}
+              rows={8}
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
               placeholder="Describe tu landing con todo el detalle posible..."
               className={`${brutalInput} resize-none`}
             />
