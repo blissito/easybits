@@ -42,7 +42,13 @@ Available block types and their content:
 - timeline: { title, variant ("vertical"|"steps"|"horizontal"), events: [{date, title, desc}] }
 - gallery: { title, variant ("grid"|"masonry"), columns (2|3|4), images: [{url, alt, caption?}] }
 
-Create 6-10 blocks. Always start with "hero" and end with "footer". Use diverse block types — don't just use hero+text+cta+footer. Include at least 2-3 of the richer blocks (features, stats, testimonials, pricing, faq, etc.) based on the prompt context. All text in Spanish.
+Create 6-10 blocks. Always start with "hero" and end with "footer". All text in Spanish.
+
+DIVERSITY RULES (strictly follow):
+- Use at least 4 DIFFERENT block types between hero and footer. Do NOT repeat the same block type.
+- Do NOT use more than 2 "text" blocks. Prefer richer blocks like features, stats, testimonials, pricing, faq, timeline, gallery, comparison, or diagram.
+- ALWAYS include "imageSearchQuery" in hero and imageText blocks — it is REQUIRED, not optional.
+- Use visual variants when available: e.g. features "cards-icon" or "bordered", stats "cards" or "inline", testimonials "quote-large", faq "two-col", timeline "steps", gallery "masonry". Do NOT always use the default variant — vary them.
 
 IMPORTANT: Output each block as a COMPLETE JSON object on its own line (NDJSON format). Do NOT wrap in an outer object or array. Each line must be a valid JSON object like:
 {"type": "hero", "content": {"headline": "...", "subtitle": "...", "ctaText": "...", "ctaUrl": "#"}}

@@ -1,4 +1,4 @@
-name: Purge deleted files
+name: Scheduled maintenance
 on:
   schedule:
     - cron: '0 6 */7 * *'
@@ -12,3 +12,8 @@ jobs:
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://easybits.cloud/api/cron/purge-files
+      - name: Purge orphaned certs
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/purge-certs

@@ -114,9 +114,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **Planned**: Video Calls 1:1 + Recording — AWS Chime SDK, llamadas 1:1 entre usuarios, grabación automática que se sube como archivo a EasyBits. Costo estimado ~$0.41 USD/hr (audio+video) + recording pipeline. Ya existe POC en el proyecto.
 - **Planned**: YouTube-style "Video Elements" section — reusable dark card/section with action rows, inspired by YouTube Studio
 - **URGENTE — Streaming para presentaciones**: Igual que landings v2, convertir generación de slides a streaming SSE para que el usuario vea slides aparecer una a una en vez de esperar todas
-- **Configurar cron purge-certs en Fly/GitHub Actions**: El endpoint existe pero no hay cron schedule aún. Añadir junto al cron de purge-files
-- **Landings v2 — gallery/timeline/logoCloud variants**: Estos bloques tienen variantes definidas en BLOCK_VARIANTS pero aún no implementan estilos distintos (como features antes del fix)
-- **Landings v2 — mejorar prompt de generación**: Pedir al modelo que use más variantes diversas y que no repita patrones
+- **Landings v2 — logoCloud variants**: logoCloud tiene variantes definidas pero no implementa estilos distintos aún
 - **Imagen de referencia para bloques**: El usuario sube/pega una imagen y la AI genera el bloque replicando ese diseño (Claude vision). Aplica a landings y presentaciones
 
 ## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos
@@ -127,9 +125,12 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Landings v2 streaming generation (SSE, block-by-block con animación + auto-scroll)
 - Pexels stock photos automáticas en hero/imageText blocks
 - Variantes visuales para 6 tipos de bloque (features, stats, testimonials, FAQ, pricing, team)
+- Cron purge-certs en GitHub Actions (junto a purge-files)
+- Gallery masonry variant + Timeline steps variant
+- Prompt de generación mejorado (diversidad de bloques, variantes, imageSearchQuery obligatorio)
 
 **Prioridad 1 — Landings v2 clase S (SIGUIENTE)**:
-- Variantes faltantes: gallery, timeline, logoCloud (ya tienen opciones en UI pero no cambian visualmente)
+- Variante faltante: logoCloud (ya tiene opciones en UI pero no cambia visualmente)
 - Streaming para presentaciones (mismo patrón SSE que landings v2)
 - Imagen de referencia: usuario sube imagen → AI replica el diseño como bloque
 

@@ -12,6 +12,7 @@ export function GalleryBlock({
   const c = block.content;
   const images = c.images || [];
   const columns = c.columns || 3;
+  const variant = c.variant || "grid";
   const updateItem = (index: number, field: string, value: any) => {
     const updated = [...images];
     updated[index] = { ...updated[index], [field]: value };
@@ -61,11 +62,19 @@ export function GalleryBlock({
           </div>
 
           <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+            className={
+              variant === "masonry"
+                ? "gap-4"
+                : "grid gap-4"
+            }
+            style={
+              variant === "masonry"
+                ? { columns: `${columns}`, columnGap: "1rem" }
+                : { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }
+            }
           >
             {images.map((img: any, i: number) => (
-              <div key={i} className="relative group border border-dashed border-gray-300 rounded-xl overflow-hidden">
+              <div key={i} className={`relative group border border-dashed border-gray-300 rounded-xl overflow-hidden ${variant === "masonry" ? "mb-4 break-inside-avoid" : ""}`}>
                 <button
                   type="button"
                   onClick={() => removeItem(i)}
@@ -74,9 +83,9 @@ export function GalleryBlock({
                   x
                 </button>
                 {img.url ? (
-                  <img src={img.url} alt={img.alt || ""} className="w-full aspect-square object-cover" />
+                  <img src={img.url} alt={img.alt || ""} className={`w-full object-cover ${variant === "masonry" ? "" : "aspect-square"}`} />
                 ) : (
-                  <div className="w-full aspect-square bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
+                  <div className={`w-full bg-gray-100 flex items-center justify-center text-gray-400 text-xs ${variant === "masonry" ? "py-12" : "aspect-square"}`}>
                     Sin imagen
                   </div>
                 )}
