@@ -451,7 +451,24 @@ export default function Landing3Editor() {
                 prev.map((s) => (s.id === sectionId ? { ...s, html: data.html } : s))
               );
             } else if (event === "done" && data.html) {
-              // API endpoint already saved to DB — just update local state
+              setSections((prev) =>
+                prev.map((s) => (s.id === sectionId ? { ...s, html: data.html } : s))
+              );
+              setSelection(null);
+            }
+          }
+        }
+      }
+
+      // Process any remaining data in buffer after stream ends
+      if (buf.trim()) {
+        const remaining = buf.split("\n");
+        let event = "";
+        for (const line of remaining) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (event === "done" && data.html) {
               setSections((prev) =>
                 prev.map((s) => (s.id === sectionId ? { ...s, html: data.html } : s))
               );
