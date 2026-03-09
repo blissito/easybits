@@ -1,74 +1,77 @@
 {
   "name": "@easybits.cloud/html-tailwind-generator",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "AI-powered landing page generator with Tailwind CSS — canvas editor, streaming generation, and one-click deploy",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./components": "./src/components/index.ts",
-    "./images": "./src/images/index.ts",
-    "./generate": "./src/generate.ts",
-    "./refine": "./src/refine.ts",
-    "./deploy": "./src/deploy.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./components": {
+      "types": "./dist/components.d.ts",
+      "import": "./dist/components.js"
+    },
+    "./images": {
+      "types": "./dist/images.d.ts",
+      "import": "./dist/images.js"
+    },
+    "./generate": {
+      "types": "./dist/generate.d.ts",
+      "import": "./dist/generate.js"
+    },
+    "./refine": {
+      "types": "./dist/refine.d.ts",
+      "import": "./dist/refine.js"
+    },
+    "./deploy": {
+      "types": "./dist/deploy.d.ts",
+      "import": "./dist/deploy.js"
+    }
   },
   "files": [
-    "src"
+    "dist"
   ],
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "tsup"
+  },
   "peerDependencies": {
-    "react": ">=18",
-    "react-dom": ">=18",
-    "ai": ">=4",
     "@ai-sdk/anthropic": ">=3",
     "@ai-sdk/openai": ">=1",
+    "@codemirror/autocomplete": ">=6",
+    "@codemirror/commands": ">=6",
     "@codemirror/lang-html": ">=6",
+    "@codemirror/language": ">=6",
+    "@codemirror/search": ">=6",
     "@codemirror/state": ">=6",
     "@codemirror/theme-one-dark": ">=6",
     "@codemirror/view": ">=6",
-    "@codemirror/commands": ">=6",
-    "@codemirror/search": ">=6",
-    "@codemirror/language": ">=6",
-    "@codemirror/autocomplete": ">=6",
+    "ai": ">=4",
+    "react": ">=18",
+    "react-dom": ">=18",
     "react-icons": ">=5"
   },
   "peerDependenciesMeta": {
-    "@codemirror/lang-html": {
-      "optional": true
-    },
-    "@codemirror/state": {
-      "optional": true
-    },
-    "@codemirror/theme-one-dark": {
-      "optional": true
-    },
-    "@codemirror/view": {
-      "optional": true
-    },
-    "@codemirror/commands": {
-      "optional": true
-    },
-    "@codemirror/search": {
-      "optional": true
-    },
-    "@codemirror/language": {
-      "optional": true
-    },
-    "@codemirror/autocomplete": {
-      "optional": true
-    },
-    "react-icons": {
-      "optional": true
-    },
-    "@ai-sdk/openai": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
+    "@codemirror/lang-html": { "optional": true },
+    "@codemirror/state": { "optional": true },
+    "@codemirror/theme-one-dark": { "optional": true },
+    "@codemirror/view": { "optional": true },
+    "@codemirror/commands": { "optional": true },
+    "@codemirror/search": { "optional": true },
+    "@codemirror/language": { "optional": true },
+    "@codemirror/autocomplete": { "optional": true },
+    "react-icons": { "optional": true },
+    "@ai-sdk/openai": { "optional": true },
+    "react-dom": { "optional": true }
   },
   "dependencies": {
     "nanoid": "^5.1.5"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
   }
 }
