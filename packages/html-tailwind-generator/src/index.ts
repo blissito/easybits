@@ -55,4 +55,6 @@ export {
   SectionList,
   FloatingToolbar,
   CodeEditor,
+  ViewportToggle,
+  type Viewport,
 } from "./components/index";

@@ -231,13 +231,9 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
               const results = await Promise.allSettled(
                 slotsSnapshot.map(async (slot) => {
                   let url: string | null = null;
-                  if (openaiApiKey) {
-                    url = await generateImage(slot.query, openaiApiKey).catch(() => null);
-                  }
-                  if (!url) {
-                    const img = await searchImage(slot.query, pexelsApiKey).catch(() => null);
-                    url = img?.url || null;
-                  }
+                  // Pexels first (permanent URLs), DALL-E disabled (temporary URLs expire ~2hrs)
+                  const img = await searchImage(slot.query, pexelsApiKey).catch(() => null);
+                  url = img?.url || null;
                   url ??= `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
                   return { slot, url };
                 })

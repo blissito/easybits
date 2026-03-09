@@ -17,6 +17,7 @@ import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildCustomThemeCss, type CustomColors } from "~/lib/landing3/themes";
+import { ViewportToggle, type Viewport } from "@easybits.cloud/html-tailwind-generator";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -164,7 +165,7 @@ export default function Landing3Editor() {
     searchParams.get("generating") === "1"
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
-  const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [viewport, setViewport] = useState<Viewport>("desktop");
   const [customColors, setCustomColors] = useState<CustomColors>(() => {
     const meta = landing.metadata as Record<string, unknown> | null;
     const saved = meta?.customColors as CustomColors | undefined;
@@ -808,26 +809,11 @@ export default function Landing3Editor() {
         {/* Canvas */}
         <div className={`${codeViewSectionId ? "w-1/2" : "flex-1"} overflow-auto relative flex flex-col`}>
           {/* Viewport buttons */}
-          <div className="flex items-center justify-center gap-1 py-2 shrink-0 bg-gray-50 border-b border-gray-200">
-            {([
-              { id: "desktop" as const, label: "Desktop", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v8.5A2.25 2.25 0 0115.75 15h-3.105a3.501 3.501 0 001.1 1.677A.75.75 0 0113.26 18H6.74a.75.75 0 01-.484-1.323A3.501 3.501 0 007.355 15H4.25A2.25 2.25 0 012 12.75v-8.5zm1.5 0a.75.75 0 01.75-.75h11.5a.75.75 0 01.75.75v8.5a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-8.5z" clipRule="evenodd"/></svg> },
-              { id: "tablet" as const, label: "Tablet", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 1a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2H5zm0 1.5h10a.5.5 0 01.5.5v14a.5.5 0 01-.5.5H5a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5zm4 14a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd"/></svg> },
-              { id: "mobile" as const, label: "Mobile", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm0 1.5h8a.5.5 0 01.5.5v12a.5.5 0 01-.5.5H6a.5.5 0 01-.5-.5V4a.5.5 0 01.5-.5zm3 13a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd"/></svg> },
-            ]).map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setViewport(v.id)}
-                title={v.label}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewport === v.id
-                    ? "bg-brand-100 text-brand-700"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {v.icon}
-              </button>
-            ))}
-          </div>
+          <ViewportToggle
+            value={viewport}
+            onChange={setViewport}
+            activeClass="bg-brand-100 text-brand-700"
+          />
 
           {/* Canvas area with viewport sizing */}
           <div className={`flex-1 overflow-auto relative ${viewport !== "desktop" ? "flex justify-center bg-gray-100" : ""}`}>
