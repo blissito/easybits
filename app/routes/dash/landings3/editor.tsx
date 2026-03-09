@@ -307,6 +307,7 @@ export default function Landing3Editor() {
 
       const decoder = new TextDecoder();
       let buf = "";
+      let eventType = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -316,14 +317,12 @@ export default function Landing3Editor() {
         const lines = buf.split("\n");
         buf = lines.pop() || "";
 
-        let eventType = "";
         for (const line of lines) {
           if (line.startsWith("event: ")) {
             eventType = line.slice(7).trim();
           } else if (line.startsWith("data: ")) {
-            const payload = line.slice(6);
             try {
-              const data = JSON.parse(payload);
+              const data = JSON.parse(line.slice(6));
               if (eventType === "section") {
                 setSections((prev) => [...prev, data]);
                 requestAnimationFrame(() => {
@@ -342,7 +341,6 @@ export default function Landing3Editor() {
             } catch {
               /* skip malformed */
             }
-            eventType = "";
           }
         }
       }
@@ -432,19 +430,13 @@ export default function Landing3Editor() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let event = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-
-        const lines = buf.split("\n");
-        buf = lines.pop() || "";
-
-        let event = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) event = line.slice(7);
-          else if (line.startsWith("data: ")) {
+      const processLine = (line: string) => {
+        if (line.startsWith("event: ")) {
+          event = line.slice(7);
+        } else if (line.startsWith("data: ")) {
+          try {
             const data = JSON.parse(line.slice(6));
             if (event === "chunk" && data.html) {
               setSections((prev) =>
@@ -456,26 +448,23 @@ export default function Landing3Editor() {
               );
               setSelection(null);
             }
-          }
+          } catch {}
         }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) processLine(line);
       }
 
-      // Process any remaining data in buffer after stream ends
+      // Process remaining buffer
       if (buf.trim()) {
-        const remaining = buf.split("\n");
-        let event = "";
-        for (const line of remaining) {
-          if (line.startsWith("event: ")) event = line.slice(7);
-          else if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.slice(6));
-            if (event === "done" && data.html) {
-              setSections((prev) =>
-                prev.map((s) => (s.id === sectionId ? { ...s, html: data.html } : s))
-              );
-              setSelection(null);
-            }
-          }
-        }
+        for (const line of buf.split("\n")) processLine(line);
       }
     } catch (err) {
       console.error("Refine error:", err);
@@ -539,6 +528,7 @@ export default function Landing3Editor() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let event = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -548,24 +538,46 @@ export default function Landing3Editor() {
         const lines = buf.split("\n");
         buf = lines.pop() || "";
 
-        let event = "";
         for (const line of lines) {
           if (line.startsWith("event: ")) event = line.slice(7);
           else if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.slice(6));
-            if (event === "chunk" && data.html) {
-              setSections((prev) =>
-                prev.map((s) => (s.id === newId ? { ...s, html: data.html } : s))
-              );
-            } else if (event === "done" && data.html) {
-              setSections((prev) => {
-                const updated = prev.map((s) =>
-                  s.id === newId ? { ...s, html: data.html } : s
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (event === "chunk" && data.html) {
+                setSections((prev) =>
+                  prev.map((s) => (s.id === newId ? { ...s, html: data.html } : s))
                 );
-                saveSections(updated);
-                return updated;
-              });
-            }
+              } else if (event === "done" && data.html) {
+                setSections((prev) => {
+                  const updated = prev.map((s) =>
+                    s.id === newId ? { ...s, html: data.html } : s
+                  );
+                  saveSections(updated);
+                  return updated;
+                });
+              }
+            } catch {}
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buf.trim()) {
+        for (const line of buf.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (event === "done" && data.html) {
+                setSections((prev) => {
+                  const updated = prev.map((s) =>
+                    s.id === newId ? { ...s, html: data.html } : s
+                  );
+                  saveSections(updated);
+                  return updated;
+                });
+              }
+            } catch {}
           }
         }
       }
