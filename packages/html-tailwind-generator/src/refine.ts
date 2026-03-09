@@ -2,10 +2,10 @@ import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { enrichImages } from "./images/enrichImages";
 
-function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
+async function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
   const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
   if (openaiKey) {
-    const { createOpenAI } = require("@ai-sdk/openai");
+    const { createOpenAI } = await import("@ai-sdk/openai");
     const openai = createOpenAI({ apiKey: openaiKey });
     return openai(opts.modelId || opts.defaultOpenai);
   }
@@ -83,7 +83,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
   const defaultOpenai = referenceImage ? "gpt-4o" : "gpt-4o-mini";
   const defaultAnthropic = referenceImage ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
-  const model = resolveModel({ openaiApiKey, anthropicApiKey, modelId, defaultOpenai, defaultAnthropic });
+  const model = await resolveModel({ openaiApiKey, anthropicApiKey, modelId, defaultOpenai, defaultAnthropic });
 
   // Build content (supports multimodal with reference image)
   const content: any[] = [];

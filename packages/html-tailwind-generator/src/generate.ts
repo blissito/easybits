@@ -6,10 +6,10 @@ import { searchImage } from "./images/pexels";
 import { generateImage } from "./images/dalleImages";
 import type { Section3 } from "./types";
 
-function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
+async function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
   const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
   if (openaiKey) {
-    const { createOpenAI } = require("@ai-sdk/openai");
+    const { createOpenAI } = await import("@ai-sdk/openai");
     const openai = createOpenAI({ apiKey: openaiKey });
     return openai(opts.modelId || opts.defaultOpenai);
   }
@@ -172,7 +172,7 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
   } = options;
 
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
-  const model = resolveModel({ openaiApiKey, anthropicApiKey, modelId, defaultOpenai: "gpt-4o", defaultAnthropic: "claude-sonnet-4-6" });
+  const model = await resolveModel({ openaiApiKey, anthropicApiKey, modelId, defaultOpenai: "gpt-4o", defaultAnthropic: "claude-sonnet-4-6" });
 
   // Build prompt content (supports multimodal with reference image)
   const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
