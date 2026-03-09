@@ -32,6 +32,8 @@ All API keys can be set via environment variables instead of passing them explic
 
 **Priority**: If both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are set, OpenAI takes precedence. To force Anthropic, pass `anthropicApiKey` explicitly and omit `openaiApiKey`.
 
+**Planned**: Mix providers — use Anthropic for text generation + DALL-E for images (best of both). This is on the roadmap; [open an issue](https://github.com/blissito/easybits/issues) to bump priority.
+
 ## Quick Start
 
 ### Generate a landing page (server-side)
