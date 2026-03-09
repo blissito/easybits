@@ -178,7 +178,19 @@ export function getIframeScript(): string {
 
     if (msg.action === 'update-section') {
       var el = getSectionElement(msg.id);
-      if (el) { el.innerHTML = msg.html; }
+      if (el && typeof window.morphdom === 'function') {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = msg.html;
+        window.morphdom(el, tmp, {
+          childrenOnly: true,
+          onBeforeElUpdated: function(fromEl, toEl) {
+            if (fromEl.isEqualNode(toEl)) return false;
+            return true;
+          }
+        });
+      } else if (el) {
+        el.innerHTML = msg.html;
+      }
     }
 
     if (msg.action === 'remove-section') {

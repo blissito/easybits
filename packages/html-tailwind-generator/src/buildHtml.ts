@@ -20,6 +20,7 @@ export function buildPreviewHtml(sections: Section3[], theme?: string): string {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/morphdom@2.7.4/dist/morphdom-umd.min.js"></script>
 <script>tailwind.config = ${tailwindConfig}</script>
 <style>
 ${css}
