@@ -3,7 +3,6 @@ import { data, redirect } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { auditCerts, deleteOrphanedCerts } from "~/.server/core/certOperations";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { useState } from "react";
 import type { Route } from "./+types/certs";
 
 export const meta = () => [
@@ -36,16 +35,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const form = await request.formData();
   const intent = form.get("intent") as string;
 
-  if (intent === "delete-selected") {
-    const hostnames = (form.get("hostnames") as string || "").split(",").filter(Boolean);
-    if (hostnames.length === 0) return data({ error: "No hostnames selected" });
-    const result = await deleteOrphanedCerts(hostnames);
-    return data({ ok: true, ...result });
-  }
-
-  if (intent === "delete-all-orphans") {
-    const hostnames = (form.get("hostnames") as string || "").split(",").filter(Boolean);
-    const result = await deleteOrphanedCerts(hostnames);
+  if (intent === "delete-one") {
+    const hostname = (form.get("hostname") as string || "").trim();
+    if (!hostname) return data({ error: "No hostname provided" });
+    const result = await deleteOrphanedCerts([hostname]);
     return data({ ok: true, ...result });
   }
 
@@ -55,27 +48,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
 export default function CertsAdmin() {
   const audit = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const isSubmitting = fetcher.state !== "idle";
   const actionData = fetcher.data as any;
-
-  const toggleSelect = (hostname: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(hostname)) next.delete(hostname);
-      else next.add(hostname);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    if (selected.size === audit.orphanedCerts.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(audit.orphanedCerts.map((c) => c.hostname)));
-    }
-  };
 
   return (
     <div className="max-w-4xl">
@@ -118,77 +92,61 @@ export default function CertsAdmin() {
       {/* Orphaned certs */}
       {audit.orphanedCerts.length > 0 && (
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-black text-red-700">
-              Certificados huerfanos ({audit.orphanedCerts.length})
-            </h3>
-            <div className="flex gap-2">
-              <BrutalButton size="chip" mode="ghost" onClick={selectAll}>
-                {selected.size === audit.orphanedCerts.length ? "Deseleccionar" : "Seleccionar todos"}
-              </BrutalButton>
-              {selected.size > 0 && (
-                <fetcher.Form method="post">
-                  <input type="hidden" name="intent" value="delete-selected" />
-                  <input type="hidden" name="hostnames" value={Array.from(selected).join(",")} />
-                  <BrutalButton
-                    type="submit"
-                    size="chip"
-                    disabled={isSubmitting}
-                    className="bg-red-500 text-white border-red-700"
-                  >
-                    {isSubmitting ? "Eliminando..." : `Eliminar ${selected.size} seleccionados`}
-                  </BrutalButton>
-                </fetcher.Form>
-              )}
-            </div>
-          </div>
+          <h3 className="text-lg font-black text-red-700 mb-3">
+            Certificados huerfanos ({audit.orphanedCerts.length})
+          </h3>
           <div className="border-2 border-black rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="p-2 text-left w-8">
-                    <input
-                      type="checkbox"
-                      checked={selected.size === audit.orphanedCerts.length}
-                      onChange={selectAll}
-                    />
-                  </th>
                   <th className="p-2 text-left font-bold">Hostname</th>
                   <th className="p-2 text-left font-bold">Status</th>
                   <th className="p-2 text-left font-bold">Creado</th>
+                  <th className="p-2 text-right font-bold">Accion</th>
                 </tr>
               </thead>
               <tbody>
-                {audit.orphanedCerts.map((cert) => (
-                  <tr
-                    key={cert.hostname}
-                    className="border-t border-gray-200 hover:bg-red-50 cursor-pointer"
-                    onClick={() => toggleSelect(cert.hostname)}
-                  >
-                    <td className="p-2">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(cert.hostname)}
-                        onChange={() => toggleSelect(cert.hostname)}
-                      />
-                    </td>
-                    <td className="p-2 font-mono text-xs">{cert.hostname}</td>
-                    <td className="p-2">
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                          cert.clientStatus === "Issued"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {cert.clientStatus}
-                      </span>
-                    </td>
-                    <td className="p-2 text-xs text-gray-500">
-                      {new Date(cert.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
+                {audit.orphanedCerts.map((cert) => {
+                  const isDeleting =
+                    fetcher.state !== "idle" &&
+                    fetcher.formData?.get("hostname") === cert.hostname;
+                  return (
+                    <tr
+                      key={cert.hostname}
+                      className="border-t border-gray-200 hover:bg-red-50"
+                    >
+                      <td className="p-2 font-mono text-xs">{cert.hostname}</td>
+                      <td className="p-2">
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            cert.clientStatus === "Issued"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {cert.clientStatus}
+                        </span>
+                      </td>
+                      <td className="p-2 text-xs text-gray-500">
+                        {new Date(cert.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="p-2 text-right">
+                        <fetcher.Form method="post" className="inline">
+                          <input type="hidden" name="intent" value="delete-one" />
+                          <input type="hidden" name="hostname" value={cert.hostname} />
+                          <BrutalButton
+                            type="submit"
+                            size="chip"
+                            disabled={isDeleting}
+                            className="bg-red-500 text-white border-red-700"
+                          >
+                            {isDeleting ? "..." : "Eliminar"}
+                          </BrutalButton>
+                        </fetcher.Form>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
