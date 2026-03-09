@@ -30,9 +30,19 @@ RULES:
 - All text content in Spanish unless the prompt specifies otherwise
 - Use real-looking content (not Lorem ipsum) — make it specific to the prompt
 
+RESPONSIVE — MANDATORY:
+- EVERY grid: grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 (NEVER grid-cols-3 alone)
+- EVERY flex row: flex flex-col md:flex-row (NEVER flex flex-row alone)
+- Text sizes: text-3xl md:text-5xl lg:text-7xl (NEVER text-7xl alone)
+- Images: w-full h-auto object-cover max-w-full
+- Padding: px-4 md:px-8 lg:px-16 (NEVER px-16 alone)
+- Hide decorative on mobile if breaks layout: hidden md:block
+
 IMAGES — CRITICAL:
-- Use <img data-image-query="english search query" alt="description" class="..."/>
+- EVERY image MUST use: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/>
+- NEVER use <img> without data-image-query
 - NEVER include a src attribute — the system auto-replaces data-image-query with a real image URL
+- Queries must be generic stock-photo friendly (e.g. "modern office" not "Juan's cybercafe")
 - For avatar-like elements, use colored divs with initials instead of img tags (e.g. <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">JD</div>)
 
 COLOR SYSTEM — CRITICAL (READ CAREFULLY):
@@ -275,11 +285,66 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
         };
         allSections.push(section);
         onSection?.(section);
+
+        // Enrich images for remaining-buffer sections too
+        const slots = findImageSlots(section.html);
+        if (slots.length > 0) {
+          const sectionRef = section;
+          const slotsSnapshot = slots.map((s) => ({ ...s }));
+          imagePromises.push(
+            (async () => {
+              const results = await Promise.allSettled(
+                slotsSnapshot.map(async (slot) => {
+                  let url: string | null = null;
+                  const img = await searchImage(slot.query, pexelsApiKey).catch(() => null);
+                  url = img?.url || null;
+                  url ??= `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
+                  return { slot, url };
+                })
+              );
+              let html = sectionRef.html;
+              for (const r of results) {
+                if (r.status === "fulfilled" && r.value) {
+                  const { slot, url } = r.value;
+                  const replacement = slot.replaceStr.replace("{url}", url);
+                  html = html.replaceAll(slot.searchStr, replacement);
+                }
+              }
+              if (html !== sectionRef.html) {
+                sectionRef.html = html;
+                onImageUpdate?.(sectionRef.id, html);
+              }
+            })()
+          );
+        }
       }
     }
 
     // Wait for image enrichment
     await Promise.allSettled(imagePromises);
+
+    // Final fallback: any <img> still without src gets a placeholder
+    for (const section of allSections) {
+      const before = section.html;
+      section.html = section.html.replace(
+        /<img\s(?![^>]*\bsrc=)([^>]*?)>/gi,
+        (_match, attrs) => {
+          const altMatch = attrs.match(/alt="([^"]*?)"/);
+          const query = altMatch?.[1] || "image";
+          return `<img src="https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(query.slice(0, 30))}" ${attrs}>`;
+        }
+      );
+      // Also replace any remaining data-image-query that wasn't enriched
+      section.html = section.html.replace(
+        /data-image-query="([^"]+)"/g,
+        (_match, query) => {
+          return `src="https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(query.slice(0, 30))}" data-enriched="placeholder"`;
+        }
+      );
+      if (section.html !== before) {
+        onImageUpdate?.(section.id, section.html);
+      }
+    }
 
     onDone?.(allSections);
     return allSections;

@@ -156,7 +156,7 @@ export function SectionList({
                 {section.label}
               </span>
             )}
-            <div className="opacity-0 group-hover:opacity-100 flex gap-0.5">
+            <div className="hidden group-hover:flex gap-0.5 shrink-0">
               <button
                 onClick={(e) => {
                   e.stopPropagation();

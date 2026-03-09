@@ -9,13 +9,19 @@ export async function searchImage(query: string, apiKey?: string): Promise<Pexel
   if (!key) return null;
   try {
     const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&locale=en-US`,
       { headers: { Authorization: key } }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[pexels] ${res.status} for "${query}"`);
+      return null;
+    }
     const data = await res.json();
     const photo = data.photos?.[0];
-    if (!photo) return null;
+    if (!photo) {
+      console.warn(`[pexels] 0 results for "${query}"`);
+      return null;
+    }
     return {
       url: photo.src.large,
       photographer: photo.photographer,

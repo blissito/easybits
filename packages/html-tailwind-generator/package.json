@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/html-tailwind-generator",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "AI-powered landing page generator with Tailwind CSS — canvas editor, streaming generation, and one-click deploy",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -56,17 +56,39 @@
     "react-icons": ">=5"
   },
   "peerDependenciesMeta": {
-    "@codemirror/lang-html": { "optional": true },
-    "@codemirror/state": { "optional": true },
-    "@codemirror/theme-one-dark": { "optional": true },
-    "@codemirror/view": { "optional": true },
-    "@codemirror/commands": { "optional": true },
-    "@codemirror/search": { "optional": true },
-    "@codemirror/language": { "optional": true },
-    "@codemirror/autocomplete": { "optional": true },
-    "react-icons": { "optional": true },
-    "@ai-sdk/openai": { "optional": true },
-    "react-dom": { "optional": true }
+    "@codemirror/lang-html": {
+      "optional": true
+    },
+    "@codemirror/state": {
+      "optional": true
+    },
+    "@codemirror/theme-one-dark": {
+      "optional": true
+    },
+    "@codemirror/view": {
+      "optional": true
+    },
+    "@codemirror/commands": {
+      "optional": true
+    },
+    "@codemirror/search": {
+      "optional": true
+    },
+    "@codemirror/language": {
+      "optional": true
+    },
+    "@codemirror/autocomplete": {
+      "optional": true
+    },
+    "react-icons": {
+      "optional": true
+    },
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "dependencies": {
     "nanoid": "^5.1.5"

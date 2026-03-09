@@ -149,6 +149,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 **Prioridad 1 — Landings v3 clase S (SIGUIENTE)**:
 - Streaming para presentaciones (mismo patrón SSE que landings v2)
 - Imagen de referencia: usuario sube imagen → AI replica el diseño como sección
+- FloatingToolbar IMG: diferenciar "subir imagen" (upload/URL) vs "generar imagen con AI" (DALL-E) — actualmente solo hay campo SRC manual y el botón de cámara no distingue entre ambos flujos
 
 **Prioridad 2 — Previews de archivos inline (table stakes)**:
 - Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
