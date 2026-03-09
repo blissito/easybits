@@ -40,7 +40,7 @@ export const LANDING_THEMES: LandingTheme[] = [
       "primary-light": "#f4f4f5",
       "primary-dark": "#a1a1aa",
       secondary: "#71717a",
-      accent: "#e4e4e7",
+      accent: "#a78bfa",
       surface: "#09090b",
       "surface-alt": "#18181b",
       "on-surface": "#fafafa",

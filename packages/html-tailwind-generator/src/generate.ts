@@ -41,7 +41,7 @@ COLOR SYSTEM — CRITICAL (READ CAREFULLY):
 - The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
 - ALL backgrounds MUST use: bg-primary, bg-primary-dark, bg-surface, bg-surface-alt
 - ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-primary, text-accent
-- CONTRAST RULE: on bg-primary or bg-primary-dark → use text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface or text-on-surface-muted. NEVER put text-on-surface on bg-primary or vice versa.
+- CONTRAST RULE: on bg-primary or bg-primary-dark → use text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface or text-on-surface-muted. NEVER put text-on-surface on bg-primary or vice versa. text-accent is decorative — use sparingly on bg-surface/bg-surface-alt only.
 - For gradients: from-primary to-primary-dark, from-surface to-surface-alt
 - For hover: hover:bg-primary-dark, hover:bg-primary-light
 
