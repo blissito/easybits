@@ -832,7 +832,7 @@ export default function Landing3Editor() {
           {/* Canvas area with viewport sizing */}
           <div className={`flex-1 overflow-auto relative ${viewport !== "desktop" ? "flex justify-center bg-gray-100" : ""}`}>
           <div
-            className={viewport !== "desktop" ? "transition-all duration-300 h-full shrink-0" : "h-full"}
+            className={`transition-all duration-300 h-full ${viewport !== "desktop" ? "shrink-0" : ""}`}
             style={viewport === "tablet" ? { width: 768 } : viewport === "mobile" ? { width: 375 } : undefined}
           >
           {isGenerating && sections.length === 0 ? (
