@@ -104,6 +104,7 @@ export default [
         ...prefix("admin", [
           index("routes/dash/admin/users.tsx"),
           route("certs", "routes/dash/admin/certs.tsx"),
+          route("metrics", "routes/dash/admin/metrics.tsx"),
         ]),
       ]),
     ]),
