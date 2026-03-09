@@ -2,6 +2,7 @@
   "name": "easybits",
   "private": true,
   "type": "module",
+  "workspaces": ["packages/*"],
   "scripts": {
     "dev": "react-router dev",
     "build": "react-router build",
