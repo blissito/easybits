@@ -837,10 +837,8 @@ export default function Landing3Editor() {
           >
           {isGenerating && sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24">
-              <div className="flex gap-1.5 mb-4">
-                <span className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2.5 h-2.5 rounded-full bg-brand-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2.5 h-2.5 rounded-full bg-brand-300 animate-bounce" style={{ animationDelay: "300ms" }} />
+              <div className="mb-4">
+                <span className="block w-8 h-8 border-[3px] border-gray-200 border-t-brand-500 rounded-full animate-spin" />
               </div>
               <p className="text-sm font-bold text-gray-700">
                 Generando tu landing con AI...
