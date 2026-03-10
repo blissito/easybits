@@ -41,6 +41,32 @@ export function getIframeScript(): string {
     return parts.join(' > ');
   }
 
+  function getCleanSectionHtml(sectionEl) {
+    var els = sectionEl.querySelectorAll('*');
+    var saved = [];
+    for (var i = 0; i < els.length; i++) {
+      var s = els[i].style;
+      saved.push({ outline: s.outline, outlineOffset: s.outlineOffset, ce: els[i].contentEditable });
+      s.outline = '';
+      s.outlineOffset = '';
+      if (els[i].contentEditable === 'true') els[i].removeAttribute('contenteditable');
+    }
+    // Also clean the section root
+    var rootOutline = sectionEl.style.outline;
+    var rootOffset = sectionEl.style.outlineOffset;
+    sectionEl.style.outline = '';
+    sectionEl.style.outlineOffset = '';
+    var html = sectionEl.innerHTML;
+    sectionEl.style.outline = rootOutline;
+    sectionEl.style.outlineOffset = rootOffset;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.outline = saved[i].outline;
+      els[i].style.outlineOffset = saved[i].outlineOffset;
+      if (saved[i].ce === 'true') els[i].contentEditable = 'true';
+    }
+    return html;
+  }
+
   function isTextElement(el) {
     var textTags = ['H1','H2','H3','H4','H5','H6','P','SPAN','LI','A','BLOCKQUOTE','LABEL','TD','TH','FIGCAPTION','BUTTON'];
     return textTags.indexOf(el.tagName) !== -1;
@@ -146,7 +172,7 @@ export function getIframeScript(): string {
         sectionId: sid,
         elementPath: getElementPath(el),
         newText: el.innerHTML,
-        sectionHtml: sectionEl ? sectionEl.innerHTML : null,
+        sectionHtml: sectionEl ? getCleanSectionHtml(sectionEl) : null,
       }, '*');
 
       selectedEl = null;
@@ -226,7 +252,7 @@ export function getIframeScript(): string {
           window.parent.postMessage({
             type: 'section-html-updated',
             sectionId: msg.sectionId,
-            sectionHtml: sectionEl.innerHTML,
+            sectionHtml: getCleanSectionHtml(sectionEl),
           }, '*');
         }
       }
