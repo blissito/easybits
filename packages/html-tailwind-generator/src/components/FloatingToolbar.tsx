@@ -75,7 +75,7 @@ export function FloatingToolbar({
 
   if (!selection || !selection.rect || !iframeRect) return null;
 
-  const toolbarWidth = toolbarRef.current?.offsetWidth || 480;
+  const toolbarWidth = toolbarRef.current?.offsetWidth || 600;
   const toolbarHeight = toolbarRef.current?.offsetHeight || 60;
   const top = iframeRect.top + selection.rect.top + selection.rect.height + 8;
   const left = iframeRect.left + selection.rect.left;
@@ -141,7 +141,7 @@ export function FloatingToolbar({
     <div
       ref={toolbarRef}
       className="fixed z-50 flex flex-col gap-1.5 bg-gray-900 text-white rounded-xl shadow-2xl px-2 py-1.5 border border-gray-700"
-      style={{ top: finalTop, left: clampedLeft, maxWidth: "min(480px, calc(100vw - 16px))" }}
+      style={{ top: finalTop, left: clampedLeft, maxWidth: "min(600px, calc(100vw - 16px))" }}
     >
       {/* Main row */}
       <div className="flex items-center gap-1.5">
@@ -161,8 +161,20 @@ export function FloatingToolbar({
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={refImage ? "Instruccion + imagen..." : "Editar con AI..."}
             disabled={isRefining}
-            className="bg-transparent text-sm text-white placeholder:text-gray-500 outline-none w-40 md:w-56 px-2 py-1"
+            className="bg-transparent text-sm text-white placeholder:text-gray-500 outline-none min-w-[10rem] flex-1 px-2 py-1"
           />
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={!prompt.trim() || isRefining}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-30 transition-colors shrink-0"
+          >
+            {isRefining ? (
+              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <HiSparkles className="w-3.5 h-3.5" />
+            )}
+          </button>
           {/* Image attach button */}
           <button
             type="button"
@@ -186,17 +198,6 @@ export function FloatingToolbar({
             onChange={handleFileSelect}
             className="hidden"
           />
-          <button
-            type="submit"
-            disabled={!prompt.trim() || isRefining}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-30 transition-colors"
-          >
-            {isRefining ? (
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <HiSparkles className="w-3.5 h-3.5" />
-            )}
-          </button>
         </form>
 
         {/* Variante button */}
