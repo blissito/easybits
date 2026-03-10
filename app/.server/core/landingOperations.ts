@@ -7,7 +7,8 @@ import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
 import { buildDeployHtml } from "~/lib/landing3/buildHtml";
-import { buildDocumentHtml, buildDocumentViewerHtml } from "~/lib/documents/buildHtml";
+import { buildDocumentHtml } from "~/lib/documents/buildHtml";
+import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
 import type { LandingSection } from "~/lib/landingCatalog";
 import type { LandingBlock } from "~/lib/landing2/blockTypes";
 import type { Section3 } from "~/lib/landing3/types";
@@ -21,7 +22,7 @@ function throwJson(error: string, status: number): never {
   });
 }
 
-export async function deployLanding(ctx: AuthContext, id: string, options?: { pdfUrl?: string }) {
+export async function deployLanding(ctx: AuthContext, id: string) {
   requireScope(ctx, "WRITE");
   const landing = await db.landing.findUnique({ where: { id } });
   if (!landing || landing.ownerId !== ctx.user.id)
@@ -33,10 +34,17 @@ export async function deployLanding(ctx: AuthContext, id: string, options?: { pd
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
   const landingMeta = (landing.metadata as Record<string, unknown>) || {};
   const isPaidPlan = ctx.user.roles.some((r) => r === "Flow" || r === "Studio");
-  const html = landing.version === 4 && options?.pdfUrl
-    ? buildDocumentViewerHtml(options.pdfUrl, landing.name, { showBranding: !isPaidPlan })
-    : landing.version === 4
-    ? buildDocumentHtml(sections as Section3[], { showBranding: !isPaidPlan })
+  const html = landing.version === 4
+    ? (() => {
+        const docTheme = (landingMeta.theme as string) || undefined;
+        const docThemeCss = docTheme ? buildSingleThemeCss(docTheme) : null;
+        return buildDocumentHtml(sections as Section3[], {
+          showBranding: !isPaidPlan,
+          themeCss: docThemeCss?.css,
+          tailwindConfig: docThemeCss?.tailwindConfig,
+          title: landing.name,
+        });
+      })()
     : landing.version === 3
     ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined, !isPaidPlan)
     : landing.version === 2

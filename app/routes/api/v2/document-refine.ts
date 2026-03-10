@@ -175,7 +175,7 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
-        const model = "claude-sonnet-4-6";
+        const model = "claude-haiku-4-5-20251001";
 
         const result = streamText({
           model: anthropic(model),

@@ -19,9 +19,6 @@ interface PageListProps {
   onStopVariant?: () => void;
   loadingVariantId?: string | null;
   onContextMenu?: (sectionIds: string[], position: { x: number; y: number }) => void;
-  /** When set, auto-opens the variant popup for this section ID (then call with null to reset) */
-  openVariantPopupFor?: string | null;
-  onVariantPopupOpened?: () => void;
 }
 
 /** Section3 with optional version history */
@@ -61,8 +58,6 @@ export function PageList({
   onStopVariant,
   loadingVariantId,
   onContextMenu,
-  openVariantPopupFor,
-  onVariantPopupOpened,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
@@ -75,18 +70,6 @@ export function PageList({
   const [variantPrompt, setVariantPrompt] = useState("");
   const [variantImage, setVariantImage] = useState<string | null>(null);
   const variantFileRef = useRef<HTMLInputElement>(null);
-
-  // Auto-open variant popup when requested from context menu
-  useEffect(() => {
-    if (openVariantPopupFor) {
-      setVariantPopup(openVariantPopupFor);
-      setVariantPrompt("");
-      setVariantImage(null);
-      onVariantPopupOpened?.();
-      // Scroll the thumbnail into view
-      itemRefs.current[openVariantPopupFor]?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [openVariantPopupFor]);
 
   // Close popups on ESC
   useEffect(() => {
@@ -206,46 +189,7 @@ export function PageList({
               }`}
             >
               {/* Thumbnail — scaled-down iframe clipped to container */}
-              <div className="relative" style={{ marginTop: (section as Section3WithVersions).versions?.length ? 4 : 0 }}>
-                {/* Stacked version thumbnails behind current page */}
-                {(() => {
-                  const versions = (section as Section3WithVersions).versions;
-                  if (!versions?.length) return null;
-                  // Show up to 2 most recent versions as stacked iframes
-                  const deckVersions = versions.slice(-2);
-                  return deckVersions.map((v, vi) => {
-                    const depth = deckVersions.length - vi; // 2 or 1 (furthest first)
-                    const offsetX = depth * 3;
-                    const scale = 1 - depth * 0.03;
-                    const opacity = depth === 2 ? 0.5 : 0.7;
-                    return (
-                      <div
-                        key={v.timestamp}
-                        className="absolute top-0 left-0 w-full rounded-t-lg border border-gray-200 overflow-hidden"
-                        style={{
-                          aspectRatio: "8.5 / 11",
-                          transform: `translateX(${offsetX}px) scale(${scale})`,
-                          transformOrigin: "top left",
-                          opacity,
-                          zIndex: -depth,
-                        }}
-                      >
-                        <iframe
-                          srcDoc={buildThumbnailHtml({ ...section, html: v.html }, themeCssData)}
-                          className="absolute top-0 left-0 border-none pointer-events-none"
-                          style={{
-                            width: "8.5in",
-                            height: "11in",
-                            transform: `scale(${(192 * scale) / (8.5 * 96)})`,
-                            transformOrigin: "top left",
-                          }}
-                          tabIndex={-1}
-                          loading="lazy"
-                        />
-                      </div>
-                    );
-                  });
-                })()}
+              <div className="relative">
                 <div
                   className="w-full bg-white rounded-t-lg border border-gray-200 relative overflow-hidden"
                   style={{ aspectRatio: "8.5 / 11", zIndex: 1 }}

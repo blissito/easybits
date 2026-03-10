@@ -20,6 +20,7 @@ import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
 
+
 function errorToast(msg: string) {
   toast.error(msg, {
     style: { border: "2px solid #000", padding: "16px", color: "#000", fontWeight: 600 },
@@ -53,8 +54,6 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const meta = (landing.metadata as Record<string, unknown>) || {};
   const sourceContent = meta.sourceContent as string | undefined;
   const logoUrl = meta.logoUrl as string | undefined;
-  const pdfUrl = meta.pdfUrl as string | undefined;
-
   // AI generation usage
   const userMeta = (user.metadata as Record<string, unknown>) || {};
   const userPlan = (userMeta.plan as string) || "Spark";
@@ -62,7 +61,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const aiGenUsed = (user as any).aiGenerationsCount || 0;
   const aiGenLimit = planConfig.aiGenerationsPerMonth;
 
-  return { landing, websiteUrl, sourceContent, logoUrl, pdfUrl, aiGenUsed, aiGenLimit, userPlan };
+  return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, userPlan };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
@@ -112,11 +111,10 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "deploy") {
     try {
-      const pdfUrl = formData.get("pdfUrl")?.toString() || undefined;
       const { deployLanding } = await import(
         "~/.server/core/landingOperations"
       );
-      const result = await deployLanding(ctx as any, params.id, { pdfUrl });
+      const result = await deployLanding(ctx as any, params.id);
       return result;
     } catch (err: any) {
       console.error("Deploy error:", err);
@@ -126,27 +124,6 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
           : err?.message || "Error al publicar";
       return { error: msg };
     }
-  }
-
-  if (intent === "get-pdf-put-url") {
-    const { getPlatformDefaultClient, PUBLIC_BUCKET } = await import("~/.server/storage");
-    const { nanoid } = await import("nanoid");
-    const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
-    const storageKey = `pdf/${user.id}/doc-${params.id}-${nanoid(6)}.pdf`;
-    const putUrl = await client.getPutUrl(storageKey);
-    const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
-    return { putUrl, publicUrl };
-  }
-
-  if (intent === "save-pdf-url") {
-    const pdfUrl = String(formData.get("pdfUrl") || "");
-    if (!pdfUrl) return { error: "Missing pdfUrl" };
-    const existing = (landing.metadata as Record<string, unknown>) || {};
-    await db.landing.update({
-      where: { id: params.id },
-      data: { metadata: { ...existing, pdfUrl } },
-    });
-    return { ok: true, pdfUrl };
   }
 
   if (intent === "unpublish") {
@@ -173,7 +150,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
 export default function DocumentEditor() {
   const {
-    landing, websiteUrl, sourceContent, logoUrl, pdfUrl: initialPdfUrl,
+    landing, websiteUrl, sourceContent, logoUrl,
     aiGenUsed: initialAiGenUsed, aiGenLimit, userPlan,
   } = useLoaderData<typeof loader>();
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
@@ -184,15 +161,8 @@ export default function DocumentEditor() {
     url?: string;
     redirect?: string;
     unpublished?: boolean;
-    putUrl?: string;
-    publicUrl?: string;
-    pdfUrl?: string;
-    ok?: boolean;
   }>();
-  const pdfFetcher = useFetcher<{ putUrl?: string; publicUrl?: string }>();
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
-  const [pdfLink, setPdfLink] = useState<string | null>(initialPdfUrl || null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sectionIds: string[] } | null>(null);
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 
@@ -305,6 +275,26 @@ export default function DocumentEditor() {
         else if (overflowOpen) setOverflowOpen(false);
         else if (selection) setSelection(null);
       }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const tag = (e.target as HTMLElement)?.tagName;
+        const isEditable = (e.target as HTMLElement)?.isContentEditable;
+        if (tag === "INPUT" || tag === "TEXTAREA" || isEditable) return;
+        if (contextMenu || showAddPrompt || codeViewSectionId) return;
+        if (selectedSectionIds.length === 0) return;
+        if (isGenerating || variantLoadingId) return;
+
+        e.preventDefault();
+        const updated = sections
+          .filter((s) => !selectedSectionIds.includes(s.id))
+          .map((s, i) => ({ ...s, order: i }));
+        if (updated.length === sections.length) return;
+        handleSectionsChange(updated);
+        setSelectedSectionIds([]);
+        if (selection && selectedSectionIds.includes(selection.sectionId)) {
+          setSelection(null);
+        }
+      }
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
@@ -314,6 +304,10 @@ export default function DocumentEditor() {
     selection,
     codeViewSectionId,
     showAddPrompt,
+    selectedSectionIds,
+    sections,
+    isGenerating,
+    variantLoadingId,
   ]);
 
   function stopGeneration() {
@@ -476,8 +470,10 @@ ${getIframeScript()}
 
   const saveSections = useCallback((s: Section3[]) => {
     queueMicrotask(() => {
+      // Strip ephemeral version history before persisting to DB
+      const clean = s.map(({ versions, ...rest }: any) => rest);
       saveFetcher.submit(
-        { intent: "update-sections", sections: JSON.stringify(s) },
+        { intent: "update-sections", sections: JSON.stringify(clean) },
         { method: "post" }
       );
     });
@@ -880,141 +876,10 @@ ${sectionsHtml}
     window.open(url, "_blank");
   }
 
-  async function handleDeployDocument() {
+  function handleDeployDocument() {
     if (sections.length === 0) return;
     setActiveIntent("deploy");
-    try {
-      // Generate PDF first, then deploy with the PDF URL
-      const pdfUrl = await generateAndUploadPdf();
-      const formData: Record<string, string> = { intent: "deploy" };
-      if (pdfUrl) formData.pdfUrl = pdfUrl;
-      deployFetcher.submit(formData, { method: "post" });
-    } catch (err) {
-      console.error("Deploy document error:", err);
-      errorToast("Error al publicar documento");
-      setActiveIntent(null);
-    }
-  }
-
-  async function generateAndUploadPdf(filterSectionIds?: string[]): Promise<string | null> {
-    const targetSections = filterSectionIds
-      ? sections.filter((s) => filterSectionIds.includes(s.id))
-      : sections;
-    if (targetSections.length === 0) return null;
-    setIsGeneratingPdf(true);
-    try {
-      // 1. Get PUT URL from server
-      const formData = new FormData();
-      formData.set("intent", "get-pdf-put-url");
-      const res = await fetch(`/dash/documents/${landing.id}`, {
-        method: "POST",
-        body: formData,
-      });
-      const { putUrl, publicUrl } = await res.json();
-      if (!putUrl || !publicUrl) throw new Error("No PUT URL returned");
-
-      // 2. Generate PDF client-side with html2pdf.js
-      const html2pdf = (await import("html2pdf.js")).default;
-      const sorted = [...targetSections].sort((a, b) => a.order - b.order);
-      const sectionsHtml = sorted
-        .map((s) => `<div class="page-section">${s.html}</div>`)
-        .join("\n");
-
-      const fullHtml = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
-  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    ${themeCssData?.css || ""}
-    * { box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; margin: 0; }
-    .page-section { page-break-after: always; padding: 0.75in; }
-    .page-section:last-child { page-break-after: auto; }
-  </style>
-</head>
-<body>${sectionsHtml}</body>
-</html>`;
-
-      // Create a temporary container to render
-      const container = document.createElement("div");
-      container.style.position = "absolute";
-      container.style.left = "-9999px";
-      container.style.width = "8.5in";
-      document.body.appendChild(container);
-
-      // Use iframe to render with Tailwind
-      const iframe = document.createElement("iframe");
-      iframe.style.width = "8.5in";
-      iframe.style.height = "11in";
-      iframe.style.border = "none";
-      container.appendChild(iframe);
-
-      await new Promise<void>((resolve) => {
-        iframe.onload = () => setTimeout(resolve, 4000); // Wait for Tailwind CDN + Chart.js
-        iframe.srcdoc = fullHtml;
-      });
-
-      const iframeBody = iframe.contentDocument?.body;
-      if (!iframeBody) throw new Error("Could not access iframe body");
-
-      // Convert Chart.js <canvas> elements to <img> so html2canvas captures them
-      const canvases = iframeBody.querySelectorAll("canvas");
-      canvases.forEach((canvas) => {
-        try {
-          const img = iframe.contentDocument!.createElement("img");
-          img.src = canvas.toDataURL("image/png");
-          img.style.cssText = canvas.style.cssText || "";
-          img.width = canvas.width;
-          img.height = canvas.height;
-          img.style.width = canvas.getAttribute("width") ? canvas.getAttribute("width") + "px" : "100%";
-          img.style.height = canvas.getAttribute("height") ? canvas.getAttribute("height") + "px" : "auto";
-          canvas.parentNode?.replaceChild(img, canvas);
-        } catch (_) { /* cross-origin or empty canvas — skip */ }
-      });
-
-      const pdfBlob: Blob = await html2pdf()
-        .set({
-          margin: 0,
-          filename: `${landing.name}.pdf`,
-          image: { type: "jpeg", quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, logging: false },
-          jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-          pagebreak: { mode: ["css", "legacy"], avoid: [] },
-        })
-        .from(iframeBody)
-        .outputPdf("blob");
-
-      document.body.removeChild(container);
-
-      // 3. Upload PDF blob
-      const uploadRes = await fetch(putUrl, {
-        method: "PUT",
-        body: pdfBlob,
-        headers: { "Content-Type": "application/pdf" },
-      });
-      if (!uploadRes.ok) throw new Error("PDF upload failed");
-
-      // 4. Save pdfUrl in metadata
-      const saveForm = new FormData();
-      saveForm.set("intent", "save-pdf-url");
-      saveForm.set("pdfUrl", publicUrl);
-      await fetch(`/dash/documents/${landing.id}`, {
-        method: "POST",
-        body: saveForm,
-      });
-
-      setPdfLink(publicUrl);
-      return publicUrl;
-    } catch (err) {
-      console.error("PDF generation error:", err);
-      return null;
-    } finally {
-      setIsGeneratingPdf(false);
-    }
+    deployFetcher.submit({ intent: "deploy" }, { method: "post" });
   }
 
   function handleThemeChange(newTheme: string) {
@@ -1079,29 +944,6 @@ ${sectionsHtml}
               </a>
               <Copy
                 text={liveUrl}
-                mode="ghost"
-                className="relative static p-0"
-              />
-            </span>
-          )}
-          {isGeneratingPdf && (
-            <span className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-3 h-3 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
-              Generando PDF...
-            </span>
-          )}
-          {pdfLink && !isGeneratingPdf && (
-            <span className="flex items-center gap-1.5">
-              <a
-                href={pdfLink}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-red-600 hover:underline font-bold"
-              >
-                PDF
-              </a>
-              <Copy
-                text={pdfLink}
                 mode="ghost"
                 className="relative static p-0"
               />
@@ -1320,6 +1162,24 @@ ${sectionsHtml}
                     const ids = contextMenu.sectionIds;
                     setContextMenu(null);
                     handleExportPdf(ids);
+                  },
+                },
+                {
+                  label: contextMenu.sectionIds.length === 1
+                    ? "Suprimir página"
+                    : `Suprimir ${contextMenu.sectionIds.length} páginas`,
+                  icon: (
+                    <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  ),
+                  onClick: () => {
+                    const ids = contextMenu.sectionIds;
+                    setContextMenu(null);
+                    const updated = sections
+                      .filter((s) => !ids.includes(s.id))
+                      .map((s, i) => ({ ...s, order: i }));
+                    handleSectionsChange(updated);
                   },
                 },
               ].map((item, i, arr) => (
