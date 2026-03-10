@@ -36,8 +36,7 @@ export async function action({ request }: Route.ActionArgs) {
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI");
 
-  // Increment counter before generating
-  await incrementAiGeneration(ctx.user.id);
+  let quotaIncremented = false;
 
   // Build the prompt combining source content + user instructions
   const parts = [
@@ -68,7 +67,11 @@ export async function action({ request }: Route.ActionArgs) {
           logoUrl: logoUrl || undefined,
           extraInstructions: extraInstructions || undefined,
           pexelsApiKey: process.env.PEXELS_API_KEY,
-          onSection(section) {
+          async onSection(section) {
+            if (!quotaIncremented) {
+              quotaIncremented = true;
+              await incrementAiGeneration(ctx.user.id);
+            }
             allSections.push(section);
             send("section", section);
           },

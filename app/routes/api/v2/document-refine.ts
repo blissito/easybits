@@ -108,7 +108,7 @@ export async function action({ request }: Route.ActionArgs) {
       { status: 429 }
     );
   }
-  await incrementAiGeneration(ctx.user.id);
+  let quotaIncremented = false;
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const anthropic = createAnthropic({ apiKey: userKey || undefined });
@@ -190,6 +190,10 @@ export async function action({ request }: Route.ActionArgs) {
         for await (const chunk of result.textStream) {
           fullHtml += chunk;
           chunkCount++;
+          if (!quotaIncremented) {
+            quotaIncremented = true;
+            incrementAiGeneration(ctx.user.id);
+          }
 
           // Send partial HTML every ~5 chunks for real-time feel
           if (chunkCount % 5 === 0) {

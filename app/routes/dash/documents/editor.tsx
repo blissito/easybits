@@ -15,11 +15,38 @@ import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
-import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
+import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
 
+
+/** Resize image to max dimension, return data URL */
+function resizeImageToDataUrl(file: File, maxDim: number): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= maxDim && height <= maxDim && file.size < 1024 * 1024) {
+          resolve(reader.result as string);
+          return;
+        }
+        const scale = Math.min(maxDim / width, maxDim / height, 1);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function errorToast(msg: string) {
   toast.error(msg, {
@@ -1430,9 +1457,7 @@ ${sectionsHtml}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => setAddRefImage(reader.result as string);
-                    reader.readAsDataURL(file);
+                    resizeImageToDataUrl(file, 1024).then(setAddRefImage);
                     e.target.value = "";
                   }}
                 />

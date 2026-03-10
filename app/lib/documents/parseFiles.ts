@@ -3,10 +3,26 @@
  * Accepts multiple files and returns combined text content.
  */
 
+/** Max file size: 10 MB */
+export const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+/** Max chars sent to AI */
+export const MAX_CONTENT_CHARS = 15_000;
+
 export interface ParsedFile {
   name: string;
   content: string;
   type: string;
+  /** Set when file exceeds MAX_FILE_SIZE */
+  skipped?: boolean;
+  error?: string;
+}
+
+export interface ParseResult {
+  files: ParsedFile[];
+  /** True if combined content exceeds MAX_CONTENT_CHARS */
+  truncated: boolean;
+  totalChars: number;
 }
 
 export async function parseFiles(files: File[]): Promise<ParsedFile[]> {
@@ -14,6 +30,18 @@ export async function parseFiles(files: File[]): Promise<ParsedFile[]> {
 
   for (const file of files) {
     const ext = file.name.split(".").pop()?.toLowerCase() || "";
+
+    if (file.size > MAX_FILE_SIZE) {
+      results.push({
+        name: file.name,
+        content: "",
+        type: ext,
+        skipped: true,
+        error: `Archivo muy grande (${(file.size / 1024 / 1024).toFixed(1)} MB). Máximo: ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+      });
+      continue;
+    }
+
     let content = "";
 
     try {
@@ -33,7 +61,9 @@ export async function parseFiles(files: File[]): Promise<ParsedFile[]> {
       }
     } catch (err) {
       console.error(`Error parsing ${file.name}:`, err);
-      content = `[Error al leer ${file.name}]`;
+      content = "";
+      results.push({ name: file.name, content: "", type: ext, error: `Error al leer: ${(err as Error).message || "formato no soportado"}` });
+      continue;
     }
 
     results.push({ name: file.name, content, type: ext });
@@ -89,9 +119,21 @@ async function parsePdf(file: File): Promise<string> {
 }
 
 export function combineContent(parsed: ParsedFile[]): string {
-  if (parsed.length === 1) return parsed[0].content;
+  const valid = parsed.filter((f) => !f.skipped && !f.error);
+  if (valid.length === 0) return "";
+  if (valid.length === 1) return valid[0].content;
 
-  return parsed
+  return valid
     .map((f) => `--- Contenido de ${f.name} ---\n${f.content}`)
     .join("\n\n");
+}
+
+/** Returns combined content + metadata about truncation and errors */
+export function combineContentWithMeta(parsed: ParsedFile[]): ParseResult {
+  const combined = combineContent(parsed);
+  return {
+    files: parsed,
+    truncated: combined.length > MAX_CONTENT_CHARS,
+    totalChars: combined.length,
+  };
 }

@@ -6,7 +6,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
-import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
+import { parseFiles, combineContent, combineContentWithMeta, MAX_FILE_SIZE, MAX_CONTENT_CHARS } from "~/lib/documents/parseFiles";
 import type { Route } from "./+types/new";
 
 export const meta = () => [
@@ -77,6 +77,33 @@ function BrutalField({ children }: { children: React.ReactNode }) {
   return <div className="rounded-xl bg-black">{children}</div>;
 }
 
+/** Resize image to max dimension and return data URL (JPEG, ~80% quality) */
+function resizeImageToDataUrl(file: File, maxDim: number): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= maxDim && height <= maxDim && file.size < 1024 * 1024) {
+          resolve(reader.result as string);
+          return;
+        }
+        const scale = Math.min(maxDim / width, maxDim / height, 1);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 const ACCEPTED_TYPES = ".txt,.md,.csv,.xlsx,.xls,.docx,.pdf";
 
 export default function NewDocument() {
@@ -87,6 +114,8 @@ export default function NewDocument() {
   const [files, setFiles] = useState<File[]>([]);
   const [parsedContent, setParsedContent] = useState("");
   const [isParsing, setIsParsing] = useState(false);
+  const [fileErrors, setFileErrors] = useState<string[]>([]);
+  const [isTruncated, setIsTruncated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -106,9 +135,7 @@ export default function NewDocument() {
     const url = URL.createObjectURL(logoFile);
     setLogoPreview(url);
 
-    const reader = new FileReader();
-    reader.onload = () => setLogoDataUrl(reader.result as string);
-    reader.readAsDataURL(logoFile);
+    resizeImageToDataUrl(logoFile, 512).then(setLogoDataUrl);
 
     return () => URL.revokeObjectURL(url);
   }, [logoFile]);
@@ -129,8 +156,14 @@ export default function NewDocument() {
 
       try {
         const parsed = await parseFiles(allFiles);
-        const combined = combineContent(parsed);
-        setParsedContent(combined);
+        const meta = combineContentWithMeta(parsed);
+        setParsedContent(combineContent(parsed));
+        setIsTruncated(meta.truncated);
+        setFileErrors(
+          parsed
+            .filter((f) => f.error)
+            .map((f) => `${f.name}: ${f.error}`)
+        );
 
         // Auto-set name from first file if empty
         if (!nameValue && fileArray.length > 0) {
@@ -401,15 +434,32 @@ export default function NewDocument() {
           </p>
         </div>
 
+        {/* File errors */}
+        {fileErrors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 space-y-1">
+            {fileErrors.map((err, i) => (
+              <p key={i}>{err}</p>
+            ))}
+          </div>
+        )}
+
         {/* Content preview */}
         {parsedContent && (
           <div>
             <label className="block text-sm font-bold mb-1">
               Contenido detectado
+              <span className="font-normal text-gray-400 ml-1">
+                ({parsedContent.length.toLocaleString()} caracteres)
+              </span>
             </label>
+            {isTruncated && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-700 mb-2">
+                Tu contenido tiene {parsedContent.length.toLocaleString()} caracteres. La AI usar&aacute; los primeros {MAX_CONTENT_CHARS.toLocaleString()} para la generaci&oacute;n.
+              </div>
+            )}
             <div className="max-h-40 overflow-auto bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 font-mono whitespace-pre-wrap">
               {parsedContent.substring(0, 2000)}
-              {parsedContent.length > 2000 && "\n\n... (contenido truncado)"}
+              {parsedContent.length > 2000 && "\n\n... (contenido truncado en vista previa)"}
             </div>
           </div>
         )}
