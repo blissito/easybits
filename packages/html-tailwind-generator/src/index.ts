@@ -24,6 +24,13 @@ export {
   type GenerateOptions,
 } from "./generate";
 
+export {
+  generateDocument,
+  DOCUMENT_SYSTEM_PROMPT,
+  DOCUMENT_PROMPT_SUFFIX,
+  type GenerateDocumentOptions,
+} from "./generateDocument";
+
 // Refinement
 export {
   refineLanding,
@@ -45,6 +52,7 @@ export {
   enrichImages,
   findImageSlots,
   generateImage,
+  generateSvg,
   type PexelsResult,
   type EnrichImagesOptions,
 } from "./images/index";

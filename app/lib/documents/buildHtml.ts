@@ -72,6 +72,64 @@ ${branding}
 /**
  * Build preview HTML for the editor iframe (no Paged.js, simulates pages visually).
  */
+/**
+ * Build a PDF viewer HTML page that embeds a PDF via URL.
+ */
+export function buildDocumentViewerHtml(
+  pdfUrl: string,
+  title: string,
+  options?: { showBranding?: boolean }
+): string {
+  const branding = options?.showBranding !== false
+    ? `<div style="position:fixed;bottom:8px;right:12px;font-size:9px;color:#999;z-index:9999;">
+        Creado con <a href="https://easybits.cloud" style="color:#9870ED;text-decoration:none;">EasyBits</a>
+      </div>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: #f3f4f6; }
+    .viewer { display: flex; flex-direction: column; height: 100%; }
+    .toolbar { padding: 12px 20px; background: white; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; }
+    .toolbar h1 { font-size: 14px; font-weight: 600; color: #111; }
+    .toolbar a { font-size: 13px; color: #9870ED; text-decoration: none; font-weight: 500; }
+    .toolbar a:hover { text-decoration: underline; }
+    .pdf-container { flex: 1; }
+    embed, iframe { width: 100%; height: 100%; border: none; }
+    .fallback { display: none; text-align: center; padding: 60px 20px; }
+    .fallback a { display: inline-block; padding: 12px 24px; background: #9870ED; color: white; border-radius: 8px; text-decoration: none; font-weight: 500; }
+    @media (max-width: 768px) {
+      .pdf-container embed { display: none; }
+      .fallback { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <div class="viewer">
+    <div class="toolbar">
+      <h1>${title}</h1>
+      <a href="${pdfUrl}" download>Descargar PDF</a>
+    </div>
+    <div class="pdf-container">
+      <embed src="${pdfUrl}" type="application/pdf">
+      <div class="fallback">
+        <p style="margin-bottom:16px;color:#666;">Tu navegador no soporta visualización de PDFs.</p>
+        <a href="${pdfUrl}" download>Descargar PDF</a>
+      </div>
+    </div>
+  </div>
+  ${branding}
+</body>
+</html>`;
+}
+
 export function buildDocumentPreviewHtml(sections: Section3[]): string {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const sectionsHtml = sorted

@@ -17,7 +17,7 @@ export default defineConfig({
     assetsInlineLimit: 4096,
     sourcemap: process.env.NODE_ENV === "development",
     rollupOptions: {
-      external: ["react-hook-multipart"],
+      external: ["react-hook-multipart", "html2pdf.js"],
     },
   },
 });

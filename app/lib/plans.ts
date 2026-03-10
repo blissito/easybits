@@ -12,6 +12,8 @@ export interface PlanConfig {
   price: number;
   /** Max storage in GB */
   storageGB: number;
+  /** AI generations per month (null = unlimited) */
+  aiGenerationsPerMonth: number | null;
   /** Stripe intent key (null for free) */
   stripeIntent: string | null;
   /** Features list for pricing cards */
@@ -23,6 +25,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Spark",
     price: 0,
     storageGB: 1,
+    aiGenerationsPerMonth: 5,
     stripeIntent: null,
     features: [
       "1 GB de almacenamiento",
@@ -38,6 +41,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Flow",
     price: 199,
     storageGB: 50,
+    aiGenerationsPerMonth: 50,
     stripeIntent: "flow_plan",
     features: [
       "50 GB de almacenamiento",
@@ -53,6 +57,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Studio",
     price: 999,
     storageGB: 500,
+    aiGenerationsPerMonth: null,
     stripeIntent: "studio_plan",
     features: [
       "500 GB de almacenamiento",

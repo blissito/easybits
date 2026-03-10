@@ -6,6 +6,7 @@ export default defineConfig({
     components: "src/components/index.ts",
     images: "src/images/index.ts",
     generate: "src/generate.ts",
+    generateDocument: "src/generateDocument.ts",
     refine: "src/refine.ts",
     deploy: "src/deploy.ts",
   },
