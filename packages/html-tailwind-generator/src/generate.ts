@@ -156,6 +156,21 @@ export function extractJsonObjects(text: string): [any[], string] {
   return [objects, remaining];
 }
 
+/** Inline SVG data URI: animated "generating" placeholder for images */
+const LOADING_PLACEHOLDER = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500"><rect fill="%231f2937" width="800" height="500" rx="12"/><style>@keyframes p{0%{opacity:.3}50%{opacity:1}to{opacity:.3}}.d{animation:p 1.5s ease-in-out infinite}</style><circle class="d" cx="370" cy="240" r="8" fill="%239ca3af"/><circle class="d" cx="400" cy="240" r="8" fill="%239ca3af" style="animation-delay:.2s"/><circle class="d" cx="430" cy="240" r="8" fill="%239ca3af" style="animation-delay:.4s"/><text x="400" y="280" text-anchor="middle" fill="%239ca3af" font-family="system-ui" font-size="14">Generando imagen...</text></svg>`)}`;
+
+/** Replace data-image-query attrs with animated loading placeholders */
+function addLoadingPlaceholders(html: string): string {
+  return html.replace(
+    /(<img\s[^>]*)data-image-query="([^"]+)"([^>]*?)(?:\s*\/?>)/gi,
+    (_match, before, query, after) => {
+      // Don't add src if already has one
+      if (before.includes('src=') || after.includes('src=')) return _match;
+      return `${before}src="${LOADING_PLACEHOLDER}" data-image-query="${query}" alt="${query}"${after}>`;
+    }
+  );
+}
+
 export interface GenerateOptions {
   /** Anthropic API key. Falls back to ANTHROPIC_API_KEY env var */
   anthropicApiKey?: string;
@@ -253,6 +268,8 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
           label: obj.label,
         };
 
+        // Add loading placeholders so images don't show as broken while DALL-E generates
+        section.html = addLoadingPlaceholders(section.html);
         allSections.push(section);
         onSection?.(section);
 
@@ -320,6 +337,8 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
           html: obj.html,
           label: obj.label,
         };
+        // Add loading placeholders so images don't show as broken while DALL-E generates
+        section.html = addLoadingPlaceholders(section.html);
         allSections.push(section);
         onSection?.(section);
 
