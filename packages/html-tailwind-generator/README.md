@@ -225,6 +225,7 @@ The generator uses a semantic color system with CSS custom properties:
 - [ ] **i18n** — Component labels are in Spanish. Add a `locale` prop or i18n system for English and other languages.
 - [ ] **Tests** — Unit tests for `extractJsonObjects`, `findImageSlots`, `buildDeployHtml`, `buildCustomTheme`.
 - [ ] **Storybook** — Visual stories for Canvas, SectionList, FloatingToolbar, CodeEditor.
+- [ ] **Upgrade OpenAI models** — Evaluate GPT-5 / GPT-5-mini as defaults for generation and refinement. Compare quality, latency, and cost vs current GPT-4o/4o-mini. Update `resolveModel()` defaults if better.
 
 ## Used in Production
 
