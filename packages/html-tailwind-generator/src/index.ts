@@ -46,6 +46,7 @@ export {
   findImageSlots,
   generateImage,
   type PexelsResult,
+  type EnrichImagesOptions,
 } from "./images/index";
 
 // Components (re-exported for convenience)

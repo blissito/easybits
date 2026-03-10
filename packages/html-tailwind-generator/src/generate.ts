@@ -1,7 +1,7 @@
 import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { nanoid } from "nanoid";
-import { findImageSlots } from "./images/enrichImages";
+import { findImageSlots, type EnrichImagesOptions } from "./images/enrichImages";
 import { searchImage } from "./images/pexels";
 import { generateImage } from "./images/dalleImages";
 import type { Section3 } from "./types";
@@ -165,6 +165,8 @@ export interface GenerateOptions {
   model?: string;
   /** Pexels API key for image enrichment. Falls back to PEXELS_API_KEY env var */
   pexelsApiKey?: string;
+  /** Called with temp DALL-E URL + query, returns permanent URL. Use to persist to S3/etc. */
+  persistImage?: (tempUrl: string, query: string) => Promise<string>;
   /** Called when a new section is parsed from the stream */
   onSection?: (section: Section3) => void;
   /** Called when a section's images are enriched */
@@ -189,6 +191,7 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
     systemPrompt = SYSTEM_PROMPT,
     model: modelId,
     pexelsApiKey,
+    persistImage,
     onSection,
     onImageUpdate,
     onDone,
@@ -255,9 +258,21 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
               const results = await Promise.allSettled(
                 slotsSnapshot.map(async (slot) => {
                   let url: string | null = null;
-                  // Pexels first (permanent URLs), DALL-E disabled (temporary URLs expire ~2hrs)
-                  const img = await searchImage(slot.query, pexelsApiKey).catch(() => null);
-                  url = img?.url || null;
+                  // 1. DALL-E if openaiApiKey provided
+                  if (openaiApiKey) {
+                    try {
+                      const tempUrl = await generateImage(slot.query, openaiApiKey);
+                      url = persistImage ? await persistImage(tempUrl, slot.query) : tempUrl;
+                    } catch (e) {
+                      console.warn(`[dalle] failed for "${slot.query}":`, e);
+                    }
+                  }
+                  // 2. Pexels fallback
+                  if (!url) {
+                    const img = await searchImage(slot.query, pexelsApiKey).catch(() => null);
+                    url = img?.url || null;
+                  }
+                  // 3. Placeholder fallback
                   url ??= `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
                   return { slot, url };
                 })

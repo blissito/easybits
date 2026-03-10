@@ -7,6 +7,13 @@ interface ImageMatch {
   replaceStr: string;
 }
 
+export interface EnrichImagesOptions {
+  pexelsApiKey?: string;
+  openaiApiKey?: string;
+  /** Called with temp URL + query, returns permanent URL. Use to persist DALL-E images to S3/etc. */
+  persistImage?: (tempUrl: string, query: string) => Promise<string>;
+}
+
 const FAKE_DOMAINS = [
   "images.unsplash.com",
   "unsplash.com",
@@ -101,26 +108,63 @@ export function findImageSlots(html: string): ImageMatch[] {
 }
 
 /**
- * Enrich all images in an HTML string with Pexels photos.
+ * Enrich all images in an HTML string.
+ * Strategy: DALL-E (if openaiApiKey) → Pexels fallback → placeholder.
+ * All images resolved in parallel. If persistImage callback provided, temp DALL-E URLs are persisted.
  */
-export async function enrichImages(html: string, pexelsApiKey?: string, openaiApiKey?: string): Promise<string> {
+export async function enrichImages(html: string, pexelsApiKeyOrOpts?: string | EnrichImagesOptions, openaiApiKey?: string): Promise<string> {
+  // Support both legacy (string, string) and new (options object) signatures
+  let opts: EnrichImagesOptions;
+  if (typeof pexelsApiKeyOrOpts === "object" && pexelsApiKeyOrOpts !== null) {
+    opts = pexelsApiKeyOrOpts;
+  } else {
+    opts = { pexelsApiKey: pexelsApiKeyOrOpts, openaiApiKey };
+  }
+
   const slots = findImageSlots(html);
   if (slots.length === 0) return html;
 
+  // Resolve all images in parallel
+  const resolved = await Promise.allSettled(
+    slots.map(async (slot) => {
+      let url: string | null = null;
+
+      // 1. DALL-E if openaiApiKey provided
+      if (opts.openaiApiKey) {
+        try {
+          const tempUrl = await generateImage(slot.query, opts.openaiApiKey);
+          // Persist if callback provided, otherwise use temp URL
+          url = opts.persistImage
+            ? await opts.persistImage(tempUrl, slot.query)
+            : tempUrl;
+        } catch (e) {
+          console.warn(`[dalle] failed for "${slot.query}":`, e);
+        }
+      }
+
+      // 2. Pexels fallback
+      if (!url && opts.pexelsApiKey) {
+        const img = await searchImage(slot.query, opts.pexelsApiKey).catch(() => null);
+        url = img?.url || null;
+      }
+
+      // 3. Placeholder fallback
+      url ??= `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
+
+      return { slot, url };
+    })
+  );
+
   let result = html;
-  const promises = slots.map(async (slot) => {
-    let url: string | null = null;
-    // Pexels first (permanent URLs), DALL-E disabled (temporary URLs expire ~2hrs)
-    const img = await searchImage(slot.query, pexelsApiKey).catch(() => null);
-    url = img?.url || null;
-    url ??= `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
-    const replacement = slot.replaceStr.replace("{url}", url);
-    result = result.replaceAll(slot.searchStr, replacement);
-  });
+  for (const r of resolved) {
+    if (r.status === "fulfilled" && r.value) {
+      const { slot, url } = r.value;
+      const replacement = slot.replaceStr.replace("{url}", url);
+      result = result.replaceAll(slot.searchStr, replacement);
+    }
+  }
 
-  await Promise.allSettled(promises);
-
-  // Catch any remaining <img> tags without src (AI didn't follow instructions)
+  // Catch any remaining <img> tags without src
   result = result.replace(/<img\s(?![^>]*\bsrc=)([^>]*?)>/gi, (_match, attrs) => {
     const altMatch = attrs.match(/alt="([^"]*?)"/);
     const query = altMatch?.[1] || "professional image";

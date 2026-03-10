@@ -53,6 +53,8 @@ export interface RefineOptions {
   model?: string;
   /** Pexels API key for image enrichment. Falls back to PEXELS_API_KEY env var */
   pexelsApiKey?: string;
+  /** Called with temp DALL-E URL + query, returns permanent URL. Use to persist to S3/etc. */
+  persistImage?: (tempUrl: string, query: string) => Promise<string>;
   /** Called with accumulated HTML as it streams */
   onChunk?: (html: string) => void;
   /** Called when refinement is complete with final enriched HTML */
@@ -75,6 +77,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     systemPrompt = REFINE_SYSTEM,
     model: modelId,
     pexelsApiKey,
+    persistImage,
     onChunk,
     onDone,
     onError,
@@ -116,7 +119,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     }
 
     // Enrich images (DALL-E if openaiApiKey, otherwise Pexels)
-    html = await enrichImages(html, pexelsApiKey, openaiApiKey);
+    html = await enrichImages(html, { pexelsApiKey, openaiApiKey, persistImage });
 
     onDone?.(html);
     return html;
