@@ -21,6 +21,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
   // Track what the iframe currently has so we can diff
   const knownSectionsRef = useRef<Map<string, string>>(new Map());
   const initializedRef = useRef(false);
+  const onReadyRef = useRef(onReadyProp);
+  onReadyRef.current = onReadyProp;
 
   // Post a message to the iframe
   const postToIframe = useCallback((msg: Record<string, unknown>) => {
@@ -64,8 +66,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     if (savedY) {
       setTimeout(() => postToIframe({ action: "restore-scroll", y: Number(savedY) }), 100);
     }
-    onReadyProp?.();
-  }, [sections, postToIframe, onReadyProp]);
+    onReadyRef.current?.();
+  }, [sections, postToIframe]);
 
   // Incremental diff: detect added/updated/removed sections
   useEffect(() => {
