@@ -119,7 +119,7 @@ export function findImageSlots(html: string): ImageMatch[] {
 
 /**
  * Enrich all images in an HTML string.
- * Strategy: DALL-E (if openaiApiKey) → Pexels fallback → placeholder.
+ * Strategy: Pexels (free) → DALL-E fallback (if openaiApiKey) → placeholder.
  * All images resolved in parallel. If persistImage callback provided, temp DALL-E URLs are persisted.
  */
 export async function enrichImages(html: string, pexelsApiKeyOrOpts?: string | EnrichImagesOptions, openaiApiKey?: string): Promise<string> {
@@ -139,23 +139,22 @@ export async function enrichImages(html: string, pexelsApiKeyOrOpts?: string | E
     slots.map(async (slot) => {
       let url: string | null = null;
 
-      // 1. DALL-E if openaiApiKey provided
-      if (opts.openaiApiKey) {
+      // 1. Pexels first (free)
+      if (opts.pexelsApiKey) {
+        const img = await searchImage(slot.query, opts.pexelsApiKey).catch(() => null);
+        url = img?.url || null;
+      }
+
+      // 2. DALL-E fallback if Pexels found nothing
+      if (!url && opts.openaiApiKey) {
         try {
           const tempUrl = await generateImage(slot.query, opts.openaiApiKey);
-          // Persist if callback provided, otherwise use temp URL
           url = opts.persistImage
             ? await opts.persistImage(tempUrl, slot.query)
             : tempUrl;
         } catch (e) {
           console.warn(`[dalle] failed for "${slot.query}":`, e);
         }
-      }
-
-      // 2. Pexels fallback
-      if (!url && opts.pexelsApiKey) {
-        const img = await searchImage(slot.query, opts.pexelsApiKey).catch(() => null);
-        url = img?.url || null;
       }
 
       // 3. Placeholder fallback
