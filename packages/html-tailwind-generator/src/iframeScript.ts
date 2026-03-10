@@ -199,7 +199,9 @@ export function getIframeScript(): string {
       wrapper.innerHTML = msg.html;
       wrapper.style.animation = 'fadeInUp 0.4s ease-out';
       document.body.appendChild(wrapper);
-      wrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      if (msg.scroll) {
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
     }
 
     if (msg.action === 'update-section') {

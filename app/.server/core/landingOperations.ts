@@ -31,8 +31,9 @@ export async function deployLanding(ctx: AuthContext, id: string) {
 
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
   const landingMeta = (landing.metadata as Record<string, unknown>) || {};
+  const isPaidPlan = ctx.user.roles.some((r) => r === "Flow" || r === "Studio");
   const html = landing.version === 3
-    ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined)
+    ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined, !isPaidPlan)
     : landing.version === 2
     ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
     : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);

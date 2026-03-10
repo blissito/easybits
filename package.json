@@ -28,7 +28,7 @@
     "@codemirror/state": "^6.5.4",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.39.16",
-    "@easybits.cloud/html-tailwind-generator": "^0.2.8",
+    "@easybits.cloud/html-tailwind-generator": "^0.2.17",
     "@headlessui/react": "^2.2.2",
     "@livekit/components-react": "^2.8.1",
     "@livekit/components-styles": "^1.1.4",

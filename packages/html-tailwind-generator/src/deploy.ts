@@ -9,6 +9,8 @@ export interface DeployToS3Options {
   theme?: string;
   /** Custom colors (when theme is "custom") */
   customColors?: CustomColors;
+  /** Show "Powered by easybits.cloud" branding (default true) */
+  showBranding?: boolean;
   /** S3-compatible upload function. Receives the HTML string, returns the URL */
   upload: (html: string) => Promise<string>;
 }
@@ -18,8 +20,8 @@ export interface DeployToS3Options {
  * The consumer provides their own upload function.
  */
 export async function deployToS3(options: DeployToS3Options): Promise<string> {
-  const { sections, theme, customColors, upload } = options;
-  const html = buildDeployHtml(sections, theme, customColors);
+  const { sections, theme, customColors, showBranding, upload } = options;
+  const html = buildDeployHtml(sections, theme, customColors, showBranding);
   return upload(html);
 }
 
@@ -34,6 +36,8 @@ export interface DeployToEasyBitsOptions {
   theme?: string;
   /** Custom colors (when theme is "custom") */
   customColors?: CustomColors;
+  /** Show "Powered by easybits.cloud" branding (default true) */
+  showBranding?: boolean;
   /** EasyBits API base URL (default: https://easybits.cloud) */
   baseUrl?: string;
 }
@@ -49,10 +53,11 @@ export async function deployToEasyBits(options: DeployToEasyBitsOptions): Promis
     sections,
     theme,
     customColors,
+    showBranding,
     baseUrl = "https://easybits.cloud",
   } = options;
 
-  const html = buildDeployHtml(sections, theme, customColors);
+  const html = buildDeployHtml(sections, theme, customColors, showBranding);
 
   const res = await fetch(`${baseUrl}/api/v2/websites`, {
     method: "POST",

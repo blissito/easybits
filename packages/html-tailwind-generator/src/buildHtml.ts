@@ -91,7 +91,7 @@ section>*{max-width:80rem;margin-left:auto;margin-right:auto;padding-left:1rem;p
 <body class="bg-surface text-on-surface">
 ${body}
 ${showBranding ? `<div style="text-align:center;padding:16px 0 12px;font-size:12px">
-  <a href="https://easybits.cloud" target="_blank" rel="noopener"
+  <a href="https://www.easybits.cloud" target="_blank" rel="noopener"
      style="color:#9ca3af;text-decoration:none">
     Powered by easybits.cloud
   </a>

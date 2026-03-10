@@ -55,7 +55,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     // Inject all current sections
     const sorted = [...sections].sort((a, b) => a.order - b.order);
     for (const s of sorted) {
-      postToIframe({ action: "add-section", id: s.id, html: s.html });
+      postToIframe({ action: "add-section", id: s.id, html: s.html, scroll: false });
       knownSectionsRef.current.set(s.id, s.html);
     }
   }, [sections, postToIframe]);
@@ -71,7 +71,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     // Add new sections
     for (const s of sorted) {
       if (!known.has(s.id)) {
-        postToIframe({ action: "add-section", id: s.id, html: s.html });
+        postToIframe({ action: "add-section", id: s.id, html: s.html, scroll: true });
         known.set(s.id, s.html);
       } else if (known.get(s.id) !== s.html) {
         // Update changed sections
@@ -91,7 +91,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     // Reorder if needed
     const knownOrder = [...known.keys()];
     const desiredOrder = sorted.map((s) => s.id);
-    if (JSON.stringify(knownOrder) !== JSON.stringify(desiredOrder)) {
+    if (knownOrder.length !== desiredOrder.length || knownOrder.some((id, i) => id !== desiredOrder[i])) {
       postToIframe({ action: "reorder-sections", order: desiredOrder });
     }
   }, [sections, ready, postToIframe]);
@@ -157,7 +157,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
           <span className="w-6 h-6 border-2 border-gray-400 border-t-gray-800 rounded-full animate-spin" />
         </div>
       )}
-      <a href="https://easybits.cloud" target="_blank" rel="noopener noreferrer"
+      <a href="https://www.easybits.cloud" target="_blank" rel="noopener noreferrer"
          className="absolute bottom-2 right-3 text-xs text-gray-400 hover:text-gray-600 transition-colors">
         Powered by easybits.cloud
       </a>
