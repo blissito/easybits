@@ -10,7 +10,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Copy } from "~/components/common/Copy";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { SectionList } from "~/components/landings3/SectionList";
+import { PageList } from "~/components/documents/PageList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
@@ -663,13 +663,9 @@ ${sectionsHtml}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Section list sidebar */}
         {!codeViewSectionId && (
-          <SectionList
+          <PageList
             sections={sections}
             selectedSectionId={selection?.sectionId ?? null}
-            theme="default"
-            customColors={{ primary: "#ef4444" }}
-            onThemeChange={() => {}}
-            onCustomColorChange={() => {}}
             onSelect={(id) => {
               const el = iframeRef.current?.contentDocument?.getElementById(
                 `section-${id}`
