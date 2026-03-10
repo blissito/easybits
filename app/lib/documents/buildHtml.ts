@@ -40,8 +40,9 @@ export function buildDocumentHtml(
     @page { size: letter; margin: 0; }
     ${options?.themeCss || ""}
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-section { page-break-after: always; }
+    .page-section { page-break-after: always; page-break-inside: avoid; }
     .page-section:last-child { page-break-after: auto; }
+    .page-section > section { width: 8.5in; height: 11in; overflow: hidden; }
     .doc-toolbar { font-family: 'Inter', sans-serif; }
     @media print { .doc-toolbar { display: none !important; } }
   </style>
@@ -92,13 +93,14 @@ export function buildDocumentPreviewHtml(sections: Section3[]): string {
     }
     .doc-page {
       width: 8.5in;
-      min-height: 11in;
+      height: 11in;
       background: white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       padding: 0.75in;
       position: relative;
       cursor: pointer;
       transition: box-shadow 0.2s;
+      overflow: hidden;
     }
     .doc-page:hover {
       box-shadow: 0 4px 16px rgba(0,0,0,0.2);

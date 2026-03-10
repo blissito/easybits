@@ -19,6 +19,8 @@ RULES:
 - Redesign layout structure, typography scale, decorative elements, spacing, alignment — but KEEP the same color theme
 - Use bold, confident design choices — large type contrasts, asymmetric layouts, dramatic whitespace
 - Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
+- Decorative elements with absolute positioning MUST stay fully inside the page — no negative coordinates, no elements beyond the right edge
+- Large decorative text (text-[200px] etc.) MUST have opacity-5 AND overflow-hidden on container
 - For charts/data viz, use pure CSS bars/progress — NEVER Chart.js or canvas
 - For complex charts: <div data-svg-chart="description with data" class="w-full"></div>
 - For images: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/>
@@ -38,7 +40,14 @@ DESIGN VARIETY — choose a DIFFERENT approach from the original:
 - If original uses centered layout → try asymmetric or grid
 - If original uses small text → try oversized headlines with small body
 - If original uses rounded shapes → try sharp geometric or diagonal cuts
-- If original is minimal → try rich with decorative elements (or vice versa)`;
+- If original is minimal → try rich with decorative elements (or vice versa)
+
+ADAPT TO DOCUMENT TYPE — Not everything is a report. Match the visual style to the content:
+- Brochures/Marketing: bold images, large headlines, feature grids, visual storytelling
+- Catalogs: product cards, specs grids, price highlights
+- Invitations: centered dramatic typography, decorative borders, elegant spacing
+- Reports: tables, progress bars, metric cards, data hierarchy
+- Study the existing content to determine the type and design accordingly`;
 
 const REFINE_SYSTEM_PROMPT = `You are a professional document designer. You refine HTML content for letter-sized (8.5" × 11") document pages.
 
@@ -136,6 +145,12 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const pageHtml = currentHtml || section?.html || "<section></section>";
+  const multiPageHint = isNewSection
+    ? "\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page. Output as many <section>...</section> blocks as needed."
+    : "";
+  const outputHint = isNewSection
+    ? "Output the <section> HTML (multiple <section> tags for multiple pages)."
+    : "Output ONLY the refined <section> HTML.";
   const messages: any[] = [];
   if (referenceImage) {
     // Convert data URL to Uint8Array for AI SDK
@@ -149,7 +164,7 @@ export async function action({ request }: Route.ActionArgs) {
         imageContent,
         {
           type: "text",
-          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}\n\nUse the image as design reference. Output ONLY the refined <section> HTML.`,
+          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}\n\nUse the image as design reference. ${outputHint}`,
         },
       ],
     });
@@ -161,7 +176,7 @@ export async function action({ request }: Route.ActionArgs) {
   } else {
     messages.push({
       role: "user",
-      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}\n\nOutput ONLY the refined <section> HTML.`,
+      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}\n\n${outputHint}`,
     });
   }
 
@@ -181,7 +196,7 @@ export async function action({ request }: Route.ActionArgs) {
           model: anthropic(model),
           system: systemPrompt,
           messages,
-          maxTokens: isVariantMode ? 8000 : 4000,
+          maxTokens: isVariantMode ? 8000 : isNewSection ? 12000 : 4000,
         });
 
         let fullHtml = "";
@@ -212,9 +227,19 @@ export async function action({ request }: Route.ActionArgs) {
           }
         }
 
-        // Final extraction
-        const finalMatch = fullHtml.match(/<section[\s\S]*<\/section>/i);
-        let finalHtml = finalMatch ? finalMatch[0] : fullHtml;
+        // Final extraction — support multiple sections for __new__ mode
+        const allSectionMatches = fullHtml.match(/<section[\s\S]*?<\/section>/gi) || [];
+        let finalHtml: string;
+        let multipleSections: string[] | null = null;
+
+        if (isNewSection && allSectionMatches.length > 1) {
+          // Multiple pages generated — enrich each independently
+          multipleSections = allSectionMatches;
+          finalHtml = allSectionMatches.join("\n");
+        } else {
+          const finalMatch = fullHtml.match(/<section[\s\S]*<\/section>/i);
+          finalHtml = finalMatch ? finalMatch[0] : fullHtml;
+        }
 
         // Enrich images (Pexels → DALL-E → placeholder)
         const imageSlots = findImageSlots(finalHtml);
@@ -257,7 +282,13 @@ export async function action({ request }: Route.ActionArgs) {
         // DB update is handled by the client via saveSections() — no server-side write
         // This avoids race conditions that strip version history from sections
 
-        send("done", { html: finalHtml });
+        if (multipleSections && multipleSections.length > 1) {
+          // Re-extract after enrichment
+          const enrichedSections = finalHtml.match(/<section[\s\S]*?<\/section>/gi) || [finalHtml];
+          send("done", { html: enrichedSections[0], sections: enrichedSections });
+        } else {
+          send("done", { html: finalHtml });
+        }
         controller.close();
       } catch (err: any) {
         send("error", { message: err.message || "Refine failed" });

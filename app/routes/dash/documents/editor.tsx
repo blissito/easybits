@@ -700,6 +700,7 @@ export default function DocumentEditor() {
           sectionId: "__new__",
           instruction,
           currentHtml: "<section></section>",
+          allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
           ...(addRefImage && { referenceImage: addRefImage }),
         }),
       });
@@ -735,17 +736,33 @@ export default function DocumentEditor() {
             try {
               const d = JSON.parse(line.slice(6));
               if ((event === "chunk" || event === "done") && d.html) {
-                setSections((prev) =>
-                  prev.map((s) => (s.id === newId ? { ...s, html: d.html } : s))
-                );
-                if (event === "done") {
+                if (event === "done" && d.sections && d.sections.length > 1) {
+                  // Multiple pages returned — replace placeholder with all pages
                   setSections((prev) => {
-                    const updated = prev.map((s) =>
-                      s.id === newId ? { ...s, html: d.html } : s
-                    );
+                    const without = prev.filter((s) => s.id !== newId);
+                    const newSections = d.sections.map((html: string, i: number) => ({
+                      id: Math.random().toString(36).slice(2, 10),
+                      order: without.length + i,
+                      html,
+                      label: `Página ${without.length + i + 1}`,
+                    }));
+                    const updated = [...without, ...newSections];
                     saveSections(updated);
                     return updated;
                   });
+                } else {
+                  setSections((prev) =>
+                    prev.map((s) => (s.id === newId ? { ...s, html: d.html } : s))
+                  );
+                  if (event === "done") {
+                    setSections((prev) => {
+                      const updated = prev.map((s) =>
+                        s.id === newId ? { ...s, html: d.html } : s
+                      );
+                      saveSections(updated);
+                      return updated;
+                    });
+                  }
                 }
               }
             } catch {}
@@ -802,8 +819,9 @@ export default function DocumentEditor() {
     @page { size: letter; margin: 0; }
     ${themeCssData?.css || ""}
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-section { page-break-after: always; }
+    .page-section { page-break-after: always; page-break-inside: avoid; }
     .page-section:last-child { page-break-after: auto; }
+    .page-section > section { width: 8.5in; height: 11in; overflow: hidden; }
   </style>
 </head>
 <body>
