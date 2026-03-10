@@ -13,6 +13,7 @@ import { db } from "~/.server/db";
 import { PageList, type Section3WithVersions } from "~/components/documents/PageList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
+import { Canvas, type CanvasHandle } from "~/components/landings3/Canvas";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
@@ -221,8 +222,7 @@ export default function DocumentEditor() {
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
   const iframeRectRef = useRef<DOMRect | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const generatingShellRef = useRef<string | null>(null);
+  const canvasRef = useRef<CanvasHandle>(null);
   const [, setToolbarTick] = useState(0);
 
   // Add page prompt modal
@@ -241,8 +241,6 @@ export default function DocumentEditor() {
     const meta = (landing.metadata as Record<string, unknown>) || {};
     return (meta?.theme as string) || "minimal";
   });
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
   const themeCssData = useMemo(() => buildSingleThemeCss(theme), [theme]);
 
   // Regenerate prompt bar
@@ -342,62 +340,12 @@ export default function DocumentEditor() {
     setIsGenerating(false);
   }
 
-  // Build shell HTML for streaming (no sections, just the frame)
-  function buildShellHtml(): string {
-    return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    ${themeCssData?.css || ""}
-    * { box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; margin: 0; padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-    .doc-page { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; cursor: pointer; transition: box-shadow 0.2s; }
-    .doc-page:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-    .doc-page.selected { outline: 3px solid #9870ED; outline-offset: 2px; }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-page-in { animation: fadeInUp 0.4s ease-out; }
-  </style>
-</head>
-<body id="pages">
-<script>
-${getDocumentIframeScript()}
-<\/script>
-</body>
-</html>`;
-  }
-
-  // Inject a section into the iframe DOM without reloading srcDoc
-  function injectSectionIntoIframe(section: Section3) {
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    const container = doc.getElementById("pages");
-    if (!container) return;
-    const div = doc.createElement("div");
-    div.className = "doc-page animate-page-in";
-    div.setAttribute("data-section-id", section.id);
-    div.id = `section-${section.id}`;
-    div.innerHTML = section.html;
-    // Insert before the script tag
-    const script = container.querySelector("script");
-    if (script) {
-      container.insertBefore(div, script);
-    } else {
-      container.appendChild(div);
-    }
-    div.scrollIntoView({ behavior: "smooth", block: "end" });
-  }
-
-  // Update a section's HTML in the iframe DOM
-  function updateSectionInIframe(sectionId: string, html: string) {
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    const el = doc.getElementById(`section-${sectionId}`);
-    if (el) el.innerHTML = html;
-  }
+  // Document-specific CSS injected into Canvas iframe
+  const documentCss = `
+    body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
+    [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  `;
 
   async function generateSections(extraInstructions?: string) {
     abortRef.current?.abort();
@@ -416,13 +364,6 @@ ${getDocumentIframeScript()}
         setIsGenerating(false);
         return;
       }
-
-      // Set shell HTML first, then wait for iframe to load
-      const shellHtml = buildShellHtml();
-      generatingShellRef.current = shellHtml;
-
-      // Wait a tick for the iframe to render the shell
-      await new Promise((r) => setTimeout(r, 100));
 
       const res = await fetch("/api/v2/document-generate", {
         method: "POST",
@@ -465,12 +406,11 @@ ${getDocumentIframeScript()}
               const d = JSON.parse(line.slice(6));
               if (eventType === "section") {
                 accumulated.push(d);
-                injectSectionIntoIframe(d);
+                setSections([...accumulated]);
               } else if (eventType === "section-update") {
-                // Update accumulated
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
-                updateSectionInIframe(d.id, d.html);
+                setSections([...accumulated]);
               }
             } catch {
               /* skip */
@@ -479,10 +419,7 @@ ${getDocumentIframeScript()}
         }
       }
 
-      // Set final sections state and freeze srcDoc
       setSections([...accumulated]);
-      stableSrcDoc.current = buildPreviewHtml(accumulated, themeCssData);
-      setSrcDocVersion((v) => v + 1);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Generation error:", err);
@@ -490,7 +427,6 @@ ${getDocumentIframeScript()}
       // Still set whatever we got
       if (accumulated.length > 0) setSections([...accumulated]);
     } finally {
-      generatingShellRef.current = null;
       if (abortRef.current === controller) setIsGenerating(false);
     }
   }
@@ -511,83 +447,29 @@ ${getDocumentIframeScript()}
     (newSections: Section3[]) => {
       setSections(newSections);
       saveSections(newSections);
-      // Structural change — force iframe reload via ref + version bump
-      stableSrcDoc.current = buildPreviewHtml(newSections, buildSingleThemeCss(themeRef.current));
-      setSrcDocVersion((v) => v + 1);
     },
     [saveSections]
   );
 
-  // Listen to iframe messages
-  useEffect(() => {
-    function handleMessage(e: MessageEvent) {
-      const msg = e.data;
-      if (!msg?.type) return;
-      if (msg.type === "element-selected") {
-        setSelection(msg);
-        setToolbarTick((t) => t + 1);
-      } else if (msg.type === "element-deselected") {
-        setSelection(null);
-      } else if (
-        (msg.type === "text-edited" || msg.type === "section-html-updated") &&
-        msg.sectionId &&
-        msg.sectionHtml
-      ) {
-        setSections((prev) => {
-          const updated = prev.map((s) =>
-            s.id === msg.sectionId ? { ...s, html: msg.sectionHtml } : s
-          );
-          saveSections(updated);
-          return updated;
-        });
-      } else if (msg.type === "delete-element" && msg.sectionId) {
-        if (msg.isSectionRoot) {
-          // Delete entire page
-          setSections((prev) => {
-            const updated = prev
-              .filter((s) => s.id !== msg.sectionId)
-              .map((s, i) => ({ ...s, order: i }));
-            saveSections(updated);
-            return updated;
-          });
-          setSelection(null);
-        } else if (msg.elementPath) {
-          // Delete element within page via DOM manipulation
-          setSections((prev) => {
-            const section = prev.find((s) => s.id === msg.sectionId);
-            if (!section) return prev;
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(`<div>${section.html}</div>`, "text/html");
-            const root = doc.body.firstElementChild;
-            if (!root) return prev;
-            const parts = msg.elementPath.split(">");
-            let cur: Element | null | undefined = root;
-            for (const part of parts) {
-              const match = part.match(/^(\w+)\[(\d+)\]$/);
-              if (!match || !cur) break;
-              cur = cur.children[parseInt(match[2])];
-            }
-            if (cur && cur !== root) {
-              cur.remove();
-              const newHtml = root.innerHTML;
-              const updated = prev.map((s) =>
-                s.id === msg.sectionId ? { ...s, html: newHtml } : s
-              );
-              saveSections(updated);
-              // Also update iframe
-              iframeRef.current?.contentWindow?.postMessage(
-                { action: "update-section", id: msg.sectionId, html: newHtml }, "*"
-              );
-              setSelection(null);
-              return updated;
-            }
-            return prev;
-          });
-        }
-      }
+  const handleIframeMessage = useCallback((msg: IframeMessage) => {
+    if (msg.type === "element-selected") {
+      setSelection(msg);
+      setToolbarTick((t) => t + 1);
+    } else if (msg.type === "element-deselected") {
+      setSelection(null);
+    } else if (
+      (msg.type === "text-edited" || msg.type === "section-html-updated") &&
+      msg.sectionId &&
+      msg.sectionHtml
+    ) {
+      setSections((prev) => {
+        const updated = prev.map((s) =>
+          s.id === msg.sectionId ? { ...s, html: msg.sectionHtml } : s
+        );
+        saveSections(updated);
+        return updated;
+      });
     }
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
   }, [saveSections]);
 
   async function handleRefine(instruction: string, referenceImage?: string) {
@@ -647,7 +529,6 @@ ${getDocumentIframeScript()}
                     s.id === sectionId ? { ...s, html: d.html } : s
                   )
                 );
-                syncSectionToIframe(sectionId, d.html);
                 if (event === "done") setSelection(null);
               }
             } catch {}
@@ -655,7 +536,7 @@ ${getDocumentIframeScript()}
         }
       }
       saveSections(sectionsRef.current);
-      scrollIframeToSection(sectionId);
+      canvasRef.current?.scrollToSection(sectionId);
     } catch (err) {
       console.error("Refine error:", err);
       errorToast((err as Error).message || "Error al refinar página");
@@ -742,13 +623,12 @@ ${getDocumentIframeScript()}
                     s.id === sectionId ? { ...s, html: d.html } : s
                   )
                 );
-                syncSectionToIframe(sectionId, d.html);
               }
             } catch {}
           }
         }
       }
-      scrollIframeToSection(sectionId);
+      canvasRef.current?.scrollToSection(sectionId);
       saveSections(sectionsRef.current);
     } catch (err) {
       if ((err as Error).name === "AbortError") return; // User cancelled — keep last chunk
@@ -783,17 +663,14 @@ ${getDocumentIframeScript()}
     attr: string,
     value: string
   ) {
-    iframeRef.current?.contentWindow?.postMessage(
-      {
-        action: "update-attribute",
-        sectionId,
-        elementPath,
-        tagName: selection?.tagName || "*",
-        attr,
-        value,
-      },
-      "*"
-    );
+    canvasRef.current?.postMessage({
+      action: "update-attribute",
+      sectionId,
+      elementPath,
+      tagName: selection?.tagName || "*",
+      attr,
+      value,
+    });
   }
 
   function handleDeleteSection() {
@@ -861,15 +738,12 @@ ${getDocumentIframeScript()}
                 setSections((prev) =>
                   prev.map((s) => (s.id === newId ? { ...s, html: d.html } : s))
                 );
-                syncSectionToIframe(newId, d.html);
                 if (event === "done") {
                   setSections((prev) => {
                     const updated = prev.map((s) =>
                       s.id === newId ? { ...s, html: d.html } : s
                     );
                     saveSections(updated);
-                    stableSrcDoc.current = buildPreviewHtml(updated, themeCssData);
-                    setSrcDocVersion((v) => v + 1);
                     return updated;
                   });
                 }
@@ -934,17 +808,33 @@ ${getDocumentIframeScript()}
 </head>
 <body>
 ${sectionsHtml}
-<script>
-  window.onload = () => {
-    setTimeout(() => window.print(), 1500);
-  };
-<\/script>
 </body>
 </html>`;
 
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
+    const win = window.open("", "_blank");
+    if (!win) {
+      errorToast("El navegador bloqueó la ventana. Permite popups para este sitio.");
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    // Print as soon as Tailwind CDN finishes, then close
+    function printAndClose() {
+      win.print();
+      setTimeout(() => { try { win.close(); } catch {} }, 300);
+    }
+    // Detect when Tailwind CDN script has loaded and processed styles
+    const check = setInterval(() => {
+      try {
+        if (win.document.readyState === "complete" && (win as any).tailwind) {
+          clearInterval(check);
+          setTimeout(printAndClose, 200); // small buffer for style flush
+        }
+      } catch { clearInterval(check); }
+    }, 100);
+    // Fallback: don't wait forever
+    setTimeout(() => { clearInterval(check); printAndClose(); }, 5000);
   }
 
   function handleDeployDocument() {
@@ -959,36 +849,8 @@ ${sectionsHtml}
       { intent: "update-theme", theme: newTheme },
       { method: "post" }
     );
-    // Theme changes CSS — must reload iframe
-    const newCss = buildSingleThemeCss(newTheme);
-    stableSrcDoc.current = buildPreviewHtml(sections, newCss);
-    setSrcDocVersion((v) => v + 1);
   }
 
-  // Stable srcDoc — set once when sections first populate, then only updated for structural changes
-  const stableSrcDoc = useRef<string | null>(null);
-  const [srcDocVersion, setSrcDocVersion] = useState(0);
-  if (!stableSrcDoc.current && sections.length > 0) {
-    stableSrcDoc.current = buildPreviewHtml(sections, themeCssData);
-  }
-  const previewHtml = generatingShellRef.current || stableSrcDoc.current || buildPreviewHtml(sections, themeCssData);
-
-  // Sync section HTML to iframe via postMessage (no reload)
-  function syncSectionToIframe(sectionId: string, html: string) {
-    iframeRef.current?.contentWindow?.postMessage(
-      { action: 'update-section', id: sectionId, html }, '*'
-    );
-  }
-
-  // Scroll iframe to a section — direct DOM access (more reliable than postMessage)
-  function scrollIframeToSection(sectionId: string) {
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    const el = doc.querySelector(`[data-section-id="${sectionId}"]`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
 
 
   return (
@@ -1160,7 +1022,7 @@ ${sectionsHtml}
                     : [...prev, id]
                   : [id]
               );
-              scrollIframeToSection(id);
+              canvasRef.current?.scrollToSection(id);
             }}
             onContextMenu={(sectionIds, position) => {
               setSelectedSectionIds(sectionIds);
@@ -1326,21 +1188,14 @@ ${sectionsHtml}
                 </div>
               ) : (
                 <>
-                  <iframe
-                    key={srcDocVersion}
-                    ref={iframeRef}
-                    srcDoc={previewHtml}
-                    className="w-full h-full border-none"
-                    title="Document preview"
-                    onLoad={() => {
-                      if (iframeRef.current) {
-                        iframeRectRef.current =
-                          iframeRef.current.getBoundingClientRect();
-                      }
-                      // After structural reload, scroll to selected section
-                      if (selectedSectionIds.length) {
-                        setTimeout(() => scrollIframeToSection(selectedSectionIds[0]), 200);
-                      }
+                  <Canvas
+                    ref={canvasRef}
+                    sections={sections}
+                    theme={theme}
+                    onMessage={handleIframeMessage}
+                    iframeRectRef={iframeRectRef}
+                    onReady={() => {
+                      canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
                     }}
                   />
                   {isGenerating && (
@@ -1556,214 +1411,3 @@ ${sectionsHtml}
   );
 }
 
-/** Document-specific iframe script — replaces landings3 getIframeScript() */
-function getDocumentIframeScript(): string {
-  return `
-(function() {
-  let selectedPage = null;
-  let selectedEl = null;
-
-  function getElementPath(el) {
-    const parts = [];
-    let cur = el;
-    while (cur && cur !== document.body) {
-      const parent = cur.parentElement;
-      if (!parent) break;
-      const idx = Array.from(parent.children).indexOf(cur);
-      parts.unshift(cur.tagName.toLowerCase() + '[' + idx + ']');
-      cur = parent;
-    }
-    return parts.join('>');
-  }
-
-  function clearSelection() {
-    if (selectedPage) selectedPage.classList.remove('selected');
-    if (selectedEl) selectedEl.style.outline = '';
-    selectedPage = null;
-    selectedEl = null;
-  }
-
-  function selectPage(page) {
-    clearSelection();
-    selectedPage = page;
-    page.classList.add('selected');
-    const sectionId = page.getAttribute('data-section-id');
-    window.parent.postMessage({
-      type: 'element-selected',
-      sectionId: sectionId,
-      isSectionRoot: true,
-      tagName: 'DIV',
-      text: '',
-      rect: page.getBoundingClientRect(),
-      attrs: {}
-    }, '*');
-  }
-
-  function selectElement(el, page) {
-    clearSelection();
-    selectedPage = page;
-    page.classList.add('selected');
-    selectedEl = el;
-    el.style.outline = '2px solid #3B82F6';
-    const sectionId = page.getAttribute('data-section-id');
-    const attrs = {};
-    for (const attr of el.attributes) {
-      attrs[attr.name] = attr.value;
-    }
-    window.parent.postMessage({
-      type: 'element-selected',
-      sectionId: sectionId,
-      isSectionRoot: false,
-      tagName: el.tagName,
-      elementPath: getElementPath(el),
-      text: el.textContent?.substring(0, 200) || '',
-      rect: el.getBoundingClientRect(),
-      attrs: attrs,
-      sectionHtml: page.innerHTML
-    }, '*');
-  }
-
-  // Click handler — no preventDefault so contenteditable works
-  document.addEventListener('click', function(e) {
-    const page = e.target.closest('.doc-page');
-    if (!page) {
-      clearSelection();
-      window.parent.postMessage({ type: 'element-deselected' }, '*');
-      return;
-    }
-    // If clicked directly on page background (not a child element)
-    if (e.target === page) {
-      selectPage(page);
-      return;
-    }
-    // Clicked on a child element
-    selectElement(e.target, page);
-  });
-
-  // Double-click on text to enable contentEditable
-  document.addEventListener('dblclick', function(e) {
-    const el = e.target;
-    const page = el.closest('.doc-page');
-    if (!page || el === page) return;
-    // Only for text-bearing elements
-    const textTags = ['P','H1','H2','H3','H4','H5','H6','SPAN','LI','TD','TH','A','LABEL','FIGCAPTION','BLOCKQUOTE','DT','DD'];
-    if (!textTags.includes(el.tagName) && !el.hasAttribute('data-editable')) return;
-    el.contentEditable = 'true';
-    el.focus();
-    el.style.outline = '2px solid #9870ED';
-    function onBlur() {
-      el.contentEditable = 'false';
-      el.style.outline = selectedEl === el ? '2px solid #3B82F6' : '';
-      const sectionId = page.getAttribute('data-section-id');
-      window.parent.postMessage({
-        type: 'text-edited',
-        sectionId: sectionId,
-        sectionHtml: page.innerHTML,
-        text: el.textContent
-      }, '*');
-      el.removeEventListener('blur', onBlur);
-    }
-    el.addEventListener('blur', onBlur);
-  });
-
-  // Delete key sends message to parent
-  document.addEventListener('keydown', function(e) {
-    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-    // Don't interfere with contentEditable
-    const active = document.activeElement;
-    if (active && active.isContentEditable) return;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-    if (!selectedPage) return;
-    e.preventDefault();
-    const sectionId = selectedPage.getAttribute('data-section-id');
-    window.parent.postMessage({
-      type: 'delete-element',
-      sectionId: sectionId,
-      isSectionRoot: !selectedEl || selectedEl === selectedPage,
-      elementPath: selectedEl ? getElementPath(selectedEl) : null
-    }, '*');
-  });
-
-  // PostMessage handlers from parent
-  window.addEventListener('message', function(e) {
-    const msg = e.data;
-    if (!msg?.action) return;
-
-    if (msg.action === 'scroll-to-section') {
-      const el = document.querySelector('[data-section-id="' + msg.id + '"]');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    else if (msg.action === 'update-section') {
-      const el = document.getElementById('section-' + msg.id);
-      if (el) el.innerHTML = msg.html;
-    }
-    else if (msg.action === 'remove-section') {
-      const el = document.getElementById('section-' + msg.id);
-      if (el) el.remove();
-    }
-    else if (msg.action === 'reorder-sections') {
-      const container = document.getElementById('pages') || document.body;
-      const ids = msg.ids || [];
-      ids.forEach(function(id) {
-        const el = document.getElementById('section-' + id);
-        if (el) container.appendChild(el);
-      });
-    }
-    else if (msg.action === 'update-attribute') {
-      const page = document.querySelector('[data-section-id="' + msg.sectionId + '"]');
-      if (!page || !msg.elementPath) return;
-      const parts = msg.elementPath.split('>');
-      let cur = page;
-      for (const part of parts) {
-        const match = part.match(/^(\\w+)\\[(\\d+)\\]$/);
-        if (!match || !cur) break;
-        cur = cur.children[parseInt(match[2])];
-      }
-      if (cur && msg.attr && msg.value !== undefined) {
-        cur.setAttribute(msg.attr, msg.value);
-        window.parent.postMessage({
-          type: 'section-html-updated',
-          sectionId: msg.sectionId,
-          sectionHtml: page.innerHTML
-        }, '*');
-      }
-    }
-  });
-})();`;
-}
-
-/** Build preview HTML inline (no Paged.js for editor — shows pages visually) */
-function buildPreviewHtml(sections: Section3[], themeCssData?: { css: string; tailwindConfig: string }): string {
-  const sorted = [...sections].sort((a, b) => a.order - b.order);
-  const sectionsHtml = sorted
-    .map(
-      (s) => `<div class="doc-page" data-section-id="${s.id}" id="section-${s.id}">
-        ${s.html}
-      </div>`
-    )
-    .join("\n");
-
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    ${themeCssData?.css || ""}
-    * { box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; margin: 0; padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-    .doc-page { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; cursor: pointer; transition: box-shadow 0.2s; }
-    .doc-page:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-    .doc-page.selected { outline: 3px solid #9870ED; outline-offset: 2px; }
-  </style>
-</head>
-<body>
-${sectionsHtml}
-<script>
-${getDocumentIframeScript()}
-<\/script>
-</body>
-</html>`;
-}
