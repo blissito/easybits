@@ -5,6 +5,7 @@ import { data } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
+import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import type { Route } from "./+types/new";
 
@@ -27,7 +28,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   const metadata: Record<string, unknown> = {};
   if (sourceContent) metadata.sourceContent = sourceContent;
-  if (logoDataUrl) metadata.logoDataUrl = logoDataUrl;
 
   const landing = await db.landing.create({
     data: {
@@ -41,6 +41,31 @@ export const action = async ({ request }: Route.ActionArgs) => {
       metadata,
     },
   });
+
+  // Upload logo to public bucket
+  if (logoDataUrl) {
+    const match = logoDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      const contentType = match[1];
+      const buffer = Buffer.from(match[2], "base64");
+      const ext = contentType.split("/")[1]?.replace("jpeg", "jpg") || "png";
+      const storageKey = `${user.id}/doc-logo-${landing.id}.${ext}`;
+      const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+      const putUrl = await client.getPutUrl(`pdf/${storageKey}`);
+      const putRes = await fetch(putUrl, {
+        method: "PUT",
+        body: buffer,
+        headers: { "Content-Type": contentType },
+      });
+      if (putRes.ok) {
+        metadata.logoUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/pdf/${storageKey}`;
+        await db.landing.update({
+          where: { id: landing.id },
+          data: { metadata },
+        });
+      }
+    }
+  }
 
   return redirect(`/dash/documents/${landing.id}?generating=1`);
 };

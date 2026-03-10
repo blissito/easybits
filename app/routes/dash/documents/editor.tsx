@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   useLoaderData,
   useFetcher,
@@ -14,6 +14,8 @@ import { PageList } from "~/components/documents/PageList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
+import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
+import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -41,9 +43,9 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
   const meta = (landing.metadata as Record<string, unknown>) || {};
   const sourceContent = meta.sourceContent as string | undefined;
-  const logoDataUrl = meta.logoDataUrl as string | undefined;
+  const logoUrl = meta.logoUrl as string | undefined;
 
-  return { landing, websiteUrl, sourceContent, logoDataUrl };
+  return { landing, websiteUrl, sourceContent, logoUrl };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
@@ -76,6 +78,16 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         data: { sections },
       })
     );
+    return { ok: true };
+  }
+
+  if (intent === "update-theme") {
+    const newTheme = String(formData.get("theme") || "minimal");
+    const existing = (landing.metadata as Record<string, unknown>) || {};
+    await db.landing.update({
+      where: { id: params.id },
+      data: { metadata: { ...existing, theme: newTheme } },
+    });
     return { ok: true };
   }
 
@@ -121,7 +133,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 };
 
 export default function DocumentEditor() {
-  const { landing, websiteUrl, sourceContent, logoDataUrl } =
+  const { landing, websiteUrl, sourceContent, logoUrl } =
     useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -158,10 +170,22 @@ export default function DocumentEditor() {
   const [showAddPrompt, setShowAddPrompt] = useState(false);
   const [addPrompt, setAddPrompt] = useState("");
   const [isAddingSection, setIsAddingSection] = useState(false);
+  const [addFiles, setAddFiles] = useState<File[]>([]);
+  const [addRefImage, setAddRefImage] = useState<string | null>(null);
+  const [addParsedContent, setAddParsedContent] = useState("");
+  const [isParsingAdd, setIsParsingAdd] = useState(false);
+  const addFileRef = useRef<HTMLInputElement>(null);
+  const addImageRef = useRef<HTMLInputElement>(null);
 
-  // Regenerate prompt modal
-  const [showRegenPrompt, setShowRegenPrompt] = useState(false);
-  const [regenPrompt, setRegenPrompt] = useState("");
+  // Theme
+  const [theme, setTheme] = useState<string>(() => {
+    const meta = (landing.metadata as Record<string, unknown>) || {};
+    return (meta?.theme as string) || "minimal";
+  });
+  const themeCssData = useMemo(() => buildSingleThemeCss(theme), [theme]);
+
+  // Regenerate prompt bar
+  const [regenInput, setRegenInput] = useState("");
 
   // Code view
   const [codeViewSectionId, setCodeViewSectionId] = useState<string | null>(
@@ -209,7 +233,6 @@ export default function DocumentEditor() {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         if (codeViewSectionId) setCodeViewSectionId(null);
-        else if (showRegenPrompt) setShowRegenPrompt(false);
         else if (showAddPrompt) setShowAddPrompt(false);
         else if (overflowOpen) setOverflowOpen(false);
         else if (selection) setSelection(null);
@@ -222,7 +245,6 @@ export default function DocumentEditor() {
     selection,
     codeViewSectionId,
     showAddPrompt,
-    showRegenPrompt,
   ]);
 
   function stopGeneration() {
@@ -245,7 +267,7 @@ export default function DocumentEditor() {
           landingId: landing.id,
           prompt: landing.prompt,
           sourceContent,
-          logoDataUrl,
+          logoUrl,
           ...(extraInstructions ? { extraInstructions } : {}),
         }),
         signal: controller.signal,
@@ -418,18 +440,24 @@ export default function DocumentEditor() {
   }
 
   async function handleAddPage() {
-    if (!addPrompt.trim() || isAddingSection) return;
+    if ((!addPrompt.trim() && !addParsedContent) || isAddingSection) return;
     setIsAddingSection(true);
     const newId = Math.random().toString(36).slice(2, 10);
     try {
+      const instruction = [
+        addPrompt.trim() ? `Create new pages: ${addPrompt}` : "Create new pages from this content",
+        addParsedContent ? `\n\nSource content:\n${addParsedContent.substring(0, 15000)}` : "",
+      ].join("");
+
       const res = await fetch("/api/v2/document-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           landingId: landing.id,
           sectionId: "__new__",
-          instruction: `Create a new page: ${addPrompt}`,
+          instruction,
           currentHtml: "<section></section>",
+          ...(addRefImage && { referenceImage: addRefImage }),
         }),
       });
       if (!res.ok) throw new Error("Add page failed");
@@ -481,6 +509,9 @@ export default function DocumentEditor() {
 
       setShowAddPrompt(false);
       setAddPrompt("");
+      setAddFiles([]);
+      setAddRefImage(null);
+      setAddParsedContent("");
     } catch (err) {
       console.error("Add page error:", err);
     } finally {
@@ -520,7 +551,7 @@ export default function DocumentEditor() {
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    @page { size: letter; margin: 0.75in; }
+    @page { size: letter; margin: 0; }
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section { page-break-after: always; }
     .page-section:last-child { page-break-after: auto; }
@@ -543,8 +574,16 @@ ${sectionsHtml}
     window.open(url, "_blank");
   }
 
+  function handleThemeChange(newTheme: string) {
+    setTheme(newTheme);
+    saveFetcher.submit(
+      { intent: "update-theme", theme: newTheme },
+      { method: "post" }
+    );
+  }
+
   // Build preview HTML for iframe
-  const previewHtml = buildPreviewHtml(sections);
+  const previewHtml = buildPreviewHtml(sections, themeCssData);
 
   return (
     <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
@@ -611,16 +650,6 @@ ${sectionsHtml}
             </button>
             {overflowOpen && (
               <div className="absolute right-0 top-full mt-1 w-48 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 overflow-hidden">
-                <button
-                  onClick={() => {
-                    setOverflowOpen(false);
-                    setShowRegenPrompt(true);
-                  }}
-                  disabled={isGenerating}
-                  className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Regenerar
-                </button>
                 {liveUrl && (
                   <button
                     onClick={() => {
@@ -659,6 +688,36 @@ ${sectionsHtml}
         </div>
       </div>
 
+      {/* Prompt bar */}
+      <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-white shrink-0">
+        <input
+          type="text"
+          value={regenInput}
+          onChange={(e) => setRegenInput(e.target.value)}
+          placeholder="Instrucciones: ej. fondo blanco, 4 páginas, estilo minimalista..."
+          disabled={isGenerating}
+          className="flex-1 h-8 px-3 text-sm border-2 border-gray-200 rounded-lg bg-gray-50 placeholder:text-gray-400 disabled:opacity-50"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && regenInput.trim()) {
+              generateSections(regenInput.trim());
+              setRegenInput("");
+            }
+          }}
+        />
+        <BrutalButton
+          size="chip"
+          onClick={() => {
+            if (!regenInput.trim()) return;
+            generateSections(regenInput.trim());
+            setRegenInput("");
+          }}
+          isLoading={isGenerating}
+          isDisabled={!regenInput.trim() || isGenerating}
+        >
+          Regenerar
+        </BrutalButton>
+      </div>
+
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Section list sidebar */}
@@ -687,6 +746,9 @@ ${sectionsHtml}
               handleSectionsChange(updated);
             }}
             onAdd={() => setShowAddPrompt(true)}
+            theme={theme}
+            onThemeChange={handleThemeChange}
+            themeCss={`${themeCssData.css}\n<\/style>\n<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>\n<style>`}
           />
         )}
 
@@ -811,77 +873,98 @@ ${sectionsHtml}
         />
       </div>
 
-      {/* Regenerate modal */}
-      {showRegenPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-black mb-3">Regenerar documento</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Instrucciones adicionales (opcional)
-            </p>
-            <textarea
-              value={regenPrompt}
-              onChange={(e) => setRegenPrompt(e.target.value)}
-              placeholder="Ej: Usa colores corporativos azules, agrega más gráficas, hazlo más minimalista..."
-              rows={3}
-              className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  setShowRegenPrompt(false);
-                  generateSections(regenPrompt.trim() || undefined);
-                  setRegenPrompt("");
-                }
-              }}
-            />
-            <div className="flex gap-2 mt-4 justify-end">
-              <BrutalButton
-                size="chip"
-                mode="ghost"
-                onClick={() => {
-                  setShowRegenPrompt(false);
-                  setRegenPrompt("");
-                }}
-              >
-                Cancelar
-              </BrutalButton>
-              <BrutalButton
-                size="chip"
-                mode="ghost"
-                onClick={() => {
-                  setShowRegenPrompt(false);
-                  generateSections();
-                  setRegenPrompt("");
-                }}
-              >
-                Sin instrucciones
-              </BrutalButton>
-              <BrutalButton
-                size="chip"
-                onClick={() => {
-                  setShowRegenPrompt(false);
-                  generateSections(regenPrompt.trim() || undefined);
-                  setRegenPrompt("");
-                }}
-              >
-                Regenerar
-              </BrutalButton>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add page modal */}
+      {/* Add pages modal */}
       {showAddPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-black mb-3">
-              Agregar p&aacute;gina
+              Agregar p&aacute;ginas
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Describe el contenido de la nueva p&aacute;gina
+              Sube archivos, una imagen de referencia, o describe el contenido
             </p>
+
+            {/* File upload */}
+            <div className="mb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => addFileRef.current?.click()}
+                  className="text-xs font-bold text-brand-600 border border-brand-300 px-3 py-1.5 rounded-lg hover:bg-brand-50 transition-colors"
+                >
+                  + Archivos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addImageRef.current?.click()}
+                  className="text-xs font-bold text-gray-600 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Imagen referencia
+                </button>
+                <input
+                  ref={addFileRef}
+                  type="file"
+                  accept=".txt,.md,.csv,.xlsx,.xls,.docx,.pdf"
+                  multiple
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (!files.length) return;
+                    setIsParsingAdd(true);
+                    const all = [...addFiles, ...files];
+                    setAddFiles(all);
+                    try {
+                      const parsed = await parseFiles(all);
+                      setAddParsedContent(combineContent(parsed));
+                    } catch {}
+                    setIsParsingAdd(false);
+                    e.target.value = "";
+                  }}
+                />
+                <input
+                  ref={addImageRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => setAddRefImage(reader.result as string);
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+              {/* File chips */}
+              {(addFiles.length > 0 || addRefImage) && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {addFiles.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-[11px] font-bold bg-gray-100 px-2 py-1 rounded-md">
+                      {f.name}
+                      <button
+                        onClick={() => {
+                          const updated = addFiles.filter((_, j) => j !== i);
+                          setAddFiles(updated);
+                          if (updated.length === 0) setAddParsedContent("");
+                          else parseFiles(updated).then(p => setAddParsedContent(combineContent(p)));
+                        }}
+                        className="text-red-400 hover:text-red-600 ml-0.5"
+                      >&times;</button>
+                    </span>
+                  ))}
+                  {addRefImage && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-purple-50 text-purple-700 px-2 py-1 rounded-md">
+                      <img src={addRefImage} alt="" className="w-4 h-4 object-cover rounded" />
+                      Referencia
+                      <button onClick={() => setAddRefImage(null)} className="text-red-400 hover:text-red-600 ml-0.5">&times;</button>
+                    </span>
+                  )}
+                </div>
+              )}
+              {isParsingAdd && <p className="text-xs text-gray-400 mt-1">Leyendo archivos...</p>}
+            </div>
+
             <textarea
               value={addPrompt}
               onChange={(e) => setAddPrompt(e.target.value)}
@@ -903,6 +986,9 @@ ${sectionsHtml}
                 onClick={() => {
                   setShowAddPrompt(false);
                   setAddPrompt("");
+                  setAddFiles([]);
+                  setAddRefImage(null);
+                  setAddParsedContent("");
                 }}
               >
                 Cancelar
@@ -911,7 +997,7 @@ ${sectionsHtml}
                 size="chip"
                 onClick={handleAddPage}
                 isLoading={isAddingSection}
-                isDisabled={!addPrompt.trim() || isAddingSection}
+                isDisabled={(!addPrompt.trim() && !addParsedContent) || isAddingSection}
               >
                 Generar
               </BrutalButton>
@@ -924,7 +1010,7 @@ ${sectionsHtml}
 }
 
 /** Build preview HTML inline (no Paged.js for editor — shows pages visually) */
-function buildPreviewHtml(sections: Section3[]): string {
+function buildPreviewHtml(sections: Section3[], themeCssData?: { css: string; tailwindConfig: string }): string {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const sectionsHtml = sorted
     .map(
@@ -939,12 +1025,14 @@ function buildPreviewHtml(sections: Section3[]): string {
 <head>
   <meta charset="UTF-8">
   <script src="https://cdn.tailwindcss.com"><\/script>
+  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+    ${themeCssData?.css || ""}
     * { box-sizing: border-box; }
     body { font-family: 'Inter', sans-serif; margin: 0; padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-    .doc-page { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); padding: 0.75in; position: relative; cursor: pointer; transition: box-shadow 0.2s; }
+    .doc-page { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; cursor: pointer; transition: box-shadow 0.2s; }
     .doc-page:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
     .doc-page.selected { outline: 3px solid #9870ED; outline-offset: 2px; }
   </style>
