@@ -222,6 +222,7 @@ export default function DocumentEditor() {
   const [selection, setSelection] = useState<IframeMessage | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
+  const [variantPopupTarget, setVariantPopupTarget] = useState<string | null>(null);
   const iframeRectRef = useRef<DOMRect | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const generatingShellRef = useRef<string | null>(null);
@@ -924,12 +925,14 @@ ${sectionsHtml}
 <head>
   <meta charset="UTF-8">
   <script src="https://cdn.tailwindcss.com"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
   ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     ${themeCssData?.css || ""}
+    * { box-sizing: border-box; }
     body { font-family: 'Inter', sans-serif; margin: 0; }
-    .page-section { page-break-after: always; }
+    .page-section { page-break-after: always; padding: 0.75in; }
     .page-section:last-child { page-break-after: auto; }
   </style>
 </head>
@@ -951,12 +954,27 @@ ${sectionsHtml}
       container.appendChild(iframe);
 
       await new Promise<void>((resolve) => {
-        iframe.onload = () => setTimeout(resolve, 2000); // Wait for Tailwind CDN
+        iframe.onload = () => setTimeout(resolve, 4000); // Wait for Tailwind CDN + Chart.js
         iframe.srcdoc = fullHtml;
       });
 
       const iframeBody = iframe.contentDocument?.body;
       if (!iframeBody) throw new Error("Could not access iframe body");
+
+      // Convert Chart.js <canvas> elements to <img> so html2canvas captures them
+      const canvases = iframeBody.querySelectorAll("canvas");
+      canvases.forEach((canvas) => {
+        try {
+          const img = iframe.contentDocument!.createElement("img");
+          img.src = canvas.toDataURL("image/png");
+          img.style.cssText = canvas.style.cssText || "";
+          img.width = canvas.width;
+          img.height = canvas.height;
+          img.style.width = canvas.getAttribute("width") ? canvas.getAttribute("width") + "px" : "100%";
+          img.style.height = canvas.getAttribute("height") ? canvas.getAttribute("height") + "px" : "auto";
+          canvas.parentNode?.replaceChild(img, canvas);
+        } catch (_) { /* cross-origin or empty canvas — skip */ }
+      });
 
       const pdfBlob: Blob = await html2pdf()
         .set({
@@ -1253,6 +1271,8 @@ ${sectionsHtml}
             onGenerateVariant={handleGenerateVariant}
             onStopVariant={stopVariant}
             loadingVariantId={variantLoadingId}
+            openVariantPopupFor={variantPopupTarget}
+            onVariantPopupOpened={() => setVariantPopupTarget(null)}
             onRestoreVersion={(sectionId, oldHtml) => {
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
@@ -1283,9 +1303,9 @@ ${sectionsHtml}
                   icon: <span className="text-brand-500 text-sm">&#10022;</span>,
                   disabled: !!variantLoadingId,
                   onClick: () => {
-                    const ids = contextMenu.sectionIds;
+                    const id = contextMenu.sectionIds[0];
                     setContextMenu(null);
-                    ids.forEach((id) => handleGenerateVariant(id));
+                    setVariantPopupTarget(id);
                   },
                 },
                 {

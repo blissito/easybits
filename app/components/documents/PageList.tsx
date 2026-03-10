@@ -19,6 +19,9 @@ interface PageListProps {
   onStopVariant?: () => void;
   loadingVariantId?: string | null;
   onContextMenu?: (sectionIds: string[], position: { x: number; y: number }) => void;
+  /** When set, auto-opens the variant popup for this section ID (then call with null to reset) */
+  openVariantPopupFor?: string | null;
+  onVariantPopupOpened?: () => void;
 }
 
 /** Section3 with optional version history */
@@ -58,6 +61,8 @@ export function PageList({
   onStopVariant,
   loadingVariantId,
   onContextMenu,
+  openVariantPopupFor,
+  onVariantPopupOpened,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
@@ -70,6 +75,18 @@ export function PageList({
   const [variantPrompt, setVariantPrompt] = useState("");
   const [variantImage, setVariantImage] = useState<string | null>(null);
   const variantFileRef = useRef<HTMLInputElement>(null);
+
+  // Auto-open variant popup when requested from context menu
+  useEffect(() => {
+    if (openVariantPopupFor) {
+      setVariantPopup(openVariantPopupFor);
+      setVariantPrompt("");
+      setVariantImage(null);
+      onVariantPopupOpened?.();
+      // Scroll the thumbnail into view
+      itemRefs.current[openVariantPopupFor]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [openVariantPopupFor]);
 
   // Close popups on ESC
   useEffect(() => {
