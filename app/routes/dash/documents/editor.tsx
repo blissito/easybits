@@ -222,7 +222,7 @@ export default function DocumentEditor() {
   const [selection, setSelection] = useState<IframeMessage | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
-  const [variantPopupTarget, setVariantPopupTarget] = useState<string | null>(null);
+  const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
   const iframeRectRef = useRef<DOMRect | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const generatingShellRef = useRef<string | null>(null);
@@ -301,7 +301,7 @@ export default function DocumentEditor() {
       if (e.key === "Escape") {
         if (contextMenu) setContextMenu(null);
         else if (codeViewSectionId) setCodeViewSectionId(null);
-        else if (showAddPrompt) setShowAddPrompt(false);
+        else if (showAddPrompt) { setShowAddPrompt(false); setRegenTargetId(null); }
         else if (overflowOpen) setOverflowOpen(false);
         else if (selection) setSelection(null);
       }
@@ -1271,8 +1271,6 @@ ${sectionsHtml}
             onGenerateVariant={handleGenerateVariant}
             onStopVariant={stopVariant}
             loadingVariantId={variantLoadingId}
-            openVariantPopupFor={variantPopupTarget}
-            onVariantPopupOpened={() => setVariantPopupTarget(null)}
             onRestoreVersion={(sectionId, oldHtml) => {
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
@@ -1305,7 +1303,8 @@ ${sectionsHtml}
                   onClick: () => {
                     const id = contextMenu.sectionIds[0];
                     setContextMenu(null);
-                    setVariantPopupTarget(id);
+                    setRegenTargetId(id);
+                    setShowAddPrompt(true);
                   },
                 },
                 {
@@ -1471,10 +1470,12 @@ ${sectionsHtml}
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-black mb-3">
-              Agregar p&aacute;ginas
+              {regenTargetId ? "Regenerar página" : "Agregar páginas"}
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Sube archivos, una imagen de referencia, o describe el contenido
+              {regenTargetId
+                ? "Describe los cambios o adjunta una imagen de referencia"
+                : "Sube archivos, una imagen de referencia, o describe el contenido"}
             </p>
 
             {/* File upload */}
@@ -1568,7 +1569,15 @@ ${sectionsHtml}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleAddPage();
+                  if (regenTargetId) {
+                    handleGenerateVariant(regenTargetId, addPrompt || undefined, addRefImage || undefined);
+                    setShowAddPrompt(false);
+                    setRegenTargetId(null);
+                    setAddPrompt("");
+                    setAddRefImage(null);
+                  } else {
+                    handleAddPage();
+                  }
                 }
               }}
             />
@@ -1578,6 +1587,7 @@ ${sectionsHtml}
                 mode="ghost"
                 onClick={() => {
                   setShowAddPrompt(false);
+                  setRegenTargetId(null);
                   setAddPrompt("");
                   setAddFiles([]);
                   setAddRefImage(null);
@@ -1588,11 +1598,23 @@ ${sectionsHtml}
               </BrutalButton>
               <BrutalButton
                 size="chip"
-                onClick={handleAddPage}
-                isLoading={isAddingSection}
-                isDisabled={(!addPrompt.trim() && !addParsedContent) || isAddingSection}
+                onClick={() => {
+                  if (regenTargetId) {
+                    handleGenerateVariant(regenTargetId, addPrompt || undefined, addRefImage || undefined);
+                    setShowAddPrompt(false);
+                    setRegenTargetId(null);
+                    setAddPrompt("");
+                    setAddRefImage(null);
+                  } else {
+                    handleAddPage();
+                  }
+                }}
+                isLoading={regenTargetId ? !!variantLoadingId : isAddingSection}
+                isDisabled={regenTargetId
+                  ? (!addPrompt.trim() && !addRefImage) || !!variantLoadingId
+                  : (!addPrompt.trim() && !addParsedContent) || isAddingSection}
               >
-                Generar
+                {regenTargetId ? "Regenerar" : "Generar"}
               </BrutalButton>
             </div>
           </div>
