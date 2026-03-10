@@ -228,7 +228,13 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
   const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
   const content: any[] = [];
   if (referenceImage) {
-    content.push({ type: "image", image: referenceImage });
+    // Convert data URLs to Uint8Array (AI SDK doesn't accept data: URLs directly)
+    const base64Match = referenceImage.match(/^data:([^;]+);base64,(.+)$/);
+    if (base64Match) {
+      content.push({ type: "image", image: new Uint8Array(Buffer.from(base64Match[2], "base64")), mimeType: base64Match[1] });
+    } else {
+      content.push({ type: "image", image: referenceImage });
+    }
     content.push({
       type: "text",
       text: `Generate a landing page inspired by this reference image for: ${prompt}${extra}${PROMPT_SUFFIX}`,
