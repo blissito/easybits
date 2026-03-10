@@ -28,7 +28,7 @@ ${css}
 html{scroll-behavior:smooth}
 body{font-family:system-ui,-apple-system,sans-serif;background-color:var(--color-surface);color:var(--color-on-surface)}
 img{max-width:100%}
-section{width:100%}
+section{width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;padding-left:0!important;padding-right:0!important}
 section>*{max-width:80rem;margin-left:auto;margin-right:auto;padding-left:1rem;padding-right:1rem}
 [contenteditable="true"]{cursor:text}
 </style>
@@ -72,7 +72,7 @@ ${baseCss}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{font-family:system-ui,-apple-system,sans-serif;background-color:var(--color-surface);color:var(--color-on-surface)}
-section{width:100%}
+section{width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;padding-left:0!important;padding-right:0!important}
 section>*{max-width:80rem;margin-left:auto;margin-right:auto;padding-left:1rem;padding-right:1rem}
 </style>
 </head>
