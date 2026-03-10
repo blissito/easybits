@@ -14,7 +14,7 @@ import { PageList, type Section3WithVersions } from "~/components/documents/Page
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildSingleThemeCss, getIframeScript } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
@@ -337,7 +337,7 @@ export default function DocumentEditor() {
 </head>
 <body id="pages">
 <script>
-${getIframeScript()}
+${getDocumentIframeScript()}
 <\/script>
 </body>
 </html>`;
@@ -513,6 +513,50 @@ ${getIframeScript()}
           saveSections(updated);
           return updated;
         });
+      } else if (msg.type === "delete-element" && msg.sectionId) {
+        if (msg.isSectionRoot) {
+          // Delete entire page
+          setSections((prev) => {
+            const updated = prev
+              .filter((s) => s.id !== msg.sectionId)
+              .map((s, i) => ({ ...s, order: i }));
+            saveSections(updated);
+            return updated;
+          });
+          setSelection(null);
+        } else if (msg.elementPath) {
+          // Delete element within page via DOM manipulation
+          setSections((prev) => {
+            const section = prev.find((s) => s.id === msg.sectionId);
+            if (!section) return prev;
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${section.html}</div>`, "text/html");
+            const root = doc.body.firstElementChild;
+            if (!root) return prev;
+            const parts = msg.elementPath.split(">");
+            let cur: Element | null | undefined = root;
+            for (const part of parts) {
+              const match = part.match(/^(\w+)\[(\d+)\]$/);
+              if (!match || !cur) break;
+              cur = cur.children[parseInt(match[2])];
+            }
+            if (cur && cur !== root) {
+              cur.remove();
+              const newHtml = root.innerHTML;
+              const updated = prev.map((s) =>
+                s.id === msg.sectionId ? { ...s, html: newHtml } : s
+              );
+              saveSections(updated);
+              // Also update iframe
+              iframeRef.current?.contentWindow?.postMessage(
+                { action: "update-section", id: msg.sectionId, html: newHtml }, "*"
+              );
+              setSelection(null);
+              return updated;
+            }
+            return prev;
+          });
+        }
       }
     }
     window.addEventListener("message", handleMessage);
@@ -909,11 +953,14 @@ ${sectionsHtml}
     );
   }
 
-  // Scroll iframe to a section via postMessage
+  // Scroll iframe to a section — direct DOM access (more reliable than postMessage)
   function scrollIframeToSection(sectionId: string) {
-    iframeRef.current?.contentWindow?.postMessage(
-      { action: 'scroll-to-section', id: sectionId }, '*'
-    );
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+    const el = doc.querySelector(`[data-section-id="${sectionId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
 
@@ -1484,6 +1531,182 @@ ${sectionsHtml}
   );
 }
 
+/** Document-specific iframe script — replaces landings3 getIframeScript() */
+function getDocumentIframeScript(): string {
+  return `
+(function() {
+  let selectedPage = null;
+  let selectedEl = null;
+
+  function getElementPath(el) {
+    const parts = [];
+    let cur = el;
+    while (cur && cur !== document.body) {
+      const parent = cur.parentElement;
+      if (!parent) break;
+      const idx = Array.from(parent.children).indexOf(cur);
+      parts.unshift(cur.tagName.toLowerCase() + '[' + idx + ']');
+      cur = parent;
+    }
+    return parts.join('>');
+  }
+
+  function clearSelection() {
+    if (selectedPage) selectedPage.classList.remove('selected');
+    if (selectedEl) selectedEl.style.outline = '';
+    selectedPage = null;
+    selectedEl = null;
+  }
+
+  function selectPage(page) {
+    clearSelection();
+    selectedPage = page;
+    page.classList.add('selected');
+    const sectionId = page.getAttribute('data-section-id');
+    window.parent.postMessage({
+      type: 'element-selected',
+      sectionId: sectionId,
+      isSectionRoot: true,
+      tagName: 'DIV',
+      text: '',
+      rect: page.getBoundingClientRect(),
+      attrs: {}
+    }, '*');
+  }
+
+  function selectElement(el, page) {
+    clearSelection();
+    selectedPage = page;
+    page.classList.add('selected');
+    selectedEl = el;
+    el.style.outline = '2px solid #3B82F6';
+    const sectionId = page.getAttribute('data-section-id');
+    const attrs = {};
+    for (const attr of el.attributes) {
+      attrs[attr.name] = attr.value;
+    }
+    window.parent.postMessage({
+      type: 'element-selected',
+      sectionId: sectionId,
+      isSectionRoot: false,
+      tagName: el.tagName,
+      elementPath: getElementPath(el),
+      text: el.textContent?.substring(0, 200) || '',
+      rect: el.getBoundingClientRect(),
+      attrs: attrs,
+      sectionHtml: page.innerHTML
+    }, '*');
+  }
+
+  // Click handler — no preventDefault so contenteditable works
+  document.addEventListener('click', function(e) {
+    const page = e.target.closest('.doc-page');
+    if (!page) {
+      clearSelection();
+      window.parent.postMessage({ type: 'element-deselected' }, '*');
+      return;
+    }
+    // If clicked directly on page background (not a child element)
+    if (e.target === page) {
+      selectPage(page);
+      return;
+    }
+    // Clicked on a child element
+    selectElement(e.target, page);
+  });
+
+  // Double-click on text to enable contentEditable
+  document.addEventListener('dblclick', function(e) {
+    const el = e.target;
+    const page = el.closest('.doc-page');
+    if (!page || el === page) return;
+    // Only for text-bearing elements
+    const textTags = ['P','H1','H2','H3','H4','H5','H6','SPAN','LI','TD','TH','A','LABEL','FIGCAPTION','BLOCKQUOTE','DT','DD'];
+    if (!textTags.includes(el.tagName) && !el.hasAttribute('data-editable')) return;
+    el.contentEditable = 'true';
+    el.focus();
+    el.style.outline = '2px solid #9870ED';
+    function onBlur() {
+      el.contentEditable = 'false';
+      el.style.outline = selectedEl === el ? '2px solid #3B82F6' : '';
+      const sectionId = page.getAttribute('data-section-id');
+      window.parent.postMessage({
+        type: 'text-edited',
+        sectionId: sectionId,
+        sectionHtml: page.innerHTML,
+        text: el.textContent
+      }, '*');
+      el.removeEventListener('blur', onBlur);
+    }
+    el.addEventListener('blur', onBlur);
+  });
+
+  // Delete key sends message to parent
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    // Don't interfere with contentEditable
+    const active = document.activeElement;
+    if (active && active.isContentEditable) return;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    if (!selectedPage) return;
+    e.preventDefault();
+    const sectionId = selectedPage.getAttribute('data-section-id');
+    window.parent.postMessage({
+      type: 'delete-element',
+      sectionId: sectionId,
+      isSectionRoot: !selectedEl || selectedEl === selectedPage,
+      elementPath: selectedEl ? getElementPath(selectedEl) : null
+    }, '*');
+  });
+
+  // PostMessage handlers from parent
+  window.addEventListener('message', function(e) {
+    const msg = e.data;
+    if (!msg?.action) return;
+
+    if (msg.action === 'scroll-to-section') {
+      const el = document.querySelector('[data-section-id="' + msg.id + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    else if (msg.action === 'update-section') {
+      const el = document.getElementById('section-' + msg.id);
+      if (el) el.innerHTML = msg.html;
+    }
+    else if (msg.action === 'remove-section') {
+      const el = document.getElementById('section-' + msg.id);
+      if (el) el.remove();
+    }
+    else if (msg.action === 'reorder-sections') {
+      const container = document.getElementById('pages') || document.body;
+      const ids = msg.ids || [];
+      ids.forEach(function(id) {
+        const el = document.getElementById('section-' + id);
+        if (el) container.appendChild(el);
+      });
+    }
+    else if (msg.action === 'update-attribute') {
+      const page = document.querySelector('[data-section-id="' + msg.sectionId + '"]');
+      if (!page || !msg.elementPath) return;
+      const parts = msg.elementPath.split('>');
+      let cur = page;
+      for (const part of parts) {
+        const match = part.match(/^(\\w+)\\[(\\d+)\\]$/);
+        if (!match || !cur) break;
+        cur = cur.children[parseInt(match[2])];
+      }
+      if (cur && msg.attr && msg.value !== undefined) {
+        cur.setAttribute(msg.attr, msg.value);
+        window.parent.postMessage({
+          type: 'section-html-updated',
+          sectionId: msg.sectionId,
+          sectionHtml: page.innerHTML
+        }, '*');
+      }
+    }
+  });
+})();`;
+}
+
 /** Build preview HTML inline (no Paged.js for editor — shows pages visually) */
 function buildPreviewHtml(sections: Section3[], themeCssData?: { css: string; tailwindConfig: string }): string {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
@@ -1514,7 +1737,7 @@ function buildPreviewHtml(sections: Section3[], themeCssData?: { css: string; ta
 <body>
 ${sectionsHtml}
 <script>
-${getIframeScript()}
+${getDocumentIframeScript()}
 <\/script>
 </body>
 </html>`;
