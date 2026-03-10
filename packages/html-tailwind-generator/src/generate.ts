@@ -7,16 +7,21 @@ import { generateImage } from "./images/dalleImages";
 import type { Section3 } from "./types";
 
 async function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
+  // Prefer Anthropic for text generation when both keys are available
+  const anthropicKey = opts.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey) {
+    const anthropic = createAnthropic({ apiKey: anthropicKey });
+    return anthropic(opts.modelId || opts.defaultAnthropic);
+  }
+  // Fallback to OpenAI for text only if no Anthropic key
   const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
   if (openaiKey) {
     const { createOpenAI } = await import("@ai-sdk/openai");
     const openai = createOpenAI({ apiKey: openaiKey });
     return openai(opts.modelId || opts.defaultOpenai);
   }
-  const anthropic = opts.anthropicApiKey
-    ? createAnthropic({ apiKey: opts.anthropicApiKey })
-    : createAnthropic();
-  return anthropic(opts.modelId || opts.defaultAnthropic);
+  // Last resort: createAnthropic() without key (uses env var)
+  return createAnthropic()(opts.modelId || opts.defaultAnthropic);
 }
 
 export const SYSTEM_PROMPT = `You are a world-class web designer who creates AWARD-WINNING landing pages. Your designs win Awwwards, FWA, and CSS Design Awards. You think in terms of visual hierarchy, whitespace, and emotional impact.
@@ -79,14 +84,17 @@ TESTIMONIALS SECTION:
 - NEVER use same dark bg for both section AND cards
 
 HERO SECTION — your masterpiece:
-- Bento-grid or asymmetric layout, NOT a generic centered hero
-- Large headline block + smaller stat/metric cards in a grid
-- Real social proof: "2,847+ users", avatar stack (colored divs with initials), star ratings
-- Bold oversized headline (text-6xl/7xl font-black leading-none)
-- Tag/label above headline (uppercase, tracking-wider, text-xs)
-- 2 CTAs: primary (large, with → arrow) + secondary (ghost/outlined)
-- Real image via data-image-query
-- Min height: min-h-[90vh] with generous padding
+- Use a 2-column grid (lg:grid-cols-2) that fills the full height, NOT content floating in empty space
+- Left column: headline + description + CTAs, vertically centered with flex flex-col justify-center
+- Right column: large hero image (data-image-query) filling the column, or a bento-grid of image + stat cards
+- Bold oversized headline (text-4xl md:text-6xl lg:text-7xl font-black leading-tight)
+- Tag/label above headline (uppercase, tracking-wider, text-xs text-accent)
+- Short description paragraph (text-lg text-on-surface-muted, max-w-lg)
+- 2 CTAs: primary (large, px-8 py-4, with → arrow) + secondary (ghost/outlined)
+- Optional: social proof bar below CTAs (avatar stack + "2,847+ users" text)
+- Min height: min-h-[90vh] with items-center on the grid so content is vertically centered
+- CRITICAL: the grid must stretch to fill the section height. Use min-h-[90vh] on the grid container itself, not just the section
+- NEVER leave large empty areas — if using min-h-[90vh], content must be centered/distributed within it
 
 TAILWIND v3 NOTES:
 - Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)

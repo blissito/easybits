@@ -97,22 +97,6 @@ export const LANDING_THEMES: LandingTheme[] = [
     },
   },
   {
-    id: "notion",
-    label: "Notion",
-    colors: {
-      primary: "#37352f",
-      "primary-light": "#55534e",
-      "primary-dark": "#25231e",
-      secondary: "#9b9a97",
-      accent: "#eb5757",
-      surface: "#ffffff",
-      "surface-alt": "#f7f6f3",
-      "on-surface": "#37352f",
-      "on-surface-muted": "#9b9a97",
-      "on-primary": "#ffffff",
-    },
-  },
-  {
     id: "rosa",
     label: "Rosa",
     colors: {
