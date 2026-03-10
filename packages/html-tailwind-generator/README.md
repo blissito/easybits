@@ -32,7 +32,7 @@ All API keys can be set via environment variables instead of passing them explic
 | `ANTHROPIC_API_KEY` | `generateLanding`, `refineLanding` | Anthropic API key (auto-read by `@ai-sdk/anthropic`) |
 | `PEXELS_API_KEY` | `enrichImages`, `searchImage` | Pexels stock photo API key |
 
-**Priority**: If both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are set, OpenAI takes precedence. To force Anthropic, pass `anthropicApiKey` explicitly and omit `openaiApiKey`.
+**Priority**: If both keys are set, Anthropic takes precedence for text generation. OpenAI is used as fallback, or for DALL-E image generation when `openaiApiKey` is available.
 
 **Mix providers**: You can use Anthropic for text generation + DALL-E for images (best of both). Denik uses this setup in production — Claude Sonnet for generation, Haiku for refinement, and DALL-E 3 for images.
 
