@@ -55,8 +55,8 @@ COLOR SYSTEM — CRITICAL (READ CAREFULLY):
 - NEVER use hardcoded Tailwind color classes: NO bg-gray-*, bg-black, bg-white, bg-indigo-*, bg-blue-*, bg-purple-*, text-gray-*, text-black, text-white, etc.
 - The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
 - ALL backgrounds MUST use: bg-primary, bg-primary-dark, bg-surface, bg-surface-alt
-- ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-primary, text-accent
-- CONTRAST RULE: on bg-primary or bg-primary-dark → use text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface or text-on-surface-muted. NEVER put text-on-surface on bg-primary or vice versa. text-accent is decorative — use sparingly on bg-surface/bg-surface-alt only.
+- ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-accent. Use text-primary ONLY on bg-surface/bg-surface-alt (it's the same hue as bg-primary — invisible on primary backgrounds).
+- CONTRAST RULE: on bg-primary or bg-primary-dark → use ONLY text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface, text-on-surface-muted, or text-primary. NEVER use text-primary on bg-primary — they are the SAME COLOR. NEVER put text-on-surface on bg-primary or text-on-primary on bg-surface. text-accent is decorative — use sparingly on bg-surface/bg-surface-alt only.
 - ANTI-PATTERN: NEVER put bg-primary on BOTH the section AND elements inside it. If section is bg-primary, inner cards/elements should be bg-surface. If section is bg-surface, cards can use bg-surface-alt or bg-primary.
 - For gradients: from-primary to-primary-dark, from-surface to-surface-alt
 - For hover: hover:bg-primary-dark, hover:bg-primary-light
