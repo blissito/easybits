@@ -37,7 +37,7 @@ export function SectionList({
   const [editingLabel, setEditingLabel] = useState("");
 
   return (
-    <div className="w-56 shrink-0 flex flex-col bg-white border-r-2 border-gray-200 overflow-y-auto">
+    <div className="flex flex-col flex-1 overflow-hidden">
       <div className="p-3 border-b border-gray-200">
         <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">
           Tema

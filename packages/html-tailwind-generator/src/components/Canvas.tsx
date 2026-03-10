@@ -58,6 +58,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
       postToIframe({ action: "add-section", id: s.id, html: s.html, scroll: false });
       knownSectionsRef.current.set(s.id, s.html);
     }
+    // Restore scroll position from sessionStorage
+    const savedY = sessionStorage.getItem("landing-v3-iframe-scrollY");
+    if (savedY) {
+      setTimeout(() => postToIframe({ action: "restore-scroll", y: Number(savedY) }), 100);
+    }
   }, [sections, postToIframe]);
 
   // Incremental diff: detect added/updated/removed sections
@@ -119,6 +124,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     };
   }, [updateRect]);
 
+  // Periodically save iframe scroll position
+  useEffect(() => {
+    if (!ready) return;
+    const interval = setInterval(() => {
+      postToIframe({ action: "get-scroll" });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [ready, postToIframe]);
+
   // Listen for postMessage from iframe
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
@@ -127,6 +141,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
 
       if (data.type === "ready") {
         handleReady();
+        return;
+      }
+
+      if (data.type === "scroll-position") {
+        sessionStorage.setItem("landing-v3-iframe-scrollY", String(data.y));
         return;
       }
 

@@ -283,6 +283,14 @@ export function getIframeScript(): string {
       if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     }
 
+    if (msg.action === 'get-scroll') {
+      window.parent.postMessage({ type: 'scroll-position', y: window.scrollY }, '*');
+    }
+
+    if (msg.action === 'restore-scroll') {
+      window.scrollTo(0, msg.y);
+    }
+
     if (msg.action === 'full-rewrite') {
       // Fallback: rewrite everything
       document.body.innerHTML = msg.html;
