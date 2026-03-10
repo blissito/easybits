@@ -144,7 +144,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
   }, [onMessage, updateRect, handleReady]);
 
   return (
-    <div className="flex-1 bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200 relative">
+    <div className="flex-1 overflow-hidden relative">
       <iframe
         ref={iframeRef}
         title="Landing preview"
