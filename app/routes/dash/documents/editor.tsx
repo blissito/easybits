@@ -10,12 +10,13 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Copy } from "~/components/common/Copy";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { PageList } from "~/components/documents/PageList";
+import { PageList, type Section3WithVersions } from "~/components/documents/PageList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, getIframeScript } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
+import { PLANS, type PlanKey } from "~/lib/plans";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -44,8 +45,16 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const meta = (landing.metadata as Record<string, unknown>) || {};
   const sourceContent = meta.sourceContent as string | undefined;
   const logoUrl = meta.logoUrl as string | undefined;
+  const pdfUrl = meta.pdfUrl as string | undefined;
 
-  return { landing, websiteUrl, sourceContent, logoUrl };
+  // AI generation usage
+  const userMeta = (user.metadata as Record<string, unknown>) || {};
+  const userPlan = (userMeta.plan as string) || "Spark";
+  const planConfig = PLANS[userPlan as PlanKey] || PLANS.Spark;
+  const aiGenUsed = (user as any).aiGenerationsCount || 0;
+  const aiGenLimit = planConfig.aiGenerationsPerMonth;
+
+  return { landing, websiteUrl, sourceContent, logoUrl, pdfUrl, aiGenUsed, aiGenLimit, userPlan };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
@@ -110,6 +119,27 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     }
   }
 
+  if (intent === "get-pdf-put-url") {
+    const { getPlatformDefaultClient, PUBLIC_BUCKET } = await import("~/.server/storage");
+    const { nanoid } = await import("nanoid");
+    const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+    const storageKey = `pdf/${user.id}/doc-${params.id}-${nanoid(6)}.pdf`;
+    const putUrl = await client.getPutUrl(storageKey);
+    const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+    return { putUrl, publicUrl };
+  }
+
+  if (intent === "save-pdf-url") {
+    const pdfUrl = String(formData.get("pdfUrl") || "");
+    if (!pdfUrl) return { error: "Missing pdfUrl" };
+    const existing = (landing.metadata as Record<string, unknown>) || {};
+    await db.landing.update({
+      where: { id: params.id },
+      data: { metadata: { ...existing, pdfUrl } },
+    });
+    return { ok: true, pdfUrl };
+  }
+
   if (intent === "unpublish") {
     const { unpublishLanding } = await import(
       "~/.server/core/landingOperations"
@@ -133,8 +163,11 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 };
 
 export default function DocumentEditor() {
-  const { landing, websiteUrl, sourceContent, logoUrl } =
-    useLoaderData<typeof loader>();
+  const {
+    landing, websiteUrl, sourceContent, logoUrl, pdfUrl: initialPdfUrl,
+    aiGenUsed: initialAiGenUsed, aiGenLimit, userPlan,
+  } = useLoaderData<typeof loader>();
+  const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const saveFetcher = useFetcher();
@@ -142,8 +175,15 @@ export default function DocumentEditor() {
     url?: string;
     redirect?: string;
     unpublished?: boolean;
+    putUrl?: string;
+    publicUrl?: string;
+    pdfUrl?: string;
+    ok?: boolean;
   }>();
+  const pdfFetcher = useFetcher<{ putUrl?: string; publicUrl?: string }>();
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
+  const [pdfLink, setPdfLink] = useState<string | null>(initialPdfUrl || null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [sections, setSections] = useState<Section3[]>(() => {
     const raw = landing.sections;
@@ -199,8 +239,13 @@ export default function DocumentEditor() {
   useEffect(() => {
     if (deployFetcher.state === "idle") setActiveIntent(null);
     if (deployFetcher.data?.redirect) navigate(deployFetcher.data.redirect);
-    if (deployFetcher.data?.url) setLiveUrl(deployFetcher.data.url);
+    if (deployFetcher.data?.url) {
+      setLiveUrl(deployFetcher.data.url);
+      // Generate and upload PDF after successful deploy
+      generateAndUploadPdf();
+    }
     if (deployFetcher.data?.unpublished) setLiveUrl(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployFetcher.state, deployFetcher.data, navigate]);
 
   // Auto-generate on mount
@@ -260,6 +305,13 @@ export default function DocumentEditor() {
     setIsGenerating(true);
     setSections([]);
     try {
+      // Check limit client-side
+      if (aiGenLimit !== null && aiGenUsed >= aiGenLimit) {
+        alert(`Límite de generaciones AI alcanzado (${aiGenUsed}/${aiGenLimit}). Upgrade tu plan.`);
+        setIsGenerating(false);
+        return;
+      }
+
       const res = await fetch("/api/v2/document-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -273,6 +325,7 @@ export default function DocumentEditor() {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("Generation failed");
+      setAiGenUsed((c: number) => c + 1);
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No stream");
@@ -352,7 +405,11 @@ export default function DocumentEditor() {
         setToolbarTick((t) => t + 1);
       } else if (msg.type === "element-deselected") {
         setSelection(null);
-      } else if (msg.type === "text-edited" && msg.sectionId && msg.sectionHtml) {
+      } else if (
+        (msg.type === "text-edited" || msg.type === "section-html-updated") &&
+        msg.sectionId &&
+        msg.sectionHtml
+      ) {
         setSections((prev) => {
           const updated = prev.map((s) =>
             s.id === msg.sectionId ? { ...s, html: msg.sectionHtml } : s
@@ -374,6 +431,16 @@ export default function DocumentEditor() {
       if (!section) return;
       const sectionId = selection.sectionId;
 
+      // Snapshot current version before refine
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.id !== sectionId) return s;
+          const sv = s as Section3WithVersions;
+          const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
+          return { ...s, versions } as any;
+        })
+      );
+
       const res = await fetch("/api/v2/document-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -386,6 +453,7 @@ export default function DocumentEditor() {
         }),
       });
       if (!res.ok) throw new Error("Refine failed");
+      setAiGenUsed((c: number) => c + 1);
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
@@ -428,6 +496,25 @@ export default function DocumentEditor() {
     sorted.splice(toIndex, 0, moved);
     const reordered = sorted.map((s, i) => ({ ...s, order: i }));
     handleSectionsChange(reordered);
+  }
+
+  function handleUpdateAttribute(
+    sectionId: string,
+    elementPath: string,
+    attr: string,
+    value: string
+  ) {
+    iframeRef.current?.contentWindow?.postMessage(
+      {
+        action: "update-attribute",
+        sectionId,
+        elementPath,
+        tagName: selection?.tagName || "*",
+        attr,
+        value,
+      },
+      "*"
+    );
   }
 
   function handleDeleteSection() {
@@ -548,7 +635,6 @@ export default function DocumentEditor() {
   <meta charset="UTF-8">
   <title>${landing.name}</title>
   <script src="https://cdn.tailwindcss.com"><\/script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     @page { size: letter; margin: 0; }
@@ -560,9 +646,7 @@ export default function DocumentEditor() {
 <body>
 ${sectionsHtml}
 <script>
-  // Auto-print after load
   window.onload = () => {
-    // Wait for Tailwind + charts
     setTimeout(() => window.print(), 1500);
   };
 <\/script>
@@ -572,6 +656,105 @@ ${sectionsHtml}
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
+  }
+
+  async function generateAndUploadPdf() {
+    if (sections.length === 0) return;
+    setIsGeneratingPdf(true);
+    try {
+      // 1. Get PUT URL from server
+      const formData = new FormData();
+      formData.set("intent", "get-pdf-put-url");
+      const res = await fetch(`/dash/documents/${landing.id}`, {
+        method: "POST",
+        body: formData,
+      });
+      const { putUrl, publicUrl } = await res.json();
+      if (!putUrl || !publicUrl) throw new Error("No PUT URL returned");
+
+      // 2. Generate PDF client-side with html2pdf.js
+      const html2pdf = (await import("html2pdf.js")).default;
+      const sorted = [...sections].sort((a, b) => a.order - b.order);
+      const sectionsHtml = sorted
+        .map((s) => `<div class="page-section">${s.html}</div>`)
+        .join("\n");
+
+      const fullHtml = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    ${themeCssData?.css || ""}
+    body { font-family: 'Inter', sans-serif; margin: 0; }
+    .page-section { page-break-after: always; }
+    .page-section:last-child { page-break-after: auto; }
+  </style>
+</head>
+<body>${sectionsHtml}</body>
+</html>`;
+
+      // Create a temporary container to render
+      const container = document.createElement("div");
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.width = "8.5in";
+      document.body.appendChild(container);
+
+      // Use iframe to render with Tailwind
+      const iframe = document.createElement("iframe");
+      iframe.style.width = "8.5in";
+      iframe.style.height = "11in";
+      iframe.style.border = "none";
+      container.appendChild(iframe);
+
+      await new Promise<void>((resolve) => {
+        iframe.onload = () => setTimeout(resolve, 2000); // Wait for Tailwind CDN
+        iframe.srcdoc = fullHtml;
+      });
+
+      const iframeBody = iframe.contentDocument?.body;
+      if (!iframeBody) throw new Error("Could not access iframe body");
+
+      const pdfBlob: Blob = await html2pdf()
+        .set({
+          margin: 0,
+          filename: `${landing.name}.pdf`,
+          image: { type: "jpeg", quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"], avoid: [] },
+        })
+        .from(iframeBody)
+        .outputPdf("blob");
+
+      document.body.removeChild(container);
+
+      // 3. Upload PDF blob
+      const uploadRes = await fetch(putUrl, {
+        method: "PUT",
+        body: pdfBlob,
+        headers: { "Content-Type": "application/pdf" },
+      });
+      if (!uploadRes.ok) throw new Error("PDF upload failed");
+
+      // 4. Save pdfUrl in metadata
+      const saveForm = new FormData();
+      saveForm.set("intent", "save-pdf-url");
+      saveForm.set("pdfUrl", publicUrl);
+      await fetch(`/dash/documents/${landing.id}`, {
+        method: "POST",
+        body: saveForm,
+      });
+
+      setPdfLink(publicUrl);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   }
 
   function handleThemeChange(newTheme: string) {
@@ -615,6 +798,34 @@ ${sectionsHtml}
                 mode="ghost"
                 className="relative static p-0"
               />
+            </span>
+          )}
+          {isGeneratingPdf && (
+            <span className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span className="w-3 h-3 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
+              Generando PDF...
+            </span>
+          )}
+          {pdfLink && !isGeneratingPdf && (
+            <span className="flex items-center gap-1.5">
+              <a
+                href={pdfLink}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-red-600 hover:underline font-bold"
+              >
+                PDF
+              </a>
+              <Copy
+                text={pdfLink}
+                mode="ghost"
+                className="relative static p-0"
+              />
+            </span>
+          )}
+          {aiGenLimit !== null && (
+            <span className={`text-xs font-bold ${aiGenUsed >= aiGenLimit ? "text-red-500" : "text-gray-400"}`}>
+              {aiGenUsed}/{aiGenLimit} gen
             </span>
           )}
         </div>
@@ -748,7 +959,17 @@ ${sectionsHtml}
             onAdd={() => setShowAddPrompt(true)}
             theme={theme}
             onThemeChange={handleThemeChange}
-            themeCss={`${themeCssData.css}\n<\/style>\n<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>\n<style>`}
+            themeCssData={themeCssData}
+            onRestoreVersion={(sectionId, oldHtml) => {
+              const updated = sections.map((s) => {
+                if (s.id !== sectionId) return s;
+                const sv = s as Section3WithVersions;
+                // Push current to versions, restore old
+                const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
+                return { ...s, html: oldHtml, versions } as any;
+              });
+              handleSectionsChange(updated);
+            }}
           />
         )}
 
@@ -868,7 +1089,7 @@ ${sectionsHtml}
           onViewCode={() => {
             if (selection?.sectionId) handleOpenCode(selection.sectionId);
           }}
-          onUpdateAttribute={() => {}}
+          onUpdateAttribute={handleUpdateAttribute}
           isRefining={isRefining}
         />
       </div>
@@ -1026,7 +1247,6 @@ function buildPreviewHtml(sections: Section3[], themeCssData?: { css: string; ta
   <meta charset="UTF-8">
   <script src="https://cdn.tailwindcss.com"><\/script>
   ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     ${themeCssData?.css || ""}
@@ -1040,19 +1260,7 @@ function buildPreviewHtml(sections: Section3[], themeCssData?: { css: string; ta
 <body>
 ${sectionsHtml}
 <script>
-  document.querySelectorAll('.doc-page').forEach(page => {
-    page.addEventListener('click', (e) => {
-      document.querySelectorAll('.doc-page').forEach(p => p.classList.remove('selected'));
-      page.classList.add('selected');
-      window.parent.postMessage({ type: 'element-selected', sectionId: page.dataset.sectionId, tagName: 'SECTION', text: page.textContent?.substring(0, 80) || '' }, '*');
-    });
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.doc-page')) {
-      document.querySelectorAll('.doc-page').forEach(p => p.classList.remove('selected'));
-      window.parent.postMessage({ type: 'element-deselected' }, '*');
-    }
-  });
+${getIframeScript()}
 <\/script>
 </body>
 </html>`;

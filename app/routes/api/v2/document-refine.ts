@@ -5,16 +5,26 @@ import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { Section3 } from "~/lib/landing3/types";
+import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
 
 const REFINE_SYSTEM_PROMPT = `You are a professional document designer. You refine HTML content for letter-sized (8.5" × 11") document pages.
 
-RULES:
+CRITICAL PRIORITY RULES — SURGICAL EDITS:
+- Make the SMALLEST possible change to fulfill the instruction
+- If the instruction mentions a specific element (circles, dots, header, logo, icon, chart, etc.), find that exact element and modify ONLY it
+- Do NOT change layout, colors, typography, structure, or content that the instruction does not mention
+- The output HTML must be 90%+ identical to the input — only the targeted element should differ
+- NEVER rewrite the entire page for a small change request
+- Keep all existing classes, inline styles, and structure intact unless the instruction explicitly asks to change them
+
+GENERAL RULES:
 - Output ONLY the refined HTML <section>...</section> — no markdown, no explanation
 - Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
 - Use Tailwind CSS classes for styling
 - Maintain professional, colorful design with geometric elements, gradients, SVG icons
-- For charts, use Chart.js <canvas> + <script type="text/chartjs"> tags
-- Preserve existing content unless asked to change it`;
+- For charts and data visualization, use pure CSS bars/progress elements or inline SVG — NEVER use Chart.js or canvas
+- NEVER use emojis anywhere — use SVG icons or geometric shapes instead
+- Ensure strong contrast: dark text on light backgrounds, light text on dark backgrounds`;
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -46,6 +56,16 @@ export async function action({ request }: Route.ActionArgs) {
   if (!isNewSection && !section) {
     return Response.json({ error: "Section not found" }, { status: 404 });
   }
+
+  // Check AI generation limit
+  const genLimit = await checkAiGenerationLimit(ctx.user.id);
+  if (!genLimit.allowed) {
+    return Response.json(
+      { error: `Límite de generaciones AI alcanzado (${genLimit.used}/${genLimit.limit}). Upgrade tu plan para más.` },
+      { status: 429 }
+    );
+  }
+  await incrementAiGeneration(ctx.user.id);
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const anthropic = createAnthropic({ apiKey: userKey || undefined });
