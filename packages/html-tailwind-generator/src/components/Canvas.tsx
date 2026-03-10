@@ -12,9 +12,10 @@ interface CanvasProps {
   theme?: string;
   onMessage: (msg: IframeMessage) => void;
   iframeRectRef: React.MutableRefObject<DOMRect | null>;
+  onReady?: () => void;
 }
 
-export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ sections, theme, onMessage, iframeRectRef }, ref) {
+export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ sections, theme, onMessage, iframeRectRef, onReady: onReadyProp }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   // Track what the iframe currently has so we can diff
@@ -63,7 +64,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     if (savedY) {
       setTimeout(() => postToIframe({ action: "restore-scroll", y: Number(savedY) }), 100);
     }
-  }, [sections, postToIframe]);
+    onReadyProp?.();
+  }, [sections, postToIframe, onReadyProp]);
 
   // Incremental diff: detect added/updated/removed sections
   useEffect(() => {
