@@ -6,6 +6,39 @@ import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { Section3 } from "~/lib/landing3/types";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
+import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
+import { generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
+
+const VARIANT_SYSTEM_PROMPT = `You are an elite document designer. You create stunning visual variants of document pages for letter-sized (8.5" × 11") format.
+
+TASK: Given an existing page, create a COMPLETELY DIFFERENT visual design while keeping the SAME text content and the SAME color theme.
+
+RULES:
+- Output ONLY the HTML <section>...</section> — no markdown, no explanation
+- Keep ALL the same text/data content — change ONLY the visual presentation
+- Redesign layout structure, typography scale, decorative elements, spacing, alignment — but KEEP the same color theme
+- Use bold, confident design choices — large type contrasts, asymmetric layouts, dramatic whitespace
+- Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
+- For charts/data viz, use pure CSS bars/progress — NEVER Chart.js or canvas
+- For complex charts: <div data-svg-chart="description with data" class="w-full"></div>
+- For images: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/>
+- NEVER use emojis — use SVG icons or geometric shapes instead
+- Ensure strong contrast: dark text on light, light text on dark
+
+COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colors):
+- bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
+- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
+- bg-secondary, text-secondary, bg-accent, text-accent
+- CONTRAST: bg-primary/bg-primary-dark → text-on-primary or text-white
+- CONTRAST: bg-surface/bg-surface-alt → text-on-surface
+- You may use Tailwind gray/white/black for subtle accents, but primary colors MUST come from semantic classes
+- Study the OTHER PAGES provided to match their visual language (color usage, backgrounds, decorative patterns)
+
+DESIGN VARIETY — choose a DIFFERENT approach from the original:
+- If original uses centered layout → try asymmetric or grid
+- If original uses small text → try oversized headlines with small body
+- If original uses rounded shapes → try sharp geometric or diagonal cuts
+- If original is minimal → try rich with decorative elements (or vice versa)`;
 
 const REFINE_SYSTEM_PROMPT = `You are a professional document designer. You refine HTML content for letter-sized (8.5" × 11") document pages.
 
@@ -22,7 +55,17 @@ GENERAL RULES:
 - Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
 - Use Tailwind CSS classes for styling
 - Maintain professional, colorful design with geometric elements, gradients, SVG icons
-- For charts and data visualization, use pure CSS bars/progress elements or inline SVG — NEVER use Chart.js or canvas
+- For charts and data visualization, use pure CSS bars/progress elements — NEVER use Chart.js or canvas
+
+COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colors):
+- bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
+- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
+- bg-secondary, text-secondary, bg-accent, text-accent
+- CONTRAST: bg-primary/bg-primary-dark → text-on-primary or text-white
+- CONTRAST: bg-surface/bg-surface-alt → text-on-surface
+- You may use Tailwind gray/white/black for subtle accents, but primary colors MUST come from semantic classes
+- For complex charts/diagrams, use: <div data-svg-chart="description with data" class="w-full"></div> — the system generates SVGs automatically
+- For images, use: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/> — the system resolves real images
 - NEVER use emojis anywhere — use SVG icons or geometric shapes instead
 - Ensure strong contrast: dark text on light backgrounds, light text on dark backgrounds`;
 
@@ -61,7 +104,7 @@ export async function action({ request }: Route.ActionArgs) {
   const genLimit = await checkAiGenerationLimit(ctx.user.id);
   if (!genLimit.allowed) {
     return Response.json(
-      { error: `Límite de generaciones AI alcanzado (${genLimit.used}/${genLimit.limit}). Upgrade tu plan para más.` },
+      { error: `Has usado todas tus ${genLimit.limit} generaciones de este mes.` },
       { status: 429 }
     );
   }
@@ -70,6 +113,29 @@ export async function action({ request }: Route.ActionArgs) {
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const anthropic = createAnthropic({ apiKey: userKey || undefined });
 
+  const isVariantMode = instruction === "VARIANT_MODE";
+  const systemPrompt = isVariantMode ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+
+  // Build neighbor pages context for style consistency
+  const allSections = (body.allSections || []) as { id: string; label?: string; html: string }[];
+  let neighborContext = "";
+  if (allSections.length > 1) {
+    const idx = allSections.findIndex((s) => s.id === sectionId);
+    const neighbors: string[] = [];
+    if (idx > 0) {
+      const prev = allSections[idx - 1];
+      neighbors.push(`[Page ${idx} - ${prev.label || "Previous"}]: ${prev.html}`);
+    }
+    if (idx >= 0 && idx < allSections.length - 1) {
+      const next = allSections[idx + 1];
+      neighbors.push(`[Page ${idx + 2} - ${next.label || "Next"}]: ${next.html}`);
+    }
+    if (neighbors.length > 0) {
+      neighborContext = `\n\nHere are other pages in the same document for style reference:\n${neighbors.join("\n\n")}`;
+    }
+  }
+
+  const pageHtml = currentHtml || section?.html || "<section></section>";
   const messages: any[] = [];
   if (referenceImage) {
     // Convert data URL to Uint8Array for AI SDK
@@ -83,14 +149,19 @@ export async function action({ request }: Route.ActionArgs) {
         imageContent,
         {
           type: "text",
-          text: `Current HTML:\n${currentHtml || section?.html || "<section></section>"}\n\nInstruction: ${instruction}\n\nUse the image as design reference. Output ONLY the refined <section> HTML.`,
+          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}\n\nUse the image as design reference. Output ONLY the refined <section> HTML.`,
         },
       ],
+    });
+  } else if (isVariantMode) {
+    messages.push({
+      role: "user",
+      content: `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${neighborContext}\n\nOutput ONLY the new <section> HTML.`,
     });
   } else {
     messages.push({
       role: "user",
-      content: `Current HTML:\n${currentHtml || section?.html || "<section></section>"}\n\nInstruction: ${instruction}\n\nOutput ONLY the refined <section> HTML.`,
+      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}\n\nOutput ONLY the refined <section> HTML.`,
     });
   }
 
@@ -104,58 +175,83 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
-        const model = referenceImage
-          ? "claude-sonnet-4-6"
-          : "claude-haiku-4-5-20251001";
+        const model = "claude-sonnet-4-6";
 
         const result = streamText({
           model: anthropic(model),
-          system: REFINE_SYSTEM_PROMPT,
+          system: systemPrompt,
           messages,
-          maxTokens: 4000,
+          maxTokens: isVariantMode ? 8000 : 4000,
         });
 
         let fullHtml = "";
+        let chunkCount = 0;
 
         for await (const chunk of result.textStream) {
           fullHtml += chunk;
+          chunkCount++;
 
-          // Extract <section>...</section> if present
-          const sectionMatch = fullHtml.match(
-            /<section[\s\S]*<\/section>/i
-          );
-          if (sectionMatch) {
-            send("chunk", { html: sectionMatch[0] });
+          // Send partial HTML every ~5 chunks for real-time feel
+          if (chunkCount % 5 === 0) {
+            const sectionMatch = fullHtml.match(
+              /<section[\s\S]*<\/section>/i
+            );
+            if (sectionMatch) {
+              send("chunk", { html: sectionMatch[0] });
+            } else {
+              // Send partial: close the section tag so iframe can render
+              const openMatch = fullHtml.match(/<section[\s\S]*/i);
+              if (openMatch) {
+                send("chunk", { html: openMatch[0] + "</section>" });
+              }
+            }
           }
         }
 
         // Final extraction
         const finalMatch = fullHtml.match(/<section[\s\S]*<\/section>/i);
-        const finalHtml = finalMatch ? finalMatch[0] : fullHtml;
+        let finalHtml = finalMatch ? finalMatch[0] : fullHtml;
 
-        // Update DB (skip for new sections)
-        if (!isNewSection) {
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              const fresh = await db.landing.findUnique({
-                where: { id: landingId },
-              });
-              const freshSections =
-                (fresh?.sections || []) as unknown as Section3[];
-              const updatedSections = freshSections.map((s) =>
-                s.id === sectionId ? { ...s, html: finalHtml } : s
-              );
-              await db.landing.update({
-                where: { id: landingId },
-                data: { sections: updatedSections as any },
-              });
-              break;
-            } catch (err: any) {
-              if (err?.code === "P2034" && attempt < 2) continue;
-              throw err;
+        // Enrich images (Pexels → DALL-E → placeholder)
+        const imageSlots = findImageSlots(finalHtml);
+        if (imageSlots.length > 0) {
+          const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI");
+          finalHtml = await enrichImages(finalHtml, {
+            pexelsApiKey: process.env.PEXELS_API_KEY,
+            openaiApiKey: openaiKey || undefined,
+          });
+          send("chunk", { html: finalHtml });
+        }
+
+        // Enrich SVG charts
+        const svgRegex = /<div\s[^>]*data-svg-chart="([^"]+)"[^>]*>[\s\S]*?<\/div>/gi;
+        const svgMatches: { fullMatch: string; prompt: string }[] = [];
+        let svgM: RegExpExecArray | null;
+        while ((svgM = svgRegex.exec(finalHtml)) !== null) {
+          svgMatches.push({ fullMatch: svgM[0], prompt: svgM[1] });
+        }
+        if (svgMatches.length > 0) {
+          const results = await Promise.allSettled(
+            svgMatches.map(async ({ fullMatch, prompt }) => {
+              try {
+                const svg = await generateSvg(prompt, userKey || undefined);
+                return { fullMatch, svg };
+              } catch (e) {
+                console.warn(`[svg-refine] failed for "${prompt}":`, e);
+                return { fullMatch, svg: `<div class="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">${prompt}</div>` };
+              }
+            })
+          );
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value) {
+              finalHtml = finalHtml.replace(r.value.fullMatch, r.value.svg);
             }
           }
+          send("chunk", { html: finalHtml });
         }
+
+        // DB update is handled by the client via saveSections() — no server-side write
+        // This avoids race conditions that strip version history from sections
 
         send("done", { html: finalHtml });
         controller.close();

@@ -112,6 +112,7 @@ type NewsLetter {
 type Metadata {
   asset_types   String[]
   customer_type String?
+  plan          String?
 }
 
 type Notifications {
@@ -188,6 +189,9 @@ model User {
   presentations    Presentation[]
   landings         Landing[]
   customDomains    CustomDomain[]
+  // AI generation limits
+  aiGenerationsCount   Int?       @default(0)
+  aiGenerationsResetAt DateTime?
 }
 
 enum FileStatus {

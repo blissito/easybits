@@ -17,7 +17,15 @@ import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildSingleThemeCss, getIframeScript } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import { PLANS, type PlanKey } from "~/lib/plans";
+import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
+
+function errorToast(msg: string) {
+  toast.error(msg, {
+    style: { border: "2px solid #000", padding: "16px", color: "#000", fontWeight: 600 },
+    duration: 5000,
+  });
+}
 
 export const meta = () => [
   { title: "Editor Documento — EasyBits" },
@@ -104,10 +112,11 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "deploy") {
     try {
+      const pdfUrl = formData.get("pdfUrl")?.toString() || undefined;
       const { deployLanding } = await import(
         "~/.server/core/landingOperations"
       );
-      const result = await deployLanding(ctx as any, params.id);
+      const result = await deployLanding(ctx as any, params.id, { pdfUrl });
       return result;
     } catch (err: any) {
       console.error("Deploy error:", err);
@@ -184,11 +193,21 @@ export default function DocumentEditor() {
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   const [pdfLink, setPdfLink] = useState<string | null>(initialPdfUrl || null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sectionIds: string[] } | null>(null);
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 
-  const [sections, setSections] = useState<Section3[]>(() => {
+  const [sections, _setSections] = useState<Section3[]>(() => {
     const raw = landing.sections;
     return Array.isArray(raw) ? (raw as unknown as Section3[]) : [];
   });
+  const sectionsRef = useRef(sections);
+  const setSections = useCallback((updater: Section3[] | ((prev: Section3[]) => Section3[])) => {
+    _setSections((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      sectionsRef.current = next;
+      return next;
+    });
+  }, []);
 
   const [isGenerating, setIsGenerating] = useState(
     searchParams.get("generating") === "1"
@@ -202,8 +221,10 @@ export default function DocumentEditor() {
   // Selection state for FloatingToolbar
   const [selection, setSelection] = useState<IframeMessage | null>(null);
   const [isRefining, setIsRefining] = useState(false);
+  const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const iframeRectRef = useRef<DOMRect | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const generatingShellRef = useRef<string | null>(null);
   const [, setToolbarTick] = useState(0);
 
   // Add page prompt modal
@@ -222,6 +243,8 @@ export default function DocumentEditor() {
     const meta = (landing.metadata as Record<string, unknown>) || {};
     return (meta?.theme as string) || "minimal";
   });
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const themeCssData = useMemo(() => buildSingleThemeCss(theme), [theme]);
 
   // Regenerate prompt bar
@@ -241,8 +264,6 @@ export default function DocumentEditor() {
     if (deployFetcher.data?.redirect) navigate(deployFetcher.data.redirect);
     if (deployFetcher.data?.url) {
       setLiveUrl(deployFetcher.data.url);
-      // Generate and upload PDF after successful deploy
-      generateAndUploadPdf();
     }
     if (deployFetcher.data?.unpublished) setLiveUrl(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,7 +298,8 @@ export default function DocumentEditor() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        if (codeViewSectionId) setCodeViewSectionId(null);
+        if (contextMenu) setContextMenu(null);
+        else if (codeViewSectionId) setCodeViewSectionId(null);
         else if (showAddPrompt) setShowAddPrompt(false);
         else if (overflowOpen) setOverflowOpen(false);
         else if (selection) setSelection(null);
@@ -286,6 +308,7 @@ export default function DocumentEditor() {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [
+    contextMenu,
     overflowOpen,
     selection,
     codeViewSectionId,
@@ -297,6 +320,63 @@ export default function DocumentEditor() {
     setIsGenerating(false);
   }
 
+  // Build shell HTML for streaming (no sections, just the frame)
+  function buildShellHtml(): string {
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    ${themeCssData?.css || ""}
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; margin: 0; padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    .doc-page { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; cursor: pointer; transition: box-shadow 0.2s; }
+    .doc-page:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    .doc-page.selected { outline: 3px solid #9870ED; outline-offset: 2px; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-page-in { animation: fadeInUp 0.4s ease-out; }
+  </style>
+</head>
+<body id="pages">
+<script>
+${getIframeScript()}
+<\/script>
+</body>
+</html>`;
+  }
+
+  // Inject a section into the iframe DOM without reloading srcDoc
+  function injectSectionIntoIframe(section: Section3) {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+    const container = doc.getElementById("pages");
+    if (!container) return;
+    const div = doc.createElement("div");
+    div.className = "doc-page animate-page-in";
+    div.setAttribute("data-section-id", section.id);
+    div.id = `section-${section.id}`;
+    div.innerHTML = section.html;
+    // Insert before the script tag
+    const script = container.querySelector("script");
+    if (script) {
+      container.insertBefore(div, script);
+    } else {
+      container.appendChild(div);
+    }
+    div.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  // Update a section's HTML in the iframe DOM
+  function updateSectionInIframe(sectionId: string, html: string) {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+    const el = doc.getElementById(`section-${sectionId}`);
+    if (el) el.innerHTML = html;
+  }
+
   async function generateSections(extraInstructions?: string) {
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -304,13 +384,23 @@ export default function DocumentEditor() {
 
     setIsGenerating(true);
     setSections([]);
+    // Accumulated sections for final state update
+    const accumulated: Section3[] = [];
+
     try {
       // Check limit client-side
       if (aiGenLimit !== null && aiGenUsed >= aiGenLimit) {
-        alert(`Límite de generaciones AI alcanzado (${aiGenUsed}/${aiGenLimit}). Upgrade tu plan.`);
+        errorToast(`Has usado todas tus ${aiGenLimit} generaciones de este mes.`);
         setIsGenerating(false);
         return;
       }
+
+      // Set shell HTML first, then wait for iframe to load
+      const shellHtml = buildShellHtml();
+      generatingShellRef.current = shellHtml;
+
+      // Wait a tick for the iframe to render the shell
+      await new Promise((r) => setTimeout(r, 100));
 
       const res = await fetch("/api/v2/document-generate", {
         method: "POST",
@@ -324,7 +414,10 @@ export default function DocumentEditor() {
         }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error("Generation failed");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Error al generar documento");
+      }
       setAiGenUsed((c: number) => c + 1);
 
       const reader = res.body?.getReader();
@@ -349,19 +442,13 @@ export default function DocumentEditor() {
             try {
               const d = JSON.parse(line.slice(6));
               if (eventType === "section") {
-                setSections((prev) => [...prev, d]);
-                requestAnimationFrame(() => {
-                  streamEndRef.current?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "end",
-                  });
-                });
+                accumulated.push(d);
+                injectSectionIntoIframe(d);
               } else if (eventType === "section-update") {
-                setSections((prev) =>
-                  prev.map((s) =>
-                    s.id === d.id ? { ...s, html: d.html } : s
-                  )
-                );
+                // Update accumulated
+                const idx = accumulated.findIndex((s) => s.id === d.id);
+                if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
+                updateSectionInIframe(d.id, d.html);
               }
             } catch {
               /* skip */
@@ -369,10 +456,19 @@ export default function DocumentEditor() {
           }
         }
       }
+
+      // Set final sections state and freeze srcDoc
+      setSections([...accumulated]);
+      stableSrcDoc.current = buildPreviewHtml(accumulated, themeCssData);
+      setSrcDocVersion((v) => v + 1);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Generation error:", err);
+      errorToast((err as Error).message || "Error al generar documento");
+      // Still set whatever we got
+      if (accumulated.length > 0) setSections([...accumulated]);
     } finally {
+      generatingShellRef.current = null;
       if (abortRef.current === controller) setIsGenerating(false);
     }
   }
@@ -391,6 +487,9 @@ export default function DocumentEditor() {
     (newSections: Section3[]) => {
       setSections(newSections);
       saveSections(newSections);
+      // Structural change — force iframe reload via ref + version bump
+      stableSrcDoc.current = buildPreviewHtml(newSections, buildSingleThemeCss(themeRef.current));
+      setSrcDocVersion((v) => v + 1);
     },
     [saveSections]
   );
@@ -452,7 +551,10 @@ export default function DocumentEditor() {
           ...(referenceImage && { referenceImage }),
         }),
       });
-      if (!res.ok) throw new Error("Refine failed");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Error al refinar página");
+      }
       setAiGenUsed((c: number) => c + 1);
 
       const reader = res.body!.getReader();
@@ -477,16 +579,125 @@ export default function DocumentEditor() {
                     s.id === sectionId ? { ...s, html: d.html } : s
                   )
                 );
+                syncSectionToIframe(sectionId, d.html);
                 if (event === "done") setSelection(null);
               }
             } catch {}
           }
         }
       }
+      saveSections(sectionsRef.current);
+      scrollIframeToSection(sectionId);
     } catch (err) {
       console.error("Refine error:", err);
+      errorToast((err as Error).message || "Error al refinar página");
+      // Rollback the premature version snapshot
+      if (selection?.sectionId) {
+        const rollbackId = selection.sectionId;
+        setSections((prev) =>
+          prev.map((s) => {
+            if (s.id !== rollbackId) return s;
+            const sv = s as Section3WithVersions;
+            if (!sv.versions?.length) return s;
+            return { ...s, versions: sv.versions.slice(0, -1) } as any;
+          })
+        );
+      }
     } finally {
       setIsRefining(false);
+    }
+  }
+
+  const variantAbortRef = useRef<AbortController | null>(null);
+
+  function stopVariant() {
+    variantAbortRef.current?.abort();
+    variantAbortRef.current = null;
+    setVariantLoadingId(null);
+  }
+
+  async function handleGenerateVariant(sectionId: string, instruction?: string, referenceImage?: string) {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+    setVariantLoadingId(sectionId);
+    const abortController = new AbortController();
+    variantAbortRef.current = abortController;
+    try {
+      // Snapshot current version
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.id !== sectionId) return s;
+          const sv = s as Section3WithVersions;
+          const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
+          return { ...s, versions } as any;
+        })
+      );
+
+      const res = await fetch("/api/v2/document-refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
+        body: JSON.stringify({
+          landingId: landing.id,
+          sectionId,
+          instruction: instruction || "VARIANT_MODE",
+          currentHtml: section.html,
+          ...(referenceImage ? { referenceImage } : {}),
+          allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Error al generar variante");
+      }
+      setAiGenUsed((c: number) => c + 1);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let event = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if ((event === "chunk" || event === "done") && d.html) {
+                setSections((prev) =>
+                  prev.map((s) =>
+                    s.id === sectionId ? { ...s, html: d.html } : s
+                  )
+                );
+                syncSectionToIframe(sectionId, d.html);
+              }
+            } catch {}
+          }
+        }
+      }
+      scrollIframeToSection(sectionId);
+      saveSections(sectionsRef.current);
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return; // User cancelled — keep last chunk
+      console.error("Variant error:", err);
+      errorToast((err as Error).message || "Error al generar variante");
+      // Rollback the premature version snapshot since no new HTML was generated
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.id !== sectionId) return s;
+          const sv = s as Section3WithVersions;
+          if (!sv.versions?.length) return s;
+          return { ...s, versions: sv.versions.slice(0, -1) } as any;
+        })
+      );
+    } finally {
+      variantAbortRef.current = null;
+      setVariantLoadingId(null);
     }
   }
 
@@ -547,7 +758,10 @@ export default function DocumentEditor() {
           ...(addRefImage && { referenceImage: addRefImage }),
         }),
       });
-      if (!res.ok) throw new Error("Add page failed");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Error al agregar página");
+      }
 
       setSections((prev) => [
         ...prev,
@@ -579,12 +793,15 @@ export default function DocumentEditor() {
                 setSections((prev) =>
                   prev.map((s) => (s.id === newId ? { ...s, html: d.html } : s))
                 );
+                syncSectionToIframe(newId, d.html);
                 if (event === "done") {
                   setSections((prev) => {
                     const updated = prev.map((s) =>
                       s.id === newId ? { ...s, html: d.html } : s
                     );
                     saveSections(updated);
+                    stableSrcDoc.current = buildPreviewHtml(updated, themeCssData);
+                    setSrcDocVersion((v) => v + 1);
                     return updated;
                   });
                 }
@@ -601,6 +818,7 @@ export default function DocumentEditor() {
       setAddParsedContent("");
     } catch (err) {
       console.error("Add page error:", err);
+      errorToast((err as Error).message || "Error al agregar página");
     } finally {
       setIsAddingSection(false);
     }
@@ -622,9 +840,10 @@ export default function DocumentEditor() {
     setSelection(null);
   }
 
-  function handleExportPdf() {
+  function handleExportPdf(filterSectionIds?: string[]) {
     // Build full HTML with Paged.js and open in new window for window.print()
-    const sorted = [...sections].sort((a, b) => a.order - b.order);
+    const base = filterSectionIds ? sections.filter(s => filterSectionIds.includes(s.id)) : sections;
+    const sorted = [...base].sort((a, b) => a.order - b.order);
     const sectionsHtml = sorted
       .map((s) => `<div class="page-section">${s.html}</div>`)
       .join("\n");
@@ -635,9 +854,11 @@ export default function DocumentEditor() {
   <meta charset="UTF-8">
   <title>${landing.name}</title>
   <script src="https://cdn.tailwindcss.com"><\/script>
+  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     @page { size: letter; margin: 0; }
+    ${themeCssData?.css || ""}
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section { page-break-after: always; }
     .page-section:last-child { page-break-after: auto; }
@@ -658,8 +879,27 @@ ${sectionsHtml}
     window.open(url, "_blank");
   }
 
-  async function generateAndUploadPdf() {
+  async function handleDeployDocument() {
     if (sections.length === 0) return;
+    setActiveIntent("deploy");
+    try {
+      // Generate PDF first, then deploy with the PDF URL
+      const pdfUrl = await generateAndUploadPdf();
+      const formData: Record<string, string> = { intent: "deploy" };
+      if (pdfUrl) formData.pdfUrl = pdfUrl;
+      deployFetcher.submit(formData, { method: "post" });
+    } catch (err) {
+      console.error("Deploy document error:", err);
+      errorToast("Error al publicar documento");
+      setActiveIntent(null);
+    }
+  }
+
+  async function generateAndUploadPdf(filterSectionIds?: string[]): Promise<string | null> {
+    const targetSections = filterSectionIds
+      ? sections.filter((s) => filterSectionIds.includes(s.id))
+      : sections;
+    if (targetSections.length === 0) return null;
     setIsGeneratingPdf(true);
     try {
       // 1. Get PUT URL from server
@@ -674,7 +914,7 @@ ${sectionsHtml}
 
       // 2. Generate PDF client-side with html2pdf.js
       const html2pdf = (await import("html2pdf.js")).default;
-      const sorted = [...sections].sort((a, b) => a.order - b.order);
+      const sorted = [...targetSections].sort((a, b) => a.order - b.order);
       const sectionsHtml = sorted
         .map((s) => `<div class="page-section">${s.html}</div>`)
         .join("\n");
@@ -750,8 +990,10 @@ ${sectionsHtml}
       });
 
       setPdfLink(publicUrl);
+      return publicUrl;
     } catch (err) {
       console.error("PDF generation error:", err);
+      return null;
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -763,10 +1005,34 @@ ${sectionsHtml}
       { intent: "update-theme", theme: newTheme },
       { method: "post" }
     );
+    // Theme changes CSS — must reload iframe
+    const newCss = buildSingleThemeCss(newTheme);
+    stableSrcDoc.current = buildPreviewHtml(sections, newCss);
+    setSrcDocVersion((v) => v + 1);
   }
 
-  // Build preview HTML for iframe
-  const previewHtml = buildPreviewHtml(sections, themeCssData);
+  // Stable srcDoc — set once when sections first populate, then only updated for structural changes
+  const stableSrcDoc = useRef<string | null>(null);
+  const [srcDocVersion, setSrcDocVersion] = useState(0);
+  if (!stableSrcDoc.current && sections.length > 0) {
+    stableSrcDoc.current = buildPreviewHtml(sections, themeCssData);
+  }
+  const previewHtml = generatingShellRef.current || stableSrcDoc.current || buildPreviewHtml(sections, themeCssData);
+
+  // Sync section HTML to iframe via postMessage (no reload)
+  function syncSectionToIframe(sectionId: string, html: string) {
+    iframeRef.current?.contentWindow?.postMessage(
+      { action: 'update-section', id: sectionId, html }, '*'
+    );
+  }
+
+  // Scroll iframe to a section via postMessage
+  function scrollIframeToSection(sectionId: string) {
+    iframeRef.current?.contentWindow?.postMessage(
+      { action: 'scroll-to-section', id: sectionId }, '*'
+    );
+  }
+
 
   return (
     <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
@@ -823,28 +1089,29 @@ ${sectionsHtml}
               />
             </span>
           )}
-          {aiGenLimit !== null && (
-            <span className={`text-xs font-bold ${aiGenUsed >= aiGenLimit ? "text-red-500" : "text-gray-400"}`}>
-              {aiGenUsed}/{aiGenLimit} gen
-            </span>
-          )}
+          {aiGenLimit !== null && (() => {
+            const remaining = aiGenLimit - aiGenUsed;
+            const color = remaining <= 0 ? "text-red-500" : remaining <= 2 ? "text-yellow-600" : "text-gray-400";
+            return (
+              <span className={`text-xs font-bold ${color}`}>
+                {remaining <= 0 ? "0" : remaining} gen restantes
+              </span>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2">
           <BrutalButton
             size="chip"
             mode="ghost"
-            onClick={handleExportPdf}
+            onClick={() => handleExportPdf()}
             isDisabled={sections.length === 0}
           >
             Exportar PDF
           </BrutalButton>
           <BrutalButton
             size="chip"
-            onClick={() => {
-              setActiveIntent("deploy");
-              deployFetcher.submit({ intent: "deploy" }, { method: "post" });
-            }}
+            onClick={handleDeployDocument}
             isLoading={activeIntent === "deploy"}
             isDisabled={sections.length === 0 || activeIntent !== null}
           >
@@ -899,6 +1166,21 @@ ${sectionsHtml}
         </div>
       </div>
 
+      {/* Limit banner */}
+      {aiGenLimit !== null && aiGenUsed >= aiGenLimit && (
+        <div className="flex items-center justify-between px-4 py-2 bg-red-50 border-b-2 border-red-200 shrink-0">
+          <span className="text-sm font-bold text-red-700">
+            Agotaste tus generaciones de este mes.
+          </span>
+          <Link
+            to="/plans"
+            className="text-sm font-bold text-red-700 underline hover:text-red-900"
+          >
+            Ver planes →
+          </Link>
+        </div>
+      )}
+
       {/* Prompt bar */}
       <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-white shrink-0">
         <input
@@ -935,12 +1217,20 @@ ${sectionsHtml}
         {!codeViewSectionId && (
           <PageList
             sections={sections}
-            selectedSectionId={selection?.sectionId ?? null}
-            onSelect={(id) => {
-              const el = iframeRef.current?.contentDocument?.getElementById(
-                `section-${id}`
+            selectedSectionIds={selectedSectionIds}
+            onSelect={(id, multi) => {
+              setSelectedSectionIds((prev) =>
+                multi
+                  ? prev.includes(id)
+                    ? prev.filter((x) => x !== id)
+                    : [...prev, id]
+                  : [id]
               );
-              el?.scrollIntoView({ behavior: "smooth" });
+              scrollIframeToSection(id);
+            }}
+            onContextMenu={(sectionIds, position) => {
+              setSelectedSectionIds(sectionIds);
+              setContextMenu({ ...position, sectionIds });
             }}
             onOpenCode={(id) => handleOpenCode(id)}
             onReorder={handleReorder}
@@ -960,6 +1250,9 @@ ${sectionsHtml}
             theme={theme}
             onThemeChange={handleThemeChange}
             themeCssData={themeCssData}
+            onGenerateVariant={handleGenerateVariant}
+            onStopVariant={stopVariant}
+            loadingVariantId={variantLoadingId}
             onRestoreVersion={(sectionId, oldHtml) => {
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
@@ -971,6 +1264,60 @@ ${sectionsHtml}
               handleSectionsChange(updated);
             }}
           />
+        )}
+
+        {/* Context menu */}
+        {contextMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+            <div
+              onContextMenu={(e) => e.preventDefault()}
+              className="fixed z-50 border-2 border-black rounded-xl bg-white shadow-[4px_4px_0_#000] py-1 min-w-[200px] overflow-hidden"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              {[
+                {
+                  label: contextMenu.sectionIds.length === 1
+                    ? "Regenerar página"
+                    : `Regenerar ${contextMenu.sectionIds.length} páginas`,
+                  icon: <span className="text-brand-500 text-sm">&#10022;</span>,
+                  disabled: !!variantLoadingId,
+                  onClick: () => {
+                    const ids = contextMenu.sectionIds;
+                    setContextMenu(null);
+                    ids.forEach((id) => handleGenerateVariant(id));
+                  },
+                },
+                {
+                  label: contextMenu.sectionIds.length === 1
+                    ? "Exportar página a PDF"
+                    : `Exportar ${contextMenu.sectionIds.length} páginas a PDF`,
+                  icon: (
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  ),
+                  onClick: () => {
+                    const ids = contextMenu.sectionIds;
+                    setContextMenu(null);
+                    handleExportPdf(ids);
+                  },
+                },
+              ].map((item, i, arr) => (
+                <span key={i}>
+                  <button
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                    className="w-full text-left px-4 py-2 text-sm font-bold flex items-center gap-2 hover:bg-gray-100 disabled:opacity-40"
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                  {i < arr.length - 1 && <div className="mx-2 border-t-2 border-black/10" />}
+                </span>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Code editor */}
@@ -1027,6 +1374,7 @@ ${sectionsHtml}
               ) : (
                 <>
                   <iframe
+                    key={srcDocVersion}
                     ref={iframeRef}
                     srcDoc={previewHtml}
                     className="w-full h-full border-none"
@@ -1035,6 +1383,10 @@ ${sectionsHtml}
                       if (iframeRef.current) {
                         iframeRectRef.current =
                           iframeRef.current.getBoundingClientRect();
+                      }
+                      // After structural reload, scroll to selected section
+                      if (selectedSectionIds.length) {
+                        setTimeout(() => scrollIframeToSection(selectedSectionIds[0]), 200);
                       }
                     }}
                   />

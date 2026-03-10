@@ -128,9 +128,10 @@ export async function uploadFile(
 
   // Storage quota check
   const userRoles = (ctx.user as any).roles as string[] | undefined;
-  const planKey: PlanKey = userRoles?.includes("Studio")
+  const metaPlan = ((ctx.user as any).metadata as any)?.plan as string | undefined;
+  const planKey: PlanKey = userRoles?.includes("Studio") || metaPlan === "Studio"
     ? "Studio"
-    : userRoles?.includes("Flow")
+    : userRoles?.includes("Flow") || metaPlan === "Flow"
       ? "Flow"
       : "Spark";
   const maxBytes = PLANS[planKey].storageGB * 1024 * 1024 * 1024;
@@ -705,9 +706,10 @@ export async function getUsageStats(ctx: AuthContext) {
   requireScope(ctx, "READ");
 
   const userRoles = (ctx.user as any).roles as string[] | undefined;
-  const planKey: PlanKey = userRoles?.includes("Studio")
+  const metaPlan = ((ctx.user as any).metadata as any)?.plan as string | undefined;
+  const planKey: PlanKey = userRoles?.includes("Studio") || metaPlan === "Studio"
     ? "Studio"
-    : userRoles?.includes("Flow")
+    : userRoles?.includes("Flow") || metaPlan === "Flow"
       ? "Flow"
       : "Spark";
 

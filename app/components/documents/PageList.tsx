@@ -1,11 +1,11 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from "react";
 import type { Section3 } from "~/lib/landing3/types";
 import { LANDING_THEMES, type LandingTheme } from "@easybits.cloud/html-tailwind-generator";
 
 interface PageListProps {
   sections: Section3[];
-  selectedSectionId: string | null;
-  onSelect: (id: string) => void;
+  selectedSectionIds: string[];
+  onSelect: (id: string, multi: boolean) => void;
   onOpenCode: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onDelete: (id: string) => void;
@@ -15,6 +15,10 @@ interface PageListProps {
   onThemeChange?: (themeId: string) => void;
   themeCssData?: { css: string; tailwindConfig: string };
   onRestoreVersion?: (sectionId: string, html: string) => void;
+  onGenerateVariant?: (sectionId: string, instruction?: string, referenceImage?: string) => void;
+  onStopVariant?: () => void;
+  loadingVariantId?: string | null;
+  onContextMenu?: (sectionIds: string[], position: { x: number; y: number }) => void;
 }
 
 /** Section3 with optional version history */
@@ -39,7 +43,7 @@ ${themeCssData?.css || ""}
 
 export function PageList({
   sections,
-  selectedSectionId,
+  selectedSectionIds,
   onSelect,
   onOpenCode,
   onReorder,
@@ -50,13 +54,50 @@ export function PageList({
   onThemeChange,
   themeCssData,
   onRestoreVersion,
+  onGenerateVariant,
+  onStopVariant,
+  loadingVariantId,
+  onContextMenu,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [showThemes, setShowThemes] = useState(false);
   const [versionDropdown, setVersionDropdown] = useState<string | null>(null);
+  const [variantPopup, setVariantPopup] = useState<string | null>(null);
+  const [variantPrompt, setVariantPrompt] = useState("");
+  const [variantImage, setVariantImage] = useState<string | null>(null);
+  const variantFileRef = useRef<HTMLInputElement>(null);
+
+  // Close popups on ESC
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (variantPopup) setVariantPopup(null);
+        else if (versionDropdown) setVersionDropdown(null);
+        else if (showThemes) setShowThemes(false);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [variantPopup, versionDropdown, showThemes]);
+
+  // Auto-scroll sidebar to selected thumbnail
+  const initialScrollDone = useRef(false);
+  useEffect(() => {
+    if (selectedSectionIds.length === 1) {
+      const doScroll = () => itemRefs.current[selectedSectionIds[0]]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (!initialScrollDone.current) {
+        initialScrollDone.current = true;
+        // Delay initial scroll to let thumbnails render
+        setTimeout(doScroll, 100);
+      } else {
+        doScroll();
+      }
+    }
+  }, [selectedSectionIds]);
 
   return (
     <div className="w-56 shrink-0 border-r border-gray-200 bg-white flex flex-col h-full overflow-hidden">
@@ -68,9 +109,20 @@ export function PageList({
           <div className="relative">
             <button
               onClick={() => setShowThemes((p) => !p)}
-              className="text-[10px] font-bold text-brand-600 hover:underline"
+              className="text-[10px] font-bold text-brand-600 hover:underline flex items-center gap-1"
             >
-              Tema
+              {(() => {
+                const t = LANDING_THEMES.find((t) => t.id === theme);
+                return t ? (
+                  <>
+                    <span className="flex gap-0.5">
+                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: t.colors.primary }} />
+                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: t.colors.accent }} />
+                    </span>
+                    {t.label}
+                  </>
+                ) : "Tema";
+              })()}
             </button>
             {showThemes && (
               <div className="absolute right-0 top-full mt-1 w-36 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 max-h-48 overflow-y-auto">
@@ -100,11 +152,12 @@ export function PageList({
 
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-2">
         {sorted.map((section, idx) => {
-          const isSelected = section.id === selectedSectionId;
+          const isSelected = selectedSectionIds.includes(section.id);
 
           return (
             <div
               key={section.id}
+              ref={(el) => { itemRefs.current[section.id] = el; }}
               draggable
               onDragStart={() => {
                 dragRef.current = idx;
@@ -116,7 +169,15 @@ export function PageList({
                 }
                 dragRef.current = null;
               }}
-              onClick={() => onSelect(section.id)}
+              onClick={(e) => onSelect(section.id, e.metaKey || e.ctrlKey)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (onContextMenu) {
+                  const ids = isSelected ? selectedSectionIds : [section.id];
+                  if (!isSelected) onSelect(section.id, false);
+                  onContextMenu(ids, { x: e.clientX, y: e.clientY });
+                }
+              }}
               onDoubleClick={() => {
                 setEditingId(section.id);
                 setEditLabel(section.label || `P\u00e1gina ${idx + 1}`);
@@ -129,15 +190,45 @@ export function PageList({
             >
               {/* Thumbnail — scaled-down iframe clipped to container */}
               <div className="relative" style={{ marginTop: (section as Section3WithVersions).versions?.length ? 4 : 0 }}>
-                {/* Stacked card shadows for versions */}
-                {(section as Section3WithVersions).versions?.length ? (
-                  <>
-                    <div className="absolute inset-0 bg-gray-100 border border-gray-200 rounded-t-lg" style={{ transform: "translate(3px, -3px)", zIndex: 0 }} />
-                    {((section as Section3WithVersions).versions?.length ?? 0) > 1 && (
-                      <div className="absolute inset-0 bg-gray-50 border border-gray-200 rounded-t-lg" style={{ transform: "translate(6px, -6px)", zIndex: 0 }} />
-                    )}
-                  </>
-                ) : null}
+                {/* Stacked version thumbnails behind current page */}
+                {(() => {
+                  const versions = (section as Section3WithVersions).versions;
+                  if (!versions?.length) return null;
+                  // Show up to 2 most recent versions as stacked iframes
+                  const deckVersions = versions.slice(-2);
+                  return deckVersions.map((v, vi) => {
+                    const depth = deckVersions.length - vi; // 2 or 1 (furthest first)
+                    const offsetX = depth * 3;
+                    const scale = 1 - depth * 0.03;
+                    const opacity = depth === 2 ? 0.5 : 0.7;
+                    return (
+                      <div
+                        key={v.timestamp}
+                        className="absolute top-0 left-0 w-full rounded-t-lg border border-gray-200 overflow-hidden"
+                        style={{
+                          aspectRatio: "8.5 / 11",
+                          transform: `translateX(${offsetX}px) scale(${scale})`,
+                          transformOrigin: "top left",
+                          opacity,
+                          zIndex: -depth,
+                        }}
+                      >
+                        <iframe
+                          srcDoc={buildThumbnailHtml({ ...section, html: v.html }, themeCssData)}
+                          className="absolute top-0 left-0 border-none pointer-events-none"
+                          style={{
+                            width: "8.5in",
+                            height: "11in",
+                            transform: `scale(${(192 * scale) / (8.5 * 96)})`,
+                            transformOrigin: "top left",
+                          }}
+                          tabIndex={-1}
+                          loading="lazy"
+                        />
+                      </div>
+                    );
+                  });
+                })()}
                 <div
                   className="w-full bg-white rounded-t-lg border border-gray-200 relative overflow-hidden"
                   style={{ aspectRatio: "8.5 / 11", zIndex: 1 }}
@@ -164,6 +255,21 @@ export function PageList({
                     title={section.label || `Página ${idx + 1}`}
                     tabIndex={-1}
                   />
+                  {/* Variant loading overlay */}
+                  {loadingVariantId === section.id && (
+                    <div className="absolute inset-0 bg-white/80 z-10 flex flex-col items-center justify-center rounded-t-lg">
+                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                      <span className="text-[9px] font-bold text-brand-600 mt-1">Regenerando</span>
+                      {onStopVariant && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onStopVariant(); }}
+                          className="mt-1.5 text-[9px] font-bold text-red-500 hover:text-red-700 px-2 py-0.5 border border-red-300 rounded-lg bg-white hover:bg-red-50 transition-colors"
+                        >
+                          Detener
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {/* Version badge */}
                   {(section as Section3WithVersions).versions?.length ? (
                     <button
@@ -241,6 +347,86 @@ export function PageList({
                   >
                     &lt;/&gt;
                   </button>
+                  {onGenerateVariant && (
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (variantPopup === section.id) {
+                            setVariantPopup(null);
+                          } else {
+                            setVariantPopup(section.id);
+                            setVariantPrompt("");
+                            setVariantImage(null);
+                          }
+                        }}
+                        disabled={!!loadingVariantId}
+                        className="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-brand-600 hover:bg-brand-50 text-[9px] disabled:opacity-40"
+                        title="Generar variante"
+                      >
+                        ✦
+                      </button>
+                      {variantPopup === section.id && (
+                        <div
+                          className="absolute right-0 top-full mt-1 w-52 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 p-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <textarea
+                            autoFocus
+                            value={variantPrompt}
+                            onChange={(e) => setVariantPrompt(e.target.value)}
+                            placeholder="Describe los cambios..."
+                            className="w-full text-[11px] px-2 py-1.5 border border-gray-300 rounded-lg resize-none h-16"
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") setVariantPopup(null);
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                onGenerateVariant(section.id, variantPrompt || undefined, variantImage || undefined);
+                                setVariantPopup(null);
+                              }
+                            }}
+                          />
+                          {variantImage && (
+                            <div className="mt-1 flex items-center gap-1">
+                              <img src={variantImage} className="w-8 h-8 object-cover rounded" alt="" />
+                              <button onClick={() => setVariantImage(null)} className="text-[9px] text-red-500 font-bold">✕</button>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <input
+                              ref={variantFileRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => setVariantImage(reader.result as string);
+                                reader.readAsDataURL(file);
+                              }}
+                            />
+                            <button
+                              onClick={() => variantFileRef.current?.click()}
+                              className="text-[9px] font-bold text-gray-500 hover:text-gray-700 px-1.5 py-1 border border-gray-200 rounded-lg"
+                              title="Adjuntar imagen de referencia"
+                            >
+                              Imagen
+                            </button>
+                            <button
+                              onClick={() => {
+                                onGenerateVariant(section.id, variantPrompt || undefined, variantImage || undefined);
+                                setVariantPopup(null);
+                              }}
+                              className="flex-1 text-[9px] font-bold text-white bg-brand-500 hover:bg-brand-600 px-2 py-1 rounded-lg"
+                            >
+                              {variantPrompt.trim() ? "Regenerar" : "Solo variante"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
