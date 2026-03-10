@@ -1,5 +1,7 @@
 # @easybits.cloud/html-tailwind-generator
 
+> **Production Ready** — Used in production by [Denik](https://denik.me) for AI-generated business landing pages.
+
 AI-powered landing page generator with Tailwind CSS. Canvas editor, streaming AI generation, one-click deploy.
 
 Built and maintained by [EasyBits](https://easybits.cloud).
@@ -32,7 +34,7 @@ All API keys can be set via environment variables instead of passing them explic
 
 **Priority**: If both `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are set, OpenAI takes precedence. To force Anthropic, pass `anthropicApiKey` explicitly and omit `openaiApiKey`.
 
-**Planned**: Mix providers — use Anthropic for text generation + DALL-E for images (best of both). This is on the roadmap; [open an issue](https://github.com/blissito/easybits/issues) to bump priority.
+**Mix providers**: You can use Anthropic for text generation + DALL-E for images (best of both). Denik uses this setup in production — Claude Sonnet for generation, Haiku for refinement, and DALL-E 3 for images.
 
 ## Quick Start
 
@@ -219,10 +221,14 @@ The generator uses a semantic color system with CSS custom properties:
 
 - [ ] **Inline Tailwind CSS build** — Replace CDN `<script src="tailwindcss.com">` with `@tailwindcss/standalone` or PostCSS to generate only used CSS as `<style>`. Faster load, no external dependency, production-ready.
 - [x] **DALL-E image generation** — `openaiApiKey` option generates unique images via DALL-E 3 with Pexels fallback.
-- [ ] **tsup build** — Add a proper build step (ESM + CJS + types) for npm publish. Currently exported as raw TypeScript source, which works for monorepo consumers but not for external npm users.
+- [x] **tsup build** — ESM + types via tsup. Published to npm as `@easybits.cloud/html-tailwind-generator`.
 - [ ] **i18n** — Component labels are in Spanish. Add a `locale` prop or i18n system for English and other languages.
 - [ ] **Tests** — Unit tests for `extractJsonObjects`, `findImageSlots`, `buildDeployHtml`, `buildCustomTheme`.
 - [ ] **Storybook** — Visual stories for Canvas, SectionList, FloatingToolbar, CodeEditor.
+
+## Used in Production
+
+- **[Denik](https://denik.me)** — AI landing page generator for businesses. Uses Claude Sonnet 4.6 for generation, Haiku 4.5 for refinement, DALL-E 3 for images, and Pexels for stock photos. Canvas editor with real-time streaming, semantic color themes, and one-click deploy.
 
 ## License
 
