@@ -883,8 +883,17 @@ ${sectionsHtml}
   async function handleDeployDocument() {
     if (sections.length === 0) return;
     setActiveIntent("deploy");
-    // Deploy HTML directly (Paged.js handles letter pages) — no PDF generation needed
-    deployFetcher.submit({ intent: "deploy" }, { method: "post" });
+    try {
+      // Generate PDF first, then deploy with the PDF URL
+      const pdfUrl = await generateAndUploadPdf();
+      const formData: Record<string, string> = { intent: "deploy" };
+      if (pdfUrl) formData.pdfUrl = pdfUrl;
+      deployFetcher.submit(formData, { method: "post" });
+    } catch (err) {
+      console.error("Deploy document error:", err);
+      errorToast("Error al publicar documento");
+      setActiveIntent(null);
+    }
   }
 
   async function generateAndUploadPdf(filterSectionIds?: string[]): Promise<string | null> {
