@@ -98,11 +98,33 @@ export function FloatingToolbar({
     const file = e.target.files?.[0];
     if (!file) return;
     setRefImageName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setRefImage(reader.result as string);
+
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1024;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return;
+          const reader = new FileReader();
+          reader.onload = () => setRefImage(reader.result as string);
+          reader.readAsDataURL(blob);
+        },
+        "image/jpeg",
+        0.7
+      );
+      URL.revokeObjectURL(img.src);
     };
-    reader.readAsDataURL(file);
+    img.src = URL.createObjectURL(file);
     e.target.value = "";
   }
 
