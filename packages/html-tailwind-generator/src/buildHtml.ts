@@ -43,9 +43,21 @@ ${body}
 /**
  * Build the deploy HTML (no editing script, clean output).
  */
-export function buildDeployHtml(sections: Section3[], theme?: string, customColors?: CustomColors): string {
+/**
+ * Remove editor artifacts (outline, outlineOffset, contenteditable) from HTML before deploy.
+ */
+function stripEditorArtifacts(html: string): string {
+  return html
+    .replace(/\s*outline:\s*[^;"]+;?/gi, "")
+    .replace(/\s*outline-offset:\s*[^;"]+;?/gi, "")
+    .replace(/\s*style="\s*"/gi, "")
+    .replace(/\s+contenteditable="[^"]*"/gi, "")
+    .replace(/\s+data-section-id="[^"]*"/gi, "")
+}
+
+export function buildDeployHtml(sections: Section3[], theme?: string, customColors?: CustomColors, showBranding = true): string {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
-  const body = sorted.map((s) => s.html).join("\n");
+  const body = sorted.map((s) => stripEditorArtifacts(s.html)).join("\n");
 
   const isCustom = theme === "custom" && customColors;
   const dataTheme = theme && theme !== "default" && !isCustom ? ` data-theme="${theme}"` : "";
@@ -78,6 +90,12 @@ section>*{max-width:80rem;margin-left:auto;margin-right:auto;padding-left:1rem;p
 </head>
 <body class="bg-surface text-on-surface">
 ${body}
+${showBranding ? `<div style="text-align:center;padding:16px 0 12px;font-size:12px">
+  <a href="https://easybits.cloud" target="_blank" rel="noopener"
+     style="color:#9ca3af;text-decoration:none">
+    Powered by easybits.cloud
+  </a>
+</div>` : ""}
 </body>
 </html>`;
 }
