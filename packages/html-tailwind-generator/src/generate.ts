@@ -52,6 +52,7 @@ COLOR SYSTEM — CRITICAL (READ CAREFULLY):
 - ALL backgrounds MUST use: bg-primary, bg-primary-dark, bg-surface, bg-surface-alt
 - ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-primary, text-accent
 - CONTRAST RULE: on bg-primary or bg-primary-dark → use text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface or text-on-surface-muted. NEVER put text-on-surface on bg-primary or vice versa. text-accent is decorative — use sparingly on bg-surface/bg-surface-alt only.
+- ANTI-PATTERN: NEVER put bg-primary on BOTH the section AND elements inside it. If section is bg-primary, inner cards/elements should be bg-surface. If section is bg-surface, cards can use bg-surface-alt or bg-primary.
 - For gradients: from-primary to-primary-dark, from-surface to-surface-alt
 - For hover: hover:bg-primary-dark, hover:bg-primary-light
 
@@ -63,6 +64,19 @@ DESIGN PHILOSOPHY — what separates good from GREAT:
 - ASYMMETRY: avoid centering everything. Use grid-cols-5 with col-span-3 + col-span-2. Offset elements.
 - TEXTURE: use subtle patterns, gradients, border treatments, rounded-3xl mixed with sharp edges
 - Each section should have a COMPLETELY DIFFERENT layout from the others
+
+SECTION LAYOUT — CRITICAL:
+- Each <section> must be full-width (bg goes edge-to-edge). NO max-w on the section itself.
+- Constrain content inside with a wrapper div: <section class="bg-primary py-24"><div class="max-w-7xl mx-auto px-4 md:px-8">...content...</div></section>
+- EVERY section follows this pattern. The <section> handles bg color + vertical padding. The inner <div> handles horizontal padding + max-width.
+
+TESTIMONIALS SECTION:
+- Cards MUST use bg-surface or bg-surface-alt with text-on-surface
+- If section bg is bg-primary or bg-primary-dark, cards MUST be bg-surface (light cards on dark bg)
+- Quote text: text-on-surface, italic
+- Avatar: colored div with initials (bg-accent text-on-primary or bg-primary-light text-on-primary)
+- Name: text-on-surface font-semibold. Role/company: text-on-surface-muted
+- NEVER use same dark bg for both section AND cards
 
 HERO SECTION — your masterpiece:
 - Bento-grid or asymmetric layout, NOT a generic centered hero

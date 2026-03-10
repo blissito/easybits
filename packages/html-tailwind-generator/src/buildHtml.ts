@@ -28,7 +28,8 @@ ${css}
 html{scroll-behavior:smooth}
 body{font-family:system-ui,-apple-system,sans-serif;background-color:var(--color-surface);color:var(--color-on-surface)}
 img{max-width:100%}
-section{max-width:80rem;margin-left:auto;margin-right:auto}
+section{width:100%}
+section>*{max-width:80rem;margin-left:auto;margin-right:auto;padding-left:1rem;padding-right:1rem}
 [contenteditable="true"]{cursor:text}
 </style>
 </head>
@@ -71,7 +72,8 @@ ${baseCss}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{font-family:system-ui,-apple-system,sans-serif;background-color:var(--color-surface);color:var(--color-on-surface)}
-section{max-width:80rem;margin-left:auto;margin-right:auto}
+section{width:100%}
+section>*{max-width:80rem;margin-left:auto;margin-right:auto;padding-left:1rem;padding-right:1rem}
 </style>
 </head>
 <body class="bg-surface text-on-surface">
