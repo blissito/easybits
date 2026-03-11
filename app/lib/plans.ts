@@ -94,6 +94,6 @@ export const MAX_REFERRALS = 50;           // anti-abuse cap
 
 export const GENERATION_PACKS: GenerationPack[] = [
   { id: "pack_10", generations: 10, prices: { Spark: 49, Flow: 39, Studio: 29 } },
-  { id: "pack_50", generations: 50, prices: { Spark: 199, Flow: 169, Studio: 99 } },
-  { id: "pack_100", generations: 100, prices: { Spark: 349, Flow: 249, Studio: 179 } },
+  { id: "pack_50", generations: 50, prices: { Spark: 199, Flow: 169, Studio: 149 } },
+  { id: "pack_100", generations: 100, prices: { Spark: 349, Flow: 249, Studio: 249 } },
 ];
