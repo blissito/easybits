@@ -93,10 +93,11 @@ The digital asset platform where AI agents can store, manage, and consume files 
 
 ## Landings v3
 - Editor: `app/routes/dash/landings3/editor.tsx` — canvas-based, iframe preview, floating toolbar
-- Canvas: `app/components/landings3/Canvas.tsx` — iframe with injected HTML, click-to-select elements
-- SectionList: `app/components/landings3/SectionList.tsx` — sidebar with theme picker, reorder, delete, double-click rename
-- FloatingToolbar: `app/components/landings3/FloatingToolbar.tsx` — AI prompt, variante button, style presets, attr editing
-- CodeEditor: `app/components/landings3/CodeEditor.tsx` — CodeMirror 6, flash highlight, format, Cmd+S save
+- Canvas/FloatingToolbar/CodeEditor: local files re-export from `@easybits.cloud/html-tailwind-generator` SDK
+- Canvas: iframe with injected HTML, click-to-select, shimmer image placeholders, Cmd+Z forwarding to parent
+- FloatingToolbar: AI prompt, ✦ Variante, tag switcher, size presets (padding/margin/width/text/font-weight/rounded), color swatches, delete element, attr editing. **Class replacement is parent-side** (computes new className from `selection.className` + prefix filter, then `setAttribute('class')`) — NOT iframe-side
+- SectionList: sidebar with theme picker, reorder, delete, double-click rename
+- CodeEditor: CodeMirror 6, flash highlight, format, Cmd+S save
 - Generation: `app/routes/api/v2/landing3-generate.ts` — **Sonnet 4.6**, streaming SSE, NDJSON brace-depth parser
 - Refine: `app/routes/api/v2/landing3-refine.ts` — **Haiku 4.5** (Sonnet for vision), streaming SSE, element-level or section-level
 - Types: `app/lib/landing3/types.ts` — Section3, IframeMessage, CustomColors
@@ -135,7 +136,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 ## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos
 **Estrategia**: Hacer que cada feature existente funcione clase S antes de añadir cosas nuevas. Búsqueda semántica y RAG se posponen — son features de escala, no de early adopters.
 
-**DONE (Mar 7-8)**:
+**DONE (Mar 7-10)**:
 - Cert management system (audit, cleanup, admin UI, cron endpoint)
 - Landings v2 streaming generation (SSE, block-by-block con animación + auto-scroll)
 - Pexels stock photos automáticas en hero/imageText blocks
@@ -145,11 +146,14 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Prompt de generación mejorado (diversidad de bloques, variantes, imageSearchQuery obligatorio)
 - logoCloud variantes visuales (grid=corporate cards, row=grayscale strip con hover)
 - **Landings v3**: canvas editor, Sonnet generation, Haiku refine, floating toolbar, code editor with flash highlight, semantic color themes, multi-color custom picker, viewport buttons, sidebar delete/rename, variante contextual (element vs section), deploy fix, toolbar viewport clamping
+- **FloatingToolbar mejorado**: tag switcher, size presets (padding/margin/width/text/font-weight/rounded para containers/text/buttons/imgs), dual color rows, delete element. Class replace ahora parent-side (no iframe). Shimmer placeholders para imágenes cargando. Cmd+Z desde iframe forwarded al parent.
+- **Documents editor**: prompt bar removida, undo/redo funciona desde canvas
 
-**Prioridad 1 — Landings v3 clase S (SIGUIENTE)**:
-- Streaming para presentaciones (mismo patrón SSE que landings v2)
+**Prioridad 1 — Landings v3 / Documents clase S (SIGUIENTE)**:
 - Imagen de referencia: usuario sube imagen → AI replica el diseño como sección
 - FloatingToolbar IMG: diferenciar "subir imagen" (upload/URL) vs "generar imagen con AI" (DALL-E) — actualmente solo hay campo SRC manual y el botón de cámara no distingue entre ambos flujos
+- Streaming para presentaciones (mismo patrón SSE que landings v2)
+- Verificar que color swatches aplican al elemento correcto (bug reportado: bg aplicado a hijo en vez de container)
 
 **Prioridad 2 — Previews de archivos inline (table stakes)**:
 - Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
