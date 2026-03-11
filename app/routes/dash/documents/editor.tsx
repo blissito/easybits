@@ -24,6 +24,27 @@ import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
 
 
+/** Show brutalist toast with CTA when generation limit is hit */
+function showLimitToast(message: string, upgradeUrl: string) {
+  toast.custom(
+    (t) => (
+      <div
+        className={`${t.visible ? "animate-enter" : "animate-leave"} flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-3 shadow-[4px_4px_0_0_rgba(0,0,0,1)]`}
+      >
+        <span className="text-sm font-bold text-red-700">{message}</span>
+        <a
+          href={upgradeUrl}
+          className="shrink-0 text-sm font-bold text-brand-600 underline hover:text-brand-800"
+          onClick={() => toast.dismiss(t.id)}
+        >
+          Comprar más →
+        </a>
+      </div>
+    ),
+    { duration: 6000 }
+  );
+}
+
 /** Resize image to max dimension, return data URL */
 function resizeImageToDataUrl(file: File, maxDim: number): Promise<string> {
   return new Promise((resolve) => {
@@ -412,24 +433,9 @@ export default function DocumentEditor() {
     try {
       // Check limit client-side
       if (aiGenLimit !== null && aiGenUsed >= aiGenLimit) {
-        toast.custom(
-          (t) => (
-            <div
-              className={`${t.visible ? "animate-enter" : "animate-leave"} flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-3 shadow-[4px_4px_0_0_rgba(0,0,0,1)]`}
-            >
-              <span className="text-sm font-bold text-red-700">
-                Has usado todas tus {aiGenLimit} generaciones de este mes.
-              </span>
-              <a
-                href="/dash/packs"
-                className="shrink-0 text-sm font-bold text-brand-600 underline hover:text-brand-800"
-                onClick={() => toast.dismiss(t.id)}
-              >
-                Comprar más →
-              </a>
-            </div>
-          ),
-          { duration: 6000 }
+        showLimitToast(
+          `Has usado todas tus ${aiGenLimit} generaciones de este mes.`,
+          "/dash/packs"
         );
         setIsGenerating(false);
         return;
@@ -450,6 +456,10 @@ export default function DocumentEditor() {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        if (errBody.upgradeUrl) {
+          showLimitToast(errBody.error, errBody.upgradeUrl);
+          return;
+        }
         throw new Error(errBody.error || "Error al generar documento");
       }
       setAiGenUsed((c: number) => c + 1);
@@ -634,6 +644,10 @@ export default function DocumentEditor() {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        if (errBody.upgradeUrl) {
+          showLimitToast(errBody.error, errBody.upgradeUrl);
+          return;
+        }
         throw new Error(errBody.error || "Error al refinar página");
       }
       setAiGenUsed((c: number) => c + 1);
@@ -729,6 +743,10 @@ export default function DocumentEditor() {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        if (errBody.upgradeUrl) {
+          showLimitToast(errBody.error, errBody.upgradeUrl);
+          return;
+        }
         throw new Error(errBody.error || "Error al generar variante");
       }
       setAiGenUsed((c: number) => c + 1);
@@ -873,6 +891,10 @@ export default function DocumentEditor() {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        if (errBody.upgradeUrl) {
+          showLimitToast(errBody.error, errBody.upgradeUrl);
+          return;
+        }
         throw new Error(errBody.error || "Error al agregar página");
       }
 
