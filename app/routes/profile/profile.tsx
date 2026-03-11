@@ -5,13 +5,14 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { redirect } from "react-router";
 import { ProfileTabs } from "./ProfileTabs";
 import { db } from "~/.server/db";
+import { getUserPlan } from "~/lib/plans";
 
 export const loader = async ({ request }: Route.ClientLoaderArgs) => {
   const user = await getUserOrRedirect(request);
   let customer;
   if (user.customer) customer = await retrieveCustomer(user.customer);
 
-  const plan = user.roles.find((r) => r === "Creative" || r === "Expert");
+  const plan = getUserPlan(user);
 
   const files = await db.file.findMany({
     where: {
@@ -48,7 +49,7 @@ export function HydrateFallback() {
 }
 
 export default function Profile({ loaderData }: Route.ComponentProps) {
-  const { total, user, customer, plan = "Starter" } = loaderData;
+  const { total, user, customer, plan } = loaderData;
   return (
     <article className=" min-h-svh w-full relative box-border inline-block md:py-10 pt-16 pb-6 px-4 md:pl-28 md:pr-8 2xl:px-0">
       <div className="max-w-7xl mx-auto">

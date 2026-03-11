@@ -85,6 +85,14 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     }
   }
 
+  if (session) {
+    throw redirect("/dash", {
+      headers: {
+        "Set-Cookie": await commitSession(session),
+      },
+    });
+  }
+
   return redirect("/dash");
 };
 

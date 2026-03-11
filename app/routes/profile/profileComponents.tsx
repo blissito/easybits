@@ -10,8 +10,7 @@ import { useEscape } from "~/hooks/useEscape";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Switch } from "../../components/forms/Switch";
 
-import { plansLegacy } from "~/lib/plans";
-export const plans = plansLegacy;
+import { PLANS, type PlanKey } from "~/lib/plans";
 
 export const DEFAULT_PIC =
   "/logo-default.svg";
@@ -42,17 +41,17 @@ export const SuscriptionCard = ({
             {customer?.subscription || "Plan " + plan}
           </h3>
           <span className={cn("text-xl font-semibold", "md:text-2xl")}>
-            ${plans[plan].price} mxn/mes
+            ${PLANS[plan as PlanKey]?.price ?? 0} mxn/mes
           </span>
         </div>
         <PerkItem perk="Hasta 1 asset en venta" />
         <PerkItem perk="Dashboard de administración" />
         <PerkItem perk="Landing page personalizable para tu asset" />
         <PerkItem perk="Sistema de venta en línea con integración Stripe o Paypal" />
-        <PerkItem perk={`Hasta ${plans[plan].max} GB de almacenamiento`} />
+        <PerkItem perk={`Hasta ${PLANS[plan as PlanKey]?.storageGB ?? 1} GB de almacenamiento`} />
       </div>
       <hr className={cn("bg-black h-[1px] border-none  w-full")} />
-      <StorageBar current={used} plan={plans[plan]} />
+      <StorageBar current={used} plan={{ max: PLANS[plan as PlanKey]?.storageGB ?? 1, price: PLANS[plan as PlanKey]?.price ?? 0 }} />
 
       <hr className={cn("bg-black h-[1px] border-none w-full")} />
       <div
