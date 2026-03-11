@@ -279,6 +279,8 @@ export function PageList({
                     title={section.label || `Página ${idx + 1}`}
                     tabIndex={-1}
                   />
+                  {/* Transparent overlay to capture clicks on Safari (iframe swallows contextmenu despite pointer-events-none) */}
+                  <div className="absolute inset-0 z-[2]" />
                   {/* Variant loading overlay */}
                   {loadingVariantId === section.id && (
                     <div className="absolute inset-0 bg-white/80 z-10 flex flex-col items-center justify-center rounded-t-lg">
