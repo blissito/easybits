@@ -91,7 +91,7 @@ export function FilePreviewModal({
         <iframe
           src={url}
           title={file!.name}
-          className="w-full h-[70vh] rounded-lg border-2 border-black"
+          className="w-full h-[85vh] rounded-lg border-2 border-black"
         />
       );
     }
@@ -110,7 +110,7 @@ export function FilePreviewModal({
           </span>
         ) : undefined
       }
-      className="min-h-0 max-w-3xl w-full"
+      className={`min-h-0 w-full ${isPdf ? "max-w-6xl" : "max-w-3xl"}`}
     >
       {file && (
         <div>
