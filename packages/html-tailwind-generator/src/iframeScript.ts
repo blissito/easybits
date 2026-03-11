@@ -446,9 +446,50 @@ export function getIframeScript(): string {
     }
   });
 
-  // Inject animation keyframe
+  // Image loading placeholders
+  function setupImagePlaceholder(img) {
+    if (img.complete && img.naturalWidth > 0) return;
+    img.style.background = 'linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%)';
+    img.style.backgroundSize = '200% 100%';
+    img.style.animation = 'shimmer 1.5s infinite';
+    if (!img.style.minHeight && !img.getAttribute('height')) img.style.minHeight = '120px';
+    function onDone() {
+      img.style.background = '';
+      img.style.backgroundSize = '';
+      img.style.animation = '';
+      if (img.style.minHeight === '120px') img.style.minHeight = '';
+      img.removeEventListener('load', onDone);
+      img.removeEventListener('error', onDone);
+    }
+    img.addEventListener('load', onDone);
+    img.addEventListener('error', onDone);
+  }
+  // Observe new/changed images
+  var imgObserver = new MutationObserver(function(mutations) {
+    for (var m = 0; m < mutations.length; m++) {
+      // New nodes
+      for (var n = 0; n < mutations[m].addedNodes.length; n++) {
+        var node = mutations[m].addedNodes[n];
+        if (node.tagName === 'IMG') setupImagePlaceholder(node);
+        if (node.querySelectorAll) {
+          var imgs = node.querySelectorAll('img');
+          for (var i = 0; i < imgs.length; i++) setupImagePlaceholder(imgs[i]);
+        }
+      }
+      // src attribute changed
+      if (mutations[m].type === 'attributes' && mutations[m].attributeName === 'src' && mutations[m].target.tagName === 'IMG') {
+        setupImagePlaceholder(mutations[m].target);
+      }
+    }
+  });
+  imgObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+  // Initial images
+  var existingImgs = document.querySelectorAll('img');
+  for (var ii = 0; ii < existingImgs.length; ii++) setupImagePlaceholder(existingImgs[ii]);
+
+  // Inject animation keyframes
   var style = document.createElement('style');
-  style.textContent = '@keyframes fadeInUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }';
+  style.textContent = '@keyframes fadeInUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } } @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }';
   document.head.appendChild(style);
 
   // Notify parent we're ready
