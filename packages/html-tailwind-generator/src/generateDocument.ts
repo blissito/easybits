@@ -214,21 +214,10 @@ export async function generateDocument(options: GenerateDocumentOptions): Promis
   // Truncate prompt to prevent token overflow (max ~15K chars ≈ 5K tokens)
   const safePrompt = prompt.length > 15_000 ? prompt.substring(0, 15_000) + "\n[...content truncated...]" : prompt;
   const logoInstruction = logoUrl
-    ? `\nLOGO: Include this logo on the cover page and as a small header on other pages:\n<img src="__LOGO_URL__" alt="Logo" class="h-12 object-contain" />\nUse this exact <img> tag with src="__LOGO_URL__" — do NOT invent a different URL.`
+    ? `\nLOGO: Include this logo on the cover page and as a small header on other pages:\n<img src="${logoUrl}" alt="Logo" class="h-12 object-contain" />\nUse this exact <img> tag with this exact src URL — do NOT invent a different URL or modify it.`
     : "";
 
   const content: any[] = [];
-
-  // Add logo as vision input so the AI can actually see it
-  if (logoUrl) {
-    const convertedLogo = dataUrlToImagePart(logoUrl);
-    if (convertedLogo) {
-      content.push({ type: "image", ...convertedLogo });
-    } else {
-      content.push({ type: "image", image: logoUrl });
-    }
-    content.push({ type: "text", text: "This is the company logo. Use it on the cover and as a small header on other pages." });
-  }
 
   if (referenceImage) {
     const converted = dataUrlToImagePart(referenceImage);

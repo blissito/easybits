@@ -5,6 +5,23 @@ import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { generateDocument } from "@easybits.cloud/html-tailwind-generator/generateDocument";
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
+import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
+
+async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return dataUrl; // already a URL
+  const buffer = Buffer.from(match[2], "base64");
+  const ext = match[1].includes("png") ? "png" : match[1].includes("svg") ? "svg" : "webp";
+  const key = `logos/${userId}/${crypto.randomUUID()}.${ext}`;
+  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const putUrl = await client.getPutUrl(key, { timeout: 60 });
+  await fetch(putUrl, {
+    method: "PUT",
+    body: buffer,
+    headers: { "Content-Type": match[1] },
+  });
+  return `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${key}`;
+}
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -38,6 +55,9 @@ export async function action({ request }: Route.ActionArgs) {
 
   let quotaIncremented = false;
 
+  // Upload logo to public storage so AI gets a short URL instead of huge data URL
+  const resolvedLogoUrl = logoUrl ? await uploadLogoToStorage(logoUrl, ctx.user.id) : undefined;
+
   // Build the prompt combining source content + user instructions
   const parts = [
     sourceContent
@@ -66,7 +86,7 @@ export async function action({ request }: Route.ActionArgs) {
           anthropicApiKey: userKey || undefined,
           openaiApiKey: openaiKey || undefined,
           prompt: parts,
-          logoUrl: logoUrl || undefined,
+          logoUrl: resolvedLogoUrl,
           extraInstructions: extraInstructions || undefined,
           pexelsApiKey: process.env.PEXELS_API_KEY,
           onRawChunk(rawBuffer, completedCount) {
@@ -81,13 +101,11 @@ export async function action({ request }: Route.ActionArgs) {
             if (/<section/i.test(partial) && !/<\/section>/i.test(partial)) {
               partial += '</section>';
             }
-            if (logoUrl) partial = partial.replaceAll("__LOGO_URL__", logoUrl);
             if (partial.length > 20) {
               send("section-building", { html: partial, order: completedCount });
             }
           },
           async onSection(section) {
-            if (logoUrl) section.html = section.html.replaceAll("__LOGO_URL__", logoUrl);
             if (!quotaIncremented) {
               quotaIncremented = true;
               await incrementAiGeneration(ctx.user.id);
