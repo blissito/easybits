@@ -137,6 +137,6 @@ export const MAX_REFERRALS = 50;           // anti-abuse cap
 
 export const GENERATION_PACKS: GenerationPack[] = [
   { id: "pack_10", generations: 10, prices: { Byte: 49, Mega: 39, Tera: 29 } },
-  { id: "pack_50", generations: 50, prices: { Byte: 199, Mega: 169, Tera: 149 }, promoPrice: 99, promoLabel: "Lanzamiento", featured: true },
+  { id: "pack_50", generations: 50, prices: { Byte: 199, Mega: 169, Tera: 149 }, promoPrice: 99, promoLabel: "Precio de lanzamiento", featured: true },
   { id: "pack_100", generations: 100, prices: { Byte: 349, Mega: 249, Tera: 249 } },
 ];
