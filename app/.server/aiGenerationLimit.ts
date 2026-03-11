@@ -50,7 +50,7 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
     if (bonus > 0) {
       return { allowed: true, used: count, limit, bonus };
     }
-    return { allowed: false, used: count, limit, bonus: 0 };
+    return { allowed: false, used: count, limit, bonus };
   }
 
   return { allowed: true, used: count, limit, bonus };
