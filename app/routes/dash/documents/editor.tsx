@@ -560,6 +560,7 @@ export default function DocumentEditor() {
           else if (line.startsWith("data: ")) {
             try {
               const d = JSON.parse(line.slice(6));
+              if (event === "error") throw new Error(d.message || "Error en generación");
               if ((event === "chunk" || event === "done") && d.html) {
                 setSections((prev) =>
                   prev.map((s) =>
@@ -654,6 +655,7 @@ export default function DocumentEditor() {
           else if (line.startsWith("data: ")) {
             try {
               const d = JSON.parse(line.slice(6));
+              if (event === "error") throw new Error(d.message || "Error en generación");
               if ((event === "chunk" || event === "done") && d.html) {
                 setSections((prev) =>
                   prev.map((s) =>
@@ -721,16 +723,10 @@ export default function DocumentEditor() {
 
   async function handleAddPage() {
     if ((!addPrompt.trim() && !addParsedContent) || isAddingSection) return;
-    // Close modal immediately so user sees pages appear in real time
-    setShowAddPrompt(false);
-    setAddPrompt("");
-    setAddFiles([]);
-    setAddRefImage(null);
+    setIsAddingSection(true);
     const savedPrompt = addPrompt.trim();
     const savedParsedContent = addParsedContent;
     const savedRefImage = addRefImage;
-    setAddParsedContent("");
-    setIsAddingSection(true);
     const newId = Math.random().toString(36).slice(2, 10);
     try {
       const instruction = [
@@ -754,6 +750,13 @@ export default function DocumentEditor() {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error || "Error al agregar página");
       }
+
+      // Close modal after fetch succeeds — user sees loading, then pages stream in
+      setShowAddPrompt(false);
+      setAddPrompt("");
+      setAddFiles([]);
+      setAddRefImage(null);
+      setAddParsedContent("");
 
       setSections((prev) => [
         ...prev,
@@ -781,6 +784,7 @@ export default function DocumentEditor() {
           else if (line.startsWith("data: ")) {
             try {
               const d = JSON.parse(line.slice(6));
+              if (event === "error") throw new Error(d.message || "Error en generación");
               if ((event === "chunk" || event === "done") && d.html) {
                 if (event === "done" && d.sections && d.sections.length > 1) {
                   // Multiple pages returned — replace placeholder with all pages
@@ -811,7 +815,9 @@ export default function DocumentEditor() {
                   }
                 }
               }
-            } catch {}
+            } catch (parseErr) {
+              console.error("Add page stream parse error:", parseErr);
+            }
           }
         }
       }
@@ -819,6 +825,8 @@ export default function DocumentEditor() {
     } catch (err) {
       console.error("Add page error:", err);
       errorToast((err as Error).message || "Error al agregar página");
+      // Remove the empty placeholder page on error
+      setSections((prev) => prev.filter((s) => s.id !== newId));
     } finally {
       setIsAddingSection(false);
     }
