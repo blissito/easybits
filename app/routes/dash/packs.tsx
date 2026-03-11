@@ -124,7 +124,7 @@ function PackCard({
   return (
     <div className={`border-2 rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative ${pack.featured ? "border-brand-500 ring-2 ring-brand-500" : "border-black"}`}>
       {pack.promoLabel && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 min-w-max whitespace-nowrap bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">
           {pack.promoLabel}
         </div>
       )}
