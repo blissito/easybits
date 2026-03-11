@@ -324,17 +324,22 @@ export function FloatingToolbar({
           {[
             { color: "#ffffff", css: "#ffffff", label: "Blanco" },
             { color: "#000000", css: "#000000", label: "Negro" },
+            { color: "transparent", css: "transparent", label: "Transparente" },
             ...(themeColors ? [
               { color: themeColors.primary, css: "var(--color-primary)", label: "Primary" },
               { color: themeColors.secondary, css: "var(--color-secondary)", label: "Secondary" },
               { color: themeColors.accent, css: "var(--color-accent)", label: "Accent" },
+              { color: themeColors.surface, css: "var(--color-surface)", label: "Surface" },
             ] : []),
           ].map(({ color, css, label }) => (
             <button
               key={label}
               onClick={() => handleSetAttr("style", `${cssProp}: ${css}`)}
               className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
-              style={{ backgroundColor: color }}
+              style={color === "transparent" ? {
+                backgroundImage: "repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%)",
+                backgroundSize: "8px 8px",
+              } : { backgroundColor: color }}
               title={label}
             />
           ))}

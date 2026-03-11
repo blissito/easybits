@@ -16,6 +16,7 @@ import { CodeEditor } from "~/components/landings3/CodeEditor";
 import { Canvas, type CanvasHandle } from "~/components/landings3/Canvas";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
+import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
@@ -242,6 +243,9 @@ export default function DocumentEditor() {
   const [showAddPrompt, setShowAddPrompt] = useState(false);
   const [addPrompt, setAddPrompt] = useState("");
   const [isAddingSection, setIsAddingSection] = useState(false);
+
+  // Undo/Redo
+  const { pushUndo, undo, redo, canUndo, canRedo } = useUndoStack<Section3[]>();
   const [addFiles, setAddFiles] = useState<File[]>([]);
   const [addRefImage, setAddRefImage] = useState<string | null>(null);
   const [addParsedContent, setAddParsedContent] = useState("");
@@ -488,12 +492,45 @@ export default function DocumentEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Undo/Redo keydown listener
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      const isUndo = key === "z" && !e.shiftKey;
+      const isRedo = (key === "z" && e.shiftKey) || key === "y";
+      if (!isUndo && !isRedo) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      e.preventDefault();
+      if (isRedo) {
+        const next = redo(sectionsRef.current);
+        if (next) {
+          setSections(next);
+          saveSections(next);
+          canvasRef.current?.postMessage({ action: "reload-sections" });
+        }
+      } else {
+        const prev = undo(sectionsRef.current);
+        if (prev) {
+          setSections(prev);
+          saveSections(prev);
+          canvasRef.current?.postMessage({ action: "reload-sections" });
+        }
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [undo, redo, saveSections, setSections]);
+
   const handleSectionsChange = useCallback(
     (newSections: Section3[]) => {
+      pushUndo(sectionsRef.current);
       setSections(newSections);
       saveSections(newSections);
     },
-    [saveSections]
+    [saveSections, pushUndo, setSections]
   );
 
   const handleIframeMessage = useCallback((msg: IframeMessage) => {
@@ -507,6 +544,7 @@ export default function DocumentEditor() {
       msg.sectionId &&
       msg.sectionHtml
     ) {
+      pushUndo(sectionsRef.current);
       setSections((prev) => {
         const updated = prev.map((s) =>
           s.id === msg.sectionId ? { ...s, html: msg.sectionHtml } : s
@@ -515,10 +553,11 @@ export default function DocumentEditor() {
         return updated;
       });
     }
-  }, [saveSections]);
+  }, [saveSections, pushUndo, setSections]);
 
   async function handleRefine(instruction: string, referenceImage?: string) {
     if (!selection?.sectionId) return;
+    pushUndo(sectionsRef.current);
     setIsRefining(true);
     try {
       const section = sections.find((s) => s.id === selection.sectionId);

@@ -18,6 +18,7 @@ import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildCustomThemeCss, LANDING_THEMES, type CustomColors } from "~/lib/landing3/themes";
 import { ViewportToggle, type Viewport } from "@easybits.cloud/html-tailwind-generator";
+import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [
@@ -151,14 +152,22 @@ export default function Landing3Editor() {
   }>();
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
 
-  const [sections, setSections] = useState<Section3[]>(() => {
+  const [sections, _setSections] = useState<Section3[]>(() => {
     const raw = landing.sections;
     return Array.isArray(raw) ? (raw as unknown as Section3[]) : [];
   });
+  const sectionsRef = useRef(sections);
+  const setSections = useCallback((updater: Section3[] | ((prev: Section3[]) => Section3[])) => {
+    _setSections((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      sectionsRef.current = next;
+      return next;
+    });
+  }, []);
 
   const [theme, setTheme] = useState<string>(() => {
     const meta = landing.metadata as Record<string, unknown> | null;
-    return (meta?.theme as string) || "default";
+    return (meta?.theme as string) || "minimal";
   });
 
   const [isGenerating, setIsGenerating] = useState(
@@ -193,6 +202,9 @@ export default function Landing3Editor() {
   const [addPrompt, setAddPrompt] = useState("");
   const [isAddingSection, setIsAddingSection] = useState(false);
 
+  // Undo/Redo
+  const { pushUndo, undo, redo, canUndo, canRedo } = useUndoStack<Section3[]>();
+
   // Regenerate prompt modal
   const [showRegenPrompt, setShowRegenPrompt] = useState(false);
   const [regenPrompt, setRegenPrompt] = useState("");
@@ -212,7 +224,7 @@ export default function Landing3Editor() {
   // Resolve theme colors for FloatingToolbar swatches
   const resolvedThemeColors = useMemo(() => {
     if (theme === "custom") {
-      const base = LANDING_THEMES.find((t) => t.id === "default")!.colors;
+      const base = LANDING_THEMES.find((t) => t.id === "minimal")!.colors;
       return { ...base, ...Object.fromEntries(Object.entries(customColors).filter(([, v]) => v)) } as typeof base;
     }
     return LANDING_THEMES.find((t) => t.id === theme)?.colors ?? LANDING_THEMES[0].colors;
@@ -380,12 +392,45 @@ export default function Landing3Editor() {
     []
   );
 
+  // Undo/Redo keydown listener
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      const isUndo = key === "z" && !e.shiftKey;
+      const isRedo = (key === "z" && e.shiftKey) || key === "y";
+      if (!isUndo && !isRedo) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      e.preventDefault();
+      if (isRedo) {
+        const next = redo(sectionsRef.current);
+        if (next) {
+          setSections(next);
+          saveSections(next);
+          canvasRef.current?.postMessage({ action: "reload-sections" });
+        }
+      } else {
+        const prev = undo(sectionsRef.current);
+        if (prev) {
+          setSections(prev);
+          saveSections(prev);
+          canvasRef.current?.postMessage({ action: "reload-sections" });
+        }
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [undo, redo, saveSections, setSections]);
+
   const handleSectionsChange = useCallback(
     (newSections: Section3[]) => {
+      pushUndo(sectionsRef.current);
       setSections(newSections);
       saveSections(newSections);
     },
-    [saveSections]
+    [saveSections, pushUndo, setSections]
   );
 
   const handleIframeMessage = useCallback((msg: IframeMessage) => {
@@ -397,6 +442,7 @@ export default function Landing3Editor() {
     } else if (msg.type === "text-edited" && msg.sectionId) {
       const sectionHtml = (msg as any).sectionHtml;
       if (sectionHtml) {
+        pushUndo(sectionsRef.current);
         setSections((prev) => {
           const updated = prev.map((s) =>
             s.id === msg.sectionId ? { ...s, html: sectionHtml } : s
@@ -414,10 +460,11 @@ export default function Landing3Editor() {
         return updated;
       });
     }
-  }, [saveSections]);
+  }, [saveSections, pushUndo, setSections]);
 
   async function handleRefine(instruction: string, referenceImage?: string) {
     if (!selection?.sectionId) return;
+    pushUndo(sectionsRef.current);
     setIsRefining(true);
     try {
       const section = sections.find((s) => s.id === selection.sectionId);
