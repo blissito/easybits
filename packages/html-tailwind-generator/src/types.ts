@@ -16,7 +16,9 @@ export interface IframeMessage {
     | "text-edited"
     | "element-deselected"
     | "ready"
-    | "section-html-updated";
+    | "section-html-updated"
+    | "undo"
+    | "redo";
   sectionId?: string;
   tagName?: string;
   rect?: { top: number; left: number; width: number; height: number };

@@ -316,12 +316,21 @@ export function getIframeScript(): string {
           }
         }
         if (target) {
-          // Remove classes matching the list (exact match) using classList
-          var removeList = msg.removePrefixes || [];
-          for (var r = 0; r < removeList.length; r++) {
-            if (target.classList.contains(removeList[r])) {
-              target.classList.remove(removeList[r]);
+          // Remove classes matching prefixes (supports responsive variants like md:p-4)
+          var prefixes = msg.removePrefixes || [];
+          var toRemove = [];
+          for (var ci = 0; ci < target.classList.length; ci++) {
+            var cls = target.classList[ci];
+            var bare = cls.indexOf(':') !== -1 ? cls.substring(cls.lastIndexOf(':') + 1) : cls;
+            for (var pi = 0; pi < prefixes.length; pi++) {
+              if (bare === prefixes[pi] || bare.indexOf(prefixes[pi]) === 0) {
+                toRemove.push(cls);
+                break;
+              }
             }
+          }
+          for (var ri = 0; ri < toRemove.length; ri++) {
+            target.classList.remove(toRemove[ri]);
           }
           // Add new class
           if (msg.addClass && !target.classList.contains(msg.addClass)) {
@@ -422,6 +431,18 @@ export function getIframeScript(): string {
     if (msg.action === 'full-rewrite') {
       // Fallback: rewrite everything
       document.body.innerHTML = msg.html;
+    }
+  });
+
+  // Forward Cmd/Ctrl+Z undo/redo to parent (iframe captures keyboard focus)
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      window.parent.postMessage({ type: e.shiftKey ? 'redo' : 'undo' }, '*');
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      window.parent.postMessage({ type: 'redo' }, '*');
     }
   });
 

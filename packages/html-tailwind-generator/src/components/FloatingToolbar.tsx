@@ -152,96 +152,141 @@ export function FloatingToolbar({
   const hasAttrEditing = (isImg || isLink) && onUpdateAttribute;
 
   function handleReplaceClass(removePrefixes: string[], addClass: string) {
-    if (!selection?.sectionId || !selection?.elementPath || !onReplaceClass) return;
-    onReplaceClass(selection.sectionId, selection.elementPath, removePrefixes, addClass);
+    if (!selection?.sectionId || !selection?.elementPath || !onUpdateAttribute) return;
+    const currentClasses = (selection.className || "").split(/\s+/).filter(Boolean);
+    const filtered = currentClasses.filter(cls => {
+      const bare = cls.includes(":") ? cls.substring(cls.lastIndexOf(":") + 1) : cls;
+      return !removePrefixes.some(pfx => bare === pfx || bare.startsWith(pfx));
+    });
+    if (addClass) {
+      for (const c of addClass.split(/\s+/).filter(Boolean)) {
+        if (!filtered.includes(c)) filtered.push(c);
+      }
+    }
+    onUpdateAttribute(selection.sectionId, selection.elementPath, "class", filtered.join(" "));
   }
 
   // Determine size presets based on element type
   const sizePresets = (() => {
-    if (!onReplaceClass || !selection.tagName) return null;
+    if (!onUpdateAttribute || !selection.tagName) return null;
     const tag = selection.tagName.toUpperCase();
     const CONTAINERS = ["DIV", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "NAV", "MAIN"];
     const TEXT_TAGS = ["H1", "H2", "H3", "H4", "H5", "H6", "P", "SPAN", "BLOCKQUOTE"];
     const currentClasses = (selection.className || "").split(/\s+/);
 
     if (CONTAINERS.includes(tag)) {
-      const RESP = ["sm:", "md:", "lg:", "xl:", "2xl:"];
-      const BASE_W = ["w-full", "w-auto", "w-screen", "w-1/2", "w-1/3", "w-2/3", "w-1/4", "w-3/4", "w-1/5", "w-2/5", "w-3/5", "w-4/5"];
-      const BASE_MAX_W = ["max-w-none", "max-w-xs", "max-w-sm", "max-w-md", "max-w-lg", "max-w-xl", "max-w-2xl", "max-w-3xl", "max-w-4xl", "max-w-5xl", "max-w-6xl", "max-w-7xl", "max-w-full", "max-w-screen-sm", "max-w-screen-md", "max-w-screen-lg", "max-w-screen-xl"];
-      const BASE_P = ["p-0", "p-1", "p-2", "p-3", "p-4", "p-5", "p-6", "p-8", "p-10", "p-12", "p-16", "p-20", "p-24", "px-0", "px-1", "px-2", "px-3", "px-4", "px-5", "px-6", "px-8", "px-10", "px-12", "px-16", "px-20", "px-24", "py-0", "py-1", "py-2", "py-3", "py-4", "py-5", "py-6", "py-8", "py-10", "py-12", "py-16", "py-20", "py-24"];
-      const WIDTH_CLASSES = BASE_W.flatMap(c => [c, ...RESP.map(r => r + c)]);
-      const MAX_W_CLASSES = BASE_MAX_W.flatMap(c => [c, ...RESP.map(r => r + c)]);
-      const PADDING_CLASSES = BASE_P.flatMap(c => [c, ...RESP.map(r => r + c)]);
+      // Prefix-based matching: iframe strips responsive prefixes and matches startsWith
+      const W_PREFIXES = ["w-"];
+      const MAX_W_PREFIXES = ["max-w-"];
+      const P_PREFIXES = ["p-", "px-", "py-"];
       const widthOptions = [
-        { label: "Full", cls: "w-full", prefixes: WIDTH_CLASSES },
-        { label: "3/4", cls: "w-3/4", prefixes: WIDTH_CLASSES },
-        { label: "2/3", cls: "w-2/3", prefixes: WIDTH_CLASSES },
-        { label: "1/2", cls: "w-1/2", prefixes: WIDTH_CLASSES },
-        { label: "1/3", cls: "w-1/3", prefixes: WIDTH_CLASSES },
+        { label: "Full", cls: "w-full", prefixes: W_PREFIXES },
+        { label: "3/4", cls: "w-3/4", prefixes: W_PREFIXES },
+        { label: "2/3", cls: "w-2/3", prefixes: W_PREFIXES },
+        { label: "1/2", cls: "w-1/2", prefixes: W_PREFIXES },
+        { label: "1/3", cls: "w-1/3", prefixes: W_PREFIXES },
       ];
       const maxWOptions = [
-        { label: "sm", cls: "max-w-sm", prefixes: MAX_W_CLASSES },
-        { label: "md", cls: "max-w-md", prefixes: MAX_W_CLASSES },
-        { label: "lg", cls: "max-w-lg", prefixes: MAX_W_CLASSES },
-        { label: "xl", cls: "max-w-xl", prefixes: MAX_W_CLASSES },
-        { label: "2xl", cls: "max-w-2xl", prefixes: MAX_W_CLASSES },
-        { label: "full", cls: "max-w-full", prefixes: MAX_W_CLASSES },
+        { label: "sm", cls: "max-w-sm", prefixes: MAX_W_PREFIXES },
+        { label: "md", cls: "max-w-md", prefixes: MAX_W_PREFIXES },
+        { label: "lg", cls: "max-w-lg", prefixes: MAX_W_PREFIXES },
+        { label: "xl", cls: "max-w-xl", prefixes: MAX_W_PREFIXES },
+        { label: "2xl", cls: "max-w-2xl", prefixes: MAX_W_PREFIXES },
+        { label: "full", cls: "max-w-full", prefixes: MAX_W_PREFIXES },
       ];
       const paddingOptions = [
-        { label: "0", cls: "p-0", prefixes: PADDING_CLASSES },
-        { label: "4", cls: "p-4", prefixes: PADDING_CLASSES },
-        { label: "8", cls: "p-8", prefixes: PADDING_CLASSES },
-        { label: "12", cls: "p-12", prefixes: PADDING_CLASSES },
-        { label: "16", cls: "p-16", prefixes: PADDING_CLASSES },
+        { label: "0", cls: "p-0", prefixes: P_PREFIXES },
+        { label: "4", cls: "p-4", prefixes: P_PREFIXES },
+        { label: "8", cls: "p-8", prefixes: P_PREFIXES },
+        { label: "12", cls: "p-12", prefixes: P_PREFIXES },
+        { label: "16", cls: "p-16", prefixes: P_PREFIXES },
       ];
-      return { width: widthOptions, maxW: maxWOptions, padding: paddingOptions, currentClasses };
+      const M_PREFIXES = ["m-", "mx-", "my-", "mt-", "mb-"];
+      const marginOptions = [
+        { label: "0", cls: "m-0", prefixes: M_PREFIXES },
+        { label: "auto", cls: "mx-auto", prefixes: M_PREFIXES },
+        { label: "2", cls: "m-2", prefixes: M_PREFIXES },
+        { label: "4", cls: "m-4", prefixes: M_PREFIXES },
+        { label: "8", cls: "m-8", prefixes: M_PREFIXES },
+      ];
+      return { width: widthOptions, maxW: maxWOptions, padding: paddingOptions, margin: marginOptions, currentClasses };
     }
 
     if (TEXT_TAGS.includes(tag)) {
-      const BASE_TEXT_SIZES = ["text-xs", "text-sm", "text-base", "text-lg", "text-xl", "text-2xl", "text-3xl", "text-4xl", "text-5xl", "text-6xl", "text-7xl", "text-8xl", "text-9xl"];
-      const BASE_FONT_WEIGHTS = ["font-thin", "font-extralight", "font-light", "font-normal", "font-medium", "font-semibold", "font-bold", "font-extrabold", "font-black"];
-      const RESPONSIVE = ["sm:", "md:", "lg:", "xl:", "2xl:"];
-      const TEXT_SIZE_CLASSES = BASE_TEXT_SIZES.flatMap(c => [c, ...RESPONSIVE.map(r => r + c)]);
-      const FONT_WEIGHT_CLASSES = BASE_FONT_WEIGHTS.flatMap(c => [c, ...RESPONSIVE.map(r => r + c)]);
+      // Text sizes: exact list to avoid matching text-white, text-center, etc.
+      const TEXT_SIZE_EXACT = ["text-xs", "text-sm", "text-base", "text-lg", "text-xl", "text-2xl", "text-3xl", "text-4xl", "text-5xl", "text-6xl", "text-7xl", "text-8xl", "text-9xl"];
+      // Font weights: exact list to avoid matching font-sans, font-serif, etc.
+      const FONT_WEIGHT_EXACT = ["font-thin", "font-extralight", "font-light", "font-normal", "font-medium", "font-semibold", "font-bold", "font-extrabold", "font-black"];
       const textSizes = [
-        { label: "sm", cls: "text-sm", prefixes: TEXT_SIZE_CLASSES },
-        { label: "base", cls: "text-base", prefixes: TEXT_SIZE_CLASSES },
-        { label: "lg", cls: "text-lg", prefixes: TEXT_SIZE_CLASSES },
-        { label: "xl", cls: "text-xl", prefixes: TEXT_SIZE_CLASSES },
-        { label: "2xl", cls: "text-2xl", prefixes: TEXT_SIZE_CLASSES },
-        { label: "3xl", cls: "text-3xl", prefixes: TEXT_SIZE_CLASSES },
-        { label: "4xl", cls: "text-4xl", prefixes: TEXT_SIZE_CLASSES },
-        { label: "5xl", cls: "text-5xl", prefixes: TEXT_SIZE_CLASSES },
+        { label: "sm", cls: "text-sm", prefixes: TEXT_SIZE_EXACT },
+        { label: "base", cls: "text-base", prefixes: TEXT_SIZE_EXACT },
+        { label: "lg", cls: "text-lg", prefixes: TEXT_SIZE_EXACT },
+        { label: "xl", cls: "text-xl", prefixes: TEXT_SIZE_EXACT },
+        { label: "2xl", cls: "text-2xl", prefixes: TEXT_SIZE_EXACT },
+        { label: "3xl", cls: "text-3xl", prefixes: TEXT_SIZE_EXACT },
+        { label: "4xl", cls: "text-4xl", prefixes: TEXT_SIZE_EXACT },
+        { label: "5xl", cls: "text-5xl", prefixes: TEXT_SIZE_EXACT },
       ];
       const fontWeight = [
-        { label: "light", cls: "font-light", prefixes: FONT_WEIGHT_CLASSES },
-        { label: "normal", cls: "font-normal", prefixes: FONT_WEIGHT_CLASSES },
-        { label: "medium", cls: "font-medium", prefixes: FONT_WEIGHT_CLASSES },
-        { label: "semibold", cls: "font-semibold", prefixes: FONT_WEIGHT_CLASSES },
-        { label: "bold", cls: "font-bold", prefixes: FONT_WEIGHT_CLASSES },
+        { label: "light", cls: "font-light", prefixes: FONT_WEIGHT_EXACT },
+        { label: "normal", cls: "font-normal", prefixes: FONT_WEIGHT_EXACT },
+        { label: "medium", cls: "font-medium", prefixes: FONT_WEIGHT_EXACT },
+        { label: "semibold", cls: "font-semibold", prefixes: FONT_WEIGHT_EXACT },
+        { label: "bold", cls: "font-bold", prefixes: FONT_WEIGHT_EXACT },
       ];
-      return { textSize: textSizes, fontWeight, currentClasses };
+      const M_PREFIXES = ["m-", "mx-", "my-", "mt-", "mb-"];
+      const marginOptions = [
+        { label: "0", cls: "m-0", prefixes: M_PREFIXES },
+        { label: "auto", cls: "mx-auto", prefixes: M_PREFIXES },
+        { label: "2", cls: "m-2", prefixes: M_PREFIXES },
+        { label: "4", cls: "m-4", prefixes: M_PREFIXES },
+        { label: "8", cls: "m-8", prefixes: M_PREFIXES },
+      ];
+      return { textSize: textSizes, fontWeight, margin: marginOptions, currentClasses };
+    }
+
+    if (tag === "BUTTON" || tag === "A") {
+      const W_PREFIXES = ["w-"];
+      const P_PREFIXES = ["p-", "px-", "py-"];
+      const M_PREFIXES = ["m-", "mx-", "my-", "mt-", "mb-"];
+      const widthOptions = [
+        { label: "auto", cls: "w-auto", prefixes: W_PREFIXES },
+        { label: "Full", cls: "w-full", prefixes: W_PREFIXES },
+        { label: "1/2", cls: "w-1/2", prefixes: W_PREFIXES },
+        { label: "1/3", cls: "w-1/3", prefixes: W_PREFIXES },
+      ];
+      const paddingOptions = [
+        { label: "0", cls: "p-0", prefixes: P_PREFIXES },
+        { label: "2", cls: "px-2 py-1", prefixes: P_PREFIXES },
+        { label: "4", cls: "px-4 py-2", prefixes: P_PREFIXES },
+        { label: "6", cls: "px-6 py-3", prefixes: P_PREFIXES },
+        { label: "8", cls: "px-8 py-4", prefixes: P_PREFIXES },
+      ];
+      const marginOptions = [
+        { label: "0", cls: "m-0", prefixes: M_PREFIXES },
+        { label: "auto", cls: "mx-auto", prefixes: M_PREFIXES },
+        { label: "2", cls: "m-2", prefixes: M_PREFIXES },
+        { label: "4", cls: "m-4", prefixes: M_PREFIXES },
+      ];
+      return { width: widthOptions, padding: paddingOptions, margin: marginOptions, currentClasses };
     }
 
     if (tag === "IMG") {
-      const R = ["sm:", "md:", "lg:", "xl:", "2xl:"];
-      const BASE_IMG = ["max-w-none", "max-w-xs", "max-w-sm", "max-w-md", "max-w-lg", "max-w-xl", "max-w-2xl", "max-w-full", "w-full", "w-auto", "w-1/2", "w-1/3", "w-2/3"];
-      const BASE_ROUND = ["rounded-none", "rounded-sm", "rounded", "rounded-md", "rounded-lg", "rounded-xl", "rounded-2xl", "rounded-3xl", "rounded-full"];
-      const IMG_SIZE_CLASSES = BASE_IMG.flatMap(c => [c, ...R.map(r => r + c)]);
-      const ROUNDED_CLASSES = BASE_ROUND.flatMap(c => [c, ...R.map(r => r + c)]);
+      const IMG_SIZE_PREFIXES = ["w-", "max-w-"];
+      const ROUNDED_PREFIXES = ["rounded"];
       const imgSizes = [
-        { label: "sm", cls: "max-w-xs", prefixes: IMG_SIZE_CLASSES },
-        { label: "md", cls: "max-w-md", prefixes: IMG_SIZE_CLASSES },
-        { label: "lg", cls: "max-w-lg", prefixes: IMG_SIZE_CLASSES },
-        { label: "xl", cls: "max-w-xl", prefixes: IMG_SIZE_CLASSES },
-        { label: "full", cls: "w-full", prefixes: IMG_SIZE_CLASSES },
+        { label: "sm", cls: "max-w-xs", prefixes: IMG_SIZE_PREFIXES },
+        { label: "md", cls: "max-w-md", prefixes: IMG_SIZE_PREFIXES },
+        { label: "lg", cls: "max-w-lg", prefixes: IMG_SIZE_PREFIXES },
+        { label: "xl", cls: "max-w-xl", prefixes: IMG_SIZE_PREFIXES },
+        { label: "full", cls: "w-full", prefixes: IMG_SIZE_PREFIXES },
       ];
       const rounded = [
-        { label: "none", cls: "rounded-none", prefixes: ROUNDED_CLASSES },
-        { label: "md", cls: "rounded-md", prefixes: ROUNDED_CLASSES },
-        { label: "lg", cls: "rounded-lg", prefixes: ROUNDED_CLASSES },
-        { label: "xl", cls: "rounded-xl", prefixes: ROUNDED_CLASSES },
-        { label: "full", cls: "rounded-full", prefixes: ROUNDED_CLASSES },
+        { label: "none", cls: "rounded-none", prefixes: ROUNDED_PREFIXES },
+        { label: "md", cls: "rounded-md", prefixes: ROUNDED_PREFIXES },
+        { label: "lg", cls: "rounded-lg", prefixes: ROUNDED_PREFIXES },
+        { label: "xl", cls: "rounded-xl", prefixes: ROUNDED_PREFIXES },
+        { label: "full", cls: "rounded-full", prefixes: ROUNDED_PREFIXES },
       ];
       return { imgSize: imgSizes, rounded, currentClasses };
     }
@@ -535,7 +580,7 @@ export function FloatingToolbar({
       {/* Size presets */}
       {sizePresets && !selection.isSectionRoot && (() => {
         const groups = Object.entries(sizePresets).filter(([k]) => k !== 'currentClasses') as [string, { label: string; cls: string; prefixes: string[] }[]][];
-        const labels: Record<string, string> = { width: "Ancho", maxW: "Max", padding: "Padding", textSize: "Texto", fontWeight: "Peso", imgSize: "Tamaño", rounded: "Borde" };
+        const labels: Record<string, string> = { width: "Ancho", maxW: "Max", padding: "Padding", margin: "Margin", textSize: "Texto", fontWeight: "Peso", imgSize: "Tamaño", rounded: "Borde" };
         return groups.map(([key, options]) => (
           <div key={key} className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
             <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0 w-10">{labels[key] || key}</span>

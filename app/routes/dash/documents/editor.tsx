@@ -552,8 +552,14 @@ export default function DocumentEditor() {
         saveSections(updated);
         return updated;
       });
+    } else if (msg.type === "undo") {
+      const prev = undo(sectionsRef.current);
+      if (prev) { setSections(prev); saveSections(prev); canvasRef.current?.postMessage({ action: "reload-sections" }); }
+    } else if (msg.type === "redo") {
+      const next = redo(sectionsRef.current);
+      if (next) { setSections(next); saveSections(next); canvasRef.current?.postMessage({ action: "reload-sections" }); }
     }
-  }, [saveSections, pushUndo, setSections]);
+  }, [saveSections, pushUndo, setSections, undo, redo]);
 
   async function handleRefine(instruction: string, referenceImage?: string) {
     if (!selection?.sectionId) return;
@@ -1123,35 +1129,6 @@ ${sectionsHtml}
         </div>
       )}
 
-      {/* Prompt bar */}
-      <div className="flex items-center gap-2 px-4 py-1.5 border-b border-gray-200 bg-white shrink-0">
-        <input
-          type="text"
-          value={regenInput}
-          onChange={(e) => setRegenInput(e.target.value)}
-          placeholder="Instrucciones: ej. fondo blanco, 4 páginas, estilo minimalista..."
-          disabled={isGenerating}
-          className="flex-1 h-8 px-3 text-sm border-2 border-gray-200 rounded-lg bg-gray-50 placeholder:text-gray-400 disabled:opacity-50"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && regenInput.trim()) {
-              generateSections(regenInput.trim());
-              setRegenInput("");
-            }
-          }}
-        />
-        <BrutalButton
-          size="chip"
-          onClick={() => {
-            if (!regenInput.trim()) return;
-            generateSections(regenInput.trim());
-            setRegenInput("");
-          }}
-          isLoading={isGenerating}
-          isDisabled={!regenInput.trim() || isGenerating}
-        >
-          Regenerar
-        </BrutalButton>
-      </div>
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden relative">
