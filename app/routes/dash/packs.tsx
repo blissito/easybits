@@ -200,9 +200,10 @@ function ReferralSection({
         </div>
         <BrutalButton
           onClick={handleCopy}
-          className={`shrink-0 transition-colors duration-500 ${copied ? "bg-emerald-400" : "bg-brand-500"}`}
+          className={copied ? "bg-emerald-400 border-emerald-600" : undefined}
+          containerClassName={copied ? "bg-emerald-600" : undefined}
         >
-          {copied ? "Copiado!" : "Copiar"}
+          {copied ? "✓ Copiado!" : "Copiar"}
         </BrutalButton>
       </div>
 
