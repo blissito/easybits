@@ -453,7 +453,23 @@ export default function DocumentEditor() {
           } else if (line.startsWith("data: ")) {
             try {
               const d = JSON.parse(line.slice(6));
-              if (eventType === "section") {
+              if (eventType === "section-building") {
+                const buildIdx = accumulated.findIndex((s) => s.id === "__building__");
+                const building = {
+                  id: "__building__",
+                  order: d.order,
+                  html: d.html,
+                  label: "...",
+                };
+                if (buildIdx !== -1) {
+                  accumulated[buildIdx] = building;
+                } else {
+                  accumulated.push(building);
+                }
+                setSections([...accumulated]);
+              } else if (eventType === "section") {
+                const buildIdx = accumulated.findIndex((s) => s.id === "__building__");
+                if (buildIdx !== -1) accumulated.splice(buildIdx, 1);
                 accumulated.push(d);
                 setSections([...accumulated]);
               } else if (eventType === "section-update") {

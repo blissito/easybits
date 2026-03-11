@@ -193,6 +193,7 @@ export interface GenerateDocumentOptions {
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   onSection?: (section: Section3) => void;
   onImageUpdate?: (sectionId: string, html: string) => void;
+  onRawChunk?: (buffer: string, completedCount: number) => void;
   onDone?: (sections: Section3[]) => void;
   onError?: (error: Error) => void;
 }

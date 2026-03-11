@@ -533,24 +533,36 @@ export function FloatingToolbar({
       {!selection.isSectionRoot && onUpdateAttribute && selection.tagName !== 'IMG' && (() => {
         const containerTags = ['DIV', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MAIN', 'ARTICLE'];
         const isContainer = containerTags.includes(selection.tagName ?? '');
-        const colorSwatches = [
+
+        const TEXT_COLOR_PREFIXES = ["text-primary", "text-secondary", "text-accent", "text-on-surface", "text-on-primary", "text-on-surface-muted", "text-white", "text-black"];
+        const BG_COLOR_PREFIXES = ["bg-primary", "bg-primary-dark", "bg-secondary", "bg-accent", "bg-surface", "bg-surface-alt"];
+
+        const themeSwatches = themeColors ? [
+          { color: themeColors.primary, textCls: "text-primary", bgCls: "bg-primary", label: "Primary" },
+          { color: themeColors.secondary, textCls: "text-secondary", bgCls: "bg-secondary", label: "Secondary" },
+          { color: themeColors.accent, textCls: "text-accent", bgCls: "bg-accent", label: "Accent" },
+          { color: themeColors.surface, textCls: "text-on-surface", bgCls: "bg-surface", label: "Surface" },
+        ] : [];
+
+        const fixedSwatches = [
           { color: "#ffffff", css: "#ffffff", label: "Blanco" },
           { color: "#000000", css: "#000000", label: "Negro" },
           { color: "transparent", css: "transparent", label: "Transparente" },
-          ...(themeColors ? [
-            { color: themeColors.primary, css: "var(--color-primary)", label: "Primary" },
-            { color: themeColors.secondary, css: "var(--color-secondary)", label: "Secondary" },
-            { color: themeColors.accent, css: "var(--color-accent)", label: "Accent" },
-            { color: themeColors.surface, css: "var(--color-surface)", label: "Surface" },
-          ] : []),
         ];
-        const renderColorRow = (label: string, cssProp: string) => (
-          <div key={cssProp} className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
+
+        const renderColorRow = (label: string, mode: "text" | "bg") => (
+          <div key={mode} className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
             <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0 w-10">{label}</span>
-            {colorSwatches.map(({ color, css, label: swatchLabel }) => (
+            {/* Fixed swatches — inline style */}
+            {fixedSwatches.map(({ color, css, label: swatchLabel }) => (
               <button
                 key={swatchLabel}
-                onClick={() => handleSetAttr("style", `${cssProp}: ${css}`)}
+                onClick={() => {
+                  // Remove theme classes so they don't conflict
+                  handleReplaceClass(mode === "text" ? TEXT_COLOR_PREFIXES : BG_COLOR_PREFIXES, "");
+                  const cssProp = mode === "text" ? "color" : "background-color";
+                  handleSetAttr("style", `${cssProp}: ${css}`);
+                }}
                 className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
                 style={color === "transparent" ? {
                   backgroundImage: "repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%)",
@@ -559,9 +571,28 @@ export function FloatingToolbar({
                 title={swatchLabel}
               />
             ))}
+            {/* Theme swatches — Tailwind classes */}
+            {themeSwatches.map(({ color, textCls, bgCls, label: swatchLabel }) => (
+              <button
+                key={swatchLabel}
+                onClick={() => {
+                  const prefixes = mode === "text" ? TEXT_COLOR_PREFIXES : BG_COLOR_PREFIXES;
+                  const cls = mode === "text" ? textCls : bgCls;
+                  handleReplaceClass(prefixes, cls);
+                }}
+                className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
+                style={{ backgroundColor: color }}
+                title={swatchLabel}
+              />
+            ))}
+            {/* Custom color picker — inline style */}
             <input
               type="color"
-              onChange={(e) => handleSetAttr("style", `${cssProp}: ${e.target.value}`)}
+              onChange={(e) => {
+                handleReplaceClass(mode === "text" ? TEXT_COLOR_PREFIXES : BG_COLOR_PREFIXES, "");
+                const cssProp = mode === "text" ? "color" : "background-color";
+                handleSetAttr("style", `${cssProp}: ${e.target.value}`);
+              }}
               className="w-5 h-5 rounded-full border border-gray-600 cursor-pointer shrink-0 p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
               title="Color personalizado"
             />
@@ -569,11 +600,11 @@ export function FloatingToolbar({
         );
         return isContainer ? (
           <>
-            {renderColorRow("Color", "color")}
-            {renderColorRow("Fondo", "background-color")}
+            {renderColorRow("Color", "text")}
+            {renderColorRow("Fondo", "bg")}
           </>
         ) : (
-          renderColorRow("Color", "color")
+          renderColorRow("Color", "text")
         );
       })()}
 

@@ -69,6 +69,22 @@ export async function action({ request }: Route.ActionArgs) {
           logoUrl: logoUrl || undefined,
           extraInstructions: extraInstructions || undefined,
           pexelsApiKey: process.env.PEXELS_API_KEY,
+          onRawChunk(rawBuffer, completedCount) {
+            const htmlMatch = rawBuffer.match(/"html"\s*:\s*"([\s\S]*)/);
+            if (!htmlMatch) return;
+            let partial = htmlMatch[1]
+              .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            if (partial.endsWith('\\')) partial = partial.slice(0, -1);
+            // Remove trailing incomplete JSON (quote + possible comma/brace)
+            const lastQuote = partial.lastIndexOf('"');
+            if (lastQuote > 0) partial = partial.slice(0, lastQuote);
+            if (/<section/i.test(partial) && !/<\/section>/i.test(partial)) {
+              partial += '</section>';
+            }
+            if (partial.length > 20) {
+              send("section-building", { html: partial, order: completedCount });
+            }
+          },
           async onSection(section) {
             if (!quotaIncremented) {
               quotaIncremented = true;

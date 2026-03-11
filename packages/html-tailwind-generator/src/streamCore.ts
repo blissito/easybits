@@ -136,6 +136,8 @@ export interface StreamGenerateOptions {
   onSection?: (section: Section3) => void;
   /** Called when a section's images are enriched */
   onImageUpdate?: (sectionId: string, html: string) => void;
+  /** Called with raw text buffer for real-time partial streaming */
+  onRawChunk?: (buffer: string, completedCount: number) => void;
   /** Called when generation is complete */
   onDone?: (sections: Section3[]) => void;
   /** Called on error */
@@ -157,6 +159,7 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
     persistImage,
     onSection,
     onImageUpdate,
+    onRawChunk,
     onDone,
     onError,
   } = options;
@@ -276,11 +279,21 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
   }
 
   try {
+    let chunkCount = 0;
     for await (const chunk of result.textStream) {
       buffer += chunk;
+      chunkCount++;
+
       const [objects, remaining] = extractJsonObjects(buffer);
       buffer = remaining;
-      for (const obj of objects) processObject(obj);
+      for (const obj of objects) {
+        chunkCount = 0;
+        processObject(obj);
+      }
+
+      if (onRawChunk && chunkCount % 5 === 0 && buffer.length > 20) {
+        onRawChunk(buffer, allSections.length);
+      }
     }
 
     // Parse remaining buffer
