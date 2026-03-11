@@ -18,6 +18,7 @@ import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
+import { playTone } from "~/hooks/useNotificationSound";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
@@ -472,6 +473,7 @@ export default function DocumentEditor() {
                 if (buildIdx !== -1) accumulated.splice(buildIdx, 1);
                 accumulated.push(d);
                 setSections([...accumulated]);
+                playTone();
               } else if (eventType === "section-update") {
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };

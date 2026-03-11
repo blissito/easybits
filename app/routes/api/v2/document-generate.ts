@@ -81,11 +81,13 @@ export async function action({ request }: Route.ActionArgs) {
             if (/<section/i.test(partial) && !/<\/section>/i.test(partial)) {
               partial += '</section>';
             }
+            if (logoUrl) partial = partial.replaceAll("__LOGO_URL__", logoUrl);
             if (partial.length > 20) {
               send("section-building", { html: partial, order: completedCount });
             }
           },
           async onSection(section) {
+            if (logoUrl) section.html = section.html.replaceAll("__LOGO_URL__", logoUrl);
             if (!quotaIncremented) {
               quotaIncremented = true;
               await incrementAiGeneration(ctx.user.id);

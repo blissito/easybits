@@ -178,7 +178,7 @@ export default function NewDocument() {
   }
 
   return (
-    <article className="pt-20 px-8 pb-24 md:pl-36 w-full max-w-2xl">
+    <article className="pt-20 px-8 pb-24 mx-auto w-full max-w-2xl">
       <div className="flex items-center gap-3 mb-8">
         <Link
           to="/dash/documents"
