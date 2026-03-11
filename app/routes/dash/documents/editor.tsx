@@ -15,7 +15,7 @@ import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import { Canvas, type CanvasHandle } from "~/components/landings3/Canvas";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
@@ -266,6 +266,14 @@ export default function DocumentEditor() {
       return { css, tailwindConfig };
     }
     return buildSingleThemeCss(theme);
+  }, [theme, customColors]);
+
+  const resolvedThemeColors = useMemo(() => {
+    if (theme === "custom") {
+      const base = LANDING_THEMES.find((t) => t.id === "minimal")!.colors;
+      return { ...base, ...Object.fromEntries(Object.entries(customColors).filter(([, v]) => v)) } as typeof base;
+    }
+    return LANDING_THEMES.find((t) => t.id === theme)?.colors ?? LANDING_THEMES[0].colors;
   }, [theme, customColors]);
 
   // Inject custom theme CSS + document layout CSS into Canvas iframe
@@ -1328,6 +1336,7 @@ ${sectionsHtml}
           onUpdateAttribute={handleUpdateAttribute}
           isRefining={isRefining}
           hideStylePresets
+          themeColors={resolvedThemeColors}
         />
       </div>
 

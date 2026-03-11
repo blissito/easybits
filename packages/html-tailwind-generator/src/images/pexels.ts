@@ -9,7 +9,7 @@ export async function searchImage(query: string, apiKey?: string): Promise<Pexel
   if (!key) return null;
   try {
     const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&locale=en-US`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape&locale=en-US`,
       { headers: { Authorization: key } }
     );
     if (!res.ok) {
@@ -17,11 +17,12 @@ export async function searchImage(query: string, apiKey?: string): Promise<Pexel
       return null;
     }
     const data = await res.json();
-    const photo = data.photos?.[0];
-    if (!photo) {
+    const photos = data.photos;
+    if (!photos || photos.length === 0) {
       console.warn(`[pexels] 0 results for "${query}"`);
       return null;
     }
+    const photo = photos[Math.floor(Math.random() * photos.length)];
     return {
       url: photo.src.large,
       photographer: photo.photographer,

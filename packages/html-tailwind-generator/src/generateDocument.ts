@@ -78,10 +78,13 @@ COLOR SYSTEM — use semantic classes:
 - Cover pages should use bold full-bleed backgrounds (bg-primary, gradients from-primary to-primary-dark)
 - CONTRAST: bg-primary/bg-primary-dark/bg-secondary → text-white or text-on-primary. White/bg-surface → text-gray-900 or text-on-surface
 
-IMAGES:
+IMAGES — USE GENEROUSLY:
 - EVERY image MUST use: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/>
 - NEVER include a src attribute — the system auto-replaces data-image-query with a real image
 - For avatar-like elements, use colored divs with initials instead of img tags
+- Include at LEAST 3-5 images across the document — hero images, section illustrations, backgrounds, product photos
+- Each data-image-query should be a UNIQUE, specific search query in English (e.g. "modern office workspace aerial view", "team brainstorming whiteboard", "abstract blue technology network")
+- Use images to break up text-heavy pages and add visual interest
 
 CHARTS & DATA VISUALIZATION (SVG):
 - For charts, diagrams, and decorative data graphics, use:

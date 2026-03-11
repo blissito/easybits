@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { HiSparkles } from "react-icons/hi2";
 import type { IframeMessage } from "../types";
+import type { LandingTheme } from "../themes";
 
 const STYLE_PRESETS = [
   { label: "Minimal", icon: "○", instruction: "Redisena esta seccion con estetica minimal: mucho espacio en blanco, tipografia limpia, sin bordes ni sombras innecesarias. Manten el mismo contenido." },
@@ -22,6 +23,7 @@ interface FloatingToolbarProps {
   onUpdateAttribute?: (sectionId: string, elementPath: string, attr: string, value: string) => void;
   isRefining: boolean;
   hideStylePresets?: boolean;
+  themeColors?: LandingTheme["colors"];
 }
 
 export function FloatingToolbar({
@@ -36,6 +38,7 @@ export function FloatingToolbar({
   onUpdateAttribute,
   isRefining,
   hideStylePresets,
+  themeColors,
 }: FloatingToolbarProps) {
   const [prompt, setPrompt] = useState("");
   const [showCode, setShowCode] = useState(false);
@@ -309,6 +312,41 @@ export function FloatingToolbar({
           ))}
         </div>
       )}
+
+      {/* Color swatches for text/container elements */}
+      {!selection.isSectionRoot && onUpdateAttribute && selection.tagName !== 'IMG' && (() => {
+        const containerTags = ['DIV', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MAIN', 'ARTICLE'];
+        const isContainer = containerTags.includes(selection.tagName ?? '');
+        const cssProp = isContainer ? 'background-color' : 'color';
+        return (
+        <div className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0">{isContainer ? 'Fondo' : 'Color'}</span>
+          {[
+            { color: "#ffffff", css: "#ffffff", label: "Blanco" },
+            { color: "#000000", css: "#000000", label: "Negro" },
+            ...(themeColors ? [
+              { color: themeColors.primary, css: "var(--color-primary)", label: "Primary" },
+              { color: themeColors.secondary, css: "var(--color-secondary)", label: "Secondary" },
+              { color: themeColors.accent, css: "var(--color-accent)", label: "Accent" },
+            ] : []),
+          ].map(({ color, css, label }) => (
+            <button
+              key={label}
+              onClick={() => handleSetAttr("style", `${cssProp}: ${css}`)}
+              className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
+              style={{ backgroundColor: color }}
+              title={label}
+            />
+          ))}
+          <input
+            type="color"
+            onChange={(e) => handleSetAttr("style", `${cssProp}: ${e.target.value}`)}
+            className="w-5 h-5 rounded-full border border-gray-600 cursor-pointer shrink-0 p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
+            title="Color personalizado"
+          />
+        </div>
+        );
+      })()}
 
       {/* Image attr editing */}
       {isImg && hasAttrEditing && (

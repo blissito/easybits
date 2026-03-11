@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   useLoaderData,
   useFetcher,
@@ -16,7 +16,7 @@ import { SectionList } from "~/components/landings3/SectionList";
 import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildCustomThemeCss, type CustomColors } from "~/lib/landing3/themes";
+import { buildCustomThemeCss, LANDING_THEMES, type CustomColors } from "~/lib/landing3/themes";
 import { ViewportToggle, type Viewport } from "@easybits.cloud/html-tailwind-generator";
 import type { Route } from "./+types/editor";
 
@@ -208,6 +208,15 @@ export default function Landing3Editor() {
     if (deployFetcher.data?.url) setLiveUrl(deployFetcher.data.url);
     if (deployFetcher.data?.unpublished) setLiveUrl(null);
   }, [deployFetcher.state, deployFetcher.data, navigate]);
+
+  // Resolve theme colors for FloatingToolbar swatches
+  const resolvedThemeColors = useMemo(() => {
+    if (theme === "custom") {
+      const base = LANDING_THEMES.find((t) => t.id === "default")!.colors;
+      return { ...base, ...Object.fromEntries(Object.entries(customColors).filter(([, v]) => v)) } as typeof base;
+    }
+    return LANDING_THEMES.find((t) => t.id === theme)?.colors ?? LANDING_THEMES[0].colors;
+  }, [theme, customColors]);
 
   // Inject custom theme CSS when theme is "custom"
   useEffect(() => {
@@ -893,6 +902,7 @@ export default function Landing3Editor() {
           }}
           onUpdateAttribute={handleUpdateAttribute}
           isRefining={isRefining}
+          themeColors={resolvedThemeColors}
         />
       </div>
 
