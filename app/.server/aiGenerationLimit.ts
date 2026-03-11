@@ -1,6 +1,9 @@
 import { db } from "./db";
 import { PLANS, type PlanKey } from "~/lib/plans";
 
+export type GenerationType = "generate" | "refine" | "variant";
+export type GenerationProduct = "document" | "landing" | "presentation";
+
 /**
  * Check if a user has remaining AI generations for the current month.
  * Resets the counter if more than 30 days have passed since last reset.
@@ -57,7 +60,11 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
  * Increment the AI generation counter for a user.
  * Consumes monthly quota first, then bonus.
  */
-export async function incrementAiGeneration(userId: string, userPlan?: string) {
+export async function incrementAiGeneration(
+  userId: string,
+  userPlan?: string,
+  log?: { type: GenerationType; product: GenerationProduct }
+) {
   const user = await db.user.findUnique({
     where: { id: userId },
     select: {
@@ -67,6 +74,13 @@ export async function incrementAiGeneration(userId: string, userPlan?: string) {
     },
   });
   if (!user) return;
+
+  // Log generation for analytics
+  if (log) {
+    db.aiGenerationLog.create({
+      data: { userId, type: log.type, product: log.product },
+    }).catch(() => {}); // fire-and-forget
+  }
 
   const plan = (userPlan || (user.metadata as any)?.plan || "Spark") as PlanKey;
   const config = PLANS[plan] || PLANS.Spark;

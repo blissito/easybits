@@ -213,7 +213,7 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
           chunkCount++;
           if (!quotaIncremented) {
             quotaIncremented = true;
-            incrementAiGeneration(ctx.user.id);
+            incrementAiGeneration(ctx.user.id, undefined, { type: isVariantMode ? "variant" : "refine", product: "document" });
           }
 
           // Send partial HTML every ~5 chunks for real-time feel

@@ -112,7 +112,9 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const aiGenUsed = (user as any).aiGenerationsCount || 0;
   const aiGenLimit = planConfig.aiGenerationsPerMonth;
 
-  return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, userPlan };
+  const sectionVersions = (landing.sectionVersions as Record<string, { html: string; timestamp: number }[]>) || {};
+
+  return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, userPlan, sectionVersions };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -142,10 +144,15 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "update-sections") {
     const sections = JSON.parse(String(formData.get("sections") || "[]"));
+    const sectionVersionsRaw = formData.get("sectionVersions");
+    const data: Record<string, unknown> = { sections };
+    if (sectionVersionsRaw) {
+      data.sectionVersions = JSON.parse(String(sectionVersionsRaw));
+    }
     await withRetry(() =>
       db.landing.update({
         where: { id: params.id },
-        data: { sections },
+        data,
       })
     );
     return { ok: true };
@@ -219,6 +226,7 @@ export default function DocumentEditor() {
   const {
     landing, websiteUrl, sourceContent, logoUrl,
     aiGenUsed: initialAiGenUsed, aiGenLimit, userPlan,
+    sectionVersions: savedVersions,
   } = useLoaderData<typeof loader>();
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
   const navigate = useNavigate();
@@ -235,7 +243,15 @@ export default function DocumentEditor() {
 
   const [sections, _setSections] = useState<Section3[]>(() => {
     const raw = landing.sections;
-    return Array.isArray(raw) ? (raw as unknown as Section3[]) : [];
+    const base = Array.isArray(raw) ? (raw as unknown as Section3[]) : [];
+    // Hydrate versions from DB
+    if (savedVersions && typeof savedVersions === "object") {
+      return base.map((s) => {
+        const v = (savedVersions as Record<string, any>)[s.id];
+        return v ? { ...s, versions: v } : s;
+      });
+    }
+    return base;
   });
   const sectionsRef = useRef(sections);
   const setSections = useCallback((updater: Section3[] | ((prev: Section3[]) => Section3[])) => {
@@ -533,10 +549,20 @@ export default function DocumentEditor() {
   const saveSections = useCallback((s: Section3[]) => {
     clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      // Strip ephemeral version history before persisting to DB
+      // Separate versions from sections for DB persistence
       const clean = s.map(({ versions, ...rest }: any) => rest);
+      const versionMap: Record<string, { html: string; timestamp: number }[]> = {};
+      for (const sec of s as any[]) {
+        if (sec.versions?.length) {
+          versionMap[sec.id] = sec.versions.slice(-10);
+        }
+      }
       saveFetcher.submit(
-        { intent: "update-sections", sections: JSON.stringify(clean) },
+        {
+          intent: "update-sections",
+          sections: JSON.stringify(clean),
+          sectionVersions: JSON.stringify(versionMap),
+        },
         { method: "post" }
       );
     }, 300);

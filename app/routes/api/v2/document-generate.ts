@@ -108,7 +108,7 @@ export async function action({ request }: Route.ActionArgs) {
           async onSection(section) {
             if (!quotaIncremented) {
               quotaIncremented = true;
-              await incrementAiGeneration(ctx.user.id);
+              await incrementAiGeneration(ctx.user.id, undefined, { type: "generate", product: "document" });
             }
             allSections.push(section);
             send("section", section);

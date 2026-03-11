@@ -191,6 +191,7 @@ model User {
   customDomains    CustomDomain[]
   referrals        Referral[]     @relation("Referrals")
   referredBy       Referral?      @relation("ReferredBy")
+  aiGenerationLogs AiGenerationLog[]
   // AI generation limits
   aiGenerationsCount   Int?       @default(0)
   aiGenerationsResetAt DateTime?
@@ -457,8 +458,9 @@ model Landing {
   sections  Json     // LandingSection[]
   theme        String   @default("modern")
   customColors Json?    // { bg, accent, text } hex colors
-  metadata     Json?    // { theme, ... } extensible metadata
-  version      Int      @default(1)
+  metadata         Json?    // { theme, ... } extensible metadata
+  sectionVersions  Json?    // Record<sectionId, {html, timestamp}[]>
+  version          Int      @default(1)
   status       String   @default("DRAFT") // DRAFT | PUBLISHED
   ownerId   String   @db.ObjectId
   owner     User     @relation(fields: [ownerId], references: [id])
@@ -482,6 +484,19 @@ model Referral {
 
   @@unique([referredId])
   @@index([referrerId])
+}
+
+model AiGenerationLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  type      String   // "generate" | "refine" | "variant"
+  product   String   // "document" | "landing" | "presentation"
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, product])
+  @@index([createdAt])
 }
 
 model TelemetryEvent {

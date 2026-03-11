@@ -28,6 +28,18 @@ export interface Section3WithVersions extends Section3 {
   versions?: { html: string; timestamp: number }[];
 }
 
+/** Format relative time in Spanish */
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Ahora";
+  if (mins < 60) return `Hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Hace ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Hace ${days}d`;
+}
+
 /** Build a tiny HTML preview of a section for the thumbnail */
 function buildThumbnailHtml(section: Section3, themeCssData?: { css: string; tailwindConfig: string }): string {
   return `<!DOCTYPE html><html><head>
@@ -89,6 +101,9 @@ export function PageList({
     const onClick = (e: MouseEvent) => {
       if (showThemes && themeRef.current && !themeRef.current.contains(e.target as Node)) {
         setShowThemes(false);
+      }
+      if (versionDropdown) {
+        setVersionDropdown(null);
       }
     };
     document.addEventListener("keydown", onKey);
@@ -296,42 +311,7 @@ export function PageList({
                       )}
                     </div>
                   )}
-                  {/* Version badge */}
-                  {(section as Section3WithVersions).versions?.length ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setVersionDropdown(versionDropdown === section.id ? null : section.id);
-                      }}
-                      className="absolute top-1 right-1 bg-brand-500 text-white text-[8px] font-bold px-1 py-0.5 rounded z-10"
-                      title="Ver versiones anteriores"
-                    >
-                      {(section as Section3WithVersions).versions!.length}v
-                    </button>
-                  ) : null}
                 </div>
-                {/* Version dropdown */}
-                {versionDropdown === section.id && (section as Section3WithVersions).versions?.length ? (
-                  <div className="absolute right-0 top-6 w-40 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 max-h-40 overflow-y-auto">
-                    <div className="px-2 py-1 text-[9px] font-black text-gray-400 uppercase">Versiones</div>
-                    {(section as Section3WithVersions).versions!.slice().reverse().map((v, vi) => (
-                      <button
-                        key={v.timestamp}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRestoreVersion?.(section.id, v.html);
-                          setVersionDropdown(null);
-                        }}
-                        className="w-full text-left px-2 py-1 text-[10px] hover:bg-brand-50 flex items-center justify-between"
-                      >
-                        <span className="text-gray-600">
-                          {new Date(v.timestamp).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                        <span className="text-brand-600 font-bold text-[9px]">Restaurar</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
               </div>
               {/* Label row */}
               <div className="flex items-center gap-1 px-1.5 py-1 bg-gray-50 rounded-b-lg border border-t-0 border-gray-200">
@@ -363,6 +343,47 @@ export function PageList({
                   </span>
                 )}
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Versions */}
+                  {(section as Section3WithVersions).versions?.length ? (
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVersionDropdown(versionDropdown === section.id ? null : section.id);
+                        }}
+                        className="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-brand-600 hover:bg-brand-50 text-[9px]"
+                        title={`${(section as Section3WithVersions).versions!.length} versiones anteriores`}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <circle cx="8" cy="8" r="6.5" /><path d="M8 4.5V8l2.5 1.5" />
+                        </svg>
+                      </button>
+                      {versionDropdown === section.id && (
+                        <div className="absolute left-0 bottom-full mb-1 w-44 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 max-h-48 overflow-y-auto">
+                          <div className="px-2 py-1 text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                            Versiones ({(section as Section3WithVersions).versions!.length})
+                          </div>
+                          {(section as Section3WithVersions).versions!.slice().reverse().map((v) => {
+                            const ago = formatTimeAgo(v.timestamp);
+                            return (
+                              <button
+                                key={v.timestamp}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRestoreVersion?.(section.id, v.html);
+                                  setVersionDropdown(null);
+                                }}
+                                className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-brand-50 flex items-center justify-between gap-2 transition-colors"
+                              >
+                                <span className="text-gray-600 truncate">{ago}</span>
+                                <span className="text-brand-600 font-bold text-[9px] shrink-0">Restaurar</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
