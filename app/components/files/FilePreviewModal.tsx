@@ -110,7 +110,7 @@ export function FilePreviewModal({
           </span>
         ) : undefined
       }
-      className={`min-h-0 w-full ${isPdf ? "max-w-6xl" : "max-w-3xl"}`}
+      className={`min-h-0 w-full ${isPdf ? "max-w-6xl md:w-full lg:min-w-0" : "max-w-3xl"}`}
     >
       {file && (
         <div>
