@@ -998,7 +998,7 @@ export function buildRevealHtml(slides: Slide[], theme = "black", paletteId?: st
 ${sections}
     </div>
   </div>
-  <a href="https://easybits.cloud" target="_blank" rel="noopener"
+  <a href="https://www.easybits.cloud" target="_blank" rel="noopener"
      style="position:fixed;bottom:12px;right:16px;z-index:9999;font-family:system-ui,sans-serif;font-size:11px;color:rgba(255,255,255,0.85);text-decoration:none;letter-spacing:0.02em;pointer-events:auto;background:rgba(0,0,0,0.5);padding:4px 10px;border-radius:6px;backdrop-filter:blur(4px);"
      onmouseover="this.style.background='rgba(0,0,0,0.7)';this.style.color='#fff'" onmouseout="this.style.background='rgba(0,0,0,0.5)';this.style.color='rgba(255,255,255,0.85)'"
   >Powered by EasyBits</a>

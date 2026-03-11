@@ -29,12 +29,14 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     stripeIntent: null,
     features: [
       "1 GB de almacenamiento",
+      "5 generaciones AI/mes incluidas",
       "MCP + SDK + API",
       "Webhooks",
       "Landing pages",
       "Branding 'Powered by' en landings",
       "Preview de archivos",
       "7 días de papelera",
+      "Packs de generaciones desde $49",
     ],
   },
   Mega: {
@@ -45,12 +47,14 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     stripeIntent: "flow_plan",
     features: [
       "50 GB de almacenamiento",
+      "50 generaciones AI/mes incluidas",
       "Todo lo de Byte",
       "Subidas ilimitadas",
       "Sin branding en landings",
       "Websites estáticos",
       "Streaming HLS",
       "Transformación de imágenes",
+      "Packs de generaciones desde $39",
     ],
   },
   Tera: {
@@ -61,10 +65,12 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     stripeIntent: "studio_plan",
     features: [
       "500 GB de almacenamiento",
+      "200 generaciones AI/mes incluidas",
       "Todo lo de Mega",
       "Proveedores custom",
       "Dominios custom",
       "Soporte prioritario",
+      "Packs de generaciones desde $29",
       "RAG as a Service (próximamente)",
     ],
   },

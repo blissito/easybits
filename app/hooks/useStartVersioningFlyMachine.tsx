@@ -13,7 +13,7 @@ export const useStartVersioningFlyMachine = (
         authorization: "Bearer PerroTOken", // publishable token
       },
       body: JSON.stringify({
-        webhook: "https://easybits.cloud/api/v1/conversion_webhook",
+        webhook: "https://www.easybits.cloud/api/v1/conversion_webhook",
         storageKey,
         Bucket,
       }),

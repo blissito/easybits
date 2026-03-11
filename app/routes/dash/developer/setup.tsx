@@ -67,7 +67,7 @@ function McpSection() {
   "mcpServers": {
     "easybits": {
       "type": "streamable-http",
-      "url": "https://easybits.cloud/api/mcp",
+      "url": "https://www.easybits.cloud/api/mcp",
       "headers": {
         "Authorization": "Bearer eb_sk_live_YOUR_KEY"
       }
@@ -160,7 +160,7 @@ const file = await eb.getFile("file_id");`}
       >
         <CodeBlock language="bash" title="curl" showLineNumbers={false}>
 {`curl -H "Authorization: Bearer eb_sk_live_..." \\
-  https://easybits.cloud/api/v2/files`}
+  https://www.easybits.cloud/api/v2/files`}
         </CodeBlock>
       </Card>
 
@@ -173,7 +173,7 @@ const file = await eb.getFile("file_id");`}
   -H "Authorization: Bearer eb_sk_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{"fileName":"doc.pdf","contentType":"application/pdf","size":1024}' \\
-  https://easybits.cloud/api/v2/files`}
+  https://www.easybits.cloud/api/v2/files`}
         </CodeBlock>
       </Card>
 
@@ -183,7 +183,7 @@ const file = await eb.getFile("file_id");`}
       >
         <CodeBlock language="bash" title="curl" showLineNumbers={false}>
 {`curl -H "Authorization: Bearer eb_sk_live_..." \\
-  https://easybits.cloud/api/v2/files/FILE_ID`}
+  https://www.easybits.cloud/api/v2/files/FILE_ID`}
         </CodeBlock>
       </Card>
 
@@ -194,7 +194,7 @@ const file = await eb.getFile("file_id");`}
         <CodeBlock language="bash" title="curl" showLineNumbers={false}>
 {`curl -X DELETE \\
   -H "Authorization: Bearer eb_sk_live_..." \\
-  https://easybits.cloud/api/v2/files/FILE_ID`}
+  https://www.easybits.cloud/api/v2/files/FILE_ID`}
         </CodeBlock>
       </Card>
     </>

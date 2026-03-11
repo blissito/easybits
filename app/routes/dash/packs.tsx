@@ -36,7 +36,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     plan,
     ...genLimit,
     referralStats,
-    referralLink: `https://easybits.cloud/login?ref=${user.publicKey}`,
+    referralLink: `https://www.easybits.cloud/login?ref=${user.publicKey}`,
   };
 };
 

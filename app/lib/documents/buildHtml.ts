@@ -23,7 +23,7 @@ export function buildDocumentHtml(
 
   const branding = options?.showBranding !== false
     ? `<div class="doc-toolbar" style="position:fixed;bottom:8px;right:12px;font-size:9px;color:#999;z-index:9999;">
-        Creado con <a href="https://easybits.cloud" style="color:#9870ED;text-decoration:none;">EasyBits</a>
+        Creado con <a href="https://www.easybits.cloud" style="color:#9870ED;text-decoration:none;">EasyBits</a>
       </div>`
     : "";
 
