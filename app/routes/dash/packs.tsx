@@ -198,7 +198,10 @@ function ReferralSection({
         <div className="flex-1 border-2 border-black rounded-lg px-3 py-2 bg-gray-50 text-sm truncate font-mono">
           {referralLink}
         </div>
-        <BrutalButton onClick={handleCopy} className="bg-brand-500 shrink-0">
+        <BrutalButton
+          onClick={handleCopy}
+          className={`shrink-0 transition-colors duration-500 ${copied ? "bg-emerald-400" : "bg-brand-500"}`}
+        >
           {copied ? "Copiado!" : "Copiar"}
         </BrutalButton>
       </div>
