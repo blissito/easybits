@@ -1134,7 +1134,7 @@ ${sectionsHtml}
             const color = totalRemaining <= 0 ? "text-red-500" : totalRemaining <= 2 ? "text-yellow-600" : "text-gray-400";
             return (
               <span className={`text-xs font-bold ${color}`}>
-                {totalRemaining} gen restantes{aiGenBonus > 0 ? ` (+${aiGenBonus} bonus)` : ""}
+                {totalRemaining} gen restantes
               </span>
             );
           })()}
