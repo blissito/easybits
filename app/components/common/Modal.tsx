@@ -29,11 +29,14 @@ export const Modal = ({
 }) => {
   const titleId = useId();
 
-  const keyDownHandler = useCallback((event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      onClose?.();
-    }
-  }, [onClose]);
+  const keyDownHandler = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose?.();
+      }
+    },
+    [onClose],
+  );
 
   useEffect(() => {
     if (isOpen && block) {
@@ -43,7 +46,7 @@ export const Modal = ({
       document.body.style.overflow = "";
       document.removeEventListener("keydown", keyDownHandler);
     }
-    
+
     return () => {
       document.body.style.overflow = "";
       document.removeEventListener("keydown", keyDownHandler);
@@ -107,91 +110,94 @@ export const Modal = ({
 
   return (
     <Portal>
-    <AnimatePresence mode="wait" onExitComplete={() => {
-      document.body.style.overflow = "";
-    }}>
-      {isOpen ? (
-        <article
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          className={cn(
-            "z-[90]",
-            "grid place-content-center px-4 md:px-[5%] xl:px-0",
-            "fixed overflow-hidden",
-
-            {
-              "inset-0 overflow-y-auto": mode !== "naked",
-              "place-content-end p-3": mode === "naked",
-              "bottom-0 right-0": mode === "naked" || mode === "drawer",
-            },
-            containerClassName
-          )}
-        >
-          {mode === "overlay" ? (
-            <motion.article
-              onClick={onClose}
-              className="grid-overlay absolute inset-0 "
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            />
-          ) : mode === "drawer" ? (
-            <motion.article
-              onClick={onClose}
-              className="absolute inset-0 bg-black bg-opacity-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            />
-          ) : null}
-          <motion.section
-            onClick={(e) => e.stopPropagation()}
-            exit={getProps("exit")}
-            initial={getProps("initial")}
-            animate={getProps("animate")}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
+      <AnimatePresence
+        mode="wait"
+        onExitComplete={() => {
+          document.body.style.overflow = "";
+        }}
+      >
+        {isOpen ? (
+          <article
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
             className={cn(
-              "bg-white",
-              "border-2 border-black",
-              "p-6 md:p-8 rounded-3xl min-h-[472px] min-w-[360px] relative",
-              "flex flex-col",
-              "max-w-[600px]  mx-auto  min-w-full max-w-[90%]  md:w-[600px] lg:min-w-[600px]",
+              "z-[90]",
+              "grid place-content-center px-4 md:px-[5%] xl:px-0",
+              "fixed overflow-hidden",
+
               {
-                "min-h-[0px] max-w-[300px]": mode === "naked",
-                "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute border-l-2 border-y-0 border-r-0 md:max-w-[600px]  overflow-y-scroll":
-                  mode === "drawer",
+                "inset-0 overflow-y-auto": mode !== "naked",
+                "place-content-end p-3": mode === "naked",
+                "bottom-0 right-0": mode === "naked" || mode === "drawer",
               },
-              className
+              containerClassName,
             )}
           >
-            {!noCloseButton && (
-              <BrutalButtonClose
-                className="absolute top-6 md:top-8 right-6 md:right-8"
+            {mode === "overlay" ? (
+              <motion.article
                 onClick={onClose}
+                className="grid-overlay absolute inset-0 "
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
               />
-            )}
-            <h2
-              id={titleId}
-              className={cn("text-2xl md:text-3xl font-semibold  ", {
-                "mb-1": mode === "naked",
-                "mb-4": mode === "drawer",
-              })}
+            ) : mode === "drawer" ? (
+              <motion.article
+                onClick={onClose}
+                className="absolute inset-0 bg-black bg-opacity-0"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              />
+            ) : null}
+            <motion.section
+              onClick={(e) => e.stopPropagation()}
+              exit={getProps("exit")}
+              initial={getProps("initial")}
+              animate={getProps("animate")}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className={cn(
+                "bg-white",
+                "border-2 border-black",
+                "p-6 md:p-8 rounded-3xl min-h-[472px] min-w-[360px] relative",
+                "flex flex-col",
+                "mx-auto  min-w-full max-w-[90%]  md:w-[600px] lg:w-fit",
+                {
+                  "min-h-[0px] max-w-[300px]": mode === "naked",
+                  "h-screen w-[80vw] lg:w-[40vw] rounded-none right-0 absolute border-l-2 border-y-0 border-r-0 md:max-w-[600px]  overflow-y-scroll":
+                    mode === "drawer",
+                },
+                className,
+              )}
             >
-              {title}
-            </h2>
-            {children}
-            {footer && (
-              <section className="mt-auto flex gap-6 justify-end pt-3">
-                {footer}
-              </section>
-            )}
-          </motion.section>
-        </article>
-      ) : null}
-    </AnimatePresence>
+              {!noCloseButton && (
+                <BrutalButtonClose
+                  className="absolute top-6 md:top-8 right-6 md:right-8"
+                  onClick={onClose}
+                />
+              )}
+              <h2
+                id={titleId}
+                className={cn("text-2xl md:text-3xl font-semibold  ", {
+                  "mb-1": mode === "naked",
+                  "mb-4": mode === "drawer",
+                })}
+              >
+                {title}
+              </h2>
+              {children}
+              {footer && (
+                <section className="mt-auto flex gap-6 justify-end pt-3">
+                  {footer}
+                </section>
+              )}
+            </motion.section>
+          </article>
+        ) : null}
+      </AnimatePresence>
     </Portal>
   );
 };

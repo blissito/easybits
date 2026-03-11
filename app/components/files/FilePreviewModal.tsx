@@ -31,7 +31,7 @@ export function FilePreviewModal({
     if (file) {
       fetcher.submit(
         { intent: "preview", fileId: file.id },
-        { method: "post" }
+        { method: "post" },
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,11 +71,7 @@ export function FilePreviewModal({
     }
     if (isVideo) {
       return (
-        <video
-          controls
-          src={url}
-          className="max-h-[70vh] w-full rounded-lg"
-        />
+        <video controls src={url} className="max-h-[70vh] w-full rounded-lg" />
       );
     }
     if (isAudio) {
@@ -91,7 +87,7 @@ export function FilePreviewModal({
         <iframe
           src={url}
           title={file!.name}
-          className="w-full h-[85vh] rounded-lg border-2 border-black"
+          className="h-[85vh] rounded-lg border-2 border-black w-full"
         />
       );
     }
@@ -106,18 +102,21 @@ export function FilePreviewModal({
         file ? (
           <span className="flex items-center gap-2">
             <span className="text-lg flex-shrink-0">{typeIcon}</span>
-            <span className="truncate text-sm font-bold" title={file.name}>{file.name}</span>
+            <span className="truncate text-sm font-bold" title={file.name}>
+              {file.name}
+            </span>
           </span>
         ) : undefined
       }
-      className={`min-h-0 w-full ${isPdf ? "max-w-6xl md:w-full lg:min-w-0" : "max-w-3xl"}`}
     >
       {file && (
-        <div>
+        <section className="min-w-[80vw]">
           {isLoading ? (
             <div className="flex flex-col items-center gap-4 py-12">
               <span className="text-4xl animate-pulse">{typeIcon}</span>
-              <p className="text-sm text-gray-500 font-medium">Cargando preview...</p>
+              <p className="text-sm text-gray-500 font-medium">
+                Cargando preview...
+              </p>
             </div>
           ) : canPreview && previewUrl ? (
             renderPreview(previewUrl)
@@ -130,7 +129,7 @@ export function FilePreviewModal({
               </p>
             </div>
           )}
-        </div>
+        </section>
       )}
     </Modal>
   );
