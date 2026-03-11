@@ -1,6 +1,7 @@
 import { getStripe } from "~/.server/stripe";
 import { db } from "~/.server/db";
 import { default as logger } from "~/.server/logger";
+import { processReferralUpgrade } from "~/.server/core/referralOperations";
 import type { StripeSession } from "~/.server/types/stripe";
 import type { ActionFunctionArgs } from "~/.server/types/react-router";
 import Stripe from "stripe";
@@ -206,6 +207,25 @@ export async function action({ request }: ActionFunctionArgs) {
     switch (event.type) {
       case "checkout.session.completed":
         const session = event.data.object as StripeSession;
+
+        // Handle generation pack purchase
+        if (session.metadata?.type === "generation_pack") {
+          const generations = parseInt(session.metadata.generations || "0", 10);
+          const packUserId = session.metadata.userId;
+          if (generations > 0 && packUserId) {
+            await db.user.update({
+              where: { id: packUserId },
+              data: { aiGenerationsBonus: { increment: generations } },
+            });
+            logger.info("Generation pack credited", {
+              userId: packUserId,
+              generations,
+              packId: session.metadata.packId,
+            });
+          }
+          break;
+        }
+
         await assignAssetToUser(session, stripe);
         // @todo send notifications
         break;
@@ -230,6 +250,11 @@ export async function action({ request }: ActionFunctionArgs) {
           where: { id: user.id },
           data: { roles, customer: checkoutSession.customer },
         });
+
+        // Award referral upgrade bonus if referred user upgrades to paid plan
+        if (plan === "Flow" || plan === "Studio") {
+          await processReferralUpgrade(user.id);
+        }
         break;
 
       case "customer.subscription.resumed":

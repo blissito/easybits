@@ -114,7 +114,7 @@ export async function action({ request }: Route.ActionArgs) {
   const genLimit = await checkAiGenerationLimit(ctx.user.id);
   if (!genLimit.allowed) {
     return Response.json(
-      { error: `Has usado todas tus ${genLimit.limit} generaciones de este mes.` },
+      { error: `Has usado todas tus ${genLimit.limit} generaciones de este mes. Compra un pack extra en /dash/packs`, upgradeUrl: "/dash/packs" },
       { status: 429 }
     );
   }

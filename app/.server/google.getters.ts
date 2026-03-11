@@ -73,7 +73,7 @@ export const getGoogleURL = () => {
 };
 
 // export to use in loader
-export const createGoogleSession = async (code: string, request: Request) => {
+export const createGoogleSession = async (code: string, request: Request, ref?: string) => {
   const { error, access_token, refresh_token } =
     await validateGoogleAccessToken(code);
   if (error) {
@@ -85,6 +85,13 @@ export const createGoogleSession = async (code: string, request: Request) => {
   const userData = await getGoogleExtraData(access_token);
   if (!userData.email) throw new Error("::Missing User Data::(email)");
 
+  // Check if user exists before upsert to detect new signups
+  const existingUser = await db.user.findUnique({
+    where: { email: userData.email },
+    select: { id: true },
+  });
+  const isNewUser = !existingUser;
+
   const updateData = {
     picture: userData.picture,
     family_name: userData.family_name,
@@ -93,7 +100,7 @@ export const createGoogleSession = async (code: string, request: Request) => {
     displayName: userData.name,
   };
   const host = userData.email.split("@")[0];
-  await db.user.upsert({
+  const user = await db.user.upsert({
     where: {
       email: userData.email,
     },
@@ -104,6 +111,13 @@ export const createGoogleSession = async (code: string, request: Request) => {
       host,
     },
     update: updateData,
-  }); // @revisit
+  });
+
+  // Process referral for new users
+  if (isNewUser && ref) {
+    const { processReferralSignup } = await import("./core/referralOperations");
+    await processReferralSignup(user.id, ref);
+  }
+
   return await getUserSession(userData.email, request);
 };

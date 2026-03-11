@@ -60,6 +60,49 @@ export const getStripeCheckout = async (options: {
   return session.url || "/404";
 };
 
+/**
+ * Create a one-time checkout session for a generation pack.
+ */
+export const createPackCheckout = async ({
+  userId,
+  email,
+  packId,
+  generations,
+  priceMxn,
+}: {
+  userId: string;
+  email: string;
+  packId: string;
+  generations: number;
+  priceMxn: number;
+}) => {
+  const session = await getStripe().checkout.sessions.create({
+    mode: "payment",
+    customer_email: email,
+    metadata: {
+      type: "generation_pack",
+      userId,
+      packId,
+      generations: String(generations),
+    },
+    line_items: [
+      {
+        price_data: {
+          currency: "mxn",
+          product_data: {
+            name: `Pack de ${generations} generaciones AI`,
+          },
+          unit_amount: priceMxn * 100, // Stripe expects centavos
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${location}/dash/developer/files?pack=success`,
+    cancel_url: `${location}/dash/developer/files?pack=cancel`,
+  });
+  return session.url || "/404";
+};
+
 /*
  * create account session
  */

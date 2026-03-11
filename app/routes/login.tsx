@@ -30,11 +30,21 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const code = url.searchParams.get("code");
   const auth = url.searchParams.get("auth");
   const next = url.searchParams.get("next") as string;
+  const ref = url.searchParams.get("ref");
 
   let cookie = { next: "" } as Cookie<{ next: string }>;
-  if (next) {
-    // saving next
-    cookie = await setRedirectCookie(request, next);
+  if (next || ref) {
+    // saving next and/or ref
+    cookie = await setRedirectCookie(request, next || "");
+    if (ref) cookie["ref"] = ref;
+    if (!next && ref) {
+      // Only ref param, no redirect needed — just set cookie and show login
+      return new Response(null, {
+        headers: {
+          "Set-Cookie": await redirectCookieFn().serialize(cookie),
+        },
+      });
+    }
     return new Response(null, {
       headers: {
         "Set-Cookie": await redirectCookieFn().serialize(cookie),
@@ -50,8 +60,15 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   }
 
   if (code && auth === "google") {
-    session = await createGoogleSession(code, request);
+    const redirectCookie = await getRedirectCookie(request);
+    const refCode = redirectCookie["ref"] as string | undefined;
+    session = await createGoogleSession(code, request, refCode);
     sendConfrimation(session.get("email"), { validate: true }); // @revisit
+    // Clear ref from cookie
+    if (refCode) {
+      redirectCookie["ref"] = undefined;
+      // Cookie will be serialized below if there's a next redirect
+    }
   }
 
   if (session) {

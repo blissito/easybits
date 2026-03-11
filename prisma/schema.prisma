@@ -189,9 +189,12 @@ model User {
   presentations    Presentation[]
   landings         Landing[]
   customDomains    CustomDomain[]
+  referrals        Referral[]     @relation("Referrals")
+  referredBy       Referral?      @relation("ReferredBy")
   // AI generation limits
   aiGenerationsCount   Int?       @default(0)
   aiGenerationsResetAt DateTime?
+  aiGenerationsBonus   Int?       @default(0)
 }
 
 enum FileStatus {
@@ -464,6 +467,21 @@ model Landing {
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+model Referral {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  referrerId   String   @db.ObjectId
+  referrer     User     @relation("Referrals", fields: [referrerId], references: [id])
+  referredId   String   @db.ObjectId
+  referred     User     @relation("ReferredBy", fields: [referredId], references: [id])
+  status       String   @default("SIGNED_UP") // SIGNED_UP | UPGRADED
+  bonusAwarded Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([referredId])
+  @@index([referrerId])
 }
 
 model TelemetryEvent {

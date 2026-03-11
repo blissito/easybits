@@ -79,3 +79,21 @@ export const plansLegacy: Record<string, Record<string, number>> = Object.fromEn
 export function formatPrice(price: number): string {
   return price === 0 ? "$0" : `$${price}`;
 }
+
+export interface GenerationPack {
+  id: string;
+  generations: number;
+  prices: Record<PlanKey, number>;
+}
+
+// Referral system constants
+export const REFERRAL_SIGNUP_BONUS = 3;    // referrer earns on signup
+export const REFERRAL_UPGRADE_BONUS = 10;  // referrer earns if referred upgrades to paid
+export const REFERRAL_WELCOME_BONUS = 2;   // referred earns on signup
+export const MAX_REFERRALS = 50;           // anti-abuse cap
+
+export const GENERATION_PACKS: GenerationPack[] = [
+  { id: "pack_10", generations: 10, prices: { Spark: 49, Flow: 39, Studio: 29 } },
+  { id: "pack_50", generations: 50, prices: { Spark: 199, Flow: 149, Studio: 99 } },
+  { id: "pack_100", generations: 100, prices: { Spark: 349, Flow: 249, Studio: 179 } },
+];
