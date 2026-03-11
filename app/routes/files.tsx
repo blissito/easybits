@@ -10,7 +10,7 @@ import { ShareTokensModal } from "~/components/forms/files/ShareTokensModal";
 import type { File } from "@prisma/client";
 import { FilePreviewModal } from "~/components/files/FilePreviewModal";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { plans } from "./profile/profileComponents";
+import { PLANS, type PlanKey } from "~/lib/plans";
 import { Link, data, useFetcher } from "react-router";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -80,7 +80,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         cta={
           files.length > 0 && (
             <BrutalButton
-              isDisabled={plans[plan].max < total}
+              isDisabled={PLANS[plan as PlanKey]?.storageGB ?? 1 < total}
               onClick={open}
               containerClassName="block md:mt-0 md:ml-auto "
             >
@@ -131,7 +131,7 @@ const Layout = ({
             </h2>
             <p>
               Usado: <strong>{used < 1 ? `${(used * 1024).toFixed(1)} MB` : `${used.toFixed(2)} GB`}</strong> de{" "}
-              <strong>{plans[plan].max} GB </strong>(Plan {plan}){" "}
+              <strong>{PLANS[plan as PlanKey]?.storageGB ?? 1} GB </strong>(Plan {plan}){" "}
               <Link to="/planes" className="text-xs underline text-brand-500">
                 Mejorar plan
               </Link>
