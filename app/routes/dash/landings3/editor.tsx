@@ -687,6 +687,37 @@ export default function Landing3Editor() {
     });
   }
 
+  function handleChangeTag(sectionId: string, elementPath: string, newTag: string) {
+    pushUndo(sectionsRef.current);
+    canvasRef.current?.postMessage({
+      action: "change-tag",
+      sectionId,
+      elementPath,
+      newTag,
+    });
+  }
+
+  function handleDeleteElement(sectionId: string, elementPath: string) {
+    pushUndo(sectionsRef.current);
+    canvasRef.current?.postMessage({
+      action: "delete-element",
+      sectionId,
+      elementPath,
+    });
+    setSelection(null);
+  }
+
+  function handleReplaceClass(sectionId: string, elementPath: string, removePrefixes: string[], addClass: string) {
+    pushUndo(sectionsRef.current);
+    canvasRef.current?.postMessage({
+      action: "replace-class",
+      sectionId,
+      elementPath,
+      removePrefixes,
+      addClass,
+    });
+  }
+
   function handleOpenCode(sectionId: string) {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
@@ -948,6 +979,9 @@ export default function Landing3Editor() {
             }
           }}
           onUpdateAttribute={handleUpdateAttribute}
+          onChangeTag={handleChangeTag}
+          onReplaceClass={handleReplaceClass}
+          onDeleteElement={handleDeleteElement}
           isRefining={isRefining}
           themeColors={resolvedThemeColors}
         />

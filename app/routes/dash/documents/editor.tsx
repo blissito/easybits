@@ -743,6 +743,16 @@ export default function DocumentEditor() {
     handleSectionsChange(reordered);
   }
 
+  function handleChangeTag(sectionId: string, elementPath: string, newTag: string) {
+    pushUndo(sectionsRef.current);
+    canvasRef.current?.postMessage({
+      action: "change-tag",
+      sectionId,
+      elementPath,
+      newTag,
+    });
+  }
+
   function handleUpdateAttribute(
     sectionId: string,
     elementPath: string,
@@ -756,6 +766,27 @@ export default function DocumentEditor() {
       tagName: selection?.tagName || "*",
       attr,
       value,
+    });
+  }
+
+  function handleDeleteElement(sectionId: string, elementPath: string) {
+    pushUndo(sectionsRef.current);
+    canvasRef.current?.postMessage({
+      action: "delete-element",
+      sectionId,
+      elementPath,
+    });
+    setSelection(null);
+  }
+
+  function handleReplaceClass(sectionId: string, elementPath: string, removePrefixes: string[], addClass: string) {
+    pushUndo(sectionsRef.current);
+    canvasRef.current?.postMessage({
+      action: "replace-class",
+      sectionId,
+      elementPath,
+      removePrefixes,
+      addClass,
     });
   }
 
@@ -1373,6 +1404,9 @@ ${sectionsHtml}
             if (selection?.sectionId) handleOpenCode(selection.sectionId);
           }}
           onUpdateAttribute={handleUpdateAttribute}
+          onChangeTag={handleChangeTag}
+          onReplaceClass={handleReplaceClass}
+          onDeleteElement={handleDeleteElement}
           isRefining={isRefining}
           hideStylePresets
           themeColors={resolvedThemeColors}

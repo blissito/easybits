@@ -26,5 +26,6 @@ export interface IframeMessage {
   newText?: string;
   isSectionRoot?: boolean;
   attrs?: Record<string, string>;
+  className?: string;
   sectionHtml?: string;
 }

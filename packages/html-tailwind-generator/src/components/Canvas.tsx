@@ -158,6 +158,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
           data.type
         )
       ) {
+        // Sync known HTML so the diff doesn't re-send to iframe
+        if (data.type === "section-html-updated" && data.sectionId && data.sectionHtml) {
+          knownSectionsRef.current.set(data.sectionId, data.sectionHtml);
+        }
         updateRect();
         onMessage(data as IframeMessage);
       }

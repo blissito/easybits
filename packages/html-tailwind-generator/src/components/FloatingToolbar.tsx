@@ -21,6 +21,9 @@ interface FloatingToolbarProps {
   onClose: () => void;
   onViewCode: () => void;
   onUpdateAttribute?: (sectionId: string, elementPath: string, attr: string, value: string) => void;
+  onChangeTag?: (sectionId: string, elementPath: string, newTag: string) => void;
+  onReplaceClass?: (sectionId: string, elementPath: string, removePrefixes: string[], addClass: string) => void;
+  onDeleteElement?: (sectionId: string, elementPath: string) => void;
   isRefining: boolean;
   hideStylePresets?: boolean;
   themeColors?: LandingTheme["colors"];
@@ -36,6 +39,9 @@ export function FloatingToolbar({
   onClose,
   onViewCode,
   onUpdateAttribute,
+  onChangeTag,
+  onReplaceClass,
+  onDeleteElement,
   isRefining,
   hideStylePresets,
   themeColors,
@@ -48,6 +54,8 @@ export function FloatingToolbar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
+  const [showTagPicker, setShowTagPicker] = useState(false);
+
   // Local attr editing state
   const [imgSrc, setImgSrc] = useState("");
   const [imgAlt, setImgAlt] = useState("");
@@ -58,6 +66,7 @@ export function FloatingToolbar({
     setShowCode(false);
     setRefImage(null);
     setRefImageName(null);
+    setShowTagPicker(false);
   }, [selection?.sectionId]);
 
   // Sync attr inputs when selection changes
@@ -142,6 +151,104 @@ export function FloatingToolbar({
   const isLink = selection.tagName === "A";
   const hasAttrEditing = (isImg || isLink) && onUpdateAttribute;
 
+  function handleReplaceClass(removePrefixes: string[], addClass: string) {
+    if (!selection?.sectionId || !selection?.elementPath || !onReplaceClass) return;
+    onReplaceClass(selection.sectionId, selection.elementPath, removePrefixes, addClass);
+  }
+
+  // Determine size presets based on element type
+  const sizePresets = (() => {
+    if (!onReplaceClass || !selection.tagName) return null;
+    const tag = selection.tagName.toUpperCase();
+    const CONTAINERS = ["DIV", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "NAV", "MAIN"];
+    const TEXT_TAGS = ["H1", "H2", "H3", "H4", "H5", "H6", "P", "SPAN", "BLOCKQUOTE"];
+    const currentClasses = (selection.className || "").split(/\s+/);
+
+    if (CONTAINERS.includes(tag)) {
+      const RESP = ["sm:", "md:", "lg:", "xl:", "2xl:"];
+      const BASE_W = ["w-full", "w-auto", "w-screen", "w-1/2", "w-1/3", "w-2/3", "w-1/4", "w-3/4", "w-1/5", "w-2/5", "w-3/5", "w-4/5"];
+      const BASE_MAX_W = ["max-w-none", "max-w-xs", "max-w-sm", "max-w-md", "max-w-lg", "max-w-xl", "max-w-2xl", "max-w-3xl", "max-w-4xl", "max-w-5xl", "max-w-6xl", "max-w-7xl", "max-w-full", "max-w-screen-sm", "max-w-screen-md", "max-w-screen-lg", "max-w-screen-xl"];
+      const BASE_P = ["p-0", "p-1", "p-2", "p-3", "p-4", "p-5", "p-6", "p-8", "p-10", "p-12", "p-16", "p-20", "p-24", "px-0", "px-1", "px-2", "px-3", "px-4", "px-5", "px-6", "px-8", "px-10", "px-12", "px-16", "px-20", "px-24", "py-0", "py-1", "py-2", "py-3", "py-4", "py-5", "py-6", "py-8", "py-10", "py-12", "py-16", "py-20", "py-24"];
+      const WIDTH_CLASSES = BASE_W.flatMap(c => [c, ...RESP.map(r => r + c)]);
+      const MAX_W_CLASSES = BASE_MAX_W.flatMap(c => [c, ...RESP.map(r => r + c)]);
+      const PADDING_CLASSES = BASE_P.flatMap(c => [c, ...RESP.map(r => r + c)]);
+      const widthOptions = [
+        { label: "Full", cls: "w-full", prefixes: WIDTH_CLASSES },
+        { label: "3/4", cls: "w-3/4", prefixes: WIDTH_CLASSES },
+        { label: "2/3", cls: "w-2/3", prefixes: WIDTH_CLASSES },
+        { label: "1/2", cls: "w-1/2", prefixes: WIDTH_CLASSES },
+        { label: "1/3", cls: "w-1/3", prefixes: WIDTH_CLASSES },
+      ];
+      const maxWOptions = [
+        { label: "sm", cls: "max-w-sm", prefixes: MAX_W_CLASSES },
+        { label: "md", cls: "max-w-md", prefixes: MAX_W_CLASSES },
+        { label: "lg", cls: "max-w-lg", prefixes: MAX_W_CLASSES },
+        { label: "xl", cls: "max-w-xl", prefixes: MAX_W_CLASSES },
+        { label: "2xl", cls: "max-w-2xl", prefixes: MAX_W_CLASSES },
+        { label: "full", cls: "max-w-full", prefixes: MAX_W_CLASSES },
+      ];
+      const paddingOptions = [
+        { label: "0", cls: "p-0", prefixes: PADDING_CLASSES },
+        { label: "4", cls: "p-4", prefixes: PADDING_CLASSES },
+        { label: "8", cls: "p-8", prefixes: PADDING_CLASSES },
+        { label: "12", cls: "p-12", prefixes: PADDING_CLASSES },
+        { label: "16", cls: "p-16", prefixes: PADDING_CLASSES },
+      ];
+      return { width: widthOptions, maxW: maxWOptions, padding: paddingOptions, currentClasses };
+    }
+
+    if (TEXT_TAGS.includes(tag)) {
+      const BASE_TEXT_SIZES = ["text-xs", "text-sm", "text-base", "text-lg", "text-xl", "text-2xl", "text-3xl", "text-4xl", "text-5xl", "text-6xl", "text-7xl", "text-8xl", "text-9xl"];
+      const BASE_FONT_WEIGHTS = ["font-thin", "font-extralight", "font-light", "font-normal", "font-medium", "font-semibold", "font-bold", "font-extrabold", "font-black"];
+      const RESPONSIVE = ["sm:", "md:", "lg:", "xl:", "2xl:"];
+      const TEXT_SIZE_CLASSES = BASE_TEXT_SIZES.flatMap(c => [c, ...RESPONSIVE.map(r => r + c)]);
+      const FONT_WEIGHT_CLASSES = BASE_FONT_WEIGHTS.flatMap(c => [c, ...RESPONSIVE.map(r => r + c)]);
+      const textSizes = [
+        { label: "sm", cls: "text-sm", prefixes: TEXT_SIZE_CLASSES },
+        { label: "base", cls: "text-base", prefixes: TEXT_SIZE_CLASSES },
+        { label: "lg", cls: "text-lg", prefixes: TEXT_SIZE_CLASSES },
+        { label: "xl", cls: "text-xl", prefixes: TEXT_SIZE_CLASSES },
+        { label: "2xl", cls: "text-2xl", prefixes: TEXT_SIZE_CLASSES },
+        { label: "3xl", cls: "text-3xl", prefixes: TEXT_SIZE_CLASSES },
+        { label: "4xl", cls: "text-4xl", prefixes: TEXT_SIZE_CLASSES },
+        { label: "5xl", cls: "text-5xl", prefixes: TEXT_SIZE_CLASSES },
+      ];
+      const fontWeight = [
+        { label: "light", cls: "font-light", prefixes: FONT_WEIGHT_CLASSES },
+        { label: "normal", cls: "font-normal", prefixes: FONT_WEIGHT_CLASSES },
+        { label: "medium", cls: "font-medium", prefixes: FONT_WEIGHT_CLASSES },
+        { label: "semibold", cls: "font-semibold", prefixes: FONT_WEIGHT_CLASSES },
+        { label: "bold", cls: "font-bold", prefixes: FONT_WEIGHT_CLASSES },
+      ];
+      return { textSize: textSizes, fontWeight, currentClasses };
+    }
+
+    if (tag === "IMG") {
+      const R = ["sm:", "md:", "lg:", "xl:", "2xl:"];
+      const BASE_IMG = ["max-w-none", "max-w-xs", "max-w-sm", "max-w-md", "max-w-lg", "max-w-xl", "max-w-2xl", "max-w-full", "w-full", "w-auto", "w-1/2", "w-1/3", "w-2/3"];
+      const BASE_ROUND = ["rounded-none", "rounded-sm", "rounded", "rounded-md", "rounded-lg", "rounded-xl", "rounded-2xl", "rounded-3xl", "rounded-full"];
+      const IMG_SIZE_CLASSES = BASE_IMG.flatMap(c => [c, ...R.map(r => r + c)]);
+      const ROUNDED_CLASSES = BASE_ROUND.flatMap(c => [c, ...R.map(r => r + c)]);
+      const imgSizes = [
+        { label: "sm", cls: "max-w-xs", prefixes: IMG_SIZE_CLASSES },
+        { label: "md", cls: "max-w-md", prefixes: IMG_SIZE_CLASSES },
+        { label: "lg", cls: "max-w-lg", prefixes: IMG_SIZE_CLASSES },
+        { label: "xl", cls: "max-w-xl", prefixes: IMG_SIZE_CLASSES },
+        { label: "full", cls: "w-full", prefixes: IMG_SIZE_CLASSES },
+      ];
+      const rounded = [
+        { label: "none", cls: "rounded-none", prefixes: ROUNDED_CLASSES },
+        { label: "md", cls: "rounded-md", prefixes: ROUNDED_CLASSES },
+        { label: "lg", cls: "rounded-lg", prefixes: ROUNDED_CLASSES },
+        { label: "xl", cls: "rounded-xl", prefixes: ROUNDED_CLASSES },
+        { label: "full", cls: "rounded-full", prefixes: ROUNDED_CLASSES },
+      ];
+      return { imgSize: imgSizes, rounded, currentClasses };
+    }
+
+    return null;
+  })();
+
   return (
     <div
       ref={toolbarRef}
@@ -150,12 +257,58 @@ export function FloatingToolbar({
     >
       {/* Main row */}
       <div className="flex items-center gap-1.5">
-        {/* Tag badge */}
-        {selection.tagName && (
-          <span className="px-2 py-0.5 rounded-md bg-blue-600 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0">
-            {selection.tagName.toLowerCase()}
-          </span>
-        )}
+        {/* Tag badge / switcher */}
+        {selection.tagName && (() => {
+          const tag = selection.tagName.toUpperCase();
+          const HEADINGS = ["H1", "H2", "H3", "H4", "H5", "H6"];
+          const TEXT = ["P", "SPAN", "DIV", "BLOCKQUOTE"];
+          const CONTAINERS = ["DIV", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "NAV", "MAIN"];
+          const NO_SWITCH = ["A", "IMG", "INPUT", "BUTTON", "SVG", "VIDEO", "IFRAME", "TABLE", "UL", "OL", "LI", "FORM"];
+
+          let tagOptions: string[] = [];
+          if (HEADINGS.includes(tag)) tagOptions = [...HEADINGS, "P"];
+          else if (TEXT.includes(tag) && !CONTAINERS.includes(tag)) tagOptions = [...TEXT, "H1", "H2", "H3"];
+          else if (CONTAINERS.includes(tag)) tagOptions = [...CONTAINERS, "P", "SPAN"];
+          // Filter out current tag and no-switch tags
+          tagOptions = tagOptions.filter((t) => t !== tag);
+          const canSwitch = !NO_SWITCH.includes(tag) && tagOptions.length > 0 && onChangeTag;
+
+          return canSwitch ? (
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowTagPicker(!showTagPicker)}
+                className="px-2 py-0.5 rounded-md bg-blue-600 hover:bg-blue-500 text-[10px] font-mono font-bold uppercase tracking-wider transition-colors flex items-center gap-0.5"
+              >
+                {tag.toLowerCase()}
+                <svg className="w-2.5 h-2.5 opacity-60" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+              </button>
+              {showTagPicker && (
+                <div className={`absolute left-0 bg-gray-800 border border-gray-600 rounded-lg shadow-xl py-1 z-50 min-w-[4rem] max-h-[200px] overflow-y-auto ${showAbove ? "bottom-full mb-1" : "top-full mt-1"}`}>
+                  {tagOptions.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        if (selection.sectionId && selection.elementPath) {
+                          onChangeTag(selection.sectionId, selection.elementPath, t.toLowerCase());
+                        }
+                        setShowTagPicker(false);
+                      }}
+                      className="block w-full text-left px-3 py-1 text-[11px] font-mono font-bold uppercase hover:bg-gray-700 transition-colors"
+                    >
+                      {t.toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="px-2 py-0.5 rounded-md bg-blue-600 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0">
+              {tag.toLowerCase()}
+            </span>
+          );
+        })()}
 
         {/* AI prompt input */}
         <form onSubmit={handleSubmit} className="flex items-center gap-1 flex-1">
@@ -253,13 +406,31 @@ export function FloatingToolbar({
           &lt;/&gt;
         </button>
 
-        {selection.isSectionRoot && (
+        {selection.isSectionRoot ? (
           <>
             <div className="w-px h-5 bg-gray-700" />
             <button
               onClick={onDelete}
               className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-900/50 text-red-400 transition-colors"
               title="Eliminar seccion"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+              </svg>
+            </button>
+          </>
+        ) : onDeleteElement && (
+          <>
+            <div className="w-px h-5 bg-gray-700" />
+            <button
+              onClick={() => {
+                if (selection.sectionId && selection.elementPath) {
+                  onDeleteElement(selection.sectionId, selection.elementPath);
+                }
+              }}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-900/50 text-red-400 transition-colors"
+              title="Eliminar elemento"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
@@ -317,40 +488,87 @@ export function FloatingToolbar({
       {!selection.isSectionRoot && onUpdateAttribute && selection.tagName !== 'IMG' && (() => {
         const containerTags = ['DIV', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MAIN', 'ARTICLE'];
         const isContainer = containerTags.includes(selection.tagName ?? '');
-        const cssProp = isContainer ? 'background-color' : 'color';
-        return (
-        <div className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
-          <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0">{isContainer ? 'Fondo' : 'Color'}</span>
-          {[
-            { color: "#ffffff", css: "#ffffff", label: "Blanco" },
-            { color: "#000000", css: "#000000", label: "Negro" },
-            { color: "transparent", css: "transparent", label: "Transparente" },
-            ...(themeColors ? [
-              { color: themeColors.primary, css: "var(--color-primary)", label: "Primary" },
-              { color: themeColors.secondary, css: "var(--color-secondary)", label: "Secondary" },
-              { color: themeColors.accent, css: "var(--color-accent)", label: "Accent" },
-              { color: themeColors.surface, css: "var(--color-surface)", label: "Surface" },
-            ] : []),
-          ].map(({ color, css, label }) => (
-            <button
-              key={label}
-              onClick={() => handleSetAttr("style", `${cssProp}: ${css}`)}
-              className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
-              style={color === "transparent" ? {
-                backgroundImage: "repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%)",
-                backgroundSize: "8px 8px",
-              } : { backgroundColor: color }}
-              title={label}
+        const colorSwatches = [
+          { color: "#ffffff", css: "#ffffff", label: "Blanco" },
+          { color: "#000000", css: "#000000", label: "Negro" },
+          { color: "transparent", css: "transparent", label: "Transparente" },
+          ...(themeColors ? [
+            { color: themeColors.primary, css: "var(--color-primary)", label: "Primary" },
+            { color: themeColors.secondary, css: "var(--color-secondary)", label: "Secondary" },
+            { color: themeColors.accent, css: "var(--color-accent)", label: "Accent" },
+            { color: themeColors.surface, css: "var(--color-surface)", label: "Surface" },
+          ] : []),
+        ];
+        const renderColorRow = (label: string, cssProp: string) => (
+          <div key={cssProp} className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0 w-10">{label}</span>
+            {colorSwatches.map(({ color, css, label: swatchLabel }) => (
+              <button
+                key={swatchLabel}
+                onClick={() => handleSetAttr("style", `${cssProp}: ${css}`)}
+                className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
+                style={color === "transparent" ? {
+                  backgroundImage: "repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%)",
+                  backgroundSize: "8px 8px",
+                } : { backgroundColor: color }}
+                title={swatchLabel}
+              />
+            ))}
+            <input
+              type="color"
+              onChange={(e) => handleSetAttr("style", `${cssProp}: ${e.target.value}`)}
+              className="w-5 h-5 rounded-full border border-gray-600 cursor-pointer shrink-0 p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
+              title="Color personalizado"
             />
-          ))}
-          <input
-            type="color"
-            onChange={(e) => handleSetAttr("style", `${cssProp}: ${e.target.value}`)}
-            className="w-5 h-5 rounded-full border border-gray-600 cursor-pointer shrink-0 p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
-            title="Color personalizado"
-          />
-        </div>
+          </div>
         );
+        return isContainer ? (
+          <>
+            {renderColorRow("Color", "color")}
+            {renderColorRow("Fondo", "background-color")}
+          </>
+        ) : (
+          renderColorRow("Color", "color")
+        );
+      })()}
+
+      {/* Size presets */}
+      {sizePresets && !selection.isSectionRoot && (() => {
+        const groups = Object.entries(sizePresets).filter(([k]) => k !== 'currentClasses') as [string, { label: string; cls: string; prefixes: string[] }[]][];
+        const labels: Record<string, string> = { width: "Ancho", maxW: "Max", padding: "Padding", textSize: "Texto", fontWeight: "Peso", imgSize: "Tamaño", rounded: "Borde" };
+        return groups.map(([key, options]) => (
+          <div key={key} className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0 w-10">{labels[key] || key}</span>
+            {options.map((opt) => {
+              const isActive = sizePresets.currentClasses.includes(opt.cls);
+              return (
+                <button
+                  key={opt.cls}
+                  onClick={() => handleReplaceClass(opt.prefixes, opt.cls)}
+                  className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-md transition-colors whitespace-nowrap ${
+                    isActive ? "bg-blue-600 text-white" : "bg-gray-800 hover:bg-gray-700 text-gray-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+            <input
+              type="text"
+              placeholder="clase..."
+              className="w-16 bg-gray-800 text-[10px] font-mono text-white rounded-md px-1.5 py-0.5 outline-none placeholder:text-gray-600 ml-1"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const val = (e.target as HTMLInputElement).value.trim();
+                  if (val) {
+                    handleReplaceClass(options[0].prefixes, val);
+                    (e.target as HTMLInputElement).value = "";
+                  }
+                }
+              }}
+            />
+          </div>
+        ));
       })()}
 
       {/* Image attr editing */}

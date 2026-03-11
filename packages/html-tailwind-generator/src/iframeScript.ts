@@ -72,9 +72,34 @@ export function getIframeScript(): string {
     return textTags.indexOf(el.tagName) !== -1;
   }
 
+  function emitElementSelected(el) {
+    var rect = el.getBoundingClientRect();
+    var attrs = {};
+    if (el.tagName === 'IMG') attrs = { src: el.getAttribute('src') || '', alt: el.getAttribute('alt') || '' };
+    if (el.tagName === 'A') attrs = { href: el.getAttribute('href') || '', target: el.getAttribute('target') || '' };
+    var ot = el.outerHTML.split('>')[0] + '>';
+    if (ot.length > 200) ot = ot.substring(0, 200);
+    window.parent.postMessage({
+      type: 'element-selected',
+      sectionId: getSectionId(el),
+      tagName: el.tagName,
+      rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+      text: (el.textContent || '').substring(0, 200),
+      openTag: ot,
+      elementPath: getElementPath(el),
+      isSectionRoot: el.dataset && el.dataset.sectionId ? true : false,
+      attrs: attrs,
+      className: (typeof el.className === 'string' ? el.className : '') || '',
+    }, '*');
+  }
+
   // Hover
   document.addEventListener('mouseover', function(e) {
     var el = e.target;
+    while (el && el !== document.body && (el instanceof SVGElement) && el.tagName !== 'svg') {
+      el = el.parentElement;
+    }
+    if (el && el.tagName === 'svg' && el.parentElement) el = el.parentElement;
     if (el === document.body || el === document.documentElement) return;
     if (el === selectedEl) return;
     if (hoveredEl && hoveredEl !== selectedEl) {
@@ -101,6 +126,15 @@ export function getIframeScript(): string {
     e.preventDefault();
     e.stopPropagation();
     var el = e.target;
+
+    // Bubble up from SVG internals to the nearest HTML element
+    while (el && el !== document.body && (el instanceof SVGElement) && el.tagName !== 'svg') {
+      el = el.parentElement;
+    }
+    // If we landed on an <svg>, bubble up to its HTML parent
+    if (el && el.tagName === 'svg' && el.parentElement) {
+      el = el.parentElement;
+    }
 
     // Deselect previous
     if (selectedEl) {
@@ -143,6 +177,7 @@ export function getIframeScript(): string {
       elementPath: getElementPath(el),
       isSectionRoot: el.dataset && el.dataset.sectionId ? true : false,
       attrs: attrs,
+      className: el.className || '',
     }, '*');
   }, true);
 
@@ -250,12 +285,105 @@ export function getIframeScript(): string {
           }
         }
         if (target) {
-          target.setAttribute(msg.attr, msg.value);
+          if (msg.attr === 'style' && msg.value.indexOf(':') !== -1) {
+            // Merge style property instead of replacing entire style
+            var parts = msg.value.split(':');
+            var prop = parts[0].trim();
+            var val = parts.slice(1).join(':').trim();
+            target.style.setProperty(prop, val);
+          } else {
+            target.setAttribute(msg.attr, msg.value);
+          }
           window.parent.postMessage({
             type: 'section-html-updated',
             sectionId: msg.sectionId,
             sectionHtml: getCleanSectionHtml(sectionEl),
           }, '*');
+          emitElementSelected(target);
+        }
+      }
+    }
+
+    if (msg.action === 'replace-class') {
+      var sectionEl = getSectionElement(msg.sectionId);
+      if (sectionEl && msg.elementPath) {
+        var target = null;
+        var allEls = sectionEl.querySelectorAll('*');
+        for (var i = 0; i < allEls.length; i++) {
+          if (getElementPath(allEls[i]) === msg.elementPath) {
+            target = allEls[i];
+            break;
+          }
+        }
+        if (target) {
+          // Remove classes matching the list (exact match) using classList
+          var removeList = msg.removePrefixes || [];
+          for (var r = 0; r < removeList.length; r++) {
+            if (target.classList.contains(removeList[r])) {
+              target.classList.remove(removeList[r]);
+            }
+          }
+          // Add new class
+          if (msg.addClass && !target.classList.contains(msg.addClass)) {
+            target.classList.add(msg.addClass);
+          }
+          window.parent.postMessage({
+            type: 'section-html-updated',
+            sectionId: msg.sectionId,
+            sectionHtml: getCleanSectionHtml(sectionEl),
+          }, '*');
+          emitElementSelected(target);
+        }
+      }
+    }
+
+    if (msg.action === 'delete-element') {
+      var sectionEl = getSectionElement(msg.sectionId);
+      if (sectionEl && msg.elementPath) {
+        var target = null;
+        var allEls = sectionEl.querySelectorAll('*');
+        for (var i = 0; i < allEls.length; i++) {
+          if (getElementPath(allEls[i]) === msg.elementPath) {
+            target = allEls[i];
+            break;
+          }
+        }
+        if (target && target.parentNode) {
+          target.parentNode.removeChild(target);
+          window.parent.postMessage({
+            type: 'section-html-updated',
+            sectionId: msg.sectionId,
+            sectionHtml: getCleanSectionHtml(sectionEl),
+          }, '*');
+          window.parent.postMessage({ type: 'element-deselected' }, '*');
+        }
+      }
+    }
+
+    if (msg.action === 'change-tag') {
+      var sectionEl = getSectionElement(msg.sectionId);
+      if (sectionEl && msg.elementPath && msg.newTag) {
+        var target = null;
+        var allEls = sectionEl.querySelectorAll('*');
+        for (var i = 0; i < allEls.length; i++) {
+          if (getElementPath(allEls[i]) === msg.elementPath) {
+            target = allEls[i];
+            break;
+          }
+        }
+        if (target && target.parentNode) {
+          var newEl = document.createElement(msg.newTag);
+          for (var a = 0; a < target.attributes.length; a++) {
+            newEl.setAttribute(target.attributes[a].name, target.attributes[a].value);
+          }
+          while (target.firstChild) newEl.appendChild(target.firstChild);
+          target.parentNode.replaceChild(newEl, target);
+          window.parent.postMessage({
+            type: 'section-html-updated',
+            sectionId: msg.sectionId,
+            sectionHtml: getCleanSectionHtml(sectionEl),
+          }, '*');
+          emitElementSelected(newEl);
         }
       }
     }
