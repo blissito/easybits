@@ -4,7 +4,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import { getReferralStats } from "~/.server/core/referralOperations";
-import { GENERATION_PACKS, type PlanKey } from "~/lib/plans";
+import { GENERATION_PACKS, REFERRAL_SIGNUP_BONUS, REFERRAL_UPGRADE_BONUS, REFERRAL_WELCOME_BONUS, type PlanKey } from "~/lib/plans";
 import type { Route } from "./+types/packs";
 
 export const meta = () => [
@@ -18,10 +18,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const genLimit = await checkAiGenerationLimit(user.id, plan);
   const referralStats = await getReferralStats(user.id);
 
+  const nextPlanMap: Partial<Record<PlanKey, PlanKey>> = { Spark: "Flow", Flow: "Studio" };
+  const nextPlan = nextPlanMap[plan];
+
   const packs = GENERATION_PACKS.map((pack) => ({
     id: pack.id,
     generations: pack.generations,
     price: pack.prices[plan],
+    nextPlanName: nextPlan || null,
+    nextPlanPrice: nextPlan ? pack.prices[nextPlan] : null,
   }));
 
   return {
@@ -54,7 +59,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           </div>
           <div>
             <p className="text-sm text-iron">Usadas este mes</p>
-            <p className="text-xl font-bold">
+            <p className={`text-xl font-bold ${limit !== null && used >= limit ? "text-red-500" : ""}`}>
               {used} / {limit === null ? "∞" : limit}
             </p>
           </div>
@@ -84,7 +89,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
 function PackCard({
   pack,
 }: {
-  pack: { id: string; generations: number; price: number };
+  pack: { id: string; generations: number; price: number; nextPlanName: string | null; nextPlanPrice: number | null };
 }) {
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
@@ -112,10 +117,17 @@ function PackCard({
         <p className="text-iron mt-1">generaciones</p>
       </div>
       <div className="p-6 flex flex-col flex-1 justify-between">
-        <p className="text-3xl font-bold text-center mb-6">
-          ${pack.price}{" "}
-          <span className="text-base text-iron font-normal">mxn</span>
-        </p>
+        <div className="text-center mb-6">
+          <p className="text-3xl font-bold">
+            ${pack.price}{" "}
+            <span className="text-base text-iron font-normal">mxn</span>
+          </p>
+          {pack.nextPlanName && pack.nextPlanPrice !== null && pack.nextPlanPrice < pack.price && (
+            <p className="text-xs text-iron mt-1">
+              En {pack.nextPlanName}: ${pack.nextPlanPrice} mxn
+            </p>
+          )}
+        </div>
         <BrutalButton
           onClick={handleBuy}
           isLoading={isLoading}
@@ -157,12 +169,13 @@ function ReferralSection({
 
   return (
     <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-6">
-      <h2 className="text-2xl font-bold mb-4">
-        Invita amigos, gana generaciones
+      <h2 className="text-2xl font-bold mb-2">
+        🎁 Invita amigos, gana generaciones gratis
       </h2>
+      <p className="text-sm text-iron mb-4">Comparte tu link y ambos ganan generaciones AI</p>
 
       {/* Referral link */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-6">
         <div className="flex-1 border-2 border-black rounded-lg px-3 py-2 bg-gray-50 text-sm truncate font-mono">
           {referralLink}
         </div>
@@ -171,15 +184,23 @@ function ReferralSection({
         </BrutalButton>
       </div>
 
-      {/* Bonus explanation */}
-      <div className="text-sm text-iron mb-6 space-y-1">
-        <p>
-          <span className="font-bold text-black">+3</span> por cada registro
-          &nbsp;&middot;&nbsp;
-          <span className="font-bold text-black">+10</span> si upgraden a plan
-          pago
-        </p>
-        <p>Tu referido tambien recibe <span className="font-bold text-black">+2</span> al registrarse</p>
+      {/* Reward cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-brand-500">+{REFERRAL_SIGNUP_BONUS}</p>
+          <p className="text-sm font-medium mt-1">Se registra</p>
+          <p className="text-xs text-iron mt-0.5">Tu amigo crea cuenta</p>
+        </div>
+        <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-brand-500">+{REFERRAL_UPGRADE_BONUS}</p>
+          <p className="text-sm font-medium mt-1">Upgrade a pago</p>
+          <p className="text-xs text-iron mt-0.5">Si elige plan Flow o Studio</p>
+        </div>
+        <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-brand-500">+{REFERRAL_WELCOME_BONUS}</p>
+          <p className="text-sm font-medium mt-1">Tu amigo recibe</p>
+          <p className="text-xs text-iron mt-0.5">Bonus de bienvenida</p>
+        </div>
       </div>
 
       {/* Stats */}
