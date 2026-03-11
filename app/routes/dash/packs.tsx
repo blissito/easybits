@@ -27,6 +27,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     originalPrice: pack.promoPrice ? pack.prices[plan] : null,
     promoLabel: pack.promoLabel ?? null,
     featured: pack.featured ?? false,
+    description: pack.description ?? null,
     nextPlanName: nextPlan || null,
     nextPlanPrice: nextPlan ? pack.prices[nextPlan] : null,
   }));
@@ -73,7 +74,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
       </div>
 
       {/* Pack cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
         {packs.map((pack) => (
           <PackCard key={pack.id} pack={pack} />
         ))}
@@ -98,6 +99,7 @@ function PackCard({
     originalPrice: number | null;
     promoLabel: string | null;
     featured: boolean;
+    description: string | null;
     nextPlanName: string | null;
     nextPlanPrice: number | null;
   };
@@ -145,6 +147,9 @@ function PackCard({
             <p className="text-xs text-iron mt-1">
               En {pack.nextPlanName}: ${pack.nextPlanPrice} mxn
             </p>
+          )}
+          {pack.description && (
+            <p className="text-xs text-iron mt-2">{pack.description}</p>
           )}
         </div>
         <BrutalButton

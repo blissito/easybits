@@ -115,6 +115,7 @@ export const Steper = ({ user }: { user: User }) => {
             value={host}
             onChange={setHost}
             onClick={handleStep(0)}
+            onSkip={() => setStep(1)}
           />
         );
     }
@@ -424,6 +425,7 @@ export const StepTwo = ({
 
 export const StepOne = ({
   onClick,
+  onSkip,
   value,
   onChange,
   error,
@@ -431,6 +433,7 @@ export const StepOne = ({
 }: {
   isLoading?: boolean;
   onClick?: () => void;
+  onSkip?: () => void;
   onChange?: (arg0: string) => void;
   value: string;
   error?: string;
@@ -469,15 +472,24 @@ export const StepOne = ({
           <p>.easybits.cloud</p>
         </div>
       </div>
-      <BrutalButton
-        isDisabled={!value || value.length < 3}
-        type="button"
-        isLoading={isLoading}
-        onClick={onClick}
-        className="mt-auto w-full"
-      >
-        Continuar
-      </BrutalButton>
+      <div className="flex flex-col gap-2 mt-auto">
+        <BrutalButton
+          isDisabled={!value || value.length < 3}
+          type="button"
+          isLoading={isLoading}
+          onClick={onClick}
+          className="w-full"
+        >
+          Continuar
+        </BrutalButton>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="text-sm text-iron hover:text-black transition-colors py-2"
+        >
+          Omitir — lo configuro después
+        </button>
+      </div>
     </motion.div>
   );
 };

@@ -36,7 +36,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Branding 'Powered by' en landings",
       "Preview de archivos",
       "7 días de papelera",
-      "Packs de generaciones desde $49",
+      "Packs de generaciones desde $19",
     ],
   },
   Mega: {
@@ -54,7 +54,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Websites estáticos",
       "Streaming HLS",
       "Transformación de imágenes",
-      "Packs de generaciones desde $39",
+      "Packs de generaciones desde $15",
     ],
   },
   Tera: {
@@ -70,7 +70,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Proveedores custom",
       "Dominios custom",
       "Soporte prioritario",
-      "Packs de generaciones desde $29",
+      "Packs de generaciones desde $9",
       "RAG as a Service (próximamente)",
     ],
   },
@@ -127,6 +127,8 @@ export interface GenerationPack {
   promoLabel?: string;
   /** Highlight this pack visually */
   featured?: boolean;
+  /** Short catchy description */
+  description?: string;
 }
 
 // Referral system constants
@@ -136,7 +138,8 @@ export const REFERRAL_WELCOME_BONUS = 2;   // referred earns on signup
 export const MAX_REFERRALS = 50;           // anti-abuse cap
 
 export const GENERATION_PACKS: GenerationPack[] = [
-  { id: "pack_10", generations: 10, prices: { Byte: 49, Mega: 39, Tera: 29 } },
-  { id: "pack_50", generations: 50, prices: { Byte: 199, Mega: 169, Tera: 149 }, promoPrice: 99, promoLabel: "Precio de lanzamiento", featured: true },
-  { id: "pack_100", generations: 100, prices: { Byte: 349, Mega: 249, Tera: 249 } },
+  { id: "pack_5", generations: 5, prices: { Byte: 19, Mega: 15, Tera: 9 }, description: "Perfecto para crear un documento profesional" },
+  { id: "pack_10", generations: 10, prices: { Byte: 49, Mega: 39, Tera: 29 }, description: "Ideal para una landing page completa con variantes" },
+  { id: "pack_50", generations: 50, prices: { Byte: 199, Mega: 169, Tera: 149 }, promoPrice: 99, promoLabel: "Precio de lanzamiento", featured: true, description: "Crea todo un sitio web con múltiples páginas" },
+  { id: "pack_100", generations: 100, prices: { Byte: 349, Mega: 249, Tera: 249 }, description: "Para equipos y proyectos a gran escala" },
 ];

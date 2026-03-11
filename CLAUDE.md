@@ -31,6 +31,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 
 | Pack | Byte | Mega | Tera |
 |------|------|------|------|
+| 5 gens | $19 | $15 | $9 |
 | 10 gens | $49 | $39 | $29 |
 | 50 gens | $99 (promo) | $99 (promo) | $99 (promo) |
 | 100 gens | $349 | $249 | $249 |
