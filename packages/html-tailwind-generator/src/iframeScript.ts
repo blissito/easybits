@@ -9,8 +9,8 @@ export function getIframeScript(): string {
 (function() {
   let hoveredEl = null;
   let selectedEl = null;
-  const OUTLINE_HOVER = '2px solid #3B82F6';
-  const OUTLINE_SELECTED = '2px solid #8B5CF6';
+  const SHADOW_HOVER = 'inset 0 0 0 2px #3B82F6';
+  const SHADOW_SELECTED = 'inset 0 0 0 2px #8B5CF6';
 
   function getSectionId(el) {
     let node = el;
@@ -46,22 +46,17 @@ export function getIframeScript(): string {
     var saved = [];
     for (var i = 0; i < els.length; i++) {
       var s = els[i].style;
-      saved.push({ outline: s.outline, outlineOffset: s.outlineOffset, ce: els[i].contentEditable });
-      s.outline = '';
-      s.outlineOffset = '';
+      saved.push({ boxShadow: s.boxShadow, ce: els[i].contentEditable });
+      s.boxShadow = '';
       if (els[i].contentEditable === 'true') els[i].removeAttribute('contenteditable');
     }
     // Also clean the section root
-    var rootOutline = sectionEl.style.outline;
-    var rootOffset = sectionEl.style.outlineOffset;
-    sectionEl.style.outline = '';
-    sectionEl.style.outlineOffset = '';
+    var rootShadow = sectionEl.style.boxShadow;
+    sectionEl.style.boxShadow = '';
     var html = sectionEl.innerHTML;
-    sectionEl.style.outline = rootOutline;
-    sectionEl.style.outlineOffset = rootOffset;
+    sectionEl.style.boxShadow = rootShadow;
     for (var i = 0; i < els.length; i++) {
-      els[i].style.outline = saved[i].outline;
-      els[i].style.outlineOffset = saved[i].outlineOffset;
+      els[i].style.boxShadow = saved[i].boxShadow;
       if (saved[i].ce === 'true') els[i].contentEditable = 'true';
     }
     return html;
@@ -103,20 +98,17 @@ export function getIframeScript(): string {
     if (el === document.body || el === document.documentElement) return;
     if (el === selectedEl) return;
     if (hoveredEl && hoveredEl !== selectedEl) {
-      hoveredEl.style.outline = '';
-      hoveredEl.style.outlineOffset = '';
+      hoveredEl.style.boxShadow = '';
     }
     hoveredEl = el;
     if (el !== selectedEl) {
-      el.style.outline = OUTLINE_HOVER;
-      el.style.outlineOffset = '-2px';
+      el.style.boxShadow = SHADOW_HOVER;
     }
   });
 
   document.addEventListener('mouseout', function(e) {
     if (hoveredEl && hoveredEl !== selectedEl) {
-      hoveredEl.style.outline = '';
-      hoveredEl.style.outlineOffset = '';
+      hoveredEl.style.boxShadow = '';
     }
     hoveredEl = null;
   });
@@ -138,8 +130,7 @@ export function getIframeScript(): string {
 
     // Deselect previous
     if (selectedEl) {
-      selectedEl.style.outline = '';
-      selectedEl.style.outlineOffset = '';
+      selectedEl.style.boxShadow = '';
     }
 
     if (selectedEl === el) {
@@ -151,12 +142,10 @@ export function getIframeScript(): string {
     selectedEl = el;
 
     // Clear hover styles BEFORE capturing openTag (so it matches source HTML)
-    el.style.outline = '';
-    el.style.outlineOffset = '';
+    el.style.boxShadow = '';
     var openTag = el.outerHTML.substring(0, el.outerHTML.indexOf('>') + 1).substring(0, 120);
 
-    el.style.outline = OUTLINE_SELECTED;
-    el.style.outlineOffset = '-2px';
+    el.style.boxShadow = SHADOW_SELECTED;
 
     var rect = el.getBoundingClientRect();
     var attrs = {};
@@ -190,13 +179,11 @@ export function getIframeScript(): string {
 
     el.contentEditable = 'true';
     el.focus();
-    el.style.outline = '2px dashed #F59E0B';
-    el.style.outlineOffset = '-2px';
+    el.style.boxShadow = 'inset 0 0 0 2px #F59E0B';
 
     function onBlur() {
       el.contentEditable = 'false';
-      el.style.outline = '';
-      el.style.outlineOffset = '';
+      el.style.boxShadow = '';
       el.removeEventListener('blur', onBlur);
       el.removeEventListener('keydown', onKeydown);
 
