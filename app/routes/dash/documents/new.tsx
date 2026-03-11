@@ -21,6 +21,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const prompt = String(formData.get("prompt") || "").trim();
   const sourceContent = String(formData.get("sourceContent") || "").trim();
   const logoDataUrl = String(formData.get("logoDataUrl") || "").trim();
+  const pageCount = Math.min(20, Math.max(1, Number(formData.get("pageCount")) || 5));
 
   if (!name) {
     return data({ error: "El nombre es requerido" });
@@ -51,7 +52,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     });
   }
 
-  return redirect(`/dash/documents/${landing.id}?generating=1`);
+  return redirect(`/dash/documents/${landing.id}?generating=1&pages=${pageCount}`);
 };
 
 const brutalInput =
@@ -104,6 +105,7 @@ export default function NewDocument() {
   const dropRef = useRef<HTMLDivElement>(null);
 
   // Logo state
+  const [pageCount, setPageCount] = useState(5);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState("");
@@ -193,6 +195,7 @@ export default function NewDocument() {
         {/* Hidden fields */}
         <input type="hidden" name="sourceContent" value={parsedContent} />
         <input type="hidden" name="logoDataUrl" value={logoDataUrl} />
+        <input type="hidden" name="pageCount" value={pageCount} />
 
         {/* File upload zone */}
         <div>
@@ -447,6 +450,27 @@ export default function NewDocument() {
             </div>
           </div>
         )}
+
+        {/* Page count selector */}
+        <div>
+          <label className="block text-sm font-bold mb-1">
+            Numero de paginas
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={1}
+              max={20}
+              value={pageCount}
+              onChange={(e) => setPageCount(Number(e.target.value))}
+              className="flex-1 accent-brand-500"
+            />
+            <span className="text-lg font-black tabular-nums w-8 text-center">{pageCount}</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            La AI generara aproximadamente {pageCount} {pageCount === 1 ? "pagina" : "paginas"} tamano carta
+          </p>
+        </div>
 
         <BrutalButton
           type="submit"

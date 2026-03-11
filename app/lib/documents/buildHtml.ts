@@ -40,9 +40,8 @@ export function buildDocumentHtml(
     @page { size: letter; margin: 0; }
     ${options?.themeCss || ""}
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-section { page-break-after: always; page-break-inside: avoid; }
-    .page-section:last-child { page-break-after: auto; }
-    .page-section > section { width: 8.5in; height: 11in; overflow: hidden; }
+    .page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+    .page-section:last-child { page-break-after: auto; break-after: auto; }
     .doc-toolbar { font-family: 'Inter', sans-serif; }
     @media print { .doc-toolbar { display: none !important; } }
   </style>

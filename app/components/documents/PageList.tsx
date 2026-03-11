@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo, useEffect } from "react";
 import type { Section3 } from "~/lib/landing3/types";
-import { LANDING_THEMES, type LandingTheme } from "@easybits.cloud/html-tailwind-generator";
+import { LANDING_THEMES, type LandingTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 
 interface PageListProps {
   sections: Section3[];
@@ -13,6 +13,8 @@ interface PageListProps {
   onAdd: () => void;
   theme?: string;
   onThemeChange?: (themeId: string) => void;
+  customColors?: CustomColors;
+  onCustomColorChange?: (colors: Partial<CustomColors>) => void;
   themeCssData?: { css: string; tailwindConfig: string };
   onRestoreVersion?: (sectionId: string, html: string) => void;
   onGenerateVariant?: (sectionId: string, instruction?: string, referenceImage?: string) => void;
@@ -52,6 +54,8 @@ export function PageList({
   onAdd,
   theme,
   onThemeChange,
+  customColors,
+  onCustomColorChange,
   themeCssData,
   onRestoreVersion,
   onGenerateVariant,
@@ -71,17 +75,28 @@ export function PageList({
   const [variantImage, setVariantImage] = useState<string | null>(null);
   const variantFileRef = useRef<HTMLInputElement>(null);
 
-  // Close popups on ESC
+  const themeRef = useRef<HTMLDivElement>(null);
+
+  // Close popups on ESC + click outside
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (variantPopup) setVariantPopup(null);
         else if (versionDropdown) setVersionDropdown(null);
         else if (showThemes) setShowThemes(false);
       }
     };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    const onClick = (e: MouseEvent) => {
+      if (showThemes && themeRef.current && !themeRef.current.contains(e.target as Node)) {
+        setShowThemes(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
   }, [variantPopup, versionDropdown, showThemes]);
 
   // Auto-scroll sidebar to selected thumbnail
@@ -106,12 +121,20 @@ export function PageList({
           P&aacute;ginas
         </h3>
         {onThemeChange && (
-          <div className="relative">
+          <div className="relative" ref={themeRef}>
             <button
               onClick={() => setShowThemes((p) => !p)}
               className="text-[10px] font-bold text-brand-600 hover:underline flex items-center gap-1"
             >
               {(() => {
+                if (theme === "custom") {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: customColors?.primary || "#6366f1" }} />
+                      Custom
+                    </>
+                  );
+                }
                 const t = LANDING_THEMES.find((t) => t.id === theme);
                 return t ? (
                   <>
@@ -125,7 +148,7 @@ export function PageList({
               })()}
             </button>
             {showThemes && (
-              <div className="absolute right-0 top-full mt-1 w-36 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 max-h-48 overflow-y-auto">
+              <div className="absolute right-0 top-full mt-1 w-44 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1">
                 {LANDING_THEMES.map((t) => (
                   <button
                     key={t.id}
@@ -144,6 +167,46 @@ export function PageList({
                     {t.label}
                   </button>
                 ))}
+                {/* Custom theme option */}
+                {onCustomColorChange && (
+                  <>
+                    <div className="border-t border-gray-100 my-1" />
+                    <div className={`px-3 py-1.5 ${theme === "custom" ? "bg-brand-50" : ""}`}>
+                      <button
+                        onClick={() => {
+                          onThemeChange("custom");
+                        }}
+                        className={`w-full text-left text-xs font-bold flex items-center gap-2 ${theme === "custom" ? "text-brand-700" : ""}`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-sm border border-gray-300"
+                          style={customColors?.primary ? { backgroundColor: customColors.primary, borderColor: customColors.primary } : undefined}
+                        />
+                        Custom
+                      </button>
+                      {theme === "custom" && (
+                        <div className="mt-2 space-y-1.5">
+                          {([
+                            { key: "primary" as const, label: "Principal", fallback: "#6366f1" },
+                            { key: "secondary" as const, label: "Secundario", fallback: "#8b5cf6" },
+                            { key: "accent" as const, label: "Acento", fallback: "#f59e0b" },
+                            { key: "surface" as const, label: "Superficie", fallback: "#f8fafc" },
+                          ]).map((c) => (
+                            <label key={c.key} className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                              <input
+                                type="color"
+                                className="w-5 h-5 rounded cursor-pointer border-0 p-0"
+                                value={customColors?.[c.key] || c.fallback}
+                                onChange={(e) => onCustomColorChange({ [c.key]: e.target.value })}
+                              />
+                              {c.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

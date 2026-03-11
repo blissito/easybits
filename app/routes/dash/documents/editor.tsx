@@ -15,7 +15,7 @@ import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
 import { Canvas, type CanvasHandle } from "~/components/landings3/Canvas";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import toast from "react-hot-toast";
@@ -135,6 +135,19 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     return { ok: true };
   }
 
+  if (intent === "update-custom-colors") {
+    const raw = String(formData.get("customColors") || "{}");
+    const existing = (landing.metadata as Record<string, unknown>) || {};
+    try {
+      const customColors = JSON.parse(raw);
+      await db.landing.update({
+        where: { id: params.id },
+        data: { metadata: { ...existing, theme: "custom", customColors } },
+      });
+    } catch {}
+    return { ok: true };
+  }
+
   const ctx = { user, scopes: ["ADMIN" as const] };
 
   if (intent === "deploy") {
@@ -241,7 +254,30 @@ export default function DocumentEditor() {
     const meta = (landing.metadata as Record<string, unknown>) || {};
     return (meta?.theme as string) || "minimal";
   });
-  const themeCssData = useMemo(() => buildSingleThemeCss(theme), [theme]);
+  const [customColors, setCustomColors] = useState<CustomColors>(() => {
+    const meta = (landing.metadata as Record<string, unknown>) || {};
+    return (meta?.customColors as CustomColors) || { primary: "#6366f1" };
+  });
+  const themeCssData = useMemo(() => {
+    if (theme === "custom") {
+      const t = buildCustomTheme(customColors);
+      const css = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+      const { tailwindConfig } = buildSingleThemeCss("minimal");
+      return { css, tailwindConfig };
+    }
+    return buildSingleThemeCss(theme);
+  }, [theme, customColors]);
+
+  // Inject custom theme CSS + document layout CSS into Canvas iframe
+  useEffect(() => {
+    if (theme === "custom") {
+      const t = buildCustomTheme(customColors);
+      const themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+      canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss + "\n" + themeCss });
+    } else {
+      canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
+    }
+  }, [theme, customColors]);
 
   // Regenerate prompt bar
   const [regenInput, setRegenInput] = useState("");
@@ -373,6 +409,7 @@ export default function DocumentEditor() {
           prompt: landing.prompt,
           sourceContent,
           logoUrl,
+          pageCount: Number(searchParams.get("pages")) || undefined,
           ...(extraInstructions ? { extraInstructions } : {}),
         }),
         signal: controller.signal,
@@ -684,12 +721,21 @@ export default function DocumentEditor() {
 
   async function handleAddPage() {
     if ((!addPrompt.trim() && !addParsedContent) || isAddingSection) return;
+    // Close modal immediately so user sees pages appear in real time
+    setShowAddPrompt(false);
+    setAddPrompt("");
+    setAddFiles([]);
+    setAddRefImage(null);
+    const savedPrompt = addPrompt.trim();
+    const savedParsedContent = addParsedContent;
+    const savedRefImage = addRefImage;
+    setAddParsedContent("");
     setIsAddingSection(true);
     const newId = Math.random().toString(36).slice(2, 10);
     try {
       const instruction = [
-        addPrompt.trim() ? `Create new pages: ${addPrompt}` : "Create new pages from this content",
-        addParsedContent ? `\n\nSource content:\n${addParsedContent.substring(0, 15000)}` : "",
+        savedPrompt ? `Create new pages: ${savedPrompt}` : "Create new pages from this content",
+        savedParsedContent ? `\n\nSource content:\n${savedParsedContent.substring(0, 15000)}` : "",
       ].join("");
 
       const res = await fetch("/api/v2/document-refine", {
@@ -701,7 +747,7 @@ export default function DocumentEditor() {
           instruction,
           currentHtml: "<section></section>",
           allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
-          ...(addRefImage && { referenceImage: addRefImage }),
+          ...(savedRefImage && { referenceImage: savedRefImage }),
         }),
       });
       if (!res.ok) {
@@ -770,11 +816,6 @@ export default function DocumentEditor() {
         }
       }
 
-      setShowAddPrompt(false);
-      setAddPrompt("");
-      setAddFiles([]);
-      setAddRefImage(null);
-      setAddParsedContent("");
     } catch (err) {
       console.error("Add page error:", err);
       errorToast((err as Error).message || "Error al agregar página");
@@ -819,40 +860,31 @@ export default function DocumentEditor() {
     @page { size: letter; margin: 0; }
     ${themeCssData?.css || ""}
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-section { page-break-after: always; page-break-inside: avoid; }
-    .page-section:last-child { page-break-after: auto; }
-    .page-section > section { width: 8.5in; height: 11in; overflow: hidden; }
+    .page-section {
+      width: 8.5in;
+      height: 11in;
+      overflow: hidden;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .page-section:last-child { page-break-after: auto; break-after: auto; }
   </style>
 </head>
 <body>
 ${sectionsHtml}
+<script>
+  window.onload = () => {
+    setTimeout(() => window.print(), 1500);
+  };
+<\/script>
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
-    if (!win) {
-      errorToast("El navegador bloqueó la ventana. Permite popups para este sitio.");
-      return;
-    }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    // Print as soon as Tailwind CDN finishes, then close
-    function printAndClose() {
-      win.print();
-      setTimeout(() => { try { win.close(); } catch {} }, 300);
-    }
-    // Detect when Tailwind CDN script has loaded and processed styles
-    const check = setInterval(() => {
-      try {
-        if (win.document.readyState === "complete" && (win as any).tailwind) {
-          clearInterval(check);
-          setTimeout(printAndClose, 200); // small buffer for style flush
-        }
-      } catch { clearInterval(check); }
-    }, 100);
-    // Fallback: don't wait forever
-    setTimeout(() => { clearInterval(check); printAndClose(); }, 5000);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
   }
 
   function handleDeployDocument() {
@@ -865,6 +897,16 @@ ${sectionsHtml}
     setTheme(newTheme);
     saveFetcher.submit(
       { intent: "update-theme", theme: newTheme },
+      { method: "post" }
+    );
+  }
+
+  function handleCustomColorChange(partial: Partial<CustomColors>) {
+    const merged = { ...customColors, ...partial };
+    setCustomColors(merged);
+    setTheme("custom");
+    saveFetcher.submit(
+      { intent: "update-custom-colors", customColors: JSON.stringify(merged) },
       { method: "post" }
     );
   }
@@ -1063,6 +1105,8 @@ ${sectionsHtml}
             onAdd={() => setShowAddPrompt(true)}
             theme={theme}
             onThemeChange={handleThemeChange}
+            customColors={customColors}
+            onCustomColorChange={handleCustomColorChange}
             themeCssData={themeCssData}
             onGenerateVariant={handleGenerateVariant}
             onStopVariant={stopVariant}
@@ -1213,7 +1257,13 @@ ${sectionsHtml}
                     onMessage={handleIframeMessage}
                     iframeRectRef={iframeRectRef}
                     onReady={() => {
-                      canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
+                      if (theme === "custom") {
+                        const t = buildCustomTheme(customColors);
+                        const themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+                        canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss + "\n" + themeCss });
+                      } else {
+                        canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
+                      }
                     }}
                   />
                   {isGenerating && (
@@ -1269,6 +1319,7 @@ ${sectionsHtml}
           }}
           onUpdateAttribute={handleUpdateAttribute}
           isRefining={isRefining}
+          hideStylePresets
         />
       </div>
 
@@ -1375,11 +1426,12 @@ ${sectionsHtml}
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   if (regenTargetId) {
-                    handleGenerateVariant(regenTargetId, addPrompt || undefined, addRefImage || undefined);
+                    const _id = regenTargetId, _p = addPrompt, _img = addRefImage;
                     setShowAddPrompt(false);
                     setRegenTargetId(null);
                     setAddPrompt("");
                     setAddRefImage(null);
+                    handleGenerateVariant(_id, _p || undefined, _img || undefined);
                   } else {
                     handleAddPage();
                   }
@@ -1405,11 +1457,12 @@ ${sectionsHtml}
                 size="chip"
                 onClick={() => {
                   if (regenTargetId) {
-                    handleGenerateVariant(regenTargetId, addPrompt || undefined, addRefImage || undefined);
+                    const _id = regenTargetId, _p = addPrompt, _img = addRefImage;
                     setShowAddPrompt(false);
                     setRegenTargetId(null);
                     setAddPrompt("");
                     setAddRefImage(null);
+                    handleGenerateVariant(_id, _p || undefined, _img || undefined);
                   } else {
                     handleAddPage();
                   }

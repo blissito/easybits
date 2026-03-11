@@ -21,6 +21,7 @@ interface FloatingToolbarProps {
   onViewCode: () => void;
   onUpdateAttribute?: (sectionId: string, elementPath: string, attr: string, value: string) => void;
   isRefining: boolean;
+  hideStylePresets?: boolean;
 }
 
 export function FloatingToolbar({
@@ -34,6 +35,7 @@ export function FloatingToolbar({
   onViewCode,
   onUpdateAttribute,
   isRefining,
+  hideStylePresets,
 }: FloatingToolbarProps) {
   const [prompt, setPrompt] = useState("");
   const [showCode, setShowCode] = useState(false);
@@ -290,7 +292,7 @@ export function FloatingToolbar({
       )}
 
       {/* Style presets row — only for section roots */}
-      {selection.isSectionRoot && (
+      {selection.isSectionRoot && !hideStylePresets && (
         <div className="flex items-center gap-1 pt-0.5 pb-0.5 border-t border-gray-700/50">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0">Estilo</span>
           {STYLE_PRESETS.map((preset) => (

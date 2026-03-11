@@ -13,7 +13,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, sourceContent, logoUrl, extraInstructions } = body;
+  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount } = body;
 
   if (!landingId) {
     return Response.json({ error: "landingId required" }, { status: 400 });
@@ -44,7 +44,9 @@ export async function action({ request }: Route.ActionArgs) {
       ? `Transform this content into beautiful document pages:\n\n${sourceContent.substring(0, 15000)}`
       : "Create a professional document",
     prompt ? `\nInstructions: ${prompt}` : "",
-    "\nGenerate 3-8 pages depending on content length.",
+    pageCount
+      ? `\nGenerate exactly ${pageCount} pages.`
+      : "\nGenerate 3-8 pages depending on content length.",
   ].filter(Boolean).join("\n");
 
   const allSections: Section3[] = [];

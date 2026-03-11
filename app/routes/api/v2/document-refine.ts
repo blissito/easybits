@@ -105,7 +105,8 @@ export async function action({ request }: Route.ActionArgs) {
   const section = isNewSection
     ? null
     : sections.find((s) => s.id === sectionId);
-  if (!isNewSection && !section) {
+  // Fallback: client sends currentHtml, use it if section not in DB yet (race condition with saveSections)
+  if (!isNewSection && !section && !currentHtml) {
     return Response.json({ error: "Section not found" }, { status: 404 });
   }
 
@@ -146,7 +147,12 @@ export async function action({ request }: Route.ActionArgs) {
 
   const pageHtml = currentHtml || section?.html || "<section></section>";
   const multiPageHint = isNewSection
-    ? "\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page. Output as many <section>...</section> blocks as needed."
+    ? `\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page.
+CRITICAL: Each section MUST use this exact structure: <section class="w-[8.5in] h-[11in] relative overflow-hidden ...">
+The section MUST be exactly 8.5in wide and 11in tall (letter size). Content must fit within the page. Use overflow-hidden.
+Do NOT use w-full, min-h-screen, or responsive classes — this is a fixed-size print document.
+ALWAYS output one <section> per page. NEVER put multiple pages of content inside a single <section>.
+Each <section> = exactly one letter-sized page. If content needs 3 pages, output 3 separate <section> tags.`
     : "";
   const outputHint = isNewSection
     ? "Output the <section> HTML (multiple <section> tags for multiple pages)."

@@ -8,7 +8,7 @@ import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
 import { buildDeployHtml } from "~/lib/landing3/buildHtml";
 import { buildDocumentHtml } from "~/lib/documents/buildHtml";
-import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import type { LandingSection } from "~/lib/landingCatalog";
 import type { LandingBlock } from "~/lib/landing2/blockTypes";
 import type { Section3 } from "~/lib/landing3/types";
@@ -37,11 +37,21 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   const html = landing.version === 4
     ? (() => {
         const docTheme = (landingMeta.theme as string) || undefined;
-        const docThemeCss = docTheme ? buildSingleThemeCss(docTheme) : null;
+        let themeCss: string | undefined;
+        let tailwindConfig: string | undefined;
+        if (docTheme === "custom" && landingMeta.customColors) {
+          const t = buildCustomTheme(landingMeta.customColors as any);
+          themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+          tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
+        } else if (docTheme) {
+          const docThemeCss = buildSingleThemeCss(docTheme);
+          themeCss = docThemeCss.css;
+          tailwindConfig = docThemeCss.tailwindConfig;
+        }
         return buildDocumentHtml(sections as Section3[], {
           showBranding: !isPaidPlan,
-          themeCss: docThemeCss?.css,
-          tailwindConfig: docThemeCss?.tailwindConfig,
+          themeCss,
+          tailwindConfig,
           title: landing.name,
         });
       })()
