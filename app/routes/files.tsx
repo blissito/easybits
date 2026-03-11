@@ -64,7 +64,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { files, plan = "Spark", total } = loaderData;
+  const { files, plan = "Byte", total } = loaderData;
   const [showModal, setShowModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<null | File>(null);
   const open = () => setShowModal(true);

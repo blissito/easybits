@@ -310,20 +310,20 @@ curl -X POST https://api.easybits.cloud/v2/share-tokens \\
           </h2>
           <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             <PricingCard
-              title={PLANS.Spark.name}
-              price={formatPrice(PLANS.Spark.price)}
-              features={PLANS.Spark.features}
+              title={PLANS.Byte.name}
+              price={formatPrice(PLANS.Byte.price)}
+              features={PLANS.Byte.features}
             />
             <PricingCard
-              title={PLANS.Flow.name}
-              price={`${formatPrice(PLANS.Flow.price)} mxn/mes`}
-              features={PLANS.Flow.features}
+              title={PLANS.Mega.name}
+              price={`${formatPrice(PLANS.Mega.price)} mxn/mes`}
+              features={PLANS.Mega.features}
               highlighted
             />
             <PricingCard
-              title={PLANS.Studio.name}
-              price={`${formatPrice(PLANS.Studio.price)} mxn/mes`}
-              features={PLANS.Studio.features}
+              title={PLANS.Tera.name}
+              price={`${formatPrice(PLANS.Tera.price)} mxn/mes`}
+              features={PLANS.Tera.features}
             />
           </div>
           <p className="text-center mt-8 text-gray-500">

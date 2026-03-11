@@ -19,7 +19,7 @@ import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES, type CustomColor
 import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
 import { playTone } from "~/hooks/useNotificationSound";
-import { PLANS, type PlanKey } from "~/lib/plans";
+import { PLANS, normalizePlan } from "~/lib/plans";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
 
@@ -107,8 +107,8 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const logoUrl = meta.logoUrl as string | undefined;
   // AI generation usage
   const userMeta = (user.metadata as Record<string, unknown>) || {};
-  const userPlan = (userMeta.plan as string) || "Spark";
-  const planConfig = PLANS[userPlan as PlanKey] || PLANS.Spark;
+  const userPlan = normalizePlan(userMeta.plan as string);
+  const planConfig = PLANS[userPlan];
   const aiGenUsed = (user as any).aiGenerationsCount || 0;
   const aiGenLimit = planConfig.aiGenerationsPerMonth;
 

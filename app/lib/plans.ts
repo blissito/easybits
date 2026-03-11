@@ -3,7 +3,7 @@
  * Update prices here — they propagate to /developers, /planes, profile, etc.
  */
 
-export type PlanKey = "Spark" | "Flow" | "Studio";
+export type PlanKey = "Byte" | "Mega" | "Tera";
 
 export interface PlanConfig {
   /** Display name */
@@ -21,8 +21,8 @@ export interface PlanConfig {
 }
 
 export const PLANS: Record<PlanKey, PlanConfig> = {
-  Spark: {
-    name: "Spark",
+  Byte: {
+    name: "Byte",
     price: 0,
     storageGB: 1,
     aiGenerationsPerMonth: 5,
@@ -37,15 +37,15 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "7 días de papelera",
     ],
   },
-  Flow: {
-    name: "Flow",
+  Mega: {
+    name: "Mega",
     price: 199,
     storageGB: 50,
     aiGenerationsPerMonth: 50,
     stripeIntent: "flow_plan",
     features: [
       "50 GB de almacenamiento",
-      "Todo lo de Spark",
+      "Todo lo de Byte",
       "Subidas ilimitadas",
       "Sin branding en landings",
       "Websites estáticos",
@@ -53,15 +53,15 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Transformación de imágenes",
     ],
   },
-  Studio: {
-    name: "Studio",
+  Tera: {
+    name: "Tera",
     price: 999,
     storageGB: 500,
     aiGenerationsPerMonth: 200,
     stripeIntent: "studio_plan",
     features: [
       "500 GB de almacenamiento",
-      "Todo lo de Flow",
+      "Todo lo de Mega",
       "Proveedores custom",
       "Dominios custom",
       "Soporte prioritario",
@@ -69,6 +69,37 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     ],
   },
 };
+
+/** Map old DB names → new keys (backwards compat) */
+const PLAN_ALIASES: Record<string, PlanKey> = { Spark: "Byte", Flow: "Mega", Studio: "Tera" };
+
+/** Resolve raw plan string (from DB metadata/roles) to PlanKey */
+export function normalizePlan(raw?: string | null): PlanKey {
+  if (!raw) return "Byte";
+  if (raw in PLANS) return raw as PlanKey;
+  return PLAN_ALIASES[raw] ?? "Byte";
+}
+
+/** Resolve PlanKey from user roles + metadata */
+export function getUserPlan(user: { roles?: string[]; metadata?: unknown }): PlanKey {
+  const meta = (user.metadata as any)?.plan as string | undefined;
+  const roles = user.roles as string[] | undefined;
+  // Check from highest to lowest (new + old names)
+  for (const [key, aliases] of [["Tera", ["Tera", "Studio"]], ["Mega", ["Mega", "Flow"]]] as const) {
+    for (const name of aliases) {
+      if (roles?.includes(name) || meta === name) return key as PlanKey;
+    }
+  }
+  return "Byte";
+}
+
+/** Is this a paid plan? */
+export function isPaidPlan(plan: PlanKey): boolean {
+  return PLANS[plan].price > 0;
+}
+
+/** Next plan for upsell (null if highest) */
+export const NEXT_PLAN: Partial<Record<PlanKey, PlanKey>> = { Byte: "Mega", Mega: "Tera" };
 
 /** Legacy lookup for profile storage bar (key: plan name, value: { price, max }) */
 export const plansLegacy: Record<string, Record<string, number>> = Object.fromEntries(
@@ -84,6 +115,12 @@ export interface GenerationPack {
   id: string;
   generations: number;
   prices: Record<PlanKey, number>;
+  /** Optional promo price (flat, ignores plan) */
+  promoPrice?: number;
+  /** Promo label e.g. "Lanzamiento" */
+  promoLabel?: string;
+  /** Highlight this pack visually */
+  featured?: boolean;
 }
 
 // Referral system constants
@@ -93,7 +130,7 @@ export const REFERRAL_WELCOME_BONUS = 2;   // referred earns on signup
 export const MAX_REFERRALS = 50;           // anti-abuse cap
 
 export const GENERATION_PACKS: GenerationPack[] = [
-  { id: "pack_10", generations: 10, prices: { Spark: 49, Flow: 39, Studio: 29 } },
-  { id: "pack_50", generations: 50, prices: { Spark: 199, Flow: 169, Studio: 149 } },
-  { id: "pack_100", generations: 100, prices: { Spark: 349, Flow: 249, Studio: 249 } },
+  { id: "pack_10", generations: 10, prices: { Byte: 49, Mega: 39, Tera: 29 } },
+  { id: "pack_50", generations: 50, prices: { Byte: 199, Mega: 169, Tera: 149 }, promoPrice: 99, promoLabel: "Lanzamiento", featured: true },
+  { id: "pack_100", generations: 100, prices: { Byte: 349, Mega: 249, Tera: 249 } },
 ];

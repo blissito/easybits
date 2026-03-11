@@ -723,7 +723,7 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
               method="GET"
               path="/usage"
               description="Get account usage statistics: storage, file counts, plan info"
-              response={`{ "plan": "Spark", "storage": { "usedGB": 0.5, "maxGB": 1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
+              response={`{ "plan": "Byte", "storage": { "usedGB": 0.5, "maxGB": 1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
               sdk={`const stats = await eb.getUsageStats();
 console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             />

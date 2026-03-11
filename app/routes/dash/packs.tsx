@@ -4,7 +4,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import { getReferralStats } from "~/.server/core/referralOperations";
-import { GENERATION_PACKS, REFERRAL_SIGNUP_BONUS, REFERRAL_UPGRADE_BONUS, REFERRAL_WELCOME_BONUS, type PlanKey } from "~/lib/plans";
+import { GENERATION_PACKS, NEXT_PLAN, REFERRAL_SIGNUP_BONUS, REFERRAL_UPGRADE_BONUS, REFERRAL_WELCOME_BONUS, getUserPlan } from "~/lib/plans";
 import type { Route } from "./+types/packs";
 
 export const meta = () => [
@@ -14,17 +14,19 @@ export const meta = () => [
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  const plan = ((user.metadata as any)?.plan || "Spark") as PlanKey;
+  const plan = getUserPlan(user);
   const genLimit = await checkAiGenerationLimit(user.id, plan);
   const referralStats = await getReferralStats(user.id);
 
-  const nextPlanMap: Partial<Record<PlanKey, PlanKey>> = { Spark: "Flow", Flow: "Studio" };
-  const nextPlan = nextPlanMap[plan];
+  const nextPlan = NEXT_PLAN[plan];
 
   const packs = GENERATION_PACKS.map((pack) => ({
     id: pack.id,
     generations: pack.generations,
-    price: pack.prices[plan],
+    price: pack.promoPrice ?? pack.prices[plan],
+    originalPrice: pack.promoPrice ? pack.prices[plan] : null,
+    promoLabel: pack.promoLabel ?? null,
+    featured: pack.featured ?? false,
     nextPlanName: nextPlan || null,
     nextPlanPrice: nextPlan ? pack.prices[nextPlan] : null,
   }));
@@ -89,7 +91,16 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
 function PackCard({
   pack,
 }: {
-  pack: { id: string; generations: number; price: number; nextPlanName: string | null; nextPlanPrice: number | null };
+  pack: {
+    id: string;
+    generations: number;
+    price: number;
+    originalPrice: number | null;
+    promoLabel: string | null;
+    featured: boolean;
+    nextPlanName: string | null;
+    nextPlanPrice: number | null;
+  };
 }) {
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
@@ -111,14 +122,22 @@ function PackCard({
   }
 
   return (
-    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col">
-      <div className="p-6 border-b-2 border-black text-center">
+    <div className={`border-2 rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative ${pack.featured ? "border-brand-500 ring-2 ring-brand-500" : "border-black"}`}>
+      {pack.promoLabel && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+          {pack.promoLabel}
+        </div>
+      )}
+      <div className={`p-6 border-b-2 text-center ${pack.featured ? "border-brand-500 bg-brand-50" : "border-black"}`}>
         <p className="text-5xl font-bold">{pack.generations}</p>
         <p className="text-iron mt-1">generaciones</p>
       </div>
       <div className="p-6 flex flex-col flex-1 justify-between">
         <div className="text-center mb-6">
-          <p className="text-3xl font-bold">
+          {pack.originalPrice !== null && (
+            <p className="text-lg text-iron line-through">${pack.originalPrice} mxn</p>
+          )}
+          <p className={`text-3xl font-bold ${pack.featured ? "text-brand-500" : ""}`}>
             ${pack.price}{" "}
             <span className="text-base text-iron font-normal">mxn</span>
           </p>
@@ -131,7 +150,7 @@ function PackCard({
         <BrutalButton
           onClick={handleBuy}
           isLoading={isLoading}
-          className="w-full bg-brand-500"
+          className={`w-full ${pack.featured ? "bg-brand-500" : "bg-brand-500"}`}
           containerClassName="w-full"
         >
           Comprar
@@ -194,7 +213,7 @@ function ReferralSection({
         <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4 text-center">
           <p className="text-3xl font-bold text-brand-500">+{REFERRAL_UPGRADE_BONUS}</p>
           <p className="text-sm font-medium mt-1">Upgrade a pago</p>
-          <p className="text-xs text-iron mt-0.5">Si elige plan Flow o Studio</p>
+          <p className="text-xs text-iron mt-0.5">Si elige plan Mega o Tera</p>
         </div>
         <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4 text-center">
           <p className="text-3xl font-bold text-brand-500">+{REFERRAL_WELCOME_BONUS}</p>

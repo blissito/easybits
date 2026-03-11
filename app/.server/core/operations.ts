@@ -15,7 +15,7 @@ import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
-import { PLANS, type PlanKey } from "~/lib/plans";
+import { PLANS, getUserPlan } from "~/lib/plans";
 import { dispatchWebhooks } from "../webhooks";
 
 // --- List Files ---
@@ -127,13 +127,7 @@ export async function uploadFile(
   }
 
   // Storage quota check
-  const userRoles = (ctx.user as any).roles as string[] | undefined;
-  const metaPlan = ((ctx.user as any).metadata as any)?.plan as string | undefined;
-  const planKey: PlanKey = userRoles?.includes("Studio") || metaPlan === "Studio"
-    ? "Studio"
-    : userRoles?.includes("Flow") || metaPlan === "Flow"
-      ? "Flow"
-      : "Spark";
+  const planKey = getUserPlan(ctx.user);
   const maxBytes = PLANS[planKey].storageGB * 1024 * 1024 * 1024;
   const usage = await db.file.aggregate({
     where: { ownerId: ctx.user.id, status: { not: "DELETED" } },
@@ -705,13 +699,7 @@ export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
 export async function getUsageStats(ctx: AuthContext) {
   requireScope(ctx, "READ");
 
-  const userRoles = (ctx.user as any).roles as string[] | undefined;
-  const metaPlan = ((ctx.user as any).metadata as any)?.plan as string | undefined;
-  const planKey: PlanKey = userRoles?.includes("Studio") || metaPlan === "Studio"
-    ? "Studio"
-    : userRoles?.includes("Flow") || metaPlan === "Flow"
-      ? "Flow"
-      : "Spark";
+  const planKey = getUserPlan(ctx.user);
 
   const [fileStats, deletedCount, websiteCount, webhookCount] = await Promise.all([
     db.file.aggregate({

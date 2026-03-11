@@ -32,17 +32,17 @@ export const Pricing = () => {
       <div className="mx-auto mt-12 lg:mt-20 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-6 items-stretch max-w-5xl">
         <PlanCard
           badge="/home/foco.svg"
-          planName={PLANS.Spark.name}
-          price={PLANS.Spark.price}
+          planName={PLANS.Byte.name}
+          price={PLANS.Byte.price}
           classNameButton="bg-[#F6DB7F] w-full"
-          perks={PLANS.Spark.features}
+          perks={PLANS.Byte.features}
         />
         <PlanCard
           badge="/home/rocket.svg"
-          planName={PLANS.Flow.name}
-          price={PLANS.Flow.price}
+          planName={PLANS.Mega.name}
+          price={PLANS.Mega.price}
           classNameButton="bg-[#A1CCE5] w-full"
-          perks={PLANS.Flow.features}
+          perks={PLANS.Mega.features}
           className="lg:-mt-6"
           cta={
             <PlanForm
@@ -55,9 +55,9 @@ export const Pricing = () => {
         <PlanCard
           classNameButton="w-full"
           badge="/home/coder.svg"
-          planName={PLANS.Studio.name}
-          price={PLANS.Studio.price}
-          perks={PLANS.Studio.features}
+          planName={PLANS.Tera.name}
+          price={PLANS.Tera.price}
+          perks={PLANS.Tera.features}
           cta={<PlanForm id="studio_plan" intent="studio_plan" />}
         />
       </div>

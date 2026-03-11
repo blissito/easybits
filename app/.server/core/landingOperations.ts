@@ -8,6 +8,7 @@ import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
 import { buildDeployHtml } from "~/lib/landing3/buildHtml";
 import { buildDocumentHtml } from "~/lib/documents/buildHtml";
+import { getUserPlan, isPaidPlan } from "~/lib/plans";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import type { LandingSection } from "~/lib/landingCatalog";
 import type { LandingBlock } from "~/lib/landing2/blockTypes";
@@ -33,7 +34,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
 
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
   const landingMeta = (landing.metadata as Record<string, unknown>) || {};
-  const isPaidPlan = ctx.user.roles.some((r) => r === "Flow" || r === "Studio");
+  const isPaid = isPaidPlan(getUserPlan(ctx.user));
   const html = landing.version === 4
     ? (() => {
         const docTheme = (landingMeta.theme as string) || undefined;
@@ -49,14 +50,14 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           tailwindConfig = docThemeCss.tailwindConfig;
         }
         return buildDocumentHtml(sections as Section3[], {
-          showBranding: !isPaidPlan,
+          showBranding: !isPaid,
           themeCss,
           tailwindConfig,
           title: landing.name,
         });
       })()
     : landing.version === 3
-    ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined, !isPaidPlan)
+    ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined, !isPaid)
     : landing.version === 2
     ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
     : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);

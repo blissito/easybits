@@ -5,6 +5,7 @@ import { processReferralUpgrade } from "~/.server/core/referralOperations";
 import type { StripeSession } from "~/.server/types/stripe";
 import type { ActionFunctionArgs } from "~/.server/types/react-router";
 import Stripe from "stripe";
+import { isPaidPlan, normalizePlan } from "~/lib/plans";
 
 // Función para manejar eventos de suscripción
 async function handleSubscriptionEvent(
@@ -252,7 +253,7 @@ export async function action({ request }: ActionFunctionArgs) {
         });
 
         // Award referral upgrade bonus if referred user upgrades to paid plan
-        if (plan === "Flow" || plan === "Studio") {
+        if (isPaidPlan(normalizePlan(plan))) {
           await processReferralUpgrade(user.id);
         }
         break;

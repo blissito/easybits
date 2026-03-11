@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { PLANS, type PlanKey } from "~/lib/plans";
+import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
 
 export type GenerationType = "generate" | "refine" | "variant";
 export type GenerationProduct = "document" | "landing" | "presentation";
@@ -21,8 +21,8 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
   });
   if (!user) throw new Response("User not found", { status: 404 });
 
-  const plan = (userPlan || (user.metadata as any)?.plan || "Spark") as PlanKey;
-  const config = PLANS[plan] || PLANS.Spark;
+  const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
+  const config = PLANS[plan];
   const limit = config.aiGenerationsPerMonth;
   const bonus = user.aiGenerationsBonus || 0;
 
@@ -82,8 +82,8 @@ export async function incrementAiGeneration(
     }).catch(() => {}); // fire-and-forget
   }
 
-  const plan = (userPlan || (user.metadata as any)?.plan || "Spark") as PlanKey;
-  const config = PLANS[plan] || PLANS.Spark;
+  const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
+  const config = PLANS[plan];
   const limit = config.aiGenerationsPerMonth;
   const count = user.aiGenerationsCount || 0;
 
