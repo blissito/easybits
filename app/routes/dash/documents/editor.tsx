@@ -20,6 +20,7 @@ import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
 import { playTone } from "~/hooks/useNotificationSound";
 import { PLANS, normalizePlan } from "~/lib/plans";
+import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
 
@@ -108,13 +109,14 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   // AI generation usage
   const userMeta = (user.metadata as Record<string, unknown>) || {};
   const userPlan = normalizePlan(userMeta.plan as string);
-  const planConfig = PLANS[userPlan];
-  const aiGenUsed = (user as any).aiGenerationsCount || 0;
-  const aiGenLimit = planConfig.aiGenerationsPerMonth;
+  const genLimit = await checkAiGenerationLimit(user.id, userPlan);
+  const aiGenUsed = genLimit.used;
+  const aiGenLimit = genLimit.limit;
+  const aiGenBonus = genLimit.bonus;
 
   const sectionVersions = (landing.sectionVersions as Record<string, { html: string; timestamp: number }[]>) || {};
 
-  return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, userPlan, sectionVersions };
+  return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -225,7 +227,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 export default function DocumentEditor() {
   const {
     landing, websiteUrl, sourceContent, logoUrl,
-    aiGenUsed: initialAiGenUsed, aiGenLimit, userPlan,
+    aiGenUsed: initialAiGenUsed, aiGenLimit, aiGenBonus, userPlan,
     sectionVersions: savedVersions,
   } = useLoaderData<typeof loader>();
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
@@ -448,7 +450,7 @@ export default function DocumentEditor() {
 
     try {
       // Check limit client-side
-      if (aiGenLimit !== null && aiGenUsed >= aiGenLimit) {
+      if (aiGenLimit !== null && aiGenUsed >= aiGenLimit && aiGenBonus <= 0) {
         showLimitToast(
           `Has usado todas tus ${aiGenLimit} generaciones de este mes.`,
           "/dash/packs"
@@ -1127,11 +1129,12 @@ ${sectionsHtml}
             </span>
           )}
           {aiGenLimit !== null && (() => {
-            const remaining = aiGenLimit - aiGenUsed;
-            const color = remaining <= 0 ? "text-red-500" : remaining <= 2 ? "text-yellow-600" : "text-gray-400";
+            const monthlyRemaining = Math.max(0, aiGenLimit - aiGenUsed);
+            const totalRemaining = monthlyRemaining + aiGenBonus;
+            const color = totalRemaining <= 0 ? "text-red-500" : totalRemaining <= 2 ? "text-yellow-600" : "text-gray-400";
             return (
               <span className={`text-xs font-bold ${color}`}>
-                {remaining <= 0 ? "0" : remaining} gen restantes
+                {totalRemaining} gen restantes{aiGenBonus > 0 ? ` (+${aiGenBonus} bonus)` : ""}
               </span>
             );
           })()}
@@ -1204,7 +1207,7 @@ ${sectionsHtml}
       </div>
 
       {/* Limit banner */}
-      {aiGenLimit !== null && aiGenUsed >= aiGenLimit && (
+      {aiGenLimit !== null && aiGenUsed >= aiGenLimit && aiGenBonus <= 0 && (
         <div className="flex items-center justify-between px-4 py-2 bg-red-50 border-b-2 border-red-200 shrink-0">
           <span className="text-sm font-bold text-red-700">
             Agotaste tus generaciones de este mes.

@@ -12,7 +12,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, sectionId, instruction, currentHtml, referenceImage } =
+  const { landingId, sectionId, instruction, currentHtml, referenceImage, isVariant } =
     body;
 
   if (!landingId || !sectionId || !instruction) {
@@ -52,6 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
           currentHtml: currentHtml || section?.html || "<section></section>",
           instruction,
           referenceImage,
+          isVariant: !!isVariant,
           pexelsApiKey: process.env.PEXELS_API_KEY,
           onChunk(html) {
             send("chunk", { html });

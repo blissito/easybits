@@ -465,7 +465,7 @@ export default function Landing3Editor() {
     }
   }, [saveSections, pushUndo, setSections]);
 
-  async function handleRefine(instruction: string, referenceImage?: string) {
+  async function handleRefine(instruction: string, referenceImage?: string, opts?: { isVariant?: boolean }) {
     if (!selection?.sectionId) return;
     pushUndo(sectionsRef.current);
     setIsRefining(true);
@@ -483,6 +483,7 @@ export default function Landing3Editor() {
           instruction,
           currentHtml: section.html,
           ...(referenceImage && { referenceImage }),
+          ...(opts?.isVariant && { isVariant: true }),
         }),
       });
       if (!res.ok) throw new Error("Refine failed");

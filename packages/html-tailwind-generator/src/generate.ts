@@ -129,7 +129,7 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
     }
     content.push({
       type: "text",
-      text: `Generate a landing page inspired by this reference image for: ${prompt}${extra}${PROMPT_SUFFIX}`,
+      text: `Generate a landing page for: ${prompt}${extra}\n\nIMPORTANT: Use the reference image as a DIRECT visual guide. Replicate its layout structure, grid arrangement, spacing, visual hierarchy, and section organization as closely as possible. Match the number of columns, element positioning, and overall composition. Adapt the content to the prompt but keep the visual DNA of the reference.${PROMPT_SUFFIX}`,
     });
   } else {
     content.push({

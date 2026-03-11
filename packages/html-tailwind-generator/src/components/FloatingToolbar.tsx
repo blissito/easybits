@@ -14,7 +14,7 @@ const STYLE_PRESETS = [
 interface FloatingToolbarProps {
   selection: IframeMessage | null;
   iframeRect: DOMRect | null;
-  onRefine: (instruction: string, referenceImage?: string) => void;
+  onRefine: (instruction: string, referenceImage?: string, opts?: { isVariant?: boolean }) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
@@ -412,7 +412,7 @@ export function FloatingToolbar({
             const prompt = selection.isSectionRoot
               ? "Genera una variante completamente diferente de esta seccion. Manten el mismo contenido/informacion pero cambia radicalmente el layout, la estructura visual, y el estilo. Sorprendeme con un diseno creativo e inesperado."
               : `Modifica SOLO el elemento <${tag}> que contiene "${text}". Genera una variante visual diferente de ESE elemento (diferente estilo, layout, tipografia). NO modifiques ningun otro elemento de la seccion.`;
-            onRefine(prompt, refImage || undefined);
+            onRefine(prompt, refImage || undefined, { isVariant: selection.isSectionRoot ? true : undefined });
           }}
           disabled={isRefining}
           className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-30 transition-colors whitespace-nowrap shrink-0"

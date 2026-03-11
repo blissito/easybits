@@ -82,10 +82,6 @@ export function PageList({
   const [editLabel, setEditLabel] = useState("");
   const [showThemes, setShowThemes] = useState(false);
   const [versionDropdown, setVersionDropdown] = useState<string | null>(null);
-  const [variantPopup, setVariantPopup] = useState<string | null>(null);
-  const [variantPrompt, setVariantPrompt] = useState("");
-  const [variantImage, setVariantImage] = useState<string | null>(null);
-  const variantFileRef = useRef<HTMLInputElement>(null);
 
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -93,8 +89,7 @@ export function PageList({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (variantPopup) setVariantPopup(null);
-        else if (versionDropdown) setVersionDropdown(null);
+        if (versionDropdown) setVersionDropdown(null);
         else if (showThemes) setShowThemes(false);
       }
     };
@@ -112,7 +107,7 @@ export function PageList({
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onClick);
     };
-  }, [variantPopup, versionDropdown, showThemes]);
+  }, [versionDropdown, showThemes]);
 
   // Auto-scroll sidebar to selected thumbnail
   const initialScrollDone = useRef(false);
@@ -394,86 +389,6 @@ export function PageList({
                   >
                     &lt;/&gt;
                   </button>
-                  {onGenerateVariant && (
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (variantPopup === section.id) {
-                            setVariantPopup(null);
-                          } else {
-                            setVariantPopup(section.id);
-                            setVariantPrompt("");
-                            setVariantImage(null);
-                          }
-                        }}
-                        disabled={!!loadingVariantId}
-                        className="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-brand-600 hover:bg-brand-50 text-[9px] disabled:opacity-40"
-                        title="Generar variante"
-                      >
-                        ✦
-                      </button>
-                      {variantPopup === section.id && (
-                        <div
-                          className="absolute right-0 top-full mt-1 w-52 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 p-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <textarea
-                            autoFocus
-                            value={variantPrompt}
-                            onChange={(e) => setVariantPrompt(e.target.value)}
-                            placeholder="Describe los cambios..."
-                            className="w-full text-[11px] px-2 py-1.5 border border-gray-300 rounded-lg resize-none h-16"
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") setVariantPopup(null);
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                onGenerateVariant(section.id, variantPrompt || undefined, variantImage || undefined);
-                                setVariantPopup(null);
-                              }
-                            }}
-                          />
-                          {variantImage && (
-                            <div className="mt-1 flex items-center gap-1">
-                              <img src={variantImage} className="w-8 h-8 object-cover rounded" alt="" />
-                              <button onClick={() => setVariantImage(null)} className="text-[9px] text-red-500 font-bold">✕</button>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1 mt-1.5">
-                            <input
-                              ref={variantFileRef}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                const reader = new FileReader();
-                                reader.onload = () => setVariantImage(reader.result as string);
-                                reader.readAsDataURL(file);
-                              }}
-                            />
-                            <button
-                              onClick={() => variantFileRef.current?.click()}
-                              className="text-[9px] font-bold text-gray-500 hover:text-gray-700 px-1.5 py-1 border border-gray-200 rounded-lg"
-                              title="Adjuntar imagen de referencia"
-                            >
-                              Imagen
-                            </button>
-                            <button
-                              onClick={() => {
-                                onGenerateVariant(section.id, variantPrompt || undefined, variantImage || undefined);
-                                setVariantPopup(null);
-                              }}
-                              className="flex-1 text-[9px] font-bold text-white bg-brand-500 hover:bg-brand-600 px-2 py-1 rounded-lg"
-                            >
-                              {variantPrompt.trim() ? "Regenerar" : "Solo variante"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

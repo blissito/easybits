@@ -42,6 +42,51 @@ TAILWIND v3 NOTES:
 - Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)
 - Borders: border + border-gray-200 for visible borders`;
 
+/**
+ * Extract a text description from HTML for variant generation.
+ * Instead of sending full HTML to the model, we send a content summary
+ * so the model generates a completely new layout rather than tweaking colors.
+ */
+export function extractSectionDescription(html: string, label?: string): { content: string; layoutHint: string } {
+  // Extract headings
+  const headings = [...html.matchAll(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi)]
+    .map(m => m[1].replace(/<[^>]+>/g, "").trim())
+    .filter(Boolean);
+
+  // Extract paragraphs
+  const paragraphs = [...html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map(m => m[1].replace(/<[^>]+>/g, "").trim())
+    .filter(Boolean);
+
+  // Extract button/CTA text
+  const buttons = [...html.matchAll(/<(?:button|a)[^>]*>([\s\S]*?)<\/(?:button|a)>/gi)]
+    .map(m => m[1].replace(/<[^>]+>/g, "").trim())
+    .filter(t => t.length > 0 && t.length < 60);
+
+  // Count items (cards, list items, grid children)
+  const listItems = (html.match(/<li[\s>]/gi) || []).length;
+  const gridMatch = html.match(/grid-cols-(\d)/);
+  const gridCols = gridMatch ? parseInt(gridMatch[1]) : 0;
+
+  // Detect layout patterns for negative prompt
+  const layouts: string[] = [];
+  if (html.includes("grid")) layouts.push("grid");
+  if (html.includes("flex-col")) layouts.push("vertical-stack");
+  if (html.includes("flex-row") || html.includes("md:flex-row")) layouts.push("horizontal-flex");
+  if (html.includes("text-center") && !html.includes("text-left")) layouts.push("centered");
+  if (gridCols) layouts.push(`${gridCols}-column-grid`);
+
+  const content = [
+    label ? `Section: ${label}` : "",
+    headings.length ? `Headings: ${headings.join(" | ")}` : "",
+    paragraphs.length ? `Text: ${paragraphs.slice(0, 3).join(" ")}` : "",
+    buttons.length ? `CTAs: ${buttons.join(", ")}` : "",
+    listItems > 0 ? `${listItems} list/card items` : "",
+  ].filter(Boolean).join("\n");
+
+  return { content, layoutHint: layouts.join(", ") };
+}
+
 export interface RefineOptions {
   /** Anthropic API key. Falls back to ANTHROPIC_API_KEY env var */
   anthropicApiKey?: string;
@@ -53,6 +98,8 @@ export interface RefineOptions {
   instruction: string;
   /** Reference image (base64 data URI) for vision-based refinement */
   referenceImage?: string;
+  /** When true, generates a completely new layout variant instead of refining */
+  isVariant?: boolean;
   /** Custom system prompt (overrides default REFINE_SYSTEM) */
   systemPrompt?: string;
   /** Model ID (default: gpt-4o-mini/gpt-4o for OpenAI, claude-haiku/claude-sonnet for Anthropic) */
@@ -80,6 +127,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     currentHtml,
     instruction,
     referenceImage,
+    isVariant,
     systemPrompt = REFINE_SYSTEM,
     model: modelId,
     pexelsApiKey,
@@ -90,8 +138,9 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
   } = options;
 
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
-  const defaultOpenai = referenceImage ? "gpt-4o" : "gpt-4o-mini";
-  const defaultAnthropic = referenceImage ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
+  const useVision = !!referenceImage;
+  const defaultOpenai = useVision ? "gpt-4o" : "gpt-4o-mini";
+  const defaultAnthropic = useVision ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
   const model = await resolveModel({ openaiApiKey, anthropicApiKey, modelId, defaultOpenai, defaultAnthropic });
 
   // Build content (supports multimodal with reference image)
@@ -99,15 +148,26 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
   if (referenceImage) {
     content.push({ type: "image", image: referenceImage });
   }
-  content.push({
-    type: "text",
-    text: `Current HTML:\n${currentHtml}\n\nInstruction: ${instruction}\n\nReturn the updated HTML.`,
-  });
+
+  if (isVariant && !referenceImage) {
+    // Variant mode: send description instead of HTML to force creative layout
+    const { content: desc, layoutHint } = extractSectionDescription(currentHtml);
+    content.push({
+      type: "text",
+      text: `Generate a COMPLETELY NEW section with the following content. Create an original, creative layout.\n\nContent:\n${desc}\n\n${layoutHint ? `DO NOT use these layout patterns (the current design already uses them): ${layoutHint}. Choose a radically different structure.` : ""}\n\nReturn ONLY the <section>...</section> HTML with Tailwind classes.`,
+    });
+  } else {
+    content.push({
+      type: "text",
+      text: `Current HTML:\n${currentHtml}\n\nInstruction: ${instruction}\n\nReturn the updated HTML.`,
+    });
+  }
 
   const result = streamText({
     model,
     system: systemPrompt,
     messages: [{ role: "user", content }],
+    ...(isVariant && !referenceImage ? { temperature: 1.2 } : {}),
   });
 
   try {
