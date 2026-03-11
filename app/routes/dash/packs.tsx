@@ -233,7 +233,7 @@ function ReferralSection({
           <span className="font-bold">{stats.count}</span>
         </div>
         <div>
-          <span className="text-iron">Bonus ganado:</span>{" "}
+          <span className="text-iron">Bonus otorgado (total):</span>{" "}
           <span className="font-bold text-brand-500">{stats.totalBonus}</span>
         </div>
       </div>
