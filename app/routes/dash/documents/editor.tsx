@@ -412,7 +412,25 @@ export default function DocumentEditor() {
     try {
       // Check limit client-side
       if (aiGenLimit !== null && aiGenUsed >= aiGenLimit) {
-        errorToast(`Has usado todas tus ${aiGenLimit} generaciones de este mes.`);
+        toast.custom(
+          (t) => (
+            <div
+              className={`${t.visible ? "animate-enter" : "animate-leave"} flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-3 shadow-[4px_4px_0_0_rgba(0,0,0,1)]`}
+            >
+              <span className="text-sm font-bold text-red-700">
+                Has usado todas tus {aiGenLimit} generaciones de este mes.
+              </span>
+              <a
+                href="/dash/packs"
+                className="shrink-0 text-sm font-bold text-brand-600 underline hover:text-brand-800"
+                onClick={() => toast.dismiss(t.id)}
+              >
+                Comprar más →
+              </a>
+            </div>
+          ),
+          { duration: 6000 }
+        );
         setIsGenerating(false);
         return;
       }
@@ -1144,10 +1162,10 @@ ${sectionsHtml}
             Agotaste tus generaciones de este mes.
           </span>
           <Link
-            to="/plans"
+            to="/dash/packs"
             className="text-sm font-bold text-red-700 underline hover:text-red-900"
           >
-            Ver planes →
+            Comprar más →
           </Link>
         </div>
       )}
