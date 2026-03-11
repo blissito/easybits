@@ -94,12 +94,15 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, userPlan };
 };
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err: any) {
-      if (err?.code === "P2034" && i < retries - 1) continue;
+      if (err?.code === "P2034" && i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 50 * 2 ** i + Math.random() * 100));
+        continue;
+      }
       throw err;
     }
   }
@@ -498,15 +501,17 @@ export default function DocumentEditor() {
     }
   }
 
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const saveSections = useCallback((s: Section3[]) => {
-    queueMicrotask(() => {
+    clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
       // Strip ephemeral version history before persisting to DB
       const clean = s.map(({ versions, ...rest }: any) => rest);
       saveFetcher.submit(
         { intent: "update-sections", sections: JSON.stringify(clean) },
         { method: "post" }
       );
-    });
+    }, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

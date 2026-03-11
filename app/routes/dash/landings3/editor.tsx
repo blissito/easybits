@@ -47,13 +47,16 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   return { landing, websiteUrl };
 };
 
-/** Retry a DB operation on write conflict (P2034) */
-async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+/** Retry a DB operation on write conflict (P2034) with exponential backoff */
+async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err: any) {
-      if (err?.code === "P2034" && i < retries - 1) continue;
+      if (err?.code === "P2034" && i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 50 * 2 ** i + Math.random() * 100));
+        continue;
+      }
       throw err;
     }
   }
