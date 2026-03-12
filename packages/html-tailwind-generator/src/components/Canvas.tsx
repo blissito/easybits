@@ -69,7 +69,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     onReadyRef.current?.();
   }, [sections, postToIframe]);
 
-  // Incremental diff: detect added/updated/removed sections
+  // Incremental diff: detect added/updated/removed/renamed sections
   useEffect(() => {
     if (!ready) return;
 
@@ -77,10 +77,27 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     const currentIds = new Set(sections.map((s) => s.id));
     const sorted = [...sections].sort((a, b) => a.order - b.order);
 
-    // Add new sections
+    // Detect renames: a known id disappears and a new id appears at the same index
+    const removedIds = [...known.keys()].filter((id) => !currentIds.has(id));
+    const addedSections = sorted.filter((s) => !known.has(s.id));
+
+    // Match removed → added by position for rename (e.g. __building__ → real id)
+    const renamedSet = new Set<string>();
+    for (const removedId of removedIds) {
+      if (addedSections.length > 0) {
+        const added = addedSections.shift()!;
+        postToIframe({ action: "rename-section", oldId: removedId, newId: added.id, html: added.html });
+        known.delete(removedId);
+        known.set(added.id, added.html);
+        renamedSet.add(added.id);
+      }
+    }
+
+    // Add truly new sections (not renamed)
     for (const s of sorted) {
+      if (renamedSet.has(s.id)) continue;
       if (!known.has(s.id)) {
-        postToIframe({ action: "add-section", id: s.id, html: s.html, scroll: true });
+        postToIframe({ action: "add-section", id: s.id, html: s.html, scroll: s.id !== "__building__" });
         known.set(s.id, s.html);
       } else if (known.get(s.id) !== s.html) {
         // Update changed sections
@@ -89,8 +106,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
       }
     }
 
-    // Remove deleted sections
-    for (const id of known.keys()) {
+    // Remove deleted sections (that weren't renamed)
+    for (const id of [...known.keys()]) {
       if (!currentIds.has(id)) {
         postToIframe({ action: "remove-section", id });
         known.delete(id);

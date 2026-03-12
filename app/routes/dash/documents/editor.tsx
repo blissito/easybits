@@ -357,13 +357,21 @@ export default function DocumentEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployFetcher.state, deployFetcher.data, navigate]);
 
-  // Auto-generate on mount
+  // Auto-generate on mount (only when navigating from /new with ?generating=1)
   useEffect(() => {
-    if (!isGenerating || sections.length > 0) {
-      setIsGenerating(false);
-      return;
+    if (!isGenerating) return;
+    // Remove ?generating=1 from URL so refreshes don't re-trigger
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("generating")) {
+      url.searchParams.delete("generating");
+      window.history.replaceState({}, "", url.pathname + url.search);
     }
-    generateSections();
+    if (sections.length > 0) {
+      // Cover preview exists — generate remaining pages only
+      generateSections(undefined, true);
+    } else {
+      generateSections();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -439,15 +447,17 @@ export default function DocumentEditor() {
     [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
   `;
 
-  async function generateSections(extraInstructions?: string) {
+  async function generateSections(extraInstructions?: string, skipCover?: boolean) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setIsGenerating(true);
-    setSections([]);
+    // When skipCover, keep existing cover sections; otherwise clear all
+    const existingSections = skipCover ? [...sections] : [];
+    if (!skipCover) setSections([]);
     // Accumulated sections for final state update
-    const accumulated: Section3[] = [];
+    const accumulated: Section3[] = [...existingSections];
 
     try {
       // Check limit client-side
@@ -471,6 +481,7 @@ export default function DocumentEditor() {
           pageCount: Number(searchParams.get("pages")) || undefined,
           ...(extraInstructions ? { extraInstructions } : {}),
           ...(direction ? { direction } : {}),
+          ...(skipCover ? { skipCover: true } : {}),
         }),
         signal: controller.signal,
       });
@@ -520,15 +531,22 @@ export default function DocumentEditor() {
                 }
                 setSections([...accumulated]);
               } else if (eventType === "section") {
+                // Replace __building__ in-place instead of remove+add to avoid iframe flicker
                 const buildIdx = accumulated.findIndex((s) => s.id === "__building__");
-                if (buildIdx !== -1) accumulated.splice(buildIdx, 1);
-                accumulated.push(d);
+                if (buildIdx !== -1) {
+                  accumulated[buildIdx] = d;
+                } else {
+                  accumulated.push(d);
+                }
                 setSections([...accumulated]);
                 playTone();
+                canvasRef.current?.scrollToSection(d.id);
               } else if (eventType === "section-update") {
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
                 setSections([...accumulated]);
+              } else if (eventType === "error") {
+                errorToast(d.message || "Error en la generación");
               }
             } catch {
               /* skip */
@@ -713,6 +731,7 @@ export default function DocumentEditor() {
         }
       }
       saveSections(sectionsRef.current);
+      playTone();
       canvasRef.current?.scrollToSection(sectionId);
     } catch (err) {
       console.error("Refine error:", err);
@@ -811,6 +830,7 @@ export default function DocumentEditor() {
           }
         }
       }
+      playTone();
       canvasRef.current?.scrollToSection(sectionId);
       saveSections(sectionsRef.current);
     } catch (err) {
@@ -1383,28 +1403,7 @@ ${sectionsHtml}
         >
           <div className="flex-1 overflow-auto relative flex justify-center bg-gray-200">
             <div className="transition-all duration-300 h-full w-full">
-              {isGenerating && sections.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-24">
-                  <div className="mb-4">
-                    <span className="block w-8 h-8 border-[3px] border-gray-200 border-t-brand-500 rounded-full animate-spin" />
-                  </div>
-                  <p className="text-sm font-bold text-gray-700">
-                    Generando tu documento con AI...
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Cada p&aacute;gina tama&ntilde;o carta se genera una a una
-                  </p>
-                  <div className="mt-5">
-                    <BrutalButton
-                      size="chip"
-                      mode="ghost"
-                      onClick={stopGeneration}
-                    >
-                      Detener
-                    </BrutalButton>
-                  </div>
-                </div>
-              ) : sections.length === 0 ? (
+              {sections.length === 0 && !isGenerating ? (
                 <div className="flex flex-col items-center justify-center py-24">
                   <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
                 </div>
@@ -1426,6 +1425,13 @@ ${sectionsHtml}
                       }
                     }}
                   />
+                  {isGenerating && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
+                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                      <span className="text-sm font-bold">Generando...</span>
+                      <button onClick={stopGeneration} className="text-xs font-bold text-red-500 hover:underline ml-1">Detener</button>
+                    </div>
+                  )}
                   {isGenerating && (
                     <div
                       ref={streamEndRef}

@@ -3,13 +3,12 @@ import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { streamText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import type { Section3 } from "~/lib/landing3/types";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
 import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
 import { generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
 import { sanitizeSemanticColors } from "~/.server/sanitizeColors";
-import { getAiModel } from "~/.server/aiModels";
+import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 
 const VARIANT_SYSTEM_PROMPT = `You are an elite document designer. You create stunning visual variants of document pages for letter-sized (8.5" × 11") format.
 
@@ -123,7 +122,7 @@ export async function action({ request }: Route.ActionArgs) {
   let quotaIncremented = false;
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
-  const anthropic = createAnthropic({ apiKey: userKey || undefined });
+  const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
 
   const isVariantMode = instruction === "VARIANT_MODE";
   const systemPrompt = isVariantMode ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
@@ -209,10 +208,10 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
       };
 
       try {
-        const model = await getAiModel(isVariantMode ? "docVariant" : "docRefine");
+        const modelId = await getAiModel(isVariantMode ? "docVariant" : "docRefine");
 
         const result = streamText({
-          model: anthropic(model),
+          model: resolveModelLocal(modelId, openaiKey || undefined, userKey || undefined),
           system: systemPrompt,
           messages,
           maxTokens: isVariantMode ? 8000 : isNewSection ? 12000 : 4000,

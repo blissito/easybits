@@ -6,7 +6,7 @@ import { generateDocument } from "@easybits.cloud/html-tailwind-generator/genera
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
-import { getAiModel } from "~/.server/aiModels";
+import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 
 async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -31,7 +31,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction } = body;
+  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction, skipCover } = body;
 
   if (!landingId) {
     return Response.json({ error: "landingId required" }, { status: 400 });
@@ -52,7 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
-  const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI");
+  const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
 
   let quotaIncremented = false;
 
@@ -65,9 +65,11 @@ export async function action({ request }: Route.ActionArgs) {
       ? `Transform this content into beautiful document pages:\n\n${sourceContent.substring(0, 15000)}`
       : "Create a professional document",
     prompt ? `\nInstructions: ${prompt}` : "",
-    pageCount
-      ? `\nGenerate exactly ${pageCount} pages.`
-      : "\nGenerate 3-8 pages depending on content length.",
+    skipCover
+      ? `\nGenerate exactly ${Math.max(1, (pageCount || 5) - 1)} pages. Do NOT generate a cover page — the cover already exists. Start directly with the content pages (page 2 onwards).`
+      : pageCount
+        ? `\nGenerate exactly ${pageCount} pages.`
+        : "\nGenerate 3-8 pages depending on content length.",
   ].filter(Boolean).join("\n");
 
   const allSections: Section3[] = [];
@@ -83,10 +85,9 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
-        const docModel = await getAiModel("docGenerate");
+        const docModelId = await getAiModel("docGenerate");
+        const docModel = resolveModelLocal(docModelId, openaiKey || undefined, userKey || undefined);
         await generateDocument({
-          anthropicApiKey: userKey || undefined,
-          openaiApiKey: openaiKey || undefined,
           prompt: parts,
           logoUrl: resolvedLogoUrl,
           extraInstructions: extraInstructions || undefined,
@@ -124,9 +125,16 @@ export async function action({ request }: Route.ActionArgs) {
           },
           async onDone() {
             if (allSections.length > 0) {
+              // If skipCover, prepend existing sections from DB
+              let finalSections = allSections;
+              if (skipCover) {
+                const existing = await db.landing.findUnique({ where: { id: landingId }, select: { sections: true } });
+                const existingSections = (existing?.sections as any[]) || [];
+                finalSections = [...existingSections, ...allSections.map((s, i) => ({ ...s, order: existingSections.length + i }))];
+              }
               await db.landing.update({
                 where: { id: landingId },
-                data: { sections: allSections as any },
+                data: { sections: finalSections as any },
               });
             }
             send("done", { total: allSections.length });

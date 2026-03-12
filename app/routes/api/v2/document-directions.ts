@@ -6,7 +6,7 @@ import {
   generateHeroPreview,
 } from "@easybits.cloud/html-tailwind-generator/directions";
 import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
-import { getAiModel } from "~/.server/aiModels";
+import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -15,14 +15,14 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { prompt, sourceContent } = body;
+  const { prompt, sourceContent, referenceImage } = body;
 
   if (!prompt) {
     return Response.json({ error: "prompt required" }, { status: 400 });
   }
 
   const anthropicKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
-  const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI");
+  const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
 
   const brief = sourceContent
     ? `${prompt}\n\nSource content preview: ${sourceContent.substring(0, 500)}`
@@ -39,9 +39,9 @@ export async function action({ request }: Route.ActionArgs) {
 
       try {
         // Step 1: Generate 4 directions
-        const directionsModel = await getAiModel("docDirections");
+        const directionsModelId = await getAiModel("docDirections");
+        const directionsModel = resolveModelLocal(directionsModelId, openaiKey || undefined, anthropicKey || undefined);
         const directions = await generateDirections({
-          openaiApiKey: openaiKey || undefined,
           prompt: brief,
           count: 4,
           model: directionsModel,
@@ -49,15 +49,15 @@ export async function action({ request }: Route.ActionArgs) {
         send("directions", directions);
 
         // Step 2: Generate 4 cover previews in parallel (Haiku, ~3s)
-        const previewModel = await getAiModel("docDirectionsPreview");
+        const previewModelId = await getAiModel("docDirectionsPreview");
+        const previewModel = resolveModelLocal(previewModelId, openaiKey || undefined, anthropicKey || undefined);
         const previewPromises = directions.map((direction, index) =>
           generateHeroPreview({
-            openaiApiKey: openaiKey || undefined,
             prompt: brief,
             direction,
             product: "document",
-            useOpenai: true,
             model: previewModel,
+            referenceImage: referenceImage || undefined,
             onChunk: (partial) => {
               // Strip fake src attrs and send partial for real-time preview
               const cleaned = partial.replace(/<img([^>]*)\ssrc="[^"]*"([^>]*)>/gi, '<img$1$2>');
