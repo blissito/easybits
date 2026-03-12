@@ -10,27 +10,55 @@ import { sanitizeSemanticColors } from "./sanitizeColors";
 
 /**
  * Resolve AI model from available keys.
+ * If modelId is already a LanguageModel object, return it directly.
  * Prefers Anthropic, falls back to OpenAI.
  */
+function isOpenAiModel(id: string): boolean {
+  return /^(gpt-|o[1-9]|dall-e|tts-|whisper|chatgpt-)/.test(id);
+}
+
+function isLanguageModel(value: unknown): value is import("ai").LanguageModel {
+  return typeof value === "object" && value !== null && "modelId" in value && "provider" in value;
+}
+
 export async function resolveModel(opts: {
   openaiApiKey?: string;
   anthropicApiKey?: string;
-  modelId?: string;
+  modelId?: string | import("ai").LanguageModel;
   defaultOpenai: string;
   defaultAnthropic: string;
 }) {
+  // If modelId is already a model object, return it directly
+  if (opts.modelId && isLanguageModel(opts.modelId)) {
+    return opts.modelId;
+  }
+
+  const modelId = opts.modelId as string | undefined;
+
+  if (modelId && isOpenAiModel(modelId)) {
+    const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
+    if (openaiKey) {
+      const { createOpenAI } = await import("@ai-sdk/openai");
+      return createOpenAI({ apiKey: openaiKey })(modelId);
+    }
+    // OpenAI model requested but no key — fall through to Anthropic default
+  } else if (modelId) {
+    const anthropicKey = opts.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey) {
+      return createAnthropic({ apiKey: anthropicKey })(modelId);
+    }
+  }
+  // No explicit modelId — prefer Anthropic, fallback to OpenAI
   const anthropicKey = opts.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   if (anthropicKey) {
-    const anthropic = createAnthropic({ apiKey: anthropicKey });
-    return anthropic(opts.modelId || opts.defaultAnthropic);
+    return createAnthropic({ apiKey: anthropicKey })(opts.defaultAnthropic);
   }
   const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
   if (openaiKey) {
     const { createOpenAI } = await import("@ai-sdk/openai");
-    const openai = createOpenAI({ apiKey: openaiKey });
-    return openai(opts.modelId || opts.defaultOpenai);
+    return createOpenAI({ apiKey: openaiKey })(opts.defaultOpenai);
   }
-  return createAnthropic()(opts.modelId || opts.defaultAnthropic);
+  return createAnthropic()(opts.defaultAnthropic);
 }
 
 /**
@@ -123,8 +151,8 @@ export interface StreamGenerateOptions {
   anthropicApiKey?: string;
   /** OpenAI API key */
   openaiApiKey?: string;
-  /** Model ID override */
-  model?: string;
+  /** Model ID override or pre-built LanguageModel object */
+  model?: string | import("ai").LanguageModel;
   /** System prompt */
   systemPrompt: string;
   /** User message content (text or multimodal parts) */

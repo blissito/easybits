@@ -1,8 +1,7 @@
 import { generateObject, streamText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import { nanoid } from "nanoid";
+import { resolveModel } from "./streamCore";
 
 export const DesignDirectionSchema = z.object({
   name: z.string().describe("Creative direction name, e.g. 'The Editorial'"),
@@ -37,8 +36,8 @@ export interface DirectionsOptions {
   count?: number;
   /** "landing" generates hero sections, "document" generates cover pages */
   product?: "landing" | "document";
-  /** Override the model ID (default: gpt-4o-mini) */
-  model?: string;
+  /** Override the model ID or pass a pre-built LanguageModel object */
+  model?: string | import("ai").LanguageModel;
 }
 
 const DIRECTIONS_SYSTEM = `You are an elite creative director at a top design agency (Pentagram, Sagmeister, Collins).
@@ -58,6 +57,7 @@ RULES:
 - AT LEAST one direction must be dark-mode
 - AT LEAST one must use serif headings
 - AT LEAST one must be bold/editorial with huge typography
+- AT LEAST one layoutHint must include "photo" (e.g. "split-screen-photo", "immersive-gallery") — this tells the preview generator to use a real image
 - Colors must be cohesive palettes, not random. Think Dribbble-worthy.
 - Names should be evocative ("The Chronicle", "Neon Pulse", "Warm Atelier")`;
 
@@ -68,18 +68,20 @@ RULES:
 export async function generateDirections(
   options: DirectionsOptions
 ): Promise<DesignDirection[]> {
-  const { prompt, count = 4, openaiApiKey, model: modelId } = options;
+  const { prompt, count = 4, openaiApiKey, anthropicApiKey, model: modelId } = options;
 
-  const apiKey = openaiApiKey || process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OpenAI API key required for generateDirections");
-
-  const openai = createOpenAI({ apiKey });
-  const model = openai(modelId || "gpt-4o-mini");
+  const model = await resolveModel({
+    openaiApiKey,
+    anthropicApiKey,
+    modelId,
+    defaultOpenai: "gpt-4o-mini",
+    defaultAnthropic: "claude-haiku-4-5-20251001",
+  });
 
   const { object } = await generateObject({
     model,
     schema: z.object({
-      directions: z.array(DesignDirectionSchema).length(count),
+      directions: z.array(DesignDirectionSchema).describe(`Exactly ${count} design directions`),
     }),
     system: DIRECTIONS_SYSTEM,
     prompt: `Project brief: "${prompt}"
@@ -100,27 +102,22 @@ export async function generateHeroPreview(options: {
   prompt: string;
   direction: DesignDirection;
   product?: "landing" | "document";
-  /** Use 4o-mini instead of Haiku for cheaper previews */
-  useOpenai?: boolean;
-  /** Override model ID */
-  model?: string;
+  /** Override model ID or pass a pre-built LanguageModel object */
+  model?: string | import("ai").LanguageModel;
   /** Called with partial HTML as it streams in */
   onChunk?: (partialHtml: string) => void;
+  /** Reference image data URL — AI will replicate this design style */
+  referenceImage?: string;
 }): Promise<string> {
-  const { prompt, direction, anthropicApiKey, openaiApiKey, product = "landing", useOpenai = false, model: modelId, onChunk } = options;
+  const { prompt, direction, anthropicApiKey, openaiApiKey, product = "landing", model: modelId, onChunk, referenceImage } = options;
 
-  let model: any;
-  if (useOpenai) {
-    const apiKey = openaiApiKey || process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OpenAI API key required");
-    const openai = createOpenAI({ apiKey });
-    model = openai(modelId || "gpt-4o-mini");
-  } else {
-    const apiKey = anthropicApiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("Anthropic API key required");
-    const anthropic = createAnthropic({ apiKey });
-    model = anthropic(modelId || "claude-haiku-4-5-20251001");
-  }
+  const model = await resolveModel({
+    openaiApiKey,
+    anthropicApiKey,
+    modelId,
+    defaultOpenai: "gpt-4o-mini",
+    defaultAnthropic: "claude-haiku-4-5-20251001",
+  });
 
   const fontsUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(direction.headingFont).replace(/%20/g, "+")}:wght@400;700;900&family=${encodeURIComponent(direction.bodyFont).replace(/%20/g, "+")}:wght@400;500;600&display=swap`;
 
@@ -145,7 +142,8 @@ DESIGN APPROACHES (vary across directions):
 - Approach B: Split layout — image on one half, text on solid color half
 - Approach C: Full-bleed image WITH a solid overlay (bg-black/50 or bg-[primary]/80) AND white text on top
 - Approach D: Geometric/abstract design with color blocks, no image
-- Choose the approach that best fits the mood. NOT every cover needs a full-bleed image.
+- If the layout hint contains "photo", you MUST use Approach B or C (with a real image).
+- Otherwise, choose the approach that best fits the mood. NOT every cover needs a full-bleed image.
 
 If using images:
 - Pattern: <img data-image-query="specific english search query" alt="description" class="absolute inset-0 w-full h-full object-cover"/>
@@ -176,10 +174,7 @@ Then a <section> with min-h-[80vh].
 Use the exact hex colors in Tailwind arbitrary values like bg-[${direction.colors.primary}] text-[${direction.colors.text}] etc.
 Make it look like a $50K agency landing page hero.`;
 
-  const result = streamText({
-    model,
-    system: systemPrompt,
-    prompt: `Brief: "${prompt}"
+  const textPrompt = `Brief: "${prompt}"
 
 Design direction: "${direction.name}" — ${direction.tagline}
 Layout: ${direction.layoutHint}
@@ -188,7 +183,22 @@ Body font: ${direction.bodyFont}
 Colors: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}, surfaceAlt=${direction.colors.surfaceAlt}, text=${direction.colors.text}
 Mood: ${direction.mood}
 
-${sectionInstruction}`,
+${sectionInstruction}`;
+
+  const messages: any[] = [{
+    role: "user" as const,
+    content: referenceImage
+      ? [
+          { type: "image" as const, image: referenceImage },
+          { type: "text" as const, text: `Replicate the visual design style, layout, and aesthetic from the reference image above.\n\n${textPrompt}` },
+        ]
+      : textPrompt,
+  }];
+
+  const result = streamText({
+    model,
+    system: systemPrompt,
+    messages,
   });
 
   let html = "";

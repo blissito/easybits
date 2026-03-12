@@ -18,7 +18,7 @@ import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
 import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
-import { playTone } from "~/hooks/useNotificationSound";
+import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import { PLANS, normalizePlan } from "~/lib/plans";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import toast from "react-hot-toast";
@@ -359,6 +359,7 @@ export default function DocumentEditor() {
 
   // Auto-generate on mount (only when navigating from /new with ?generating=1)
   useEffect(() => {
+    warmAudio();
     if (!isGenerating) return;
     // Remove ?generating=1 from URL so refreshes don't re-trigger
     const url = new URL(window.location.href);
@@ -1639,10 +1640,10 @@ ${sectionsHtml}
                 }}
                 isLoading={regenTargetId ? !!variantLoadingId : isAddingSection}
                 isDisabled={regenTargetId
-                  ? (!addPrompt.trim() && !addRefImage) || !!variantLoadingId
+                  ? !!variantLoadingId
                   : (!addPrompt.trim() && !addParsedContent) || isAddingSection}
               >
-                {regenTargetId ? "Regenerar" : "Generar"}
+                {regenTargetId ? (addPrompt.trim() ? "Refinar" : "Variante") : "Generar"}
               </BrutalButton>
             </div>
           </div>

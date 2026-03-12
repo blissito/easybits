@@ -189,7 +189,7 @@ export interface GenerateDocumentOptions {
   logoUrl?: string;
   referenceImage?: string;
   extraInstructions?: string;
-  model?: string;
+  model?: string | import("ai").LanguageModel;
   pexelsApiKey?: string;
   /** Design direction — injects Google Fonts + hex colors into the prompt */
   direction?: DesignDirection;

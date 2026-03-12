@@ -208,7 +208,7 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
       };
 
       try {
-        const modelId = await getAiModel(isVariantMode ? "docVariant" : "docRefine");
+        const modelId = await getAiModel("docRefine");
 
         const result = streamText({
           model: resolveModelLocal(modelId, openaiKey || undefined, userKey || undefined),

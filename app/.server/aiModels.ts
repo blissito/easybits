@@ -1,21 +1,20 @@
 import { db } from "./db";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 
 export type DocModelOperation =
   | "docDirections"
   | "docDirectionsPreview"
   | "docGenerate"
-  | "docRefine"
-  | "docVariant";
+  | "docRefine";
 
 const DEFAULTS: Record<DocModelOperation, string> = {
   docDirections: "gpt-4.1-mini",
-  docDirectionsPreview: "claude-sonnet-4-6",
-  docGenerate: "claude-haiku-4-5-20251001",
-  docRefine: "claude-sonnet-4-6",
-  docVariant: "claude-sonnet-4-6",
+  docDirectionsPreview: "gemini-2.5-pro",
+  docGenerate: "gemini-2.5-pro",
+  docRefine: "gemini-2.5-pro",
 };
 
 let cache: Record<string, string> | null = null;
@@ -51,8 +50,13 @@ export function resolveModelLocal(modelId: string, openaiKey?: string, anthropic
   if (isOpenAi && openaiKey) {
     return createOpenAI({ apiKey: openaiKey })(modelId);
   }
+  const isGemini = /^gemini-/.test(modelId);
+  if (isGemini) {
+    const gKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (gKey) return createGoogleGenerativeAI({ apiKey: gKey })(modelId);
+  }
   const aKey = anthropicKey || process.env.ANTHROPIC_API_KEY;
-  if (!isOpenAi && aKey) {
+  if (!isOpenAi && !isGemini && aKey) {
     return createAnthropic({ apiKey: aKey })(modelId);
   }
   if (aKey) return createAnthropic({ apiKey: aKey })("claude-sonnet-4-6");

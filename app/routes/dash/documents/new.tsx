@@ -85,6 +85,12 @@ export default function NewDocument() {
   const [logoDataUrl, setLogoDataUrl] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Reference image state
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [referencePreview, setReferencePreview] = useState<string | null>(null);
+  const [referenceDataUrl, setReferenceDataUrl] = useState("");
+  const referenceInputRef = useRef<HTMLInputElement>(null);
+
   // Convert logo to data URL for passing to AI
   useEffect(() => {
     if (!logoFile) {
@@ -99,6 +105,19 @@ export default function NewDocument() {
 
     return () => URL.revokeObjectURL(url);
   }, [logoFile]);
+
+  // Convert reference image to data URL
+  useEffect(() => {
+    if (!referenceFile) {
+      setReferenceDataUrl("");
+      setReferencePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(referenceFile);
+    setReferencePreview(url);
+    resizeImageToDataUrl(referenceFile, 1024).then(setReferenceDataUrl);
+    return () => URL.revokeObjectURL(url);
+  }, [referenceFile]);
 
   const handleFiles = useCallback(
     async (newFiles: FileList | File[]) => {
@@ -174,6 +193,7 @@ export default function NewDocument() {
           sourceContent: parsedContent,
           logoDataUrl,
           pageCount,
+          referenceDataUrl,
         }));
         navigate("/dash/documents/directions");
       }}>
@@ -303,70 +323,136 @@ export default function NewDocument() {
           )}
         </div>
 
-        {/* Logo upload */}
-        <div>
-          <label className="block text-sm font-bold mb-1">
-            Logo
-            <span className="font-normal text-gray-400 ml-1">(opcional)</span>
-          </label>
-          <div className="flex items-center gap-4">
-            {logoPreview ? (
-              <div className="relative group">
-                <img
-                  src={logoPreview}
-                  alt="Logo"
-                  className="w-16 h-16 object-contain rounded-lg border-2 border-gray-200 bg-white p-1"
-                />
+        {/* Logo + Reference image */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-1">
+              Logo
+              <span className="font-normal text-gray-400 ml-1">(opcional)</span>
+            </label>
+            <div className="flex items-center gap-4">
+              {logoPreview ? (
+                <div className="relative group">
+                  <img
+                    src={logoPreview}
+                    alt="Logo"
+                    className="w-16 h-16 object-contain rounded-lg border-2 border-gray-200 bg-white p-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLogoFile(null)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => setLogoFile(null)}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => logoInputRef.current?.click()}
+                  className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  &times;
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
                 </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => logoInputRef.current?.click()}
-                className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-              </button>
-            )}
-            <div className="text-xs text-gray-500">
-              {logoPreview ? (
-                <p className="font-bold text-gray-700">{logoFile?.name}</p>
-              ) : (
-                <p>
-                  La AI incluir&aacute; tu logo en la portada y encabezados
-                </p>
               )}
+              <div className="text-xs text-gray-500">
+                {logoPreview ? (
+                  <p className="font-bold text-gray-700">{logoFile?.name}</p>
+                ) : (
+                  <p>
+                    La AI incluir&aacute; tu logo en la portada y encabezados
+                  </p>
+                )}
+              </div>
             </div>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && file.type.startsWith("image/")) {
+                  setLogoFile(file);
+                }
+              }}
+            />
           </div>
-          <input
-            ref={logoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file && file.type.startsWith("image/")) {
-                setLogoFile(file);
-              }
-            }}
-          />
+
+          <div>
+            <label className="block text-sm font-bold mb-1">
+              Imagen de referencia
+              <span className="font-normal text-gray-400 ml-1">(opcional)</span>
+            </label>
+            <div className="flex items-center gap-4">
+              {referencePreview ? (
+                <div className="relative group">
+                  <img
+                    src={referencePreview}
+                    alt="Referencia"
+                    className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setReferenceFile(null)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => referenceInputRef.current?.click()}
+                  className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="12" y1="18" x2="12" y2="12" />
+                    <line x1="9" y1="15" x2="15" y2="15" />
+                  </svg>
+                </button>
+              )}
+              <div className="text-xs text-gray-500">
+                {referencePreview ? (
+                  <p className="font-bold text-gray-700">{referenceFile?.name}</p>
+                ) : (
+                  <p>La AI replicar&aacute; este dise&ntilde;o</p>
+                )}
+              </div>
+            </div>
+            <input
+              ref={referenceInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && file.type.startsWith("image/")) {
+                  setReferenceFile(file);
+                }
+              }}
+            />
+          </div>
         </div>
 
         <div>

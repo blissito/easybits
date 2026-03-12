@@ -243,6 +243,22 @@ export function getIframeScript(): string {
       }
     }
 
+    if (msg.action === 'rename-section') {
+      var el = getSectionElement(msg.oldId);
+      if (el) {
+        el.setAttribute('data-section-id', msg.newId);
+        if (msg.html) {
+          if (typeof window.morphdom === 'function') {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = msg.html;
+            window.morphdom(el, tmp, { childrenOnly: true, onBeforeElUpdated: function(f,t){ return !f.isEqualNode(t); } });
+          } else {
+            el.innerHTML = msg.html;
+          }
+        }
+      }
+    }
+
     if (msg.action === 'remove-section') {
       var el = getSectionElement(msg.id);
       if (el) { el.remove(); }

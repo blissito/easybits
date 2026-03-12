@@ -1,25 +1,7 @@
 import { streamText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { enrichImages } from "./images/enrichImages";
 import { sanitizeSemanticColors } from "./sanitizeColors";
-
-async function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
-  // Prefer Anthropic for text generation when both keys are available
-  const anthropicKey = opts.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
-  if (anthropicKey) {
-    const anthropic = createAnthropic({ apiKey: anthropicKey });
-    return anthropic(opts.modelId || opts.defaultAnthropic);
-  }
-  // Fallback to OpenAI for text only if no Anthropic key
-  const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
-  if (openaiKey) {
-    const { createOpenAI } = await import("@ai-sdk/openai");
-    const openai = createOpenAI({ apiKey: openaiKey });
-    return openai(opts.modelId || opts.defaultOpenai);
-  }
-  // Last resort: createAnthropic() without key (uses env var)
-  return createAnthropic()(opts.modelId || opts.defaultAnthropic);
-}
+import { resolveModel } from "./streamCore";
 
 export const REFINE_SYSTEM = `You are an expert HTML/Tailwind CSS developer. You receive the current HTML of a landing page section and a user instruction.
 
