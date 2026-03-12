@@ -171,7 +171,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
       }
 
       if (
-        ["element-selected", "text-edited", "element-deselected", "section-html-updated", "undo", "redo"].includes(
+        ["element-selected", "element-contextmenu", "text-edited", "element-deselected", "section-html-updated", "undo", "redo"].includes(
           data.type
         )
       ) {

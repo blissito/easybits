@@ -11,8 +11,8 @@ export type DocModelOperation =
   | "docRefine";
 
 const DEFAULTS: Record<DocModelOperation, string> = {
-  docDirections: "gpt-4.1-mini",
-  docDirectionsPreview: "gemini-2.5-pro",
+  docDirections: "gemini-2.5-flash-lite",
+  docDirectionsPreview: "gemini-3-flash-preview",
   docGenerate: "gemini-2.5-pro",
   docRefine: "gemini-2.5-pro",
 };

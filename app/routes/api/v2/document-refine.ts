@@ -79,6 +79,43 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 - NEVER use emojis anywhere — use SVG icons or geometric shapes instead
 - Ensure strong contrast: dark text on light backgrounds, light text on dark backgrounds`;
 
+const ELEMENT_REFINE_SYSTEM_PROMPT = `You edit a single HTML element. Output ONLY the edited element — same wrapping tag.
+Rules:
+- Make the smallest change to fulfill the instruction
+- Keep all existing classes, styles, and child structure unless the instruction says otherwise
+- You CAN add new child elements inside the element if the instruction asks for additions (buttons, icons, text, etc.)
+- Do NOT add <section> wrapper — output the element directly
+- Maintain semantic color classes (bg-primary, text-on-surface, etc.)
+- For images: <img data-image-query="english search query" alt="description" class="..."/>
+- NEVER use emojis — use SVG icons or geometric shapes instead`;
+
+/** Extract a complete element from HTML starting at startIdx for the given tagName */
+function extractElement(html: string, startIdx: number, tagName: string): string {
+  const openPattern = new RegExp(`<${tagName}[\\s>/]`, "gi");
+  const closePattern = new RegExp(`</${tagName}>`, "gi");
+  let depth = 0;
+  let i = startIdx;
+  while (i < html.length) {
+    openPattern.lastIndex = i;
+    closePattern.lastIndex = i;
+    const openMatch = openPattern.exec(html);
+    const closeMatch = closePattern.exec(html);
+    if (!closeMatch) break;
+    if (openMatch && openMatch.index < closeMatch.index) {
+      depth++;
+      i = openMatch.index + openMatch[0].length;
+    } else {
+      depth--;
+      if (depth <= 0) {
+        return html.substring(startIdx, closeMatch.index + closeMatch[0].length);
+      }
+      i = closeMatch.index + closeMatch[0].length;
+    }
+  }
+  // Fallback: return from startIdx to end
+  return html.substring(startIdx);
+}
+
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -86,7 +123,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, sectionId, instruction, currentHtml, referenceImage, direction } =
+  const { landingId, sectionId, instruction, currentHtml, referenceImage, direction, openTag, elementText } =
     body;
 
   if (!landingId || !sectionId || !instruction) {
@@ -125,7 +162,7 @@ export async function action({ request }: Route.ActionArgs) {
   const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
 
   const isVariantMode = instruction === "VARIANT_MODE";
-  const systemPrompt = isVariantMode ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+  // Element-scoped detection is set below after pageHtml — declare systemPrompt later
 
   // Build neighbor pages context for style consistency
   const allSections = (body.allSections || []) as { id: string; label?: string; html: string }[];
@@ -144,6 +181,16 @@ export async function action({ request }: Route.ActionArgs) {
     if (neighbors.length > 0) {
       neighborContext = `\n\nHere are other pages in the same document for style reference:\n${neighbors.join("\n\n")}`;
     }
+
+    // For new sections, provide full document outline so AI can generate TOC/index
+    if (isNewSection && allSections.length > 2) {
+      const outline = allSections.map((s, i) => {
+        const headingMatch = s.html.match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
+        const heading = headingMatch ? headingMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+        return `- Page ${i + 1}: ${s.label || `Página ${i + 1}`}${heading ? ` — ${heading}` : ""}`;
+      }).join("\n");
+      neighborContext += `\n\nFull document outline (${allSections.length} pages):\n${outline}`;
+    }
   }
 
   // Build font instruction from direction
@@ -158,6 +205,59 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const pageHtml = currentHtml || section?.html || "<section></section>";
+
+  // Element-scoped refine: extract the specific element when openTag is provided
+  let elementHtml = "";
+  let elementRefine = false;
+  if (openTag && !isNewSection && !isVariantMode) {
+    const tagName = openTag.match(/^<(\w+)/)?.[1];
+    if (tagName) {
+      // Extract class from openTag for matching (DOM openTag may have extra attrs like style/outline)
+      const classMatch = openTag.match(/class="([^"]*)"/);
+      const openTagClass = classMatch ? classMatch[1] : null;
+
+      // Strategy: find by exact openTag first, then by tagName+class, then by text
+      const candidates: { html: string; startIdx: number }[] = [];
+
+      // Try exact match first
+      let searchFrom = 0;
+      while (true) {
+        const idx = pageHtml.indexOf(openTag, searchFrom);
+        if (idx < 0) break;
+        candidates.push({ html: extractElement(pageHtml, idx, tagName), startIdx: idx });
+        searchFrom = idx + openTag.length;
+      }
+
+      // If no exact match, search by tagName + class (handles DOM-modified openTags)
+      if (candidates.length === 0 && openTagClass) {
+        const tagPattern = new RegExp(`<${tagName}[^>]*class="${openTagClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`, "gi");
+        let m: RegExpExecArray | null;
+        while ((m = tagPattern.exec(pageHtml)) !== null) {
+          candidates.push({ html: extractElement(pageHtml, m.index, tagName), startIdx: m.index });
+        }
+      }
+
+      if (candidates.length === 1) {
+        elementHtml = candidates[0].html;
+        elementRefine = true;
+      } else if (candidates.length > 1 && elementText) {
+        const stripTags = (h: string) => h.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+        const targetText = elementText.replace(/\s+/g, " ").trim();
+        const match = candidates.find((c) => {
+          const ct = stripTags(c.html);
+          return ct.includes(targetText) || targetText.includes(ct);
+        });
+        elementHtml = (match || candidates[0]).html;
+        elementRefine = true;
+      } else if (candidates.length > 1) {
+        elementHtml = candidates[0].html;
+        elementRefine = true;
+      }
+    }
+  }
+
+  const systemPrompt = elementRefine ? ELEMENT_REFINE_SYSTEM_PROMPT : isVariantMode ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+
   const multiPageHint = isNewSection
     ? `\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page.
 CRITICAL: Each section MUST use this exact structure: <section class="w-[8.5in] h-[11in] relative overflow-hidden ...">
@@ -191,6 +291,11 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
       role: "user",
       content: `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${neighborContext}${fontInstruction}\n\nOutput ONLY the new <section> HTML.`,
     });
+  } else if (elementRefine) {
+    messages.push({
+      role: "user",
+      content: `Element to edit:\n${elementHtml}\n\nInstruction: ${instruction}${fontInstruction}\n\nPage context (DO NOT output this, for reference only):\n${pageHtml}`,
+    });
   } else {
     messages.push({
       role: "user",
@@ -214,7 +319,7 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
           model: resolveModelLocal(modelId, openaiKey || undefined, userKey || undefined),
           system: systemPrompt,
           messages,
-          maxTokens: isVariantMode ? 8000 : isNewSection ? 12000 : 4000,
+          maxTokens: isVariantMode ? 8000 : isNewSection ? 12000 : elementRefine ? 2000 : 4000,
         });
 
         let fullHtml = "";
@@ -230,16 +335,27 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
 
           // Send partial HTML every ~5 chunks for real-time feel
           if (chunkCount % 5 === 0) {
-            const sectionMatch = fullHtml.match(
-              /<section[\s\S]*<\/section>/i
-            );
-            if (sectionMatch) {
-              send("chunk", { html: sectionMatch[0] });
+            if (elementRefine) {
+              // AI outputs just the element — replace in page for live preview
+              let partial = fullHtml.replace(/^```html?\n?/i, "").replace(/\n?```$/i, "").trim();
+              // Close any unclosed tag so iframe can render
+              const tagName = openTag.match(/^<(\w+)/)?.[1];
+              if (tagName && !new RegExp(`</${tagName}>\\s*$`, "i").test(partial)) {
+                partial += `</${tagName}>`;
+              }
+              send("chunk", { html: pageHtml.replace(elementHtml, partial) });
             } else {
-              // Send partial: close the section tag so iframe can render
-              const openMatch = fullHtml.match(/<section[\s\S]*/i);
-              if (openMatch) {
-                send("chunk", { html: openMatch[0] + "</section>" });
+              const sectionMatch = fullHtml.match(
+                /<section[\s\S]*<\/section>/i
+              );
+              if (sectionMatch) {
+                send("chunk", { html: sectionMatch[0] });
+              } else {
+                // Send partial: close the section tag so iframe can render
+                const openMatch = fullHtml.match(/<section[\s\S]*/i);
+                if (openMatch) {
+                  send("chunk", { html: openMatch[0] + "</section>" });
+                }
               }
             }
           }
@@ -250,7 +366,14 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
         let finalHtml: string;
         let multipleSections: string[] | null = null;
 
-        if (isNewSection && allSectionMatches.length > 1) {
+        if (elementRefine) {
+          // AI output is just the edited element — strip markdown fences if present
+          let editedElement = fullHtml.replace(/^```html?\n?/i, "").replace(/\n?```$/i, "").trim();
+          // Remove any accidental <section> wrapper the AI may add
+          const innerMatch = editedElement.match(/<section[^>]*>([\s\S]*)<\/section>/i);
+          if (innerMatch) editedElement = innerMatch[1].trim();
+          finalHtml = pageHtml.replace(elementHtml, editedElement);
+        } else if (isNewSection && allSectionMatches.length > 1) {
           // Multiple pages generated — enrich each independently
           multipleSections = allSectionMatches;
           finalHtml = allSectionMatches.join("\n");

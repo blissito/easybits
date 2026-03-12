@@ -431,6 +431,32 @@ export function getIframeScript(): string {
       window.scrollTo(0, msg.y);
     }
 
+    if (msg.action === 'element-loading') {
+      var sectionEl = getSectionElement(msg.sectionId);
+      if (sectionEl && msg.elementPath) {
+        var allEls = sectionEl.querySelectorAll('*');
+        for (var i = 0; i < allEls.length; i++) {
+          if (getElementPath(allEls[i]) === msg.elementPath) {
+            var el = allEls[i];
+            el.style.position = 'relative';
+            el.style.overflow = 'hidden';
+            var overlay = document.createElement('div');
+            overlay.setAttribute('data-loading-overlay', 'true');
+            overlay.style.cssText = 'position:absolute;inset:0;z-index:999;border-radius:inherit;background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.6) 50%,rgba(255,255,255,0) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite;pointer-events:none;';
+            el.appendChild(overlay);
+            break;
+          }
+        }
+      }
+    }
+
+    if (msg.action === 'element-loading-clear') {
+      var overlays = document.querySelectorAll('[data-loading-overlay]');
+      for (var i = 0; i < overlays.length; i++) {
+        overlays[i].remove();
+      }
+    }
+
     if (msg.action === 'full-rewrite') {
       // Fallback: rewrite everything
       document.body.innerHTML = msg.html;

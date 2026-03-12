@@ -17,27 +17,18 @@ interface PageListProps {
   onCustomColorChange?: (colors: Partial<CustomColors>) => void;
   themeCssData?: { css: string; tailwindConfig: string };
   onRestoreVersion?: (sectionId: string, html: string) => void;
+  /** Navigate version without pushing to history — just swap displayed html */
+  onNavigateVersion?: (sectionId: string, html: string) => void;
   onGenerateVariant?: (sectionId: string, instruction?: string, referenceImage?: string) => void;
   onStopVariant?: () => void;
   loadingVariantId?: string | null;
+  refiningIds?: Set<string>;
   onContextMenu?: (sectionIds: string[], position: { x: number; y: number }) => void;
 }
 
 /** Section3 with optional version history */
 export interface Section3WithVersions extends Section3 {
   versions?: { html: string; timestamp: number }[];
-}
-
-/** Format relative time in Spanish */
-function formatTimeAgo(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Ahora";
-  if (mins < 60) return `Hace ${mins} min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `Hace ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `Hace ${days}d`;
 }
 
 /** Build a tiny HTML preview of a section for the thumbnail */
@@ -70,9 +61,11 @@ export function PageList({
   onCustomColorChange,
   themeCssData,
   onRestoreVersion,
+  onNavigateVersion,
   onGenerateVariant,
   onStopVariant,
   loadingVariantId,
+  refiningIds,
   onContextMenu,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
@@ -81,7 +74,10 @@ export function PageList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [showThemes, setShowThemes] = useState(false);
-  const [versionDropdown, setVersionDropdown] = useState<string | null>(null);
+  // Version navigation: index into versions array (undefined = current/active html)
+  const [versionView, setVersionView] = useState<Record<string, number>>({});
+  // Store the "current active" html when user first navigates back, so ▶ can restore it
+  const activeHtmlRef = useRef<Record<string, string>>({});
 
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -89,16 +85,12 @@ export function PageList({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (versionDropdown) setVersionDropdown(null);
-        else if (showThemes) setShowThemes(false);
+        if (showThemes) setShowThemes(false);
       }
     };
     const onClick = (e: MouseEvent) => {
       if (showThemes && themeRef.current && !themeRef.current.contains(e.target as Node)) {
         setShowThemes(false);
-      }
-      if (versionDropdown) {
-        setVersionDropdown(null);
       }
     };
     document.addEventListener("keydown", onKey);
@@ -107,7 +99,7 @@ export function PageList({
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onClick);
     };
-  }, [versionDropdown, showThemes]);
+  }, [showThemes]);
 
   // Auto-scroll sidebar to selected thumbnail
   const initialScrollDone = useRef(false);
@@ -116,13 +108,24 @@ export function PageList({
       const doScroll = () => itemRefs.current[selectedSectionIds[0]]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       if (!initialScrollDone.current) {
         initialScrollDone.current = true;
-        // Delay initial scroll to let thumbnails render
         setTimeout(doScroll, 100);
       } else {
         doScroll();
       }
     }
   }, [selectedSectionIds]);
+
+  // Auto-scroll to last thumbnail when new sections are added
+  const prevSectionCount = useRef(sections.length);
+  useEffect(() => {
+    if (sections.length > prevSectionCount.current) {
+      const lastId = sorted[sorted.length - 1]?.id;
+      if (lastId) {
+        setTimeout(() => itemRefs.current[lastId]?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 150);
+      }
+    }
+    prevSectionCount.current = sections.length;
+  }, [sections.length, sorted]);
 
   return (
     <div className="w-56 shrink-0 border-r border-gray-200 bg-white flex flex-col h-full overflow-hidden">
@@ -291,6 +294,13 @@ export function PageList({
                   />
                   {/* Transparent overlay to capture clicks on Safari (iframe swallows contextmenu despite pointer-events-none) */}
                   <div className="absolute inset-0 z-[2]" />
+                  {/* Refine loading overlay */}
+                  {refiningIds?.has(section.id) && (
+                    <div className="absolute inset-0 bg-white/60 z-10 flex flex-col items-center justify-center rounded-t-lg">
+                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                      <span className="text-[9px] font-bold text-brand-600 mt-1">Refinando</span>
+                    </div>
+                  )}
                   {/* Variant loading overlay */}
                   {loadingVariantId === section.id && (
                     <div className="absolute inset-0 bg-white/80 z-10 flex flex-col items-center justify-center rounded-t-lg">
@@ -308,6 +318,67 @@ export function PageList({
                   )}
                 </div>
               </div>
+              {/* Version arrows — only when versions exist */}
+              {(() => {
+                const sv = section as Section3WithVersions;
+                const versions = sv.versions || [];
+                if (versions.length === 0) return null;
+                // total = versions (old) + 1 (current active)
+                const total = versions.length + 1;
+                const viewIdx = versionView[section.id];
+                // undefined = current (last), else index into versions array
+                const currentPos = viewIdx !== undefined ? viewIdx + 1 : total;
+                const isFirst = currentPos === 1;
+                const isLast = currentPos === total;
+                return (
+                  <div className="flex items-center justify-center gap-1.5 px-1.5 py-0.5 bg-gray-100 border-x border-gray-200">
+                    <button
+                      disabled={isFirst}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // First time navigating back: snapshot current active html
+                        if (viewIdx === undefined) {
+                          activeHtmlRef.current[section.id] = section.html;
+                        }
+                        const newIdx = viewIdx !== undefined ? viewIdx - 1 : versions.length - 1;
+                        setVersionView((p) => ({ ...p, [section.id]: newIdx }));
+                        onNavigateVersion?.(section.id, versions[newIdx].html);
+                      }}
+                      className="w-4 h-4 flex items-center justify-center rounded text-gray-500 hover:text-brand-600 disabled:opacity-30 disabled:cursor-default text-[10px]"
+                    >
+                      &#9664;
+                    </button>
+                    <span className="text-[9px] font-bold text-gray-500 tabular-nums">
+                      {currentPos}/{total}
+                    </span>
+                    <button
+                      disabled={isLast}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (viewIdx !== undefined) {
+                          const newIdx = viewIdx + 1;
+                          if (newIdx >= versions.length) {
+                            // Back to current active
+                            setVersionView((p) => {
+                              const next = { ...p };
+                              delete next[section.id];
+                              return next;
+                            });
+                            const activeHtml = activeHtmlRef.current[section.id];
+                            if (activeHtml) onNavigateVersion?.(section.id, activeHtml);
+                          } else {
+                            setVersionView((p) => ({ ...p, [section.id]: newIdx }));
+                            onNavigateVersion?.(section.id, versions[newIdx].html);
+                          }
+                        }
+                      }}
+                      className="w-4 h-4 flex items-center justify-center rounded text-gray-500 hover:text-brand-600 disabled:opacity-30 disabled:cursor-default text-[10px]"
+                    >
+                      &#9654;
+                    </button>
+                  </div>
+                );
+              })()}
               {/* Label row */}
               <div className="flex items-center gap-1 px-1.5 py-1 bg-gray-50 rounded-b-lg border border-t-0 border-gray-200">
                 <span className="text-[10px] text-gray-400 font-mono w-3 shrink-0 text-right">
@@ -338,47 +409,6 @@ export function PageList({
                   </span>
                 )}
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {/* Versions */}
-                  {(section as Section3WithVersions).versions?.length ? (
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setVersionDropdown(versionDropdown === section.id ? null : section.id);
-                        }}
-                        className="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-brand-600 hover:bg-brand-50 text-[9px]"
-                        title={`${(section as Section3WithVersions).versions!.length} versiones anteriores`}
-                      >
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <circle cx="8" cy="8" r="6.5" /><path d="M8 4.5V8l2.5 1.5" />
-                        </svg>
-                      </button>
-                      {versionDropdown === section.id && (
-                        <div className="absolute left-0 bottom-full mb-1 w-44 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 max-h-48 overflow-y-auto">
-                          <div className="px-2 py-1 text-[9px] font-black text-gray-400 uppercase tracking-wider">
-                            Versiones ({(section as Section3WithVersions).versions!.length})
-                          </div>
-                          {(section as Section3WithVersions).versions!.slice().reverse().map((v) => {
-                            const ago = formatTimeAgo(v.timestamp);
-                            return (
-                              <button
-                                key={v.timestamp}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onRestoreVersion?.(section.id, v.html);
-                                  setVersionDropdown(null);
-                                }}
-                                className="w-full text-left px-2 py-1.5 text-[10px] hover:bg-brand-50 flex items-center justify-between gap-2 transition-colors"
-                              >
-                                <span className="text-gray-600 truncate">{ago}</span>
-                                <span className="text-brand-600 font-bold text-[9px] shrink-0">Restaurar</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

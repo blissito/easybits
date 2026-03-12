@@ -242,6 +242,7 @@ export default function DocumentEditor() {
   }>();
   const [activeIntent, setActiveIntent] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sectionIds: string[] } | null>(null);
+
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 
   const [sections, _setSections] = useState<Section3[]>(() => {
@@ -276,7 +277,7 @@ export default function DocumentEditor() {
 
   // Selection state for FloatingToolbar
   const [selection, setSelection] = useState<IframeMessage | null>(null);
-  const [isRefining, setIsRefining] = useState(false);
+  const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
   const iframeRectRef = useRef<DOMRect | null>(null);
@@ -663,8 +664,14 @@ export default function DocumentEditor() {
 
   async function handleRefine(instruction: string, referenceImage?: string) {
     if (!selection?.sectionId) return;
+    const refineId = selection.sectionId;
+    const isElementScoped = !!(selection && !selection.isSectionRoot && selection.openTag && selection.elementPath);
     pushUndo(sectionsRef.current);
-    setIsRefining(true);
+    setRefiningSections((prev) => new Set(prev).add(refineId));
+    // Show shimmer on the element being refined
+    if (isElementScoped) {
+      canvasRef.current?.postMessage({ action: "element-loading", sectionId: refineId, elementPath: selection.elementPath });
+    }
     try {
       const section = sections.find((s) => s.id === selection.sectionId);
       if (!section) return;
@@ -690,6 +697,10 @@ export default function DocumentEditor() {
           currentHtml: section.html,
           ...(referenceImage && { referenceImage }),
           ...(direction && { direction }),
+          ...(selection && !selection.isSectionRoot && selection.openTag && {
+            openTag: selection.openTag,
+            elementText: selection.text,
+          }),
         }),
       });
       if (!res.ok) {
@@ -720,6 +731,10 @@ export default function DocumentEditor() {
               const d = JSON.parse(line.slice(6));
               if (event === "error") throw new Error(d.message || "Error en generación");
               if ((event === "chunk" || event === "done") && d.html) {
+                // Clear shimmer on first chunk — streaming content replaces it
+                if (isElementScoped) {
+                  canvasRef.current?.postMessage({ action: "element-loading-clear" });
+                }
                 setSections((prev) =>
                   prev.map((s) =>
                     s.id === sectionId ? { ...s, html: d.html } : s
@@ -732,14 +747,13 @@ export default function DocumentEditor() {
         }
       }
       saveSections(sectionsRef.current);
-      playTone();
       canvasRef.current?.scrollToSection(sectionId);
     } catch (err) {
       console.error("Refine error:", err);
       errorToast((err as Error).message || "Error al refinar página");
       // Rollback the premature version snapshot
-      if (selection?.sectionId) {
-        const rollbackId = selection.sectionId;
+      {
+        const rollbackId = refineId;
         setSections((prev) =>
           prev.map((s) => {
             if (s.id !== rollbackId) return s;
@@ -750,7 +764,12 @@ export default function DocumentEditor() {
         );
       }
     } finally {
-      setIsRefining(false);
+      canvasRef.current?.postMessage({ action: "element-loading-clear" });
+      setRefiningSections((prev) => {
+        const next = new Set(prev);
+        next.delete(refineId);
+        return next;
+      });
     }
   }
 
@@ -989,6 +1008,7 @@ export default function DocumentEditor() {
               if ((event === "chunk" || event === "done") && d.html) {
                 if (event === "done" && d.sections && d.sections.length > 1) {
                   // Multiple pages returned — replace placeholder with all pages
+                  let lastNewId = "";
                   setSections((prev) => {
                     const without = prev.filter((s) => s.id !== newId);
                     const newSections = d.sections.map((html: string, i: number) => ({
@@ -997,10 +1017,16 @@ export default function DocumentEditor() {
                       html,
                       label: `Página ${without.length + i + 1}`,
                     }));
+                    lastNewId = newSections[newSections.length - 1].id;
                     const updated = [...without, ...newSections];
                     saveSections(updated);
                     return updated;
                   });
+                  playTone();
+                  setTimeout(() => {
+                    setSelectedSectionIds([lastNewId]);
+                    setTimeout(() => canvasRef.current?.scrollToSection(lastNewId), 300);
+                  }, 100);
                 } else {
                   setSections((prev) =>
                     prev.map((s) => (s.id === newId ? { ...s, html: d.html } : s))
@@ -1013,6 +1039,9 @@ export default function DocumentEditor() {
                       saveSections(updated);
                       return updated;
                     });
+                    playTone();
+                    setSelectedSectionIds([newId]);
+                    setTimeout(() => canvasRef.current?.scrollToSection(newId), 300);
                   }
                 }
               }
@@ -1071,22 +1100,66 @@ export default function DocumentEditor() {
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section {
       width: 8.5in;
+      min-height: 11in;
       height: 11in;
       overflow: hidden;
+      position: relative;
       page-break-after: always;
       break-after: page;
       page-break-inside: avoid;
       break-inside: avoid;
+      box-sizing: border-box;
     }
     .page-section:last-child { page-break-after: auto; break-after: auto; }
+    @media print {
+      .page-section { page-break-after: always !important; break-after: page !important; }
+      .page-section:last-child { page-break-after: auto !important; break-after: auto !important; }
+    }
   </style>
 </head>
 <body>
 ${sectionsHtml}
 <script>
-  window.onload = () => {
-    setTimeout(() => window.print(), 1500);
-  };
+  // Tailwind CDN injects a <style> into <head> when done processing.
+  // Watch for it, then wait for all images, then print.
+  (function() {
+    var printed = false;
+    function doPrint() {
+      if (printed) return;
+      printed = true;
+      // Wait for all images to load before printing
+      var imgs = Array.from(document.images);
+      var pending = imgs.filter(function(img) { return !img.complete; });
+      if (pending.length === 0) { window.print(); return; }
+      var loaded = 0;
+      function check() { if (++loaded >= pending.length) window.print(); }
+      pending.forEach(function(img) {
+        img.addEventListener('load', check);
+        img.addEventListener('error', check);
+      });
+      // Safety: don't wait more than 5s for images
+      setTimeout(function() { window.print(); }, 5000);
+    }
+
+    // MutationObserver on <head>: Tailwind CDN adds/updates a <style> tag
+    var observer = new MutationObserver(function(mutations) {
+      for (var i = 0; i < mutations.length; i++) {
+        var nodes = mutations[i].addedNodes;
+        for (var j = 0; j < nodes.length; j++) {
+          if (nodes[j].tagName === 'STYLE') {
+            // Tailwind style injected — debounce briefly then print
+            observer.disconnect();
+            setTimeout(doPrint, 300);
+            return;
+          }
+        }
+      }
+    });
+    observer.observe(document.head, { childList: true });
+
+    // Fallback: if Tailwind CDN already ran or never fires, print after 4s
+    setTimeout(function() { observer.disconnect(); doPrint(); }, 4000);
+  })();
 <\/script>
 </body>
 </html>`;
@@ -1124,6 +1197,10 @@ ${sectionsHtml}
 
   return (
     <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
+      {/* Experimental banner */}
+      <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-center text-xs text-amber-800 font-medium shrink-0">
+        Experimental — la velocidad de generaci&oacute;n podr&iacute;a no ser la &oacute;ptima. Ten paciencia mientras mejoramos el rendimiento.
+      </div>
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 px-4 py-2 shrink-0 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
@@ -1292,6 +1369,7 @@ ${sectionsHtml}
             onGenerateVariant={handleGenerateVariant}
             onStopVariant={stopVariant}
             loadingVariantId={variantLoadingId}
+            refiningIds={refiningSections}
             onRestoreVersion={(sectionId, oldHtml) => {
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
@@ -1301,6 +1379,12 @@ ${sectionsHtml}
                 return { ...s, html: oldHtml, versions } as any;
               });
               handleSectionsChange(updated);
+            }}
+            onNavigateVersion={(sectionId, html) => {
+              // Just swap displayed html — no version push, no save
+              setSections((prev) =>
+                prev.map((s) => s.id === sectionId ? { ...s, html } : s)
+              );
             }}
           />
         )}
@@ -1426,6 +1510,12 @@ ${sectionsHtml}
                       }
                     }}
                   />
+                  {refiningSections.size > 0 && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
+                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                      <span className="text-sm font-bold">Refinando{refiningSections.size > 1 ? ` (${refiningSections.size})` : ""}...</span>
+                    </div>
+                  )}
                   {isGenerating && (
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
                       <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
@@ -1472,8 +1562,8 @@ ${sectionsHtml}
           </div>
         </div>
 
-        {/* Floating toolbar */}
-        <FloatingToolbar
+        {/* Floating toolbar — hidden if selected section is refining */}
+        {!(selection?.sectionId && refiningSections.has(selection.sectionId)) && <FloatingToolbar
           selection={selection}
           iframeRect={iframeRectRef.current}
           onRefine={handleRefine}
@@ -1488,10 +1578,10 @@ ${sectionsHtml}
           onChangeTag={handleChangeTag}
           onReplaceClass={handleReplaceClass}
           onDeleteElement={handleDeleteElement}
-          isRefining={isRefining}
+          isRefining={refiningSections.size > 0}
           hideStylePresets
           themeColors={resolvedThemeColors}
-        />
+        />}
       </div>
 
       {/* Add pages modal */}

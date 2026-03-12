@@ -19,6 +19,7 @@ export interface IframeMessage {
     | "section-html-updated"
     | "undo"
     | "redo";
+
   sectionId?: string;
   tagName?: string;
   rect?: { top: number; left: number; width: number; height: number };
