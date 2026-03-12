@@ -675,6 +675,8 @@ export default function DocumentEditor() {
     const isElementScoped = !!(selection && !selection.isSectionRoot && selection.openTag && selection.elementPath);
     pushUndo(sectionsRef.current);
     setRefiningSections((prev) => new Set(prev).add(refineId));
+    const abortController = new AbortController();
+    refineAbortMap.current.set(refineId, abortController);
     // Show shimmer on the element being refined
     if (isElementScoped) {
       canvasRef.current?.postMessage({ action: "element-loading", sectionId: refineId, elementPath: selection.elementPath });
@@ -697,6 +699,7 @@ export default function DocumentEditor() {
       const res = await fetch("/api/v2/document-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           landingId: landing.id,
           sectionId,
@@ -756,6 +759,7 @@ export default function DocumentEditor() {
       saveSections(sectionsRef.current);
       canvasRef.current?.scrollToSection(sectionId);
     } catch (err) {
+      if ((err as Error).name === "AbortError") return; // User cancelled — keep last chunk
       console.error("Refine error:", err);
       errorToast((err as Error).message || "Error al refinar página");
       // Rollback the premature version snapshot
@@ -771,6 +775,7 @@ export default function DocumentEditor() {
         );
       }
     } finally {
+      refineAbortMap.current.delete(refineId);
       canvasRef.current?.postMessage({ action: "element-loading-clear" });
       setRefiningSections((prev) => {
         const next = new Set(prev);
@@ -780,6 +785,7 @@ export default function DocumentEditor() {
     }
   }
 
+  const refineAbortMap = useRef<Map<string, AbortController>>(new Map());
   const variantAbortRef = useRef<AbortController | null>(null);
 
   function stopVariant() {
@@ -1535,6 +1541,15 @@ ${sectionsHtml}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
                       <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
                       <span className="text-sm font-bold">Refinando{refiningSections.size > 1 ? ` (${refiningSections.size})` : ""}...</span>
+                      <button
+                        onClick={() => {
+                          for (const [, ctrl] of refineAbortMap.current) ctrl.abort();
+                          refineAbortMap.current.clear();
+                        }}
+                        className="text-xs font-bold text-red-500 hover:underline ml-1"
+                      >
+                        Detener
+                      </button>
                     </div>
                   )}
                   {isGenerating && (
