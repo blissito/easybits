@@ -898,6 +898,9 @@ export default function DocumentEditor() {
     sorted.splice(toIndex, 0, moved);
     const reordered = sorted.map((s, i) => ({ ...s, order: i }));
     handleSectionsChange(reordered);
+    // Explicitly tell canvas the new order (don't rely only on useEffect diff)
+    const newOrder = sorted.map((s) => s.id);
+    setTimeout(() => canvasRef.current?.postMessage({ action: "reorder-sections", order: newOrder }), 100);
   }
 
   function handleChangeTag(sectionId: string, elementPath: string, newTag: string) {
