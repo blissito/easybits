@@ -9,6 +9,7 @@ export default defineConfig({
     generateDocument: "src/generateDocument.ts",
     refine: "src/refine.ts",
     deploy: "src/deploy.ts",
+    directions: "src/directions.ts",
   },
   format: ["esm"],
   dts: true,
@@ -29,6 +30,8 @@ export default defineConfig({
     "@codemirror/language",
     "@codemirror/autocomplete",
     "react-icons",
+    "zod",
+    "nanoid",
   ],
   jsx: "automatic",
 });

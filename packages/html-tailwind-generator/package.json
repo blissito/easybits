@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/html-tailwind-generator",
-  "version": "0.2.72",
+  "version": "0.2.80",
   "description": "AI-powered landing page generator with Tailwind CSS — canvas editor, streaming generation, and one-click deploy",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -34,6 +34,10 @@
     "./deploy": {
       "types": "./dist/deploy.d.ts",
       "import": "./dist/deploy.js"
+    },
+    "./directions": {
+      "types": "./dist/directions.d.ts",
+      "import": "./dist/directions.js"
     }
   },
   "files": [
@@ -95,7 +99,7 @@
     }
   },
   "dependencies": {
-    "@easybits.cloud/html-tailwind-generator": "^0.2.47",
+    "@easybits.cloud/html-tailwind-generator": "^0.2.79",
     "nanoid": "^5.1.5"
   },
   "devDependencies": {

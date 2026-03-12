@@ -6,6 +6,7 @@ import { generateDocument } from "@easybits.cloud/html-tailwind-generator/genera
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
+import { getAiModel } from "~/.server/aiModels";
 
 async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -30,7 +31,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount } = body;
+  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction } = body;
 
   if (!landingId) {
     return Response.json({ error: "landingId required" }, { status: 400 });
@@ -82,13 +83,16 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
+        const docModel = await getAiModel("docGenerate");
         await generateDocument({
           anthropicApiKey: userKey || undefined,
           openaiApiKey: openaiKey || undefined,
           prompt: parts,
           logoUrl: resolvedLogoUrl,
           extraInstructions: extraInstructions || undefined,
+          direction: direction || undefined,
           pexelsApiKey: process.env.PEXELS_API_KEY,
+          model: docModel,
           onRawChunk(rawBuffer, completedCount) {
             const htmlMatch = rawBuffer.match(/"html"\s*:\s*"([\s\S]*)/);
             if (!htmlMatch) return;

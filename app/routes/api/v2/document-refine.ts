@@ -9,6 +9,7 @@ import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGener
 import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
 import { generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
 import { sanitizeSemanticColors } from "~/.server/sanitizeColors";
+import { getAiModel } from "~/.server/aiModels";
 
 const VARIANT_SYSTEM_PROMPT = `You are an elite document designer. You create stunning visual variants of document pages for letter-sized (8.5" × 11") format.
 
@@ -86,7 +87,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, sectionId, instruction, currentHtml, referenceImage } =
+  const { landingId, sectionId, instruction, currentHtml, referenceImage, direction } =
     body;
 
   if (!landingId || !sectionId || !instruction) {
@@ -146,6 +147,17 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
+  // Build font instruction from direction
+  let fontInstruction = "";
+  if (direction?.headingFont || direction?.bodyFont) {
+    const fontsUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(direction.headingFont).replace(/%20/g, "+")}:wght@400;700;900&family=${encodeURIComponent(direction.bodyFont).replace(/%20/g, "+")}:wght@400;500;600&display=swap`;
+    fontInstruction = `\n\nTYPOGRAPHY — CRITICAL: Maintain these fonts on ALL elements:
+- Headings: style="font-family: '${direction.headingFont}', sans-serif" (inline style on h1, h2, h3, etc.)
+- Body text: style="font-family: '${direction.bodyFont}', sans-serif" (inline style on p, li, td, span, etc.)
+- Include <link href="${fontsUrl}" rel="stylesheet"> inside the <section> if not already present.
+- NEVER remove or change these font-family declarations.`;
+  }
+
   const pageHtml = currentHtml || section?.html || "<section></section>";
   const multiPageHint = isNewSection
     ? `\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page.
@@ -171,19 +183,19 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
         imageContent,
         {
           type: "text",
-          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}\n\nUse the image as design reference. ${outputHint}`,
+          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}${fontInstruction}\n\nUse the image as design reference. ${outputHint}`,
         },
       ],
     });
   } else if (isVariantMode) {
     messages.push({
       role: "user",
-      content: `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${neighborContext}\n\nOutput ONLY the new <section> HTML.`,
+      content: `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${neighborContext}${fontInstruction}\n\nOutput ONLY the new <section> HTML.`,
     });
   } else {
     messages.push({
       role: "user",
-      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}\n\n${outputHint}`,
+      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}${fontInstruction}\n\n${outputHint}`,
     });
   }
 
@@ -197,7 +209,7 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
       };
 
       try {
-        const model = "claude-haiku-4-5-20251001";
+        const model = await getAiModel(isVariantMode ? "docVariant" : "docRefine");
 
         const result = streamText({
           model: anthropic(model),

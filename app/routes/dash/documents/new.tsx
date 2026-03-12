@@ -1,10 +1,9 @@
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { Form, Link, redirect, useNavigation, useNavigate } from "react-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { HiSparkles } from "react-icons/hi2";
 import { data } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
-import { db } from "~/.server/db";
 
 import { parseFiles, combineContent, combineContentWithMeta, MAX_FILE_SIZE, MAX_CONTENT_CHARS } from "~/lib/documents/parseFiles";
 import type { Route } from "./+types/new";
@@ -15,44 +14,18 @@ export const meta = () => [
 ];
 
 export const action = async ({ request }: Route.ActionArgs) => {
-  const user = await getUserOrRedirect(request);
+  await getUserOrRedirect(request);
+  // We don't create the Landing here — the directions page creates it after user picks a style
+  // Just validate and redirect
   const formData = await request.formData();
   const name = String(formData.get("name") || "").trim();
-  const prompt = String(formData.get("prompt") || "").trim();
-  const sourceContent = String(formData.get("sourceContent") || "").trim();
-  const logoDataUrl = String(formData.get("logoDataUrl") || "").trim();
-  const pageCount = Math.min(20, Math.max(1, Number(formData.get("pageCount")) || 5));
 
   if (!name) {
     return data({ error: "El nombre es requerido" });
   }
 
-  const metadata: Record<string, unknown> = {};
-  if (sourceContent) metadata.sourceContent = sourceContent;
-
-  const landing = await db.landing.create({
-    data: {
-      name,
-      prompt:
-        prompt ||
-        "Transforma este contenido en un documento profesional con diseño atractivo",
-      sections: [],
-      version: 4,
-      ownerId: user.id,
-      metadata,
-    },
-  });
-
-  // Store logo as data URL directly in metadata (avoids Tigris 403 issues)
-  if (logoDataUrl) {
-    metadata.logoUrl = logoDataUrl;
-    await db.landing.update({
-      where: { id: landing.id },
-      data: { metadata },
-    });
-  }
-
-  return redirect(`/dash/documents/${landing.id}?generating=1&pages=${pageCount}`);
+  // Form data is passed via sessionStorage on the client side (see component below)
+  return redirect("/dash/documents/directions");
 };
 
 const brutalInput =
@@ -93,6 +66,7 @@ const ACCEPTED_TYPES = ".txt,.md,.csv,.xlsx,.xls,.docx,.pdf";
 
 export default function NewDocument() {
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const isSubmitting = navigation.state === "submitting";
   const [nameValue, setNameValue] = useState("");
   const [promptValue, setPromptValue] = useState("");
@@ -191,7 +165,18 @@ export default function NewDocument() {
         </h1>
       </div>
 
-      <Form method="post" className="space-y-6">
+      <form className="space-y-6" onSubmit={(e) => {
+        e.preventDefault();
+        if (!nameValue.trim()) return;
+        sessionStorage.setItem("doc-new", JSON.stringify({
+          name: nameValue,
+          prompt: promptValue,
+          sourceContent: parsedContent,
+          logoDataUrl,
+          pageCount,
+        }));
+        navigate("/dash/documents/directions");
+      }}>
         {/* Hidden fields */}
         <input type="hidden" name="sourceContent" value={parsedContent} />
         <input type="hidden" name="logoDataUrl" value={logoDataUrl} />
@@ -481,7 +466,7 @@ export default function NewDocument() {
         >
           <HiSparkles className="inline -mt-0.5" /> Generar documento
         </BrutalButton>
-      </Form>
+      </form>
     </article>
   );
 }

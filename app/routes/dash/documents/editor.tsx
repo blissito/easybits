@@ -106,6 +106,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const meta = (landing.metadata as Record<string, unknown>) || {};
   const sourceContent = meta.sourceContent as string | undefined;
   const logoUrl = meta.logoUrl as string | undefined;
+  const direction = meta.direction as Record<string, unknown> | undefined;
   // AI generation usage
   const userMeta = (user.metadata as Record<string, unknown>) || {};
   const userPlan = normalizePlan(userMeta.plan as string);
@@ -116,7 +117,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
   const sectionVersions = (landing.sectionVersions as Record<string, { html: string; timestamp: number }[]>) || {};
 
-  return { landing, websiteUrl, sourceContent, logoUrl, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions };
+  return { landing, websiteUrl, sourceContent, logoUrl, direction, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -226,7 +227,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
 export default function DocumentEditor() {
   const {
-    landing, websiteUrl, sourceContent, logoUrl,
+    landing, websiteUrl, sourceContent, logoUrl, direction,
     aiGenUsed: initialAiGenUsed, aiGenLimit, aiGenBonus, userPlan,
     sectionVersions: savedVersions,
   } = useLoaderData<typeof loader>();
@@ -469,6 +470,7 @@ export default function DocumentEditor() {
           logoUrl,
           pageCount: Number(searchParams.get("pages")) || undefined,
           ...(extraInstructions ? { extraInstructions } : {}),
+          ...(direction ? { direction } : {}),
         }),
         signal: controller.signal,
       });
@@ -668,6 +670,7 @@ export default function DocumentEditor() {
           instruction,
           currentHtml: section.html,
           ...(referenceImage && { referenceImage }),
+          ...(direction && { direction }),
         }),
       });
       if (!res.ok) {
@@ -766,6 +769,7 @@ export default function DocumentEditor() {
           instruction: instruction || "VARIANT_MODE",
           currentHtml: section.html,
           ...(referenceImage ? { referenceImage } : {}),
+          ...(direction && { direction }),
           allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
         }),
       });
@@ -915,6 +919,7 @@ export default function DocumentEditor() {
           currentHtml: "<section></section>",
           allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
           ...(savedRefImage && { referenceImage: savedRefImage }),
+          ...(direction && { direction }),
         }),
       });
       if (!res.ok) {

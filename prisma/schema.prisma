@@ -515,3 +515,10 @@ model TelemetryEvent {
   @@index([timestamp])
   @@index([ownerId, timestamp])
 }
+
+model AppConfig {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}

@@ -5,6 +5,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/list";
 import type { Section3 } from "~/lib/landing3/types";
+import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 
 export const meta = () => [
   { title: "Documentos — EasyBits" },
@@ -22,19 +23,28 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       status: true,
       prompt: true,
       sections: true,
+      metadata: true,
       createdAt: true,
       updatedAt: true,
     },
   });
 
   const items = documents.map((d) => {
-    const sections = Array.isArray(d.sections) ? d.sections : [];
+    const sections = (Array.isArray(d.sections) ? d.sections : []) as unknown as Section3[];
+    const meta = (d.metadata || {}) as Record<string, any>;
+    const theme = (meta.theme as string) || "minimal";
+    const customColors = meta.customColors as CustomColors | undefined;
+    // First section HTML for thumbnail
+    const coverHtml = sections[0]?.html || "";
     return {
       id: d.id,
       name: d.name,
       status: d.status,
       prompt: d.prompt,
       pageCount: sections.length,
+      coverHtml,
+      theme,
+      customColors: theme === "custom" ? customColors : undefined,
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
     };
@@ -98,20 +108,19 @@ export default function DocumentsList() {
                   to={`/dash/documents/${item.id}`}
                   className="group block border-2 border-black rounded-2xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all duration-200 overflow-hidden"
                 >
-                  <div className="h-3 w-full bg-gradient-to-r from-orange-400 to-red-500" />
-                  <div className="p-5">
+                  {item.coverHtml ? (
+                    <DocThumb html={item.coverHtml} theme={item.theme} customColors={item.customColors} />
+                  ) : (
+                    <div className="h-3 w-full bg-gradient-to-r from-orange-400 to-red-500" />
+                  )}
+                  <div className="p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-black text-lg truncate group-hover:text-brand-600 transition-colors">
+                      <h3 className="font-black text-sm truncate group-hover:text-brand-600 transition-colors">
                         {item.name}
                       </h3>
                       <StatusBadge status={item.status} />
                     </div>
-                    {item.prompt && (
-                      <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed">
-                        {item.prompt}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-3 mt-4 text-xs text-gray-400">
+                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
                       <span>
                         {item.pageCount}{" "}
                         {item.pageCount === 1 ? "p\u00e1gina" : "p\u00e1ginas"}
@@ -133,6 +142,65 @@ export default function DocumentsList() {
         </div>
       )}
     </article>
+  );
+}
+
+function buildThumbHtml(html: string, themeCssData: { css: string; tailwindConfig: string }): string {
+  return `<!DOCTYPE html><html><head>
+<meta charset="UTF-8">
+<script src="https://cdn.tailwindcss.com"><\/script>
+${themeCssData.tailwindConfig ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; width: 8.5in; overflow: hidden; }
+${themeCssData.css || ""}
+</style>
+</head><body>${html}</body></html>`;
+}
+
+function DocThumb({ html, theme, customColors }: { html: string; theme: string; customColors?: CustomColors }) {
+  const themeCssData = (() => {
+    if (theme === "custom" && customColors) {
+      const t = buildCustomTheme(customColors);
+      const css = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+      const { tailwindConfig } = buildSingleThemeCss("minimal");
+      return { css, tailwindConfig };
+    }
+    return buildSingleThemeCss(theme);
+  })();
+
+  const srcDoc = buildThumbHtml(html, themeCssData);
+
+  return (
+    <div
+      className="w-full bg-white relative overflow-hidden"
+      style={{ aspectRatio: "8.5 / 11" }}
+    >
+      <iframe
+        srcDoc={srcDoc}
+        className="absolute top-0 left-0 border-none pointer-events-none"
+        style={{
+          width: "8.5in",
+          height: "11in",
+          transform: "scale(var(--thumb-scale))",
+          transformOrigin: "top left",
+        }}
+        ref={(el) => {
+          if (!el) return;
+          const parent = el.parentElement;
+          if (!parent) return;
+          const ro = new ResizeObserver(([entry]) => {
+            const scale = entry.contentRect.width / (8.5 * 96);
+            el.style.setProperty("--thumb-scale", String(scale));
+          });
+          ro.observe(parent);
+        }}
+        title="Preview"
+        loading="lazy"
+        tabIndex={-1}
+      />
+    </div>
   );
 }
 

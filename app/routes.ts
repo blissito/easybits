@@ -88,6 +88,7 @@ export default [
       ...prefix("documents", [
         index("routes/dash/documents/list.tsx"),
         route("new", "routes/dash/documents/new.tsx"),
+        route("directions", "routes/dash/documents/directions.tsx"),
         route(":id", "routes/dash/documents/editor.tsx"),
       ]),
       route("packs", "routes/dash/packs.tsx"),
@@ -162,6 +163,7 @@ export default [
     route("landing2-refine-block", "routes/api/v2/landing2-refine-block.ts"),
     route("landing3-generate", "routes/api/v2/landing3-generate.ts"),
     route("landing3-refine", "routes/api/v2/landing3-refine.ts"),
+    route("document-directions", "routes/api/v2/document-directions.ts"),
     route("document-generate", "routes/api/v2/document-generate.ts"),
     route("document-refine", "routes/api/v2/document-refine.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),

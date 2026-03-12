@@ -1,5 +1,6 @@
 import { streamGenerate, dataUrlToImagePart } from "./streamCore";
 import type { Section3 } from "./types";
+import type { DesignDirection } from "./directions";
 
 export const DOCUMENT_SYSTEM_PROMPT = `You are a professional document designer who creates stunning letter-sized (8.5" × 11") document pages using HTML + Tailwind CSS.
 
@@ -190,6 +191,8 @@ export interface GenerateDocumentOptions {
   extraInstructions?: string;
   model?: string;
   pexelsApiKey?: string;
+  /** Design direction — injects Google Fonts + hex colors into the prompt */
+  direction?: DesignDirection;
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   onSection?: (section: Section3) => void;
   onImageUpdate?: (sectionId: string, html: string) => void;
@@ -207,10 +210,31 @@ export async function generateDocument(options: GenerateDocumentOptions): Promis
     logoUrl,
     referenceImage,
     extraInstructions,
+    direction,
     ...rest
   } = options;
 
   const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
+
+  // Build direction style instructions if provided
+  let directionInstruction = "";
+  if (direction) {
+    const fontsUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(direction.headingFont).replace(/%20/g, "+")}:wght@400;700;900&family=${encodeURIComponent(direction.bodyFont).replace(/%20/g, "+")}:wght@400;500;600&display=swap`;
+    directionInstruction = `
+DESIGN DIRECTION: "${direction.name}" — ${direction.tagline}
+TYPOGRAPHY: Use these Google Fonts via <link href="${fontsUrl}" rel="stylesheet"> on the first page.
+- Headings: font-family: '${direction.headingFont}', sans-serif (via inline style)
+- Body: font-family: '${direction.bodyFont}', sans-serif (via inline style)
+COLORS — use ONLY semantic Tailwind classes (the editor injects CSS variables that resolve these):
+- bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
+- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
+- bg-secondary, text-secondary, bg-accent, text-accent
+- NEVER use hardcoded hex colors like bg-[#xxx] or text-[#xxx] — always use semantic classes
+- The palette is: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}
+Mood: ${direction.mood}
+Layout approach: ${direction.layoutHint}
+IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL heading elements and style="font-family: '${direction.bodyFont}'" on ALL body text elements. Include the Google Fonts <link> tag inside the FIRST <section> only.`;
+  }
   // Truncate prompt to prevent token overflow (max ~15K chars ≈ 5K tokens)
   const safePrompt = prompt.length > 15_000 ? prompt.substring(0, 15_000) + "\n[...content truncated...]" : prompt;
   const logoInstruction = logoUrl
@@ -228,12 +252,12 @@ export async function generateDocument(options: GenerateDocumentOptions): Promis
     }
     content.push({
       type: "text",
-      text: `Create a professional document inspired by this reference image for: ${safePrompt}${logoInstruction}${extra}${DOCUMENT_PROMPT_SUFFIX}`,
+      text: `Create a professional document inspired by this reference image for: ${safePrompt}${logoInstruction}${directionInstruction}${extra}${DOCUMENT_PROMPT_SUFFIX}`,
     });
   } else {
     content.push({
       type: "text",
-      text: `Create a professional document for: ${safePrompt}${logoInstruction}${extra}${DOCUMENT_PROMPT_SUFFIX}`,
+      text: `Create a professional document for: ${safePrompt}${logoInstruction}${directionInstruction}${extra}${DOCUMENT_PROMPT_SUFFIX}`,
     });
   }
 

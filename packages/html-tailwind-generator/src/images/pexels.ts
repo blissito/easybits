@@ -13,8 +13,8 @@ export async function searchImage(query: string, apiKey?: string): Promise<Pexel
       { headers: { Authorization: key } }
     );
     if (!res.ok) {
-      console.warn(`[pexels] ${res.status} for "${query}"`);
-      return null;
+      console.warn(`[pexels] ${res.status} for "${query}", trying unsplash fallback`);
+      return searchUnsplash(query);
     }
     const data = await res.json();
     const photos = data.photos;
@@ -27,6 +27,26 @@ export async function searchImage(query: string, apiKey?: string): Promise<Pexel
       url: photo.src.large,
       photographer: photo.photographer,
       alt: photo.alt || query,
+    };
+  } catch {
+    return searchUnsplash(query);
+  }
+}
+
+async function searchUnsplash(query: string): Promise<PexelsResult | null> {
+  try {
+    const res = await fetch(
+      `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data.results;
+    if (!results || results.length === 0) return null;
+    const photo = results[Math.floor(Math.random() * results.length)];
+    return {
+      url: photo.urls?.regular || photo.urls?.small,
+      photographer: photo.user?.name || "Unsplash",
+      alt: photo.alt_description || query,
     };
   } catch {
     return null;
