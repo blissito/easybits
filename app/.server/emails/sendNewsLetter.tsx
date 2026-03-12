@@ -12,18 +12,16 @@ export const emailSchema = z.string().email();
 const isDev = process.env.NODE_ENV === "development";
 const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
-let timer: number;
+let timer = 0;
 export const sendMagicLink = (email: string, data: any) => {
-  if (timer < Date.now()) {
-    console.error("Avoided");
-  } else {
-    timer = Date.now() + 120000; // 2 min de espera para un nuevo link
+  if (timer > Date.now()) {
+    console.error("Avoided: rate limited");
+    return;
   }
+  timer = Date.now() + 120000; // 2 min de espera para un nuevo link
   const magicToken = generateUserToken({ ...data, email });
-  const url = new URL(location);
-  url.pathname = "/api/v1/tokens/" + magicToken;
-  // url.searchParams.set("intent", "magic_link");
-  // url.searchParams.set("token", magicToken);
+  const url = new URL(location + "/api/v1/tokens");
+  url.searchParams.set("token", magicToken);
   return getSesTransport()
     .sendMail({
       from: "EasyBits@easybits.cloud",
@@ -50,7 +48,8 @@ export const sendConfrimation = async (
   }
 
   const confirmationToken = generateUserToken({ ...data, email });
-  const url = new URL(`${location}/api/v1/tokens/${confirmationToken}`);
+  const url = new URL(`${location}/api/v1/tokens`);
+  url.searchParams.set("token", confirmationToken);
   return getSesTransport()
     .sendMail({
       from: "EasyBits@easybits.cloud",

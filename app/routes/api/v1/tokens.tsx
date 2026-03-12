@@ -12,8 +12,11 @@ import type { AuthContext } from "~/.server/apiAuth";
 
 // @todo send welcome?
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
-  if (params.token) {
-    const { email, next, error } = decode(params.token);
+  const token =
+    params.token ||
+    new URL(request.url).searchParams.get("token");
+  if (token) {
+    const { email, next, error } = decode(token);
     if (error) {
       return { success: false };
     }

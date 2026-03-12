@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { enrichImages } from "./images/enrichImages";
+import { sanitizeSemanticColors } from "./sanitizeColors";
 
 async function resolveModel(opts: { openaiApiKey?: string; anthropicApiKey?: string; modelId?: string; defaultOpenai: string; defaultAnthropic: string }) {
   // Prefer Anthropic for text generation when both keys are available
@@ -183,6 +184,9 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     if (html.startsWith("```")) {
       html = html.replace(/^```(?:html|xml)?\s*/, "").replace(/\s*```$/, "");
     }
+
+    // Sanitize hardcoded colors to semantic classes
+    html = sanitizeSemanticColors(html);
 
     // Enrich images (DALL-E if openaiApiKey, otherwise Pexels)
     html = await enrichImages(html, { pexelsApiKey, openaiApiKey, persistImage });
