@@ -637,6 +637,8 @@ export default function DocumentEditor() {
       pushUndo(sectionsRef.current);
       setSections(newSections);
       saveSections(newSections);
+      // Notify canvas of reorder/delete so it re-renders sections
+      setTimeout(() => canvasRef.current?.postMessage({ action: "reload-sections" }), 50);
     },
     [saveSections, pushUndo, setSections]
   );
