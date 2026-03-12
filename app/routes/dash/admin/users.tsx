@@ -72,6 +72,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
       });
       return { ok: true };
     }
+    case "addGenerations": {
+      const amount = Number(formData.get("amount"));
+      if (!amount || amount < 1 || amount > 1000)
+        return data({ error: "Cantidad inválida" }, { status: 400 });
+      const currentBonus = user.aiGenerationsBonus ?? 0;
+      await db.user.update({
+        where: { id: userId },
+        data: { aiGenerationsBonus: currentBonus + amount },
+      });
+      await db.aiGenerationLog.create({
+        data: { userId, type: "admin_bonus", product: "admin" },
+      });
+      return { ok: true };
+    }
     default:
       return data({ error: "Invalid intent" }, { status: 400 });
   }
@@ -123,6 +137,7 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
                       <th scope="col" className="px-4 py-2">Email</th>
                       <th scope="col" className="px-4 py-2">Nombre</th>
                       <th scope="col" className="px-4 py-2">Roles</th>
+                      <th scope="col" className="px-4 py-2">Gens</th>
                       <th scope="col" className="px-4 py-2">Registro</th>
                       <th scope="col" className="px-4 py-2">Activo</th>
                     </tr>
@@ -277,6 +292,12 @@ function UserRow({ user }: { user: any }) {
           </fetcher.Form>
         </div>
       </td>
+      <td className="px-4 py-2">
+        <div className="text-xs text-gray-600 mb-1">
+          {user.aiGenerationsCount ?? 0} usadas · {user.aiGenerationsBonus ?? 0} bonus
+        </div>
+        <AddGensForm userId={user.id} />
+      </td>
       <td className="px-4 py-2 text-gray-500 text-xs">
         {new Date(user.createdAt).toLocaleDateString()}
       </td>
@@ -340,6 +361,48 @@ function UserCard({ user }: { user: any }) {
         </div>
         <EnableSwitch user={user} busy={busy} fetcher={fetcher} className="flex-shrink-0 ml-1" />
       </div>
+      <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-gray-200">
+        <span className="text-[10px] text-gray-500">
+          {user.aiGenerationsCount ?? 0} usadas · {user.aiGenerationsBonus ?? 0} bonus
+        </span>
+        <AddGensForm userId={user.id} />
+      </div>
     </article>
+  );
+}
+
+function AddGensForm({ userId }: { userId: string }) {
+  const fetcher = useFetcher();
+  const [amount, setAmount] = useState("");
+  const busy = fetcher.state !== "idle";
+  const error = fetcher.data && "error" in fetcher.data ? (fetcher.data as any).error : null;
+
+  return (
+    <div className="inline-flex gap-1 items-center">
+      <fetcher.Form
+        method="post"
+        className="inline-flex gap-1 items-center"
+        onSubmit={() => setAmount("")}
+      >
+        <input type="hidden" name="intent" value="addGenerations" />
+        <input type="hidden" name="userId" value={userId} />
+        <input
+          name="amount"
+          type="number"
+          min="1"
+          max="1000"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="+ gens"
+          className="px-1 py-0.5 border border-black rounded text-xs w-16"
+        />
+        {amount && (
+          <BrutalButton size="chip" type="submit" disabled={busy} className="px-1.5 py-0">
+            +
+          </BrutalButton>
+        )}
+      </fetcher.Form>
+      {error && <span className="text-red-600 text-[10px] font-bold">{error}</span>}
+    </div>
   );
 }

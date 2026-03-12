@@ -25,6 +25,8 @@ export async function getPaginatedUsers({
         displayName: true,
         roles: true,
         createdAt: true,
+        aiGenerationsCount: true,
+        aiGenerationsBonus: true,
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,

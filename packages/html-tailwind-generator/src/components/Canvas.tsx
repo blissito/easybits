@@ -119,6 +119,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas({ se
     const desiredOrder = sorted.map((s) => s.id);
     if (knownOrder.length !== desiredOrder.length || knownOrder.some((id, i) => id !== desiredOrder[i])) {
       postToIframe({ action: "reorder-sections", order: desiredOrder });
+      // Rebuild Map in new order so subsequent diffs compare correctly
+      const reordered = new Map<string, string>();
+      for (const id of desiredOrder) {
+        const html = known.get(id);
+        if (html !== undefined) reordered.set(id, html);
+      }
+      knownSectionsRef.current = reordered;
     }
   }, [sections, ready, postToIframe]);
 

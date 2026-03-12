@@ -166,6 +166,7 @@ export default [
     route("document-directions", "routes/api/v2/document-directions.ts"),
     route("document-generate", "routes/api/v2/document-generate.ts"),
     route("document-refine", "routes/api/v2/document-refine.ts"),
+    route("document-enhance", "routes/api/v2/document-enhance.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("usage", "routes/api/v2/usage.ts"),

@@ -4,6 +4,7 @@ import { HiSparkles } from "react-icons/hi2";
 import { data } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
+import toast from "react-hot-toast";
 
 import { parseFiles, combineContent, combineContentWithMeta, MAX_FILE_SIZE, MAX_CONTENT_CHARS } from "~/lib/documents/parseFiles";
 import type { Route } from "./+types/new";
@@ -84,6 +85,8 @@ export default function NewDocument() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const [isEnhancing, setIsEnhancing] = useState(false);
 
   // Reference image state
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
@@ -472,10 +475,40 @@ export default function NewDocument() {
         </div>
 
         <div>
-          <label className="block text-sm font-bold mb-1">
-            Instrucciones para la AI
-            <span className="font-normal text-gray-400 ml-1">(opcional)</span>
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-bold">
+              Instrucciones para la AI
+              <span className="font-normal text-gray-400 ml-1">(opcional)</span>
+            </label>
+            {promptValue.trim() && (
+              <BrutalButton
+                type="button"
+                size="chip"
+                mode="ghost"
+                isLoading={isEnhancing}
+                isDisabled={isEnhancing}
+                onClick={async () => {
+                  setIsEnhancing(true);
+                  try {
+                    const res = await fetch("/api/v2/document-enhance", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ prompt: promptValue, name: nameValue }),
+                    });
+                    const json = await res.json();
+                    if (json.enhanced) setPromptValue(json.enhanced);
+                    else toast.error(json.error || "Error al mejorar");
+                  } catch {
+                    toast.error("Error al mejorar descripcion");
+                  } finally {
+                    setIsEnhancing(false);
+                  }
+                }}
+              >
+                <HiSparkles className="inline -mt-0.5" /> Mejorar
+              </BrutalButton>
+            )}
+          </div>
           <BrutalField>
             <textarea
               name="prompt"
