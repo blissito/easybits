@@ -236,7 +236,7 @@ export function PageList({
             <React.Fragment key={section.id}>
             {/* Insert "+" button before/between pages */}
             {onInsertAt && (
-              <div className="flex justify-center py-1">
+              <div className="flex justify-center py-2.5">
                 <button
                   onClick={(e) => { e.stopPropagation(); onInsertAt(idx); }}
                   className="w-7 h-7 rounded-full border-2 border-gray-300 bg-white text-gray-400 text-sm font-black flex items-center justify-center hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
