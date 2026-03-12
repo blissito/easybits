@@ -133,14 +133,28 @@ The HTML must include a <link> tag for Google Fonts and a <section> tag.
 This is a LETTER-SIZE document cover page (8.5" × 11"), NOT a website hero.
 Use the EXACT fonts and colors provided. The cover must feel premium and print-ready.
 Use real-looking content specific to the brief (Spanish text).
-Include: document title (large), subtitle or description, date, optional author/company name.
+
+CRITICAL — TEXT MUST BE VISIBLE AND READABLE:
+- The document title MUST be large (text-4xl or bigger), bold, and clearly visible
+- Include: document title, subtitle or description, date, optional author/company name
+- ALL text must have strong contrast against its background — if background is dark, text MUST be white/light
+- NEVER let text disappear into the background
+
+DESIGN APPROACHES (vary across directions):
+- Approach A: Solid color background (bg-[primary]) with large white text — NO image needed
+- Approach B: Split layout — image on one half, text on solid color half
+- Approach C: Full-bleed image WITH a solid overlay (bg-black/50 or bg-[primary]/80) AND white text on top
+- Approach D: Geometric/abstract design with color blocks, no image
+- Choose the approach that best fits the mood. NOT every cover needs a full-bleed image.
+
+If using images:
+- Pattern: <img data-image-query="specific english search query" alt="description" class="absolute inset-0 w-full h-full object-cover"/>
+- ALWAYS add a dark overlay on top: <div class="absolute inset-0 bg-black/50"></div>
+- Text goes ABOVE the overlay with z-10 and text-white
+- NEVER include a src attribute — ONLY data-image-query
+
 NO buttons or CTAs — this is a print document cover.
-NO emoji — use geometric shapes or SVG icons for decoration.
-MANDATORY IMAGE: Include exactly 1 full-bleed background image covering the entire page or a large section.
-Pattern: <img data-image-query="specific english search query" alt="description" class="absolute inset-0 w-full h-full object-cover"/>
-Then overlay text on top with a semi-transparent backdrop: <div class="absolute inset-0 bg-black/40"></div> or similar.
-NEVER include a src attribute — ONLY data-image-query. The system resolves real Unsplash photos automatically.
-NEVER place images in small corners — they must be dramatic, full-bleed backgrounds.`
+NO emoji — use geometric shapes or SVG icons for decoration.`
     : `You create stunning hero sections with HTML + Tailwind CSS.
 Output ONLY the raw HTML — no markdown fences, no explanation.
 The HTML must include a <link> tag for Google Fonts and a <section> tag.
