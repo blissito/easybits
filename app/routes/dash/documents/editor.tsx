@@ -1414,6 +1414,7 @@ ${sectionsHtml}
               setSections((prev) =>
                 prev.map((s) => s.id === sectionId ? { ...s, html } : s)
               );
+              setTimeout(() => canvasRef.current?.postMessage({ action: "reload-sections" }), 50);
             }}
           />
         )}
