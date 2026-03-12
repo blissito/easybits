@@ -15,7 +15,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { prompt, sourceContent, referenceImage } = body;
+  const { prompt, sourceContent, referenceImage, _action, direction: singleDir, index: singleIndex } = body;
 
   if (!prompt) {
     return Response.json({ error: "prompt required" }, { status: 400 });
@@ -27,6 +27,64 @@ export async function action({ request }: Route.ActionArgs) {
   const brief = sourceContent
     ? `${prompt}\n\nSource content preview: ${sourceContent.substring(0, 500)}`
     : prompt;
+
+  // Regenerate a single direction (new colors/fonts) + its preview
+  if (_action === "regenerate-direction") {
+    const idx = typeof singleIndex === "number" ? singleIndex : 0;
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const send = (event: string, data: any) => {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        };
+        try {
+          // Generate 1 new direction
+          const directionsModelId = await getAiModel("docDirections");
+          const directionsModel = resolveModelLocal(directionsModelId, openaiKey || undefined, anthropicKey || undefined);
+          const [newDirection] = await generateDirections({
+            prompt: brief,
+            count: 1,
+            model: directionsModel,
+          });
+          send("direction", { index: idx, direction: newDirection });
+
+          // Generate its preview
+          const previewModelId = await getAiModel("docRegeneratePage");
+          const previewModel = resolveModelLocal(previewModelId, openaiKey || undefined, anthropicKey || undefined);
+          let html = await generateHeroPreview({
+            prompt: brief,
+            direction: newDirection,
+            product: "document",
+            model: previewModel,
+            referenceImage: referenceImage || undefined,
+            onChunk: (partial) => {
+              const cleaned = partial.replace(/<img([^>]*)\ssrc="[^"]*"([^>]*)>/gi, '<img$1$2>');
+              send("preview", { index: idx, html: cleaned });
+            },
+          });
+          html = html.replace(/<img([^>]*)\ssrc="[^"]*"([^>]*)>/gi, '<img$1$2>');
+          html = html.replace(/<img(?![^>]*data-image-query)([^>]*)\salt="([^"]+)"([^>]*)>/gi,
+            '<img$1 alt="$2" data-image-query="$2"$3>');
+          // Enrich images
+          const slots = findImageSlots(html);
+          if (slots.length > 0) {
+            try {
+              html = await enrichImages(html, { pexelsApiKey: process.env.PEXELS_API_KEY });
+            } catch {}
+          }
+          send("preview", { index: idx, html, complete: true });
+          send("done", {});
+          controller.close();
+        } catch (err: any) {
+          send("error", { message: err.message || "Failed to regenerate preview" });
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    });
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -70,7 +128,7 @@ export async function action({ request }: Route.ActionArgs) {
               // If img has alt but no data-image-query, add it from alt
               html = html.replace(/<img(?![^>]*data-image-query)([^>]*)\salt="([^"]+)"([^>]*)>/gi,
                 '<img$1 alt="$2" data-image-query="$2"$3>');
-              send("preview", { index, html });
+              send("preview", { index, html, complete: true });
               return html;
             })
             .catch((err) => {

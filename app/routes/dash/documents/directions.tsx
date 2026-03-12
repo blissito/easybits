@@ -160,6 +160,9 @@ export default function DocumentDirections() {
   const [statusMsg, setStatusMsg] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const soundedRef = useRef<Set<number>>(new Set());
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+  const directionsRef = useRef<DesignDirection[]>([]);
+  const previewsRef = useRef<(string | null)[]>([null, null, null, null]);
 
   // Rotating status messages
   useEffect(() => {
@@ -201,6 +204,26 @@ export default function DocumentDirections() {
       return;
     }
     formDataRef.current = JSON.parse(raw);
+
+    // Restore cached results if available
+    const cached = sessionStorage.getItem("doc-directions-cache");
+    if (cached) {
+      try {
+        const { directions: cachedDirs, previews: cachedPreviews } = JSON.parse(cached);
+        if (cachedDirs?.length > 0) {
+          directionsRef.current = cachedDirs;
+          setDirections(cachedDirs);
+          const hasPreviews = cachedPreviews?.some((p: string | null) => p);
+          if (hasPreviews) {
+            previewsRef.current = cachedPreviews;
+            setPreviews(cachedPreviews);
+          }
+          setIsLoading(false);
+          return;
+        }
+      } catch {}
+    }
+
     warmAudio();
     fetchDirections();
     return () => abortRef.current?.abort();
@@ -218,6 +241,7 @@ export default function DocumentDirections() {
     setPreviews([null, null, null, null]);
     soundedRef.current.clear();
     setSelectedIndex(null);
+    try { sessionStorage.removeItem("doc-directions-cache"); } catch {}
 
     try {
       const fd = formDataRef.current!;
@@ -259,19 +283,31 @@ export default function DocumentDirections() {
             try {
               const d = JSON.parse(line.slice(6));
               if (eventType === "directions") {
+                directionsRef.current = d;
                 setDirections(d);
               } else if (eventType === "preview") {
-                if (d.html && !soundedRef.current.has(d.index)) {
+                if (d.complete && !soundedRef.current.has(d.index)) {
                   soundedRef.current.add(d.index);
                   playTone({ freq: 880 });
                 }
                 setPreviews((prev) => {
                   const next = [...prev];
                   next[d.index] = d.html || null;
+                  previewsRef.current = next;
                   return next;
                 });
               } else if (eventType === "done") {
                 setIsLoading(false);
+                // Cache results from refs (not nested setState)
+                const cache = { directions: directionsRef.current, previews: previewsRef.current };
+                try {
+                  sessionStorage.setItem("doc-directions-cache", JSON.stringify(cache));
+                } catch {
+                  // Previews too large for sessionStorage — cache directions only
+                  try {
+                    sessionStorage.setItem("doc-directions-cache", JSON.stringify({ directions: directionsRef.current, previews: [null, null, null, null] }));
+                  } catch {}
+                }
               } else if (eventType === "error") {
                 throw new Error(d.message);
               }
@@ -286,6 +322,72 @@ export default function DocumentDirections() {
       if (err.name === "AbortError") return;
       setError(err.message);
       setIsLoading(false);
+    }
+  }
+
+  async function regenerateDirection(index: number) {
+    if (!formDataRef.current) return;
+    setRegeneratingIndex(index);
+    setPreviews((prev) => { const next = [...prev]; next[index] = null; return next; });
+    soundedRef.current.delete(index);
+
+    try {
+      const fd = formDataRef.current;
+
+      const res = await fetch("/api/v2/document-directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          _action: "regenerate-direction",
+          prompt: fd.prompt || fd.name,
+          sourceContent: fd.sourceContent || undefined,
+          index,
+          referenceImage: fd.referenceDataUrl || undefined,
+        }),
+      });
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No stream");
+
+      const decoder = new TextDecoder();
+      let buf = "";
+      let eventType = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if (eventType === "direction") {
+                // Update the direction at this index
+                setDirections((prev) => {
+                  const next = [...prev];
+                  next[d.index] = d.direction;
+                  directionsRef.current = next;
+                  return next;
+                });
+              } else if (eventType === "preview") {
+                if (d.complete && !soundedRef.current.has(d.index)) {
+                  soundedRef.current.add(d.index);
+                  playTone({ freq: 880 });
+                }
+                setPreviews((prev) => { const next = [...prev]; next[d.index] = d.html || null; previewsRef.current = next; return next; });
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Regenerate direction failed:", err);
+    } finally {
+      setRegeneratingIndex(null);
     }
   }
 
@@ -339,21 +441,35 @@ export default function DocumentDirections() {
     <article className="fixed inset-0 left-20 pt-4 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-8 py-2 shrink-0">
-        <Link to="/dash/documents/new" className="text-sm font-bold hover:underline">
+        <Link to="/dash/documents/new" className="text-sm font-bold hover:underline shrink-0">
           &larr; Volver
         </Link>
-        <h1 className="text-2xl font-black tracking-tight uppercase">
+        <h1 className="text-2xl font-black tracking-tight uppercase shrink-0">
           Elige un estilo
         </h1>
         {isLoading && (
-          <span className="flex items-center gap-2 text-sm text-gray-400">
+          <span className="flex items-center gap-2 text-sm text-gray-400 shrink-0">
             <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
             {statusMsg}
           </span>
         )}
-        <p className="text-xs text-gray-400 flex-1 text-center">
-          Estas son portadas de ejemplo — el documento completo se genera al elegir.
-        </p>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => { if (!confirm("¿Regenerar todas las direcciones?")) return; fetchDirections(); }}
+          disabled={isLoading}
+          className="text-sm font-bold text-gray-500 hover:text-black transition-colors disabled:opacity-40 shrink-0"
+        >
+          ↺ Regenerar todo
+        </button>
+        <BrutalButton
+          isDisabled={selectedIndex === null || isCreating || isLoading}
+          isLoading={isCreating}
+          onClick={handleSelect}
+          size="chip"
+        >
+          Crear documento
+        </BrutalButton>
       </div>
 
       {error && (
@@ -364,7 +480,7 @@ export default function DocumentDirections() {
       )}
 
       {/* Cards grid — 2x2, each card is letter-ratio, centered in cell */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-1 px-8 py-1">
+      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4 px-8 py-2">
         {[0, 1, 2, 3].map((i) => {
           const dir = directions[i];
           const preview = previews[i];
@@ -373,11 +489,10 @@ export default function DocumentDirections() {
 
           return (
             <div key={i} className={`flex min-h-0 ${isLeft ? "justify-end" : "justify-start"}`}>
-              <div className="rounded-xl bg-black h-full" style={{ aspectRatio: "8.5 / 12" }}>
-              <button
-                type="button"
+              <div className="relative rounded-xl bg-black h-full group/card" style={{ aspectRatio: "8.5 / 12" }}>
+              <div
                 onClick={() => !isLoading && setSelectedIndex(i)}
-                className={`text-left rounded-xl border-2 overflow-hidden transition-all duration-200 w-full h-full flex flex-col ${
+                className={`text-left rounded-xl border-2 overflow-hidden transition-all duration-200 w-full h-full flex flex-col cursor-pointer ${
                   isSelected
                     ? "border-brand-500 -translate-x-1 -translate-y-1"
                     : "border-black hover:-translate-x-1 hover:-translate-y-1 active:translate-x-0 active:translate-y-0"
@@ -400,19 +515,36 @@ export default function DocumentDirections() {
                 </div>
 
                 {/* Direction info */}
-                <div className="px-3 py-2 border-t-2 border-black shrink-0">
+                <div className="px-3 py-1.5 border-t-2 border-black shrink-0">
                   {dir ? (
                     <>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-xs truncate">{dir.name}</h3>
+                        <h3 className="font-black text-xs truncate flex-1">{dir.name}</h3>
                         {isSelected && (
                           <span className="text-[10px] font-bold bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full shrink-0">
                             Seleccionado
                           </span>
                         )}
+                        {dir && (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); regenerateDirection(i); }}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={regeneratingIndex === i}
+                            className="text-xs font-bold text-black bg-white border-2 border-black rounded-lg px-2 py-1 translate-x-[2px] translate-y-[2px] hover:translate-x-0 hover:translate-y-0 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all disabled:opacity-30 shrink-0"
+                            title="Regenerar portada"
+                          >
+                            {regeneratingIndex === i ? (
+                              <span className="flex items-center gap-1">
+                                <span className="block w-3 h-3 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+                                Regenerando
+                              </span>
+                            ) : "↺ Regenerar"}
+                          </button>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <div className="flex gap-1">
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <div className="flex gap-0.5 shrink-0">
                           {Object.values(dir.colors).slice(0, 3).map((c, ci) => (
                             <span
                               key={ci}
@@ -421,7 +553,7 @@ export default function DocumentDirections() {
                             />
                           ))}
                         </div>
-                        <span className="text-[10px] text-gray-400 truncate">
+                        <span className="text-[10px] text-gray-400 truncate flex-1">
                           {dir.headingFont} + {dir.bodyFont}
                         </span>
                       </div>
@@ -433,32 +565,17 @@ export default function DocumentDirections() {
                     </div>
                   )}
                 </div>
-              </button>
+              </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Footer actions */}
-      <div className="flex gap-4 items-center justify-center px-8 py-2 shrink-0">
-        <button
-          type="button"
-          onClick={fetchDirections}
-          disabled={isLoading}
-          className="text-sm font-bold text-gray-500 hover:text-black transition-colors disabled:opacity-40"
-        >
-          Regenerar estilos
-        </button>
-        <BrutalButton
-          isDisabled={selectedIndex === null || isCreating || isLoading}
-          isLoading={isCreating}
-          onClick={handleSelect}
-          className="px-8"
-        >
-          Crear documento con este estilo
-        </BrutalButton>
-      </div>
+      {/* Footer hint */}
+      <p className="text-sm text-gray-400 text-center px-8 py-3 shrink-0">
+        Podr&aacute;s editar colores, im&aacute;genes, textos y cada detalle despu&eacute;s.
+      </p>
     </article>
   );
 }

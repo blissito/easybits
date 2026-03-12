@@ -8,13 +8,15 @@ export type DocModelOperation =
   | "docDirections"
   | "docDirectionsPreview"
   | "docGenerate"
-  | "docRefine";
+  | "docRefine"
+  | "docRegeneratePage";
 
 const DEFAULTS: Record<DocModelOperation, string> = {
-  docDirections: "gemini-2.5-flash-lite",
-  docDirectionsPreview: "gemini-3-flash-preview",
+  docDirections: "gemini-2.5-flash",
+  docDirectionsPreview: "gemini-2.5-flash",
   docGenerate: "gemini-2.5-pro",
-  docRefine: "gemini-2.5-pro",
+  docRefine: "gpt-4.1-mini",
+  docRegeneratePage: "claude-sonnet-4-6",
 };
 
 let cache: Record<string, string> | null = null;

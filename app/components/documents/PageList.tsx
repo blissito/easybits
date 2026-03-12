@@ -11,6 +11,7 @@ interface PageListProps {
   onDelete: (id: string) => void;
   onRename: (id: string, label: string) => void;
   onAdd: () => void;
+  onInsertAt?: (afterIndex: number) => void;
   theme?: string;
   onThemeChange?: (themeId: string) => void;
   customColors?: CustomColors;
@@ -67,6 +68,7 @@ export function PageList({
   loadingVariantId,
   refiningIds,
   onContextMenu,
+  onInsertAt,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
@@ -226,13 +228,25 @@ export function PageList({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-2">
+      <div className="flex-1 overflow-y-auto px-2 pb-2">
         {sorted.map((section, idx) => {
           const isSelected = selectedSectionIds.includes(section.id);
 
           return (
+            <React.Fragment key={section.id}>
+            {/* Insert "+" button between pages */}
+            {idx > 0 && onInsertAt && (
+              <div className="flex justify-center py-0.5 group/insert">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onInsertAt(idx); }}
+                  className="w-5 h-5 rounded-full border border-gray-300 bg-white text-gray-400 text-xs font-bold flex items-center justify-center opacity-0 group-hover/insert:opacity-100 hover:border-brand-500 hover:text-brand-500 hover:bg-brand-50 transition-all"
+                  title={`Insertar página después de ${idx}`}
+                >
+                  +
+                </button>
+              </div>
+            )}
             <div
-              key={section.id}
               ref={(el) => { itemRefs.current[section.id] = el; }}
               draggable
               onDragStart={() => {
@@ -432,6 +446,7 @@ export function PageList({
                 </div>
               </div>
             </div>
+            </React.Fragment>
           );
         })}
       </div>

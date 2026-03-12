@@ -280,6 +280,7 @@ export default function DocumentEditor() {
   const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
+  const [insertAtIndex, setInsertAtIndex] = useState<number | null>(null);
   const iframeRectRef = useRef<DOMRect | null>(null);
   const canvasRef = useRef<CanvasHandle>(null);
   const [, setToolbarTick] = useState(0);
@@ -398,7 +399,7 @@ export default function DocumentEditor() {
       if (e.key === "Escape") {
         if (contextMenu) setContextMenu(null);
         else if (codeViewSectionId) setCodeViewSectionId(null);
-        else if (showAddPrompt) { setShowAddPrompt(false); setRegenTargetId(null); }
+        else if (showAddPrompt) { setShowAddPrompt(false); setRegenTargetId(null); setInsertAtIndex(null); }
         else if (overflowOpen) setOverflowOpen(false);
         else if (selection) setSelection(null);
       }
@@ -538,7 +539,13 @@ export default function DocumentEditor() {
                 if (buildIdx !== -1) {
                   accumulated[buildIdx] = d;
                 } else {
-                  accumulated.push(d);
+                  // Prevent duplicates — only push if this id doesn't already exist
+                  const existIdx = accumulated.findIndex((s) => s.id === d.id);
+                  if (existIdx !== -1) {
+                    accumulated[existIdx] = d;
+                  } else {
+                    accumulated.push(d);
+                  }
                 }
                 setSections([...accumulated]);
                 playTone();
@@ -784,6 +791,11 @@ export default function DocumentEditor() {
   async function handleGenerateVariant(sectionId: string, instruction?: string, referenceImage?: string) {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
+    // Abort any in-flight variant generation before starting a new one
+    if (variantAbortRef.current) {
+      variantAbortRef.current.abort();
+      variantAbortRef.current = null;
+    }
     setVariantLoadingId(sectionId);
     const abortController = new AbortController();
     variantAbortRef.current = abortController;
@@ -978,15 +990,19 @@ export default function DocumentEditor() {
       setAddRefImage(null);
       setAddParsedContent("");
 
-      setSections((prev) => [
-        ...prev,
-        {
+      const targetIdx = insertAtIndex;
+      setInsertAtIndex(null);
+      setSections((prev) => {
+        const sorted = [...prev].sort((a, b) => a.order - b.order);
+        const pos = targetIdx !== null ? targetIdx : sorted.length;
+        sorted.splice(pos, 0, {
           id: newId,
-          order: prev.length,
+          order: pos,
           html: "<section></section>",
-          label: `Página ${prev.length + 1}`,
-        },
-      ]);
+          label: `Página ${pos + 1}`,
+        });
+        return sorted.map((s, i) => ({ ...s, order: i }));
+      });
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
@@ -1011,14 +1027,18 @@ export default function DocumentEditor() {
                   let lastNewId = "";
                   setSections((prev) => {
                     const without = prev.filter((s) => s.id !== newId);
+                    const sorted = [...without].sort((a, b) => a.order - b.order);
+                    // Find where the placeholder was to insert at that position
+                    const placeholderOrder = prev.find((s) => s.id === newId)?.order ?? sorted.length;
                     const newSections = d.sections.map((html: string, i: number) => ({
                       id: Math.random().toString(36).slice(2, 10),
-                      order: without.length + i,
+                      order: placeholderOrder + i,
                       html,
-                      label: `Página ${without.length + i + 1}`,
+                      label: `Página ${placeholderOrder + i + 1}`,
                     }));
                     lastNewId = newSections[newSections.length - 1].id;
-                    const updated = [...without, ...newSections];
+                    sorted.splice(placeholderOrder, 0, ...newSections);
+                    const updated = sorted.map((s, i) => ({ ...s, order: i }));
                     saveSections(updated);
                     return updated;
                   });
@@ -1360,7 +1380,8 @@ ${sectionsHtml}
               );
               handleSectionsChange(updated);
             }}
-            onAdd={() => setShowAddPrompt(true)}
+            onAdd={() => { setInsertAtIndex(null); setShowAddPrompt(true); }}
+            onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setShowAddPrompt(true); }}
             theme={theme}
             onThemeChange={handleThemeChange}
             customColors={customColors}
@@ -1589,7 +1610,7 @@ ${sectionsHtml}
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-black mb-3">
-              {regenTargetId ? "Regenerar página" : "Agregar páginas"}
+              {regenTargetId ? "Regenerar página" : insertAtIndex !== null ? `Insertar página (posición ${insertAtIndex + 1})` : "Agregar páginas"}
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               {regenTargetId
@@ -1706,6 +1727,7 @@ ${sectionsHtml}
                 onClick={() => {
                   setShowAddPrompt(false);
                   setRegenTargetId(null);
+                  setInsertAtIndex(null);
                   setAddPrompt("");
                   setAddFiles([]);
                   setAddRefImage(null);
