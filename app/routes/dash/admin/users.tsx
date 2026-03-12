@@ -7,6 +7,7 @@ import { TablePagination } from "~/components/common/pagination/TablePagination"
 import type { Route } from "./+types/users";
 import { useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { PLANS, normalizePlan } from "~/lib/plans";
 
 export const meta = () => [
   { title: "Usuarios — EasyBits" },
@@ -294,7 +295,16 @@ function UserRow({ user }: { user: any }) {
       </td>
       <td className="px-4 py-2">
         <div className="text-xs text-gray-600 mb-1">
-          {user.aiGenerationsCount ?? 0} usadas · {user.aiGenerationsBonus ?? 0} bonus
+          {(() => {
+            const plan = normalizePlan((user.metadata as any)?.plan);
+            const limit = PLANS[plan].aiGenerationsPerMonth;
+            const used = user.aiGenerationsCount ?? 0;
+            const bonus = user.aiGenerationsBonus ?? 0;
+            const remaining = limit !== null ? Math.max(0, limit - used) + bonus : null;
+            return <>
+              {used}/{limit ?? "∞"} usadas · {bonus} bonus{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} disponibles</span></>}
+            </>;
+          })()}
         </div>
         <AddGensForm userId={user.id} />
       </td>
@@ -363,7 +373,16 @@ function UserCard({ user }: { user: any }) {
       </div>
       <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-gray-200">
         <span className="text-[10px] text-gray-500">
-          {user.aiGenerationsCount ?? 0} usadas · {user.aiGenerationsBonus ?? 0} bonus
+          {(() => {
+            const plan = normalizePlan((user.metadata as any)?.plan);
+            const limit = PLANS[plan].aiGenerationsPerMonth;
+            const used = user.aiGenerationsCount ?? 0;
+            const bonus = user.aiGenerationsBonus ?? 0;
+            const remaining = limit !== null ? Math.max(0, limit - used) + bonus : null;
+            return <>
+              {used}/{limit ?? "∞"} usadas · {bonus} bonus{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} disponibles</span></>}
+            </>;
+          })()}
         </span>
         <AddGensForm userId={user.id} />
       </div>

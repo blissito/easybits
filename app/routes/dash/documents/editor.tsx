@@ -799,6 +799,20 @@ export default function DocumentEditor() {
   async function handleGenerateVariant(sectionId: string, instruction?: string, referenceImage?: string) {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
+
+    // Auto-detect image-only pages: extract data URL and use as referenceImage for vision
+    let effectiveRef = referenceImage;
+    let effectiveInstruction = instruction;
+    const imgMatch = section.html.match(/<img\s[^>]*src="(data:image\/[^"]+)"/);
+    if (imgMatch && !referenceImage) {
+      // Check if this is an image-only page (no other meaningful content)
+      const stripped = section.html.replace(/<section[^>]*>/, "").replace(/<\/section>/, "").trim();
+      if (stripped.startsWith("<img ") && stripped.endsWith(">")) {
+        effectiveRef = imgMatch[1];
+        effectiveInstruction = instruction || "Reproduce this design as a professional HTML document page. Match the layout, colors, typography and content from the reference image exactly.";
+      }
+    }
+
     // Abort any in-flight variant generation before starting a new one
     if (variantAbortRef.current) {
       variantAbortRef.current.abort();
@@ -825,9 +839,9 @@ export default function DocumentEditor() {
         body: JSON.stringify({
           landingId: landing.id,
           sectionId,
-          instruction: instruction || "VARIANT_MODE",
+          instruction: effectiveInstruction || "VARIANT_MODE",
           currentHtml: section.html,
-          ...(referenceImage ? { referenceImage } : {}),
+          ...(effectiveRef ? { referenceImage: effectiveRef } : {}),
           ...(direction && { direction }),
           allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
         }),
@@ -1091,6 +1105,21 @@ export default function DocumentEditor() {
     } finally {
       setIsAddingSection(false);
     }
+  }
+
+  async function handleDropImage(afterIndex: number, file: File) {
+    const dataUrl = await resizeImageToDataUrl(file, 1024);
+    const newId = Math.random().toString(36).slice(2, 10);
+    const sorted = [...sections].sort((a, b) => a.order - b.order);
+    sorted.splice(afterIndex, 0, {
+      id: newId,
+      order: afterIndex,
+      html: `<section style="width:8.5in;min-height:11in;display:flex;align-items:center;justify-content:center;background:#fff"><img src="${dataUrl}" style="max-width:100%;max-height:100%;object-fit:contain"></section>`,
+      label: "Imagen",
+    });
+    const updated = sorted.map((s, i) => ({ ...s, order: i }));
+    handleSectionsChange(updated);
+    setTimeout(() => canvasRef.current?.scrollToSection(newId), 200);
   }
 
   function handleOpenCode(sectionId: string) {
@@ -1393,6 +1422,7 @@ ${sectionsHtml}
             }}
             onAdd={() => { setInsertAtIndex(null); setShowAddPrompt(true); }}
             onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setShowAddPrompt(true); }}
+            onDropImage={handleDropImage}
             theme={theme}
             onThemeChange={handleThemeChange}
             customColors={customColors}

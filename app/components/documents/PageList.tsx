@@ -12,6 +12,7 @@ interface PageListProps {
   onRename: (id: string, label: string) => void;
   onAdd: () => void;
   onInsertAt?: (afterIndex: number) => void;
+  onDropImage?: (afterIndex: number, file: File) => void;
   theme?: string;
   onThemeChange?: (themeId: string) => void;
   customColors?: CustomColors;
@@ -69,10 +70,12 @@ export function PageList({
   refiningIds,
   onContextMenu,
   onInsertAt,
+  onDropImage,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [fileDragOver, setFileDragOver] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [showThemes, setShowThemes] = useState(false);
@@ -228,21 +231,66 @@ export function PageList({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
+      <div
+        className="flex-1 overflow-y-auto px-2 pb-2"
+        onDragOver={(e) => {
+          if (!onDropImage) return;
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setFileDragOver(null);
+          }
+        }}
+        onDrop={(e) => {
+          setFileDragOver(null);
+          if (!onDropImage) return;
+          const file = e.dataTransfer.files[0];
+          if (file?.type.startsWith("image/")) {
+            e.preventDefault();
+            onDropImage(sorted.length, file);
+          }
+        }}
+      >
         {sorted.map((section, idx) => {
           const isSelected = selectedSectionIds.includes(section.id);
 
           return (
             <React.Fragment key={section.id}>
-            {/* Insert "+" button before/between pages */}
+            {/* Insert "+" button before/between pages — also acts as image drop zone */}
             {onInsertAt && (
-              <div className="flex justify-center py-2.5">
+              <div
+                className={`flex justify-center py-2.5 transition-all ${fileDragOver === idx ? "bg-brand-50 rounded-lg ring-2 ring-brand-400 ring-dashed" : ""}`}
+                onDragOver={(e) => {
+                  if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFileDragOver(idx);
+                }}
+                onDragLeave={() => setFileDragOver(null)}
+                onDrop={(e) => {
+                  e.stopPropagation();
+                  setFileDragOver(null);
+                  if (!onDropImage) return;
+                  const file = e.dataTransfer.files[0];
+                  if (file?.type.startsWith("image/")) {
+                    e.preventDefault();
+                    onDropImage(idx, file);
+                  }
+                }}
+              >
                 <button
                   onClick={(e) => { e.stopPropagation(); onInsertAt(idx); }}
-                  className="w-7 h-7 rounded-full border-2 border-gray-300 bg-white text-gray-400 text-sm font-black flex items-center justify-center hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+                  className={`w-7 h-7 rounded-full border-2 bg-white text-sm font-black flex items-center justify-center transition-all ${
+                    fileDragOver === idx
+                      ? "border-brand-500 text-brand-500 shadow-[2px_2px_0_#9870ED]"
+                      : "border-gray-300 text-gray-400 hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none"
+                  }`}
                   title={`Insertar página en posición ${idx + 1}`}
                 >
-                  +
+                  {fileDragOver === idx ? "📷" : "+"}
                 </button>
               </div>
             )}
@@ -451,13 +499,36 @@ export function PageList({
         })}
         {/* Insert "+" after last page */}
         {onInsertAt && sorted.length > 0 && (
-          <div className="flex justify-center py-1">
+          <div
+            className={`flex justify-center py-1 transition-all ${fileDragOver === sorted.length ? "bg-brand-50 rounded-lg ring-2 ring-brand-400 ring-dashed" : ""}`}
+            onDragOver={(e) => {
+              if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setFileDragOver(sorted.length);
+            }}
+            onDragLeave={() => setFileDragOver(null)}
+            onDrop={(e) => {
+              e.stopPropagation();
+              setFileDragOver(null);
+              if (!onDropImage) return;
+              const file = e.dataTransfer.files[0];
+              if (file?.type.startsWith("image/")) {
+                e.preventDefault();
+                onDropImage(sorted.length, file);
+              }
+            }}
+          >
             <button
               onClick={(e) => { e.stopPropagation(); onInsertAt(sorted.length); }}
-              className="w-7 h-7 rounded-full border-2 border-gray-300 bg-white text-gray-400 text-sm font-black flex items-center justify-center hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+              className={`w-7 h-7 rounded-full border-2 bg-white text-sm font-black flex items-center justify-center transition-all ${
+                fileDragOver === sorted.length
+                  ? "border-brand-500 text-brand-500 shadow-[2px_2px_0_#9870ED]"
+                  : "border-gray-300 text-gray-400 hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none"
+              }`}
               title={`Insertar página al final`}
             >
-              +
+              {fileDragOver === sorted.length ? "📷" : "+"}
             </button>
           </div>
         )}

@@ -15,7 +15,7 @@ const DEFAULTS: Record<DocModelOperation, string> = {
   docDirections: "gemini-2.5-flash",
   docDirectionsPreview: "gemini-2.5-flash",
   docGenerate: "gemini-2.5-pro",
-  docRefine: "gpt-4.1-mini",
+  docRefine: "claude-sonnet-4-6",
   docRegeneratePage: "claude-sonnet-4-6",
 };
 
