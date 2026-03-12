@@ -234,13 +234,13 @@ export function PageList({
 
           return (
             <React.Fragment key={section.id}>
-            {/* Insert "+" button between pages */}
-            {idx > 0 && onInsertAt && (
-              <div className="flex justify-center py-1 group/insert">
+            {/* Insert "+" button before/between pages */}
+            {onInsertAt && (
+              <div className="flex justify-center py-1">
                 <button
                   onClick={(e) => { e.stopPropagation(); onInsertAt(idx); }}
-                  className="w-7 h-7 rounded-full border-2 border-gray-300 bg-white text-gray-400 text-sm font-black flex items-center justify-center opacity-100 hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
-                  title={`Insertar página después de ${idx}`}
+                  className="w-7 h-7 rounded-full border-2 border-gray-300 bg-white text-gray-400 text-sm font-black flex items-center justify-center hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+                  title={`Insertar página en posición ${idx + 1}`}
                 >
                   +
                 </button>
@@ -449,6 +449,18 @@ export function PageList({
             </React.Fragment>
           );
         })}
+        {/* Insert "+" after last page */}
+        {onInsertAt && sorted.length > 0 && (
+          <div className="flex justify-center py-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onInsertAt(sorted.length); }}
+              className="w-7 h-7 rounded-full border-2 border-gray-300 bg-white text-gray-400 text-sm font-black flex items-center justify-center hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+              title={`Insertar página al final`}
+            >
+              +
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="px-2 py-2 border-t border-gray-100">
