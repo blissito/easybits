@@ -11,9 +11,9 @@ export type DocModelOperation =
   | "docVariant";
 
 const DEFAULTS: Record<DocModelOperation, string> = {
-  docDirections: "claude-sonnet-4-6",
+  docDirections: "gpt-4.1-mini",
   docDirectionsPreview: "claude-sonnet-4-6",
-  docGenerate: "claude-opus-4-6",
+  docGenerate: "claude-haiku-4-5-20251001",
   docRefine: "claude-sonnet-4-6",
   docVariant: "claude-sonnet-4-6",
 };

@@ -540,7 +540,7 @@ export default function DocumentEditor() {
                 }
                 setSections([...accumulated]);
                 playTone();
-                canvasRef.current?.scrollToSection(d.id);
+                setTimeout(() => canvasRef.current?.scrollToSection(d.id), 300);
               } else if (eventType === "section-update") {
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
