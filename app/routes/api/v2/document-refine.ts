@@ -8,6 +8,7 @@ import type { Section3 } from "~/lib/landing3/types";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
 import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
 import { generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
+import { sanitizeSemanticColors } from "~/.server/sanitizeColors";
 
 const VARIANT_SYSTEM_PROMPT = `You are an elite document designer. You create stunning visual variants of document pages for letter-sized (8.5" × 11") format.
 
@@ -246,6 +247,9 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
           const finalMatch = fullHtml.match(/<section[\s\S]*<\/section>/i);
           finalHtml = finalMatch ? finalMatch[0] : fullHtml;
         }
+
+        // Sanitize hardcoded colors → semantic classes
+        finalHtml = sanitizeSemanticColors(finalHtml);
 
         // Enrich images (Pexels → DALL-E → placeholder)
         const imageSlots = findImageSlots(finalHtml);

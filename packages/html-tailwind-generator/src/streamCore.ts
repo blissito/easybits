@@ -6,6 +6,7 @@ import { searchImage } from "./images/pexels";
 import { generateImage } from "./images/dalleImages";
 import { generateSvg } from "./images/svgGenerator";
 import type { Section3 } from "./types";
+import { sanitizeSemanticColors } from "./sanitizeColors";
 
 /**
  * Resolve AI model from available keys.
@@ -269,7 +270,7 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
     const section: Section3 = {
       id: nanoid(8),
       order: sectionOrder++,
-      html: addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html)),
+      html: sanitizeSemanticColors(addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html))),
       label: obj.label,
     };
     allSections.push(section);

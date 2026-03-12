@@ -76,6 +76,7 @@ export const createUserSession = async (
       publicKey: randomUUID(), // @revisit
       host,
       displayName: userData.displayName,
+      aiGenerationsBonus: 5, // promo: free bonus for new accounts
     },
     update: {
       email: userData.email,
