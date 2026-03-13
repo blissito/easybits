@@ -87,6 +87,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
       });
       return { ok: true };
     }
+    case "subtractGenerations": {
+      const amount = Number(formData.get("amount"));
+      if (!amount || amount < 1 || amount > 1000)
+        return data({ error: "Cantidad inválida" }, { status: 400 });
+      const currentBonus = user.aiGenerationsBonus ?? 0;
+      await db.user.update({
+        where: { id: userId },
+        data: { aiGenerationsBonus: Math.max(0, currentBonus - amount) },
+      });
+      await db.aiGenerationLog.create({
+        data: { userId, type: "admin_deduct", product: "admin" },
+      });
+      return { ok: true };
+    }
     default:
       return data({ error: "Invalid intent" }, { status: 400 });
   }
@@ -97,7 +111,7 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   return (
-    <div>
+    <div className="pb-12">
       <form
         className="mb-6"
         onSubmit={(e) => {
@@ -129,29 +143,7 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
         >
           {(paginatedUsers) => (
             <>
-              {/* Desktop table */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full text-sm border-2 border-black">
-                  <thead>
-                    <tr className="bg-black text-white text-left">
-                      <th scope="col" className="px-4 py-2"></th>
-                      <th scope="col" className="px-4 py-2">Email</th>
-                      <th scope="col" className="px-4 py-2">Nombre</th>
-                      <th scope="col" className="px-4 py-2">Roles</th>
-                      <th scope="col" className="px-4 py-2">Gens</th>
-                      <th scope="col" className="px-4 py-2">Registro</th>
-                      <th scope="col" className="px-4 py-2">Activo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedUsers.map((user: any) => (
-                      <UserRow key={user.id} user={user} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Mobile/tablet cards */}
-              <div className="lg:hidden flex flex-col gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {paginatedUsers.map((user: any) => (
                   <UserCard key={user.id} user={user} />
                 ))}
@@ -192,240 +184,159 @@ function EnableSwitch({ user, busy, fetcher, className }: { user: any; busy: boo
   );
 }
 
-function UserRow({ user }: { user: any }) {
+function UserCard({ user }: { user: any }) {
   const fetcher = useFetcher();
   const [editing, setEditing] = useState(false);
   const [newRole, setNewRole] = useState("");
   const busy = fetcher.state !== "idle";
 
+  const plan = normalizePlan((user.metadata as any)?.plan);
+  const limit = PLANS[plan].aiGenerationsPerMonth;
+  const used = user.aiGenerationsCount ?? 0;
+  const bonus = user.aiGenerationsBonus ?? 0;
+  const totalAvailable = limit !== null ? limit + bonus : null;
+  const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
+
   return (
-    <tr className="border-b-2 border-black hover:bg-gray-50 align-top">
-      <td className="px-4 py-2">
+    <article className="border-2 border-black rounded-xl bg-white p-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
+      {/* Header: avatar + info + switch */}
+      <div className="flex items-center gap-3">
         <img
           src={user.picture || "/images/profile.svg"}
           alt=""
-          className="w-8 h-8 rounded-full"
-        />
-      </td>
-      <td className="px-4 py-2 font-mono text-xs">{user.email}</td>
-      <td className="px-4 py-2">
-        {editing ? (
-          <fetcher.Form
-            method="post"
-            className="flex gap-1"
-            onSubmit={() => setEditing(false)}
-          >
-            <input type="hidden" name="intent" value="updateName" />
-            <input type="hidden" name="userId" value={user.id} />
-            <input
-              name="displayName"
-              defaultValue={user.displayName || ""}
-              className="px-2 py-0.5 border-2 border-black rounded text-xs w-28"
-              autoFocus
-            />
-            <BrutalButton size="chip" type="submit">
-              OK
-            </BrutalButton>
-            <BrutalButton size="chip" mode="ghost" onClick={() => setEditing(false)}>
-              X
-            </BrutalButton>
-          </fetcher.Form>
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className="hover:underline text-left"
-            title="Editar nombre"
-          >
-            {user.displayName || "—"}
-          </button>
-        )}
-      </td>
-      <td className="px-4 py-2">
-        <div className="flex gap-1 flex-wrap items-center">
-          {user.roles.map((role: string) => (
-            <span
-              key={role}
-              className="px-2 py-0.5 bg-brand-100 text-brand-700 text-xs font-bold rounded-md border border-brand-300 inline-flex items-center gap-1"
-            >
-              {role}
-              <fetcher.Form
-                method="post"
-                className="inline"
-                onSubmit={(e) => {
-                  if (!confirm(`¿Quitar el rol "${role}" de ${user.email}?`)) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                <input type="hidden" name="intent" value="removeRole" />
-                <input type="hidden" name="userId" value={user.id} />
-                <input type="hidden" name="role" value={role} />
-                <BrutalButton
-                  size="chip"
-                  mode="danger"
-                  type="submit"
-                  className="px-1.5 py-0"
-                >
-                  x
-                </BrutalButton>
-              </fetcher.Form>
-            </span>
-          ))}
-          <fetcher.Form
-            method="post"
-            className="inline-flex gap-1 items-center"
-            onSubmit={() => setNewRole("")}
-          >
-            <input type="hidden" name="intent" value="addRole" />
-            <input type="hidden" name="userId" value={user.id} />
-            <input
-              name="role"
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value)}
-              placeholder="+ rol"
-              className="px-1 py-0.5 border border-black rounded text-xs w-16"
-            />
-            {newRole && (
-              <BrutalButton size="chip" type="submit" className="px-1.5 py-0">
-                +
-              </BrutalButton>
-            )}
-          </fetcher.Form>
-        </div>
-      </td>
-      <td className="px-4 py-2">
-        <div className="text-xs text-gray-600 mb-1">
-          {(() => {
-            const plan = normalizePlan((user.metadata as any)?.plan);
-            const limit = PLANS[plan].aiGenerationsPerMonth;
-            const used = user.aiGenerationsCount ?? 0;
-            const bonus = user.aiGenerationsBonus ?? 0;
-            const totalUsed = used;
-            const totalAvailable = limit !== null ? limit + bonus : null;
-            const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
-            return <>
-              <span className="font-semibold">{totalUsed}</span> usadas de {totalAvailable ?? "∞"} total <span className="text-gray-400">({limit ?? "∞"} plan + {bonus} bonus)</span>{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} restantes</span></>}
-            </>;
-          })()}
-        </div>
-        <AddGensForm userId={user.id} />
-      </td>
-      <td className="px-4 py-2 text-gray-500 text-xs">
-        {new Date(user.createdAt).toLocaleDateString()}
-      </td>
-      <td className="px-4 py-2">
-        <EnableSwitch user={user} busy={busy} fetcher={fetcher} />
-      </td>
-    </tr>
-  );
-}
-
-function UserCard({ user }: { user: any }) {
-  const fetcher = useFetcher();
-  const [newRole, setNewRole] = useState("");
-  const busy = fetcher.state !== "idle";
-
-  return (
-    <article className="border-2 border-black rounded-lg bg-white px-3 py-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-      <div className="flex items-center gap-2">
-        <img
-          src={user.picture || "/images/profile.svg"}
-          alt=""
-          className="w-7 h-7 rounded-full border border-black flex-shrink-0"
+          className="w-10 h-10 rounded-full border-2 border-black flex-shrink-0"
         />
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-xs truncate leading-tight">{user.displayName || "—"}</p>
-          <p className="font-mono text-[10px] text-gray-500 truncate">{user.email}</p>
-        </div>
-        <div className="flex flex-wrap gap-1 items-center flex-shrink-0">
-          {user.roles.map((role: string) => (
-            <span
-              key={role}
-              className="px-1.5 py-px bg-brand-100 text-brand-700 text-[10px] font-bold rounded border border-brand-300 inline-flex items-center gap-0.5"
+          {editing ? (
+            <fetcher.Form
+              method="post"
+              className="flex gap-1 items-center"
+              onSubmit={() => setEditing(false)}
             >
-              {role}
-              <fetcher.Form method="post" className="inline">
-                <input type="hidden" name="intent" value="removeRole" />
-                <input type="hidden" name="userId" value={user.id} />
-                <input type="hidden" name="role" value={role} />
-                <button type="submit" className="text-red-500 font-bold hover:text-red-700">x</button>
-              </fetcher.Form>
-            </span>
-          ))}
-          <fetcher.Form
-            method="post"
-            className="inline-flex gap-0.5 items-center"
-            onSubmit={() => setNewRole("")}
-          >
-            <input type="hidden" name="intent" value="addRole" />
-            <input type="hidden" name="userId" value={user.id} />
-            <input
-              name="role"
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value)}
-              placeholder="+ rol"
-              className="px-1 py-px border border-black rounded text-[10px] w-12"
-            />
-            {newRole && (
-              <button type="submit" className="text-[10px] font-bold border border-black rounded px-1 hover:bg-black hover:text-white">+</button>
-            )}
-          </fetcher.Form>
+              <input type="hidden" name="intent" value="updateName" />
+              <input type="hidden" name="userId" value={user.id} />
+              <input
+                name="displayName"
+                defaultValue={user.displayName || ""}
+                className="px-2 py-0.5 border-2 border-black rounded text-xs w-full"
+                autoFocus
+              />
+              <BrutalButton size="chip" type="submit">OK</BrutalButton>
+              <BrutalButton size="chip" mode="ghost" onClick={() => setEditing(false)}>X</BrutalButton>
+            </fetcher.Form>
+          ) : (
+            <button
+              onClick={() => setEditing(true)}
+              className="font-bold text-sm truncate block hover:underline text-left w-full"
+              title="Editar nombre"
+            >
+              {user.displayName || "—"}
+            </button>
+          )}
+          <p className="font-mono text-[11px] text-gray-500 truncate">{user.email}</p>
         </div>
-        <EnableSwitch user={user} busy={busy} fetcher={fetcher} className="flex-shrink-0 ml-1" />
+        <EnableSwitch user={user} busy={busy} fetcher={fetcher} className="flex-shrink-0" />
       </div>
-      <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-gray-200">
-        <span className="text-[10px] text-gray-500">
-          {(() => {
-            const plan = normalizePlan((user.metadata as any)?.plan);
-            const limit = PLANS[plan].aiGenerationsPerMonth;
-            const used = user.aiGenerationsCount ?? 0;
-            const bonus = user.aiGenerationsBonus ?? 0;
-            const totalUsed = used;
-            const totalAvailable = limit !== null ? limit + bonus : null;
-            const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
-            return <>
-              <span className="font-semibold">{totalUsed}</span> usadas de {totalAvailable ?? "∞"} total <span className="text-gray-400">({limit ?? "∞"} plan + {bonus} bonus)</span>{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} restantes</span></>}
-            </>;
-          })()}
-        </span>
-        <AddGensForm userId={user.id} />
+
+      {/* Roles */}
+      <div className="flex gap-1 flex-wrap items-center">
+        {user.roles.map((role: string) => (
+          <span
+            key={role}
+            className="px-2 py-0.5 bg-brand-100 text-brand-700 text-[11px] font-bold rounded-md border border-brand-300 inline-flex items-center gap-1"
+          >
+            {role}
+            <fetcher.Form method="post" className="inline">
+              <input type="hidden" name="intent" value="removeRole" />
+              <input type="hidden" name="userId" value={user.id} />
+              <input type="hidden" name="role" value={role} />
+              <button type="submit" className="text-red-500 font-bold hover:text-red-700 text-xs">x</button>
+            </fetcher.Form>
+          </span>
+        ))}
+        <fetcher.Form
+          method="post"
+          className="inline-flex gap-1 items-center"
+          onSubmit={() => setNewRole("")}
+        >
+          <input type="hidden" name="intent" value="addRole" />
+          <input type="hidden" name="userId" value={user.id} />
+          <input
+            name="role"
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value)}
+            placeholder="+ rol"
+            className="px-1.5 py-0.5 border border-black rounded text-[11px] w-14"
+          />
+          {newRole && (
+            <BrutalButton size="chip" type="submit" className="px-1.5 py-0">+</BrutalButton>
+          )}
+        </fetcher.Form>
+      </div>
+
+      {/* Gens + controls */}
+      <div className="border-t border-gray-200 pt-2 flex items-center justify-between gap-2">
+        <div>
+          <span className={`text-xl font-bold ${remaining !== null && remaining <= 0 ? "text-red-500" : "text-green-600"}`}>
+            {remaining ?? "∞"}
+          </span>
+          <span className="text-xs text-gray-400 ml-1">restantes</span>
+          <div className="text-[10px] text-gray-400">
+            {used}/{totalAvailable ?? "∞"} ({limit ?? "∞"} plan + {bonus} bonus)
+          </div>
+        </div>
+        <GensControls userId={user.id} />
+      </div>
+
+      {/* Footer: date + plan */}
+      <div className="flex items-center justify-between text-[10px] text-gray-400">
+        <span>{new Date(user.createdAt).toLocaleDateString()}</span>
+        <span className="uppercase font-bold tracking-wider">{plan}</span>
       </div>
     </article>
   );
 }
 
-function AddGensForm({ userId }: { userId: string }) {
+function GensControls({ userId }: { userId: string }) {
   const fetcher = useFetcher();
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState("10");
   const busy = fetcher.state !== "idle";
   const error = fetcher.data && "error" in fetcher.data ? (fetcher.data as any).error : null;
 
+  const submit = (intent: string) => {
+    fetcher.submit(
+      { intent, userId, amount },
+      { method: "post" }
+    );
+  };
+
   return (
-    <div className="inline-flex gap-1 items-center">
-      <fetcher.Form
-        method="post"
-        className="inline-flex gap-1 items-center"
-        onSubmit={() => setAmount("")}
+    <div className="inline-flex gap-0.5 items-center mt-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => submit("subtractGenerations")}
+        className="w-6 h-6 text-xs font-bold bg-red-100 text-red-600 border border-red-300 rounded hover:bg-red-200 disabled:opacity-50"
       >
-        <input type="hidden" name="intent" value="addGenerations" />
-        <input type="hidden" name="userId" value={userId} />
-        <input
-          name="amount"
-          type="number"
-          min="1"
-          max="1000"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="+ gens"
-          className="px-1 py-0.5 border border-black rounded text-xs w-16"
-        />
-        {amount && (
-          <BrutalButton size="chip" type="submit" disabled={busy} className="px-1.5 py-0">
-            +
-          </BrutalButton>
-        )}
-      </fetcher.Form>
-      {error && <span className="text-red-600 text-[10px] font-bold">{error}</span>}
+        −
+      </button>
+      <input
+        type="number"
+        min="1"
+        max="1000"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        className="w-12 h-6 text-center text-xs border border-black rounded px-0.5"
+      />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => submit("addGenerations")}
+        className="w-6 h-6 text-xs font-bold bg-green-100 text-green-600 border border-green-300 rounded hover:bg-green-200 disabled:opacity-50"
+      >
+        +
+      </button>
+      {error && <span className="text-red-600 text-[10px] font-bold ml-1">{error}</span>}
     </div>
   );
 }
