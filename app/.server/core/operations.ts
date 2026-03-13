@@ -2,6 +2,7 @@ import { db } from "../db";
 import { nanoid } from "nanoid";
 import {
   getClientForFile,
+  getReadClientForPlatformFile,
   resolveProvider,
   createStorageClient,
   getPlatformDefaultClient,
@@ -87,7 +88,9 @@ export async function getFile(ctx: AuthContext, fileId: string) {
     }
   }
 
-  const client = await getClientForFile(file.storageProviderId, ctx.user.id);
+  const client = file.storageProviderId
+    ? await getClientForFile(file.storageProviderId, ctx.user.id)
+    : getReadClientForPlatformFile(file);
   const readUrl = await client.getReadUrl(file.storageKey);
 
   return { ...file, readUrl };
@@ -443,7 +446,9 @@ export async function generateShareToken(
     });
   }
 
-  const client = await getClientForFile(file.storageProviderId, ctx.user.id);
+  const client = file.storageProviderId
+    ? await getClientForFile(file.storageProviderId, ctx.user.id)
+    : getReadClientForPlatformFile(file);
   const url = await client.getReadUrl(file.storageKey, expiresIn);
 
   const expiresAt = new Date(Date.now() + expiresIn * 1000);

@@ -211,6 +211,15 @@ export async function getClientForFile(storageProviderId?: string | null, userId
   return getPlatformDefaultClient();
 }
 
+/**
+ * Returns the correct storage client for reading a platform file,
+ * handling the mcp/ vs root prefix distinction.
+ */
+export function getReadClientForPlatformFile(file: { storageProviderId?: string | null; url?: string | null }): StorageClient {
+  const isMcpFile = !file.url || (file.url && file.url.includes("/mcp/"));
+  return getPlatformDefaultClient({ prefix: isMcpFile ? "mcp/" : "" });
+}
+
 export async function resolveProvider(
   userId: string,
   opts?: { access?: "public" | "private"; region?: StorageRegion }

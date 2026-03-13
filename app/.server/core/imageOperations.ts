@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db";
 import {
   getClientForFile,
+  getReadClientForPlatformFile,
   resolveProvider,
   createStorageClient,
   getPlatformDefaultClient,
@@ -37,7 +38,9 @@ export async function optimizeImage(
   }
 
   // Download original
-  const sourceClient = await getClientForFile(file.storageProviderId, ctx.user.id);
+  const sourceClient = file.storageProviderId
+    ? await getClientForFile(file.storageProviderId, ctx.user.id)
+    : getReadClientForPlatformFile(file);
   const readUrl = await sourceClient.getReadUrl(file.storageKey);
   const response = await fetch(readUrl);
   if (!response.ok) {
@@ -137,7 +140,9 @@ export async function transformImage(
   }
 
   // Download original
-  const sourceClient = await getClientForFile(file.storageProviderId, ctx.user.id);
+  const sourceClient = file.storageProviderId
+    ? await getClientForFile(file.storageProviderId, ctx.user.id)
+    : getReadClientForPlatformFile(file);
   const readUrl = await sourceClient.getReadUrl(file.storageKey);
   const response = await fetch(readUrl);
   if (!response.ok) {
