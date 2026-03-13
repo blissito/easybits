@@ -63,7 +63,8 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Credentials (StorageProvider, AiKey): stored in MongoDB (plaintext — accepted risk, not prioritized)
 - CSRF: React Router actions have implicit protection; raw API endpoints need explicit tokens
 - Webhook verification: Stripe uses signature verification; other webhooks need HMAC
-- **Resolved**: IDOR downloads, endpoint auth, session cookie, Stripe signature verification, asset dedup, DB indexes
+- **Resolved**: IDOR downloads, endpoint auth, session cookie, Stripe signature verification, asset dedup, DB indexes, share token storage prefix (MCP/private files)
+- **File read helper**: `getReadClientForPlatformFile(file)` in `app/.server/storage.ts` — resolves correct prefix (`mcp/` vs root) for platform files. Use instead of `getClientForFile()` when reading file contents.
 - **Won't fix**: credentials encryption at rest, persistent rate limiter, storage quota enforcement — accepted as non-critical
 
 ## Observability & Health
