@@ -26,30 +26,28 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     search,
   });
 
-  // Fetch generation stats for all users on this page
+  // Fetch generation stats for all users on this page (avoid groupBy — crashes Prisma MongoDB on nullable fields)
   const userIds = users.map((u: any) => u.id);
-  const genStats = userIds.length > 0 ? await db.aiGenerationLog.groupBy({
-    by: ["userId", "source"],
-    where: { userId: { in: userIds }, type: { notIn: ["admin_bonus", "admin_deduct", "pack_purchase", "directions", "enhance"] } },
-    _count: true,
-  }) : [];
-
-  // Bonus acquired: admin_bonus + pack_purchase
-  const bonusAcquired = userIds.length > 0 ? await db.aiGenerationLog.groupBy({
-    by: ["userId"],
-    where: { userId: { in: userIds }, type: { in: ["admin_bonus", "pack_purchase"] } },
-    _sum: { pageCount: true },
-  }) : [];
-
   const statsMap: Record<string, { monthly: number; bonus: number; bonusAcquired: number }> = {};
-  for (const s of genStats) {
-    if (!statsMap[s.userId]) statsMap[s.userId] = { monthly: 0, bonus: 0, bonusAcquired: 0 };
-    if (s.source === "bonus") statsMap[s.userId].bonus = s._count;
-    else statsMap[s.userId].monthly += s._count;
-  }
-  for (const b of bonusAcquired) {
-    if (!statsMap[b.userId]) statsMap[b.userId] = { monthly: 0, bonus: 0, bonusAcquired: 0 };
-    statsMap[b.userId].bonusAcquired = b._sum?.pageCount ?? 0;
+
+  if (userIds.length > 0) {
+    const logs = await db.aiGenerationLog.findMany({
+      where: { userId: { in: userIds } },
+      select: { userId: true, type: true, source: true, pageCount: true },
+    });
+
+    for (const log of logs) {
+      if (!statsMap[log.userId]) statsMap[log.userId] = { monthly: 0, bonus: 0, bonusAcquired: 0 };
+      const s = statsMap[log.userId];
+
+      if (log.type === "admin_bonus" || log.type === "pack_purchase") {
+        s.bonusAcquired += log.pageCount ?? 0;
+      } else if (!["admin_deduct", "directions", "enhance"].includes(log.type)) {
+        // Actual generation — track by source
+        if (log.source === "bonus") s.bonus++;
+        else s.monthly++;
+      }
+    }
   }
 
   return { users, pagination, statsMap };
