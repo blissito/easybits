@@ -22,6 +22,8 @@ const SECTIONS = [
   { id: "sharing", label: "Sharing" },
   { id: "webhooks", label: "Webhooks" },
   { id: "websites", label: "Websites" },
+  { id: "presentations", label: "Presentations" },
+  { id: "documents", label: "Documents" },
   { id: "account", label: "Account & Usage" },
   { id: "errors", label: "Errors & Rate Limits" },
   { id: "mcp-apps", label: "MCP Apps UI" },
@@ -713,6 +715,133 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
               description="Delete website and soft-delete all its files"
               sdk={`await eb.deleteWebsite("website_id");`}
             />
+          </section>
+
+          {/* Presentations */}
+          <section id="presentations" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Presentations</h2>
+
+            <div className="mb-6 bg-indigo-50 border-2 border-indigo-300 rounded-xl p-4 text-sm space-y-2">
+              <strong>How presentations work:</strong>
+              <ol className="list-decimal list-inside space-y-1 text-gray-700">
+                <li>Create a presentation with a title, theme, and slides</li>
+                <li>Each slide contains HTML content rendered by <a href="https://revealjs.com" target="_blank" rel="noopener noreferrer" className="underline">reveal.js</a></li>
+                <li>Deploy to get a live URL at <code className="bg-gray-100 px-1 rounded">slug.easybits.cloud</code></li>
+                <li>Update slides and redeploy at any time</li>
+              </ol>
+            </div>
+
+            <h3 className="text-lg font-bold mb-4">Slide Object</h3>
+            <CodeExample
+              title="JSON"
+              code={`{
+  "content": "<h2>Welcome</h2><p>Your slide content as HTML</p>",
+  "notes": "Speaker notes for this slide",
+  "is3D": false
+}`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Available Themes</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              <code className="bg-gray-100 px-1 rounded">black</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">white</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">league</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">beige</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">night</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">serif</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">simple</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">solarized</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">moon</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">dracula</code>{" · "}
+              <code className="bg-gray-100 px-1 rounded">sky</code>
+            </p>
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Endpoints</h3>
+
+            <Endpoint
+              method="GET"
+              path="/presentations"
+              description="List your presentations"
+              response={`{ "items": [{ "id": "...", "title": "My Deck", "theme": "black", "status": "DRAFT" }] }`}
+              sdk={`const { items } = await eb.listPresentations();`}
+            />
+            <Endpoint
+              method="GET"
+              path="/presentations/:presentationId"
+              description="Get presentation details including slides"
+              sdk={`const pres = await eb.getPresentation("presentation_id");`}
+            />
+            <Endpoint
+              method="POST"
+              path="/presentations"
+              description="Create a new presentation"
+              body={[
+                { name: "title", type: "string", desc: "Presentation title (required)" },
+                { name: "theme", type: "string", desc: "Reveal.js theme (default: 'black')" },
+                { name: "slides", type: "Slide[]", desc: "Array of slide objects with content HTML" },
+              ]}
+              response={`{ "id": "...", "title": "My Deck", "theme": "black", "slides": [...] }`}
+              sdk={`const pres = await eb.createPresentation({
+  title: "Q1 Review",
+  theme: "moon",
+  slides: [
+    { content: "<h1>Q1 Review</h1><p>Key metrics</p>" },
+    { content: "<h2>Revenue</h2><p>Up 25% YoY</p>" },
+  ],
+});`}
+            />
+            <Endpoint
+              method="PATCH"
+              path="/presentations/:presentationId"
+              description="Update title, theme, or slides"
+              body={[
+                { name: "title", type: "string", desc: "New title" },
+                { name: "theme", type: "string", desc: "New theme" },
+                { name: "slides", type: "Slide[]", desc: "Replace all slides" },
+              ]}
+              sdk={`await eb.updatePresentation("presentation_id", {
+  theme: "dracula",
+  slides: [{ content: "<h1>Updated</h1>" }],
+});`}
+            />
+            <Endpoint
+              method="DELETE"
+              path="/presentations/:presentationId"
+              description="Delete a presentation and its deployed site"
+              response={`{ "success": true }`}
+              sdk={`await eb.deletePresentation("presentation_id");`}
+            />
+            <Endpoint
+              method="POST"
+              path="/presentations/:presentationId/deploy"
+              description="Deploy presentation as a static site at slug.easybits.cloud"
+              response={`{ "url": "https://my-deck.easybits.cloud" }`}
+              sdk={`const { url } = await eb.deployPresentation("presentation_id");
+console.log(url); // https://my-deck.easybits.cloud`}
+            />
+            <Endpoint
+              method="POST"
+              path="/presentations/:presentationId/unpublish"
+              description="Remove the deployed site"
+              response={`{ "success": true }`}
+              sdk={`await eb.unpublishPresentation("presentation_id");`}
+            />
+          </section>
+
+          {/* Documents */}
+          <section id="documents" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Documents</h2>
+
+            <div className="mb-6 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm space-y-2">
+              <strong>Coming Soon</strong>
+              <p className="text-gray-700">
+                AI-generated documents with parallel page generation, design directions, and semantic color themes.
+                Create professional reports, brochures, proposals, and more — each page generated in parallel for speed.
+              </p>
+              <p className="text-gray-500 text-xs mt-2">
+                Dashboard-only for now. API endpoints, SDK methods, and MCP tools coming soon.
+              </p>
+            </div>
           </section>
 
           {/* Account & Usage */}
