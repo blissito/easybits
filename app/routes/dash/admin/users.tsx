@@ -300,9 +300,11 @@ function UserRow({ user }: { user: any }) {
             const limit = PLANS[plan].aiGenerationsPerMonth;
             const used = user.aiGenerationsCount ?? 0;
             const bonus = user.aiGenerationsBonus ?? 0;
-            const remaining = limit !== null ? Math.max(0, limit - used) + bonus : null;
+            const totalUsed = used;
+            const totalAvailable = limit !== null ? limit + bonus : null;
+            const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
             return <>
-              {used}/{limit ?? "∞"} usadas · {bonus} bonus{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} disponibles</span></>}
+              <span className="font-semibold">{totalUsed}</span> usadas de {totalAvailable ?? "∞"} total <span className="text-gray-400">({limit ?? "∞"} plan + {bonus} bonus)</span>{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} restantes</span></>}
             </>;
           })()}
         </div>
@@ -378,9 +380,11 @@ function UserCard({ user }: { user: any }) {
             const limit = PLANS[plan].aiGenerationsPerMonth;
             const used = user.aiGenerationsCount ?? 0;
             const bonus = user.aiGenerationsBonus ?? 0;
-            const remaining = limit !== null ? Math.max(0, limit - used) + bonus : null;
+            const totalUsed = used;
+            const totalAvailable = limit !== null ? limit + bonus : null;
+            const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
             return <>
-              {used}/{limit ?? "∞"} usadas · {bonus} bonus{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} disponibles</span></>}
+              <span className="font-semibold">{totalUsed}</span> usadas de {totalAvailable ?? "∞"} total <span className="text-gray-400">({limit ?? "∞"} plan + {bonus} bonus)</span>{remaining !== null && <> · <span className={remaining <= 0 ? "text-red-500 font-bold" : "text-green-600"}>{remaining} restantes</span></>}
             </>;
           })()}
         </span>
