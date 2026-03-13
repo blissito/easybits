@@ -116,6 +116,20 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Deploy: static HTML to `slug.easybits.cloud` via `deployLanding` in `app/.server/core/landingOperations.ts`
 - Key differences from v2: free-form HTML sections (not block schema), iframe canvas (not React components), semantic color tokens, CodeMirror code editor
 
+## Documents
+- Editor: `app/routes/dash/documents/editor.tsx` — canvas-based (reuses landings3 Canvas/FloatingToolbar/CodeEditor)
+- New doc flow: `app/routes/dash/documents/new.tsx` → `directions.tsx` (4 design directions + cover previews) → editor with `?generating=1`
+- Model: reuses `Landing` with `version: 4`, stored in `landing.sections` as Section3[]
+- **Parallel generation** (SDK `generateDocumentParallel`): Phase 1 outline (`generateObject`, fast model ~1s) → Phase 2 N pages in parallel (`streamText` × N, ~8-10s) → Phase 3 sequential image enrichment (Pexels)
+- API: `/api/v2/document-generate` (SSE: `outline` → `section-building` × N interleaved → `section` × N → `section-update` for images → `done`)
+- Directions: `/api/v2/document-directions` — 4 design directions (fonts, colors, mood) + cover preview per direction
+- AI models: `docDirections`/`docDirectionsPreview` = Gemini 2.5 Flash, `docGenerate` = quality model (Gemini Pro)
+- Themes: reuses landings3 semantic color system (`buildSingleThemeCss`)
+- Logo: data URL uploaded to Tigris CDN, passed to AI as `<img src>` instruction
+- Export: PDF via `window.print()` with `@page` letter size
+- PageList: `app/components/documents/PageList.tsx` — thumbnails via scaled-down iframes, drag-and-drop reorder, version navigation, image drop zones
+- `skipCover`: when cover preview exists from directions, parallel gen skips cover type and appends content pages
+
 ## Cert Management
 - Audit + cleanup: `app/.server/core/certOperations.ts` — compares Fly certs vs DB (websites, customDomains, users)
 - Cron: `GET /api/cron/purge-certs` — runs in `.github/workflows/purge-cron.yml` alongside purge-files (every 7 days)
