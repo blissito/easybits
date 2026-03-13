@@ -58,10 +58,10 @@ export default function DocumentsList() {
   const navigate = useNavigate();
 
   return (
-    <article className="pt-20 px-8 pb-24 md:pl-36 w-full max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-10">
+    <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-7xl mx-auto overflow-x-hidden">
+      <div className="flex items-center justify-between mb-6 sm:mb-10 gap-3">
         <div>
-          <h1 className="text-4xl font-black tracking-tight uppercase">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase">
             Documentos
           </h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -78,7 +78,7 @@ export default function DocumentsList() {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center justify-center py-24 border-2 border-dashed border-gray-300 rounded-2xl"
+          className="flex flex-col items-center justify-center py-12 sm:py-24 border-2 border-dashed border-gray-300 rounded-2xl"
         >
           <div className="text-6xl mb-4">&#128196;</div>
           <p className="text-lg font-bold text-gray-700">
@@ -106,7 +106,7 @@ export default function DocumentsList() {
               >
                 <Link
                   to={`/dash/documents/${item.id}`}
-                  className="group block border-2 border-black rounded-2xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all duration-200 overflow-hidden"
+                  className="group block border-2 border-black rounded-2xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all duration-200 overflow-hidden max-w-[280px] sm:max-w-none mx-auto sm:mx-0"
                 >
                   {item.coverHtml ? (
                     <DocThumb html={item.coverHtml} theme={item.theme} customColors={item.customColors} />

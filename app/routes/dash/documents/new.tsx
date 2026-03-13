@@ -87,6 +87,10 @@ export default function NewDocument() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isAutoDescribing, setIsAutoDescribing] = useState(false);
+  const autoDescribeTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const lastAutoDescribedName = useRef("");
+  const promptWasManuallyEdited = useRef(false);
 
   // Reference image state
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
@@ -121,6 +125,34 @@ export default function NewDocument() {
     resizeImageToDataUrl(referenceFile, 1024).then(setReferenceDataUrl);
     return () => URL.revokeObjectURL(url);
   }, [referenceFile]);
+
+  // Auto-describe from title (debounced)
+  useEffect(() => {
+    if (autoDescribeTimer.current) clearTimeout(autoDescribeTimer.current);
+    const trimmed = nameValue.trim();
+    // Only auto-describe if: name has 3+ chars, prompt is empty, and we haven't already described this name
+    if (trimmed.length < 3 || promptWasManuallyEdited.current || lastAutoDescribedName.current === trimmed) return;
+
+    autoDescribeTimer.current = setTimeout(async () => {
+      if (lastAutoDescribedName.current === trimmed) return;
+      setIsAutoDescribing(true);
+      try {
+        const res = await fetch("/api/v2/document-enhance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ _action: "auto-describe", name: trimmed }),
+        });
+        const json = await res.json();
+        if (json.description) {
+          setPromptValue(json.description);
+          lastAutoDescribedName.current = trimmed;
+        }
+      } catch {}
+      setIsAutoDescribing(false);
+    }, 800);
+
+    return () => { if (autoDescribeTimer.current) clearTimeout(autoDescribeTimer.current); };
+  }, [nameValue]); // intentionally only nameValue — we check promptValue inside
 
   const handleFiles = useCallback(
     async (newFiles: FileList | File[]) => {
@@ -174,15 +206,15 @@ export default function NewDocument() {
   }
 
   return (
-    <article className="pt-20 px-8 pb-24 mx-auto w-full max-w-2xl">
-      <div className="flex items-center gap-3 mb-8">
+    <article className="pt-20 px-4 sm:px-8 pb-24 mx-auto w-full max-w-2xl">
+      <div className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8 flex-wrap">
         <Link
           to="/dash/documents"
           className="text-sm font-bold hover:underline"
         >
           &larr; Volver
         </Link>
-        <h1 className="text-3xl font-black tracking-tight uppercase">
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight uppercase">
           Nuevo Documento
         </h1>
       </div>
@@ -328,7 +360,7 @@ export default function NewDocument() {
         </div>
 
         {/* Logo + Reference image */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold mb-1">
               Logo
@@ -480,6 +512,12 @@ export default function NewDocument() {
             <label className="block text-sm font-bold">
               Instrucciones para la AI
               <span className="font-normal text-gray-400 ml-1">(opcional)</span>
+              {isAutoDescribing && (
+                <span className="inline-flex items-center gap-1 ml-2 text-xs font-normal text-gray-400">
+                  <span className="inline-block w-3 h-3 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                  Generando...
+                </span>
+              )}
             </label>
             {promptValue.trim() && (
               <BrutalButton
@@ -513,9 +551,10 @@ export default function NewDocument() {
           <BrutalField>
             <textarea
               name="prompt"
-              rows={4}
+              rows={8}
+              disabled={isAutoDescribing}
               value={promptValue}
-              onChange={(e) => setPromptValue(e.target.value)}
+              onChange={(e) => { setPromptValue(e.target.value); promptWasManuallyEdited.current = true; }}
               placeholder="Ej: Hazlo con estilo corporativo azul, agrega gráficas para los datos numéricos, incluye portada y tabla de contenido..."
               className={`${brutalInput} resize-none`}
             />

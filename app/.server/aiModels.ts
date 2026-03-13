@@ -9,7 +9,8 @@ export type DocModelOperation =
   | "docDirectionsPreview"
   | "docGenerate"
   | "docRefine"
-  | "docRegeneratePage";
+  | "docRegeneratePage"
+  | "docAutoDescribe";
 
 const DEFAULTS: Record<DocModelOperation, string> = {
   docDirections: "gemini-2.5-flash",
@@ -17,6 +18,7 @@ const DEFAULTS: Record<DocModelOperation, string> = {
   docGenerate: "gemini-2.5-pro",
   docRefine: "claude-sonnet-4-6",
   docRegeneratePage: "claude-sonnet-4-6",
+  docAutoDescribe: "gpt-4o-mini",
 };
 
 let cache: Record<string, string> | null = null;
@@ -49,8 +51,9 @@ export function invalidateModelCache() {
 
 export function resolveModelLocal(modelId: string, openaiKey?: string, anthropicKey?: string): LanguageModel {
   const isOpenAi = /^(gpt-|o[1-9]|dall-e|tts-|whisper|chatgpt-)/.test(modelId);
-  if (isOpenAi && openaiKey) {
-    return createOpenAI({ apiKey: openaiKey })(modelId);
+  const oKey = openaiKey || process.env.OPENAI_API_KEY;
+  if (isOpenAi && oKey) {
+    return createOpenAI({ apiKey: oKey })(modelId);
   }
   const isGemini = /^gemini-/.test(modelId);
   if (isGemini) {

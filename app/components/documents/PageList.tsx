@@ -19,13 +19,16 @@ interface PageListProps {
   onCustomColorChange?: (colors: Partial<CustomColors>) => void;
   themeCssData?: { css: string; tailwindConfig: string };
   onRestoreVersion?: (sectionId: string, html: string) => void;
-  /** Navigate version without pushing to history — just swap displayed html */
+  /** Preview a version in the canvas (read-only, no state mutation) */
   onNavigateVersion?: (sectionId: string, html: string) => void;
+  /** Exit version preview, return to current html */
+  onExitPreview?: (sectionId: string) => void;
   onGenerateVariant?: (sectionId: string, instruction?: string, referenceImage?: string) => void;
   onStopVariant?: () => void;
   loadingVariantId?: string | null;
   refiningIds?: Set<string>;
   onContextMenu?: (sectionIds: string[], position: { x: number; y: number }) => void;
+  onRegenerate?: (sectionId: string) => void;
 }
 
 /** Section3 with optional version history */
@@ -71,6 +74,8 @@ export function PageList({
   onContextMenu,
   onInsertAt,
   onDropImage,
+  onExitPreview,
+  onRegenerate,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
@@ -81,8 +86,6 @@ export function PageList({
   const [showThemes, setShowThemes] = useState(false);
   // Version navigation: index into versions array (undefined = current/active html)
   const [versionView, setVersionView] = useState<Record<string, number>>({});
-  // Store the "current active" html when user first navigates back, so ▶ can restore it
-  const activeHtmlRef = useRef<Record<string, string>>({});
 
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -100,7 +103,6 @@ export function PageList({
           delete next[section.id];
           return next;
         });
-        delete activeHtmlRef.current[section.id];
       }
       prevVersionCounts.current[section.id] = count;
     }
@@ -418,10 +420,6 @@ export function PageList({
                       disabled={isFirst}
                       onClick={(e) => {
                         e.stopPropagation();
-                        // First time navigating back: snapshot current active html
-                        if (viewIdx === undefined) {
-                          activeHtmlRef.current[section.id] = section.html;
-                        }
                         const newIdx = viewIdx !== undefined ? viewIdx - 1 : versions.length - 1;
                         setVersionView((p) => ({ ...p, [section.id]: newIdx }));
                         onNavigateVersion?.(section.id, versions[newIdx].html);
@@ -430,8 +428,8 @@ export function PageList({
                     >
                       &#9664;
                     </button>
-                    <span className="text-[9px] font-bold text-gray-500 tabular-nums">
-                      {currentPos}/{total}
+                    <span className={`text-[9px] font-bold tabular-nums ${viewIdx !== undefined ? "text-purple-500" : "text-gray-500"}`}>
+                      V{currentPos}/{total}
                     </span>
                     <button
                       disabled={isLast}
@@ -440,14 +438,13 @@ export function PageList({
                         if (viewIdx !== undefined) {
                           const newIdx = viewIdx + 1;
                           if (newIdx >= versions.length) {
-                            // Back to current active
+                            // Back to current
                             setVersionView((p) => {
                               const next = { ...p };
                               delete next[section.id];
                               return next;
                             });
-                            const activeHtml = activeHtmlRef.current[section.id];
-                            if (activeHtml) onNavigateVersion?.(section.id, activeHtml);
+                            onExitPreview?.(section.id);
                           } else {
                             setVersionView((p) => ({ ...p, [section.id]: newIdx }));
                             onNavigateVersion?.(section.id, versions[newIdx].html);
@@ -458,6 +455,22 @@ export function PageList({
                     >
                       &#9654;
                     </button>
+                    {viewIdx !== undefined && onRestoreVersion && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRestoreVersion(section.id, versions[viewIdx].html);
+                          setVersionView((p) => {
+                            const next = { ...p };
+                            delete next[section.id];
+                            return next;
+                          });
+                        }}
+                        className="text-[8px] font-bold text-purple-600 hover:text-purple-800 px-1 py-0.5 rounded bg-purple-50 hover:bg-purple-100 transition-colors ml-0.5"
+                      >
+                        Restaurar
+                      </button>
+                    )}
                   </div>
                 );
               })()}
@@ -490,13 +503,25 @@ export function PageList({
                     {section.label || `P\u00e1gina ${idx + 1}`}
                   </span>
                 )}
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  {onRegenerate && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRegenerate(section.id);
+                      }}
+                      className="w-6 h-6 md:w-4 md:h-4 flex items-center justify-center rounded text-gray-400 hover:text-brand-600 hover:bg-brand-50 text-xs md:text-[9px]"
+                      title="Regenerar p&aacute;gina"
+                    >
+                      &#10022;
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpenCode(section.id);
                     }}
-                    className="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 text-[9px]"
+                    className="w-6 h-6 md:w-4 md:h-4 flex items-center justify-center rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 text-xs md:text-[9px]"
                     title="Ver c&oacute;digo"
                   >
                     &lt;/&gt;
@@ -506,7 +531,7 @@ export function PageList({
                       e.stopPropagation();
                       onDelete(section.id);
                     }}
-                    className="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-red-600 hover:bg-red-50 text-[9px]"
+                    className="w-6 h-6 md:w-4 md:h-4 flex items-center justify-center rounded text-gray-400 hover:text-red-600 hover:bg-red-50 text-xs md:text-[9px]"
                     title="Eliminar p&aacute;gina"
                   >
                     &times;

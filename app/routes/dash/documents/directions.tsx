@@ -435,9 +435,9 @@ export default function DocumentDirections() {
   }, [selectedIndex, directions]);
 
   return (
-    <article className="fixed inset-0 left-20 pt-4 flex flex-col overflow-hidden">
+    <article className="fixed inset-0 left-0 md:left-20 pt-14 md:pt-4 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-8 py-2 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-8 py-2 shrink-0 flex-wrap">
         <Link to="/dash/documents/new" className="text-sm font-bold hover:underline shrink-0">
           &larr; Volver
         </Link>
@@ -457,16 +457,8 @@ export default function DocumentDirections() {
           disabled={isLoading}
           className="text-sm font-bold text-gray-500 hover:text-black transition-colors disabled:opacity-40 shrink-0"
         >
-          ↺ Regenerar todo
+          <span className="hidden sm:inline">↺ </span>Regenerar<span className="hidden sm:inline"> todo</span>
         </button>
-        <BrutalButton
-          isDisabled={selectedIndex === null || isCreating || isLoading}
-          isLoading={isCreating}
-          onClick={handleSelect}
-          size="chip"
-        >
-          Crear documento
-        </BrutalButton>
       </div>
 
       {error && (
@@ -477,15 +469,16 @@ export default function DocumentDirections() {
       )}
 
       {/* Cards grid — 2x2, each card is letter-ratio, centered in cell */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4 px-8 py-2">
-        {[0, 1, 2, 3].map((i) => {
+      <div className="flex-1 min-h-0 flex flex-col gap-2 sm:gap-4 px-2 sm:px-8 py-2 overflow-hidden">
+        {[[0, 1], [2, 3]].map((row, ri) => (
+          <div key={ri} className="flex-1 min-h-0 flex gap-2 sm:gap-4 justify-center">
+            {row.map((i) => {
           const dir = directions[i];
           const preview = previews[i];
           const isSelected = selectedIndex === i;
-          const isLeft = i % 2 === 0;
 
           return (
-            <div key={i} className={`flex min-h-0 ${isLeft ? "justify-end" : "justify-start"}`}>
+            <div key={i} className="flex-1 min-w-0 flex justify-center h-full">
               <div className="relative rounded-xl bg-black h-full group/card" style={{ aspectRatio: "8.5 / 12" }}>
               <div
                 onClick={() => !isLoading && setSelectedIndex(i)}
@@ -509,56 +502,58 @@ export default function DocumentDirections() {
                       </div>
                     </div>
                   )}
+                  {isSelected && !isLoading && preview && (
+                    <div className="absolute inset-0 bg-black/40 flex items-end justify-center z-10 pb-3">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSelect(); }}
+                        disabled={isCreating}
+                        className="text-[10px] sm:text-xs font-black text-white bg-brand-500 border sm:border-2 border-brand-700 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 shadow-lg hover:bg-brand-600 transition-colors disabled:opacity-50"
+                      >
+                        {isCreating ? "Creando..." : "Crear con este estilo"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Direction info */}
-                <div className="px-3 py-1.5 border-t-2 border-black shrink-0">
+                <div className="px-1.5 sm:px-3 py-1 sm:py-1.5 border-t-2 border-black shrink-0">
                   {dir ? (
                     <>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-black text-xs truncate flex-1">{dir.name}</h3>
-                        {isSelected && (
-                          <span className="text-[10px] font-bold bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full shrink-0">
-                            Seleccionado
-                          </span>
-                        )}
-                        {dir && (
-                          <button
-                            type="button"
-                            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); regenerateDirection(i); }}
-                            onClick={(e) => e.stopPropagation()}
-                            disabled={regeneratingIndex === i}
-                            className="text-xs font-bold text-black bg-white border-2 border-black rounded-lg px-2 py-1 translate-x-[2px] translate-y-[2px] hover:translate-x-0 hover:translate-y-0 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all disabled:opacity-30 shrink-0"
-                            title="Regenerar portada"
-                          >
-                            {regeneratingIndex === i ? (
-                              <span className="flex items-center gap-1">
-                                <span className="block w-3 h-3 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
-                                Regenerando
-                              </span>
-                            ) : "↺ Regenerar"}
-                          </button>
-                        )}
+                      <div className="flex items-center gap-1">
+                        <h3 className="font-black text-[10px] sm:text-xs truncate flex-1">{dir.name}</h3>
+                        <button
+                          type="button"
+                          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); regenerateDirection(i); }}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={regeneratingIndex === i}
+                          className="text-[10px] sm:text-xs font-bold text-black bg-white border sm:border-2 border-black rounded-lg px-1 sm:px-2 py-0.5 sm:py-1 hover:bg-gray-50 active:bg-gray-100 transition-all disabled:opacity-30 shrink-0"
+                          title="Regenerar portada"
+                        >
+                          {regeneratingIndex === i ? (
+                            <span className="block w-3 h-3 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+                          ) : "↺"}
+                        </button>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1 mt-0.5">
                         <div className="flex gap-0.5 shrink-0">
                           {Object.values(dir.colors).slice(0, 3).map((c, ci) => (
                             <span
                               key={ci}
-                              className="w-3 h-3 rounded-full border border-gray-200"
+                              className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border border-gray-200"
                               style={{ backgroundColor: c }}
                             />
                           ))}
                         </div>
-                        <span className="text-[10px] text-gray-400 truncate flex-1">
+                        <span className="text-[9px] sm:text-[10px] text-gray-400 truncate flex-1">
                           {dir.headingFont} + {dir.bodyFont}
                         </span>
                       </div>
                     </>
                   ) : (
-                    <div className="space-y-1.5">
-                      <div className="h-3 bg-gray-200 rounded w-1/2 animate-pulse" />
-                      <div className="h-2.5 bg-gray-100 rounded w-3/4 animate-pulse" />
+                    <div className="space-y-1">
+                      <div className="h-2.5 bg-gray-200 rounded w-1/2 animate-pulse" />
+                      <div className="h-2 bg-gray-100 rounded w-3/4 animate-pulse" />
                     </div>
                   )}
                 </div>
@@ -567,6 +562,8 @@ export default function DocumentDirections() {
             </div>
           );
         })}
+          </div>
+        ))}
       </div>
 
       {/* Footer hint */}

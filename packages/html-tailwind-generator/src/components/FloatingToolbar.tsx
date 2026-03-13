@@ -549,7 +549,7 @@ export function FloatingToolbar({
       style={{ top: finalTop, left: clampedLeft, maxWidth: "min(600px, calc(100vw - 16px))" }}
     >
       {/* Main row */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         {/* Tag badge / switcher */}
         {selection.tagName && (() => {
           const tag = selection.tagName.toUpperCase();
@@ -621,7 +621,7 @@ export function FloatingToolbar({
             placeholder={refImage ? "Instruccion + imagen..." : "Editar con AI..."}
             disabled={isRefining}
             rows={1}
-            className="bg-transparent text-sm text-white placeholder:text-gray-500 outline-none min-w-[10rem] flex-1 px-2 py-1 resize-none overflow-hidden"
+            className="bg-transparent text-sm text-white placeholder:text-gray-500 outline-none min-w-[6rem] sm:min-w-[10rem] flex-1 px-2 py-1 resize-none overflow-hidden"
           />
           <button
             type="submit"
@@ -664,7 +664,7 @@ export function FloatingToolbar({
 
         {/* Section-level actions (move/delete) */}
         {selection.isSectionRoot && (
-          <>
+          <span className="hidden sm:contents">
             <div className="w-px h-5 bg-gray-700" />
             <button
               onClick={onMoveUp}
@@ -680,7 +680,7 @@ export function FloatingToolbar({
             >
               ↓
             </button>
-          </>
+          </span>
         )}
 
         {selection.isSectionRoot ? (
@@ -721,7 +721,7 @@ export function FloatingToolbar({
         <div className="w-px h-5 bg-gray-700" />
         <button
           onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors shrink-0"
           title="Cerrar (ESC)"
         >
           ✕
@@ -743,7 +743,7 @@ export function FloatingToolbar({
       )}
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 pt-1 border-t border-gray-700/50">
+      <div className="flex items-center gap-1 pt-1 border-t border-gray-700/50 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {hasStyleTab && (
           <button
             onClick={() => toggleTab("style")}
@@ -782,7 +782,7 @@ export function FloatingToolbar({
         )}
         <button
           onClick={onViewCode}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors font-mono"
+          className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors font-mono"
           title="Ver código"
         >
           &lt;/&gt;

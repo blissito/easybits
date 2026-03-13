@@ -271,6 +271,7 @@ export default function DocumentEditor() {
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [showMobilePages, setShowMobilePages] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const streamEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -450,6 +451,10 @@ export default function DocumentEditor() {
     body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
     [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
     [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    @media (max-width: 850px) {
+      body { padding: 8px; gap: 12px; }
+      [data-section-id] { zoom: calc((100vw - 16px) / 8.5in); }
+    }
   `;
 
   async function generateSections(extraInstructions?: string, skipCover?: boolean) {
@@ -804,8 +809,6 @@ export default function DocumentEditor() {
 
   const refineAbortMap = useRef<Map<string, AbortController>>(new Map());
   const variantAbortRef = useRef<AbortController | null>(null);
-  // Track the "true current" html per section before version navigation swaps it
-  const trueHtmlRef = useRef<Record<string, string>>({});
 
   function stopVariant() {
     variantAbortRef.current?.abort();
@@ -839,9 +842,9 @@ export default function DocumentEditor() {
     const abortController = new AbortController();
     variantAbortRef.current = abortController;
     try {
-      // Use true current html (before any version navigation) for snapshot & request
-      const currentHtml = trueHtmlRef.current[sectionId] || section.html;
-      delete trueHtmlRef.current[sectionId];
+      // Exit any version preview before generating
+      canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+      const currentHtml = section.html;
 
       // Snapshot current version (using true html, not navigated-to html)
       setSections((prev) =>
@@ -1288,25 +1291,25 @@ ${sectionsHtml}
         Experimental — la velocidad de generaci&oacute;n podr&iacute;a no ser la &oacute;ptima. Ten paciencia mientras mejoramos el rendimiento.
       </div>
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-4 px-4 py-2 shrink-0 border-b border-gray-200 bg-white">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 py-2 shrink-0 border-b border-gray-200 bg-white">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link
             to="/dash/documents"
-            className="text-sm font-bold hover:underline"
+            className="text-sm font-bold hover:underline shrink-0"
           >
             &larr;
           </Link>
-          <h1 className="text-lg font-black truncate max-w-xs">
+          <h1 className="text-sm sm:text-lg font-black truncate">
             {landing.name}
           </h1>
           {liveUrl && (
-            <span className="flex items-center gap-1.5">
+            <span className="hidden sm:flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <a
                 href={liveUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-brand-600 hover:underline truncate max-w-[200px]"
+                className="text-xs text-brand-600 hover:underline truncate max-w-[120px] sm:max-w-[200px]"
               >
                 {liveUrl.replace(/^https?:\/\//, "")}
               </a>
@@ -1322,14 +1325,14 @@ ${sectionsHtml}
             const totalRemaining = monthlyRemaining + aiGenBonus;
             const color = totalRemaining <= 0 ? "text-red-500" : totalRemaining <= 2 ? "text-yellow-600" : "text-gray-400";
             return (
-              <span className={`text-xs font-bold ${color}`}>
+              <span className={`hidden sm:inline text-xs font-bold ${color}`}>
                 {totalRemaining} generaciones restantes
               </span>
             );
           })()}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <BrutalButton
             size="chip"
             mode="ghost"
@@ -1338,14 +1341,16 @@ ${sectionsHtml}
           >
             Exportar PDF
           </BrutalButton>
-          <BrutalButton
-            size="chip"
-            onClick={handleDeployDocument}
-            isLoading={activeIntent === "deploy"}
-            isDisabled={sections.length === 0 || activeIntent !== null}
-          >
-            {liveUrl ? "Actualizar" : "Publicar"}
-          </BrutalButton>
+          <span className="hidden sm:inline-flex">
+            <BrutalButton
+              size="chip"
+              onClick={handleDeployDocument}
+              isLoading={activeIntent === "deploy"}
+              isDisabled={sections.length === 0 || activeIntent !== null}
+            >
+              {liveUrl ? "Actualizar" : "Publicar"}
+            </BrutalButton>
+          </span>
 
           <div ref={overflowRef} className="relative">
             <button
@@ -1357,6 +1362,13 @@ ${sectionsHtml}
             </button>
             {overflowOpen && (
               <div className="absolute right-0 top-full mt-1 w-48 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0_#000] z-50 py-1 overflow-hidden">
+                <button
+                  onClick={() => { setOverflowOpen(false); handleDeployDocument(); }}
+                  disabled={sections.length === 0 || activeIntent !== null}
+                  className="sm:hidden w-full text-left px-4 py-2 text-sm font-bold text-brand-600 hover:bg-brand-50 disabled:opacity-50"
+                >
+                  {activeIntent === "deploy" ? "Publicando..." : liveUrl ? "Actualizar" : "Publicar"}
+                </button>
                 {liveUrl && (
                   <button
                     onClick={() => {
@@ -1411,10 +1423,99 @@ ${sectionsHtml}
       )}
 
 
+      {/* Mobile PageList toggle — outside overflow-hidden to avoid stacking context issues */}
+      {!codeViewSectionId && !showMobilePages && (
+        <button
+          type="button"
+          onClick={() => setShowMobilePages(true)}
+          className="md:hidden fixed bottom-20 left-4 z-[60] w-12 h-12 bg-white border-2 border-black rounded-xl shadow-[3px_3px_0_#000] flex items-center justify-center text-lg font-black hover:bg-gray-50 active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0_#000] transition-all"
+          title="Páginas"
+        >
+          ☰
+        </button>
+      )}
+
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Section list sidebar */}
+
+        {/* Mobile PageList drawer */}
+        {showMobilePages && !codeViewSectionId && (
+          <>
+            <div className="md:hidden fixed inset-0 bg-black/30 z-40" onClick={() => setShowMobilePages(false)} />
+            <div className="md:hidden fixed inset-y-0 left-0 z-40 w-56 bg-white shadow-xl border-r-2 border-black">
+              <PageList
+                sections={sections}
+                selectedSectionIds={selectedSectionIds}
+                onSelect={(id, multi) => {
+                  setSelectedSectionIds((prev) =>
+                    multi
+                      ? prev.includes(id)
+                        ? prev.filter((x) => x !== id)
+                        : [...prev, id]
+                      : [id]
+                  );
+                  canvasRef.current?.scrollToSection(id);
+                  setShowMobilePages(false);
+                }}
+                onContextMenu={(sectionIds, position) => {
+                  setSelectedSectionIds(sectionIds);
+                  setContextMenu({ ...position, sectionIds });
+                }}
+                onOpenCode={(id) => handleOpenCode(id)}
+                onReorder={handleReorder}
+                onDelete={(id) => {
+                  const updated = sections
+                    .filter((s) => s.id !== id)
+                    .map((s, i) => ({ ...s, order: i }));
+                  handleSectionsChange(updated);
+                }}
+                onRename={(id, label) => {
+                  const updated = sections.map((s) =>
+                    s.id === id ? { ...s, label } : s
+                  );
+                  handleSectionsChange(updated);
+                }}
+                onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
+                onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
+                onDropImage={handleDropImage}
+                theme={theme}
+                onThemeChange={handleThemeChange}
+                customColors={customColors}
+                onCustomColorChange={handleCustomColorChange}
+                themeCssData={themeCssData}
+                onGenerateVariant={handleGenerateVariant}
+                onStopVariant={stopVariant}
+                loadingVariantId={variantLoadingId}
+                refiningIds={refiningSections}
+                onRestoreVersion={(sectionId, oldHtml) => {
+                  canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+                  const updated = sections.map((s) => {
+                    if (s.id !== sectionId) return s;
+                    const sv = s as Section3WithVersions;
+                    const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
+                    return { ...s, html: oldHtml, versions } as any;
+                  });
+                  handleSectionsChange(updated);
+                }}
+                onNavigateVersion={(sectionId, html) => {
+                  canvasRef.current?.postMessage({ action: "preview-version", sectionId, html });
+                }}
+                onExitPreview={(sectionId) => {
+                  canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+                }}
+                onRegenerate={(sectionId) => {
+                  setShowMobilePages(false);
+                  setRegenTargetId(sectionId);
+                  setShowAddPrompt(true);
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Section list sidebar (desktop) */}
         {!codeViewSectionId && (
+          <div className="hidden md:flex">
           <PageList
             sections={sections}
             selectedSectionIds={selectedSectionIds}
@@ -1459,29 +1560,27 @@ ${sectionsHtml}
             loadingVariantId={variantLoadingId}
             refiningIds={refiningSections}
             onRestoreVersion={(sectionId, oldHtml) => {
-              delete trueHtmlRef.current[sectionId];
+              canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
                 const sv = s as Section3WithVersions;
-                // Push current to versions, restore old
                 const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
                 return { ...s, html: oldHtml, versions } as any;
               });
               handleSectionsChange(updated);
             }}
             onNavigateVersion={(sectionId, html) => {
-              // Save true current html before first navigation swap
-              if (!trueHtmlRef.current[sectionId]) {
-                const current = sections.find((s) => s.id === sectionId);
-                if (current) trueHtmlRef.current[sectionId] = current.html;
-              }
-              // Just swap displayed html — no version push, no save
-              setSections((prev) =>
-                prev.map((s) => s.id === sectionId ? { ...s, html } : s)
-              );
-              setTimeout(() => canvasRef.current?.postMessage({ action: "reload-sections" }), 50);
+              canvasRef.current?.postMessage({ action: "preview-version", sectionId, html });
+            }}
+            onExitPreview={(sectionId) => {
+              canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+            }}
+            onRegenerate={(sectionId) => {
+              setRegenTargetId(sectionId);
+              setShowAddPrompt(true);
             }}
           />
+          </div>
         )}
 
         {/* Context menu */}
@@ -1559,7 +1658,7 @@ ${sectionsHtml}
 
         {/* Code editor */}
         {codeViewSectionId && (
-          <div className="w-1/2 h-full border-r border-gray-700">
+          <div className="hidden md:block w-1/2 h-full border-r border-gray-700">
             <CodeEditor
               code={codeValue}
               label={
@@ -1579,7 +1678,7 @@ ${sectionsHtml}
 
         {/* Canvas — document pages */}
         <div
-          className={`${codeViewSectionId ? "w-1/2" : "flex-1"} overflow-auto relative flex flex-col`}
+          className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 overflow-auto relative flex flex-col`}
         >
           <div className="flex-1 overflow-auto relative flex justify-center bg-gray-200">
             <div className="transition-all duration-300 h-full w-full">

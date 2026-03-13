@@ -457,6 +457,31 @@ export function getIframeScript(): string {
       }
     }
 
+    if (msg.action === 'preview-version') {
+      var el = getSectionElement(msg.sectionId);
+      if (el) {
+        // Store original html if not already stored
+        if (!el.dataset.originalHtml) {
+          el.dataset.originalHtml = el.innerHTML;
+        }
+        el.innerHTML = msg.html;
+        el.style.outline = '2px dashed #8B5CF6';
+        el.style.outlineOffset = '-2px';
+        el.style.opacity = '0.85';
+      }
+    }
+
+    if (msg.action === 'exit-preview') {
+      var el = getSectionElement(msg.sectionId);
+      if (el && el.dataset.originalHtml) {
+        el.innerHTML = el.dataset.originalHtml;
+        delete el.dataset.originalHtml;
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+        el.style.opacity = '';
+      }
+    }
+
     if (msg.action === 'full-rewrite') {
       // Fallback: rewrite everything
       document.body.innerHTML = msg.html;
