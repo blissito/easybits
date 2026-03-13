@@ -1,7 +1,7 @@
 import { streamText } from "ai";
 import { enrichImages } from "./images/enrichImages";
 import { sanitizeSemanticColors } from "./sanitizeColors";
-import { resolveModel } from "./streamCore";
+import { resolveModel, currentDateLine } from "./streamCore";
 
 export const REFINE_SYSTEM = `You are an expert HTML/Tailwind CSS developer. You receive the current HTML of a landing page section and a user instruction.
 
@@ -148,7 +148,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
 
   const result = streamText({
     model,
-    system: systemPrompt,
+    system: systemPrompt + currentDateLine(),
     messages: [{ role: "user", content }],
     ...(isVariant && !referenceImage ? { temperature: 1.2 } : {}),
   });

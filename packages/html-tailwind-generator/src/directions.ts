@@ -1,7 +1,7 @@
 import { generateObject, streamText } from "ai";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { resolveModel } from "./streamCore";
+import { resolveModel, currentDateLine } from "./streamCore";
 
 export const DesignDirectionSchema = z.object({
   name: z.string().describe("Creative direction name, e.g. 'The Editorial'"),
@@ -83,7 +83,7 @@ export async function generateDirections(
     schema: z.object({
       directions: z.array(DesignDirectionSchema).describe(`Exactly ${count} design directions`),
     }),
-    system: DIRECTIONS_SYSTEM,
+    system: DIRECTIONS_SYSTEM + currentDateLine(),
     prompt: `Project brief: "${prompt}"
 
 Generate ${count} design directions. Make them as visually distinct as possible.`,
@@ -197,7 +197,7 @@ ${sectionInstruction}`;
 
   const result = streamText({
     model,
-    system: systemPrompt,
+    system: systemPrompt + currentDateLine(),
     messages,
   });
 

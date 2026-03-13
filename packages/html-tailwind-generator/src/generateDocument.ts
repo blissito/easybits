@@ -5,6 +5,7 @@ import {
   streamGenerate,
   dataUrlToImagePart,
   resolveModel,
+  currentDateLine,
   extractJsonObjects,
   addLoadingPlaceholders,
   addSvgLoadingPlaceholders,
@@ -490,7 +491,7 @@ OUTPUT: A single JSON object on ONE line, no markdown fences:
       try {
         const result = streamText({
           model: pageModel,
-          system: DOCUMENT_SYSTEM_PROMPT,
+          system: DOCUMENT_SYSTEM_PROMPT + currentDateLine(),
           messages: [{ role: "user", content: userContent }],
         });
 

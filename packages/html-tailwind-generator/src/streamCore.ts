@@ -8,6 +8,10 @@ import { generateSvg } from "./images/svgGenerator";
 import type { Section3 } from "./types";
 import { sanitizeSemanticColors } from "./sanitizeColors";
 
+export function currentDateLine(): string {
+  return `\nToday's date is ${new Date().toISOString().split("T")[0]}. Use this for any date references.\n`;
+}
+
 /**
  * Resolve AI model from available keys.
  * If modelId is already a LanguageModel object, return it directly.
@@ -288,7 +292,7 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
 
   const result = streamText({
     model,
-    system: systemPrompt,
+    system: systemPrompt + currentDateLine(),
     messages: [{ role: "user", content: userContent }],
   });
 

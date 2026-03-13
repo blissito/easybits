@@ -1,5 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateText } from "ai";
+import { currentDateLine } from "../streamCore";
 
 const SVG_SYSTEM_PROMPT = `You are a professional SVG designer. Generate clean, compact SVG graphics for documents.
 
@@ -45,7 +46,7 @@ export async function generateSvg(
 
   const result = await generateText({
     model: anthropic("claude-haiku-4-5-20251001"),
-    system: SVG_SYSTEM_PROMPT,
+    system: SVG_SYSTEM_PROMPT + currentDateLine(),
     messages: [
       {
         role: "user",
