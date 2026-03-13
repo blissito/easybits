@@ -375,8 +375,8 @@ export function FloatingToolbar({
     const containerTags = ['DIV', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MAIN', 'ARTICLE'];
     const isContainer = containerTags.includes(selection!.tagName ?? '');
 
-    const TEXT_COLOR_PREFIXES = ["text-primary", "text-secondary", "text-accent", "text-on-surface", "text-on-primary", "text-on-surface-muted", "text-white", "text-black"];
-    const BG_COLOR_PREFIXES = ["bg-primary", "bg-primary-dark", "bg-secondary", "bg-accent", "bg-surface", "bg-surface-alt"];
+    const TEXT_COLOR_PREFIXES = ["text-primary", "text-secondary", "text-accent", "text-on-surface", "text-on-primary", "text-on-surface-muted", "text-white", "text-black", "text-transparent"];
+    const BG_COLOR_PREFIXES = ["bg-primary", "bg-primary-dark", "bg-secondary", "bg-accent", "bg-surface", "bg-surface-alt", "bg-white", "bg-black", "bg-transparent"];
 
     const themeSwatches = themeColors ? [
       { color: themeColors.primary, textCls: "text-primary", bgCls: "bg-primary", label: "Primary" },
@@ -386,21 +386,22 @@ export function FloatingToolbar({
     ] : [];
 
     const fixedSwatches = [
-      { color: "#ffffff", css: "#ffffff", label: "Blanco" },
-      { color: "#000000", css: "#000000", label: "Negro" },
-      { color: "transparent", css: "transparent", label: "Transparente" },
+      { color: "#ffffff", textCls: "text-white", bgCls: "bg-white", label: "Blanco" },
+      { color: "#000000", textCls: "text-black", bgCls: "bg-black", label: "Negro" },
+      { color: "transparent", textCls: "text-transparent", bgCls: "bg-transparent", label: "Transparente" },
     ];
 
     const renderColorRow = (label: string, mode: "text" | "bg") => (
       <div key={mode} className="flex items-center gap-1 pt-0.5 pb-0.5">
         <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 shrink-0 w-10">{label}</span>
-        {fixedSwatches.map(({ color, css, label: swatchLabel }) => (
+        {fixedSwatches.map(({ color, textCls, bgCls, label: swatchLabel }) => (
           <button
             key={swatchLabel}
             onClick={() => {
-              handleReplaceClass(mode === "text" ? TEXT_COLOR_PREFIXES : BG_COLOR_PREFIXES, "");
-              const cssProp = mode === "text" ? "color" : "background-color";
-              handleSetAttr("style", `${cssProp}: ${css}`);
+              const prefixes = mode === "text" ? TEXT_COLOR_PREFIXES : BG_COLOR_PREFIXES;
+              const cls = mode === "text" ? textCls : bgCls;
+              handleReplaceClass(prefixes, cls);
+              handleSetAttr("style", "");
             }}
             className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
             style={color === "transparent" ? {
@@ -417,6 +418,7 @@ export function FloatingToolbar({
               const prefixes = mode === "text" ? TEXT_COLOR_PREFIXES : BG_COLOR_PREFIXES;
               const cls = mode === "text" ? textCls : bgCls;
               handleReplaceClass(prefixes, cls);
+              handleSetAttr("style", "");
             }}
             className="w-5 h-5 rounded-full border border-gray-600 hover:scale-125 transition-transform shrink-0"
             style={{ backgroundColor: color }}

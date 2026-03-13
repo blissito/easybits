@@ -63,7 +63,7 @@ export function getIframeScript(): string {
   }
 
   function isTextElement(el) {
-    var textTags = ['H1','H2','H3','H4','H5','H6','P','SPAN','LI','A','BLOCKQUOTE','LABEL','TD','TH','FIGCAPTION','BUTTON'];
+    var textTags = ['H1','H2','H3','H4','H5','H6','P','DIV','SPAN','LI','A','BLOCKQUOTE','LABEL','TD','TH','FIGCAPTION','BUTTON'];
     return textTags.indexOf(el.tagName) !== -1;
   }
 

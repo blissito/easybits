@@ -19,6 +19,9 @@ RULES:
 - Keep ALL the same text/data content — change ONLY the visual presentation
 - Redesign layout structure, typography scale, decorative elements, spacing, alignment — but KEEP the same color theme
 - Use bold, confident design choices — large type contrasts, asymmetric layouts, dramatic whitespace
+- Page structure: <section class="w-[8.5in] h-[11in] flex flex-col relative overflow-hidden">
+- Content area uses flex-1 overflow-hidden, footer/header bands use shrink-0
+- The section is EXACTLY 11in tall — content MUST fit, never exceed
 - Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
 - Decorative elements with absolute positioning MUST stay fully inside the page — no negative coordinates, no elements beyond the right edge
 - Large decorative text (text-[200px] etc.) MUST have opacity-5 AND overflow-hidden on container
@@ -62,6 +65,9 @@ CRITICAL PRIORITY RULES — SURGICAL EDITS:
 
 GENERAL RULES:
 - Output ONLY the refined HTML <section>...</section> — no markdown, no explanation
+- Page structure: <section class="w-[8.5in] h-[11in] flex flex-col relative overflow-hidden">
+- Content area uses flex-1 overflow-hidden, footer/header bands use shrink-0
+- The section is EXACTLY 11in tall — content MUST fit, never exceed
 - Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
 - Use Tailwind CSS classes for styling
 - Maintain professional, colorful design with geometric elements, gradients, SVG icons
@@ -168,36 +174,30 @@ export async function action({ request }: Route.ActionArgs) {
   const allSections = (body.allSections || []) as { id: string; label?: string; html: string }[];
   let neighborContext = "";
   if (allSections.length > 1) {
-    const idx = allSections.findIndex((s) => s.id === sectionId);
-    const neighbors: string[] = [];
-    if (idx > 0) {
-      const prev = allSections[idx - 1];
-      neighbors.push(`[Page ${idx} - ${prev.label || "Previous"}]: ${prev.html}`);
-    }
-    if (idx >= 0 && idx < allSections.length - 1) {
-      const next = allSections[idx + 1];
-      neighbors.push(`[Page ${idx + 2} - ${next.label || "Next"}]: ${next.html}`);
-    }
-    if (neighbors.length > 0) {
-      neighborContext = `\n\nHere are other pages in the same document for style reference:\n${neighbors.join("\n\n")}`;
-    }
-
-    // For new sections, provide full document outline so AI can generate TOC/index
-    if (isNewSection && allSections.length > 2) {
-      const outline = allSections.map((s, i) => {
-        const headingMatch = s.html.match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
-        const heading = headingMatch ? headingMatch[1].replace(/<[^>]*>/g, "").trim() : "";
-        return `- Page ${i + 1}: ${s.label || `Página ${i + 1}`}${heading ? ` — ${heading}` : ""}`;
-      }).join("\n");
-      neighborContext += `\n\nFull document outline (${allSections.length} pages):\n${outline}`;
-    }
+    // Build lightweight outline (label + heading) instead of full HTML
+    const outline = allSections.map((s, i) => {
+      const headingMatch = s.html.match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
+      const heading = headingMatch ? headingMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+      const marker = s.id === sectionId ? " ← current" : "";
+      return `- Page ${i + 1}: ${s.label || `Página ${i + 1}`}${heading ? ` — ${heading}` : ""}${marker}`;
+    }).join("\n");
+    neighborContext = `\n\nDocument outline (${allSections.length} pages):\n${outline}`;
   }
 
-  // Build font instruction from direction
-  let fontInstruction = "";
+  // Build full direction context for refine
+  let directionContext = "";
   if (direction?.headingFont || direction?.bodyFont) {
     const fontsUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(direction.headingFont).replace(/%20/g, "+")}:wght@400;700;900&family=${encodeURIComponent(direction.bodyFont).replace(/%20/g, "+")}:wght@400;500;600&display=swap`;
-    fontInstruction = `\n\nTYPOGRAPHY — CRITICAL: Maintain these fonts on ALL elements:
+    const colors = direction.colors || {};
+    directionContext = `\n\nDESIGN DIRECTION:
+- Style: "${direction.name || ""}" — ${direction.tagline || ""}
+- Mood: ${direction.mood || "professional"}
+- Layout hint: ${direction.layoutHint || "clean and structured"}
+- Heading font: ${direction.headingFont} (inline style)
+- Body font: ${direction.bodyFont} (inline style)
+- Colors: primary=${colors.primary || "N/A"}, accent=${colors.accent || "N/A"}, surface=${colors.surface || "N/A"}
+
+TYPOGRAPHY — CRITICAL: Maintain these fonts on ALL elements:
 - Headings: style="font-family: '${direction.headingFont}', sans-serif" (inline style on h1, h2, h3, etc.)
 - Body text: style="font-family: '${direction.bodyFont}', sans-serif" (inline style on p, li, td, span, etc.)
 - Include <link href="${fontsUrl}" rel="stylesheet"> inside the <section> if not already present.
@@ -205,6 +205,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const pageHtml = currentHtml || section?.html || "<section></section>";
+  const docContext = landing.prompt ? `\n\nDOCUMENT CONTEXT (original prompt): ${landing.prompt}` : "";
 
   // Element-scoped refine: extract the specific element when openTag is provided
   let elementHtml = "";
@@ -260,7 +261,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const multiPageHint = isNewSection
     ? `\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page.
-CRITICAL: Each section MUST use this exact structure: <section class="w-[8.5in] h-[11in] relative overflow-hidden ...">
+CRITICAL: Each section MUST use this exact structure: <section class="w-[8.5in] h-[11in] flex flex-col relative overflow-hidden ...">
 The section MUST be exactly 8.5in wide and 11in tall (letter size). Content must fit within the page. Use overflow-hidden.
 Do NOT use w-full, min-h-screen, or responsive classes — this is a fixed-size print document.
 ALWAYS output one <section> per page. NEVER put multiple pages of content inside a single <section>.
@@ -282,24 +283,24 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
         imageContent,
         {
           type: "text",
-          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}${fontInstruction}\n\nUse the image as design reference. ${outputHint}`,
+          text: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${docContext}${multiPageHint}${directionContext}\n\nUse the image as design reference. ${outputHint}`,
         },
       ],
     });
   } else if (isVariantMode) {
     messages.push({
       role: "user",
-      content: `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${neighborContext}${fontInstruction}\n\nOutput ONLY the new <section> HTML.`,
+      content: `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${neighborContext}${docContext}${directionContext}\n\nOutput ONLY the new <section> HTML.`,
     });
   } else if (elementRefine) {
     messages.push({
       role: "user",
-      content: `Element to edit:\n${elementHtml}\n\nInstruction: ${instruction}${fontInstruction}\n\nPage context (DO NOT output this, for reference only):\n${pageHtml}`,
+      content: `Element to edit:\n${elementHtml}\n\nInstruction: ${instruction}${directionContext}\n\nPage context (DO NOT output this, for reference only):\n${pageHtml}`,
     });
   } else {
     messages.push({
       role: "user",
-      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${multiPageHint}${fontInstruction}\n\n${outputHint}`,
+      content: `Current HTML:\n${pageHtml}\n\nInstruction: ${instruction}${neighborContext}${docContext}${multiPageHint}${directionContext}\n\n${outputHint}`,
     });
   }
 

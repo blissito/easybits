@@ -289,6 +289,7 @@ export default function DocumentEditor() {
   const [showAddPrompt, setShowAddPrompt] = useState(false);
   const [addPrompt, setAddPrompt] = useState("");
   const [isAddingSection, setIsAddingSection] = useState(false);
+  const addPageAbortRef = useRef<AbortController | null>(null);
 
   // Undo/Redo
   const { pushUndo, undo, redo, canUndo, canRedo } = useUndoStack<Section3[]>();
@@ -720,6 +721,7 @@ export default function DocumentEditor() {
           sectionId,
           instruction,
           currentHtml: section.html,
+          allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
           ...(referenceImage && { referenceImage }),
           ...(direction && { direction }),
           ...(selection && !selection.isSectionRoot && selection.openTag && {
@@ -999,6 +1001,9 @@ export default function DocumentEditor() {
     const savedParsedContent = addParsedContent;
     const savedRefImage = addRefImage;
     const newId = Math.random().toString(36).slice(2, 10);
+    addPageAbortRef.current?.abort();
+    const controller = new AbortController();
+    addPageAbortRef.current = controller;
     try {
       const instruction = [
         savedPrompt ? `Create new pages: ${savedPrompt}` : "Create new pages from this content",
@@ -1006,6 +1011,7 @@ export default function DocumentEditor() {
       ].join("");
 
       const res = await fetch("/api/v2/document-refine", {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1117,6 +1123,7 @@ export default function DocumentEditor() {
       }
 
     } catch (err) {
+      if ((err as Error).name === "AbortError") return; // User cancelled — keep partial content
       console.error("Add page error:", err);
       errorToast((err as Error).message || "Error al agregar página");
       // Remove the empty placeholder page on error
@@ -1439,8 +1446,8 @@ ${sectionsHtml}
               );
               handleSectionsChange(updated);
             }}
-            onAdd={() => { setInsertAtIndex(null); setShowAddPrompt(true); }}
-            onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setShowAddPrompt(true); }}
+            onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
+            onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
             onDropImage={handleDropImage}
             theme={theme}
             onThemeChange={handleThemeChange}
@@ -1606,6 +1613,21 @@ ${sectionsHtml}
                         onClick={() => {
                           for (const [, ctrl] of refineAbortMap.current) ctrl.abort();
                           refineAbortMap.current.clear();
+                        }}
+                        className="text-xs font-bold text-red-500 hover:underline ml-1"
+                      >
+                        Detener
+                      </button>
+                    </div>
+                  )}
+                  {isAddingSection && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
+                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                      <span className="text-sm font-bold">Generando página...</span>
+                      <button
+                        onClick={() => {
+                          addPageAbortRef.current?.abort();
+                          setIsAddingSection(false);
                         }}
                         className="text-xs font-bold text-red-500 hover:underline ml-1"
                       >

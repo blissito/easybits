@@ -58,7 +58,7 @@ export default function DocumentsList() {
   const navigate = useNavigate();
 
   return (
-    <article className="pt-20 px-8 pb-24 md:pl-36 w-full max-w-7xl">
+    <article className="pt-20 px-8 pb-24 md:pl-36 w-full max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-10">
         <div>
           <h1 className="text-4xl font-black tracking-tight uppercase">

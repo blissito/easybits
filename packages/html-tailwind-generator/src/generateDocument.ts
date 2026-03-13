@@ -19,9 +19,12 @@ export const DOCUMENT_SYSTEM_PROMPT = `You are a professional document designer 
 
 RULES:
 - Each page is a <section> element sized for letter paper
-- Page structure: <section class="w-[8.5in] h-[11in] relative overflow-hidden">
+- Page structure: <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col">
+- The section is EXACTLY 11in tall — content MUST fit, never exceed. Use flex flex-col so children can use flex-1.
 - The section itself has NO padding — backgrounds, gradients, and decorative elements go edge-to-edge
-- For text content, use an inner wrapper: <div class="px-[0.75in] py-[0.5in]">...content...</div>
+- Use slot layout: shrink-0 for header/footer bands, flex-1 overflow-hidden for main content area
+- For text content, use an inner wrapper: <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">...content...</div>
+- Footer elements (page numbers, decorative bars, contact info) use shrink-0 so they are ALWAYS visible
 - Cover pages and decorative sections can use full-bleed backgrounds (bg-primary, gradients, images that fill the entire page)
 - Content MUST NOT overflow page boundaries — be conservative with spacing
 - Use Tailwind CDN classes ONLY (no custom CSS, no @apply, no @import)
@@ -113,9 +116,9 @@ TAILWIND v3 NOTES:
 - Borders: border + border-gray-200 for visible borders
 
 EXAMPLE — Cover page (simple, no wide sidebars):
-<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-white">
+<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-white">
   <div class="absolute left-0 top-0 w-2 h-full bg-primary"></div>
-  <div class="flex flex-col justify-center h-[11in] px-[1in]">
+  <div class="flex-1 overflow-hidden flex flex-col justify-center px-[1in]">
     <div class="text-sm font-normal text-primary mb-4">Marzo 2026 · Versión 1.0</div>
     <h1 class="text-5xl font-bold text-gray-900 leading-tight">Reporte<br/>Trimestral</h1>
     <div class="w-16 h-1 bg-primary mt-6 mb-4"></div>
@@ -124,8 +127,8 @@ EXAMPLE — Cover page (simple, no wide sidebars):
 </section>
 
 EXAMPLE — Marketing/brochure page (bold, visual):
-<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-primary">
-  <div class="flex h-[11in]">
+<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-primary">
+  <div class="flex flex-1 overflow-hidden">
     <div class="w-1/2 flex flex-col justify-center px-[0.75in]">
       <span class="text-sm font-normal text-on-primary opacity-70 uppercase tracking-widest mb-3">Solución Premium</span>
       <h2 class="text-4xl font-bold text-on-primary leading-tight mb-6">Transforma tu negocio digital</h2>
@@ -142,9 +145,9 @@ EXAMPLE — Marketing/brochure page (bold, visual):
 </section>
 
 EXAMPLE — Catalog/product grid page:
-<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-surface">
-  <div class="h-1 bg-primary w-full"></div>
-  <div class="px-[0.75in] py-[0.5in]">
+<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-surface">
+  <div class="shrink-0 h-1 bg-primary w-full"></div>
+  <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">
     <div class="flex justify-between items-baseline mb-6">
       <h2 class="text-2xl font-bold text-on-surface">Colección Primavera</h2>
       <span class="text-xs font-normal text-on-surface-muted uppercase tracking-wider">Página 3 de 8</span>
@@ -163,9 +166,9 @@ EXAMPLE — Catalog/product grid page:
 </section>
 
 EXAMPLE — Content page with table + progress bars:
-<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-white">
-  <div class="h-1.5 bg-primary w-full"></div>
-  <div class="px-[0.75in] py-[0.5in]">
+<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-white">
+  <div class="shrink-0 h-1.5 bg-primary w-full"></div>
+  <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">
     <h2 class="text-2xl font-bold text-gray-900 mb-1">Métricas de Rendimiento</h2>
     <p class="text-sm font-normal text-gray-500 mb-8">Indicadores clave del periodo enero—marzo</p>
     <table class="w-full text-sm mb-10">
@@ -188,7 +191,7 @@ EXAMPLE — Content page with table + progress bars:
 export const DOCUMENT_PROMPT_SUFFIX = `
 
 OUTPUT FORMAT: NDJSON — one JSON object per line, NO wrapper array, NO markdown fences.
-Each line: {"label": "Page Title", "html": "<section class='w-[8.5in] min-h-[11in] relative overflow-hidden'>...</section>"}
+Each line: {"label": "Page Title", "html": "<section class='w-[8.5in] h-[11in] relative overflow-hidden flex flex-col'>...</section>"}
 
 Generate 3-8 pages depending on content length. First page = cover/title page.
 Each page must fit within letter size (8.5" × 11"). Be conservative with spacing.
@@ -481,7 +484,7 @@ ${isCover ? logoInstruction : logoUrl ? `\nSmall logo header: <img src="${logoUr
 ${directionInstruction}
 
 OUTPUT: A single JSON object on ONE line, no markdown fences:
-{"label": "${page.label}", "html": "<section class='w-[8.5in] min-h-[11in] relative overflow-hidden'>...</section>"}`,
+{"label": "${page.label}", "html": "<section class='w-[8.5in] h-[11in] relative overflow-hidden flex flex-col'>...</section>"}`,
       });
 
       try {
@@ -533,7 +536,7 @@ OUTPUT: A single JSON object on ONE line, no markdown fences:
         const section: Section3 = {
           id: nanoid(8),
           order: pageIdx,
-          html: `<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-gray-50 flex items-center justify-center"><div class="text-center text-gray-400"><p class="text-lg font-semibold">Error generando página</p><p class="text-sm mt-2">${(err as Error).message?.slice(0, 100) || "Error desconocido"}</p></div></section>`,
+          html: `<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-gray-50 items-center justify-center"><div class="text-center text-gray-400"><p class="text-lg font-semibold">Error generando página</p><p class="text-sm mt-2">${(err as Error).message?.slice(0, 100) || "Error desconocido"}</p></div></section>`,
           label: page.label,
         };
         onPageComplete?.(pageIdx, section);
