@@ -218,6 +218,16 @@ export async function action({ request }: ActionFunctionArgs) {
               where: { id: packUserId },
               data: { aiGenerationsBonus: { increment: generations } },
             });
+            // Log pack purchase for analytics
+            db.aiGenerationLog.create({
+              data: {
+                userId: packUserId,
+                type: "pack_purchase",
+                product: "admin",
+                pageCount: generations, // reuse pageCount to store amount
+                source: "bonus",
+              },
+            }).catch(() => {});
             logger.info("Generation pack credited", {
               userId: packUserId,
               generations,

@@ -167,6 +167,7 @@ export async function action({ request }: Route.ActionArgs) {
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
 
+  const startTime = Date.now();
   const isVariantMode = instruction === "VARIANT_MODE";
   // Element-scoped detection is set below after pageHtml — declare systemPrompt later
 
@@ -329,11 +330,6 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
         for await (const chunk of result.textStream) {
           fullHtml += chunk;
           chunkCount++;
-          if (!quotaIncremented) {
-            quotaIncremented = true;
-            incrementAiGeneration(ctx.user.id, undefined, { type: isVariantMode ? "variant" : "refine", product: "document" });
-          }
-
           // Send partial HTML every ~5 chunks for real-time feel
           if (chunkCount % 5 === 0) {
             if (elementRefine) {
@@ -360,6 +356,21 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
               }
             }
           }
+        }
+
+        // Log usage after streaming completes
+        if (!quotaIncremented) {
+          quotaIncremented = true;
+          const usage = await result.usage;
+          incrementAiGeneration(ctx.user.id, undefined, {
+            type: isVariantMode ? "variant" : "refine",
+            product: "document",
+            modelId,
+            inputTokens: usage?.inputTokens,
+            outputTokens: usage?.outputTokens,
+            resourceId: landingId,
+            durationMs: Date.now() - startTime,
+          });
         }
 
         // Final extraction — support multiple sections for __new__ mode

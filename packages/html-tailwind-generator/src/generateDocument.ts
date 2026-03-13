@@ -326,6 +326,8 @@ export interface GenerateDocumentParallelOptions {
   onImageUpdate?: (sectionId: string, html: string) => void;
   onDone?: (sections: Section3[]) => void;
   onError?: (error: Error) => void;
+  /** Called with accumulated token usage from outline + all pages */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }
 
 function buildDirectionInstruction(direction: DesignDirection): string {
@@ -382,6 +384,7 @@ export async function generateDocumentParallel(options: GenerateDocumentParallel
     onImageUpdate,
     onDone,
     onError,
+    onUsage,
   } = options;
 
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
@@ -404,7 +407,10 @@ export async function generateDocumentParallel(options: GenerateDocumentParallel
         ? `Generate exactly ${pageCount} pages including a cover page.`
         : "Generate 3-8 pages including a cover page.";
 
-    const { object: rawOutline } = await generateObject({
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
+    const { object: rawOutline, usage: outlineUsage } = await generateObject({
       model: outlineModel,
       schema: DocumentOutlineSchema,
       prompt: `You are planning a professional document. Create a detailed page-by-page outline.
@@ -423,6 +429,9 @@ ${skipCover ? "- CRITICAL: Do NOT include a cover/title page. The cover already 
 - If source content is provided, assign specific portions to each page in the contentBrief
 ${direction ? `- Design mood: ${direction.mood}, layout approach: ${direction.layoutHint}` : ""}`,
     });
+
+    totalInputTokens += outlineUsage?.inputTokens || 0;
+    totalOutputTokens += outlineUsage?.outputTokens || 0;
 
     // Filter out any cover pages if skipCover (AI sometimes ignores instructions)
     const outline: DocumentOutline = skipCover
@@ -506,6 +515,11 @@ OUTPUT: A single JSON object on ONE line, no markdown fences:
           }
         }
 
+        // Accumulate token usage
+        const pageUsage = await result.usage;
+        totalInputTokens += pageUsage?.inputTokens || 0;
+        totalOutputTokens += pageUsage?.outputTokens || 0;
+
         // Final partial before parse
         const finalPartial = extractPartialHtml(buffer);
         if (finalPartial) onPageChunk?.(pageIdx, finalPartial);
@@ -584,6 +598,7 @@ OUTPUT: A single JSON object on ONE line, no markdown fences:
       }
     }
 
+    onUsage?.({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens });
     onDone?.(sections);
     return sections;
   } catch (err: any) {

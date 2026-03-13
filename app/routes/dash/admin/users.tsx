@@ -25,7 +25,34 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     pageSize,
     search,
   });
-  return { users, pagination };
+
+  // Fetch generation stats for all users on this page
+  const userIds = users.map((u: any) => u.id);
+  const genStats = userIds.length > 0 ? await db.aiGenerationLog.groupBy({
+    by: ["userId", "source"],
+    where: { userId: { in: userIds }, type: { notIn: ["admin_bonus", "admin_deduct", "pack_purchase", "directions", "enhance"] } },
+    _count: true,
+  }) : [];
+
+  // Bonus acquired: admin_bonus + pack_purchase
+  const bonusAcquired = userIds.length > 0 ? await db.aiGenerationLog.groupBy({
+    by: ["userId"],
+    where: { userId: { in: userIds }, type: { in: ["admin_bonus", "pack_purchase"] } },
+    _sum: { pageCount: true },
+  }) : [];
+
+  const statsMap: Record<string, { monthly: number; bonus: number; bonusAcquired: number }> = {};
+  for (const s of genStats) {
+    if (!statsMap[s.userId]) statsMap[s.userId] = { monthly: 0, bonus: 0, bonusAcquired: 0 };
+    if (s.source === "bonus") statsMap[s.userId].bonus = s._count;
+    else statsMap[s.userId].monthly += s._count;
+  }
+  for (const b of bonusAcquired) {
+    if (!statsMap[b.userId]) statsMap[b.userId] = { monthly: 0, bonus: 0, bonusAcquired: 0 };
+    statsMap[b.userId].bonusAcquired = b._sum?.pageCount ?? 0;
+  }
+
+  return { users, pagination, statsMap };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -83,7 +110,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         data: { aiGenerationsBonus: currentBonus + amount },
       });
       await db.aiGenerationLog.create({
-        data: { userId, type: "admin_bonus", product: "admin" },
+        data: { userId, type: "admin_bonus", product: "admin", pageCount: amount, source: "bonus" },
       });
       return { ok: true };
     }
@@ -97,7 +124,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         data: { aiGenerationsBonus: Math.max(0, currentBonus - amount) },
       });
       await db.aiGenerationLog.create({
-        data: { userId, type: "admin_deduct", product: "admin" },
+        data: { userId, type: "admin_deduct", product: "admin", pageCount: amount, source: "bonus" },
       });
       return { ok: true };
     }
@@ -107,7 +134,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function AdminUsers({ loaderData }: Route.ComponentProps) {
-  const { users, pagination } = loaderData;
+  const { users, pagination, statsMap } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
 
   return (
@@ -145,7 +172,7 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {paginatedUsers.map((user: any) => (
-                  <UserCard key={user.id} user={user} />
+                  <UserCard key={user.id} user={user} stats={statsMap[user.id]} />
                 ))}
               </div>
               <TablePagination />
@@ -184,7 +211,7 @@ function EnableSwitch({ user, busy, fetcher, className }: { user: any; busy: boo
   );
 }
 
-function UserCard({ user }: { user: any }) {
+function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus: number; bonusAcquired: number } }) {
   const fetcher = useFetcher();
   const [editing, setEditing] = useState(false);
   const [newRole, setNewRole] = useState("");
@@ -284,6 +311,16 @@ function UserCard({ user }: { user: any }) {
           <div className="text-[10px] text-gray-400">
             {used}/{totalAvailable ?? "∞"} ({limit ?? "∞"} plan + {bonus} bonus)
           </div>
+          {stats && (
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              <span title="Generaciones con cuota mensual">📊 {stats.monthly} mensual</span>
+              {" · "}
+              <span title="Generaciones con bonus">🎁 {stats.bonus} bonus usado</span>
+              {stats.bonusAcquired > 0 && (
+                <span title="Total bonus adquirido (compras + admin)"> · 💰 {stats.bonusAcquired} adquirido</span>
+              )}
+            </div>
+          )}
         </div>
         <GensControls userId={user.id} />
       </div>

@@ -487,12 +487,19 @@ model Referral {
 }
 
 model AiGenerationLog {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  type      String   // "generate" | "refine" | "variant"
-  product   String   // "document" | "landing" | "presentation"
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  type         String   // "generate" | "refine" | "variant" | "directions" | "enhance"
+  product      String   // "document" | "landing" | "presentation"
+  modelId      String?  // "gemini-2.5-pro", "claude-sonnet-4-6"
+  inputTokens  Int?
+  outputTokens Int?
+  resourceId   String?  // landingId of the document/landing
+  pageCount    Int?     // pages generated
+  durationMs   Int?     // total generation time
+  source       String?  // "monthly" | "bonus" — which quota was consumed
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([userId, product])

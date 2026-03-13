@@ -7,6 +7,7 @@ import {
 } from "@easybits.cloud/html-tailwind-generator/directions";
 import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
+import { logAiUsage } from "~/.server/aiGenerationLimit";
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -95,6 +96,7 @@ export async function action({ request }: Route.ActionArgs) {
         );
       };
 
+      const dirStartTime = Date.now();
       try {
         // Step 1: Generate 4 directions
         const directionsModelId = await getAiModel("docDirections");
@@ -153,6 +155,14 @@ export async function action({ request }: Route.ActionArgs) {
             send("preview", { index: i, html: enriched });
           } catch {}
         }
+
+        // Log usage without consuming quota
+        logAiUsage(ctx.user.id, {
+          type: "directions",
+          product: "document",
+          modelId: directionsModelId,
+          durationMs: Date.now() - dirStartTime,
+        });
 
         send("done", {});
         controller.close();

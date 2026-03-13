@@ -55,6 +55,8 @@ export async function action({ request }: Route.ActionArgs) {
   const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
 
   let quotaIncremented = false;
+  const startTime = Date.now();
+  let usageTokens = { inputTokens: 0, outputTokens: 0 };
 
   // Upload logo to public storage so AI gets a short URL instead of huge data URL
   const resolvedLogoUrl = logoUrl ? await uploadLogoToStorage(logoUrl, ctx.user.id) : undefined;
@@ -102,12 +104,11 @@ export async function action({ request }: Route.ActionArgs) {
             send("section-building", { html, order: pageIndex });
           },
           async onPageComplete(pageIndex, section) {
-            if (!quotaIncremented) {
-              quotaIncremented = true;
-              await incrementAiGeneration(ctx.user.id, undefined, { type: "generate", product: "document" });
-            }
             allSections.push(section);
             send("section", section);
+          },
+          onUsage(usage) {
+            usageTokens = usage;
           },
           onImageUpdate(sectionId, html) {
             const s = allSections.find((s) => s.id === sectionId);
@@ -115,6 +116,19 @@ export async function action({ request }: Route.ActionArgs) {
             send("section-update", { id: sectionId, html });
           },
           async onDone() {
+            if (!quotaIncremented) {
+              quotaIncremented = true;
+              await incrementAiGeneration(ctx.user.id, undefined, {
+                type: "generate",
+                product: "document",
+                modelId: docModelId,
+                inputTokens: usageTokens.inputTokens,
+                outputTokens: usageTokens.outputTokens,
+                resourceId: landingId,
+                pageCount: allSections.length,
+                durationMs: Date.now() - startTime,
+              });
+            }
             if (allSections.length > 0) {
               // Sort by order before saving
               allSections.sort((a, b) => a.order - b.order);

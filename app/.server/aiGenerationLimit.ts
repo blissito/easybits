@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
 
-export type GenerationType = "generate" | "refine" | "variant";
+export type GenerationType = "generate" | "refine" | "variant" | "directions" | "enhance";
 export type GenerationProduct = "document" | "landing" | "presentation";
 
 /**
@@ -60,10 +60,43 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
  * Increment the AI generation counter for a user.
  * Consumes monthly quota first, then bonus.
  */
+export interface GenerationLogData {
+  type: GenerationType;
+  product: GenerationProduct;
+  modelId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  resourceId?: string;
+  pageCount?: number;
+  durationMs?: number;
+  source?: "monthly" | "bonus";
+}
+
+/**
+ * Log AI usage WITHOUT consuming quota. Use for operations that
+ * don't count toward the user's generation limit (directions, enhance).
+ */
+export function logAiUsage(userId: string, log: GenerationLogData) {
+  db.aiGenerationLog.create({
+    data: {
+      userId,
+      type: log.type,
+      product: log.product,
+      modelId: log.modelId,
+      inputTokens: log.inputTokens,
+      outputTokens: log.outputTokens,
+      resourceId: log.resourceId,
+      pageCount: log.pageCount,
+      durationMs: log.durationMs,
+      source: log.source,
+    },
+  }).catch(() => {}); // fire-and-forget
+}
+
 export async function incrementAiGeneration(
   userId: string,
   userPlan?: string,
-  log?: { type: GenerationType; product: GenerationProduct }
+  log?: GenerationLogData
 ) {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -75,17 +108,19 @@ export async function incrementAiGeneration(
   });
   if (!user) return;
 
-  // Log generation for analytics
-  if (log) {
-    db.aiGenerationLog.create({
-      data: { userId, type: log.type, product: log.product },
-    }).catch(() => {}); // fire-and-forget
-  }
-
   const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
   const config = PLANS[plan];
   const limit = config.aiGenerationsPerMonth;
   const count = user.aiGenerationsCount || 0;
+
+  // Determine source: monthly quota or bonus
+  const isBonus = limit !== null && count >= limit;
+  const source: "monthly" | "bonus" = isBonus ? "bonus" : "monthly";
+
+  // Log generation for analytics (with source)
+  if (log) {
+    logAiUsage(userId, { ...log, source });
+  }
 
   // Unlimited plan or still under monthly limit → increment monthly counter
   if (limit === null || count < limit) {
