@@ -86,6 +86,26 @@ export function PageList({
 
   const themeRef = useRef<HTMLDivElement>(null);
 
+  // Reset version navigation when versions array grows (e.g. after regeneration)
+  const prevVersionCounts = useRef<Record<string, number>>({});
+  useEffect(() => {
+    for (const section of sections) {
+      const sv = section as Section3WithVersions;
+      const count = sv.versions?.length ?? 0;
+      const prev = prevVersionCounts.current[section.id] ?? 0;
+      if (count > prev && prev > 0) {
+        // Versions grew — reset navigation to show latest (current)
+        setVersionView((p) => {
+          const next = { ...p };
+          delete next[section.id];
+          return next;
+        });
+        delete activeHtmlRef.current[section.id];
+      }
+      prevVersionCounts.current[section.id] = count;
+    }
+  }, [sections]);
+
   // Close popups on ESC + click outside
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -283,7 +303,7 @@ export function PageList({
               >
                 <button
                   onClick={(e) => { e.stopPropagation(); onInsertAt(idx); }}
-                  className={`w-7 h-7 rounded-full border-2 bg-white text-sm font-black flex items-center justify-center transition-all ${
+                  className={`w-7 h-7 rounded-full border-2 bg-white text-xl leading-none flex items-center justify-center transition-all ${
                     fileDragOver === idx
                       ? "border-brand-500 text-brand-500 shadow-[2px_2px_0_#9870ED]"
                       : "border-gray-300 text-gray-400 hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none"
@@ -521,7 +541,7 @@ export function PageList({
           >
             <button
               onClick={(e) => { e.stopPropagation(); onInsertAt(sorted.length); }}
-              className={`w-7 h-7 rounded-full border-2 bg-white text-sm font-black flex items-center justify-center transition-all ${
+              className={`w-7 h-7 rounded-full border-2 bg-white text-xl leading-none flex items-center justify-center transition-all ${
                 fileDragOver === sorted.length
                   ? "border-brand-500 text-brand-500 shadow-[2px_2px_0_#9870ED]"
                   : "border-gray-300 text-gray-400 hover:border-black hover:text-black hover:shadow-[2px_2px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none"

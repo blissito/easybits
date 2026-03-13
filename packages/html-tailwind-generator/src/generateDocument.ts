@@ -1,4 +1,17 @@
-import { streamGenerate, dataUrlToImagePart } from "./streamCore";
+import { generateObject, streamText } from "ai";
+import { z } from "zod";
+import { nanoid } from "nanoid";
+import {
+  streamGenerate,
+  dataUrlToImagePart,
+  resolveModel,
+  extractJsonObjects,
+  addLoadingPlaceholders,
+  addSvgLoadingPlaceholders,
+  enrichSectionImages,
+  enrichSectionSvgCharts,
+} from "./streamCore";
+import { sanitizeSemanticColors } from "./sanitizeColors";
 import type { Section3 } from "./types";
 import type { DesignDirection } from "./directions";
 
@@ -266,4 +279,312 @@ IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL h
     systemPrompt: DOCUMENT_SYSTEM_PROMPT,
     userContent: content,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Parallel Document Generation
+// ---------------------------------------------------------------------------
+
+const DocumentOutlineSchema = z.object({
+  pages: z.array(z.object({
+    pageNumber: z.number(),
+    label: z.string().describe("Page title for sidebar"),
+    type: z.enum(["cover", "content", "data", "visual", "closing"]),
+    layoutHint: z.string().describe("Layout approach: split, full-bleed, grid, editorial, table-heavy, sidebar"),
+    contentBrief: z.string().describe("2-4 sentences describing exactly what goes on this page"),
+    keyElements: z.array(z.string()).describe("Specific elements: stats grid, table, hero image, timeline, etc."),
+    backgroundStyle: z.enum(["white", "primary", "gradient", "surface-alt", "image"]),
+    continuesFrom: z.string().optional().describe("How this page relates to the previous one"),
+  })),
+});
+
+export type DocumentOutline = z.infer<typeof DocumentOutlineSchema>;
+
+export interface GenerateDocumentParallelOptions {
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
+  prompt: string;
+  logoUrl?: string;
+  referenceImage?: string;
+  extraInstructions?: string;
+  /** Model for page generation (quality model) */
+  model?: string | import("ai").LanguageModel;
+  /** Model for outline generation (fast model) */
+  outlineModel?: string | import("ai").LanguageModel;
+  pexelsApiKey?: string;
+  direction?: DesignDirection;
+  persistImage?: (tempUrl: string, query: string) => Promise<string>;
+  pageCount?: number;
+  skipCover?: boolean;
+  onOutline?: (outline: DocumentOutline) => void;
+  onPageChunk?: (pageIndex: number, partialHtml: string) => void;
+  onPageComplete?: (pageIndex: number, section: Section3) => void;
+  onImageUpdate?: (sectionId: string, html: string) => void;
+  onDone?: (sections: Section3[]) => void;
+  onError?: (error: Error) => void;
+}
+
+function buildDirectionInstruction(direction: DesignDirection): string {
+  const fontsUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(direction.headingFont).replace(/%20/g, "+")}:wght@400;700;900&family=${encodeURIComponent(direction.bodyFont).replace(/%20/g, "+")}:wght@400;500;600&display=swap`;
+  return `
+DESIGN DIRECTION: "${direction.name}" — ${direction.tagline}
+TYPOGRAPHY: Use these Google Fonts via <link href="${fontsUrl}" rel="stylesheet"> on the first page.
+- Headings: font-family: '${direction.headingFont}', sans-serif (via inline style)
+- Body: font-family: '${direction.bodyFont}', sans-serif (via inline style)
+COLORS — use ONLY semantic Tailwind classes (the editor injects CSS variables that resolve these):
+- bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
+- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
+- bg-secondary, text-secondary, bg-accent, text-accent
+- NEVER use hardcoded hex colors like bg-[#xxx] or text-[#xxx] — always use semantic classes
+- The palette is: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}
+Mood: ${direction.mood}
+Layout approach: ${direction.layoutHint}
+IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL heading elements and style="font-family: '${direction.bodyFont}'" on ALL body text elements. Include the Google Fonts <link> tag inside the FIRST <section> only.`;
+}
+
+/** Extract partial HTML from a raw JSON buffer (same pattern as onRawChunk) */
+function extractPartialHtml(buffer: string): string | null {
+  const htmlMatch = buffer.match(/"html"\s*:\s*"([\s\S]*)/);
+  if (!htmlMatch) return null;
+  let partial = htmlMatch[1]
+    .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  if (partial.endsWith('\\')) partial = partial.slice(0, -1);
+  const lastQuote = partial.lastIndexOf('"');
+  if (lastQuote > 0) partial = partial.slice(0, lastQuote);
+  if (/<section/i.test(partial) && !/<\/section>/i.test(partial)) {
+    partial += '</section>';
+  }
+  return partial.length > 20 ? partial : null;
+}
+
+export async function generateDocumentParallel(options: GenerateDocumentParallelOptions): Promise<Section3[]> {
+  const {
+    anthropicApiKey,
+    openaiApiKey: _openaiApiKey,
+    prompt,
+    logoUrl,
+    referenceImage,
+    extraInstructions,
+    model: pageModelId,
+    outlineModel: outlineModelId,
+    pexelsApiKey,
+    direction,
+    persistImage,
+    pageCount,
+    skipCover,
+    onOutline,
+    onPageChunk,
+    onPageComplete,
+    onImageUpdate,
+    onDone,
+    onError,
+  } = options;
+
+  const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
+
+  try {
+    // --- Phase 1: Generate outline ---
+    const outlineModel = await resolveModel({
+      openaiApiKey,
+      anthropicApiKey,
+      modelId: outlineModelId,
+      defaultOpenai: "gpt-4.1-mini",
+      defaultAnthropic: "claude-haiku-4-5-20251001",
+    });
+
+    const safePrompt = prompt.length > 15_000 ? prompt.substring(0, 15_000) + "\n[...content truncated...]" : prompt;
+    const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
+    const pageCountHint = skipCover
+      ? `Generate exactly ${Math.max(1, (pageCount || 5) - 1)} content pages (NO cover — it already exists).`
+      : pageCount
+        ? `Generate exactly ${pageCount} pages including a cover page.`
+        : "Generate 3-8 pages including a cover page.";
+
+    const { object: rawOutline } = await generateObject({
+      model: outlineModel,
+      schema: DocumentOutlineSchema,
+      prompt: `You are planning a professional document. Create a detailed page-by-page outline.
+
+DOCUMENT BRIEF: ${safePrompt}${extra}
+
+RULES:
+- ${pageCountHint}
+${skipCover ? "- CRITICAL: Do NOT include a cover/title page. The cover already exists. Start with page type 'content', 'data', or 'visual'. NEVER use type 'cover'." : "- First page is ALWAYS a stunning cover/title page."}
+- Distribute content EVENLY — no page should be overloaded
+- Each page must have a DISTINCT layout (mix split, full-bleed, grid, editorial, sidebar, table-heavy)
+- Narrative flows naturally: ${skipCover ? "introduction → detail → data → closing" : "cover → introduction → detail → data → closing"}
+- contentBrief must be detailed enough that a separate AI can generate the page independently
+- keyElements must list specific visual elements (not vague descriptions)
+- Vary backgroundStyle across pages — not all white
+- If source content is provided, assign specific portions to each page in the contentBrief
+${direction ? `- Design mood: ${direction.mood}, layout approach: ${direction.layoutHint}` : ""}`,
+    });
+
+    // Filter out any cover pages if skipCover (AI sometimes ignores instructions)
+    const outline: DocumentOutline = skipCover
+      ? { pages: rawOutline.pages.filter(p => p.type !== "cover").map((p, i) => ({ ...p, pageNumber: i + 1 })) }
+      : rawOutline;
+
+    onOutline?.(outline);
+
+    // --- Phase 2: Generate pages in parallel ---
+    const directionInstruction = direction ? buildDirectionInstruction(direction) : "";
+    const logoInstruction = logoUrl
+      ? `\nLOGO: Include this logo on the cover page and as a small header on other pages:\n<img src="${logoUrl}" alt="Logo" class="h-12 object-contain" />\nUse this exact <img> tag with this exact src URL.`
+      : "";
+
+    const outlineJson = JSON.stringify(outline.pages, null, 2);
+
+    const pageModel = await resolveModel({
+      openaiApiKey,
+      anthropicApiKey,
+      modelId: pageModelId,
+      defaultOpenai: "gpt-4o",
+      defaultAnthropic: "claude-sonnet-4-6",
+    });
+
+    async function generateSinglePage(
+      page: DocumentOutline["pages"][number],
+      retryCount = 0
+    ): Promise<Section3> {
+      const pageIdx = page.pageNumber - 1;
+      const isCover = page.type === "cover";
+
+      const userContent: any[] = [];
+
+      // Reference image only for cover/visual pages
+      if (referenceImage && (isCover || page.type === "visual")) {
+        const converted = dataUrlToImagePart(referenceImage);
+        if (converted) {
+          userContent.push({ type: "image", ...converted });
+        } else {
+          userContent.push({ type: "image", image: referenceImage });
+        }
+      }
+
+      userContent.push({
+        type: "text",
+        text: `You are generating PAGE ${page.pageNumber} of ${outline.pages.length} for a professional document.
+
+FULL DOCUMENT OUTLINE (for context — you are generating ONLY page ${page.pageNumber}):
+${outlineJson}
+
+YOUR PAGE ASSIGNMENT:
+- Label: ${page.label}
+- Type: ${page.type}
+- Layout: ${page.layoutHint}
+- Background: ${page.backgroundStyle}
+- Content: ${page.contentBrief}
+- Key elements: ${page.keyElements.join(", ")}
+${page.continuesFrom ? `- Continues from: ${page.continuesFrom}` : ""}
+${isCover ? logoInstruction : logoUrl ? `\nSmall logo header: <img src="${logoUrl}" alt="Logo" class="h-8 object-contain" />` : ""}
+${directionInstruction}
+
+OUTPUT: A single JSON object on ONE line, no markdown fences:
+{"label": "${page.label}", "html": "<section class='w-[8.5in] min-h-[11in] relative overflow-hidden'>...</section>"}`,
+      });
+
+      try {
+        const result = streamText({
+          model: pageModel,
+          system: DOCUMENT_SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userContent }],
+        });
+
+        let buffer = "";
+        let chunkCount = 0;
+        for await (const chunk of result.textStream) {
+          buffer += chunk;
+          chunkCount++;
+          if (chunkCount % 5 === 0) {
+            const partial = extractPartialHtml(buffer);
+            if (partial) onPageChunk?.(pageIdx, partial);
+          }
+        }
+
+        // Final partial before parse
+        const finalPartial = extractPartialHtml(buffer);
+        if (finalPartial) onPageChunk?.(pageIdx, finalPartial);
+
+        // Parse the JSON object
+        let cleaned = buffer.trim();
+        if (cleaned.startsWith("```")) {
+          cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+        }
+        const [objects] = extractJsonObjects(cleaned);
+        const obj = objects[0];
+        if (!obj?.html) throw new Error(`No valid HTML output for page ${page.pageNumber}`);
+
+        const section: Section3 = {
+          id: nanoid(8),
+          order: pageIdx,
+          html: sanitizeSemanticColors(addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html))),
+          label: obj.label || page.label,
+        };
+
+        onPageComplete?.(pageIdx, section);
+        return section;
+      } catch (err) {
+        if (retryCount < 1) {
+          console.warn(`Page ${page.pageNumber} failed, retrying:`, (err as Error).message);
+          return generateSinglePage(page, retryCount + 1);
+        }
+        // Return error placeholder
+        const section: Section3 = {
+          id: nanoid(8),
+          order: pageIdx,
+          html: `<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-gray-50 flex items-center justify-center"><div class="text-center text-gray-400"><p class="text-lg font-semibold">Error generando página</p><p class="text-sm mt-2">${(err as Error).message?.slice(0, 100) || "Error desconocido"}</p></div></section>`,
+          label: page.label,
+        };
+        onPageComplete?.(pageIdx, section);
+        return section;
+      }
+    }
+
+    const results = await Promise.allSettled(
+      outline.pages.map((page) => generateSinglePage(page))
+    );
+
+    const sections: Section3[] = results
+      .map((r) => r.status === "fulfilled" ? r.value : null)
+      .filter((s): s is Section3 => s !== null)
+      .sort((a, b) => a.order - b.order);
+
+    // --- Phase 3: Image enrichment (sequential to respect Pexels rate limits) ---
+    for (const section of sections) {
+      await enrichSectionImages(section, {
+        pexelsApiKey,
+        openaiApiKey,
+        persistImage,
+        onImageUpdate,
+      });
+      await enrichSectionSvgCharts(section, {
+        anthropicApiKey,
+        onImageUpdate,
+      });
+    }
+
+    // Final fallback for images without src
+    for (const section of sections) {
+      const before = section.html;
+      section.html = section.html.replace(
+        /<img\s(?![^>]*\bsrc=)([^>]*?)>/gi,
+        (_match, attrs) => {
+          const altMatch = attrs.match(/alt="([^"]*?)"/);
+          const query = altMatch?.[1] || "image";
+          return `<img src="https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(query.slice(0, 30))}" ${attrs}>`;
+        }
+      );
+      if (section.html !== before) {
+        onImageUpdate?.(section.id, section.html);
+      }
+    }
+
+    onDone?.(sections);
+    return sections;
+  } catch (err: any) {
+    const error = err instanceof Error ? err : new Error(err?.message || "Parallel generation failed");
+    onError?.(error);
+    throw error;
+  }
 }

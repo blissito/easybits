@@ -190,6 +190,7 @@ export default function NewDocument() {
       <form className="space-y-6" onSubmit={(e) => {
         e.preventDefault();
         if (!nameValue.trim()) return;
+        sessionStorage.removeItem("doc-directions-cache");
         sessionStorage.setItem("doc-new", JSON.stringify({
           name: nameValue,
           prompt: promptValue,

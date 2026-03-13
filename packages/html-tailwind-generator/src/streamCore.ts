@@ -146,6 +146,90 @@ export function addLoadingPlaceholders(html: string): string {
   );
 }
 
+/** Enrich a section's images (Pexels → DALL-E → placeholder fallback). Mutates section.html in place. */
+export async function enrichSectionImages(
+  section: Section3,
+  opts: {
+    pexelsApiKey?: string;
+    openaiApiKey?: string;
+    persistImage?: (tempUrl: string, query: string) => Promise<string>;
+    onImageUpdate?: (sectionId: string, html: string) => void;
+  }
+): Promise<void> {
+  const slots = findImageSlots(section.html);
+  if (slots.length === 0) return;
+  const results = await Promise.allSettled(
+    slots.map(async (slot) => {
+      let url: string | null = null;
+      if (opts.pexelsApiKey) {
+        const img = await searchImage(slot.query, opts.pexelsApiKey).catch(() => null);
+        url = img?.url || null;
+      }
+      if (!url && opts.openaiApiKey) {
+        try {
+          const tempUrl = await generateImage(slot.query, opts.openaiApiKey);
+          url = opts.persistImage ? await opts.persistImage(tempUrl, slot.query) : tempUrl;
+        } catch (e) {
+          console.warn(`[dalle] failed for "${slot.query}":`, e);
+        }
+      }
+      url ??= `https://placehold.co/800x500/1f2937/9ca3af?text=${encodeURIComponent(slot.query.slice(0, 30))}`;
+      return { slot, url };
+    })
+  );
+  let html = section.html;
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) {
+      const { slot, url } = r.value;
+      const replacement = slot.replaceStr.replace("{url}", url);
+      html = html.replaceAll(slot.searchStr, replacement);
+    }
+  }
+  if (html !== section.html) {
+    section.html = html;
+    opts.onImageUpdate?.(section.id, html);
+  }
+}
+
+/** Enrich a section's SVG chart placeholders. Mutates section.html in place. */
+export async function enrichSectionSvgCharts(
+  section: Section3,
+  opts: {
+    anthropicApiKey?: string;
+    onImageUpdate?: (sectionId: string, html: string) => void;
+  }
+): Promise<void> {
+  const svgRegex = /<div\s[^>]*data-svg-chart="([^"]+)"[^>]*>[\s\S]*?<\/div>/gi;
+  const svgMatches: { fullMatch: string; prompt: string }[] = [];
+  let svgM: RegExpExecArray | null;
+  while ((svgM = svgRegex.exec(section.html)) !== null) {
+    svgMatches.push({ fullMatch: svgM[0], prompt: svgM[1] });
+  }
+  if (svgMatches.length === 0) return;
+  const anthropicKey = opts.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+  const results = await Promise.allSettled(
+    svgMatches.map(async ({ fullMatch, prompt }) => {
+      try {
+        const svg = await generateSvg(prompt, anthropicKey);
+        return { fullMatch, svg };
+      } catch (e) {
+        console.warn(`[svg] failed for "${prompt}":`, e);
+        return { fullMatch, svg: `<div class="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">${prompt}</div>` };
+      }
+    })
+  );
+  let html = section.html;
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) {
+      html = html.replace(r.value.fullMatch, r.value.svg);
+    }
+  }
+  if (html !== section.html) {
+    section.html = html;
+    opts.onImageUpdate?.(section.id, html);
+  }
+}
+
 export interface StreamGenerateOptions {
   /** Anthropic API key */
   anthropicApiKey?: string;

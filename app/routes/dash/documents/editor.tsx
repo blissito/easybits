@@ -444,6 +444,7 @@ export default function DocumentEditor() {
   }
 
   // Document-specific CSS injected into Canvas iframe
+  // TODO: page numbers — explore user-customizable position/font/visibility in the future
   const documentCss = `
     body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
     [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
@@ -519,27 +520,39 @@ export default function DocumentEditor() {
           } else if (line.startsWith("data: ")) {
             try {
               const d = JSON.parse(line.slice(6));
-              if (eventType === "section-building") {
-                const buildIdx = accumulated.findIndex((s) => s.id === "__building__");
-                const building = {
-                  id: "__building__",
-                  order: d.order,
-                  html: d.html,
-                  label: "...",
-                };
-                if (buildIdx !== -1) {
-                  accumulated[buildIdx] = building;
+              if (eventType === "outline") {
+                // Pre-create placeholder sections from outline
+                const placeholders = (d.pages as any[]).map((p: any, i: number) => ({
+                  id: `__building_${p.pageNumber - 1}__`,
+                  order: skipCover ? accumulated.length + i : i,
+                  html: `<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-gray-50 flex items-center justify-center"><div class="text-center animate-pulse"><div class="w-10 h-10 mx-auto mb-3 rounded-full bg-gray-200"></div><div class="text-sm font-semibold text-gray-400">${p.label}</div><div class="text-xs text-gray-300 mt-1">Generando...</div></div></section>`,
+                  label: p.label,
+                }));
+                accumulated.push(...placeholders);
+                setSections([...accumulated]);
+              } else if (eventType === "section-building") {
+                // Update specific placeholder by order (interleaved for parallel)
+                const buildId = `__building_${d.order}__`;
+                const idx = accumulated.findIndex((s) => s.id === buildId);
+                if (idx !== -1) {
+                  accumulated[idx] = { ...accumulated[idx], html: d.html };
                 } else {
-                  accumulated.push(building);
+                  // Fallback: try legacy single-building pattern
+                  const legacyIdx = accumulated.findIndex((s) => s.id === "__building__");
+                  if (legacyIdx !== -1) {
+                    accumulated[legacyIdx] = { ...accumulated[legacyIdx], html: d.html };
+                  } else {
+                    accumulated.push({ id: buildId, order: d.order, html: d.html, label: "..." });
+                  }
                 }
                 setSections([...accumulated]);
               } else if (eventType === "section") {
-                // Replace __building__ in-place instead of remove+add to avoid iframe flicker
-                const buildIdx = accumulated.findIndex((s) => s.id === "__building__");
-                if (buildIdx !== -1) {
-                  accumulated[buildIdx] = d;
+                // Replace placeholder in-place (no flicker)
+                const buildId = `__building_${d.order}__`;
+                const idx = accumulated.findIndex((s) => s.id === buildId);
+                if (idx !== -1) {
+                  accumulated[idx] = d;
                 } else {
-                  // Prevent duplicates — only push if this id doesn't already exist
                   const existIdx = accumulated.findIndex((s) => s.id === d.id);
                   if (existIdx !== -1) {
                     accumulated[existIdx] = d;
@@ -548,12 +561,12 @@ export default function DocumentEditor() {
                   }
                 }
                 setSections([...accumulated]);
-                playTone();
-                setTimeout(() => canvasRef.current?.scrollToSection(d.id), 300);
               } else if (eventType === "section-update") {
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
                 setSections([...accumulated]);
+              } else if (eventType === "done") {
+                playTone();
               } else if (eventType === "error") {
                 errorToast(d.message || "Error en la generación");
               }
@@ -789,6 +802,8 @@ export default function DocumentEditor() {
 
   const refineAbortMap = useRef<Map<string, AbortController>>(new Map());
   const variantAbortRef = useRef<AbortController | null>(null);
+  // Track the "true current" html per section before version navigation swaps it
+  const trueHtmlRef = useRef<Record<string, string>>({});
 
   function stopVariant() {
     variantAbortRef.current?.abort();
@@ -822,13 +837,17 @@ export default function DocumentEditor() {
     const abortController = new AbortController();
     variantAbortRef.current = abortController;
     try {
-      // Snapshot current version
+      // Use true current html (before any version navigation) for snapshot & request
+      const currentHtml = trueHtmlRef.current[sectionId] || section.html;
+      delete trueHtmlRef.current[sectionId];
+
+      // Snapshot current version (using true html, not navigated-to html)
       setSections((prev) =>
         prev.map((s) => {
           if (s.id !== sectionId) return s;
           const sv = s as Section3WithVersions;
-          const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
-          return { ...s, versions } as any;
+          const versions = [...(sv.versions || []), { html: currentHtml, timestamp: Date.now() }].slice(-10);
+          return { ...s, html: currentHtml, versions } as any;
         })
       );
 
@@ -840,7 +859,7 @@ export default function DocumentEditor() {
           landingId: landing.id,
           sectionId,
           instruction: effectiveInstruction || "VARIANT_MODE",
-          currentHtml: section.html,
+          currentHtml,
           ...(effectiveRef ? { referenceImage: effectiveRef } : {}),
           ...(direction && { direction }),
           allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
@@ -1433,6 +1452,7 @@ ${sectionsHtml}
             loadingVariantId={variantLoadingId}
             refiningIds={refiningSections}
             onRestoreVersion={(sectionId, oldHtml) => {
+              delete trueHtmlRef.current[sectionId];
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
                 const sv = s as Section3WithVersions;
@@ -1443,6 +1463,11 @@ ${sectionsHtml}
               handleSectionsChange(updated);
             }}
             onNavigateVersion={(sectionId, html) => {
+              // Save true current html before first navigation swap
+              if (!trueHtmlRef.current[sectionId]) {
+                const current = sections.find((s) => s.id === sectionId);
+                if (current) trueHtmlRef.current[sectionId] = current.html;
+              }
               // Just swap displayed html — no version push, no save
               setSections((prev) =>
                 prev.map((s) => s.id === sectionId ? { ...s, html } : s)

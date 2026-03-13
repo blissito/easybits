@@ -286,10 +286,6 @@ export default function DocumentDirections() {
                 directionsRef.current = d;
                 setDirections(d);
               } else if (eventType === "preview") {
-                if (d.complete && !soundedRef.current.has(d.index)) {
-                  soundedRef.current.add(d.index);
-                  playTone({ freq: 880 });
-                }
                 setPreviews((prev) => {
                   const next = [...prev];
                   next[d.index] = d.html || null;
@@ -297,6 +293,7 @@ export default function DocumentDirections() {
                   return next;
                 });
               } else if (eventType === "done") {
+                playTone({ freq: 880 });
                 setIsLoading(false);
                 // Cache results from refs (not nested setState)
                 const cache = { directions: directionsRef.current, previews: previewsRef.current };

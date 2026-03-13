@@ -2,7 +2,7 @@ import type { Route } from "./+types/document-generate";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
-import { generateDocument } from "@easybits.cloud/html-tailwind-generator/generateDocument";
+import { generateDocumentParallel } from "@easybits.cloud/html-tailwind-generator/generateDocument";
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
@@ -65,14 +65,14 @@ export async function action({ request }: Route.ActionArgs) {
       ? `Transform this content into beautiful document pages:\n\n${sourceContent.substring(0, 15000)}`
       : "Create a professional document",
     prompt ? `\nInstructions: ${prompt}` : "",
-    skipCover
-      ? `\nGenerate exactly ${Math.max(1, (pageCount || 5) - 1)} pages. Do NOT generate a cover page — the cover already exists. Start directly with the content pages (page 2 onwards).`
-      : pageCount
-        ? `\nGenerate exactly ${pageCount} pages.`
-        : "\nGenerate 3-8 pages depending on content length.",
   ].filter(Boolean).join("\n");
 
   const allSections: Section3[] = [];
+
+  const docModelId = await getAiModel("docGenerate");
+  const docModel = resolveModelLocal(docModelId, openaiKey || undefined, userKey || undefined);
+  const outlineModelId = await getAiModel("docDirections");
+  const outlineModel = resolveModelLocal(outlineModelId, openaiKey || undefined, userKey || undefined);
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -85,32 +85,23 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
-        const docModelId = await getAiModel("docGenerate");
-        const docModel = resolveModelLocal(docModelId, openaiKey || undefined, userKey || undefined);
-        await generateDocument({
+        await generateDocumentParallel({
           prompt: parts,
           logoUrl: resolvedLogoUrl,
           extraInstructions: extraInstructions || undefined,
           direction: direction || undefined,
           pexelsApiKey: process.env.PEXELS_API_KEY,
           model: docModel,
-          onRawChunk(rawBuffer, completedCount) {
-            const htmlMatch = rawBuffer.match(/"html"\s*:\s*"([\s\S]*)/);
-            if (!htmlMatch) return;
-            let partial = htmlMatch[1]
-              .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-            if (partial.endsWith('\\')) partial = partial.slice(0, -1);
-            // Remove trailing incomplete JSON (quote + possible comma/brace)
-            const lastQuote = partial.lastIndexOf('"');
-            if (lastQuote > 0) partial = partial.slice(0, lastQuote);
-            if (/<section/i.test(partial) && !/<\/section>/i.test(partial)) {
-              partial += '</section>';
-            }
-            if (partial.length > 20) {
-              send("section-building", { html: partial, order: completedCount });
-            }
+          outlineModel,
+          pageCount: pageCount ? Number(pageCount) : undefined,
+          skipCover: !!skipCover,
+          onOutline(outline) {
+            send("outline", { pages: outline.pages.map((p) => ({ pageNumber: p.pageNumber, label: p.label, type: p.type })) });
           },
-          async onSection(section) {
+          onPageChunk(pageIndex, html) {
+            send("section-building", { html, order: pageIndex });
+          },
+          async onPageComplete(pageIndex, section) {
             if (!quotaIncremented) {
               quotaIncremented = true;
               await incrementAiGeneration(ctx.user.id, undefined, { type: "generate", product: "document" });
@@ -125,7 +116,8 @@ export async function action({ request }: Route.ActionArgs) {
           },
           async onDone() {
             if (allSections.length > 0) {
-              // If skipCover, prepend existing sections from DB
+              // Sort by order before saving
+              allSections.sort((a, b) => a.order - b.order);
               let finalSections = allSections;
               if (skipCover) {
                 const existing = await db.landing.findUnique({ where: { id: landingId }, select: { sections: true } });
