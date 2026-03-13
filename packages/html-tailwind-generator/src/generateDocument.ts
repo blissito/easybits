@@ -25,7 +25,7 @@ RULES:
 - The section itself has NO padding — backgrounds, gradients, and decorative elements go edge-to-edge
 - Use slot layout: shrink-0 for header/footer bands, flex-1 overflow-hidden for main content area
 - For text content, use an inner wrapper: <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">...content...</div>
-- Footer elements (page numbers, decorative bars, contact info) use shrink-0 so they are ALWAYS visible
+- Footer elements (page numbers, decorative bars, contact info) MUST be direct children of <section> with shrink-0 and w-full — NEVER inside the padded content wrapper. This ensures footer backgrounds extend edge-to-edge
 - Cover pages and decorative sections can use full-bleed backgrounds (bg-primary, gradients, images that fill the entire page)
 - Content MUST NOT overflow page boundaries — be conservative with spacing
 - Use Tailwind CDN classes ONLY (no custom CSS, no @apply, no @import)
@@ -163,6 +163,11 @@ EXAMPLE — Catalog/product grid page:
         <div class="p-4"><h3 class="font-bold text-on-surface text-sm">Producto Beta</h3><p class="text-xs text-on-surface-muted mt-1">Tecnología de vanguardia</p><div class="text-lg font-bold text-primary mt-2">$3,190</div></div>
       </div>
     </div>
+  </div>
+  <!-- Footer: direct child of section, shrink-0, full width -->
+  <div class="shrink-0 w-full bg-surface-alt px-[0.75in] py-3 flex justify-between items-center">
+    <span class="text-xs text-on-surface-muted">Colección Primavera 2026</span>
+    <span class="text-xs text-on-surface-muted">Página 3 de 8</span>
   </div>
 </section>
 

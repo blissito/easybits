@@ -292,6 +292,31 @@ export default function DocumentEditor() {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const addPageAbortRef = useRef<AbortController | null>(null);
 
+  // Zoom state
+  const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200];
+  const [zoomPct, setZoomPct] = useState(100);
+  const zoomIn = useCallback(() => setZoomPct((z) => {
+    const idx = ZOOM_LEVELS.indexOf(z);
+    return idx >= 0 ? ZOOM_LEVELS[Math.min(idx + 1, ZOOM_LEVELS.length - 1)] : z;
+  }), []);
+  const zoomOut = useCallback(() => setZoomPct((z) => {
+    const idx = ZOOM_LEVELS.indexOf(z);
+    return idx >= 0 ? ZOOM_LEVELS[Math.max(idx - 1, 0)] : z;
+  }), []);
+  const zoomFit = () => setZoomPct(75);
+
+  // Cmd/Ctrl + scroll to zoom
+  useEffect(() => {
+    function handleWheel(e: WheelEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      if (e.deltaY < 0) zoomIn();
+      else zoomOut();
+    }
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
+  }, [zoomIn, zoomOut]);
+
   // Undo/Redo
   const { pushUndo, undo, redo, canUndo, canRedo } = useUndoStack<Section3[]>();
   const [addFiles, setAddFiles] = useState<File[]>([]);
@@ -337,7 +362,7 @@ export default function DocumentEditor() {
     } else {
       canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
     }
-  }, [theme, customColors]);
+  }, [theme, customColors, documentCss]);
 
   // Regenerate prompt bar
   const [regenInput, setRegenInput] = useState("");
@@ -447,8 +472,9 @@ export default function DocumentEditor() {
 
   // Document-specific CSS injected into Canvas iframe
   // TODO: page numbers — explore user-customizable position/font/visibility in the future
+  const zoomFactor = zoomPct / 100;
   const documentCss = `
-    body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; zoom: ${zoomFactor}; }
     [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
     [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
     @media (max-width: 850px) {
@@ -1777,6 +1803,12 @@ ${sectionsHtml}
                 </>
               )}
             </div>
+          </div>
+          {/* Zoom controls */}
+          <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white border-2 border-black rounded-xl px-2 py-1 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-30 select-none">
+            <button onClick={zoomOut} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Alejar">−</button>
+            <button onClick={zoomFit} className="min-w-[3rem] text-center text-xs font-bold hover:bg-gray-100 rounded px-1 py-1" title="Ajustar">{zoomPct}%</button>
+            <button onClick={zoomIn} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Acercar">+</button>
           </div>
         </div>
 

@@ -85,7 +85,7 @@ export function FloatingToolbar({
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const [showTagPicker, setShowTagPicker] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('style');
 
   // Local attr editing state
   const [imgSrc, setImgSrc] = useState("");
