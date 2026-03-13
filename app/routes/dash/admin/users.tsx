@@ -290,7 +290,9 @@ function UserCard({ user }: { user: any }) {
 
       {/* Footer: date + plan */}
       <div className="flex items-center justify-between text-[10px] text-gray-400">
-        <span>{new Date(user.createdAt).toLocaleDateString()}</span>
+        <span title={`Creado: ${new Date(user.createdAt).toLocaleDateString()}`}>
+          Último acceso: {new Date(user.updatedAt).toLocaleDateString()}
+        </span>
         <span className="uppercase font-bold tracking-wider">{plan}</span>
       </div>
     </article>
