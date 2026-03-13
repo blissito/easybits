@@ -426,6 +426,13 @@ Available Reveal.js themes: \`black\` (default), \`white\`, \`league\`, \`beige\
 4. \`unpublishPresentation(id)\` — take down when done
 `,
 
+  documents: `## Documents (Coming Soon)
+
+AI-generated professional documents (reports, brochures, catalogs, proposals, CVs, and more) with parallel page generation, design directions, and automatic image enrichment.
+
+**Status:** Dashboard-only. API endpoints, SDK methods, and MCP tools coming soon.
+`,
+
   errors: `## Error Codes
 
 | Status | Meaning |
