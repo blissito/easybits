@@ -317,6 +317,18 @@ export default function DocumentEditor() {
     return () => window.removeEventListener("wheel", handleWheel);
   }, [zoomIn, zoomOut]);
 
+  // Document-specific CSS injected into Canvas iframe
+  const zoomFactor = zoomPct / 100;
+  const documentCss = `
+    body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; zoom: ${zoomFactor}; }
+    [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
+    [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    @media (max-width: 850px) {
+      body { padding: 8px; gap: 12px; }
+      [data-section-id] { zoom: calc((100vw - 16px) / 8.5in); }
+    }
+  `;
+
   // Undo/Redo
   const { pushUndo, undo, redo, canUndo, canRedo } = useUndoStack<Section3[]>();
   const [addFiles, setAddFiles] = useState<File[]>([]);
@@ -469,19 +481,6 @@ export default function DocumentEditor() {
     abortRef.current?.abort();
     setIsGenerating(false);
   }
-
-  // Document-specific CSS injected into Canvas iframe
-  // TODO: page numbers — explore user-customizable position/font/visibility in the future
-  const zoomFactor = zoomPct / 100;
-  const documentCss = `
-    body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; zoom: ${zoomFactor}; }
-    [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
-    [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-    @media (max-width: 850px) {
-      body { padding: 8px; gap: 12px; }
-      [data-section-id] { zoom: calc((100vw - 16px) / 8.5in); }
-    }
-  `;
 
   async function generateSections(extraInstructions?: string, skipCover?: boolean) {
     abortRef.current?.abort();
