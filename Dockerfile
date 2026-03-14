@@ -14,6 +14,7 @@ RUN npx prisma generate
 
 # 3. Copy source and build (only this runs on code changes)
 COPY . .
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
 # 4. Prune dev dependencies
