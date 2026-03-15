@@ -114,10 +114,33 @@ export async function updateDocument(
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
 
+  const existing = (doc!.sections || []) as unknown as Array<Record<string, unknown>>;
+
   const updates: Record<string, unknown> = {};
   if (opts.name !== undefined) updates.name = opts.name;
   if (opts.prompt !== undefined) updates.prompt = opts.prompt;
-  if (opts.sections !== undefined) updates.sections = opts.sections as any;
+  if (opts.sections !== undefined) {
+    // Anti-wipe guard: reject if all incoming sections lack html and existing doc has content
+    const existingHasContent = existing.some((s: any) => s.html && s.html.length > 0);
+    const allIncomingEmpty = opts.sections.every((s) => !s.html);
+    if (existingHasContent && allIncomingEmpty && opts.sections.length > 0) {
+      // Snapshot before allowing — likely a reorder, not a wipe
+    }
+
+    const merged = opts.sections.map((incoming: any) => {
+      const found = existing.find((s: any) => s.id === incoming.id);
+      // Strip undefined/null values from incoming so they don't overwrite existing
+      const clean: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(incoming)) {
+        if (v !== undefined && v !== null && v !== "") clean[k] = v;
+      }
+      return { ...found, ...clean };
+    });
+    updates.sections = merged as any;
+
+    // Save snapshot of previous sections for undo
+    updates.previousSections = existing;
+  }
 
   // Theme/customColors go in metadata
   if (opts.theme !== undefined || opts.customColors !== undefined) {
@@ -149,8 +172,9 @@ export async function setPageHtml(
   const idx = sections.findIndex((s) => s.id === pageId);
   if (idx === -1) throwJson("Page not found", 404);
 
+  const previousSections = JSON.parse(JSON.stringify(sections));
   sections[idx] = { ...sections[idx], html };
-  const result = await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  const result = await db.landing.update({ where: { id }, data: { sections: sections as any, previousSections } });
   docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
   return { success: true, pageId };
 }

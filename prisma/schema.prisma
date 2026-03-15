@@ -476,6 +476,7 @@ model Landing {
   customColors Json?    // { bg, accent, text } hex colors
   metadata         Json?    // { theme, ... } extensible metadata
   sectionVersions  Json?    // Record<sectionId, {html, timestamp}[]>
+  previousSections Json?    // Snapshot of sections before last update (undo)
   version          Int      @default(1)
   status       String   @default("DRAFT") // DRAFT | PUBLISHED
   ownerId   String   @db.ObjectId
