@@ -56,6 +56,18 @@ import {
   deployPresentation,
   unpublishPresentation,
 } from "../core/presentationOperations";
+import {
+  listDocuments,
+  getDocument,
+  createDocument,
+  updateDocument,
+  deleteDocument,
+  deployDocument,
+  unpublishDocument,
+  generateDocumentAI,
+  refineDocumentSection,
+  regenerateDocumentPage,
+} from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 
@@ -700,6 +712,189 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unpublishPresentation(ctx, params.presentationId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // --- Document Tools ---
+
+  server.tool(
+    "list_documents",
+    "List your documents (id, name, prompt, theme, status, pageCount, createdAt).",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listDocuments(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "get_document",
+    "Get a document by ID with full page data (sections array with HTML).",
+    {
+      documentId: z.string().describe("The document ID"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getDocument(ctx, params.documentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "create_document",
+    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }.",
+    {
+      name: z.string().describe("Document name"),
+      prompt: z.string().optional().describe("Description or prompt for the document"),
+      sections: z.array(z.object({
+        id: z.string().describe("Unique section ID"),
+        order: z.number().describe("Page order (0-based)"),
+        html: z.string().optional().describe("HTML content of the page"),
+        type: z.string().optional().describe("Section type (e.g. cover, content)"),
+        name: z.string().optional().describe("Section name"),
+      })).optional().describe("Array of pages/sections"),
+      theme: z.string().optional().describe("Theme name (e.g. minimal, corporate, elegant)"),
+      customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createDocument(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "update_document",
+    "Update a document's name, pages, theme, colors, or prompt. Each section has: { id, order, html, type?, name? }.",
+    {
+      documentId: z.string().describe("The document ID"),
+      name: z.string().optional().describe("New name"),
+      prompt: z.string().optional().describe("New prompt/description"),
+      sections: z.array(z.object({
+        id: z.string().describe("Unique section ID"),
+        order: z.number().describe("Page order (0-based)"),
+        html: z.string().optional().describe("HTML content of the page"),
+        type: z.string().optional().describe("Section type"),
+        name: z.string().optional().describe("Section name"),
+      })).optional().describe("Replace all pages/sections"),
+      theme: z.string().optional().describe("Theme name"),
+      customColors: z.record(z.string()).optional().describe("Custom color overrides"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, ...opts } = params;
+      const result = await updateDocument(ctx, documentId, opts);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "delete_document",
+    "Delete a document permanently.",
+    {
+      documentId: z.string().describe("The document ID to delete"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteDocument(ctx, params.documentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "deploy_document",
+    "Publish a document as a live website (slug.easybits.cloud). Requires at least one page/section.",
+    {
+      documentId: z.string().describe("The document ID to deploy"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deployDocument(ctx, params.documentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "unpublish_document",
+    "Unpublish a document, removing its website and reverting to draft status.",
+    {
+      documentId: z.string().describe("The document ID to unpublish"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await unpublishDocument(ctx, params.documentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // --- Document AI Tools ---
+
+  const directionSchema = z.object({
+    name: z.string().optional().describe("Direction/style name"),
+    headingFont: z.string().optional().describe("Google Font for headings (e.g. 'Playfair Display')"),
+    bodyFont: z.string().optional().describe("Google Font for body text (e.g. 'Inter')"),
+    colors: z.object({
+      primary: z.string().describe("Primary color hex"),
+      accent: z.string().describe("Accent color hex"),
+      surface: z.string().describe("Surface/background color hex"),
+      surfaceAlt: z.string().describe("Alt surface color hex"),
+      text: z.string().describe("Text color hex"),
+    }).optional().describe("Custom color palette"),
+    mood: z.enum(["dark", "light", "warm", "cool", "vibrant"]).optional().describe("Visual mood"),
+    layoutHint: z.string().optional().describe("Layout style hint (e.g. 'editorial', 'magazine', 'minimal')"),
+  }).optional().describe("Design direction for AI generation — controls fonts, colors, mood, and layout style");
+
+  server.tool(
+    "generate_document",
+    "Generate document pages with AI. Creates professional letter-sized pages using parallel generation. Takes 10-30s depending on page count. Returns generated sections.",
+    {
+      documentId: z.string().describe("The document ID to generate pages for"),
+      prompt: z.string().describe("What the document is about (e.g. 'Quarterly report Q1 2026 for Acme Corp')"),
+      pageCount: z.number().min(1).max(20).optional().describe("Number of pages to generate (default: AI decides based on prompt)"),
+      direction: directionSchema,
+      extraInstructions: z.string().optional().describe("Additional instructions for the AI (e.g. 'Include charts', 'Use Spanish')"),
+      logoUrl: z.string().optional().describe("Logo URL or data URL to include in the document"),
+      skipCover: z.boolean().optional().describe("Skip generating a cover page (useful when adding pages to existing doc)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, ...opts } = params;
+      const result = await generateDocumentAI(ctx, documentId, opts);
+      return { content: [{ type: "text", text: JSON.stringify({ total: result.total, sections: result.sections.map(s => ({ id: s.id, order: s.order, type: s.type, name: s.name })) }, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "refine_document_section",
+    "Refine a specific page/section of a document with surgical AI edits. Make targeted changes like updating text, adjusting layout, or modifying specific elements. Takes 5-15s.",
+    {
+      documentId: z.string().describe("The document ID"),
+      sectionId: z.string().describe("The section/page ID to refine (from get_document sections)"),
+      instruction: z.string().describe("What to change (e.g. 'Change the title to Q2 Report', 'Make the chart bigger', 'Add a footer with page numbers')"),
+      direction: directionSchema,
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, sectionId, instruction, direction } = params;
+      const result = await refineDocumentSection(ctx, documentId, { sectionId, instruction, direction });
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, html: result.html.substring(0, 500) + "..." }, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "regenerate_document_page",
+    "Create a completely different visual design for a document page while keeping the same content. Useful when the current design doesn't look right. Takes 5-15s.",
+    {
+      documentId: z.string().describe("The document ID"),
+      sectionId: z.string().describe("The section/page ID to regenerate (from get_document sections)"),
+      direction: directionSchema,
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, sectionId, direction } = params;
+      const result = await regenerateDocumentPage(ctx, documentId, { sectionId, direction });
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, html: result.html.substring(0, 500) + "..." }, null, 2) }] };
     }
   );
 
