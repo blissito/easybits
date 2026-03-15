@@ -193,7 +193,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (allSections.length > 1) {
     // Build lightweight outline (label + heading) instead of full HTML
     const outline = allSections.map((s, i) => {
-      const headingMatch = s.html.match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
+      const headingMatch = (s.html || "").match(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/i);
       const heading = headingMatch ? headingMatch[1].replace(/<[^>]*>/g, "").trim() : "";
       const marker = s.id === sectionId ? " ← current" : "";
       return `- Page ${i + 1}: ${s.label || `Página ${i + 1}`}${heading ? ` — ${heading}` : ""}${marker}`;
