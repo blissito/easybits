@@ -132,10 +132,11 @@ export async function updateDocument(
   return result;
 }
 
-export async function setSectionHtml(
+/** Update the full HTML of a single page in a document */
+export async function setPageHtml(
   ctx: AuthContext,
   id: string,
-  sectionId: string,
+  pageId: string,
   html: string
 ) {
   requireScope(ctx, "WRITE");
@@ -145,13 +146,93 @@ export async function setSectionHtml(
     throwJson("Document not found", 404);
 
   const sections = (doc.sections || []) as unknown as Section3[];
-  const idx = sections.findIndex((s) => s.id === sectionId);
-  if (idx === -1) throwJson("Section not found", 404);
+  const idx = sections.findIndex((s) => s.id === pageId);
+  if (idx === -1) throwJson("Page not found", 404);
 
   sections[idx] = { ...sections[idx], html };
   const result = await db.landing.update({ where: { id }, data: { sections: sections as any } });
   docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
-  return { success: true, sectionId };
+  return { success: true, pageId };
+}
+
+/** @deprecated Use setPageHtml instead */
+export const setSectionHtml = setPageHtml;
+
+/** Get the HTML and metadata of a single page */
+export async function getPageHtml(
+  ctx: AuthContext,
+  id: string,
+  pageId: string
+) {
+  requireScope(ctx, "READ");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const section = sections.find((s) => s.id === pageId);
+  if (!section) throwJson("Page not found", 404);
+
+  return section;
+}
+
+/** Get the outerHTML of a specific element within a page, matched by CSS selector */
+export async function getSectionHtml(
+  ctx: AuthContext,
+  id: string,
+  pageId: string,
+  cssSelector: string
+) {
+  requireScope(ctx, "READ");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const section = sections.find((s) => s.id === pageId);
+  if (!section) throwJson("Page not found", 404);
+
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM(section.html || "<section></section>");
+  const el = dom.window.document.querySelector(cssSelector);
+  if (!el) throwJson(`No element matches selector: ${cssSelector}`, 404);
+
+  return { html: el.outerHTML, tagName: el.tagName.toLowerCase() };
+}
+
+/** Replace the outerHTML of a specific element within a page, matched by CSS selector */
+export async function setSectionHtmlBySelector(
+  ctx: AuthContext,
+  id: string,
+  pageId: string,
+  cssSelector: string,
+  html: string
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const idx = sections.findIndex((s) => s.id === pageId);
+  if (idx === -1) throwJson("Page not found", 404);
+
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM(sections[idx].html || "<section></section>");
+  const el = dom.window.document.querySelector(cssSelector);
+  if (!el) throwJson(`No element matches selector: ${cssSelector}`, 404);
+
+  el.outerHTML = html;
+
+  // Serialize the updated page HTML
+  const updatedHtml = dom.window.document.body.innerHTML;
+  sections[idx] = { ...sections[idx], html: updatedHtml };
+  const result = await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
+  return { success: true, pageId, cssSelector };
 }
 
 export async function deleteDocument(ctx: AuthContext, id: string) {

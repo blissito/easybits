@@ -552,8 +552,20 @@ SDK: \`eb.unpublishDocument(id)\`
 MCP: \`unpublish_document({ documentId })\`
 
 ### Set page HTML
-MCP: \`set_section_html({ documentId, sectionId, html })\`
-Updates a single page's HTML without replacing all pages. Preferred over \`update_document\` for single-page edits.
+MCP: \`set_page_html({ documentId, pageId, html })\`
+Updates a single page's full HTML without replacing all pages. Preferred over \`update_document\` for single-page edits.
+
+### Get page HTML
+MCP: \`get_page_html({ documentId, pageId })\`
+Returns the HTML and metadata (id, order, type, name) of a single page.
+
+### Get section HTML (element within a page)
+MCP: \`get_section_html({ documentId, pageId, cssSelector })\`
+Returns the outerHTML of a specific element within a page, matched by CSS selector. Examples: \`.hero\`, \`#pricing\`, \`section:nth-child(2)\`, \`div.stats\`.
+
+### Set section HTML (element within a page)
+MCP: \`set_section_html({ documentId, pageId, cssSelector, html })\`
+Replaces a specific element within a page (matched by CSS selector) with new HTML. Enables surgical edits without rewriting the entire page.
 
 ### Generate document (AI)
 MCP: \`generate_document({ documentId, prompt, skipCover? })\`
@@ -608,7 +620,8 @@ When creating documents from the dashboard, 4 design directions are generated fi
 \`\`\`
 
 ### Tips for agents
-- Use \`set_section_html\` to update a single page — \`update_document\` with \`sections\` replaces ALL pages.
+- Use \`set_page_html\` to update a full page — \`update_document\` with \`sections\` replaces ALL pages.
+- Use \`get_section_html\` / \`set_section_html\` to read/edit a specific element within a page by CSS selector.
 - Use \`generate_document\` with \`skipCover: true\` to add pages to an existing document.
 - Use \`refine_document_section\` for surgical AI changes to one page.
 - Pages use semantic color classes (\`bg-primary\`, \`text-on-surface\`, etc.) — changing the theme updates all pages.

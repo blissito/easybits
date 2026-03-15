@@ -67,7 +67,10 @@ import {
   generateDocumentAI,
   refineDocumentSection,
   regenerateDocumentPage,
-  setSectionHtml,
+  setPageHtml,
+  getPageHtml,
+  getSectionHtml,
+  setSectionHtmlBySelector,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -844,16 +847,61 @@ export function createMcpServer() {
   );
 
   server.tool(
-    "set_section_html",
-    "Update the HTML of a single page/section in a document without affecting other pages. Use this instead of update_document when you only need to change one page.",
+    "set_page_html",
+    "Update the full HTML of a single page in a document without affecting other pages. Use this instead of update_document when you only need to change one page.",
     {
       documentId: z.string().describe("The document ID"),
-      sectionId: z.string().describe("The section/page ID to update (from get_document sections)"),
+      pageId: z.string().describe("The page ID to update (from get_document sections)"),
       html: z.string().describe("New HTML content for the page"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await setSectionHtml(ctx, params.documentId, params.sectionId, params.html);
+      const result = await setPageHtml(ctx, params.documentId, params.pageId, params.html);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_page_html",
+    "Get the HTML and metadata of a single page in a document.",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageId: z.string().describe("The page ID (from get_document sections)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getPageHtml(ctx, params.documentId, params.pageId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_section_html",
+    "Get the outerHTML of a specific element within a document page, matched by CSS selector. Useful for reading a specific section like .hero, #pricing, or section:nth-child(2).",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageId: z.string().describe("The page ID containing the element"),
+      cssSelector: z.string().describe("CSS selector to find the element (e.g. '.hero', '#pricing', 'section:nth-child(2)')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getSectionHtml(ctx, params.documentId, params.pageId, params.cssSelector);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "set_section_html",
+    "Replace a specific element within a document page, matched by CSS selector. Enables surgical edits to individual elements without rewriting the entire page.",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageId: z.string().describe("The page ID containing the element"),
+      cssSelector: z.string().describe("CSS selector to find the element to replace (e.g. '.hero', '#pricing', 'div:nth-child(3)')"),
+      html: z.string().describe("New HTML to replace the matched element's outerHTML"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await setSectionHtmlBySelector(ctx, params.documentId, params.pageId, params.cssSelector, params.html);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
