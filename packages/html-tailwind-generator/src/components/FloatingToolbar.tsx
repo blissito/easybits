@@ -99,8 +99,11 @@ export function FloatingToolbar({
     setRefImageName(null);
     setShowTagPicker(false);
     setActiveTab(null);
-    // Auto-focus the AI prompt input when toolbar appears
-    setTimeout(() => inputRef.current?.focus(), 50);
+    // Auto-focus AI input only for section roots (not text elements where user may want to double-click edit)
+    const isText = ["P", "SPAN", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "LI", "A"].includes(selection?.tagName ?? "");
+    if (!isText) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   }, [selection?.sectionId, selection?.elementPath]);
 
   // Sync attr inputs when selection changes
