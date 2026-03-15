@@ -19,6 +19,10 @@ function throwJson(error: string, status: number): never {
   });
 }
 
+function validateObjectId(id: string): void {
+  if (!/^[0-9a-fA-F]{24}$/.test(id)) throwJson("Document not found", 404);
+}
+
 export async function listDocuments(ctx: AuthContext) {
   requireScope(ctx, "READ");
   const items = await db.landing.findMany({
@@ -54,6 +58,7 @@ export async function listDocuments(ctx: AuthContext) {
 
 export async function getDocument(ctx: AuthContext, id: string) {
   requireScope(ctx, "READ");
+  validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
@@ -103,6 +108,7 @@ export async function updateDocument(
   }
 ) {
   requireScope(ctx, "WRITE");
+  validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
@@ -123,8 +129,30 @@ export async function updateDocument(
   return db.landing.update({ where: { id }, data: updates });
 }
 
+export async function setSectionHtml(
+  ctx: AuthContext,
+  id: string,
+  sectionId: string,
+  html: string
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const idx = sections.findIndex((s) => s.id === sectionId);
+  if (idx === -1) throwJson("Section not found", 404);
+
+  sections[idx] = { ...sections[idx], html };
+  await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  return { success: true, sectionId };
+}
+
 export async function deleteDocument(ctx: AuthContext, id: string) {
   requireScope(ctx, "DELETE");
+  validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
@@ -133,6 +161,7 @@ export async function deleteDocument(ctx: AuthContext, id: string) {
 }
 
 export async function deployDocument(ctx: AuthContext, id: string) {
+  validateObjectId(id);
   // Validate it's a document before delegating
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
@@ -141,6 +170,7 @@ export async function deployDocument(ctx: AuthContext, id: string) {
 }
 
 export async function unpublishDocument(ctx: AuthContext, id: string) {
+  validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
@@ -183,6 +213,7 @@ export async function generateDocumentAI(
   }
 ) {
   requireScope(ctx, "WRITE");
+  validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
@@ -322,6 +353,7 @@ async function _refineInternal(
   isVariant: boolean
 ) {
   requireScope(ctx, "WRITE");
+  validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);

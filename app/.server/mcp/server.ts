@@ -67,9 +67,24 @@ import {
   generateDocumentAI,
   refineDocumentSection,
   regenerateDocumentPage,
+  setSectionHtml,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
+
+function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
+  return async (params: T, extra: any) => {
+    try {
+      return await fn(params, extra);
+    } catch (err) {
+      if (err instanceof Response) {
+        const body = await err.json().catch(() => ({ error: "Unknown error" }));
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: body.error || body.message || "Unknown error", status: err.status }, null, 2) }], isError: true };
+      }
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }], isError: true };
+    }
+  };
+}
 
 export function createMcpServer() {
   const server = new McpServer({
@@ -135,14 +150,14 @@ export function createMcpServer() {
       },
       _meta: { ui: { resourceUri: "ui://easybits/file-list" } },
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listFiles(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result as Record<string, unknown>,
       };
-    }
+    })
   );
 
   registerAppTool(
@@ -155,14 +170,14 @@ export function createMcpServer() {
       },
       _meta: { ui: { resourceUri: "ui://easybits/file-preview" } },
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result as Record<string, unknown>,
       };
-    }
+    })
   );
 
   registerAppTool(
@@ -180,14 +195,14 @@ export function createMcpServer() {
       },
       _meta: { ui: { resourceUri: "ui://easybits/file-upload" } },
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await uploadFile(ctx, { ...params, source: "mcp" });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result as Record<string, unknown>,
       };
-    }
+    })
   );
 
   server.tool(
@@ -196,13 +211,13 @@ export function createMcpServer() {
     {
       fileId: z.string().describe("The file ID to delete"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -211,13 +226,13 @@ export function createMcpServer() {
     {
       fileId: z.string().describe("The file ID to restore"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await restoreFile(ctx, params.fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -230,13 +245,13 @@ export function createMcpServer() {
       canWrite: z.boolean().optional().describe("Grant write access"),
       canDelete: z.boolean().optional().describe("Grant delete access"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await shareFile(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -249,13 +264,13 @@ export function createMcpServer() {
       metadata: z.record(z.unknown()).optional().describe("Metadata to shallow-merge with existing"),
       status: z.enum(["DONE"]).optional().describe("Mark file as DONE after upload"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await updateFile(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -265,20 +280,20 @@ export function createMcpServer() {
       limit: z.number().optional().describe("Max results (default 50)"),
       cursor: z.string().optional().describe("Pagination cursor"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listDeletedFiles(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
     "list_providers",
     "List your configured storage providers. If none configured, shows platform default (Tigris).",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const providers = await db.storageProvider.findMany({
         where: { userId: ctx.user.id },
@@ -308,7 +323,7 @@ export function createMcpServer() {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -318,28 +333,28 @@ export function createMcpServer() {
       provider: z.enum(["ANTHROPIC", "OPENAI"]).describe("AI provider"),
       apiKey: z.string().describe("Your API key for the provider"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { setAiKey } = await import("../core/aiKeyOperations");
       const result = await setAiKey(ctx, params.provider, params.apiKey);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
     "list_ai_keys",
     "List your configured AI provider API keys (values are masked)",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { listAiKeys } = await import("../core/aiKeyOperations");
       const result = await listAiKeys(ctx);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -348,14 +363,14 @@ export function createMcpServer() {
     {
       provider: z.enum(["ANTHROPIC", "OPENAI"]).describe("AI provider to remove"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { deleteAiKey } = await import("../core/aiKeyOperations");
       const result = await deleteAiKey(ctx, params.provider);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -366,14 +381,14 @@ export function createMcpServer() {
       format: z.enum(["webp", "avif"]).default("webp").describe("Target format"),
       quality: z.number().min(1).max(100).optional().describe("Quality 1-100. Default: 80 for WebP, 50 for AVIF"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { optimizeImage } = await import("../core/imageOperations");
       const result = await optimizeImage(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -390,14 +405,14 @@ export function createMcpServer() {
       flip: z.boolean().optional().describe("Flip vertically"),
       grayscale: z.boolean().optional().describe("Convert to grayscale"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { transformImage } = await import("../core/imageOperations");
       const result = await transformImage(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -407,7 +422,7 @@ export function createMcpServer() {
       fileId: z.string().describe("The file ID"),
       expiresIn: z.number().min(60).max(604800).optional().describe("Expiration in seconds (default 3600, min 60, max 604800)"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await generateShareToken(ctx, {
         fileId: params.fileId,
@@ -417,7 +432,7 @@ export function createMcpServer() {
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -428,13 +443,13 @@ export function createMcpServer() {
       limit: z.number().optional().describe("Max results (default 50)"),
       cursor: z.string().optional().describe("Pagination cursor"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listShareTokens(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -443,14 +458,14 @@ export function createMcpServer() {
     {
       query: z.string().describe("Natural language search query, e.g. 'all PDF files' or 'images uploaded recently'"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { searchFilesWithAI } = await import("../core/ai");
       const results = await searchFilesWithAI(ctx.user.id, params.query);
       return {
         content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
       };
-    }
+    })
   );
 
   // --- Website Tools ---
@@ -459,13 +474,13 @@ export function createMcpServer() {
     "list_websites",
     "List your websites (id, name, slug, status, fileCount, totalSize, createdAt, url).",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listWebsites(ctx);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -474,13 +489,13 @@ export function createMcpServer() {
     {
       name: z.string().describe("Name for the website"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await createWebsite(ctx, { name: params.name });
       return {
         content: [{ type: "text", text: JSON.stringify({ website: result }, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -489,13 +504,13 @@ export function createMcpServer() {
     {
       websiteId: z.string().describe("The website ID"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getWebsite(ctx, params.websiteId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -506,7 +521,7 @@ export function createMcpServer() {
       name: z.string().optional().describe("New name"),
       status: z.enum(["ACTIVE", "ERROR"]).optional().describe("New status"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await updateWebsite(ctx, params.websiteId, {
         name: params.name,
@@ -515,7 +530,7 @@ export function createMcpServer() {
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -524,13 +539,13 @@ export function createMcpServer() {
     {
       websiteId: z.string().describe("The website ID to delete"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteWebsite(ctx, params.websiteId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    })
   );
 
   // --- Webhook Tools ---
@@ -541,22 +556,22 @@ export function createMcpServer() {
     {
       webhookId: z.string().describe("The webhook ID"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getWebhook(ctx, params.webhookId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
     "list_webhooks",
     "List your configured webhooks (id, url, events, status, failCount, lastError).",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listWebhooks(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -566,11 +581,11 @@ export function createMcpServer() {
       url: z.string().describe("HTTPS URL to receive POST notifications"),
       events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted"])).describe("Events to subscribe to"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await createWebhook(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -582,7 +597,7 @@ export function createMcpServer() {
       events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted"])).optional().describe("New events list"),
       status: z.enum(["ACTIVE", "PAUSED"]).optional().describe("Set status"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await updateWebhookConfig(ctx, params.webhookId, {
         url: params.url,
@@ -590,7 +605,7 @@ export function createMcpServer() {
         status: params.status,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -599,11 +614,11 @@ export function createMcpServer() {
     {
       webhookId: z.string().describe("The webhook ID to delete"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteWebhookById(ctx, params.webhookId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   // --- Presentation Tools ---
@@ -612,11 +627,11 @@ export function createMcpServer() {
     "list_presentations",
     "List your presentations (id, name, prompt, theme, status, websiteId, createdAt).",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listPresentations(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -625,11 +640,11 @@ export function createMcpServer() {
     {
       presentationId: z.string().describe("The presentation ID"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getPresentation(ctx, params.presentationId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -646,11 +661,11 @@ export function createMcpServer() {
       })).optional().describe("Array of slides"),
       theme: z.string().optional().describe("Reveal.js theme (default: black). Options: black, white, league, beige, night, serif, simple, solarized, moon, dracula, sky, blood"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await createPresentation(ctx, params as any);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -668,12 +683,12 @@ export function createMcpServer() {
       })).optional().describe("Replace all slides"),
       theme: z.string().optional().describe("Reveal.js theme"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { presentationId, ...opts } = params;
       const result = await updatePresentation(ctx, presentationId, opts as any);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -682,11 +697,11 @@ export function createMcpServer() {
     {
       presentationId: z.string().describe("The presentation ID to delete"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deletePresentation(ctx, params.presentationId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -695,11 +710,11 @@ export function createMcpServer() {
     {
       presentationId: z.string().describe("The presentation ID to deploy"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deployPresentation(ctx, params.presentationId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -708,11 +723,11 @@ export function createMcpServer() {
     {
       presentationId: z.string().describe("The presentation ID to unpublish"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unpublishPresentation(ctx, params.presentationId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   // --- Document Tools ---
@@ -721,11 +736,11 @@ export function createMcpServer() {
     "list_documents",
     "List your documents (id, name, prompt, theme, status, pageCount, createdAt).",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listDocuments(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -734,11 +749,11 @@ export function createMcpServer() {
     {
       documentId: z.string().describe("The document ID"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getDocument(ctx, params.documentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -757,11 +772,11 @@ export function createMcpServer() {
       theme: z.string().optional().describe("Theme name (e.g. minimal, corporate, elegant)"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await createDocument(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -781,12 +796,12 @@ export function createMcpServer() {
       theme: z.string().optional().describe("Theme name"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, ...opts } = params;
       const result = await updateDocument(ctx, documentId, opts);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -795,11 +810,11 @@ export function createMcpServer() {
     {
       documentId: z.string().describe("The document ID to delete"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteDocument(ctx, params.documentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -808,11 +823,11 @@ export function createMcpServer() {
     {
       documentId: z.string().describe("The document ID to deploy"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deployDocument(ctx, params.documentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -821,11 +836,26 @@ export function createMcpServer() {
     {
       documentId: z.string().describe("The document ID to unpublish"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unpublishDocument(ctx, params.documentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
+  );
+
+  server.tool(
+    "set_section_html",
+    "Update the HTML of a single page/section in a document without affecting other pages. Use this instead of update_document when you only need to change one page.",
+    {
+      documentId: z.string().describe("The document ID"),
+      sectionId: z.string().describe("The section/page ID to update (from get_document sections)"),
+      html: z.string().describe("New HTML content for the page"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await setSectionHtml(ctx, params.documentId, params.sectionId, params.html);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
   );
 
   // --- Document AI Tools ---
@@ -857,12 +887,12 @@ export function createMcpServer() {
       logoUrl: z.string().optional().describe("Logo URL or data URL to include in the document"),
       skipCover: z.boolean().optional().describe("Skip generating a cover page (useful when adding pages to existing doc)"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, ...opts } = params;
       const result = await generateDocumentAI(ctx, documentId, opts);
       return { content: [{ type: "text", text: JSON.stringify({ total: result.total, sections: result.sections.map(s => ({ id: s.id, order: s.order, type: s.type, name: s.name })) }, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -874,12 +904,12 @@ export function createMcpServer() {
       instruction: z.string().describe("What to change (e.g. 'Change the title to Q2 Report', 'Make the chart bigger', 'Add a footer with page numbers')"),
       direction: directionSchema,
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, sectionId, instruction, direction } = params;
       const result = await refineDocumentSection(ctx, documentId, { sectionId, instruction, direction });
       return { content: [{ type: "text", text: JSON.stringify({ success: true, html: result.html.substring(0, 500) + "..." }, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -890,12 +920,12 @@ export function createMcpServer() {
       sectionId: z.string().describe("The section/page ID to regenerate (from get_document sections)"),
       direction: directionSchema,
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, sectionId, direction } = params;
       const result = await regenerateDocumentPage(ctx, documentId, { sectionId, direction });
       return { content: [{ type: "text", text: JSON.stringify({ success: true, html: result.html.substring(0, 500) + "..." }, null, 2) }] };
-    }
+    })
   );
 
   // --- Database Tools ---
@@ -904,11 +934,11 @@ export function createMcpServer() {
     "db_list",
     "List your SQLite databases (id, name, namespace, description, createdAt).",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listDatabases(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -918,11 +948,11 @@ export function createMcpServer() {
       name: z.string().describe("Database name (alphanumeric, dashes, underscores)"),
       description: z.string().optional().describe("Optional description"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await createDatabase(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -931,11 +961,11 @@ export function createMcpServer() {
     {
       dbId: z.string().describe("The database ID"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getDatabase(ctx, params.dbId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -944,11 +974,11 @@ export function createMcpServer() {
     {
       dbId: z.string().describe("The database ID to delete"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteDatabase(ctx, params.dbId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -959,11 +989,11 @@ export function createMcpServer() {
       sql: z.string().describe("SQL statement to execute"),
       args: z.array(z.unknown()).optional().describe("Positional arguments for ? placeholders"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await queryDatabase(ctx, params.dbId, params.sql, params.args);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -976,24 +1006,24 @@ export function createMcpServer() {
         args: z.array(z.unknown()).optional().describe("Positional arguments"),
       })).describe("Array of SQL statements (1-20)"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await execDatabase(ctx, params.dbId, params.statements);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   // --- Utility Tools ---
 
   server.tool(
     "get_usage_stats",
-    "Get account usage statistics: storage used/limit, file counts, plan info.",
+    "Get account usage statistics: storage used/limit, file counts, AI generations used/remaining, plan info.",
     {},
-    async (_params, extra) => {
+    wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getUsageStats(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1002,11 +1032,11 @@ export function createMcpServer() {
     {
       fileIds: z.array(z.string()).describe("Array of file IDs to delete (1-100)"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await bulkDeleteFiles(ctx, params.fileIds);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1022,11 +1052,11 @@ export function createMcpServer() {
         region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
       })).describe("Array of files to upload (1-20)"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await bulkUploadFiles(ctx, params.items);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1035,11 +1065,11 @@ export function createMcpServer() {
     {
       fileId: z.string().describe("The file ID"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listPermissions(ctx, params.fileId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1049,11 +1079,11 @@ export function createMcpServer() {
       fileId: z.string().describe("The file ID to duplicate"),
       name: z.string().optional().describe("Name for the copy (defaults to 'Copy of ...')"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await duplicateFile(ctx, params.fileId, params.name);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1064,12 +1094,12 @@ export function createMcpServer() {
       limit: z.number().optional().describe("Max results (default 50)"),
       cursor: z.string().optional().describe("Pagination cursor"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { websiteId, ...opts } = params;
       const result = await listWebsiteFiles(ctx, websiteId, opts);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1078,11 +1108,11 @@ export function createMcpServer() {
     {
       tokenId: z.string().describe("The share token ID to revoke"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await revokeShareToken(ctx, params.tokenId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -1091,11 +1121,11 @@ export function createMcpServer() {
     {
       permissionId: z.string().describe("The permission ID to revoke"),
     },
-    async (params, extra) => {
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await revokePermission(ctx, params.permissionId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(

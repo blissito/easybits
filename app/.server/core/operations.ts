@@ -18,6 +18,7 @@ import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
 import { PLANS, getUserPlan } from "~/lib/plans";
 import { dispatchWebhooks } from "../webhooks";
+import { checkAiGenerationLimit } from "../aiGenerationLimit";
 
 // --- List Files ---
 
@@ -706,7 +707,7 @@ export async function getUsageStats(ctx: AuthContext) {
 
   const planKey = getUserPlan(ctx.user);
 
-  const [fileStats, deletedCount, websiteCount, webhookCount, databaseCount] = await Promise.all([
+  const [fileStats, deletedCount, websiteCount, webhookCount, databaseCount, genLimit] = await Promise.all([
     db.file.aggregate({
       where: { ownerId: ctx.user.id, status: { not: "DELETED" } },
       _count: true,
@@ -716,6 +717,7 @@ export async function getUsageStats(ctx: AuthContext) {
     db.website.count({ where: { ownerId: ctx.user.id, deletedAt: null } }),
     db.webhook.count({ where: { userId: ctx.user.id } }),
     db.database.count({ where: { userId: ctx.user.id } }),
+    checkAiGenerationLimit(ctx.user.id),
   ]);
 
   const usedBytes = fileStats._sum.size ?? 0;
@@ -736,6 +738,12 @@ export async function getUsageStats(ctx: AuthContext) {
       websites: websiteCount,
       webhooks: webhookCount,
       databases: databaseCount,
+    },
+    aiGenerations: {
+      used: genLimit.used,
+      limit: genLimit.limit,
+      remaining: genLimit.limit !== null ? Math.max(0, genLimit.limit - genLimit.used + genLimit.bonus) : null,
+      bonus: genLimit.bonus,
     },
   };
 }
