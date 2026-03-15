@@ -4,7 +4,6 @@ import { db } from "~/.server/db";
 import { useState, useEffect } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import {
-  listDatabases,
   createDatabase,
   deleteDatabase,
   queryDatabase,
