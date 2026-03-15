@@ -1,7 +1,7 @@
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { sqldQuery, sqldExec } from "../sqld";
+import { sqldQuery, sqldExec, sqldCreateNamespace, sqldDeleteNamespace } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
 
 const MAX_DATABASES_PER_USER = 5;
@@ -73,9 +73,12 @@ export async function createDatabase(
   });
 
   // Use the DB id as namespace (guaranteed unique)
+  const namespace = database.id;
+  await sqldCreateNamespace(namespace);
+
   const updated = await db.database.update({
     where: { id: database.id },
-    data: { namespace: database.id },
+    data: { namespace },
   });
 
   dispatchWebhooks(ctx.user.id, "database.created", {
@@ -121,6 +124,7 @@ export async function deleteDatabase(ctx: AuthContext, dbId: string) {
     });
   }
   await db.database.delete({ where: { id: dbId } });
+  await sqldDeleteNamespace(database.namespace).catch(() => {});
 
   dispatchWebhooks(ctx.user.id, "database.deleted", {
     id: database.id,

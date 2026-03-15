@@ -7,6 +7,7 @@
  */
 
 const SQLD_URL = process.env.SQLD_URL || "http://localhost:8080";
+const SQLD_ADMIN_URL = process.env.SQLD_ADMIN_URL || "http://localhost:9090";
 
 interface StmtArg {
   type: "integer" | "float" | "text" | "blob" | "null";
@@ -58,6 +59,34 @@ function parseResult(raw: PipelineResponse["results"][0]): SqldResult {
     affected_row_count: r.affected_row_count,
     last_insert_rowid: r.last_insert_rowid,
   };
+}
+
+/**
+ * Create a namespace in sqld (must be called before querying).
+ */
+export async function sqldCreateNamespace(namespace: string): Promise<void> {
+  const res = await fetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok && res.status !== 409) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`sqld create namespace error ${res.status}: ${text}`);
+  }
+}
+
+/**
+ * Delete a namespace in sqld.
+ */
+export async function sqldDeleteNamespace(namespace: string): Promise<void> {
+  const res = await fetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`sqld delete namespace error ${res.status}: ${text}`);
+  }
 }
 
 /**
