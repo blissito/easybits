@@ -11,6 +11,8 @@ const VALID_EVENTS: WebhookEvent[] = [
   "file.restored",
   "website.created",
   "website.deleted",
+  "database.created",
+  "database.deleted",
 ];
 
 export async function listWebhooks(ctx: AuthContext) {

@@ -40,6 +40,14 @@ import {
   deleteWebhookById,
 } from "../core/webhookOperations";
 import {
+  listDatabases,
+  createDatabase,
+  getDatabase,
+  deleteDatabase,
+  queryDatabase,
+  execDatabase,
+} from "../core/databaseOperations";
+import {
   listPresentations,
   getPresentation,
   createPresentation,
@@ -691,6 +699,91 @@ export function createMcpServer() {
     async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unpublishPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // --- Database Tools ---
+
+  server.tool(
+    "db_list",
+    "List your SQLite databases (id, name, namespace, description, createdAt).",
+    {},
+    async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listDatabases(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "db_create",
+    "Create a new SQLite database. Name must be alphanumeric/dashes/underscores, max 64 chars. Max 5 databases per account.",
+    {
+      name: z.string().describe("Database name (alphanumeric, dashes, underscores)"),
+      description: z.string().optional().describe("Optional description"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createDatabase(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "db_get",
+    "Get a database by ID.",
+    {
+      dbId: z.string().describe("The database ID"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getDatabase(ctx, params.dbId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "db_delete",
+    "Permanently delete a database and all its data.",
+    {
+      dbId: z.string().describe("The database ID to delete"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteDatabase(ctx, params.dbId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "db_query",
+    "Execute a single SQL statement against a database. Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc. Use `args` for parameterized queries (? placeholders).",
+    {
+      dbId: z.string().describe("The database ID"),
+      sql: z.string().describe("SQL statement to execute"),
+      args: z.array(z.unknown()).optional().describe("Positional arguments for ? placeholders"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await queryDatabase(ctx, params.dbId, params.sql, params.args);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    "db_exec",
+    "Execute multiple SQL statements in a batch (max 20). Useful for migrations or multi-step operations.",
+    {
+      dbId: z.string().describe("The database ID"),
+      statements: z.array(z.object({
+        sql: z.string().describe("SQL statement"),
+        args: z.array(z.unknown()).optional().describe("Positional arguments"),
+      })).describe("Array of SQL statements (1-20)"),
+    },
+    async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await execDatabase(ctx, params.dbId, params.statements);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
   );

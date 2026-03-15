@@ -7,7 +7,9 @@ export type WebhookEvent =
   | "file.deleted"
   | "file.restored"
   | "website.created"
-  | "website.deleted";
+  | "website.deleted"
+  | "database.created"
+  | "database.deleted";
 
 const MAX_FAIL_COUNT = 5;
 const TIMEOUT_MS = 10_000;
