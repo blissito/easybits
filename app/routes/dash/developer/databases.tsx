@@ -92,6 +92,26 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
   }
 
+  if (intent === "fetch_schema") {
+    const dbId = formData.get("dbId") as string;
+    try {
+      const tablesResult = await queryDatabase(ctx, dbId, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+      const tables = [];
+      for (const row of tablesResult.rows) {
+        const tableName = row[0] as string;
+        const colsResult = await queryDatabase(ctx, dbId, `PRAGMA table_info("${tableName}")`);
+        tables.push({
+          name: tableName,
+          columns: colsResult.rows.map((c: unknown[]) => ({ name: c[1] as string, type: c[2] as string, pk: c[5] === 1 })),
+        });
+      }
+      return { schema: tables, schemaDbId: dbId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Schema fetch failed";
+      return { schemaError: message, schemaDbId: dbId };
+    }
+  }
+
   if (intent === "query") {
     const dbId = formData.get("dbId") as string;
     const sql = formData.get("sql") as string;
@@ -315,6 +335,18 @@ export default function DatabasesPage() {
   );
 }
 
+function downloadCsv(cols: string[], rows: unknown[][], filename: string) {
+  const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [cols.map(escape).join(","), ...rows.map(r => r.map(escape).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+type SchemaTable = { name: string; columns: { name: string; type: string; pk: boolean }[] };
+
 function DatabaseRow({
   db: dbItem,
   queryOpen,
@@ -329,10 +361,27 @@ function DatabaseRow({
   queryFetcher: ReturnType<typeof useFetcher<typeof action>>;
 }) {
   const generateFetcher = useFetcher<typeof action>();
+  const schemaFetcher = useFetcher<typeof action>();
   const [sqlValue, setSqlValue] = useState("");
   const [nlPrompt, setNlPrompt] = useState("");
+  const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const queryFormRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-fetch schema when query panel opens
+  useEffect(() => {
+    if (queryOpen && schemaFetcher.state === "idle" && !schemaFetcher.data) {
+      schemaFetcher.submit(
+        { intent: "fetch_schema", dbId: dbItem.id },
+        { method: "post" }
+      );
+    }
+  }, [queryOpen]);
+
+  const sData = schemaFetcher.data as Record<string, unknown> | null | undefined;
+  const schema = sData?.schemaDbId === dbItem.id && sData?.schema
+    ? (sData.schema as SchemaTable[])
+    : null;
 
   const autoResize = () => {
     const el = textareaRef.current;
@@ -402,6 +451,51 @@ function DatabaseRow({
       {queryOpen && (
         <tr className="border-t border-gray-200">
           <td colSpan={4} className="px-4 py-4 bg-gray-50">
+            {/* Schema bar */}
+            {schemaFetcher.state !== "idle" && !schema && (
+              <div className="mb-2 text-xs text-gray-400 font-mono">Loading schema...</div>
+            )}
+            {schema && (
+              <div className="mb-2 flex flex-wrap gap-1.5 items-center">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Tables:</span>
+                {schema.length === 0 && (
+                  <span className="text-xs text-gray-400 italic">No tables yet</span>
+                )}
+                {schema.map((t) => (
+                  <div key={t.name} className="relative">
+                    <button
+                      type="button"
+                      className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                        expandedTable === t.name
+                          ? "bg-brand-500 text-white border-brand-500"
+                          : "bg-white border-gray-300 hover:border-brand-500 hover:text-brand-500"
+                      }`}
+                      onClick={() => setExpandedTable(expandedTable === t.name ? null : t.name)}
+                      onDoubleClick={() => {
+                        setSqlValue(`SELECT * FROM "${t.name}" LIMIT 50;`);
+                        requestAnimationFrame(autoResize);
+                      }}
+                      title={`Double-click to query · ${t.columns.length} columns`}
+                    >
+                      {t.name} <span className="text-[10px] opacity-60">({t.columns.length})</span>
+                    </button>
+                    {expandedTable === t.name && (
+                      <div className="absolute z-10 top-full left-0 mt-1 bg-white border-2 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] p-2 min-w-[200px]">
+                        <div className="text-xs font-bold mb-1">{t.name}</div>
+                        {t.columns.map((col) => (
+                          <div key={col.name} className="flex items-center gap-1.5 text-[11px] font-mono py-0.5">
+                            {col.pk && <span className="text-brand-500 font-bold text-[9px]">PK</span>}
+                            <span className="font-bold">{col.name}</span>
+                            <span className="text-gray-400">{col.type}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* AI prompt bar */}
             <generateFetcher.Form method="post" className="flex items-stretch gap-2 mb-2">
               <input type="hidden" name="intent" value="generate_sql" />
@@ -476,6 +570,19 @@ function DatabaseRow({
             {queryResult && (
               <div className="mt-3 overflow-x-auto">
                 {queryResult.cols.length > 0 ? (
+                  <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-500">
+                      {queryResult.rows.length} row{queryResult.rows.length !== 1 ? "s" : ""} returned
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-brand-500 hover:text-brand-700 transition-colors"
+                      onClick={() => downloadCsv(queryResult.cols, queryResult.rows, `${dbItem.name}-export.csv`)}
+                    >
+                      Export CSV
+                    </button>
+                  </div>
                   <table className="w-full text-xs border-2 border-black rounded-lg overflow-hidden">
                     <thead className="bg-black text-white">
                       <tr>
@@ -512,6 +619,7 @@ function DatabaseRow({
                       )}
                     </tbody>
                   </table>
+                  </>
                 ) : (
                   <div className="p-3 bg-lime/30 border-2 border-black rounded-lg text-sm font-mono">
                     OK — {queryResult.affected_row_count} row(s) affected
