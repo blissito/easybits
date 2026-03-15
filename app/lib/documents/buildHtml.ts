@@ -18,10 +18,13 @@ export function buildDocumentHtml(
   const title = options?.title || "Documento";
   const totalPages = sorted.length;
 
+  // Wrap each page's content in a scaling container.
+  // Content is designed for 816px × 1056px (8.5in × 11in at 96dpi).
+  // StPageFlip will set the .flipbook-page size; the inner wrapper scales to fit.
   const pagesHtml = sorted
     .map(
       (s, i) =>
-        `<div class="flipbook-page" data-page="${i + 1}">${s.html}</div>`
+        `<div class="flipbook-page" data-page="${i + 1}"><div class="page-inner">${s.html}</div></div>`
     )
     .join("\n");
 
@@ -95,6 +98,12 @@ export function buildDocumentHtml(
       background: white;
       overflow: hidden;
     }
+    .page-inner {
+      width: 816px;
+      height: 1056px;
+      transform-origin: top left;
+      overflow: hidden;
+    }
     /* Print: show pages vertically, hide toolbar */
     @page { size: letter; margin: 0; }
     @media print {
@@ -129,6 +138,11 @@ export function buildDocumentHtml(
   <div id="flipbook">
     ${pagesHtml}
   </div>
+</div>
+
+<!-- Page turn hint -->
+<div id="page-hint" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;z-index:200;pointer-events:none;transition:opacity 0.5s;display:flex;align-items:center;gap:8px;">
+  <span style="font-size:18px;">&#8592;</span> Desliza o usa las flechas para navegar <span style="font-size:18px;">&#8594;</span>
 </div>
 
 ${branding}
@@ -166,6 +180,18 @@ ${branding}
 
   flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
 
+  // Scale page content to fit the flipbook page size
+  function scalePages() {
+    var pages = document.querySelectorAll('.page-inner');
+    var scaleX = W / 816;
+    var scaleY = H / 1056;
+    var scale = Math.min(scaleX, scaleY);
+    for (var i = 0; i < pages.length; i++) {
+      pages[i].style.transform = 'scale(' + scale + ')';
+    }
+  }
+  scalePages();
+
   var indicator = document.getElementById('page-indicator');
   var prevBtn = document.getElementById('prev-btn');
   var nextBtn = document.getElementById('next-btn');
@@ -189,13 +215,20 @@ ${branding}
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { flip.flipNext(); }
   });
 
+  // Dismiss hint after first flip or after 4 seconds
+  var hint = document.getElementById('page-hint');
+  function hideHint() { if (hint) { hint.style.opacity = '0'; setTimeout(function() { hint.remove(); }, 500); } }
+  flip.on('flip', function() { hideHint(); });
+  setTimeout(hideHint, 4000);
+
   // Responsive resize
   window.addEventListener('resize', function() {
     var mobile = window.innerWidth < 768;
-    var w = mobile ? Math.min(window.innerWidth - 32, 612) : 612;
-    var h = Math.round(w * (11 / 8.5));
-    flip.updateSetting({ width: w, height: h, usePortrait: mobile });
+    W = mobile ? Math.min(window.innerWidth - 32, 612) : 612;
+    H = Math.round(W * (11 / 8.5));
+    flip.updateSetting({ width: W, height: H, usePortrait: mobile });
     flip.update();
+    scalePages();
   });
 })();
 <\/script>
