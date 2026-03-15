@@ -82,8 +82,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
       const { object } = await generateObject({
         model: anthropic("claude-haiku-4-5-20251001"),
         schema: z.object({ sql: z.string() }),
-        prompt: `Database schema:\n${schemaText || "(empty database — no tables yet)"}\n\nUser request: ${prompt}\n\nGenerate a valid SQLite query. Only return the SQL, no explanations.`,
-        system: "You are a SQL assistant for SQLite databases. Given the database schema and a user request in natural language, generate a valid SQL query. For empty databases, generate CREATE TABLE statements as appropriate.",
+        prompt: `Database schema:\n${schemaText || "(empty database — no tables yet)"}\n\nUser request: ${prompt}\n\nGenerate valid SQLite SQL. Format with line breaks and indentation for readability. Separate multiple statements with a blank line.`,
+        system: "You are a SQL assistant for SQLite databases. Given the database schema and a user request in natural language, generate valid SQL. Always format the SQL with proper line breaks and indentation (e.g. each column on its own line in CREATE TABLE, each VALUES on its own line). For empty databases, generate CREATE TABLE statements as appropriate. Return only SQL, no explanations.",
       });
       return { generatedSql: object.sql, generateDbId: dbId };
     } catch (err) {
@@ -394,7 +394,7 @@ function DatabaseRow({
         <tr className="border-t border-gray-200">
           <td colSpan={4} className="px-4 py-4 bg-gray-50">
             {/* AI prompt bar */}
-            <generateFetcher.Form method="post" className="flex gap-2 mb-2">
+            <generateFetcher.Form method="post" className="flex items-stretch gap-2 mb-2">
               <input type="hidden" name="intent" value="generate_sql" />
               <input type="hidden" name="dbId" value={dbItem.id} />
               <div className="flex-1 relative">
@@ -405,7 +405,7 @@ function DatabaseRow({
                   value={nlPrompt}
                   onChange={(e) => setNlPrompt(e.target.value)}
                   placeholder="Describe what you need in plain language..."
-                  className="w-full border-2 border-brand-200 bg-brand-50 rounded-lg pl-8 pr-3 py-2 text-sm"
+                  className="w-full h-full border-2 border-brand-200 bg-brand-50 rounded-lg pl-8 pr-3 text-xs"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -417,8 +417,8 @@ function DatabaseRow({
               <BrutalButton
                 type="submit"
                 size="chip"
-                className="text-sm px-4 py-1.5 whitespace-nowrap"
-                disabled={isGenerating || !nlPrompt.trim()}
+                isLoading={isGenerating}
+                isDisabled={!nlPrompt.trim()}
               >
                 {isGenerating ? "Generating..." : "Generate SQL"}
               </BrutalButton>
@@ -447,10 +447,10 @@ function DatabaseRow({
                 <BrutalButton
                   type="submit"
                   size="chip"
-                  className="text-sm px-4 py-1.5"
-                  disabled={!sqlValue.trim()}
+                  isLoading={queryFetcher.state !== "idle"}
+                  isDisabled={!sqlValue.trim()}
                 >
-                  {queryFetcher.state !== "idle" ? "Running..." : "▶ Run"}
+                  ▶ Run
                 </BrutalButton>
                 <span className="text-xs text-gray-400">⌘+Enter to run</span>
               </div>
