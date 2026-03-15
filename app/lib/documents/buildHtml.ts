@@ -57,12 +57,13 @@ export function buildDocumentHtml(
   <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"><\/script>
   <style>
     ${options?.themeCss || ""}
-    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
+      box-sizing: border-box;
       font-family: 'Inter', sans-serif;
       background: #1a1a1a;
       color: var(--color-on-surface, #111);
       min-height: 100vh;
+      margin: 0;
       display: flex;
       flex-direction: column;
       -webkit-print-color-adjust: exact;
