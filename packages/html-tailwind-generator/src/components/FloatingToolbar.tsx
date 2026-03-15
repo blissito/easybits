@@ -39,7 +39,7 @@ const LinkIcon = () => (
   </svg>
 );
 
-type TabType = "style" | "size" | "attrs" | null;
+type TabType = "style" | "attrs" | null;
 
 interface FloatingToolbarProps {
   selection: IframeMessage | null;
@@ -337,8 +337,7 @@ export function FloatingToolbar({
   })();
 
   // Determine which tabs are available
-  const hasStyleTab = true; // Always available (colors for non-section, style presets for section)
-  const hasSizeTab = sizePresets && !selection.isSectionRoot;
+  const hasStyleTab = true; // Always available (colors + size for non-section, style presets for section)
   const hasAttrsTab = hasAttrEditing;
 
   function toggleTab(tab: TabType) {
@@ -370,7 +369,11 @@ export function FloatingToolbar({
     }
 
     // Color swatches for non-section elements
-    if (!onUpdateAttribute || selection!.tagName === 'IMG') return null;
+    if (!onUpdateAttribute || selection!.tagName === 'IMG') {
+      // Still show size panel for IMG even without color swatches
+      if (selection!.tagName === 'IMG' && sizePresets) return <div className="pt-1 pb-0.5">{renderSizePanel()}</div>;
+      return null;
+    }
 
     const containerTags = ['DIV', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MAIN', 'ARTICLE'];
     const isContainer = containerTags.includes(selection!.tagName ?? '');
@@ -442,6 +445,7 @@ export function FloatingToolbar({
       <div className="pt-1 pb-0.5">
         {renderColorRow("Color", "text")}
         {isContainer && renderColorRow("Fondo", "bg")}
+        {renderSizePanel()}
       </div>
     );
   }
@@ -750,24 +754,13 @@ export function FloatingToolbar({
             className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
               activeTab === "style" ? "bg-blue-600 text-white" : "bg-gray-800 hover:bg-gray-700 text-gray-400"
             }`}
-            title="Estilo"
+            title="Estilo y tamaño"
           >
             <PaletteIcon />
             <span>Estilo</span>
           </button>
         )}
-        {hasSizeTab && (
-          <button
-            onClick={() => toggleTab("size")}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
-              activeTab === "size" ? "bg-blue-600 text-white" : "bg-gray-800 hover:bg-gray-700 text-gray-400"
-            }`}
-            title="Tamaño"
-          >
-            <RulerIcon />
-            <span>Tamaño</span>
-          </button>
-        )}
+
         {hasAttrsTab && (
           <button
             onClick={() => toggleTab("attrs")}
@@ -791,7 +784,6 @@ export function FloatingToolbar({
 
       {/* Active tab panel */}
       {activeTab === "style" && renderColorPanel()}
-      {activeTab === "size" && renderSizePanel()}
       {activeTab === "attrs" && renderAttrsPanel()}
     </div>
   );
