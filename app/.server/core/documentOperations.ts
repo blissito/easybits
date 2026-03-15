@@ -274,6 +274,13 @@ RULES:
 - NEVER use emojis — use SVG icons or geometric shapes instead
 - Ensure strong contrast: dark text on light, light text on dark
 
+IMAGE PRESERVATION — CRITICAL:
+- NEVER remove or replace existing <img> tags that have real src URLs (https://...)
+- If an image has data-enriched="true", it has already been resolved — keep the exact src URL
+- Only use data-image-query="..." for NEW images that don't exist yet
+- If the user asks to change a specific image, update ONLY that image's data-image-query (remove data-enriched and the old src so the system re-resolves it)
+- All other images on the page MUST remain exactly as they are
+
 COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colors):
 - bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
 - bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
@@ -287,6 +294,13 @@ CRITICAL PRIORITY RULES — SURGICAL EDITS:
 - Do NOT change layout, colors, typography, structure, or content that the instruction does not mention
 - The output HTML must be 90%+ identical to the input — only the targeted element should differ
 - NEVER rewrite the entire page for a small change request
+
+IMAGE PRESERVATION — CRITICAL:
+- NEVER remove or replace existing <img> tags that have real src URLs (https://...)
+- If an image has data-enriched="true", it has already been resolved — keep the exact src URL
+- Only use data-image-query="..." for NEW images that don't exist yet
+- If the user asks to change a specific image, update ONLY that image's data-image-query (remove data-enriched and the old src so the system re-resolves it)
+- All other images on the page MUST remain exactly as they are
 
 GENERAL RULES:
 - Output ONLY the refined HTML <section>...</section> — no markdown, no explanation

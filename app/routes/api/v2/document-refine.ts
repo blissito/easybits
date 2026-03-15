@@ -51,7 +51,14 @@ ADAPT TO DOCUMENT TYPE — Not everything is a report. Match the visual style to
 - Catalogs: product cards, specs grids, price highlights
 - Invitations: centered dramatic typography, decorative borders, elegant spacing
 - Reports: tables, progress bars, metric cards, data hierarchy
-- Study the existing content to determine the type and design accordingly`;
+- Study the existing content to determine the type and design accordingly
+
+IMAGE PRESERVATION — CRITICAL:
+- NEVER remove or replace existing <img> tags that have real src URLs (https://...)
+- If an image has data-enriched="true", it has already been resolved — keep the exact src URL
+- Only use data-image-query="..." for NEW images that don't exist yet
+- If the user asks to change a specific image, update ONLY that image's data-image-query (remove data-enriched and the old src so the system re-resolves it)
+- All other images on the page MUST remain exactly as they are`;
 
 const REFINE_SYSTEM_PROMPT = `You are a professional document designer. You refine HTML content for letter-sized (8.5" × 11") document pages.
 
@@ -83,7 +90,14 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 - For complex charts/diagrams, use: <div data-svg-chart="description with data" class="w-full"></div> — the system generates SVGs automatically
 - For images, use: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/> — the system resolves real images
 - NEVER use emojis anywhere — use SVG icons or geometric shapes instead
-- Ensure strong contrast: dark text on light backgrounds, light text on dark backgrounds`;
+- Ensure strong contrast: dark text on light backgrounds, light text on dark backgrounds
+
+IMAGE PRESERVATION — CRITICAL:
+- NEVER remove or replace existing <img> tags that have real src URLs (https://...)
+- If an image has data-enriched="true", it has already been resolved — keep the exact src URL
+- Only use data-image-query="..." for NEW images that don't exist yet
+- If the user asks to change a specific image, update ONLY that image's data-image-query (remove data-enriched and the old src so the system re-resolves it)
+- All other images on the page MUST remain exactly as they are`;
 
 const ELEMENT_REFINE_SYSTEM_PROMPT = `You edit a single HTML element. Output ONLY the edited element — same wrapping tag.
 Rules:
@@ -93,6 +107,8 @@ Rules:
 - Do NOT add <section> wrapper — output the element directly
 - Maintain semantic color classes (bg-primary, text-on-surface, etc.)
 - For images: <img data-image-query="english search query" alt="description" class="..."/>
+- If an image has data-enriched="true" and a real src URL (https://...), keep it exactly as-is
+- Only use data-image-query for NEW images — never replace an enriched image unless explicitly asked
 - NEVER use emojis — use SVG icons or geometric shapes instead`;
 
 /** Extract a complete element from HTML starting at startIdx for the given tagName */
