@@ -94,6 +94,25 @@ export function buildDocumentHtml(
       flex: 1; display: flex; align-items: center; justify-content: center;
       padding: 24px 16px;
       overflow: hidden;
+      position: relative;
+    }
+    .side-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); border: none; color: #fff;
+      font-size: 22px; cursor: pointer; z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, opacity 0.2s;
+      backdrop-filter: blur(4px);
+    }
+    .side-nav:hover { background: rgba(0,0,0,0.7); }
+    .side-nav:disabled { opacity: 0; pointer-events: none; }
+    .side-nav.left { left: 16px; }
+    .side-nav.right { right: 16px; }
+    @media (max-width: 640px) {
+      .side-nav { width: 36px; height: 36px; font-size: 18px; }
+      .side-nav.left { left: 8px; }
+      .side-nav.right { right: 8px; }
     }
     .flipbook-page {
       background: white;
@@ -136,9 +155,11 @@ export function buildDocumentHtml(
 </div>
 
 <div class="flipbook-container">
+  <button id="side-prev" class="side-nav left" aria-label="Anterior">&#8249;</button>
   <div id="flipbook">
     ${pagesHtml}
   </div>
+  <button id="side-next" class="side-nav right" aria-label="Siguiente">&#8250;</button>
 </div>
 
 <!-- Page turn hint -->
@@ -196,6 +217,8 @@ ${branding}
   var indicator = document.getElementById('page-indicator');
   var prevBtn = document.getElementById('prev-btn');
   var nextBtn = document.getElementById('next-btn');
+  var sidePrev = document.getElementById('side-prev');
+  var sideNext = document.getElementById('side-next');
   var total = ${totalPages};
 
   function updateNav() {
@@ -203,6 +226,8 @@ ${branding}
     indicator.textContent = current + ' / ' + total;
     prevBtn.disabled = current <= 1;
     nextBtn.disabled = current >= total;
+    sidePrev.disabled = current <= 1;
+    sideNext.disabled = current >= total;
   }
 
   flip.on('flip', updateNav);
@@ -210,6 +235,8 @@ ${branding}
 
   prevBtn.addEventListener('click', function() { flip.flipPrev(); });
   nextBtn.addEventListener('click', function() { flip.flipNext(); });
+  sidePrev.addEventListener('click', function() { flip.flipPrev(); });
+  sideNext.addEventListener('click', function() { flip.flipNext(); });
 
   document.addEventListener('keydown', function(e) {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { flip.flipPrev(); }
