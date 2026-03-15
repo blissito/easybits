@@ -1,6 +1,5 @@
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { docEvents } from "~/.server/core/docEvents";
 import type { Route } from "./+types/document-watch";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -24,23 +23,36 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
 
-      // Heartbeat
-      const heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(": heartbeat\n\n")); } catch { clearInterval(heartbeat); }
-      }, 15_000);
+      let lastUpdatedAt: string | null = null;
 
-      // Listen for doc changes
-      const onChanged = (payload: { id: string; sections?: unknown; updatedAt?: unknown }) => {
-        if (payload.id === id) {
-          send("doc-update", { sections: payload.sections, updatedAt: payload.updatedAt });
+      // Poll DB for changes every 3 seconds
+      const poll = setInterval(async () => {
+        try {
+          const current = await db.landing.findUnique({
+            where: { id },
+            select: { updatedAt: true, sections: true },
+          });
+          if (!current) return;
+
+          const ts = current.updatedAt.toISOString();
+          if (lastUpdatedAt !== null && ts !== lastUpdatedAt) {
+            send("doc-update", { sections: current.sections, updatedAt: ts });
+          }
+          lastUpdatedAt = ts;
+        } catch {
+          // DB error — skip this tick
         }
-      };
-      docEvents.on("doc:changed", onChanged);
+      }, 3_000);
+
+      // Heartbeat every 15s
+      const heartbeat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(": heartbeat\n\n")); } catch { /* noop */ }
+      }, 15_000);
 
       // Cleanup on disconnect
       request.signal.addEventListener("abort", () => {
+        clearInterval(poll);
         clearInterval(heartbeat);
-        docEvents.off("doc:changed", onChanged);
         try { controller.close(); } catch {}
       });
     },

@@ -313,6 +313,37 @@ export default function DocumentEditor() {
     return () => source.close();
   }, [landing.id, isGenerating, setSections]);
 
+  // Sync PageList thumbnails to canvas scroll position
+  // The SDK Canvas polls iframe scroll every 2s and posts "scroll-position" to window.
+  // We listen for that to figure out which page is visible and highlight it in PageList.
+  const sectionsRef2 = useRef(sections);
+  sectionsRef2.current = sections;
+  useEffect(() => {
+    const PAGE_HEIGHT = 11 * 96; // 11in in px = 1056
+    const GAP = 24; // body gap in canvas CSS
+    const PADDING = 24; // body padding-top
+    function onMessage(e: MessageEvent) {
+      const data = e.data;
+      if (!data || data.type !== "scroll-position") return;
+      // Don't override selection while user is editing an element
+      if (selectionRef.current) return;
+      const y = Number(data.y) || 0;
+      const sorted = [...sectionsRef2.current].sort((a, b) => a.order - b.order);
+      if (sorted.length === 0) return;
+      const adjustedY = Math.max(0, y - PADDING);
+      const idx = Math.min(Math.floor((adjustedY + PAGE_HEIGHT / 2) / (PAGE_HEIGHT + GAP)), sorted.length - 1);
+      const visibleId = sorted[idx]?.id;
+      if (visibleId) {
+        setSelectedSectionIds((prev) => {
+          if (prev.length === 1 && prev[0] === visibleId) return prev;
+          return [visibleId];
+        });
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   // Zoom state
   const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200];
   const [zoomPct, setZoomPct] = useState(100);
@@ -712,6 +743,7 @@ export default function DocumentEditor() {
     if (msg.type === "element-selected") {
       setSelection(msg);
       setToolbarTick((t) => t + 1);
+      if (msg.sectionId) setSelectedSectionIds([msg.sectionId]);
     } else if (msg.type === "element-deselected") {
       setSelection(null);
     } else if (
