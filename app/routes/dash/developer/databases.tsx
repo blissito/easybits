@@ -332,6 +332,14 @@ function DatabaseRow({
   const [sqlValue, setSqlValue] = useState("");
   const [nlPrompt, setNlPrompt] = useState("");
   const queryFormRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, window.innerHeight * 0.6) + "px";
+  };
 
   const qData = queryFetcher.data as Record<string, unknown> | null | undefined;
   const isThisDb = qData?.queryDbId === dbItem.id;
@@ -344,6 +352,7 @@ function DatabaseRow({
   useEffect(() => {
     if (isGenThisDb && gData?.generatedSql) {
       setSqlValue(gData.generatedSql as string);
+      requestAnimationFrame(autoResize);
     }
   }, [gData, isGenThisDb]);
 
@@ -435,12 +444,14 @@ function DatabaseRow({
               <input type="hidden" name="intent" value="query" />
               <input type="hidden" name="dbId" value={dbItem.id} />
               <textarea
+                ref={textareaRef}
                 name="sql"
                 value={sqlValue}
-                onChange={(e) => setSqlValue(e.target.value)}
+                onChange={(e) => { setSqlValue(e.target.value); autoResize(); }}
                 placeholder="SELECT * FROM ..."
                 rows={3}
-                className="w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-mono mb-2 resize-y"
+                className="w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-mono mb-2 resize-none overflow-y-auto"
+                style={{ maxHeight: "60vh" }}
                 onKeyDown={handleKeyDown}
               />
               <div className="flex items-center gap-3">
