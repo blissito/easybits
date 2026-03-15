@@ -355,6 +355,13 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`getDatabase(dbId)\` | Get database |
 | \`deleteDatabase(dbId)\` | Delete database |
 | \`db(name).query(sql, args?)\` | Query a database |
+| \`listDocuments()\` | List documents |
+| \`getDocument(id)\` | Get document with pages |
+| \`createDocument(params)\` | Create document |
+| \`updateDocument(id, params)\` | Update document |
+| \`deleteDocument(id)\` | Delete document |
+| \`deployDocument(id)\` | Publish as live website |
+| \`unpublishDocument(id)\` | Unpublish document |
 | \`getDocs(section?)\` | Get this documentation |
 `,
 
@@ -497,11 +504,159 @@ MCP: \`db_exec({ dbId, statements })\`
 - Batch: max 20 statements per request
 `,
 
-  documents: `## Documents (Coming Soon)
+  documents: `## Documents
 
 AI-generated professional documents (reports, brochures, catalogs, proposals, CVs, and more) with parallel page generation, design directions, and automatic image enrichment.
 
-**Status:** Dashboard-only. API endpoints, SDK methods, and MCP tools coming soon.
+### List documents
+\`GET /documents\`
+Returns: \`{ items: Document[] }\`
+SDK: \`eb.listDocuments()\`
+MCP: \`list_documents\`
+
+### Get document
+\`GET /documents/:id\`
+Returns: Document with full page/section data.
+SDK: \`eb.getDocument(id)\`
+MCP: \`get_document({ documentId })\`
+
+### Create document
+\`POST /documents\`
+Body: \`{ name, prompt?, theme?, customColors?, sections? }\`
+Returns: Document object.
+SDK: \`eb.createDocument({ name, prompt?, theme?, customColors?, sections? })\`
+MCP: \`create_document({ name, prompt?, theme?, customColors? })\`
+
+### Update document
+\`PATCH /documents/:id\`
+Body: \`{ name?, prompt?, theme?, customColors?, sections? }\`
+SDK: \`eb.updateDocument(id, { name?, prompt?, sections? })\`
+MCP: \`update_document({ documentId, name?, prompt?, theme?, customColors?, sections? })\`
+
+### Delete document
+\`DELETE /documents/:id\`
+SDK: \`eb.deleteDocument(id)\`
+MCP: \`delete_document({ documentId })\`
+
+### Deploy document
+\`POST /documents/:id/deploy\`
+Publishes the document as a live website. Requires at least one page.
+Returns: \`{ url, websiteId, slug }\`
+SDK: \`eb.deployDocument(id)\`
+MCP: \`deploy_document({ documentId })\`
+
+### Unpublish document
+\`POST /documents/:id/unpublish\`
+Removes the website and reverts to draft status.
+SDK: \`eb.unpublishDocument(id)\`
+MCP: \`unpublish_document({ documentId })\`
+
+### Set page HTML
+MCP: \`set_section_html({ documentId, sectionId, html })\`
+Updates a single page's HTML without replacing all pages. Preferred over \`update_document\` for single-page edits.
+
+### Generate document (AI)
+MCP: \`generate_document({ documentId, prompt, skipCover? })\`
+Generates pages with AI via streaming. Use \`skipCover: true\` to add content pages to an existing document without regenerating the cover.
+
+### Refine section (AI)
+MCP: \`refine_document_section({ documentId, sectionId, instruction, html })\`
+Makes surgical AI-powered changes to a specific page. Ideal for targeted edits without regenerating.
+
+### Regenerate page (AI)
+MCP: \`regenerate_document_page({ documentId, sectionId, instruction? })\`
+Completely regenerates a single page with AI.
+
+### Document object
+\`\`\`json
+{
+  "id": "doc123",
+  "name": "Q1 Report",
+  "prompt": "Quarterly business review for stakeholders",
+  "theme": "modern",
+  "customColors": { "primary": "#2563eb", "secondary": "#1e40af", "accent": "#f59e0b", "surface": "#ffffff" },
+  "sections": [{ "id": "s1", "order": 0, "html": "<section>...</section>", "type": "cover", "name": "Cover" }],
+  "status": "DRAFT",
+  "pageCount": 5,
+  "websiteId": null,
+  "createdAt": "2026-03-15T...",
+  "updatedAt": "2026-03-15T..."
+}
+\`\`\`
+
+### Section/page structure
+\`\`\`json
+{
+  "id": "section_abc",
+  "order": 0,
+  "html": "<section class='bg-primary text-on-primary'>...</section>",
+  "type": "cover",
+  "name": "Cover Page"
+}
+\`\`\`
+
+### Design directions
+When creating documents from the dashboard, 4 design directions are generated first (fonts, colors, mood, layoutHint). Direction object:
+\`\`\`json
+{
+  "headingFont": "Playfair Display",
+  "bodyFont": "Inter",
+  "colors": { "primary": "#2563eb", "secondary": "#1e40af", "accent": "#f59e0b", "surface": "#ffffff" },
+  "mood": "professional and clean",
+  "layoutHint": "asymmetric with bold headers"
+}
+\`\`\`
+
+### Tips for agents
+- Use \`set_section_html\` to update a single page — \`update_document\` with \`sections\` replaces ALL pages.
+- Use \`generate_document\` with \`skipCover: true\` to add pages to an existing document.
+- Use \`refine_document_section\` for surgical AI changes to one page.
+- Pages use semantic color classes (\`bg-primary\`, \`text-on-surface\`, etc.) — changing the theme updates all pages.
+- Export to PDF: deploy the document and use \`window.print()\` or a headless browser on the live URL.
+
+### Workflow
+1. \`create_document({ name, prompt })\` — create a document
+2. \`generate_document({ documentId, prompt })\` — AI generates all pages
+3. \`refine_document_section({ documentId, sectionId, instruction })\` — tweak individual pages
+4. \`deploy_document({ documentId })\` — publish → live URL at \`slug.easybits.cloud\`
+5. \`unpublish_document({ documentId })\` — take down when done
+
+### HTML Authoring Guide (for agents writing document HTML)
+
+**Page structure** — every page is a \`<section>\` with fixed US Letter dimensions:
+\`\`\`html
+<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-surface text-on-surface p-12">
+  <!-- page content here -->
+</section>
+\`\`\`
+
+**ONLY use Tailwind CSS classes — NEVER inline styles.** The FloatingToolbar relies on class-based styling to read and modify elements. Inline styles (\`style="..."\`) break toolbar editing. The only exception is \`font-family\` for Google Fonts (via a \`<style>\` tag or inline on the \`<section>\`).
+
+**Semantic color classes** (required — these respond to theme changes):
+- Backgrounds: \`bg-primary\`, \`bg-secondary\`, \`bg-accent\`, \`bg-surface\`, \`bg-surface-alt\`
+- Text: \`text-on-primary\`, \`text-on-secondary\`, \`text-on-accent\`, \`text-on-surface\`, \`text-on-surface-muted\`
+- Borders: \`border-primary\`, \`border-secondary\`, \`border-accent\`, \`border-surface\`
+
+**Contrast rules**: always pair backgrounds with their matching \`text-on-*\` class. Example: \`bg-primary text-on-primary\`, \`bg-surface text-on-surface\`.
+
+**Google Fonts** — load via \`<link>\` in a preceding \`<style>\` block or at the top of the section:
+\`\`\`html
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+<section style="font-family: 'Playfair Display', serif" class="w-[8.5in] h-[11in] ...">
+\`\`\`
+
+**No responsive breakpoints** — documents are fixed at 8.5×11 inches. Do not use \`sm:\`, \`md:\`, \`lg:\` prefixes.
+
+**Content must fit the page** — never exceed the section dimensions. No scrollbars, no overflow. If content is too long, split it across multiple pages.
+
+**Available themes**: \`minimal\`, \`calido\`, \`oceano\`, \`noche\`, \`bosque\`, \`rosa\`. Each theme defines the semantic color values. Set via \`update_document({ theme })\` or \`customColors\` for custom palettes.
+
+**Refine is per-section, not per-page-group** — \`refine_document_section\` edits a specific element or area within a single section's HTML. Pass \`instruction\` describing the surgical change (e.g., "change the title to Q2 Report", "make the chart larger") and the current \`html\` of that section. The AI returns the modified HTML for that section only.
+
+**Images** — use \`data-image-query="descriptive search term in English"\` on \`<img>\` tags. The system auto-enriches them with Pexels stock photos:
+\`\`\`html
+<img data-image-query="modern office teamwork" class="w-full h-64 object-cover rounded-lg" />
+\`\`\`
 `,
 
   errors: `## Error Codes

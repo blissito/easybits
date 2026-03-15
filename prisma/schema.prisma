@@ -72,6 +72,7 @@ model Asset {
   updatedAt     DateTime               @updatedAt
   Order         Order[]
   Review        Review[]
+  book          Book?
 
   @@index([userId])
 }
@@ -519,6 +520,36 @@ model AiGenerationLog {
   @@index([userId])
   @@index([userId, product])
   @@index([createdAt])
+}
+
+model Book {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  assetId         String   @unique @db.ObjectId
+  asset           Asset    @relation(fields: [assetId], references: [id])
+  sourceText      String?
+  sourceLanguage  String?
+  targetLanguage  String   @default("es")
+  theme           String   @default("default")
+  customColors    Json?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  chapters        BookChapter[]
+}
+
+model BookChapter {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookId          String   @db.ObjectId
+  book            Book     @relation(fields: [bookId], references: [id])
+  title           String
+  order           Int
+  sourceText      String?
+  sections        Json     // Section3[]
+  sectionVersions Json?
+  status          String   @default("draft") // draft | translated | reviewed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([bookId])
 }
 
 model TelemetryEvent {

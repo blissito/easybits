@@ -42,8 +42,8 @@ export function findImageSlots(html: string): ImageMatch[] {
   const matches: ImageMatch[] = [];
   const seen = new Set<string>();
 
-  // 1. data-image-query="..." — match the full <img> tag so we can replace src + data-image-query together
-  const diqRegex = /<img\s[^>]*data-image-query="([^"]+)"[^>]*>/gi;
+  // 1. data-image-query="..." or '...' — match the full <img> tag so we can replace src + data-image-query together
+  const diqRegex = /<img\s[^>]*data-image-query=["']([^"']+)["'][^>]*>/gi;
   let m: RegExpExecArray | null;
   while ((m = diqRegex.exec(html)) !== null) {
     const fullTag = m[0];
@@ -52,8 +52,8 @@ export function findImageSlots(html: string): ImageMatch[] {
     seen.add(query);
     // Build replacement tag: replace src (if any) and data-image-query with final src
     const cleanedTag = fullTag
-      .replace(/\ssrc="[^"]*"/, "")
-      .replace(/\sdata-image-query="[^"]*"/, "");
+      .replace(/\ssrc=["'][^"']*["']/, "")
+      .replace(/\sdata-image-query=["'][^"']*["']/, "");
     // Insert src and data-enriched right after <img
     const replaceTag = cleanedTag.replace(
       /^<img/,

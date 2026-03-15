@@ -80,6 +80,16 @@ export default function EditAsset({ loaderData }: Route.ComponentProps) {
           {asset.title}
         </h1>
       </nav>
+      {asset.type === "EBOOK" && (
+        <div className="md:pl-20 px-4 md:px-6 py-3 border-b border-black">
+          <Link
+            to={`/dash/assets/${asset.id}/book-editor`}
+            className="inline-flex items-center gap-2 px-4 py-2 border-2 border-black rounded-xl bg-white font-bold text-sm shadow-[3px_3px_0_0_rgba(0,0,0,1)] hover:shadow-[4px_4px_0_0_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 active:shadow-none transition-all"
+          >
+            Editar libro
+          </Link>
+        </div>
+      )}
       <main className={cn("grid grid-cols-12 md:pl-20 items-start ")}>
         <EditAssetForm
           onboardingDone={onboardingDone}

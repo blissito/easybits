@@ -264,6 +264,24 @@ export interface Permission {
   createdAt: string;
 }
 
+// ─── Database Types ──────────────────────────────────────────
+
+export interface EasybitsDatabase {
+  id: string;
+  name: string;
+  namespace: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface DatabaseQueryResult {
+  cols: string[];
+  rows: unknown[][];
+  affected_row_count: number;
+  last_insert_rowid: string | null;
+}
+
 // ─── Presentation Types ───────────────────────────────────────
 
 export interface PresentationSlide {
@@ -303,6 +321,51 @@ export interface DeployPresentationResponse {
   url: string;
   websiteId: string;
   slug: string;
+}
+
+// ─── Document Types ──────────────────────────────────────────
+
+export interface DocumentSection {
+  id: string;
+  order: number;
+  html?: string;
+  type?: string;
+  name?: string;
+}
+
+export interface Document {
+  id: string;
+  name: string;
+  prompt: string;
+  sections: DocumentSection[];
+  status: string;
+  websiteId?: string | null;
+  theme?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDocumentParams {
+  name: string;
+  prompt?: string;
+  sections?: DocumentSection[];
+  theme?: string;
+  customColors?: Record<string, string>;
+}
+
+export interface UpdateDocumentParams {
+  name?: string;
+  prompt?: string;
+  sections?: DocumentSection[];
+  theme?: string;
+  customColors?: Record<string, string>;
+}
+
+export interface DeployDocumentResponse {
+  url: string;
+  websiteId: string;
+  slug: string;
+  customUrl?: string;
 }
 
 export class EasybitsError extends Error {
@@ -611,6 +674,93 @@ export class EasybitsClient {
     });
   }
 
+  // ── Documents ──────────────────────────────────────────────
+
+  async listDocuments(): Promise<{ items: Document[] }> {
+    return this.request<{ items: Document[] }>("/documents");
+  }
+
+  async getDocument(documentId: string): Promise<Document> {
+    return this.request<Document>(`/documents/${documentId}`);
+  }
+
+  async createDocument(params: CreateDocumentParams): Promise<Document> {
+    return this.request<Document>("/documents", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async updateDocument(documentId: string, params: UpdateDocumentParams): Promise<Document> {
+    return this.request<Document>(`/documents/${documentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteDocument(documentId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/documents/${documentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async deployDocument(documentId: string): Promise<DeployDocumentResponse> {
+    return this.request<DeployDocumentResponse>(`/documents/${documentId}/deploy`, {
+      method: "POST",
+    });
+  }
+
+  async unpublishDocument(documentId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/documents/${documentId}/unpublish`, {
+      method: "POST",
+    });
+  }
+
+  // ── Databases ─────────────────────────────────────────────
+
+  async listDatabases(): Promise<{ items: EasybitsDatabase[] }> {
+    return this.request<{ items: EasybitsDatabase[] }>("/databases");
+  }
+
+  async createDatabase(params: { name: string; description?: string }): Promise<EasybitsDatabase> {
+    return this.request<EasybitsDatabase>("/databases", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getDatabase(dbId: string): Promise<EasybitsDatabase> {
+    return this.request<EasybitsDatabase>(`/databases/${dbId}`);
+  }
+
+  async deleteDatabase(dbId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/databases/${dbId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async queryDatabase(dbId: string, sql: string, args?: unknown[]): Promise<DatabaseQueryResult> {
+    return this.request<DatabaseQueryResult>(`/databases/${dbId}/query`, {
+      method: "POST",
+      body: JSON.stringify({ sql, args }),
+    });
+  }
+
+  async execDatabase(dbId: string, statements: Array<{ sql: string; args?: unknown[] }>): Promise<{ results: DatabaseQueryResult[] }> {
+    return this.request<{ results: DatabaseQueryResult[] }>(`/databases/${dbId}/query`, {
+      method: "POST",
+      body: JSON.stringify({ statements }),
+    });
+  }
+
+  /**
+   * Sugar helper: `eb.db('my-db')` returns a DatabaseHandle that auto-resolves
+   * the database by name (creates it if it doesn't exist).
+   */
+  db(name: string): DatabaseHandle {
+    return new DatabaseHandle(this, name);
+  }
+
   // ── Config helpers ──────────────────────────────────────────
 
   /** Returns the base URL configured for this client */
@@ -631,6 +781,43 @@ export class EasybitsClient {
   /** Returns the MCP endpoint URL */
   getMcpUrl(): string {
     return `${this.baseUrl}/api/mcp`;
+  }
+}
+
+// ─── DatabaseHandle ──────────────────────────────────────────────
+
+export class DatabaseHandle {
+  private _id: string | null = null;
+
+  constructor(private client: EasybitsClient, private name: string) {}
+
+  private async resolveId(): Promise<string> {
+    if (this._id) return this._id;
+    const { items } = await this.client.listDatabases();
+    const found = items.find((d) => d.name === this.name);
+    if (found) {
+      this._id = found.id;
+      return found.id;
+    }
+    const created = await this.client.createDatabase({ name: this.name });
+    this._id = created.id;
+    return created.id;
+  }
+
+  async query(sql: string, args?: unknown[]): Promise<DatabaseQueryResult> {
+    const id = await this.resolveId();
+    return this.client.queryDatabase(id, sql, args);
+  }
+
+  async exec(statements: Array<{ sql: string; args?: unknown[] }>): Promise<{ results: DatabaseQueryResult[] }> {
+    const id = await this.resolveId();
+    return this.client.execDatabase(id, statements);
+  }
+
+  async delete(): Promise<{ success: boolean }> {
+    const id = await this.resolveId();
+    this._id = null;
+    return this.client.deleteDatabase(id);
   }
 }
 

@@ -1,24 +1,32 @@
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { Input } from "~/components/common/Input";
 import { RadioCardGroup } from "./RadioCardGroup";
 import { cn } from "~/utils/cn";
 import { useEffect, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useNavigate } from "react-router";
 import type { User } from "@prisma/client";
 import { AnimatePresence, motion } from "motion/react";
 import { BrendisConfetti } from "~/components/Confetti";
 
-//Usa la imagen onboarding-1 para la primer pregunta y onboarding-2 para la segunda y tercera
+type CreateChoice = "documento" | "presentacion" | "landing" | "archivo";
+
+const CREATE_ROUTES: Record<CreateChoice, string> = {
+  documento: "/dash/documents/new",
+  presentacion: "/dash/presentations/new",
+  landing: "/dash/landings3/new",
+  archivo: "/dash/developer/files",
+};
+
 export const Steper = ({ user }: { user: User }) => {
   const [step, setStep] = useState(0);
+  const [createChoice, setCreateChoice] = useState<CreateChoice | null>(null);
   const fetcher = useFetcher();
 
-  const [host, setHost] = useState(user.host);
   const [metadata, setMetadata] = useState(
     (user.metadata || { metadata: {}, asset_types: [] }) as User["metadata"]
   );
-  const handleStep = (step: number) => async () => {
-    if (step === 2) {
+
+  const handleStep = (s: number) => async () => {
+    if (s === 0) {
       await fetcher.submit(
         {
           intent: "update_profile",
@@ -31,9 +39,9 @@ export const Steper = ({ user }: { user: User }) => {
         },
         { method: "post", action: "/api/v1/user" }
       );
-      setStep(3);
+      setStep(1);
     }
-    if (step === 1) {
+    if (s === 1) {
       await fetcher.submit(
         {
           intent: "update_profile",
@@ -48,27 +56,12 @@ export const Steper = ({ user }: { user: User }) => {
       );
       setStep(2);
     }
-    if (step === 0) {
-      // @todo revisit
-      fetcher.submit(
-        {
-          intent: "update_host",
-          host,
-          userId: user.id,
-        },
-        { method: "post", action: "/api/v1/user" }
-      );
+    if (s === 2) {
+      setStep(3);
     }
   };
 
-  useEffect(() => {
-    if (fetcher.data?.success && fetcher.data.nextStep === 1) {
-      setStep(1);
-    }
-  }, [fetcher]);
-
   const isLoading = fetcher.state !== "idle";
-  const error = fetcher.data?.error;
 
   const handleMetadataChange = (name: string, value: string) => {
     setMetadata((m) => ({ ...m, [name]: value }));
@@ -77,49 +70,46 @@ export const Steper = ({ user }: { user: User }) => {
   const handleAssetTypes = (value: string[]) => {
     setMetadata((m) => ({ ...m, asset_types: value }));
   };
+
   useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   }, []);
 
   const getStep = () => {
     switch (step) {
       case 3:
-        return <OnboardingSuccess />;
+        return (
+          <OnboardingSuccess createChoice={createChoice} />
+        );
       case 2:
         return (
-          <StepThree
-            isLoading={isLoading}
-            defaultValue={user.metadata?.asset_types}
-            onChange={handleAssetTypes}
+          <StepCreate
+            selected={createChoice}
+            onSelect={setCreateChoice}
             onClick={handleStep(2)}
           />
         );
       case 1:
         return (
-          <StepTwo
+          <StepThree
             isLoading={isLoading}
-            defaultValue={user.metadata?.customer_type}
-            onChange={(value) => handleMetadataChange("customer_type", value)}
+            defaultValue={user.metadata?.asset_types}
+            onChange={handleAssetTypes}
             onClick={handleStep(1)}
           />
         );
       case 0:
         return (
-          <StepOne
+          <StepTwo
             isLoading={isLoading}
-            error={error}
-            value={host}
-            onChange={setHost}
+            defaultValue={user.metadata?.customer_type}
+            onChange={(value) => handleMetadataChange("customer_type", value)}
             onClick={handleStep(0)}
-            onSkip={() => setStep(1)}
           />
         );
     }
   };
+
   const images = ["/home/onboarding-1.webp", "/home/onboarding-2.webp"];
   return (
     <section className="flex w-full h-svh  overflow-x-hidden">
@@ -137,17 +127,16 @@ export const Steper = ({ user }: { user: User }) => {
   );
 };
 
-//Este es el componente de success cuando completas el onbaording, uselo donde quiera, el copy esta pendiente//
-export const OnboardingSuccess = () => {
+export const OnboardingSuccess = ({
+  createChoice,
+}: {
+  createChoice?: CreateChoice | null;
+}) => {
+  const navigate = useNavigate();
+  const destination = createChoice ? CREATE_ROUTES[createChoice] : "/dash";
+
   return (
-    <section
-      // transition={{ type: "spring", bounce: 0 }}
-      // key="step_four"
-      // initial={{ y: -100, opacity: 0, scale: 0.5 }}
-      // animate={{ y: 0, opacity: 1, scale: 1 }}
-      // exit={{ y: 100, opacity: 0, scale: 0.8 }}
-      className="flex justify-center items-center w-full h-svh text-center px-4 md:px-[5%] min-h-[500px] "
-    >
+    <section className="flex justify-center items-center w-full h-svh text-center px-4 md:px-[5%] min-h-[500px] ">
       <div className="max-w-3xl ">
         <img
           className="mx-auto max-w-56"
@@ -158,19 +147,101 @@ export const OnboardingSuccess = () => {
         <h3 className="text-3xl lg:text-5xl font-bold mt-0">
           ¡Tu cuenta está lista!
         </h3>
-        <p className="text-lg mt-4 mb-10">
+        <p className="text-lg mt-4 mb-6">
           Todo está en su lugar. Es hora de poner manos a la obra y crear tu
           primer asset.
           <br /> ¡Qué emoción, ya pronto vamos a vender!
         </p>
-        <Link to="/dash">
-          <BrutalButton>¡Empezar!</BrutalButton>
-        </Link>
+
+        <div className="bg-gray-50 border-2 border-black rounded-xl p-4 mb-10 text-left">
+          <p className="text-sm">
+            <span className="font-bold">⚡ Pro tip</span>: Conecta EasyBits con
+            Claude, Cursor o cualquier agente AI via MCP y conviértete en power
+            user.{" "}
+            <Link
+              to="/docs/mcp"
+              className="text-brand-500 font-semibold hover:underline"
+            >
+              Aprende cómo →
+            </Link>
+          </p>
+        </div>
+
+        <BrutalButton onClick={() => navigate(destination)}>
+          ¡Empezar!
+        </BrutalButton>
       </div>
-      {/* <EmojiConfetti emojis={false} /> */}
-      {/* Aún estoy experimentando */}
       <BrendisConfetti />
     </section>
+  );
+};
+
+const StepCreate = ({
+  selected,
+  onSelect,
+  onClick,
+}: {
+  selected: CreateChoice | null;
+  onSelect: (choice: CreateChoice) => void;
+  onClick: () => void;
+}) => {
+  return (
+    <motion.div
+      key="step_create"
+      transition={{ type: "spring", bounce: 0 }}
+      initial={{ y: -100, opacity: 0, scale: 0.8 }}
+      animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
+      exit={{ y: 100, x: 0, opacity: 0, scale: 0.8 }}
+      className="w-full min-h-[680px] xl:min-h-0 h-full flex flex-col md:w-[50%] pt-20 lg:pt-28 px-4 xl:px-20 pb-4 xl:pb-12"
+    >
+      <div className="w-full h-full pb-6 min-h-fit">
+        <h2 className="text-2xl lg:text-3xl font-bold">
+          ¿Qué vamos a crear hoy?
+        </h2>
+        <p className="text-base lg:text-lg mt-2 lg:mt-4 mb-6 text-iron lg:mb-10">
+          Elige una opción para empezar — siempre puedes crear más después
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <SmallRadioCard
+            onClick={() => onSelect("documento")}
+            isSelected={selected === "documento"}
+            img="/home/book.svg"
+            title="Documento"
+            description="Reportes, brochures, catálogos, propuestas y más."
+          />
+          <SmallRadioCard
+            onClick={() => onSelect("presentacion")}
+            isSelected={selected === "presentacion"}
+            img="/home/template.svg"
+            title="Presentación"
+            description="Slides profesionales con diseño y 3D."
+          />
+          <SmallRadioCard
+            onClick={() => onSelect("landing")}
+            isSelected={selected === "landing"}
+            img="/home/default.webp"
+            title="Landing Page"
+            description="Página web lista para publicar al instante."
+          />
+          <SmallRadioCard
+            onClick={() => onSelect("archivo")}
+            isSelected={selected === "archivo"}
+            img="/home/cloud.svg"
+            title="Subir archivo"
+            description="Sube cualquier archivo y compártelo con el mundo."
+          />
+        </div>
+      </div>
+      <BrutalButton
+        type="button"
+        onClick={onClick}
+        isDisabled={!selected}
+        containerClassName="mt-auto"
+        className="w-full"
+      >
+        Continuar
+      </BrutalButton>
+    </motion.div>
   );
 };
 
@@ -419,77 +490,6 @@ export const StepTwo = ({
       >
         Continuar
       </BrutalButton>
-    </motion.div>
-  );
-};
-
-export const StepOne = ({
-  onClick,
-  onSkip,
-  value,
-  onChange,
-  error,
-  isLoading,
-}: {
-  isLoading?: boolean;
-  onClick?: () => void;
-  onSkip?: () => void;
-  onChange?: (arg0: string) => void;
-  value: string;
-  error?: string;
-}) => {
-  return (
-    <motion.div
-      transition={{ type: "spring", bounce: 0 }}
-      key="step_one"
-      initial={{ y: -10, opacity: 0, scale: 0.8 }}
-      animate={{ y: 0, x: 0, opacity: 1, scale: 1 }}
-      exit={{ y: 10, x: 0, opacity: 0, scale: 0.8 }}
-      className="w-full h-full flex flex-col md:w-[50%] pt-20  lg:pt-28  px-4 xl:px-20 pb-4 xl:pb-12 "
-    >
-      <div className="h-full">
-        <h2 className="text-2xl lg:text-3xl font-bold">
-          Personaliza el nombre de tu website y subdominio EasyBits
-        </h2>
-        <p className="text-base lg:text-lg text-iron mt-2 lg:mt-4 mb-6 lg:mb-10">
-          Escribe tu nombre o el nombre de tu marca que hará destacar tu tienda
-        </p>
-        <div className="flex items-baseline gap-1">
-          <p>https://</p>
-          <section className="w-full">
-            <Input
-              required
-              onChange={(e) =>
-                onChange?.(
-                  e.currentTarget.value.trim().replaceAll("_", "").toLowerCase()
-                )
-              }
-              value={value}
-              placeholder="brendi_tienda"
-            />
-            <p className="text-red-500 text-xs">{error}</p>
-          </section>
-          <p>.easybits.cloud</p>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2 mt-auto">
-        <BrutalButton
-          isDisabled={!value || value.length < 3}
-          type="button"
-          isLoading={isLoading}
-          onClick={onClick}
-          className="w-full"
-        >
-          Continuar
-        </BrutalButton>
-        <button
-          type="button"
-          onClick={onSkip}
-          className="text-sm text-iron hover:text-black transition-colors py-2"
-        >
-          Omitir — lo configuro después
-        </button>
-      </div>
     </motion.div>
   );
 };
