@@ -1,13 +1,16 @@
 import { useFetcher, useLoaderData, data } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import {
   createDatabase,
   deleteDatabase,
   queryDatabase,
 } from "~/.server/core/databaseOperations";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { generateObject } from "ai";
+import { z } from "zod";
 import type { Route } from "./+types/databases";
 
 export const meta = () => [
@@ -63,6 +66,29 @@ export const action = async ({ request }: Route.ActionArgs) => {
         return data({ error: body.error }, { status: err.status });
       }
       throw err;
+    }
+  }
+
+  if (intent === "generate_sql") {
+    const dbId = formData.get("dbId") as string;
+    const prompt = formData.get("prompt") as string;
+    if (!prompt?.trim()) {
+      return data({ generateError: "Prompt is required", generateDbId: dbId }, { status: 400 });
+    }
+    try {
+      const schemaResult = await queryDatabase(ctx, dbId, "SELECT name, sql FROM sqlite_master WHERE type IN ('table','view') ORDER BY name");
+      const schemaText = schemaResult.rows.map((r: unknown[]) => r[1]).filter(Boolean).join("\n");
+      const anthropic = createAnthropic();
+      const { object } = await generateObject({
+        model: anthropic("claude-haiku-4-5-20251001"),
+        schema: z.object({ sql: z.string() }),
+        prompt: `Database schema:\n${schemaText || "(empty database — no tables yet)"}\n\nUser request: ${prompt}\n\nGenerate a valid SQLite query. Only return the SQL, no explanations.`,
+        system: "You are a SQL assistant for SQLite databases. Given the database schema and a user request in natural language, generate a valid SQL query. For empty databases, generate CREATE TABLE statements as appropriate.",
+      });
+      return { generatedSql: object.sql, generateDbId: dbId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "SQL generation failed";
+      return { generateError: message, generateDbId: dbId };
     }
   }
 
@@ -302,8 +328,24 @@ function DatabaseRow({
   onDelete: () => void;
   queryFetcher: ReturnType<typeof useFetcher<typeof action>>;
 }) {
+  const generateFetcher = useFetcher<typeof action>();
+  const [sqlValue, setSqlValue] = useState("");
+  const [nlPrompt, setNlPrompt] = useState("");
+  const queryFormRef = useRef<HTMLFormElement>(null);
+
   const qData = queryFetcher.data as Record<string, unknown> | null | undefined;
   const isThisDb = qData?.queryDbId === dbItem.id;
+
+  const gData = generateFetcher.data as Record<string, unknown> | null | undefined;
+  const isGenThisDb = gData?.generateDbId === dbItem.id;
+  const isGenerating = generateFetcher.state !== "idle";
+
+  // When AI returns generated SQL, put it in the textarea
+  useEffect(() => {
+    if (isGenThisDb && gData?.generatedSql) {
+      setSqlValue(gData.generatedSql as string);
+    }
+  }, [gData, isGenThisDb]);
 
   const queryResult = isThisDb && qData?.queryResult
     ? (qData.queryResult as {
@@ -317,6 +359,17 @@ function DatabaseRow({
   const queryError = isThisDb && qData?.queryError
     ? (qData.queryError as string)
     : null;
+
+  const generateError = isGenThisDb && gData?.generateError
+    ? (gData.generateError as string)
+    : null;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      queryFormRef.current?.requestSubmit();
+    }
+  };
 
   return (
     <>
@@ -340,22 +393,67 @@ function DatabaseRow({
       {queryOpen && (
         <tr className="border-t border-gray-200">
           <td colSpan={4} className="px-4 py-4 bg-gray-50">
-            <queryFetcher.Form method="post">
+            {/* AI prompt bar */}
+            <generateFetcher.Form method="post" className="flex gap-2 mb-2">
+              <input type="hidden" name="intent" value="generate_sql" />
+              <input type="hidden" name="dbId" value={dbItem.id} />
+              <div className="flex-1 relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500 font-bold text-sm">✦</span>
+                <input
+                  name="prompt"
+                  type="text"
+                  value={nlPrompt}
+                  onChange={(e) => setNlPrompt(e.target.value)}
+                  placeholder="Describe what you need in plain language..."
+                  className="w-full border-2 border-brand-200 bg-brand-50 rounded-lg pl-8 pr-3 py-2 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                />
+              </div>
+              <BrutalButton
+                type="submit"
+                size="chip"
+                className="text-sm px-4 py-1.5 whitespace-nowrap"
+                disabled={isGenerating || !nlPrompt.trim()}
+              >
+                {isGenerating ? "Generating..." : "Generate SQL"}
+              </BrutalButton>
+            </generateFetcher.Form>
+
+            {generateError && (
+              <div className="mb-2 p-2 bg-brand-red/10 border border-brand-red rounded-lg text-xs font-mono text-brand-red">
+                {generateError}
+              </div>
+            )}
+
+            {/* SQL editor + Run */}
+            <queryFetcher.Form method="post" ref={queryFormRef}>
               <input type="hidden" name="intent" value="query" />
               <input type="hidden" name="dbId" value={dbItem.id} />
               <textarea
                 name="sql"
+                value={sqlValue}
+                onChange={(e) => setSqlValue(e.target.value)}
                 placeholder="SELECT * FROM ..."
                 rows={3}
                 className="w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-mono mb-2 resize-y"
+                onKeyDown={handleKeyDown}
               />
-              <BrutalButton
-                type="submit"
-                size="chip"
-                className="text-sm px-4 py-1.5"
-              >
-                {queryFetcher.state !== "idle" ? "Running..." : "Run"}
-              </BrutalButton>
+              <div className="flex items-center gap-3">
+                <BrutalButton
+                  type="submit"
+                  size="chip"
+                  className="text-sm px-4 py-1.5"
+                  disabled={!sqlValue.trim()}
+                >
+                  {queryFetcher.state !== "idle" ? "Running..." : "▶ Run"}
+                </BrutalButton>
+                <span className="text-xs text-gray-400">⌘+Enter to run</span>
+              </div>
             </queryFetcher.Form>
 
             {queryError && (
