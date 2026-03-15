@@ -237,6 +237,7 @@ export default function DocumentEditor() {
   const saveFetcher = useFetcher();
   const deployFetcher = useFetcher<{
     url?: string;
+    pdfUrl?: string;
     redirect?: string;
     unpublished?: boolean;
   }>();
@@ -270,6 +271,7 @@ export default function DocumentEditor() {
     searchParams.get("generating") === "1"
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
+  const [livePdfUrl, setLivePdfUrl] = useState<string | undefined>();
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [showMobilePages, setShowMobilePages] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -445,8 +447,9 @@ export default function DocumentEditor() {
     if (deployFetcher.data?.redirect) navigate(deployFetcher.data.redirect);
     if (deployFetcher.data?.url) {
       setLiveUrl(deployFetcher.data.url);
+      setLivePdfUrl(deployFetcher.data.pdfUrl);
     }
-    if (deployFetcher.data?.unpublished) setLiveUrl(null);
+    if (deployFetcher.data?.unpublished) { setLiveUrl(null); setLivePdfUrl(undefined); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployFetcher.state, deployFetcher.data, navigate]);
 
@@ -1396,6 +1399,17 @@ ${sectionsHtml}
                 mode="ghost"
                 className="relative static p-0"
               />
+              {livePdfUrl && (
+                <a
+                  href={livePdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-brand-600 hover:underline font-semibold"
+                  title="Descargar PDF"
+                >
+                  PDF
+                </a>
+              )}
             </span>
           )}
           {aiGenLimit !== null && (() => {

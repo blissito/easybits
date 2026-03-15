@@ -7,7 +7,7 @@ import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
 import { buildDeployHtml } from "~/lib/landing3/buildHtml";
-import { buildDocumentHtml } from "~/lib/documents/buildHtml";
+import { buildDocumentHtml, buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import type { LandingSection } from "~/lib/landingCatalog";
@@ -35,6 +35,8 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
   const landingMeta = (landing.metadata as Record<string, unknown>) || {};
   const isPaid = isPaidPlan(getUserPlan(ctx.user));
+  // For documents (version 4), we also build a print HTML for PDF generation
+  let printHtml: string | undefined;
   const html = landing.version === 4
     ? (() => {
         const docTheme = (landingMeta.theme as string) || undefined;
@@ -49,6 +51,13 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           themeCss = docThemeCss.css;
           tailwindConfig = docThemeCss.tailwindConfig;
         }
+        // Build print HTML (flat vertical for PDF generation)
+        printHtml = buildDocumentPrintHtml(sections as Section3[], {
+          themeCss,
+          tailwindConfig,
+          title: landing.name,
+        });
+        // Build flipbook viewer (pdfUrl will be set after upload)
         return buildDocumentHtml(sections as Section3[], {
           showBranding: !isPaid,
           themeCss,
@@ -133,6 +142,127 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     });
   }
 
+  // Upload print.html + generate PDF for documents
+  let pdfUrl: string | undefined;
+  if (printHtml) {
+    const printBuffer = Buffer.from(printHtml, "utf-8");
+    const printStorageKey = `${ctx.user.id}/${nanoid(6)}`;
+    const printPublicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${printStorageKey}`;
+    const printPutUrl = await client.getPutUrl(printStorageKey);
+    const printUploadRes = await fetch(printPutUrl, {
+      method: "PUT",
+      body: printBuffer,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+    if (printUploadRes.ok) {
+      // Upsert print.html file record
+      const printFileName = `sites/${websiteId}/print.html`;
+      const existingPrint = await db.file.findFirst({
+        where: { name: printFileName, ownerId: ctx.user.id, status: { not: "DELETED" } },
+      });
+      if (existingPrint) {
+        await db.file.update({
+          where: { id: existingPrint.id },
+          data: { storageKey: printStorageKey, size: printBuffer.length, status: "DONE", url: printPublicUrl },
+        });
+      } else {
+        await db.file.create({
+          data: { name: printFileName, storageKey: printStorageKey, slug: printStorageKey, size: printBuffer.length, contentType: "text/html", ownerId: ctx.user.id, access: "public", url: printPublicUrl, status: "DONE" },
+        });
+      }
+    }
+
+    // Generate PDF via Gotenberg (HTML→PDF via URL)
+    const pdfServiceUrl = process.env.PDF_SERVICE_URL;
+    if (pdfServiceUrl) {
+      try {
+        const formData = new FormData();
+        formData.append("url", `https://${slug!}.easybits.cloud/print.html`);
+        formData.append("printBackground", "true");
+        formData.append("paperWidth", "8.5");
+        formData.append("paperHeight", "11");
+        formData.append("marginTop", "0");
+        formData.append("marginBottom", "0");
+        formData.append("marginLeft", "0");
+        formData.append("marginRight", "0");
+        formData.append("waitDelay", "3s");
+        const pdfRes = await fetch(pdfServiceUrl, {
+          method: "POST",
+          body: formData,
+        });
+        if (pdfRes.ok) {
+          const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+          const pdfStorageKey = `${ctx.user.id}/${nanoid(6)}`;
+          const pdfPublicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${pdfStorageKey}`;
+          const pdfPutUrl = await client.getPutUrl(pdfStorageKey);
+          const pdfUploadRes = await fetch(pdfPutUrl, {
+            method: "PUT",
+            body: pdfBuffer,
+            headers: { "Content-Type": "application/pdf" },
+          });
+          if (pdfUploadRes.ok) {
+            pdfUrl = pdfPublicUrl;
+            // Upsert PDF file record
+            const pdfFileName = `sites/${websiteId}/document.pdf`;
+            const existingPdf = await db.file.findFirst({
+              where: { name: pdfFileName, ownerId: ctx.user.id, status: { not: "DELETED" } },
+            });
+            if (existingPdf) {
+              await db.file.update({
+                where: { id: existingPdf.id },
+                data: { storageKey: pdfStorageKey, size: pdfBuffer.length, status: "DONE", url: pdfPublicUrl },
+              });
+            } else {
+              await db.file.create({
+                data: { name: pdfFileName, storageKey: pdfStorageKey, slug: pdfStorageKey, size: pdfBuffer.length, contentType: "application/pdf", ownerId: ctx.user.id, access: "public", url: pdfPublicUrl, status: "DONE" },
+              });
+            }
+          }
+        } else {
+          console.error(`[deployLanding] PDF generation failed: ${pdfRes.status}`);
+        }
+      } catch (err) {
+        console.error("[deployLanding] PDF generation error:", err);
+      }
+    }
+
+    // Re-build flipbook HTML with pdfUrl now that we have it
+    if (pdfUrl) {
+      const { buildDocumentHtml: rebuildDoc } = await import("~/lib/documents/buildHtml");
+      const docTheme = (landingMeta.theme as string) || undefined;
+      let themeCss: string | undefined;
+      let tailwindConfig: string | undefined;
+      if (docTheme === "custom" && landingMeta.customColors) {
+        const t = buildCustomTheme(landingMeta.customColors as any);
+        themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]: [string, unknown]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+        tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
+      } else if (docTheme) {
+        const docThemeCss = buildSingleThemeCss(docTheme);
+        themeCss = docThemeCss.css;
+        tailwindConfig = docThemeCss.tailwindConfig;
+      }
+      const updatedHtml = rebuildDoc(sections as Section3[], {
+        showBranding: !isPaid,
+        themeCss,
+        tailwindConfig,
+        title: landing.name,
+        pdfUrl,
+      });
+      const updatedBuffer = Buffer.from(updatedHtml, "utf-8");
+      // Re-upload index.html with pdfUrl
+      const reUploadUrl = await client.getPutUrl(storageKey);
+      await fetch(reUploadUrl, {
+        method: "PUT",
+        body: updatedBuffer,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+      // Update file size
+      if (existingFile) {
+        await db.file.update({ where: { id: existingFile.id }, data: { size: updatedBuffer.length } });
+      }
+    }
+  }
+
   // Update website stats
   const stats = await db.file.aggregate({
     where: {
@@ -188,7 +318,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
 
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
   const url = `${proto}://${hostname}`;
-  return { url, websiteId, slug, customUrl };
+  return { url, websiteId, slug, customUrl, pdfUrl };
 }
 
 export async function unpublishLanding(ctx: AuthContext, id: string) {

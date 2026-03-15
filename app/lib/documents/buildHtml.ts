@@ -1,9 +1,8 @@
 import type { Section3 } from "~/lib/landing3/types";
 
 /**
- * Build deployed document HTML — identical structure to handleExportPdf in editor.
- * Uses Tailwind CDN + theme CSS, @page letter with margin 0, no Paged.js.
- * Includes a toolbar with title + "Descargar PDF" button (window.print).
+ * Build deployed document HTML — flipbook viewer with StPageFlip.
+ * Desktop: double-page spread. Mobile: single page. Touch/swipe/keyboard.
  */
 export function buildDocumentHtml(
   sections: Section3[],
@@ -12,20 +11,216 @@ export function buildDocumentHtml(
     themeCss?: string;
     tailwindConfig?: string;
     title?: string;
+    pdfUrl?: string;
   }
 ): string {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
+  const title = options?.title || "Documento";
+  const totalPages = sorted.length;
+
+  const pagesHtml = sorted
+    .map(
+      (s, i) =>
+        `<div class="flipbook-page" data-page="${i + 1}">${s.html}</div>`
+    )
+    .join("\n");
+
+  const pdfButton = options?.pdfUrl
+    ? `<a href="${options.pdfUrl}" target="_blank" rel="noreferrer" style="font-size:13px;color:#9870ED;background:none;border:none;cursor:pointer;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        PDF
+      </a>`
+    : `<button onclick="window.print()" style="font-size:13px;color:#9870ED;background:none;border:none;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        PDF
+      </button>`;
+
+  const branding =
+    options?.showBranding !== false
+      ? `<div style="text-align:center;padding:16px 0 8px;font-size:11px;color:#666;">
+          Creado con <a href="https://www.easybits.cloud" style="color:#9870ED;text-decoration:none;font-weight:600;">EasyBits</a>
+        </div>`
+      : "";
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  ${options?.tailwindConfig ? `<script>tailwind.config = ${options.tailwindConfig}<\/script>` : ""}
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"><\/script>
+  <style>
+    ${options?.themeCss || ""}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #1a1a1a;
+      color: var(--color-on-surface, #111);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .doc-toolbar {
+      position: sticky; top: 0; z-index: 100;
+      background: #111; border-bottom: 1px solid #333;
+      padding: 10px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: 'Inter', sans-serif;
+    }
+    .doc-toolbar h1 { font-size: 14px; font-weight: 600; color: #fff; }
+    .doc-toolbar-right { display: flex; align-items: center; gap: 16px; }
+    .page-nav {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #aaa; user-select: none;
+    }
+    .page-nav button {
+      background: none; border: 1px solid #444; color: #ccc;
+      width: 28px; height: 28px; border-radius: 6px;
+      cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .page-nav button:hover { background: #333; }
+    .page-nav button:disabled { opacity: 0.3; cursor: default; }
+    .flipbook-container {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 24px 16px;
+      overflow: hidden;
+    }
+    .flipbook-page {
+      background: white;
+      overflow: hidden;
+    }
+    /* Print: show pages vertically, hide toolbar */
+    @page { size: letter; margin: 0; }
+    @media print {
+      .doc-toolbar, .page-nav, .flipbook-container { display: none !important; }
+      body { background: white; }
+      .print-pages { display: block !important; }
+      .print-page {
+        width: 8.5in; height: 11in;
+        overflow: hidden;
+        page-break-after: always; break-after: page;
+        page-break-inside: avoid; break-inside: avoid;
+      }
+      .print-page:last-child { page-break-after: auto; break-after: auto; }
+    }
+    .print-pages { display: none; }
+  </style>
+</head>
+<body>
+<div class="doc-toolbar">
+  <h1>${title}</h1>
+  <div class="doc-toolbar-right">
+    <div class="page-nav">
+      <button id="prev-btn" aria-label="Página anterior">&larr;</button>
+      <span id="page-indicator">1 / ${totalPages}</span>
+      <button id="next-btn" aria-label="Página siguiente">&rarr;</button>
+    </div>
+    ${pdfButton}
+  </div>
+</div>
+
+<div class="flipbook-container">
+  <div id="flipbook">
+    ${pagesHtml}
+  </div>
+</div>
+
+${branding}
+
+<!-- Print fallback (hidden, shown only in @media print) -->
+<div class="print-pages">
+  ${sorted.map((s) => `<div class="print-page">${s.html}</div>`).join("\n")}
+</div>
+
+<script>
+(function() {
+  var el = document.getElementById('flipbook');
+  var isMobile = window.innerWidth < 768;
+  var W = isMobile ? Math.min(window.innerWidth - 32, 612) : 612;
+  var H = Math.round(W * (11 / 8.5));
+
+  var flip = new St.PageFlip(el, {
+    width: W,
+    height: H,
+    size: 'fixed',
+    minWidth: 300,
+    maxWidth: 612,
+    minHeight: 400,
+    maxHeight: 792,
+    showCover: true,
+    mobileScrollSupport: false,
+    usePortrait: isMobile,
+    startPage: 0,
+    drawShadow: true,
+    flippingTime: 600,
+    startZIndex: 0,
+    autoSize: true,
+    maxShadowOpacity: 0.3,
+  });
+
+  flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
+
+  var indicator = document.getElementById('page-indicator');
+  var prevBtn = document.getElementById('prev-btn');
+  var nextBtn = document.getElementById('next-btn');
+  var total = ${totalPages};
+
+  function updateNav() {
+    var current = flip.getCurrentPageIndex() + 1;
+    indicator.textContent = current + ' / ' + total;
+    prevBtn.disabled = current <= 1;
+    nextBtn.disabled = current >= total;
+  }
+
+  flip.on('flip', updateNav);
+  updateNav();
+
+  prevBtn.addEventListener('click', function() { flip.flipPrev(); });
+  nextBtn.addEventListener('click', function() { flip.flipNext(); });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { flip.flipPrev(); }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { flip.flipNext(); }
+  });
+
+  // Responsive resize
+  window.addEventListener('resize', function() {
+    var mobile = window.innerWidth < 768;
+    var w = mobile ? Math.min(window.innerWidth - 32, 612) : 612;
+    var h = Math.round(w * (11 / 8.5));
+    flip.updateSetting({ width: w, height: h, usePortrait: mobile });
+    flip.update();
+  });
+})();
+<\/script>
+</body>
+</html>`;
+}
+
+/**
+ * Build print-optimized HTML for PDF generation (Playwright/Gotenberg).
+ * Flat vertical layout, @page letter, no interactive elements.
+ */
+export function buildDocumentPrintHtml(
+  sections: Section3[],
+  options?: {
+    themeCss?: string;
+    tailwindConfig?: string;
+    title?: string;
+  }
+): string {
+  const sorted = [...sections].sort((a, b) => a.order - b.order);
+  const title = options?.title || "Documento";
+
   const sectionsHtml = sorted
     .map((s) => `<div class="page-section">${s.html}</div>`)
     .join("\n");
-
-  const title = options?.title || "Documento";
-
-  const branding = options?.showBranding !== false
-    ? `<div class="doc-toolbar" style="position:fixed;bottom:8px;right:12px;font-size:9px;color:#999;z-index:9999;">
-        Creado con <a href="https://www.easybits.cloud" style="color:#9870ED;text-decoration:none;">EasyBits</a>
-      </div>`
-    : "";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -42,17 +237,10 @@ export function buildDocumentHtml(
     body { font-family: 'Inter', sans-serif; margin: 0; color: var(--color-on-surface, #111); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
     .page-section:last-child { page-break-after: auto; break-after: auto; }
-    .doc-toolbar { font-family: 'Inter', sans-serif; }
-    @media print { .doc-toolbar { display: none !important; } }
   </style>
 </head>
 <body>
-<div class="doc-toolbar" style="position:sticky;top:0;z-index:10000;background:white;border-bottom:1px solid #e5e7eb;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;">
-  <h1 style="font-size:14px;font-weight:600;color:#111;margin:0;">${title}</h1>
-  <button onclick="window.print()" style="font-size:13px;color:#9870ED;background:none;border:none;cursor:pointer;font-weight:500;">Descargar PDF</button>
-</div>
 ${sectionsHtml}
-${branding}
 </body>
 </html>`;
 }
