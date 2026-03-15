@@ -706,7 +706,7 @@ export async function getUsageStats(ctx: AuthContext) {
 
   const planKey = getUserPlan(ctx.user);
 
-  const [fileStats, deletedCount, websiteCount, webhookCount] = await Promise.all([
+  const [fileStats, deletedCount, websiteCount, webhookCount, databaseCount] = await Promise.all([
     db.file.aggregate({
       where: { ownerId: ctx.user.id, status: { not: "DELETED" } },
       _count: true,
@@ -715,6 +715,7 @@ export async function getUsageStats(ctx: AuthContext) {
     db.file.count({ where: { ownerId: ctx.user.id, status: "DELETED" } }),
     db.website.count({ where: { ownerId: ctx.user.id, deletedAt: null } }),
     db.webhook.count({ where: { userId: ctx.user.id } }),
+    db.database.count({ where: { userId: ctx.user.id } }),
   ]);
 
   const usedBytes = fileStats._sum.size ?? 0;
@@ -734,6 +735,7 @@ export async function getUsageStats(ctx: AuthContext) {
       deletedFiles: deletedCount,
       websites: websiteCount,
       webhooks: webhookCount,
+      databases: databaseCount,
     },
   };
 }

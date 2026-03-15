@@ -204,6 +204,8 @@ SDK: \`eb.deleteWebhook(webhookId)\`
 - \`file.restored\` — file restored from trash
 - \`website.created\` — new website created
 - \`website.deleted\` — website deleted
+- \`database.created\` — new database created
+- \`database.deleted\` — database deleted
 
 ### Payload format
 \`\`\`json
@@ -348,6 +350,11 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`deletePresentation(id)\` | Delete presentation |
 | \`deployPresentation(id)\` | Publish as live website |
 | \`unpublishPresentation(id)\` | Unpublish presentation |
+| \`listDatabases()\` | List databases |
+| \`createDatabase(params)\` | Create database |
+| \`getDatabase(dbId)\` | Get database |
+| \`deleteDatabase(dbId)\` | Delete database |
+| \`db(name).query(sql, args?)\` | Query a database |
 | \`getDocs(section?)\` | Get this documentation |
 `,
 
@@ -424,6 +431,70 @@ Available Reveal.js themes: \`black\` (default), \`white\`, \`league\`, \`beige\
 2. \`updatePresentation(id, { slides })\` — edit slides as needed
 3. \`deployPresentation(id)\` — publish → get live URL at \`slug.easybits.cloud\`
 4. \`unpublishPresentation(id)\` — take down when done
+`,
+
+  databases: `## Databases (SQLite-as-a-Service)
+
+Create isolated SQLite databases for your agents and apps. Powered by sqld (libsql-server).
+
+### List databases
+\`GET /databases\`
+Returns: \`{ items: Database[] }\`
+SDK: \`eb.listDatabases()\`
+MCP: \`db_list\`
+
+### Create database
+\`POST /databases\`
+Body: \`{ name: string, description?: string }\`
+Name must be alphanumeric/dashes/underscores, max 64 chars. Limit: 5 databases per account.
+Returns: Database object.
+SDK: \`eb.createDatabase({ name, description? })\`
+MCP: \`db_create({ name, description? })\`
+
+### Get database
+\`GET /databases/:dbId\`
+SDK: \`eb.getDatabase(dbId)\`
+MCP: \`db_get({ dbId })\`
+
+### Delete database
+\`DELETE /databases/:dbId\`
+Permanently deletes the database and all its data.
+SDK: \`eb.deleteDatabase(dbId)\`
+MCP: \`db_delete({ dbId })\`
+
+### Query database
+\`POST /databases/:dbId/query\`
+Body: \`{ sql: string, args?: any[] }\`
+Returns: \`{ cols: string[], rows: any[][], affected_row_count: number, last_insert_rowid: string|null }\`
+SDK: \`eb.db(name).query(sql, args?)\`
+MCP: \`db_query({ dbId, sql, args? })\`
+
+### Batch execute
+\`POST /databases/:dbId/query\`
+Body: \`{ statements: [{ sql, args? }] }\` (max 20)
+Returns: \`{ results: Result[] }\`
+MCP: \`db_exec({ dbId, statements })\`
+
+### Database object
+\`\`\`json
+{
+  "id": "db123",
+  "name": "my-app-db",
+  "namespace": "db123",
+  "description": "App data store",
+  "createdAt": "2026-03-15T...",
+  "updatedAt": "2026-03-15T..."
+}
+\`\`\`
+
+### Webhook events
+- \`database.created\` — new database created
+- \`database.deleted\` — database deleted
+
+### Limits
+- Max 5 databases per account
+- Name: alphanumeric, dashes, underscores, max 64 chars
+- Batch: max 20 statements per request
 `,
 
   documents: `## Documents (Coming Soon)

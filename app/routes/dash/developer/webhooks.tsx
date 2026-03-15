@@ -18,6 +18,8 @@ const VALID_EVENTS = [
   "file.restored",
   "website.created",
   "website.deleted",
+  "database.created",
+  "database.deleted",
 ] as const;
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
