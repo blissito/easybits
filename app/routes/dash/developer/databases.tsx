@@ -1,7 +1,8 @@
 import { useFetcher, useLoaderData, data } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import {
   createDatabase,
@@ -365,8 +366,20 @@ function DatabaseRow({
   const [sqlValue, setSqlValue] = useState("");
   const [nlPrompt, setNlPrompt] = useState("");
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const queryFormRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleToggleExpand = useCallback((tableName: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (expandedTable === tableName) {
+      setExpandedTable(null);
+      setDropdownPos(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+      setExpandedTable(tableName);
+    }
+  }, [expandedTable]);
 
   // Auto-fetch schema when query panel opens
   useEffect(() => {
@@ -462,25 +475,36 @@ function DatabaseRow({
                   <span className="text-xs text-gray-400 italic">No tables yet</span>
                 )}
                 {schema.map((t) => (
-                  <div key={t.name} className="relative">
-                    <button
-                      type="button"
-                      className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
-                        expandedTable === t.name
-                          ? "bg-brand-500 text-white border-brand-500"
-                          : "bg-white border-gray-300 hover:border-brand-500 hover:text-brand-500"
-                      }`}
-                      onClick={() => setExpandedTable(expandedTable === t.name ? null : t.name)}
-                      onDoubleClick={() => {
-                        setSqlValue(`SELECT * FROM "${t.name}" LIMIT 50;`);
-                        requestAnimationFrame(autoResize);
-                      }}
-                      title={`Double-click to query · ${t.columns.length} columns`}
-                    >
-                      {t.name} <span className="text-[10px] opacity-60">({t.columns.length})</span>
-                    </button>
-                    {expandedTable === t.name && (
-                      <div className="absolute z-10 top-full left-0 mt-1 bg-white border-2 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] p-2 min-w-[200px]">
+                  <button
+                    key={t.name}
+                    type="button"
+                    className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                      expandedTable === t.name
+                        ? "bg-brand-500 text-white border-brand-500"
+                        : "bg-white border-gray-300 hover:border-brand-500 hover:text-brand-500"
+                    }`}
+                    onClick={(e) => handleToggleExpand(t.name, e)}
+                    onDoubleClick={() => {
+                      setSqlValue(`SELECT * FROM "${t.name}" LIMIT 50;`);
+                      setExpandedTable(null);
+                      setDropdownPos(null);
+                      requestAnimationFrame(autoResize);
+                    }}
+                    title={`Double-click to query · ${t.columns.length} columns`}
+                  >
+                    {t.name} <span className="text-[10px] opacity-60">({t.columns.length})</span>
+                  </button>
+                ))}
+                {expandedTable && dropdownPos && (() => {
+                  const t = schema.find((s) => s.name === expandedTable);
+                  if (!t) return null;
+                  return createPortal(
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => { setExpandedTable(null); setDropdownPos(null); }} />
+                      <div
+                        className="fixed z-50 bg-white border-2 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] p-2 min-w-[200px] max-h-64 overflow-y-auto"
+                        style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                      >
                         <div className="text-xs font-bold mb-1">{t.name}</div>
                         {t.columns.map((col) => (
                           <div key={col.name} className="flex items-center gap-1.5 text-[11px] font-mono py-0.5">
@@ -490,9 +514,10 @@ function DatabaseRow({
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    </>,
+                    document.body
+                  );
+                })()}
               </div>
             )}
 
