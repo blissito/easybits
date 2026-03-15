@@ -292,6 +292,27 @@ export default function DocumentEditor() {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const addPageAbortRef = useRef<AbortController | null>(null);
 
+  // SSE live reload — watch for MCP/API updates
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  useEffect(() => {
+    if (isGenerating) return;
+    const source = new EventSource(`/api/v2/document-watch?id=${landing.id}`);
+    source.addEventListener("doc-update", (e) => {
+      const data = JSON.parse(e.data);
+      if (selectionRef.current) return; // don't overwrite while editing
+      const serverSections: Section3[] = data.sections || [];
+      setSections((prev) => {
+        return serverSections.map((s) => {
+          const local = prev.find((ls) => ls.id === s.id);
+          if (local && local.html === s.html) return local;
+          return { ...s, versions: (local as any)?.versions || [] };
+        });
+      });
+    });
+    return () => source.close();
+  }, [landing.id, isGenerating, setSections]);
+
   // Zoom state
   const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200];
   const [zoomPct, setZoomPct] = useState(100);

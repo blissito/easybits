@@ -9,6 +9,7 @@ import { generateDocumentParallel } from "@easybits.cloud/html-tailwind-generato
 import { streamText } from "ai";
 import { enrichImages, findImageSlots, generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
 import { sanitizeSemanticColors } from "../sanitizeColors";
+import { docEvents } from "./docEvents";
 import type { Section3 } from "~/lib/landing3/types";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 
@@ -126,7 +127,9 @@ export async function updateDocument(
     updates.metadata = existing;
   }
 
-  return db.landing.update({ where: { id }, data: updates });
+  const result = await db.landing.update({ where: { id }, data: updates });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
+  return result;
 }
 
 export async function setSectionHtml(
@@ -146,7 +149,8 @@ export async function setSectionHtml(
   if (idx === -1) throwJson("Section not found", 404);
 
   sections[idx] = { ...sections[idx], html };
-  await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  const result = await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
   return { success: true, sectionId };
 }
 

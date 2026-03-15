@@ -53,6 +53,9 @@ export default [
       ...prefix("assets", [
         index("routes/assets/assets.tsx"),
         route(":assetId/edit", "routes/assets/EditAsset.tsx"),
+        // Book editor
+        route(":assetId/book-editor", "routes/dash/assets/book-editor.tsx"),
+        route(":assetId/book-editor/:chapterId", "routes/dash/assets/book-chapter.tsx"),
       ]),
       route("tienda", "routes/store.tsx"),
 
@@ -168,6 +171,12 @@ export default [
     route("document-generate", "routes/api/v2/document-generate.ts"),
     route("document-refine", "routes/api/v2/document-refine.ts"),
     route("document-enhance", "routes/api/v2/document-enhance.ts"),
+    route("documents", "routes/api/v2/documents.ts"),
+    route("documents/:id", "routes/api/v2/document.ts"),
+    route("documents/:id/deploy", "routes/api/v2/document-deploy.ts"),
+    route("documents/:id/unpublish", "routes/api/v2/document-unpublish.ts"),
+    route("document-watch", "routes/api/v2/document-watch.ts"),
+    route("book-generate", "routes/api/v2/book-generate.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("databases", "routes/api/v2/databases.ts"),
