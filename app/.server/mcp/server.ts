@@ -737,7 +737,7 @@ export function createMcpServer() {
 
   server.tool(
     "list_documents",
-    "List your documents (id, name, prompt, theme, status, pageCount, createdAt).",
+    "List all your documents. Returns id, name, status (DRAFT/PUBLISHED), pageCount, theme, and timestamps. Use get_document to fetch full page HTML.",
     {},
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -748,7 +748,7 @@ export function createMcpServer() {
 
   server.tool(
     "get_document",
-    "Get a document by ID with full page data (sections array with HTML).",
+    "Get a document with all its pages. Returns sections[] where each has { id, name, html, order }. Use section.id as pageId in set_page_html/get_page_html. WARNING: response can be very large for multi-page documents — use get_page_html if you only need one page.",
     {
       documentId: z.string().describe("The document ID"),
     },
@@ -848,7 +848,7 @@ export function createMcpServer() {
 
   server.tool(
     "set_page_html",
-    "Update the full HTML of a single page in a document without affecting other pages. Use this instead of update_document when you only need to change one page.",
+    "Replace the ENTIRE HTML of a single page. This is the primary tool for editing pages — use it when rewriting or significantly changing a page. Only requires pageId (from get_document sections[].id) and the new HTML. For surgical edits to a specific element within a page, use set_section_html instead.",
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID to update (from get_document sections)"),
@@ -863,7 +863,7 @@ export function createMcpServer() {
 
   server.tool(
     "get_page_html",
-    "Get the HTML and metadata of a single page in a document.",
+    "Get the full HTML and metadata of a single page. Lighter than get_document when you only need one page. Returns { id, name, html, order }.",
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID (from get_document sections)"),
@@ -877,7 +877,7 @@ export function createMcpServer() {
 
   server.tool(
     "get_section_html",
-    "Get the outerHTML of a specific element within a document page, matched by CSS selector. Useful for reading a specific section like .hero, #pricing, or section:nth-child(2).",
+    "Get the outerHTML of a specific element WITHIN a page, matched by CSS selector. Example selectors: 'section' (root), '.hero', '#pricing', 'div:nth-child(3)'. Returns only the matched element's HTML, not the full page.",
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID containing the element"),
@@ -892,7 +892,7 @@ export function createMcpServer() {
 
   server.tool(
     "set_section_html",
-    "Replace a specific element within a document page, matched by CSS selector. Enables surgical edits to individual elements without rewriting the entire page.",
+    "Replace a specific element WITHIN a page by CSS selector. Use for surgical edits (e.g., changing one card, updating an image). Requires cssSelector to find the target element. Example: cssSelector='.hero' replaces only the hero div. For replacing the entire page HTML, use set_page_html instead (simpler, no selector needed).",
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID containing the element"),
