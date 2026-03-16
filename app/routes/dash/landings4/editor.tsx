@@ -436,34 +436,50 @@ export default function Landing4Editor() {
     }
   }
 
-  // ─── AI Refine / Regenerate ────────────────────────────
+  // ─── AI Refine / Regenerate (unified) ──────────────────
+  type AiMode = "refine-element" | "refine-section" | "regenerate-section";
+  const [aiMode, setAiMode] = useState<AiMode>("refine-element");
+
   function handleAiAction(action: AiAction) {
     setAiModal(action);
     setAiPrompt("");
+    // Default mode: if user selected a section directly, default to refine-section
+    setAiMode(action.isSection ? "refine-section" : "refine-element");
   }
 
-  async function executeAiAction() {
+  async function executeAiAction(modeOverride?: AiMode) {
     if (!aiModal) return;
+    const mode = modeOverride || aiMode;
     const instruction = aiPrompt.trim();
-    const { type, componentId, html } = aiModal;
+    if (mode !== "regenerate-section" && !instruction) return;
 
-    // For regenerate, instruction is optional; for refine it describes the change
-    if (type !== "regenerate-section" && !instruction) return;
+    const targetId = (mode === "refine-element")
+      ? aiModal.componentId
+      : (aiModal.sectionComponentId || aiModal.componentId);
+    const targetHtml = (mode === "refine-element")
+      ? aiModal.html
+      : (aiModal.sectionHtml || aiModal.html);
+
+    // Capture current full HTML and the target's HTML before closing modal
+    const ed = editorRef.current?.getEditor();
+    if (!ed) return;
+    const fullHtmlBefore = ed.getHtml();
 
     setIsRefining(true);
     setAiModal(null);
+    isSavingLocked.current = true;
 
     try {
-      const isRegenerate = type === "regenerate-section";
       const body: Record<string, unknown> = {
         landingId: landing.id,
-        sectionId: componentId,
-        currentHtml: html,
-        instruction: isRegenerate
-          ? (instruction || "Regenerate this section with a fresh design, keep the same purpose and content type")
+        sectionId: "__new__",
+        currentHtml: targetHtml,
+        skipDbUpdate: true,
+        instruction: mode === "regenerate-section"
+          ? (instruction || "Regenerate this section with a completely fresh design, keep the same purpose and content type but change the visual approach entirely")
           : instruction,
       };
-      if (isRegenerate) body.isVariant = true;
+      if (mode === "regenerate-section") body.isVariant = true;
 
       const res = await fetch("/api/v2/landing3-refine", {
         method: "POST",
@@ -473,7 +489,8 @@ export default function Landing4Editor() {
       });
 
       if (!res.ok) {
-        console.error("Refine failed:", res.status);
+        const errText = await res.text().catch(() => "");
+        console.error("Refine failed:", res.status, errText);
         return;
       }
 
@@ -483,6 +500,9 @@ export default function Landing4Editor() {
       const decoder = new TextDecoder();
       let buf = "";
       let event = "";
+      let latestNewHtml = "";
+      let lastCanvasUpdate = 0;
+      const THROTTLE_MS = 2000;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -499,26 +519,43 @@ export default function Landing4Editor() {
             try {
               const data = JSON.parse(line.slice(6));
               if ((event === "chunk" || event === "done") && data.html) {
-                // Replace the component in GrapesJS in real time
-                editorRef.current?.replaceComponent(componentId, data.html);
+                latestNewHtml = data.html;
+                // Throttled canvas update — show progress without crashing
+                const now = Date.now();
+                if (now - lastCanvasUpdate > THROTTLE_MS) {
+                  lastCanvasUpdate = now;
+                  const updatedFull = fullHtmlBefore.replace(targetHtml, latestNewHtml);
+                  ed.setComponents(updatedFull);
+                }
               }
             } catch { /* skip */ }
           }
         }
       }
 
+      // Final canvas update with complete result
+      if (latestNewHtml) {
+        const updatedFull = fullHtmlBefore.replace(targetHtml, latestNewHtml);
+        ed.setComponents(updatedFull);
+      }
+
       // Save after refine completes
-      const finalHtml = editorRef.current?.getHtml() || "";
-      const newSections = grapesToSections(finalHtml);
-      saveFetcher.submit(
-        { intent: "update-sections", sections: JSON.stringify(newSections) },
-        { method: "post" }
-      );
+      if (latestNewHtml) {
+        const finalHtml = editorRef.current?.getHtml() || "";
+        const css = ed.getCss();
+        const fullWithCss = css ? `<style>${css}</style>\n${finalHtml}` : finalHtml;
+        const newSections = grapesToSections(fullWithCss);
+        saveFetcher.submit(
+          { intent: "update-sections", sections: JSON.stringify(newSections) },
+          { method: "post" }
+        );
+      }
     } catch (err) {
       console.error("AI refine error:", err);
     } finally {
       setIsRefining(false);
       setAiPrompt("");
+      isSavingLocked.current = false;
     }
   }
 
@@ -687,87 +724,68 @@ export default function Landing4Editor() {
         </div>
       )}
 
-      {/* AI Refine/Regenerate modal */}
-      {aiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-black mb-1">
-              {aiModal.type === "regenerate-section"
-                ? "Regenerar secci\u00f3n"
-                : aiModal.type === "refine-section"
-                ? "Refinar secci\u00f3n"
-                : "Refinar elemento"}
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              {aiModal.type === "regenerate-section"
-                ? "Instrucciones adicionales (opcional)"
-                : "\u00bfQu\u00e9 quieres cambiar?"}
-            </p>
-            <textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder={
-                aiModal.type === "regenerate-section"
-                  ? "Ej: Usa un estilo m\u00e1s minimalista, cambia los colores..."
-                  : "Ej: Hazlo m\u00e1s grande, cambia el color a azul, agrega un icono..."
-              }
-              rows={3}
-              className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  executeAiAction();
-                }
-                if (e.key === "Escape") {
-                  setAiModal(null);
-                }
-              }}
-            />
-            {/* Preview of what's being refined */}
-            <details className="mt-3">
-              <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">
-                Ver HTML seleccionado ({aiModal.html.length} chars)
-              </summary>
-              <pre className="mt-2 text-[10px] bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-32 overflow-auto text-gray-600">
-                {aiModal.html.substring(0, 500)}
-                {aiModal.html.length > 500 ? "..." : ""}
-              </pre>
-            </details>
-            <div className="flex gap-2 mt-4 justify-end">
-              <BrutalButton
-                size="chip"
-                mode="ghost"
-                onClick={() => {
-                  setAiModal(null);
-                  setAiPrompt("");
+      {/* AI modal — context-aware */}
+      {aiModal && (() => {
+        const isSection = !!aiModal.isSection;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-black mb-1">
+                ✦ {isSection ? "Secci\u00f3n" : "Elemento"}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {isSection
+                  ? "\u00bfQu\u00e9 quieres cambiar de esta secci\u00f3n?"
+                  : "\u00bfQu\u00e9 quieres cambiar de este elemento?"}
+              </p>
+
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Ej: Mejor copy, m\u00e1s profesional, otro color, m\u00e1s compacto..."
+                rows={3}
+                className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    executeAiAction(isSection ? "refine-section" : "refine-element");
+                  }
+                  if (e.key === "Escape") setAiModal(null);
                 }}
-              >
-                Cancelar
-              </BrutalButton>
-              {aiModal.type === "regenerate-section" && (
+              />
+
+              <div className="flex gap-2 mt-4 justify-end">
                 <BrutalButton
                   size="chip"
                   mode="ghost"
-                  onClick={() => {
-                    setAiPrompt("");
-                    executeAiAction();
-                  }}
+                  onClick={() => { setAiModal(null); setAiPrompt(""); }}
                 >
-                  Sin instrucciones
+                  Cancelar
                 </BrutalButton>
-              )}
-              <BrutalButton
-                size="chip"
-                onClick={executeAiAction}
-                isDisabled={aiModal.type !== "regenerate-section" && !aiPrompt.trim()}
-              >
-                {aiModal.type === "regenerate-section" ? "Regenerar" : "Refinar"}
-              </BrutalButton>
+                {isSection && (
+                  <BrutalButton
+                    size="chip"
+                    mode="ghost"
+                    onClick={() => executeAiAction("regenerate-section")}
+                    isLoading={isRefining && aiMode === "regenerate-section"}
+                  >
+                    Regenerar
+                  </BrutalButton>
+                )}
+                <BrutalButton
+                  size="chip"
+                  onClick={() => executeAiAction(isSection ? "refine-section" : "refine-element")}
+                  isDisabled={!aiPrompt.trim()}
+                  isLoading={isRefining && aiMode !== "regenerate-section"}
+                >
+                  Refinar
+                </BrutalButton>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* AI Generation/Improve modal */}
       {showGenModal && (() => {

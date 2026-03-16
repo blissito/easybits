@@ -12,7 +12,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, sectionId, instruction, currentHtml, referenceImage, isVariant } =
+  const { landingId, sectionId, instruction, currentHtml, referenceImage, isVariant, skipDbUpdate } =
     body;
 
   if (!landingId || !sectionId || !instruction) {
@@ -33,6 +33,8 @@ export async function action({ request }: Route.ActionArgs) {
   if (!isNewSection && !section) {
     return Response.json({ error: "Section not found" }, { status: 404 });
   }
+
+  const shouldSkipDbUpdate = !!skipDbUpdate || isNewSection;
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
 
@@ -58,8 +60,8 @@ export async function action({ request }: Route.ActionArgs) {
             send("chunk", { html });
           },
           async onDone(html) {
-            // Update section in DB (skip for new sections — editor handles that)
-            if (!isNewSection) {
+            // Update section in DB (skip when editor handles save, e.g. v4 or new sections)
+            if (!shouldSkipDbUpdate) {
               for (let attempt = 0; attempt < 3; attempt++) {
                 try {
                   // Re-read sections to avoid stale data overwrites

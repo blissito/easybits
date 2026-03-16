@@ -5,11 +5,12 @@ import { LANDING_BLOCKS } from "./blocks";
 import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
 
 export interface AiAction {
-  type: "refine-element" | "refine-section" | "regenerate-section";
+  type: "refine-element";
   componentId: string;
   html: string;
-  /** The closest <section> parent's HTML (for section-level ops) */
   sectionHtml?: string;
+  sectionComponentId?: string;
+  isSection?: boolean;
 }
 
 export interface GrapesEditorHandle {
@@ -62,11 +63,22 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       replaceComponent: (componentId: string, newHtml: string) => {
         const ed = editorRef.current;
         if (!ed) return;
-        // Try to find the component
-        const all = ed.DomComponents.getWrapper()?.find(`*`) || [];
-        const comp = all.find((c: any) => c.getId() === componentId);
+        // Search all components recursively for matching ID
+        function findById(parent: any): any {
+          if (parent.getId() === componentId) return parent;
+          for (const child of parent.components().models || []) {
+            const found = findById(child);
+            if (found) return found;
+          }
+          return null;
+        }
+        const wrapper = ed.DomComponents.getWrapper();
+        if (!wrapper) return;
+        const comp = findById(wrapper);
         if (comp) {
           comp.replaceWith(newHtml);
+        } else {
+          console.warn("[replaceComponent] Component not found:", componentId);
         }
       },
     }));
@@ -181,41 +193,20 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         } as any);
 
         // ─── AI Commands ────────────────────────────────
-        editor.Commands.add("ai-refine-element", {
+        editor.Commands.add("ai-open-menu", {
           run(ed: Editor) {
             const selected = ed.getSelected();
             if (!selected) return;
+            const section = findSectionAncestor(selected);
+            const isSection = selected.get("tagName") === "section";
             onAiActionRef.current?.({
               type: "refine-element",
               componentId: selected.getId(),
               html: selected.toHTML(),
-            });
-          },
-        });
-
-        editor.Commands.add("ai-refine-section", {
-          run(ed: Editor) {
-            const selected = ed.getSelected();
-            if (!selected) return;
-            const section = findSectionAncestor(selected) || selected;
-            onAiActionRef.current?.({
-              type: "refine-section",
-              componentId: section.getId(),
-              html: section.toHTML(),
-            });
-          },
-        });
-
-        editor.Commands.add("ai-regenerate-section", {
-          run(ed: Editor) {
-            const selected = ed.getSelected();
-            if (!selected) return;
-            const section = findSectionAncestor(selected) || selected;
-            onAiActionRef.current?.({
-              type: "regenerate-section",
-              componentId: section.getId(),
-              html: section.toHTML(),
-            });
+              sectionHtml: section ? section.toHTML() : undefined,
+              sectionComponentId: section ? section.getId() : undefined,
+              isSection,
+            } as any);
           },
         });
 
@@ -236,25 +227,11 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           const isSection = component.get("tagName") === "section";
           const aiButtons: any[] = [
             {
-              id: "ai-refine",
-              label: `<span title="Refinar elemento" style="font-size:13px;padding:0 3px;cursor:pointer">✦</span>`,
-              command: "ai-refine-element",
+              id: "ai-menu",
+              label: `<svg title="AI" width="14" height="14" viewBox="0 0 24 24" fill="#9870ED" style="vertical-align:middle;cursor:pointer"><path d="M12 2l2.09 6.26L20.18 10l-6.09 1.74L12 18l-2.09-6.26L3.82 10l6.09-1.74z"/><path d="M19 2l.75 2.25L22 5l-2.25.75L19 8l-.75-2.25L16 5l2.25-.75z" opacity=".7"/><path d="M5 16l.5 1.5L7 18l-1.5.5L5 20l-.5-1.5L3 18l1.5-.5z" opacity=".5"/></svg>`,
+              command: "ai-open-menu",
             },
           ];
-
-          if (isSection) {
-            aiButtons.push({
-              id: "ai-regen",
-              label: `<span title="Regenerar sección" style="font-size:13px;padding:0 3px;cursor:pointer">↻</span>`,
-              command: "ai-regenerate-section",
-            });
-          } else {
-            aiButtons.push({
-              id: "ai-refine-section",
-              label: `<span title="Refinar sección" style="font-size:13px;padding:0 3px;cursor:pointer">✧</span>`,
-              command: "ai-refine-section",
-            });
-          }
 
           component.set("toolbar", [...toolbar, ...aiButtons]);
         });
@@ -288,6 +265,36 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         });
 
         if (initialHtml) editor.setComponents(initialHtml);
+
+        // ─── Name layers based on content ───
+        function nameLayers() {
+          const wrapper = editor.DomComponents.getWrapper();
+          if (!wrapper) return;
+          wrapper.components().forEach((comp: any, i: number) => {
+            if (comp.get("custom-name")) return; // already named by user
+            const tag = (comp.get("tagName") || "").toLowerCase();
+            if (tag !== "section") return;
+            const html = comp.toHTML().toLowerCase();
+            let name = `Section ${i + 1}`;
+            if (html.includes("hero") || (i === 0 && html.includes("<h1"))) name = "Hero";
+            else if (html.includes("pricing") || html.includes("precio") || html.includes("inversión")) name = "Pricing";
+            else if (html.includes("testimonial") || html.includes("dicen") || html.includes("quote")) name = "Testimonials";
+            else if (html.includes("faq") || html.includes("pregunt") || html.includes("<details")) name = "FAQ";
+            else if (html.includes("footer") || html.includes("©") || html.includes("derechos")) name = "Footer";
+            else if (html.includes("feature") || html.includes("palanca") || html.includes("servicio")) name = "Features";
+            else if (html.includes("stat") || html.includes("número") || html.includes("+%")) name = "Stats";
+            else if (html.includes("team") || html.includes("equipo")) name = "Team";
+            else if (html.includes("cta") || html.includes("listo") || html.includes("empez")) name = "CTA";
+            else if (html.includes("newsletter") || html.includes("suscri") || html.includes("email")) name = "Newsletter";
+            else if (html.includes("proceso") || html.includes("step") || html.includes("cómo func")) name = "Process";
+            else if (html.includes("problema") || html.includes("pain")) name = "Problem";
+            else if (html.includes("logo") || html.includes("trusted") || html.includes("brand")) name = "Logo Cloud";
+            comp.set("custom-name", name);
+          });
+        }
+        editor.on("load", nameLayers);
+        // Also re-name after generation loads new content
+        editor.on("component:add", () => setTimeout(nameLayers, 200));
 
         // Only start listening after user's first real interaction.
         // This prevents saving empty HTML during initial setComponents() which
@@ -332,20 +339,20 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         ].forEach((evt) => editor.on(evt, notify));
 
         // Collapse all block categories except Basic and CTA
-        editor.on("block:category:update", (category: any) => {
-          const name = category.get("id") || category.get("label") || "";
-          if (name !== "Basic" && name !== "CTA") {
-            category.set("open", false);
+        try {
+          const bm = editor.BlockManager;
+          const cats = bm.getCategories?.();
+          if (cats && cats.forEach) {
+            cats.forEach((cat: any) => {
+              try {
+                const name = (typeof cat.get === "function" ? cat.get("id") || cat.get("label") : cat.id || cat.label) || "";
+                if (name !== "Basic" && name !== "CTA") {
+                  if (typeof cat.set === "function") cat.set("open", false);
+                }
+              } catch { /* skip */ }
+            });
           }
-        });
-        // Also collapse already-rendered categories
-        const bm = editor.BlockManager;
-        (bm.getCategories?.() || []).forEach((cat: any) => {
-          const name = cat.get("id") || cat.get("label") || "";
-          if (name !== "Basic" && name !== "CTA") {
-            cat.set("open", false);
-          }
-        });
+        } catch { /* skip */ }
 
         editorRef.current = editor;
       })().catch((err) => {
