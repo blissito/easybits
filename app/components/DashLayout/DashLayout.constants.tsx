@@ -105,6 +105,20 @@ export const ITEMS = {
       index: 3.3,
     },
     {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="13.5" cy="6.5" r="2.5" />
+          <circle cx="6" cy="12" r="3" />
+          <circle cx="18" cy="16" r="2" />
+          <path d="M15.5 8.5L17 14" />
+          <path d="M8.5 13.5L12 16" />
+        </svg>
+      ),
+      path: "/dash/brand-kits",
+      title: "Brand Kits",
+      index: 3.2,
+    },
+    {
       icon: <img className="scale" src="/images/storage.svg" />,
       path: "/dash/archivos",
       title: "Archivos",

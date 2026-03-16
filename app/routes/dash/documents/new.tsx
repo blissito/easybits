@@ -1,4 +1,4 @@
-import { Form, Link, redirect, useNavigation, useNavigate } from "react-router";
+import { Form, Link, redirect, useNavigation, useNavigate, useLoaderData } from "react-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { HiSparkles } from "react-icons/hi2";
 import { data } from "react-router";
@@ -7,12 +7,22 @@ import { getUserOrRedirect } from "~/.server/getters";
 import toast from "react-hot-toast";
 
 import { parseFiles, combineContent, combineContentWithMeta, MAX_FILE_SIZE, MAX_CONTENT_CHARS } from "~/lib/documents/parseFiles";
+import { db } from "~/.server/db";
 import type { Route } from "./+types/new";
 
 export const meta = () => [
   { title: "Nuevo Documento — EasyBits" },
   { name: "robots", content: "noindex" },
 ];
+
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const user = await getUserOrRedirect(request);
+  const brandKits = await db.brandKit.findMany({
+    where: { ownerId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
+  return { brandKits };
+};
 
 export const action = async ({ request }: Route.ActionArgs) => {
   await getUserOrRedirect(request);
@@ -66,11 +76,13 @@ function resizeImageToDataUrl(file: File, maxDim: number): Promise<string> {
 const ACCEPTED_TYPES = ".txt,.md,.csv,.xlsx,.xls,.docx,.pdf";
 
 export default function NewDocument() {
+  const { brandKits } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const navigate = useNavigate();
   const isSubmitting = navigation.state === "submitting";
   const [nameValue, setNameValue] = useState("");
   const [promptValue, setPromptValue] = useState("");
+  const [selectedKitId, setSelectedKitId] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [parsedContent, setParsedContent] = useState("");
   const [isParsing, setIsParsing] = useState(false);
@@ -222,16 +234,27 @@ export default function NewDocument() {
       <form className="space-y-6" onSubmit={(e) => {
         e.preventDefault();
         if (!nameValue.trim()) return;
+        const selectedKit = brandKits.find((k: any) => k.id === selectedKitId);
         sessionStorage.removeItem("doc-directions-cache");
         sessionStorage.setItem("doc-new", JSON.stringify({
           name: nameValue,
           prompt: promptValue,
           sourceContent: parsedContent,
-          logoDataUrl,
+          logoDataUrl: selectedKit?.logoUrl || logoDataUrl,
           pageCount,
           referenceDataUrl,
+          brandKit: selectedKit ? {
+            colors: selectedKit.colors,
+            fonts: selectedKit.fonts,
+            mood: selectedKit.mood,
+          } : undefined,
         }));
-        navigate("/dash/documents/directions");
+        if (selectedKit) {
+          // Skip directions — go straight to create
+          navigate("/dash/documents/directions?useBrandKit=1");
+        } else {
+          navigate("/dash/documents/directions");
+        }
       }}>
         {/* Hidden fields */}
         <input type="hidden" name="sourceContent" value={parsedContent} />
@@ -616,6 +639,42 @@ export default function NewDocument() {
           </p>
         </div>
 
+        {/* Brand Kit selector */}
+        {brandKits.length > 0 && (
+          <div>
+            <label className="block text-sm font-bold mb-1">
+              Usar Brand Kit
+              <span className="font-normal text-gray-400 ml-1">(opcional — salta la seleccion de estilo)</span>
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {brandKits.map((kit: any) => (
+                <button
+                  key={kit.id}
+                  type="button"
+                  onClick={() => setSelectedKitId(selectedKitId === kit.id ? null : kit.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 transition-all text-sm font-bold ${
+                    selectedKitId === kit.id
+                      ? "border-brand-500 bg-brand-50 -translate-x-0.5 -translate-y-0.5 shadow-[3px_3px_0_#9870ED]"
+                      : "border-gray-300 bg-white hover:border-black"
+                  }`}
+                >
+                  <span className="flex gap-0.5">
+                    {["primary", "secondary", "accent", "surface"].map((c) => (
+                      <span
+                        key={c}
+                        className="w-3 h-3 rounded-sm border border-gray-200"
+                        style={{ backgroundColor: (kit.colors as any)?.[c] }}
+                      />
+                    ))}
+                  </span>
+                  {kit.name}
+                  {kit.isDefault && <span className="text-brand-500 text-xs">&#9733;</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <BrutalButton
           type="submit"
           isLoading={isSubmitting}
@@ -623,7 +682,7 @@ export default function NewDocument() {
           className="w-full"
           containerClassName="w-full"
         >
-          <HiSparkles className="inline -mt-0.5" /> Generar documento
+          <HiSparkles className="inline -mt-0.5" /> {selectedKitId ? "Crear con Brand Kit" : "Generar documento"}
         </BrutalButton>
       </form>
     </article>

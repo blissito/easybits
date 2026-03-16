@@ -198,6 +198,7 @@ model User {
   aiGenerationsCount   Int?       @default(0)
   aiGenerationsResetAt DateTime?
   aiGenerationsBonus   Int?       @default(0)
+  brandKits            BrandKit[]
 }
 
 enum FileStatus {
@@ -551,6 +552,22 @@ model BookChapter {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   @@index([bookId])
+}
+
+model BrandKit {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  colors    Json     // { primary, secondary, accent, surface }
+  fonts     Json?    // { heading, body }
+  logoUrl   String?
+  mood      String?  // dark | light | warm | cool | vibrant
+  isDefault Boolean  @default(false)
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
 
 model TelemetryEvent {

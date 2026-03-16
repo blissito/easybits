@@ -66,7 +66,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       sections: sections as any,
       version: 4,
       ownerId: user.id,
-      metadata,
+      metadata: metadata as any,
     },
   });
 
@@ -195,6 +195,7 @@ export default function DocumentDirections() {
     logoDataUrl: string;
     pageCount: number;
     referenceDataUrl?: string;
+    brandKit?: { colors: any; fonts?: any; mood?: string };
   } | null>(null);
 
   useEffect(() => {
@@ -204,6 +205,49 @@ export default function DocumentDirections() {
       return;
     }
     formDataRef.current = JSON.parse(raw);
+
+    // Brand Kit shortcut: skip directions, create doc immediately
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("useBrandKit") === "1" && formDataRef.current?.brandKit) {
+      const fd = formDataRef.current;
+      const kit = fd.brandKit as { colors: any; fonts?: any; mood?: string };
+      const direction = {
+        name: "Brand Kit",
+        tagline: "",
+        headingFont: kit.fonts?.heading || "Inter",
+        bodyFont: kit.fonts?.body || "Inter",
+        colors: {
+          primary: kit.colors.primary,
+          accent: kit.colors.accent,
+          surface: kit.colors.surface,
+          surfaceAlt: kit.colors.secondary,
+          text: "#111827",
+        },
+        mood: kit.mood || "light",
+        layoutHint: "",
+      };
+      // Create the document directly
+      fetch("/dash/documents/directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          name: fd.name,
+          prompt: fd.prompt,
+          sourceContent: fd.sourceContent,
+          logoDataUrl: fd.logoDataUrl,
+          pageCount: String(fd.pageCount),
+          direction: JSON.stringify(direction),
+          previewHtml: "",
+        }),
+        redirect: "follow",
+      }).then((res) => {
+        if (res.redirected) {
+          sessionStorage.removeItem("doc-new");
+          window.location.href = res.url;
+        }
+      });
+      return;
+    }
 
     // Restore cached results if available
     const cached = sessionStorage.getItem("doc-directions-cache");

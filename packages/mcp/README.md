@@ -31,13 +31,7 @@ Add to your `claude_desktop_config.json`:
 #### Claude Code
 
 ```bash
-claude mcp add easybits -- npx -y @easybits.cloud/mcp
-```
-
-Then set your API key in `~/.easybitsrc`:
-
-```
-EASYBITS_API_KEY=your-api-key
+claude mcp add easybits -e EASYBITS_API_KEY=your-api-key -- npx -y @easybits.cloud/mcp
 ```
 
 #### Cursor

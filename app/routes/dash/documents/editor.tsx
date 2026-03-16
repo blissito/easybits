@@ -117,7 +117,12 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
   const sectionVersions = (landing.sectionVersions as Record<string, { html: string; timestamp: number }[]>) || {};
 
-  return { landing, websiteUrl, sourceContent, logoUrl, direction, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions };
+  const brandKits = await db.brandKit.findMany({
+    where: { ownerId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { landing, websiteUrl, sourceContent, logoUrl, direction, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions, brandKits };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -222,6 +227,16 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     return { redirect: "/dash/documents" };
   }
 
+  if (intent === "save-brand-kit") {
+    const kitName = String(formData.get("kitName") || "").trim();
+    if (!kitName) return { error: "Nombre requerido" };
+    const { extractFromDocument } = await import(
+      "~/.server/core/brandKitOperations"
+    );
+    await extractFromDocument(params.id, user.id, kitName);
+    return { brandKitSaved: true };
+  }
+
   return { error: "Intent desconocido" };
 };
 
@@ -229,7 +244,7 @@ export default function DocumentEditor() {
   const {
     landing, websiteUrl, sourceContent, logoUrl, direction,
     aiGenUsed: initialAiGenUsed, aiGenLimit, aiGenBonus, userPlan,
-    sectionVersions: savedVersions,
+    sectionVersions: savedVersions, brandKits,
   } = useLoaderData<typeof loader>();
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
   const navigate = useNavigate();
@@ -1600,6 +1615,17 @@ ${sectionsHtml}
                   setRegenTargetId(sectionId);
                   setShowAddPrompt(true);
                 }}
+                brandKits={brandKits as any}
+                onSaveBrandKit={(name) => {
+                  const fd = new FormData();
+                  fd.set("intent", "save-brand-kit");
+                  fd.set("kitName", name);
+                  saveFetcher.submit(fd, { method: "POST" });
+                  toast.success("Brand Kit guardado");
+                }}
+                onApplyBrandKit={(kit) => {
+                  handleCustomColorChange(kit.colors);
+                }}
               />
             </div>
           </>
@@ -1670,6 +1696,17 @@ ${sectionsHtml}
             onRegenerate={(sectionId) => {
               setRegenTargetId(sectionId);
               setShowAddPrompt(true);
+            }}
+            brandKits={brandKits as any}
+            onSaveBrandKit={(name) => {
+              const fd = new FormData();
+              fd.set("intent", "save-brand-kit");
+              fd.set("kitName", name);
+              saveFetcher.submit(fd, { method: "POST" });
+              toast.success("Brand Kit guardado");
+            }}
+            onApplyBrandKit={(kit) => {
+              handleCustomColorChange(kit.colors);
             }}
           />
           </div>

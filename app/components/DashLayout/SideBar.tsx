@@ -52,9 +52,6 @@ const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
             {...item}
           />
         ))}
-      </ul>
-      <hr className="bg-white opacity-20 h-[1px] w-full" />
-      <ul className="flex flex-col gap-3 py-0 items-center">
         {ITEMS.sectionItems.map((item, key) => (
           <SideBarItem key={key} {...item} />
         ))}

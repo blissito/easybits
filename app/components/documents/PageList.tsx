@@ -2,6 +2,14 @@ import React, { useRef, useState, useMemo, useEffect } from "react";
 import type { Section3 } from "~/lib/landing3/types";
 import { LANDING_THEMES, type LandingTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 
+interface BrandKit {
+  id: string;
+  name: string;
+  colors: { primary: string; secondary: string; accent: string; surface: string };
+  fonts?: { heading: string; body: string } | null;
+  isDefault: boolean;
+}
+
 interface PageListProps {
   sections: Section3[];
   selectedSectionIds: string[];
@@ -29,6 +37,9 @@ interface PageListProps {
   refiningIds?: Set<string>;
   onContextMenu?: (sectionIds: string[], position: { x: number; y: number }) => void;
   onRegenerate?: (sectionId: string) => void;
+  brandKits?: BrandKit[];
+  onSaveBrandKit?: (name: string) => void;
+  onApplyBrandKit?: (kit: BrandKit) => void;
 }
 
 /** Section3 with optional version history */
@@ -76,6 +87,9 @@ export function PageList({
   onDropImage,
   onExitPreview,
   onRegenerate,
+  brandKits,
+  onSaveBrandKit,
+  onApplyBrandKit,
 }: PageListProps) {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
@@ -84,6 +98,8 @@ export function PageList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [showThemes, setShowThemes] = useState(false);
+  const [showSaveKit, setShowSaveKit] = useState(false);
+  const [kitName, setKitName] = useState("");
   // Version navigation: index into versions array (undefined = current/active html)
   const [versionView, setVersionView] = useState<Record<string, number>>({});
 
@@ -245,6 +261,88 @@ export function PageList({
                         </div>
                       )}
                     </div>
+                  </>
+                )}
+                {/* Brand Kits section */}
+                {brandKits && brandKits.length > 0 && onApplyBrandKit && (
+                  <>
+                    <div className="border-t border-gray-100 my-1" />
+                    <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      Mis Brand Kits
+                    </div>
+                    {brandKits.map((kit) => (
+                      <button
+                        key={kit.id}
+                        onClick={() => {
+                          onApplyBrandKit(kit);
+                          setShowThemes(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs font-bold flex items-center gap-2 hover:bg-gray-50"
+                      >
+                        <span className="flex gap-0.5 shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: kit.colors.primary }} />
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: kit.colors.accent }} />
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: kit.colors.secondary }} />
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: kit.colors.surface, border: '1px solid #e5e7eb' }} />
+                        </span>
+                        <span className="truncate">{kit.name}</span>
+                        {kit.isDefault && <span className="text-[8px] text-brand-500 ml-auto">&#9733;</span>}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {/* Save as Brand Kit */}
+                {onSaveBrandKit && (
+                  <>
+                    <div className="border-t border-gray-100 my-1" />
+                    {showSaveKit ? (
+                      <div className="px-3 py-1.5">
+                        <input
+                          autoFocus
+                          value={kitName}
+                          onChange={(e) => setKitName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && kitName.trim()) {
+                              onSaveBrandKit(kitName.trim());
+                              setKitName("");
+                              setShowSaveKit(false);
+                              setShowThemes(false);
+                            }
+                            if (e.key === "Escape") setShowSaveKit(false);
+                          }}
+                          placeholder="Nombre del kit..."
+                          className="w-full text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none"
+                        />
+                        <div className="flex gap-1 mt-1">
+                          <button
+                            onClick={() => {
+                              if (kitName.trim()) {
+                                onSaveBrandKit(kitName.trim());
+                                setKitName("");
+                                setShowSaveKit(false);
+                                setShowThemes(false);
+                              }
+                            }}
+                            className="text-[10px] font-bold text-brand-600 hover:underline"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            onClick={() => setShowSaveKit(false)}
+                            className="text-[10px] font-bold text-gray-400 hover:underline"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowSaveKit(true)}
+                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-brand-600 hover:bg-brand-50"
+                      >
+                        Guardar como Brand Kit
+                      </button>
+                    )}
                   </>
                 )}
               </div>
