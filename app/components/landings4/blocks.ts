@@ -8,14 +8,14 @@ export const LANDING_BLOCKS = [
     id: "text-block",
     label: "Text",
     category: "Basic",
-    content: `<p class="text-base text-gray-800">Edit this text. Double click to start typing.</p>`,
+    content: `<p class="text-base text-on-surface">Edit this text. Double click to start typing.</p>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>`,
   },
   {
     id: "heading-block",
     label: "Heading",
     category: "Basic",
-    content: `<h2 class="text-4xl font-black text-gray-900">Your Heading Here</h2>`,
+    content: `<h2 class="text-4xl font-black text-on-surface">Your Heading Here</h2>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16"/><path d="M4 4v16"/><path d="M20 4v16"/></svg>`,
   },
   {
@@ -29,14 +29,14 @@ export const LANDING_BLOCKS = [
     id: "button-block",
     label: "Button",
     category: "Basic",
-    content: `<a href="#" class="inline-block px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:opacity-90 transition">Click Me</a>`,
+    content: `<a href="#" class="inline-block px-8 py-3 bg-primary text-on-primary font-bold rounded-xl hover:opacity-90 transition">Click Me</a>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h8"/></svg>`,
   },
   {
     id: "link-block",
     label: "Link",
     category: "Basic",
-    content: `<a href="#" class="text-indigo-600 font-bold underline hover:text-indigo-800 transition">Your Link</a>`,
+    content: `<a href="#" class="text-primary font-bold underline hover:text-primary-dark transition">Your Link</a>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
   },
   {
@@ -73,8 +73,8 @@ export const LANDING_BLOCKS = [
     label: "2 Columns",
     category: "Layout",
     content: `<div class="grid grid-cols-2 gap-8 px-6 py-12 max-w-6xl mx-auto">
-  <div class="bg-gray-50 rounded-xl p-8 min-h-[120px]"></div>
-  <div class="bg-gray-50 rounded-xl p-8 min-h-[120px]"></div>
+  <div class="bg-surface-alt rounded-xl p-8 min-h-[120px]"></div>
+  <div class="bg-surface-alt rounded-xl p-8 min-h-[120px]"></div>
 </div>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="9" height="18" rx="1"/><rect x="13" y="3" width="9" height="18" rx="1"/></svg>`,
   },
@@ -83,9 +83,9 @@ export const LANDING_BLOCKS = [
     label: "3 Columns",
     category: "Layout",
     content: `<div class="grid grid-cols-3 gap-6 px-6 py-12 max-w-6xl mx-auto">
-  <div class="bg-gray-50 rounded-xl p-6 min-h-[120px]"></div>
-  <div class="bg-gray-50 rounded-xl p-6 min-h-[120px]"></div>
-  <div class="bg-gray-50 rounded-xl p-6 min-h-[120px]"></div>
+  <div class="bg-surface-alt rounded-xl p-6 min-h-[120px]"></div>
+  <div class="bg-surface-alt rounded-xl p-6 min-h-[120px]"></div>
+  <div class="bg-surface-alt rounded-xl p-6 min-h-[120px]"></div>
 </div>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="6" height="18" rx="1"/><rect x="9" y="3" width="6" height="18" rx="1"/><rect x="17" y="3" width="6" height="18" rx="1"/></svg>`,
   },
@@ -126,12 +126,12 @@ export const LANDING_BLOCKS = [
     id: "hero-image-bg",
     label: "Hero Image BG",
     category: "Heroes",
-    content: `<section class="relative bg-gray-900 py-32 px-6 text-center overflow-hidden">
+    content: `<section class="relative bg-primary-dark py-32 px-6 text-center overflow-hidden">
   <img src="https://placehold.co/1920x800/1f2937/374151?text=Background" alt="" class="absolute inset-0 w-full h-full object-cover opacity-40" />
   <div class="relative max-w-4xl mx-auto">
-    <h1 class="text-5xl md:text-7xl font-black text-white mb-6">Bold Statement Here</h1>
-    <p class="text-xl text-white/80 mb-10 max-w-2xl mx-auto">A powerful subtitle on top of a beautiful background image.</p>
-    <a href="#" class="inline-block px-10 py-4 bg-white text-gray-900 font-bold rounded-xl text-lg hover:bg-gray-100 transition">Get Started</a>
+    <h1 class="text-5xl md:text-7xl font-black text-on-primary mb-6">Bold Statement Here</h1>
+    <p class="text-xl text-on-primary/80 mb-10 max-w-2xl mx-auto">A powerful subtitle on top of a beautiful background image.</p>
+    <a href="#" class="inline-block px-10 py-4 bg-accent text-on-accent font-bold rounded-xl text-lg hover:opacity-90 transition">Get Started</a>
   </div>
 </section>`,
     media: `<svg viewBox="0 0 24 12" fill="none"><rect width="24" height="12" rx="1" fill="#374151"/><rect x="6" y="2" width="12" height="2" rx=".5" fill="#fff"/><rect x="8" y="5" width="8" height="1" rx=".25" fill="#9ca3af"/><rect x="9" y="8" width="6" height="1.5" rx=".5" fill="#fff"/></svg>`,

@@ -97,6 +97,8 @@ export interface RefineOptions {
   onDone?: (html: string) => void;
   /** Called on error */
   onError?: (error: Error) => void;
+  /** Theme colors for AI context */
+  themeColors?: Record<string, string>;
 }
 
 /**
@@ -118,6 +120,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     onChunk,
     onDone,
     onError,
+    themeColors,
   } = options;
 
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
@@ -146,9 +149,19 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     });
   }
 
+  // Inject theme context if available
+  let finalSystem = systemPrompt + currentDateLine();
+  if (themeColors) {
+    const colorLines = Object.entries(themeColors)
+      .map(([k, v]) => `- --color-${k}: ${v}`)
+      .join("\n");
+    const isDark = themeColors.surface && parseInt(themeColors.surface.slice(1, 3), 16) < 128;
+    finalSystem += `\n\n## Active Theme Colors\nThe landing uses these semantic color values. Keep using semantic classes (bg-primary, text-on-surface, etc):\n${colorLines}${isDark ? "\nThis is a DARK theme." : ""}`;
+  }
+
   const result = streamText({
     model,
-    system: systemPrompt + currentDateLine(),
+    system: finalSystem,
     messages: [{ role: "user", content }],
     ...(isVariant && !referenceImage ? { temperature: 1.2 } : {}),
   });

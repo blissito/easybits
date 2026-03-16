@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "re
 import "grapesjs/dist/css/grapes.min.css";
 import type { Editor } from "grapesjs";
 import { LANDING_BLOCKS } from "./blocks";
-import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
 
 export interface AiAction {
   type: "refine-element";
@@ -21,24 +21,37 @@ export interface GrapesEditorHandle {
   replaceComponent: (componentId: string, newHtml: string) => void;
 }
 
+interface BrandKitItem {
+  id: string;
+  name: string;
+  colors: Record<string, string>;
+  fonts?: { heading?: string; body?: string } | null;
+  mood?: string | null;
+  logoUrl?: string | null;
+  isDefault?: boolean;
+}
+
 interface Props {
   initialHtml: string;
   theme?: string;
   customColors?: Record<string, string>;
+  brandKits?: BrandKitItem[];
   onChange?: (html: string) => void;
   onAiAction?: (action: AiAction) => void;
+  onThemeChange?: (themeId: string) => void;
 }
 
 const PANEL_TABS = [
   { id: "blocks", label: "Bloques", icon: "⊞" },
   { id: "layers", label: "Capas", icon: "☰" },
   { id: "styles", label: "Estilos", icon: "◑" },
+  { id: "themes", label: "Temas", icon: "◈" },
 ] as const;
 
 type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors, onChange, onAiAction }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange }, ref) => {
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const blocksRef = useRef<HTMLDivElement>(null);
     const layersRef = useRef<HTMLDivElement>(null);
@@ -48,6 +61,8 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     onChangeRef.current = onChange;
     const onAiActionRef = useRef(onAiAction);
     onAiActionRef.current = onAiAction;
+    const onThemeChangeRef = useRef(onThemeChange);
+    onThemeChangeRef.current = onThemeChange;
     const [activePanel, setActivePanel] = useState<PanelId>("blocks");
 
     useImperativeHandle(ref, () => ({
@@ -250,13 +265,17 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 extend: {
                   colors: {
                     primary: "var(--color-primary)",
+                    "primary-light": "var(--color-primary-light)",
+                    "primary-dark": "var(--color-primary-dark)",
                     secondary: "var(--color-secondary)",
                     accent: "var(--color-accent)",
                     surface: "var(--color-surface)",
+                    "surface-alt": "var(--color-surface-alt)",
                     "on-primary": "var(--color-on-primary)",
                     "on-secondary": "var(--color-on-secondary)",
                     "on-accent": "var(--color-on-accent)",
                     "on-surface": "var(--color-on-surface)",
+                    "on-surface-muted": "var(--color-on-surface-muted)",
                   },
                 },
               },
@@ -414,6 +433,107 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             ref={stylesRef}
             className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}
           />
+          {/* Themes panel */}
+          <div className={`flex-1 overflow-auto p-3 ${activePanel === "themes" ? "" : "hidden"}`}>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">Temas</p>
+            <div className="grid grid-cols-2 gap-2">
+              {LANDING_THEMES.map((t) => {
+                const isActive = theme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      onThemeChangeRef.current?.(t.id);
+                      // Update CSS in canvas immediately
+                      const ed = editorRef.current;
+                      if (ed) {
+                        const doc = ed.Canvas.getDocument();
+                        if (doc) {
+                          const el = doc.getElementById("easybits-theme");
+                          if (el) {
+                            try {
+                              el.textContent = buildSingleThemeCss(t.id).css || "";
+                            } catch { /* skip */ }
+                          }
+                        }
+                      }
+                    }}
+                    className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all ${
+                      isActive
+                        ? "border-brand-500 bg-brand-500/10"
+                        : "border-gray-700 hover:border-gray-500"
+                    }`}
+                  >
+                    {/* Color swatches */}
+                    <div className="flex gap-1">
+                      <div
+                        className="w-5 h-5 rounded-full border border-gray-600"
+                        style={{ background: t.colors.primary }}
+                        title="Primary"
+                      />
+                      <div
+                        className="w-5 h-5 rounded-full border border-gray-600"
+                        style={{ background: t.colors.surface }}
+                        title="Surface"
+                      />
+                      <div
+                        className="w-5 h-5 rounded-full border border-gray-600"
+                        style={{ background: t.colors.accent }}
+                        title="Accent"
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-300">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Brand Kits */}
+            {brandKits && brandKits.length > 0 && (
+              <>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-5 mb-3">Brand Kits</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {brandKits.map((bk) => {
+                    const colors = bk.colors as Record<string, string>;
+                    return (
+                      <button
+                        key={bk.id}
+                        onClick={() => {
+                          // Brand kits use custom theme — apply colors directly
+                          onThemeChangeRef.current?.("custom");
+                          const ed = editorRef.current;
+                          if (ed) {
+                            const doc = ed.Canvas.getDocument();
+                            if (doc) {
+                              const el = doc.getElementById("easybits-theme");
+                              if (el) {
+                                const vars = Object.entries(colors)
+                                  .map(([k, v]) => `  --color-${k}: ${v};`)
+                                  .join("\n");
+                                el.textContent = `:root {\n${vars}\n}`;
+                              }
+                            }
+                          }
+                        }}
+                        className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 border-gray-700 hover:border-gray-500 transition-all"
+                      >
+                        <div className="flex gap-1">
+                          {["primary", "surface", "accent"].map((key) => (
+                            <div
+                              key={key}
+                              className="w-5 h-5 rounded-full border border-gray-600"
+                              style={{ background: colors[key] || "#888" }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-300 truncate max-w-full">{bk.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Canvas */}

@@ -103,20 +103,64 @@ export interface GenerateOptions {
   onImageUpdate?: (sectionId: string, html: string) => void;
   onDone?: (sections: Section3[]) => void;
   onError?: (error: Error) => void;
+  /** Theme colors to inject into the AI prompt */
+  themeColors?: Record<string, string>;
+  /** Brand kit info for AI context */
+  brandKit?: {
+    fonts?: { heading?: string; body?: string };
+    mood?: string;
+    logoUrl?: string;
+  };
 }
 
 /**
  * Generate a landing page with streaming AI + image enrichment.
  */
+function buildVisualContext(themeColors?: Record<string, string>, brandKit?: GenerateOptions["brandKit"]): string {
+  if (!themeColors && !brandKit) return "";
+
+  const lines: string[] = ["\n\n## Visual Context — MANDATORY"];
+
+  if (themeColors) {
+    lines.push("You MUST use these exact semantic color values in your design. The CSS variables are already configured — just use the semantic classes (bg-primary, text-on-surface, etc). Here are the actual color values for reference so you understand the palette:");
+    for (const [key, value] of Object.entries(themeColors)) {
+      lines.push(`- --color-${key}: ${value}`);
+    }
+    const isDark = themeColors.surface && parseInt(themeColors.surface.slice(1, 3), 16) < 128;
+    if (isDark) {
+      lines.push("This is a DARK theme — surfaces are dark, text is light. Design accordingly.");
+    }
+  }
+
+  if (brandKit?.fonts) {
+    const { heading, body } = brandKit.fonts;
+    if (heading) lines.push(`- Heading font: use font-family: '${heading}' via inline style on h1-h6`);
+    if (body) lines.push(`- Body font: use font-family: '${body}' via inline style on p, li, span`);
+  }
+
+  if (brandKit?.mood) {
+    lines.push(`- Design mood: ${brandKit.mood} — adapt spacing, imagery style, and visual weight to match this mood`);
+  }
+
+  if (brandKit?.logoUrl) {
+    lines.push(`- Brand logo: include <img src="${brandKit.logoUrl}" alt="Logo" class="h-8 w-auto" /> in the navbar/hero area`);
+  }
+
+  return lines.join("\n");
+}
+
 export async function generateLanding(options: GenerateOptions): Promise<Section3[]> {
   const {
     prompt,
     referenceImage,
     extraInstructions,
     systemPrompt = SYSTEM_PROMPT,
+    themeColors,
+    brandKit,
     ...rest
   } = options;
 
+  const visualContext = buildVisualContext(themeColors, brandKit);
   const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
   const content: any[] = [];
 
@@ -140,7 +184,7 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
 
   return streamGenerate({
     ...rest,
-    systemPrompt,
+    systemPrompt: systemPrompt + visualContext,
     userContent: content,
   });
 }

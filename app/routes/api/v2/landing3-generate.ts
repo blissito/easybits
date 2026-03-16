@@ -12,7 +12,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, referenceImage, extraInstructions } = body;
+  const { landingId, prompt, referenceImage, extraInstructions, themeColors, brandKit } = body;
 
   if (!landingId || !prompt) {
     return Response.json(
@@ -46,6 +46,8 @@ export async function action({ request }: Route.ActionArgs) {
           prompt,
           referenceImage,
           extraInstructions,
+          themeColors,
+          brandKit,
           pexelsApiKey: process.env.PEXELS_API_KEY,
           onSection(section) {
             allSections.push(section);

@@ -12,6 +12,7 @@ import { db } from "~/.server/db";
 import type { Section3 } from "~/lib/landing3/types";
 import { grapesToSections } from "~/lib/landing4/grapesToSections";
 import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
+import { LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
 import type { GrapesEditorHandle, AiAction } from "~/components/landings4/GrapesEditor";
 import type { Route } from "./+types/editor";
 
@@ -40,7 +41,12 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     }
   }
 
-  return { landing, websiteUrl };
+  const brandKits = await db.brandKit.findMany({
+    where: { ownerId: user.id },
+    select: { id: true, name: true, colors: true, fonts: true, mood: true, logoUrl: true, isDefault: true },
+  });
+
+  return { landing, websiteUrl, brandKits };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -135,8 +141,25 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   return { error: "Intent desconocido" };
 };
 
+function playCompletionSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(587, ctx.currentTime); // D5
+    osc.frequency.setValueAtTime(784, ctx.currentTime + 0.1); // G5
+    osc.frequency.setValueAtTime(988, ctx.currentTime + 0.2); // B5
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch { /* silent fail */ }
+}
+
 export default function Landing4Editor() {
-  const { landing, websiteUrl } = useLoaderData<typeof loader>();
+  const { landing, websiteUrl, brandKits } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const saveFetcher = useFetcher();
   const deployFetcher = useFetcher<{
@@ -165,10 +188,25 @@ export default function Landing4Editor() {
     return sectionsToHtml(secs);
   })();
 
-  const theme = (() => {
+  const initialTheme = (() => {
     const meta = landing.metadata as Record<string, unknown> | null;
     return (meta?.theme as string) || "minimal";
   })();
+  const [currentTheme, setCurrentTheme] = useState(initialTheme);
+
+  const getThemeColors = useCallback((): Record<string, string> | undefined => {
+    const t = LANDING_THEMES.find((th) => th.id === currentTheme);
+    return t?.colors;
+  }, [currentTheme]);
+
+  const handleThemeChange = useCallback((themeId: string) => {
+    setCurrentTheme(themeId);
+    saveFetcher.submit(
+      { intent: "update-theme", theme: themeId },
+      { method: "post" }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cancel pending saves on unmount
   useEffect(() => {
@@ -280,6 +318,7 @@ export default function Landing4Editor() {
         body: JSON.stringify({
           landingId: landing.id,
           prompt: genPrompt,
+          themeColors: getThemeColors(),
         }),
       });
       if (!res.ok) {
@@ -357,7 +396,8 @@ export default function Landing4Editor() {
     } finally {
       setIsGenerating(false);
       setGenSectionCount(0);
-      isSavingLocked.current = false; // Unlock auto-save
+      isSavingLocked.current = false;
+      playCompletionSound();
     }
   }
 
@@ -384,6 +424,7 @@ export default function Landing4Editor() {
           instruction: genPrompt,
           currentHtml,
           skipDbUpdate: true,
+          themeColors: getThemeColors(),
         }),
       });
 
@@ -434,6 +475,7 @@ export default function Landing4Editor() {
       setIsRefining(false);
       setGenPrompt("");
       isSavingLocked.current = false;
+      playCompletionSound();
     }
   }
 
@@ -476,6 +518,7 @@ export default function Landing4Editor() {
         sectionId: "__new__",
         currentHtml: targetHtml,
         skipDbUpdate: true,
+        themeColors: getThemeColors(),
         instruction: mode === "regenerate-section"
           ? (instruction || "Regenerate this section with a completely fresh design, keep the same purpose and content type but change the visual approach entirely")
           : instruction,
@@ -557,13 +600,15 @@ export default function Landing4Editor() {
       setIsRefining(false);
       setAiPrompt("");
       isSavingLocked.current = false;
+      playCompletionSound();
     }
   }
 
   return (
     <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-4 px-4 py-2 shrink-0 border-b border-gray-200 bg-white z-10">
+      <div className="grid grid-cols-3 items-center px-4 py-2 shrink-0 border-b border-gray-200 bg-white z-10">
+        {/* Left: back + name */}
         <div className="flex items-center gap-3">
           <Link to="/dash/landings4" className="text-sm font-bold hover:underline">
             &larr;
@@ -585,7 +630,26 @@ export default function Landing4Editor() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Center: viewport toggle */}
+        <div className="flex items-center justify-center gap-1">
+          {[
+            { id: "Desktop", label: "Desktop", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v8.5A2.25 2.25 0 0115.75 15h-3.105a3.501 3.501 0 001.1 1.677A.75.75 0 0113.26 18H6.74a.75.75 0 01-.484-1.323A3.501 3.501 0 007.355 15H4.25A2.25 2.25 0 012 12.75v-8.5zm1.5 0a.75.75 0 01.75-.75h11.5a.75.75 0 01.75.75v8.5a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-8.5z" clipRule="evenodd" /></svg> },
+            { id: "Tablet", label: "Tablet", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 1a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2H5zm0 1.5h10a.5.5 0 01.5.5v14a.5.5 0 01-.5.5H5a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5zm4 14a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" /></svg> },
+            { id: "Mobile", label: "Mobile", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm0 1.5h8a.5.5 0 01.5.5v12a.5.5 0 01-.5.5H6a.5.5 0 01-.5-.5V4a.5.5 0 01.5-.5zm3 13a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" /></svg> },
+          ].map((d) => (
+            <button
+              key={d.id}
+              onClick={() => editorRef.current?.getEditor()?.setDevice(d.id)}
+              className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              title={d.label}
+            >
+              {d.icon}
+            </button>
+          ))}
+        </div>
+
+        {/* Right: actions */}
+        <div className="flex items-center gap-2 justify-end">
           {/* AI generate/improve button */}
           <BrutalButton
             size="chip"
@@ -615,29 +679,11 @@ export default function Landing4Editor() {
                 cmd.run("preview");
               }
             }}
-            className="px-3 py-1.5 text-xs font-bold border-2 border-black rounded-lg bg-white hover:bg-gray-50 transition-colors"
+            className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100"
             title="Preview"
           >
-            Preview
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" /><path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
           </button>
-
-          {/* Viewport toggle */}
-          <div className="flex border-2 border-black rounded-lg overflow-hidden">
-            {[
-              { id: "Desktop", icon: "🖥" },
-              { id: "Tablet", icon: "📱" },
-              { id: "Mobile", icon: "📲" },
-            ].map((d) => (
-              <button
-                key={d.id}
-                onClick={() => editorRef.current?.getEditor()?.setDevice(d.id)}
-                className="px-2 py-1 text-xs hover:bg-gray-100 transition-colors"
-                title={d.id}
-              >
-                {d.icon}
-              </button>
-            ))}
-          </div>
 
           <BrutalButton
             size="chip"
@@ -713,9 +759,11 @@ export default function Landing4Editor() {
           <GrapesEditor
             ref={editorRef}
             initialHtml={initialHtml}
-            theme={theme}
+            theme={currentTheme}
+            brandKits={brandKits as any}
             onChange={handleEditorChange}
             onAiAction={handleAiAction}
+            onThemeChange={handleThemeChange}
           />
         </Suspense>
       </div>
