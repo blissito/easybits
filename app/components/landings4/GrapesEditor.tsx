@@ -346,7 +346,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             cats.forEach((cat: any) => {
               try {
                 const name = (typeof cat.get === "function" ? cat.get("id") || cat.get("label") : cat.id || cat.label) || "";
-                if (name !== "Basic" && name !== "CTA") {
+                if (name !== "CTA") {
                   if (typeof cat.set === "function") cat.set("open", false);
                 }
               } catch { /* skip */ }
