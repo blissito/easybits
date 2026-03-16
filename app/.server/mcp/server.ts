@@ -62,6 +62,9 @@ import {
   createDocument,
   updateDocument,
   deleteDocument,
+  addPage,
+  deletePage,
+  reorderPages,
   deployDocument,
   unpublishDocument,
   generateDocumentAI,
@@ -816,6 +819,54 @@ export function createMcpServer() {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteDocument(ctx, params.documentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "add_page",
+    "Add a new page to a document. If html is omitted, adds a blank page. afterPageIndex is 0-based; omit to append at the end.",
+    {
+      documentId: z.string().describe("The document ID"),
+      html: z.string().optional().describe("HTML content for the new page. Omit for a blank page"),
+      afterPageIndex: z.number().optional().describe("Insert after this 0-based page index. Omit to append at the end"),
+      label: z.string().optional().describe("Page label/name (e.g. 'Cover', 'Chapter 1')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await addPage(ctx, params.documentId, {
+        html: params.html,
+        afterPageIndex: params.afterPageIndex,
+        label: params.label,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_page",
+    "Delete a page from a document by its section ID. Cannot delete the last remaining page.",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageId: z.string().describe("The page/section ID to delete (from get_document sections[].id)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deletePage(ctx, params.documentId, params.pageId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "reorder_pages",
+    "Reorder all pages in a document. pageIds must contain every existing page ID exactly once, in the desired order.",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageIds: z.array(z.string()).describe("Array of all page/section IDs in the desired order"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await reorderPages(ctx, params.documentId, params.pageIds);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

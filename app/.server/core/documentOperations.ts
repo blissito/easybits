@@ -262,6 +262,104 @@ export async function setSectionHtmlBySelector(
   return { success: true, pageId, cssSelector };
 }
 
+export async function addPage(
+  ctx: AuthContext,
+  id: string,
+  opts: { html?: string; afterPageIndex?: number; label?: string }
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const previousSections = JSON.parse(JSON.stringify(sections));
+
+  const newSection: Section3 = {
+    id: crypto.randomUUID(),
+    order: 0,
+    html: opts.html || "<section class=\"w-[8.5in] h-[11in] flex flex-col relative overflow-hidden bg-surface\"><div class=\"flex-1 flex items-center justify-center text-on-surface-muted\">New page</div></section>",
+    name: opts.label || `Page ${sections.length + 1}`,
+  };
+
+  const insertAt = opts.afterPageIndex !== undefined
+    ? Math.min(opts.afterPageIndex + 1, sections.length)
+    : sections.length;
+  sections.splice(insertAt, 0, newSection);
+
+  // Re-number orders
+  sections.forEach((s, i) => { s.order = i; });
+
+  const result = await db.landing.update({
+    where: { id },
+    data: { sections: sections as any, previousSections },
+  });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
+  return newSection;
+}
+
+export async function deletePage(
+  ctx: AuthContext,
+  id: string,
+  pageId: string
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const idx = sections.findIndex((s) => s.id === pageId);
+  if (idx === -1) throwJson("Page not found", 404);
+  if (sections.length <= 1) throwJson("Cannot delete the last remaining page", 400);
+
+  const previousSections = JSON.parse(JSON.stringify(sections));
+  sections.splice(idx, 1);
+  sections.forEach((s, i) => { s.order = i; });
+
+  const result = await db.landing.update({
+    where: { id },
+    data: { sections: sections as any, previousSections },
+  });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
+  return { success: true, remainingPages: sections.length };
+}
+
+export async function reorderPages(
+  ctx: AuthContext,
+  id: string,
+  pageIds: string[]
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const existingIds = new Set(sections.map((s) => s.id));
+  const inputIds = new Set(pageIds);
+
+  if (pageIds.length !== sections.length || pageIds.some((id) => !existingIds.has(id)) || existingIds.size !== inputIds.size)
+    throwJson("pageIds must contain every existing page ID exactly once", 400);
+
+  const previousSections = JSON.parse(JSON.stringify(sections));
+  const sectionMap = new Map(sections.map((s) => [s.id, s]));
+  const reordered = pageIds.map((pid, i) => {
+    const s = sectionMap.get(pid)!;
+    return { ...s, order: i };
+  });
+
+  const result = await db.landing.update({
+    where: { id },
+    data: { sections: reordered as any, previousSections },
+  });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
+  return reordered.map((s) => ({ id: s.id, order: s.order, name: s.name }));
+}
+
 export async function deleteDocument(ctx: AuthContext, id: string) {
   requireScope(ctx, "DELETE");
   validateObjectId(id);
