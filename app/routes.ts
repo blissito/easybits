@@ -87,6 +87,12 @@ export default [
         route("new", "routes/dash/landings3/new.tsx"),
         route(":id", "routes/dash/landings3/editor.tsx"),
       ]),
+      // Landings v4
+      ...prefix("landings4", [
+        index("routes/dash/landings4/list.tsx"),
+        route("new", "routes/dash/landings4/new.tsx"),
+        route(":id", "routes/dash/landings4/editor.tsx"),
+      ]),
       // Documents
       ...prefix("documents", [
         index("routes/dash/documents/list.tsx"),

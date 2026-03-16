@@ -7,6 +7,7 @@ import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
 import { buildDeployHtml } from "~/lib/landing3/buildHtml";
+import { buildDeployHtmlV4 } from "~/lib/landing4/buildHtml";
 import { buildDocumentHtml, buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
@@ -65,6 +66,8 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           title: landing.name,
         });
       })()
+    : landing.version === 5
+    ? buildDeployHtmlV4(sections as Section3[], { showBranding: !isPaid, title: landing.name })
     : landing.version === 3
     ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined, !isPaid)
     : landing.version === 2
