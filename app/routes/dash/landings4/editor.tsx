@@ -170,6 +170,13 @@ export default function Landing4Editor() {
     return (meta?.theme as string) || "minimal";
   })();
 
+  // Cancel pending saves on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (deployFetcher.state === "idle") setActiveIntent(null);
     if (deployFetcher.data?.redirect) navigate(deployFetcher.data.redirect);
@@ -199,14 +206,38 @@ export default function Landing4Editor() {
     return () => document.removeEventListener("keydown", handleKey);
   }, [overflowOpen, aiModal, showGenModal]);
 
+  // Track the last known good section count to prevent saving empty/degraded state
+  const lastSectionCount = useRef(
+    Array.isArray(landing.sections)
+      ? (landing.sections as unknown as Section3[]).filter((s: any) => s.id !== "__grapes_css__").length
+      : 0
+  );
+  const isSavingLocked = useRef(false);
+
   const handleEditorChange = useCallback((html: string) => {
-    // Don't save empty content (e.g. during init or clear)
+    // GUARD 1: Don't save if locked (during generation, etc.)
+    if (isSavingLocked.current) return;
+    // GUARD 2: Don't save empty content
     if (!html || !html.trim()) return;
-    // Debounce save
+    // GUARD 3: Must have real content (not just a <style> tag)
+    const stripped = html.replace(/<style[\s\S]*?<\/style>/gi, "").trim();
+    if (!stripped) return;
+
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const newSections = grapesToSections(html);
-      if (newSections.length === 0 || (newSections.length === 1 && !newSections[0].html.trim())) return;
+      const contentSections = newSections.filter((s) => s.id !== "__grapes_css__");
+      // GUARD 4: Don't save if sections went from many to zero (wipe detection)
+      if (contentSections.length === 0 && lastSectionCount.current > 0) {
+        console.warn("[v4 editor] Blocked save: would wipe", lastSectionCount.current, "sections");
+        return;
+      }
+      // GUARD 5: Don't save if sections dropped by more than 50% (partial wipe)
+      if (lastSectionCount.current > 2 && contentSections.length < lastSectionCount.current * 0.5) {
+        console.warn("[v4 editor] Blocked save: section count dropped from", lastSectionCount.current, "to", contentSections.length);
+        return;
+      }
+      lastSectionCount.current = contentSections.length;
       saveFetcher.submit(
         {
           intent: "update-sections",
@@ -214,7 +245,7 @@ export default function Landing4Editor() {
         },
         { method: "post" }
       );
-    }, 1500);
+    }, 2000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -224,15 +255,22 @@ export default function Landing4Editor() {
 
   const [genSectionCount, setGenSectionCount] = useState(0);
 
+  // Check if canvas has content
+  const hasContent = useCallback(() => {
+    const ed = editorRef.current?.getEditor();
+    if (!ed) return false;
+    const html = ed.getHtml();
+    return !!(html && html.trim());
+  }, []);
+
   async function handleGenerate() {
     if (!genPrompt.trim() || isGenerating) return;
     setIsGenerating(true);
     setGenSectionCount(0);
     setShowGenModal(false);
+    isSavingLocked.current = true; // Lock auto-save during generation
 
-    // Clear canvas for fresh generation
     const ed = editorRef.current?.getEditor();
-    if (ed) ed.DomComponents.clear();
 
     try {
       const res = await fetch("/api/v2/landing3-generate", {
@@ -257,8 +295,6 @@ export default function Landing4Editor() {
       let buf = "";
       let eventType = "";
       const allSections: Section3[] = [];
-      // Track GrapesJS component IDs for section-update
-      const sectionComponentMap = new Map<string, string>();
 
       while (true) {
         const { done, value } = await reader.read();
@@ -275,35 +311,29 @@ export default function Landing4Editor() {
             try {
               const parsed = JSON.parse(line.slice(6));
 
-              if (eventType === "section" && ed) {
+              if (eventType === "section") {
                 allSections.push(parsed);
                 setGenSectionCount(allSections.length);
 
-                // Append section HTML to GrapesJS canvas in real time
-                const wrapper = ed.DomComponents.getWrapper();
-                if (wrapper) {
-                  const added = wrapper.append(parsed.html);
-                  // Track the component for later updates
-                  if (added && added.length > 0) {
-                    sectionComponentMap.set(parsed.id, added[0].getId());
-                  }
-                  // Scroll canvas to bottom to show new section
-                  const canvasBody = ed.Canvas.getBody();
-                  if (canvasBody) {
-                    canvasBody.scrollTop = canvasBody.scrollHeight;
-                  }
+                // Rebuild entire canvas with all sections so far
+                // This ensures GrapesJS renders everything correctly
+                if (ed) {
+                  const fullHtml = allSections.map((s) => s.html).join("\n");
+                  ed.setComponents(fullHtml);
+                  // Scroll canvas to bottom
+                  requestAnimationFrame(() => {
+                    const canvasBody = ed.Canvas.getBody();
+                    if (canvasBody) canvasBody.scrollTop = canvasBody.scrollHeight;
+                  });
                 }
-              } else if (eventType === "section-update" && ed) {
-                // Update section HTML (e.g. image enrichment)
+              } else if (eventType === "section-update") {
                 const idx = allSections.findIndex((s) => s.id === parsed.id);
-                if (idx >= 0) allSections[idx] = { ...allSections[idx], html: parsed.html };
-
-                const compId = sectionComponentMap.get(parsed.id);
-                if (compId) {
-                  const comp = ed.DomComponents.getWrapper()?.find(`#${compId}`)?.[0]
-                    || ed.DomComponents.componentsById[compId];
-                  if (comp) {
-                    comp.replaceWith(parsed.html);
+                if (idx >= 0) {
+                  allSections[idx] = { ...allSections[idx], html: parsed.html };
+                  // Rebuild canvas with updated section
+                  if (ed) {
+                    const fullHtml = allSections.map((s) => s.html).join("\n");
+                    ed.setComponents(fullHtml);
                   }
                 }
               }
@@ -327,6 +357,82 @@ export default function Landing4Editor() {
     } finally {
       setIsGenerating(false);
       setGenSectionCount(0);
+      isSavingLocked.current = false; // Unlock auto-save
+    }
+  }
+
+  // ─── AI Improve (whole page refine) ────────────────────
+  async function handleImprove() {
+    if (!genPrompt.trim() || isRefining) return;
+    setIsRefining(true);
+    setShowGenModal(false);
+    isSavingLocked.current = true;
+
+    const ed = editorRef.current?.getEditor();
+    if (!ed) { setIsRefining(false); isSavingLocked.current = false; return; }
+
+    const currentHtml = ed.getHtml();
+
+    try {
+      const res = await fetch("/api/v2/landing3-refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          landingId: landing.id,
+          sectionId: "__full_page__",
+          instruction: genPrompt,
+          currentHtml,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Improve failed:", res.status);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) return;
+
+      const decoder = new TextDecoder();
+      let buf = "";
+      let event = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            event = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if ((event === "chunk" || event === "done") && data.html) {
+                ed.setComponents(data.html);
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+
+      // Save
+      const finalHtml = editorRef.current?.getHtml() || "";
+      const newSections = grapesToSections(finalHtml);
+      saveFetcher.submit(
+        { intent: "update-sections", sections: JSON.stringify(newSections) },
+        { method: "post" }
+      );
+    } catch (err) {
+      console.error("AI improve error:", err);
+    } finally {
+      setIsRefining(false);
+      setGenPrompt("");
+      isSavingLocked.current = false;
     }
   }
 
@@ -442,14 +548,18 @@ export default function Landing4Editor() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* AI generate button */}
+          {/* AI generate/improve button */}
           <BrutalButton
             size="chip"
             mode="ghost"
             onClick={() => setShowGenModal(true)}
             isDisabled={isGenerating}
           >
-            {isGenerating ? `Generando (${genSectionCount})...` : "AI Generate"}
+            {isGenerating
+              ? `Generando (${genSectionCount})...`
+              : hasContent()
+              ? "Mejorar con AI"
+              : "Generar con AI"}
           </BrutalButton>
 
           {/* Preview toggle */}
@@ -659,50 +769,76 @@ export default function Landing4Editor() {
         </div>
       )}
 
-      {/* AI Generation modal */}
-      {showGenModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-black mb-3">Generar con AI</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Describe tu landing y la AI generar&aacute; las secciones
-            </p>
-            <textarea
-              value={genPrompt}
-              onChange={(e) => setGenPrompt(e.target.value)}
-              placeholder="Ej: Landing para un SaaS de analytics con hero, features, pricing y CTA..."
-              rows={4}
-              className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleGenerate();
-                }
-              }}
-            />
-            <div className="flex gap-2 mt-4 justify-end">
-              <BrutalButton
-                size="chip"
-                mode="ghost"
-                onClick={() => {
-                  setShowGenModal(false);
-                  setGenPrompt("");
+      {/* AI Generation/Improve modal */}
+      {showGenModal && (() => {
+        const isImprove = hasContent();
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-black mb-3">
+                {isImprove ? "Mejorar con AI" : "Generar con AI"}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {isImprove
+                  ? "Describe qu\u00e9 quieres mejorar de tu landing actual"
+                  : "Describe tu landing y la AI generar\u00e1 las secciones"}
+              </p>
+              <textarea
+                value={genPrompt}
+                onChange={(e) => setGenPrompt(e.target.value)}
+                placeholder={isImprove
+                  ? "Ej: Mejora el copy, hazlo m\u00e1s profesional, agrega una secci\u00f3n de FAQ..."
+                  : "Ej: Landing para un SaaS de analytics con hero, features, pricing y CTA..."}
+                rows={4}
+                className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (isImprove) {
+                      handleImprove();
+                    } else {
+                      handleGenerate();
+                    }
+                  }
                 }}
-              >
-                Cancelar
-              </BrutalButton>
-              <BrutalButton
-                size="chip"
-                onClick={handleGenerate}
-                isDisabled={!genPrompt.trim()}
-              >
-                Generar
-              </BrutalButton>
+              />
+              <div className="flex gap-2 mt-4 justify-end">
+                <BrutalButton
+                  size="chip"
+                  mode="ghost"
+                  onClick={() => {
+                    setShowGenModal(false);
+                    setGenPrompt("");
+                  }}
+                >
+                  Cancelar
+                </BrutalButton>
+                {isImprove && (
+                  <BrutalButton
+                    size="chip"
+                    mode="ghost"
+                    onClick={() => {
+                      // Switch to full regeneration
+                      handleGenerate();
+                    }}
+                    isDisabled={!genPrompt.trim()}
+                  >
+                    Regenerar todo
+                  </BrutalButton>
+                )}
+                <BrutalButton
+                  size="chip"
+                  onClick={isImprove ? handleImprove : handleGenerate}
+                  isDisabled={!genPrompt.trim()}
+                >
+                  {isImprove ? "Mejorar" : "Generar"}
+                </BrutalButton>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </article>
   );
 }

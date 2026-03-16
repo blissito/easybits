@@ -219,63 +219,6 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           },
         });
 
-        // ─── Eyedropper button for color pickers ───
-        if (typeof window !== "undefined" && "EyeDropper" in window) {
-          const injectEyedroppers = () => {
-            const smEl = stylesRef.current;
-            if (!smEl) return;
-            smEl.querySelectorAll<HTMLElement>(".gjs-field-colorp").forEach((wrapper) => {
-              if (wrapper.querySelector(".eb-eyedropper")) return;
-              const btn = document.createElement("button");
-              btn.className = "eb-eyedropper";
-              btn.title = "Extraer color";
-              btn.textContent = "💧";
-              btn.style.cssText =
-                "position:absolute;right:-24px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;padding:0;line-height:1;z-index:1;";
-              wrapper.style.position = "relative";
-              wrapper.appendChild(btn);
-              btn.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                try {
-                  const dropper = new (window as any).EyeDropper();
-                  const result = await dropper.open();
-                  const color = result.sRGBHex;
-                  // Find the property this color picker belongs to
-                  const propEl = wrapper.closest<HTMLElement>(".gjs-sm-property");
-                  if (!propEl) return;
-                  // Find the input field and set value
-                  const input = propEl.querySelector<HTMLInputElement>(".gjs-sm-color-picker, input[type=text]");
-                  if (input) {
-                    input.value = color;
-                    input.dispatchEvent(new Event("change", { bubbles: true }));
-                  }
-                  // Also directly apply via GrapesJS style API
-                  const selected = editor.getSelected();
-                  const propName = propEl.querySelector<HTMLElement>(".gjs-sm-label")?.dataset?.smProperty
-                    || propEl.getAttribute("data-sm-property");
-                  // Try to extract property name from the label
-                  const labelEl = propEl.querySelector(".gjs-sm-label");
-                  if (selected && labelEl) {
-                    const prop = labelEl.textContent?.trim().toLowerCase().replace(/\s+/g, "-");
-                    if (prop) {
-                      selected.addStyle({ [prop]: color });
-                    }
-                  }
-                } catch {
-                  // User cancelled eyedropper
-                }
-              });
-            });
-          };
-          editor.on("component:selected", injectEyedroppers);
-          editor.on("style:sector:update", injectEyedroppers);
-          // Re-inject when styles panel becomes visible
-          const observer = new MutationObserver(injectEyedroppers);
-          if (stylesRef.current) {
-            observer.observe(stylesRef.current, { childList: true, subtree: true });
-          }
-        }
-
         // ─── Switch to Styles tab on selection ───
         editor.on("component:selected", () => {
           setActivePanel("styles");
@@ -294,24 +237,21 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           const aiButtons: any[] = [
             {
               id: "ai-refine",
-              label: `<span style="font-size:11px;font-weight:700;padding:0 4px">✦ Refine</span>`,
+              label: `<span title="Refinar elemento" style="font-size:13px;padding:0 3px;cursor:pointer">✦</span>`,
               command: "ai-refine-element",
             },
           ];
 
           if (isSection) {
-            aiButtons.push(
-              {
-                id: "ai-regen",
-                label: `<span style="font-size:11px;font-weight:700;padding:0 4px">↻ Regen</span>`,
-                command: "ai-regenerate-section",
-              }
-            );
+            aiButtons.push({
+              id: "ai-regen",
+              label: `<span title="Regenerar sección" style="font-size:13px;padding:0 3px;cursor:pointer">↻</span>`,
+              command: "ai-regenerate-section",
+            });
           } else {
-            // For non-section elements, add "Refine Section" to target the parent section
             aiButtons.push({
               id: "ai-refine-section",
-              label: `<span style="font-size:11px;font-weight:700;padding:0 4px">✦ Section</span>`,
+              label: `<span title="Refinar sección" style="font-size:13px;padding:0 3px;cursor:pointer">✧</span>`,
               command: "ai-refine-section",
             });
           }
@@ -434,7 +374,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     return (
       <div className="flex h-full w-full">
         {/* Left sidebar: tabs + panel content */}
-        <div className="w-64 shrink-0 flex flex-col bg-gray-900 border-r border-gray-700 overflow-hidden">
+        <div className="w-80 shrink-0 flex flex-col bg-gray-900 border-r border-gray-700 overflow-hidden">
           {/* Tab buttons */}
           <div className="flex border-b border-gray-700">
             {PANEL_TABS.map((tab) => (
