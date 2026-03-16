@@ -249,7 +249,10 @@ export async function setSectionHtmlBySelector(
   const el = dom.window.document.querySelector(cssSelector);
   if (!el) throwJson(`No element matches selector: ${cssSelector}`, 404);
 
-  el.outerHTML = html;
+  // Use JSDOM fragment + replaceWith instead of outerHTML assignment
+  // (outerHTML assignment in JSDOM can silently fail to persist)
+  const fragment = JSDOM.fragment(html);
+  el.replaceWith(fragment);
 
   // Serialize the updated page HTML
   const updatedHtml = dom.window.document.body.innerHTML;
