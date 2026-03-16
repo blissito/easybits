@@ -380,9 +380,10 @@ export default function Landing4Editor() {
         credentials: "same-origin",
         body: JSON.stringify({
           landingId: landing.id,
-          sectionId: "__full_page__",
+          sectionId: "__new__",
           instruction: genPrompt,
           currentHtml,
+          skipDbUpdate: true,
         }),
       });
 
@@ -590,12 +591,15 @@ export default function Landing4Editor() {
             size="chip"
             mode="ghost"
             onClick={() => setShowGenModal(true)}
-            isDisabled={isGenerating}
+            isDisabled={isGenerating || isRefining}
+            isLoading={isRefining}
           >
             {isGenerating
               ? `Generando (${genSectionCount})...`
+              : isRefining
+              ? "Regenerando..."
               : hasContent()
-              ? "Mejorar con AI"
+              ? "Regenerar todo"
               : "Generar con AI"}
           </BrutalButton>
 
@@ -794,30 +798,24 @@ export default function Landing4Editor() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-black mb-3">
-                {isImprove ? "Mejorar con AI" : "Generar con AI"}
+                {isImprove ? "Regenerar todo" : "Generar con AI"}
               </h3>
               <p className="text-sm text-gray-500 mb-4">
                 {isImprove
-                  ? "Describe qu\u00e9 quieres mejorar de tu landing actual"
+                  ? "Se regenerar\u00e1 toda la landing. Describe c\u00f3mo la quieres."
                   : "Describe tu landing y la AI generar\u00e1 las secciones"}
               </p>
               <textarea
                 value={genPrompt}
                 onChange={(e) => setGenPrompt(e.target.value)}
-                placeholder={isImprove
-                  ? "Ej: Mejora el copy, hazlo m\u00e1s profesional, agrega una secci\u00f3n de FAQ..."
-                  : "Ej: Landing para un SaaS de analytics con hero, features, pricing y CTA..."}
+                placeholder="Ej: Landing para un SaaS de analytics con hero, features, pricing y CTA..."
                 rows={4}
                 className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    if (isImprove) {
-                      handleImprove();
-                    } else {
-                      handleGenerate();
-                    }
+                    handleGenerate();
                   }
                 }}
               />
@@ -832,25 +830,12 @@ export default function Landing4Editor() {
                 >
                   Cancelar
                 </BrutalButton>
-                {isImprove && (
-                  <BrutalButton
-                    size="chip"
-                    mode="ghost"
-                    onClick={() => {
-                      // Switch to full regeneration
-                      handleGenerate();
-                    }}
-                    isDisabled={!genPrompt.trim()}
-                  >
-                    Regenerar todo
-                  </BrutalButton>
-                )}
                 <BrutalButton
                   size="chip"
-                  onClick={isImprove ? handleImprove : handleGenerate}
+                  onClick={handleGenerate}
                   isDisabled={!genPrompt.trim()}
                 >
-                  {isImprove ? "Mejorar" : "Generar"}
+                  {isImprove ? "Regenerar todo" : "Generar"}
                 </BrutalButton>
               </div>
             </div>
