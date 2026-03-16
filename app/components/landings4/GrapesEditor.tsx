@@ -349,31 +349,47 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
 
         if (initialHtml) editor.setComponents(initialHtml);
 
-        // Wait a tick before wiring onChange — avoid firing during initial load
-        let listening = false;
-        setTimeout(() => {
-          listening = true;
-        }, 500);
+        // Only start listening after user's first real interaction.
+        // This prevents saving empty HTML during initial setComponents() which
+        // fires component:add/remove events.
+        let userHasInteracted = false;
+
+        // These events indicate real user interaction (not programmatic):
+        const interactionEvents = [
+          "canvas:drop",
+          "block:drag:stop",
+          "component:drag:end",
+          "component:input",
+          "style:property:update",
+          "undo",
+          "redo",
+        ];
+
+        const markInteracted = () => { userHasInteracted = true; };
+        interactionEvents.forEach((evt) => editor.on(evt, markInteracted));
 
         const notify = () => {
-          if (!listening) return;
-          // Include GrapesJS-generated CSS as inline <style> so styles persist
+          if (!userHasInteracted) return;
           const html = editor.getHtml();
+          if (!html || !html.trim()) return;
           const css = editor.getCss();
           const fullHtml = css ? `<style>${css}</style>\n${html}` : html;
           onChangeRef.current?.(fullHtml);
         };
-        editor.on("component:update", notify);
-        editor.on("component:add", notify);
-        editor.on("component:remove", notify);
-        editor.on("component:drag:end", notify);
-        editor.on("component:input", notify);
-        editor.on("canvas:drop", notify);
-        editor.on("block:drag:stop", notify);
-        editor.on("undo", notify);
-        editor.on("redo", notify);
-        editor.on("style:property:update", notify);
-        editor.on("selector:state", notify);
+
+        // Listen to all change events for auto-save
+        [
+          "component:update",
+          "component:add",
+          "component:remove",
+          "component:drag:end",
+          "component:input",
+          "canvas:drop",
+          "block:drag:stop",
+          "undo",
+          "redo",
+          "style:property:update",
+        ].forEach((evt) => editor.on(evt, notify));
 
         // Collapse all block categories except Basic and CTA
         editor.on("block:category:update", (category: any) => {
