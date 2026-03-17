@@ -486,10 +486,12 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         let userHasInteracted = false;
         const interactionEvents = [
           "canvas:drop", "block:drag:stop", "component:drag:end",
-          "component:input", "component:update", "undo", "redo",
+          "component:input", "undo", "redo",
         ];
         const markInteracted = () => { userHasInteracted = true; };
         interactionEvents.forEach((evt) => editor.on(evt, markInteracted));
+        // Allow sidebar panels (e.g. TailwindClassEditor) to mark interaction
+        editor.on("sidebar:change", markInteracted);
 
         const notify = () => {
           if (!userHasInteracted) return;

@@ -173,8 +173,11 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
     });
     newClassList.forEach((cls: string) => component.addClass(cls));
 
+    // Mark as user interaction so onChange fires (component:update alone doesn't)
+    editor?.trigger("sidebar:change");
+
     setClasses(newClassList);
-  }, []);
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
