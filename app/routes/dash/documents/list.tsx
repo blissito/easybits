@@ -34,14 +34,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     const meta = (d.metadata || {}) as Record<string, any>;
     const theme = (meta.theme as string) || "minimal";
     const customColors = meta.customColors as CustomColors | undefined;
-    // First section HTML for thumbnail
-    const coverHtml = sections[0]?.html || "";
+    // First content section HTML for thumbnail (skip __grapes_css__)
+    const contentSections = sections.filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__");
+    const coverHtml = contentSections.sort((a, b) => a.order - b.order)[0]?.html || "";
     return {
       id: d.id,
       name: d.name,
       status: d.status,
       prompt: d.prompt,
-      pageCount: sections.length,
+      pageCount: contentSections.length,
       coverHtml,
       theme,
       customColors: theme === "custom" ? customColors : undefined,
