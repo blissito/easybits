@@ -276,34 +276,31 @@ export default function Landing4Editor() {
     };
   }, []);
 
-  const lastDeployResult = useRef<string | null>(null);
+  const deploySeq = useRef(0);
+  const lastDeploySeq = useRef(0);
   useEffect(() => {
     if (deployFetcher.state === "idle") setActiveIntent(null);
     if (deployFetcher.data?.redirect) navigate(deployFetcher.data.redirect);
-    if (deployFetcher.data?.url) {
+    if (deployFetcher.data?.url && deploySeq.current !== lastDeploySeq.current) {
+      lastDeploySeq.current = deploySeq.current;
       setLiveUrl(deployFetcher.data.url);
-      if (lastDeployResult.current !== deployFetcher.data.url) {
-        lastDeployResult.current = deployFetcher.data.url;
-        brutalToast("Landing publicada correctamente 🚀");
-        try {
-          const ctx = new AudioContext();
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.connect(g); g.connect(ctx.destination);
-          o.frequency.setValueAtTime(880, ctx.currentTime);
-          o.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-          g.gain.setValueAtTime(0.3, ctx.currentTime);
-          g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.3);
-        } catch {}
-      }
+      brutalToast(liveUrl ? "Landing actualizada 🚀" : "Landing publicada 🚀");
+      try {
+        const ctx = new AudioContext();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.setValueAtTime(880, ctx.currentTime);
+        o.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+        g.gain.setValueAtTime(0.3, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.3);
+      } catch {}
     }
-    if (deployFetcher.data?.unpublished) {
+    if (deployFetcher.data?.unpublished && deploySeq.current !== lastDeploySeq.current) {
+      lastDeploySeq.current = deploySeq.current;
       setLiveUrl(null);
-      if (lastDeployResult.current !== "unpublished") {
-        lastDeployResult.current = "unpublished";
-        brutalToast("Landing despublicada");
-      }
+      brutalToast("Landing despublicada");
     }
   }, [deployFetcher.state, deployFetcher.data, navigate]);
 
@@ -983,6 +980,7 @@ export default function Landing4Editor() {
                 { method: "post" },
               );
               setActiveIntent("deploy");
+              deploySeq.current++;
               deployFetcher.submit({ intent: "deploy" }, { method: "post" });
             }}
             isLoading={activeIntent === "deploy"}
@@ -1006,6 +1004,7 @@ export default function Landing4Editor() {
                     onClick={() => {
                       setOverflowOpen(false);
                       setActiveIntent("unpublish");
+                      deploySeq.current++;
                       deployFetcher.submit(
                         { intent: "unpublish" },
                         { method: "post" },
@@ -1023,6 +1022,7 @@ export default function Landing4Editor() {
                     setOverflowOpen(false);
                     if (!confirm("Eliminar esta landing?")) return;
                     setActiveIntent("delete");
+                    deploySeq.current++;
                     deployFetcher.submit(
                       { intent: "delete" },
                       { method: "post" },
