@@ -18,14 +18,15 @@ export function sectionsToHtml(sections: Section3[]): string {
     parts.push(cssSection.html);
   }
 
-  // Content sections
+  // Content sections — always inject data-section-id regardless of root tag
   for (const s of contentSections) {
     const html = s.html.trim();
-    if (html.startsWith("<section")) {
+    const match = html.match(/^<(\w+)/);
+    if (match) {
       parts.push(
         html.replace(
-          /^<section/,
-          `<section data-section-id="${s.id}" data-label="${s.label || ""}"`
+          new RegExp(`^<${match[1]}`),
+          `<${match[1]} data-section-id="${s.id}" data-label="${s.label || ""}"`
         )
       );
     } else {

@@ -7,7 +7,7 @@
 .gjs-four-color, .gjs-four-color-h:hover { color: #9ca3af !important; }
 
 /* Editor chrome */
-.gjs-editor { background-color: #111827 !important; }
+.gjs-editor { background-color: #000000 !important; }
 
 /* Block manager */
 .gjs-blocks-cs { background-color: #111827 !important; }
@@ -59,7 +59,7 @@
 .gjs-pn-btn.gjs-pn-active { color: #9870ED !important; }
 
 /* Canvas — full width, no padding */
-.gjs-cv-canvas { background-color: #1f2937 !important; }
+.gjs-cv-canvas { background-color: #000000 !important; }
 .gjs-frame-wrapper { padding: 0 !important; }
 .gjs-frame { width: 100% !important; left: 0 !important; }
 

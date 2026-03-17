@@ -25,6 +25,8 @@ export interface GrapesEditorHandle {
   togglePreview: () => boolean;
   /** Toggle sw-visibility (component border guides), returns new state */
   toggleSwVisibility: () => boolean;
+  /** Scroll the canvas iframe to a section by data-section-id */
+  scrollToSection: (sectionId: string) => void;
 }
 
 interface BrandKitItem {
@@ -48,6 +50,14 @@ interface Props {
   onBrandKitChange?: (brandKit: BrandKitItem | null) => void;
   /** Persisted brand kit ID — restored from metadata on load */
   initialBrandKitId?: string;
+  /** Hide specific panel tabs (e.g. ["blocks"] for documents) */
+  hiddenTabs?: PanelId[];
+  /** Extra CSS injected into the canvas iframe (e.g. document page sizing) */
+  canvasStyles?: string;
+  /** Set to false to hide device switcher (always single viewport) */
+  devices?: false;
+  /** Which side to render the panel sidebar — default "left" */
+  panelSide?: "left" | "right";
 }
 
 const PANEL_TABS = [
@@ -57,10 +67,10 @@ const PANEL_TABS = [
   { id: "themes", label: "Temas", icon: "◈" },
 ] as const;
 
-type PanelId = (typeof PANEL_TABS)[number]["id"];
+export type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left" }, ref) => {
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const blocksRef = useRef<HTMLDivElement>(null);
     const layersRef = useRef<HTMLDivElement>(null);
@@ -78,7 +88,10 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     const customColorsRef = useRef(customColors);
     customColorsRef.current = customColors;
     const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(initialBrandKitId || null);
-    const [activePanel, setActivePanel] = useState<PanelId>("styles");
+    const visibleTabs = PANEL_TABS.filter((t) => !hiddenTabs.includes(t.id));
+    const [activePanel, setActivePanel] = useState<PanelId>(() =>
+      visibleTabs.find((t) => t.id === "styles")?.id ?? visibleTabs[0]?.id ?? "styles"
+    );
     const [ready, setReady] = useState(false);
     const [themeVersion, setThemeVersion] = useState(0);
 
@@ -104,7 +117,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         } else {
           // Hide component borders in preview
           if (cmd.isActive("sw-visibility")) cmd.stop("sw-visibility");
-          ed.select(null);
+          ed.select();
           cmd.run("preview");
           return true;
         }
@@ -120,6 +133,39 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           cmd.run("sw-visibility");
           return true;
         }
+      },
+      scrollToSection: (sectionId: string) => {
+        const ed = editorRef.current;
+        if (!ed) return;
+        const wrapper = ed.DomComponents.getWrapper();
+        if (!wrapper) return;
+        const comps = wrapper.components().models || [];
+        // Find by data-section-id attribute
+        const contentComps = comps.filter((c: any) => (c.get("tagName") || "").toLowerCase() !== "style");
+        for (let i = 0; i < contentComps.length; i++) {
+          if (contentComps[i].getAttributes()["data-section-id"] === sectionId) {
+            ed.select(contentComps[i]);
+            const el = contentComps[i].getEl();
+            if (el) {
+              // First element: scroll iframe body to very top
+              if (i === 0) {
+                const doc = ed.Canvas.getDocument();
+                doc?.documentElement?.scrollTo({ top: 0, behavior: "smooth" });
+              } else {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }
+            return;
+          }
+        }
+        // Fallback: DOM query in iframe
+        const doc = ed.Canvas.getDocument();
+        if (doc) {
+          const el = doc.querySelector(`[data-section-id="${sectionId}"]`);
+          if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+        }
+        // Debug: log what components exist
+        console.warn("[scrollToSection] Section not found:", sectionId, "Available attrs:", comps.map((c: any) => c.getAttributes()["data-section-id"]));
       },
       replaceComponent: (componentId: string, newHtml: string) => {
         const ed = editorRef.current;
@@ -236,7 +282,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
               `data:text/css,${encodeURIComponent(initialThemeCss + "\n" + fallbackRules.join("\n"))}`,
             ],
           },
-          deviceManager: {
+          deviceManager: devices === false ? false as any : {
             devices: [
               { name: "Desktop", width: "" },
               { name: "Tablet", width: "768px" },
@@ -247,7 +293,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           layerManager: {
             appendTo: layersRef.current!,
           },
-          blockManager: {
+          blockManager: hiddenTabs.includes("blocks") ? false as any : {
             appendTo: blocksRef.current!,
             blocks: LANDING_BLOCKS.map((b) => ({
               id: b.id,
@@ -345,6 +391,14 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             }
           `;
           doc.head.appendChild(swStyle);
+
+          // Inject custom canvas styles (e.g. document page sizing)
+          if (canvasStyles) {
+            const extraStyle = doc.createElement("style");
+            extraStyle.id = "easybits-canvas-styles";
+            extraStyle.textContent = canvasStyles;
+            doc.head.appendChild(extraStyle);
+          }
 
           // Fix: allow space key in contenteditable buttons/links
           doc.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -530,13 +584,13 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       setTimeout(() => setThemeVersion((v) => v + 1), 100);
     }, [theme, customColors]);
 
-    return (
-      <div className="flex h-full w-full relative">
-        {/* Left sidebar: tabs + panel content */}
-        <div className="w-80 shrink-0 flex flex-col bg-gray-900 border-r border-gray-700 overflow-hidden">
+    const sidebarBorder = panelSide === "right" ? "border-l" : "border-r";
+
+    const sidebar = (
+        <div className={`w-80 shrink-0 flex flex-col bg-black ${sidebarBorder} border-gray-700 overflow-hidden`}>
           {/* Tab buttons */}
           <div className="flex border-b border-gray-700">
-            {PANEL_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActivePanel(tab.id)}
@@ -554,10 +608,10 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           </div>
 
           {/* Panel containers — all mounted, visibility toggled */}
-          <div
+          {!hiddenTabs.includes("blocks") && <div
             ref={blocksRef}
             className={`flex-1 overflow-auto p-2 ${activePanel === "blocks" ? "" : "hidden"}`}
-          />
+          />}
           <div
             ref={layersRef}
             className={`flex-1 overflow-auto ${activePanel === "layers" ? "" : "hidden"}`}
@@ -722,9 +776,13 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             )}
           </div>
         </div>
+    );
 
-        {/* Canvas */}
-        <div ref={editorContainerRef} className="flex-1 h-full" />
+    const canvas = <div ref={editorContainerRef} className="flex-1 h-full bg-black" />;
+
+    return (
+      <div className="flex h-full w-full relative">
+        {panelSide === "right" ? <>{canvas}{sidebar}</> : <>{sidebar}{canvas}</>}
 
         {/* Glass overlay while GrapesJS loads */}
         <div

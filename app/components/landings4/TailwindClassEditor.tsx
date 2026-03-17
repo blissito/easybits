@@ -133,6 +133,7 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
   const [classes, setClasses] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
   const [selectedComponent, setSelectedComponent] = useState<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -148,9 +149,8 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
     // Fallback to DOM element
     const el = component.getEl?.();
     if (!el) return [];
-    return (el.className || "")
-      .split(/\s+/)
-      .filter((c: string) => c && !c.startsWith("gjs-"));
+    const raw = typeof el.className === "string" ? el.className : el.className?.baseVal || "";
+    return raw.split(/\s+/).filter((c: string) => c && !c.startsWith("gjs-"));
   }, []);
 
   const writeClasses = useCallback((component: any, newClasses: string[]) => {
@@ -161,7 +161,8 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
     // Update DOM element directly (preserve gjs-* classes)
     const el = component.getEl();
     if (el) {
-      const gjsClasses = (el.className || "").split(/\s+/).filter((c: string) => c.startsWith("gjs-"));
+      const raw = typeof el.className === "string" ? el.className : el.className?.baseVal || "";
+      const gjsClasses = raw.split(/\s+/).filter((c: string) => c.startsWith("gjs-"));
       el.className = [...gjsClasses, ...newClassList].join(" ");
     }
 
@@ -288,19 +289,27 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
           onChange={(e) => {
             setSearch(e.target.value);
             setShowSuggestions(true);
+            setHighlightIdx(-1);
           }}
           onFocus={() => setShowSuggestions(true)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && search.trim()) {
-              if (filteredSuggestions.length > 0) {
-                addClass(filteredSuggestions[0]);
+            if (e.key === "ArrowDown" && showSuggestions && filteredSuggestions.length > 0) {
+              e.preventDefault();
+              setHighlightIdx((i) => Math.min(i + 1, filteredSuggestions.length - 1));
+            } else if (e.key === "ArrowUp" && showSuggestions && filteredSuggestions.length > 0) {
+              e.preventDefault();
+              setHighlightIdx((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter" && search.trim()) {
+              e.preventDefault();
+              if (showSuggestions && filteredSuggestions.length > 0) {
+                addClass(filteredSuggestions[highlightIdx >= 0 ? highlightIdx : 0]);
               } else {
                 addClass(search.trim());
               }
-            }
-            if (e.key === "Escape") {
+            } else if (e.key === "Escape") {
               setShowSuggestions(false);
               setSearch("");
+              setHighlightIdx(-1);
             }
           }}
           placeholder="Agregar clase..."
@@ -313,15 +322,18 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
             ref={suggestionsRef}
             className="absolute left-3 right-3 top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-48 overflow-auto"
           >
-            {filteredSuggestions.map((s) => (
+            {filteredSuggestions.map((s, i) => (
               <button
                 key={s}
+                ref={(el) => { if (i === highlightIdx && el) el.scrollIntoView({ block: "nearest" }); }}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   addClass(s);
                 }}
-                onClick={() => addClass(s)}
-                className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors font-mono"
+                onMouseEnter={() => setHighlightIdx(i)}
+                className={`w-full text-left px-3 py-1.5 text-xs transition-colors font-mono ${
+                  i === highlightIdx ? "bg-brand-500/20 text-white" : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                }`}
               >
                 {s}
               </button>

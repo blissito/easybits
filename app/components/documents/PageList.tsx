@@ -91,7 +91,9 @@ export function PageList({
   onSaveBrandKit,
   onApplyBrandKit,
 }: PageListProps) {
-  const sorted = [...sections].sort((a, b) => a.order - b.order);
+  const sorted = [...sections]
+    .filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__")
+    .sort((a, b) => a.order - b.order);
   const dragRef = useRef<number | null>(null);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [fileDragOver, setFileDragOver] = useState<number | null>(null);

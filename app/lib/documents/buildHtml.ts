@@ -14,9 +14,19 @@ export function buildDocumentHtml(
     pdfUrl?: string;
   }
 ): string {
-  const sorted = [...sections].sort((a, b) => a.order - b.order);
+  const sorted = [...sections]
+    .filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__")
+    .sort((a, b) => a.order - b.order);
   const title = options?.title || "Documento";
   const totalPages = sorted.length;
+
+  // Extract GrapesJS CSS from the special __grapes_css__ section
+  const cssSection = sections.find((s) => s.id === "__grapes_css__");
+  let grapesCss = "";
+  if (cssSection) {
+    const match = cssSection.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    grapesCss = match?.[1] || "";
+  }
 
   // Wrap each page's content in a scaling container.
   // Content is designed for 816px × 1056px (8.5in × 11in at 96dpi).
@@ -57,6 +67,7 @@ export function buildDocumentHtml(
   <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"><\/script>
   <style>
     ${options?.themeCss || ""}
+    ${grapesCss}
     body {
       box-sizing: border-box;
       font-family: 'Inter', sans-serif;
@@ -276,8 +287,18 @@ export function buildDocumentPrintHtml(
     title?: string;
   }
 ): string {
-  const sorted = [...sections].sort((a, b) => a.order - b.order);
+  const sorted = [...sections]
+    .filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__")
+    .sort((a, b) => a.order - b.order);
   const title = options?.title || "Documento";
+
+  // Extract GrapesJS CSS
+  const cssSection = sections.find((s) => s.id === "__grapes_css__");
+  let grapesCss = "";
+  if (cssSection) {
+    const match = cssSection.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    grapesCss = match?.[1] || "";
+  }
 
   const sectionsHtml = sorted
     .map((s) => `<div class="page-section">${s.html}</div>`)
@@ -295,6 +316,7 @@ export function buildDocumentPrintHtml(
   <style>
     @page { size: letter; margin: 0; }
     ${options?.themeCss || ""}
+    ${grapesCss}
     body { font-family: 'Inter', sans-serif; margin: 0; color: var(--color-on-surface, #111); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
     .page-section:last-child { page-break-after: auto; break-after: auto; }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import {
   useLoaderData,
   useFetcher,
@@ -11,18 +11,20 @@ import { Copy } from "~/components/common/Copy";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { PageList, type Section3WithVersions } from "~/components/documents/PageList";
-import { FloatingToolbar } from "~/components/landings3/FloatingToolbar";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
-import { Canvas, type CanvasHandle } from "~/components/landings3/Canvas";
-import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
-import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
-import { parseFiles, combineContent, MAX_FILE_SIZE } from "~/lib/documents/parseFiles";
+import type { Section3 } from "~/lib/landing3/types";
+import type { GrapesEditorHandle, AiAction } from "~/components/landings4/GrapesEditor";
+import { grapesToSections } from "~/lib/landing4/grapesToSections";
+import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
+import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
+import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
-import { PLANS, normalizePlan } from "~/lib/plans";
+import { normalizePlan } from "~/lib/plans";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/editor";
+
+const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
 
 
 /** Show brutalist toast with CTA when generation limit is hit */
@@ -168,24 +170,26 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "update-theme") {
     const newTheme = String(formData.get("theme") || "minimal");
-    const existing = (landing.metadata as Record<string, unknown>) || {};
-    await db.landing.update({
-      where: { id: params.id },
-      data: { metadata: { ...existing, theme: newTheme } },
-    });
-    return { ok: true };
-  }
-
-  if (intent === "update-custom-colors") {
-    const raw = String(formData.get("customColors") || "{}");
-    const existing = (landing.metadata as Record<string, unknown>) || {};
-    try {
-      const customColors = JSON.parse(raw);
+    const customColorsRaw = formData.get("customColors");
+    const customColors = customColorsRaw ? JSON.parse(String(customColorsRaw)) : undefined;
+    const brandKitId = formData.get("brandKitId") || undefined;
+    await withRetry(async () => {
+      const fresh = await db.landing.findUnique({ where: { id: params.id } });
+      const existing = (fresh?.metadata as Record<string, unknown>) || {};
+      const meta: Record<string, unknown> = { ...existing, theme: newTheme };
+      if (customColors) {
+        meta.customColors = customColors;
+      } else if (newTheme !== "custom") {
+        delete meta.customColors;
+      }
+      if (brandKitId) {
+        meta.brandKitId = brandKitId;
+      }
       await db.landing.update({
         where: { id: params.id },
-        data: { metadata: { ...existing, theme: "custom", customColors } },
+        data: { metadata: meta as any },
       });
-    } catch {}
+    });
     return { ok: true };
   }
 
@@ -290,18 +294,14 @@ export default function DocumentEditor() {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [showMobilePages, setShowMobilePages] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
-  const streamEndRef = useRef<HTMLDivElement>(null);
+
   const abortRef = useRef<AbortController | null>(null);
 
-  // Selection state for FloatingToolbar
-  const [selection, setSelection] = useState<IframeMessage | null>(null);
+  const editorRef = useRef<GrapesEditorHandle>(null);
   const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
   const [insertAtIndex, setInsertAtIndex] = useState<number | null>(null);
-  const iframeRectRef = useRef<DOMRect | null>(null);
-  const canvasRef = useRef<CanvasHandle>(null);
-  const [, setToolbarTick] = useState(0);
 
   // Add page prompt modal
   const [showAddPrompt, setShowAddPrompt] = useState(false);
@@ -309,15 +309,17 @@ export default function DocumentEditor() {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const addPageAbortRef = useRef<AbortController | null>(null);
 
+  // Track when we last saved locally — ignore SSE echoes of our own saves
+  const lastLocalSaveAt = useRef(0);
+
   // SSE live reload — watch for MCP/API updates
-  const selectionRef = useRef(selection);
-  selectionRef.current = selection;
   useEffect(() => {
     if (isGenerating) return;
     const source = new EventSource(`/api/v2/document-watch?id=${landing.id}`);
     source.addEventListener("doc-update", (e) => {
+      // Ignore SSE updates that are echoes of our own saves (within 5s window)
+      if (Date.now() - lastLocalSaveAt.current < 5_000) return;
       const data = JSON.parse(e.data);
-      if (selectionRef.current) return; // don't overwrite while editing
       const serverSections: Section3[] = data.sections || [];
       setSections((prev) => {
         return serverSections.map((s) => {
@@ -326,80 +328,23 @@ export default function DocumentEditor() {
           return { ...s, versions: (local as any)?.versions || [] };
         });
       });
+      // Sync GrapesJS canvas with external changes
+      syncToGrapes(serverSections);
     });
     return () => source.close();
   }, [landing.id, isGenerating, setSections]);
 
-  // Sync PageList thumbnails to canvas scroll position
-  // The SDK Canvas polls iframe scroll every 2s and posts "scroll-position" to window.
-  // We listen for that to figure out which page is visible and highlight it in PageList.
-  const sectionsRef2 = useRef(sections);
-  sectionsRef2.current = sections;
-  useEffect(() => {
-    const PAGE_HEIGHT = 11 * 96; // 11in in px = 1056
-    const GAP = 24; // body gap in canvas CSS
-    const PADDING = 24; // body padding-top
-    function onMessage(e: MessageEvent) {
-      const data = e.data;
-      if (!data || data.type !== "scroll-position") return;
-      // Don't override selection while user is editing an element
-      if (selectionRef.current) return;
-      const y = Number(data.y) || 0;
-      const sorted = [...sectionsRef2.current].sort((a, b) => a.order - b.order);
-      if (sorted.length === 0) return;
-      const adjustedY = Math.max(0, y - PADDING);
-      const idx = Math.min(Math.floor((adjustedY + PAGE_HEIGHT / 2) / (PAGE_HEIGHT + GAP)), sorted.length - 1);
-      const visibleId = sorted[idx]?.id;
-      if (visibleId) {
-        setSelectedSectionIds((prev) => {
-          if (prev.length === 1 && prev[0] === visibleId) return prev;
-          return [visibleId];
-        });
-      }
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+  // Helper: sync sections state to GrapesJS canvas
+  const syncToGrapes = useCallback((secs: Section3[]) => {
+    editorRef.current?.setHtml(sectionsToHtml(secs));
   }, []);
 
-  // Zoom state
-  const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150, 200];
-  const [zoomPct, setZoomPct] = useState(100);
-  const zoomIn = useCallback(() => setZoomPct((z) => {
-    const idx = ZOOM_LEVELS.indexOf(z);
-    return idx >= 0 ? ZOOM_LEVELS[Math.min(idx + 1, ZOOM_LEVELS.length - 1)] : z;
-  }), []);
-  const zoomOut = useCallback(() => setZoomPct((z) => {
-    const idx = ZOOM_LEVELS.indexOf(z);
-    return idx >= 0 ? ZOOM_LEVELS[Math.max(idx - 1, 0)] : z;
-  }), []);
-  const zoomFit = () => setZoomPct(75);
-
-  // Cmd/Ctrl + scroll to zoom
-  useEffect(() => {
-    function handleWheel(e: WheelEvent) {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      e.preventDefault();
-      if (e.deltaY < 0) zoomIn();
-      else zoomOut();
-    }
-    window.addEventListener("wheel", handleWheel, { passive: false });
-    return () => window.removeEventListener("wheel", handleWheel);
-  }, [zoomIn, zoomOut]);
-
-  // Document-specific CSS injected into Canvas iframe
-  const zoomFactor = zoomPct / 100;
-  const documentCss = `
-    body { padding: 24px; background: #d1d5db; display: flex; flex-direction: column; align-items: center; gap: 24px; zoom: ${zoomFactor}; }
-    [data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; }
-    [data-section-id]:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-    @media (max-width: 850px) {
-      body { padding: 8px; gap: 12px; }
-      [data-section-id] { zoom: calc((100vw - 16px) / 8.5in); }
-    }
+  // Document-specific CSS for GrapesJS canvas iframe
+  const documentCanvasCss = `
+    body { padding: 24px; background: #374151; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    section, [data-section-id] { width: 8.5in; min-height: 11in; max-height: 11in; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }
   `;
 
-  // Undo/Redo
-  const { pushUndo, undo, redo, canUndo, canRedo } = useUndoStack<Section3[]>();
   const [addFiles, setAddFiles] = useState<File[]>([]);
   const [addRefImage, setAddRefImage] = useState<string | null>(null);
   const [addParsedContent, setAddParsedContent] = useState("");
@@ -407,43 +352,39 @@ export default function DocumentEditor() {
   const addFileRef = useRef<HTMLInputElement>(null);
   const addImageRef = useRef<HTMLInputElement>(null);
 
-  // Theme
-  const [theme, setTheme] = useState<string>(() => {
-    const meta = (landing.metadata as Record<string, unknown>) || {};
-    return (meta?.theme as string) || "minimal";
-  });
-  const [customColors, setCustomColors] = useState<CustomColors>(() => {
-    const meta = (landing.metadata as Record<string, unknown>) || {};
-    return (meta?.customColors as CustomColors) || { primary: "#6366f1" };
-  });
+  // Theme — matches landings v4 pattern
+  const landingMeta = (landing.metadata as Record<string, unknown>) || {};
+  const [currentTheme, setCurrentTheme] = useState((landingMeta.theme as string) || "minimal");
+  const [currentCustomColors, setCurrentCustomColors] = useState<Record<string, string> | undefined>(
+    (landingMeta.customColors as Record<string, string>) || undefined
+  );
+
+  const themeDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleThemeChange = useCallback((themeId: string, customColors?: Record<string, string>, brandKitId?: string) => {
+    setCurrentTheme(themeId);
+    setCurrentCustomColors(customColors);
+    if (themeDebounce.current) clearTimeout(themeDebounce.current);
+    themeDebounce.current = setTimeout(() => {
+      const data: Record<string, string> = { intent: "update-theme", theme: themeId };
+      if (customColors) data.customColors = JSON.stringify(customColors);
+      if (brandKitId) data.brandKitId = brandKitId;
+      saveFetcher.submit(data, { method: "post" });
+    }, 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // For PDF export
   const themeCssData = useMemo(() => {
-    if (theme === "custom") {
-      const t = buildCustomTheme(customColors);
+    if (currentTheme === "custom" && currentCustomColors) {
+      const t = buildCustomTheme(currentCustomColors as any);
       const css = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
       const { tailwindConfig } = buildSingleThemeCss("minimal");
       return { css, tailwindConfig };
     }
-    return buildSingleThemeCss(theme);
-  }, [theme, customColors]);
+    return buildSingleThemeCss(currentTheme);
+  }, [currentTheme, currentCustomColors]);
 
-  const resolvedThemeColors = useMemo(() => {
-    if (theme === "custom") {
-      const base = LANDING_THEMES.find((t) => t.id === "minimal")!.colors;
-      return { ...base, ...Object.fromEntries(Object.entries(customColors).filter(([, v]) => v)) } as typeof base;
-    }
-    return LANDING_THEMES.find((t) => t.id === theme)?.colors ?? LANDING_THEMES[0].colors;
-  }, [theme, customColors]);
 
-  // Inject custom theme CSS + document layout CSS into Canvas iframe
-  useEffect(() => {
-    if (theme === "custom") {
-      const t = buildCustomTheme(customColors);
-      const themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
-      canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss + "\n" + themeCss });
-    } else {
-      canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
-    }
-  }, [theme, customColors, documentCss]);
 
   // Regenerate prompt bar
   const [regenInput, setRegenInput] = useState("");
@@ -506,46 +447,16 @@ export default function DocumentEditor() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        if (contextMenu) setContextMenu(null);
+        if (pendingAiAction) { setPendingAiAction(null); setAiRefinePrompt(""); }
+        else if (contextMenu) setContextMenu(null);
         else if (codeViewSectionId) setCodeViewSectionId(null);
         else if (showAddPrompt) { setShowAddPrompt(false); setRegenTargetId(null); setInsertAtIndex(null); }
         else if (overflowOpen) setOverflowOpen(false);
-        else if (selection) setSelection(null);
-      }
-
-      if (e.key === "Delete" || e.key === "Backspace") {
-        const tag = (e.target as HTMLElement)?.tagName;
-        const isEditable = (e.target as HTMLElement)?.isContentEditable;
-        if (tag === "INPUT" || tag === "TEXTAREA" || isEditable) return;
-        if (contextMenu || showAddPrompt || codeViewSectionId) return;
-        if (selectedSectionIds.length === 0) return;
-        if (isGenerating || variantLoadingId) return;
-
-        e.preventDefault();
-        const updated = sections
-          .filter((s) => !selectedSectionIds.includes(s.id))
-          .map((s, i) => ({ ...s, order: i }));
-        if (updated.length === sections.length) return;
-        handleSectionsChange(updated);
-        setSelectedSectionIds([]);
-        if (selection && selectedSectionIds.includes(selection.sectionId)) {
-          setSelection(null);
-        }
       }
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [
-    contextMenu,
-    overflowOpen,
-    selection,
-    codeViewSectionId,
-    showAddPrompt,
-    selectedSectionIds,
-    sections,
-    isGenerating,
-    variantLoadingId,
-  ]);
+  }, [contextMenu, overflowOpen, codeViewSectionId, showAddPrompt]);
 
   function stopGeneration() {
     abortRef.current?.abort();
@@ -662,10 +573,12 @@ export default function DocumentEditor() {
                   }
                 }
                 setSections([...accumulated]);
+                syncToGrapes([...accumulated]);
               } else if (eventType === "section-update") {
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
                 setSections([...accumulated]);
+                syncToGrapes([...accumulated]);
               } else if (eventType === "done") {
                 playTone();
               } else if (eventType === "error") {
@@ -679,18 +592,21 @@ export default function DocumentEditor() {
       }
 
       setSections([...accumulated]);
+      syncToGrapes([...accumulated]);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Generation error:", err);
       errorToast((err as Error).message || "Error al generar documento");
-      // Still set whatever we got
-      if (accumulated.length > 0) setSections([...accumulated]);
+      if (accumulated.length > 0) {
+        setSections([...accumulated]);
+        syncToGrapes([...accumulated]);
+      }
     } finally {
       if (abortRef.current === controller) setIsGenerating(false);
     }
   }
 
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const saveSections = useCallback((s: Section3[]) => {
     clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
@@ -702,6 +618,7 @@ export default function DocumentEditor() {
           versionMap[sec.id] = sec.versions.slice(-10);
         }
       }
+      lastLocalSaveAt.current = Date.now();
       saveFetcher.submit(
         {
           intent: "update-sections",
@@ -714,129 +631,95 @@ export default function DocumentEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Undo/Redo keydown listener
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      const isUndo = key === "z" && !e.shiftKey;
-      const isRedo = (key === "z" && e.shiftKey) || key === "y";
-      if (!isUndo && !isRedo) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      e.preventDefault();
-      if (isRedo) {
-        const next = redo(sectionsRef.current);
-        if (next) {
-          setSections(next);
-          saveSections(next);
-          canvasRef.current?.postMessage({ action: "reload-sections" });
-        }
-      } else {
-        const prev = undo(sectionsRef.current);
-        if (prev) {
-          setSections(prev);
-          saveSections(prev);
-          canvasRef.current?.postMessage({ action: "reload-sections" });
-        }
-      }
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [undo, redo, saveSections, setSections]);
 
   const handleSectionsChange = useCallback(
     (newSections: Section3[]) => {
-      pushUndo(sectionsRef.current);
       setSections(newSections);
       saveSections(newSections);
-      // Notify canvas of reorder/delete so it re-renders sections
-      setTimeout(() => canvasRef.current?.postMessage({ action: "reload-sections" }), 50);
+      syncToGrapes(newSections);
     },
-    [saveSections, pushUndo, setSections]
+    [saveSections, setSections, syncToGrapes]
   );
 
-  const handleIframeMessage = useCallback((msg: IframeMessage) => {
-    if (msg.type === "element-selected") {
-      setSelection(msg);
-      setToolbarTick((t) => t + 1);
-      if (msg.sectionId) setSelectedSectionIds([msg.sectionId]);
-    } else if (msg.type === "element-deselected") {
-      setSelection(null);
-    } else if (
-      (msg.type === "text-edited" || msg.type === "section-html-updated") &&
-      msg.sectionId &&
-      msg.sectionHtml
-    ) {
-      pushUndo(sectionsRef.current);
-      setSections((prev) => {
-        const updated = prev.map((s) =>
-          s.id === msg.sectionId ? { ...s, html: msg.sectionHtml } : s
-        );
-        saveSections(updated);
-        return updated;
-      });
-    } else if (msg.type === "undo") {
-      const prev = undo(sectionsRef.current);
-      if (prev) { setSections(prev); saveSections(prev); canvasRef.current?.postMessage({ action: "reload-sections" }); }
-    } else if (msg.type === "redo") {
-      const next = redo(sectionsRef.current);
-      if (next) { setSections(next); saveSections(next); canvasRef.current?.postMessage({ action: "reload-sections" }); }
-    }
-  }, [saveSections, pushUndo, setSections, undo, redo]);
+  // GrapesJS editor change handler — sync sections from HTML
+  const isSavingLocked = useRef(false);
+  const lastSectionCount = useRef(sections.length);
+  const handleEditorChange = useCallback((html: string) => {
+    if (isSavingLocked.current) return;
+    if (!html || !html.trim()) return;
+    const stripped = html.replace(/<style[\s\S]*?<\/style>/gi, "").trim();
+    if (!stripped) return;
 
-  async function handleRefine(instruction: string, referenceImage?: string) {
-    if (!selection?.sectionId) return;
-    const refineId = selection.sectionId;
-    const isElementScoped = !!(selection && !selection.isSectionRoot && selection.openTag && selection.elementPath);
-    pushUndo(sectionsRef.current);
-    setRefiningSections((prev) => new Set(prev).add(refineId));
+    const newSections = grapesToSections(html);
+    const contentSections = newSections.filter((s) => s.id !== "__grapes_css__");
+    // Wipe protection
+    if (contentSections.length === 0 && lastSectionCount.current > 0) return;
+    if (lastSectionCount.current > 2 && contentSections.length < lastSectionCount.current * 0.5) return;
+    lastSectionCount.current = contentSections.length;
+
+    setSections(newSections);
+    saveSections(newSections);
+  }, [setSections, saveSections]);
+
+  // AI action from GrapesEditor toolbar — show modal first
+  const [pendingAiAction, setPendingAiAction] = useState<AiAction | null>(null);
+  const [aiRefinePrompt, setAiRefinePrompt] = useState("");
+  const handleAiAction = useCallback((action: AiAction) => {
+    if (action.type === "refine-element") {
+      setPendingAiAction(action);
+      setAiRefinePrompt("");
+    }
+  }, []);
+
+  async function handleRefineFromGrapes(action: AiAction, instruction: string) {
+    const ed = editorRef.current?.getEditor();
+    if (!ed) return;
+
+    const targetId = action.isSection
+      ? action.sectionComponentId || action.componentId
+      : action.componentId;
+    const targetHtml = action.isSection
+      ? action.sectionHtml || action.html
+      : action.html;
+    const fullHtmlBefore = ed.getHtml();
+
+    isSavingLocked.current = true;
+    setRefiningSections((prev) => new Set(prev).add(targetId));
+
     const abortController = new AbortController();
-    refineAbortMap.current.set(refineId, abortController);
-    // Show shimmer on the element being refined
-    if (isElementScoped) {
-      canvasRef.current?.postMessage({ action: "element-loading", sectionId: refineId, elementPath: selection.elementPath });
+    refineAbortMap.current.set(targetId, abortController);
+
+    // Add shimmer to the target component
+    function findById(parent: any, id: string): any {
+      if (parent.getId() === id) return parent;
+      for (const child of parent.components().models || []) {
+        const found = findById(child, id);
+        if (found) return found;
+      }
+      return null;
     }
+    const targetComp = findById(ed.DomComponents.getWrapper(), targetId);
+    if (targetComp) targetComp.addClass("easybits-refining");
+
     try {
-      const section = sections.find((s) => s.id === selection.sectionId);
-      if (!section) return;
-      const sectionId = selection.sectionId;
-
-      // Snapshot current version before refine
-      setSections((prev) =>
-        prev.map((s) => {
-          if (s.id !== sectionId) return s;
-          const sv = s as Section3WithVersions;
-          const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
-          return { ...s, versions } as any;
-        })
-      );
-
-      const res = await fetch("/api/v2/document-refine", {
+      const res = await fetch("/api/v2/landing3-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         signal: abortController.signal,
         body: JSON.stringify({
           landingId: landing.id,
-          sectionId,
+          sectionId: "__new__",
           instruction,
-          currentHtml: section.html,
-          allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
-          ...(referenceImage && { referenceImage }),
-          ...(direction && { direction }),
-          ...(selection && !selection.isSectionRoot && selection.openTag && {
-            openTag: selection.openTag,
-            elementText: selection.text,
-          }),
+          currentHtml: targetHtml,
+          skipDbUpdate: true,
+          themeName: currentTheme,
         }),
       });
+
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        if (errBody.upgradeUrl) {
-          showLimitToast(errBody.error, errBody.upgradeUrl);
-          return;
-        }
+        if (errBody.upgradeUrl) { showLimitToast(errBody.error, errBody.upgradeUrl); return; }
         throw new Error(errBody.error || "Error al refinar página");
       }
       setAiGenUsed((c: number) => c + 1);
@@ -845,6 +728,7 @@ export default function DocumentEditor() {
       const decoder = new TextDecoder();
       let buf = "";
       let event = "";
+      let latestNewHtml = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -853,53 +737,69 @@ export default function DocumentEditor() {
         const lines = buf.split("\n");
         buf = lines.pop() || "";
         for (const line of lines) {
-          if (line.startsWith("event: ")) event = line.slice(7);
-          else if (line.startsWith("data: ")) {
+          if (line.startsWith("event: ")) {
+            event = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
             try {
               const d = JSON.parse(line.slice(6));
               if (event === "error") throw new Error(d.message || "Error en generación");
               if ((event === "chunk" || event === "done") && d.html) {
-                // Clear shimmer on first chunk — streaming content replaces it
-                if (isElementScoped) {
-                  canvasRef.current?.postMessage({ action: "element-loading-clear" });
-                }
-                setSections((prev) =>
-                  prev.map((s) =>
-                    s.id === sectionId ? { ...s, html: d.html } : s
-                  )
-                );
-                if (event === "done") setSelection(null);
+                latestNewHtml = d.html;
               }
             } catch {}
           }
         }
       }
-      saveSections(sectionsRef.current);
-      canvasRef.current?.scrollToSection(sectionId);
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return; // User cancelled — keep last chunk
-      console.error("Refine error:", err);
-      errorToast((err as Error).message || "Error al refinar página");
-      // Rollback the premature version snapshot
-      {
-        const rollbackId = refineId;
-        setSections((prev) =>
-          prev.map((s) => {
-            if (s.id !== rollbackId) return s;
-            const sv = s as Section3WithVersions;
-            if (!sv.versions?.length) return s;
-            return { ...s, versions: sv.versions.slice(0, -1) } as any;
-          })
+
+      // Clean markdown fences and apply via string replacement
+      if (latestNewHtml) {
+        latestNewHtml = latestNewHtml
+          .replace(/^```html?\s*/i, "")
+          .replace(/```\s*$/, "")
+          .trim();
+        const updatedFull = fullHtmlBefore.replace(targetHtml, latestNewHtml);
+        ed.setComponents(updatedFull);
+
+        // Scroll to refined element
+        requestAnimationFrame(() => {
+          try {
+            const wrapper = ed.DomComponents.getWrapper();
+            if (wrapper) {
+              const updated = findById(wrapper, targetId);
+              if (updated) {
+                const el = updated.getEl();
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }
+          } catch {}
+        });
+
+        // Save
+        const finalHtml = editorRef.current?.getHtml() || "";
+        const newSections = grapesToSections(finalHtml);
+        saveFetcher.submit(
+          { intent: "update-sections", sections: JSON.stringify(newSections) },
+          { method: "post" },
         );
       }
+
+      playTone();
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      console.error("Refine error:", err);
+      errorToast((err as Error).message || "Error al refinar página");
     } finally {
-      refineAbortMap.current.delete(refineId);
-      canvasRef.current?.postMessage({ action: "element-loading-clear" });
-      setRefiningSections((prev) => {
-        const next = new Set(prev);
-        next.delete(refineId);
-        return next;
-      });
+      refineAbortMap.current.delete(targetId);
+      // Remove shimmer
+      try {
+        const wrapper = ed.DomComponents.getWrapper();
+        if (wrapper) {
+          const comp = findById(wrapper, targetId);
+          if (comp) comp.removeClass("easybits-refining");
+        }
+      } catch {}
+      setRefiningSections((prev) => { const next = new Set(prev); next.delete(targetId); return next; });
+      isSavingLocked.current = false;
     }
   }
 
@@ -939,7 +839,7 @@ export default function DocumentEditor() {
     variantAbortRef.current = abortController;
     try {
       // Exit any version preview before generating
-      canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+      // Exit any version preview before generating
       const currentHtml = section.html;
 
       // Snapshot current version (using true html, not navigated-to html)
@@ -1005,7 +905,7 @@ export default function DocumentEditor() {
         }
       }
       playTone();
-      canvasRef.current?.scrollToSection(sectionId);
+      syncToGrapes(sectionsRef.current);
       saveSections(sectionsRef.current);
     } catch (err) {
       if ((err as Error).name === "AbortError") return; // User cancelled — keep last chunk
@@ -1032,66 +932,8 @@ export default function DocumentEditor() {
     sorted.splice(toIndex, 0, moved);
     const reordered = sorted.map((s, i) => ({ ...s, order: i }));
     handleSectionsChange(reordered);
-    // Explicitly tell canvas the new order (don't rely only on useEffect diff)
-    const newOrder = sorted.map((s) => s.id);
-    setTimeout(() => canvasRef.current?.postMessage({ action: "reorder-sections", order: newOrder }), 100);
   }
 
-  function handleChangeTag(sectionId: string, elementPath: string, newTag: string) {
-    pushUndo(sectionsRef.current);
-    canvasRef.current?.postMessage({
-      action: "change-tag",
-      sectionId,
-      elementPath,
-      newTag,
-    });
-  }
-
-  function handleUpdateAttribute(
-    sectionId: string,
-    elementPath: string,
-    attr: string,
-    value: string
-  ) {
-    canvasRef.current?.postMessage({
-      action: "update-attribute",
-      sectionId,
-      elementPath,
-      tagName: selection?.tagName || "*",
-      attr,
-      value,
-    });
-  }
-
-  function handleDeleteElement(sectionId: string, elementPath: string) {
-    pushUndo(sectionsRef.current);
-    canvasRef.current?.postMessage({
-      action: "delete-element",
-      sectionId,
-      elementPath,
-    });
-    setSelection(null);
-  }
-
-  function handleReplaceClass(sectionId: string, elementPath: string, removePrefixes: string[], addClass: string) {
-    pushUndo(sectionsRef.current);
-    canvasRef.current?.postMessage({
-      action: "replace-class",
-      sectionId,
-      elementPath,
-      removePrefixes,
-      addClass,
-    });
-  }
-
-  function handleDeleteSection() {
-    if (!selection?.sectionId) return;
-    const updated = sections
-      .filter((s) => s.id !== selection.sectionId)
-      .map((s, i) => ({ ...s, order: i }));
-    handleSectionsChange(updated);
-    setSelection(null);
-  }
 
   async function handleAddPage() {
     if ((!addPrompt.trim() && !addParsedContent) || isAddingSection) return;
@@ -1192,10 +1034,7 @@ export default function DocumentEditor() {
                     return updated;
                   });
                   playTone();
-                  setTimeout(() => {
-                    setSelectedSectionIds([lastNewId]);
-                    setTimeout(() => canvasRef.current?.scrollToSection(lastNewId), 300);
-                  }, 100);
+                  setSelectedSectionIds([lastNewId]);
                 } else {
                   setSections((prev) =>
                     prev.map((s) => (s.id === newId ? { ...s, html: d.html } : s))
@@ -1210,7 +1049,6 @@ export default function DocumentEditor() {
                     });
                     playTone();
                     setSelectedSectionIds([newId]);
-                    setTimeout(() => canvasRef.current?.scrollToSection(newId), 300);
                   }
                 }
               }
@@ -1244,29 +1082,34 @@ export default function DocumentEditor() {
     });
     const updated = sorted.map((s, i) => ({ ...s, order: i }));
     handleSectionsChange(updated);
-    setTimeout(() => canvasRef.current?.scrollToSection(newId), 200);
   }
 
   function handleOpenCode(sectionId: string) {
     const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
-    const target =
-      selection?.openTag || selection?.text?.substring(0, 40) || undefined;
     if (codeViewSectionId === sectionId) {
       setCodeScrollTarget(undefined);
-      requestAnimationFrame(() => setCodeScrollTarget(target));
     } else {
-      setCodeScrollTarget(target);
+      setCodeScrollTarget(undefined);
       setCodeViewSectionId(sectionId);
     }
     setCodeValue(section.html);
-    setSelection(null);
   }
 
   function handleExportPdf(filterSectionIds?: string[]) {
     // Build full HTML with Paged.js and open in new window for window.print()
-    const base = filterSectionIds ? sections.filter(s => filterSectionIds.includes(s.id)) : sections;
+    const base = (filterSectionIds ? sections.filter(s => filterSectionIds.includes(s.id)) : sections)
+      .filter(s => s.id !== "__grapes_css__" && s.label !== "__css__");
     const sorted = [...base].sort((a, b) => a.order - b.order);
+
+    // Extract GrapesJS CSS to include in print styles
+    const grapesCssSection = sections.find(s => s.id === "__grapes_css__");
+    let grapesCss = "";
+    if (grapesCssSection) {
+      const match = grapesCssSection.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+      grapesCss = match?.[1] || "";
+    }
+
     const sectionsHtml = sorted
       .map((s) => `<div class="page-section">${s.html}</div>`)
       .join("\n");
@@ -1282,6 +1125,7 @@ export default function DocumentEditor() {
   <style>
     @page { size: letter; margin: 0; }
     ${themeCssData?.css || ""}
+    ${grapesCss}
     body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section {
       width: 8.5in;
@@ -1360,23 +1204,6 @@ ${sectionsHtml}
     deployFetcher.submit({ intent: "deploy" }, { method: "post" });
   }
 
-  function handleThemeChange(newTheme: string) {
-    setTheme(newTheme);
-    saveFetcher.submit(
-      { intent: "update-theme", theme: newTheme },
-      { method: "post" }
-    );
-  }
-
-  function handleCustomColorChange(partial: Partial<CustomColors>) {
-    const merged = { ...customColors, ...partial };
-    setCustomColors(merged);
-    setTheme("custom");
-    saveFetcher.submit(
-      { intent: "update-custom-colors", customColors: JSON.stringify(merged) },
-      { method: "post" }
-    );
-  }
 
 
 
@@ -1561,7 +1388,7 @@ ${sectionsHtml}
                         : [...prev, id]
                       : [id]
                   );
-                  canvasRef.current?.scrollToSection(id);
+                  editorRef.current?.scrollToSection(id);
                   setShowMobilePages(false);
                 }}
                 onContextMenu={(sectionIds, position) => {
@@ -1585,17 +1412,17 @@ ${sectionsHtml}
                 onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
                 onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
                 onDropImage={handleDropImage}
-                theme={theme}
-                onThemeChange={handleThemeChange}
-                customColors={customColors}
-                onCustomColorChange={handleCustomColorChange}
+                theme={currentTheme}
+                onThemeChange={(t: string) => handleThemeChange(t)}
+                customColors={currentCustomColors as any}
+                onCustomColorChange={(partial: any) => handleThemeChange("custom", { ...currentCustomColors, ...partial })}
                 themeCssData={themeCssData}
                 onGenerateVariant={handleGenerateVariant}
                 onStopVariant={stopVariant}
                 loadingVariantId={variantLoadingId}
                 refiningIds={refiningSections}
                 onRestoreVersion={(sectionId, oldHtml) => {
-                  canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+                  // Exit any version preview before generating
                   const updated = sections.map((s) => {
                     if (s.id !== sectionId) return s;
                     const sv = s as Section3WithVersions;
@@ -1605,10 +1432,10 @@ ${sectionsHtml}
                   handleSectionsChange(updated);
                 }}
                 onNavigateVersion={(sectionId, html) => {
-                  canvasRef.current?.postMessage({ action: "preview-version", sectionId, html });
+                  void 0 /* version preview: use Restore instead */;
                 }}
                 onExitPreview={(sectionId) => {
-                  canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+                  // Exit any version preview before generating
                 }}
                 onRegenerate={(sectionId) => {
                   setShowMobilePages(false);
@@ -1624,7 +1451,7 @@ ${sectionsHtml}
                   toast.success("Brand Kit guardado");
                 }}
                 onApplyBrandKit={(kit) => {
-                  handleCustomColorChange(kit.colors);
+                  handleThemeChange("custom", kit.colors as Record<string, string>);
                 }}
               />
             </div>
@@ -1645,7 +1472,7 @@ ${sectionsHtml}
                     : [...prev, id]
                   : [id]
               );
-              canvasRef.current?.scrollToSection(id);
+              editorRef.current?.scrollToSection(id);
             }}
             onContextMenu={(sectionIds, position) => {
               setSelectedSectionIds(sectionIds);
@@ -1668,17 +1495,17 @@ ${sectionsHtml}
             onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
             onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
             onDropImage={handleDropImage}
-            theme={theme}
-            onThemeChange={handleThemeChange}
-            customColors={customColors}
-            onCustomColorChange={handleCustomColorChange}
+            theme={currentTheme}
+            onThemeChange={(t: string) => handleThemeChange(t)}
+            customColors={currentCustomColors as any}
+            onCustomColorChange={(partial: any) => handleThemeChange("custom", { ...currentCustomColors, ...partial })}
             themeCssData={themeCssData}
             onGenerateVariant={handleGenerateVariant}
             onStopVariant={stopVariant}
             loadingVariantId={variantLoadingId}
             refiningIds={refiningSections}
             onRestoreVersion={(sectionId, oldHtml) => {
-              canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+              // Exit any version preview before generating
               const updated = sections.map((s) => {
                 if (s.id !== sectionId) return s;
                 const sv = s as Section3WithVersions;
@@ -1688,10 +1515,10 @@ ${sectionsHtml}
               handleSectionsChange(updated);
             }}
             onNavigateVersion={(sectionId, html) => {
-              canvasRef.current?.postMessage({ action: "preview-version", sectionId, html });
+              void 0 /* version preview: use Restore instead */;
             }}
             onExitPreview={(sectionId) => {
-              canvasRef.current?.postMessage({ action: "exit-preview", sectionId });
+              // Exit any version preview before generating
             }}
             onRegenerate={(sectionId) => {
               setRegenTargetId(sectionId);
@@ -1706,7 +1533,7 @@ ${sectionsHtml}
               toast.success("Brand Kit guardado");
             }}
             onApplyBrandKit={(kit) => {
-              handleCustomColorChange(kit.colors);
+              handleThemeChange("custom", kit.colors as Record<string, string>);
             }}
           />
           </div>
@@ -1805,137 +1632,115 @@ ${sectionsHtml}
           </div>
         )}
 
-        {/* Canvas — document pages */}
-        <div
-          className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 overflow-auto relative flex flex-col`}
-        >
-          <div className="flex-1 overflow-auto relative flex justify-center bg-gray-200">
-            <div className="transition-all duration-300 h-full w-full">
-              {sections.length === 0 && !isGenerating ? (
-                <div className="flex flex-col items-center justify-center py-24">
-                  <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
-                </div>
-              ) : (
-                <>
-                  <Canvas
-                    ref={canvasRef}
-                    sections={sections}
-                    theme={theme}
-                    onMessage={handleIframeMessage}
-                    iframeRectRef={iframeRectRef}
-                    onReady={() => {
-                      if (theme === "custom") {
-                        const t = buildCustomTheme(customColors);
-                        const themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
-                        canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss + "\n" + themeCss });
-                      } else {
-                        canvasRef.current?.postMessage({ action: "set-custom-css", css: documentCss });
-                      }
-                    }}
-                  />
-                  {refiningSections.size > 0 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
-                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
-                      <span className="text-sm font-bold">Refinando{refiningSections.size > 1 ? ` (${refiningSections.size})` : ""}...</span>
-                      <button
-                        onClick={() => {
-                          for (const [, ctrl] of refineAbortMap.current) ctrl.abort();
-                          refineAbortMap.current.clear();
-                        }}
-                        className="text-xs font-bold text-red-500 hover:underline ml-1"
-                      >
-                        Detener
-                      </button>
-                    </div>
-                  )}
-                  {isAddingSection && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
-                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
-                      <span className="text-sm font-bold">Generando página...</span>
-                      <button
-                        onClick={() => {
-                          addPageAbortRef.current?.abort();
-                          setIsAddingSection(false);
-                        }}
-                        className="text-xs font-bold text-red-500 hover:underline ml-1"
-                      >
-                        Detener
-                      </button>
-                    </div>
-                  )}
-                  {isGenerating && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
-                      <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
-                      <span className="text-sm font-bold">Generando...</span>
-                      <button onClick={stopGeneration} className="text-xs font-bold text-red-500 hover:underline ml-1">Detener</button>
-                    </div>
-                  )}
-                  {isGenerating && (
-                    <div
-                      ref={streamEndRef}
-                      className="flex items-center gap-3 py-4 px-6 bg-gray-200"
-                    >
-                      <div className="flex gap-1">
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-bounce"
-                          style={{ animationDelay: "0ms" }}
-                        />
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce"
-                          style={{ animationDelay: "150ms" }}
-                        />
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-brand-300 animate-bounce"
-                          style={{ animationDelay: "300ms" }}
-                        />
-                      </div>
-                      <p className="text-sm font-bold text-gray-500">
-                        Generando p&aacute;gina {sections.length + 1}...
-                      </p>
-                      <div className="ml-2">
-                        <BrutalButton
-                          size="chip"
-                          mode="ghost"
-                          onClick={stopGeneration}
-                        >
-                          Detener
-                        </BrutalButton>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
+        {/* GrapesJS Editor — replaces Canvas + FloatingToolbar */}
+        <div className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 h-full overflow-hidden relative`}>
+          {sections.length === 0 && !isGenerating ? (
+            <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-200">
+              <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
+            </div>
+          ) : (
+            <Suspense fallback={<div className="flex items-center justify-center h-full w-full bg-black text-gray-400">Cargando editor...</div>}>
+              <GrapesEditor
+                ref={editorRef}
+                initialHtml={sectionsToHtml(sections)}
+                theme={currentTheme}
+                customColors={currentCustomColors}
+                brandKits={brandKits as any}
+                hiddenTabs={["blocks", "layers"]}
+                canvasStyles={documentCanvasCss}
+                devices={false}
+                panelSide="right"
+                onChange={handleEditorChange}
+                onAiAction={handleAiAction}
+                onThemeChange={handleThemeChange}
+              />
+            </Suspense>
+          )}
+          {/* Status overlays */}
+          {refiningSections.size > 0 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
+              <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+              <span className="text-sm font-bold">Refinando{refiningSections.size > 1 ? ` (${refiningSections.size})` : ""}...</span>
+              <button
+                onClick={() => { for (const [, ctrl] of refineAbortMap.current) ctrl.abort(); refineAbortMap.current.clear(); }}
+                className="text-xs font-bold text-red-500 hover:underline ml-1"
+              >Detener</button>
+            </div>
+          )}
+          {isAddingSection && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
+              <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+              <span className="text-sm font-bold">Generando página...</span>
+              <button onClick={() => { addPageAbortRef.current?.abort(); setIsAddingSection(false); }} className="text-xs font-bold text-red-500 hover:underline ml-1">Detener</button>
+            </div>
+          )}
+          {isGenerating && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white border-2 border-black rounded-xl px-4 py-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-20">
+              <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+              <span className="text-sm font-bold">Generando...</span>
+              <button onClick={stopGeneration} className="text-xs font-bold text-red-500 hover:underline ml-1">Detener</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* AI Refine modal */}
+      {pendingAiAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-black mb-3">
+              {pendingAiAction.isSection ? "Refinar página" : "Refinar elemento"}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Describe qué cambios quieres hacer
+            </p>
+            <textarea
+              value={aiRefinePrompt}
+              onChange={(e) => setAiRefinePrompt(e.target.value)}
+              placeholder="Ej: Hazlo más profesional, cambia los colores a tonos azules, agrega más espacio..."
+              rows={3}
+              className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && aiRefinePrompt.trim()) {
+                  e.preventDefault();
+                  const action = pendingAiAction;
+                  const prompt = aiRefinePrompt.trim();
+                  setPendingAiAction(null);
+                  setAiRefinePrompt("");
+                  handleRefineFromGrapes(action, prompt);
+                }
+                if (e.key === "Escape") {
+                  setPendingAiAction(null);
+                  setAiRefinePrompt("");
+                }
+              }}
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <BrutalButton
+                size="chip"
+                mode="ghost"
+                onClick={() => { setPendingAiAction(null); setAiRefinePrompt(""); }}
+              >
+                Cancelar
+              </BrutalButton>
+              <BrutalButton
+                size="chip"
+                onClick={() => {
+                  const action = pendingAiAction;
+                  const prompt = aiRefinePrompt.trim() || "Mejora este elemento";
+                  setPendingAiAction(null);
+                  setAiRefinePrompt("");
+                  handleRefineFromGrapes(action, prompt);
+                }}
+                isDisabled={refiningSections.size > 0}
+              >
+                Refinar
+              </BrutalButton>
             </div>
           </div>
-          {/* Zoom controls */}
-          <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white border-2 border-black rounded-xl px-2 py-1 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-30 select-none">
-            <button onClick={zoomOut} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Alejar">−</button>
-            <button onClick={zoomFit} className="min-w-[3rem] text-center text-xs font-bold hover:bg-gray-100 rounded px-1 py-1" title="Ajustar">{zoomPct}%</button>
-            <button onClick={zoomIn} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Acercar">+</button>
-          </div>
         </div>
-
-        {/* Floating toolbar — hidden if selected section is refining */}
-        {!(selection?.sectionId && refiningSections.has(selection.sectionId)) && <FloatingToolbar
-          selection={selection}
-          iframeRect={iframeRectRef.current}
-          onRefine={handleRefine}
-          onMoveUp={() => {}}
-          onMoveDown={() => {}}
-          onDelete={handleDeleteSection}
-          onClose={() => setSelection(null)}
-          onViewCode={() => {
-            if (selection?.sectionId) handleOpenCode(selection.sectionId);
-          }}
-          onUpdateAttribute={handleUpdateAttribute}
-          onChangeTag={handleChangeTag}
-          onReplaceClass={handleReplaceClass}
-          onDeleteElement={handleDeleteElement}
-          isRefining={refiningSections.size > 0}
-          hideStylePresets
-          themeColors={resolvedThemeColors}
-        />}
-      </div>
+      )}
 
       {/* Add pages modal */}
       {showAddPrompt && (
