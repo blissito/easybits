@@ -16,9 +16,9 @@ const DEFAULTS: Record<DocModelOperation, string> = {
   docDirections: "gemini-2.5-flash",
   docDirectionsPreview: "gemini-2.5-flash",
   docGenerate: "gemini-2.5-pro",
-  docRefine: "claude-sonnet-4-6",
-  docRegeneratePage: "claude-sonnet-4-6",
-  docAutoDescribe: "gpt-4o-mini",
+  docRefine: "gemini-2.5-pro",
+  docRegeneratePage: "gemini-2.5-pro",
+  docAutoDescribe: "gemini-2.5-flash",
 };
 
 let cache: Record<string, string> | null = null;
