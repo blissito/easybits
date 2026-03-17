@@ -1,4 +1,5 @@
 import { streamGenerate, dataUrlToImagePart, extractJsonObjects } from "./streamCore";
+import { buildThemePromptContext } from "./themes";
 import type { Section3 } from "./types";
 
 export { extractJsonObjects };
@@ -29,6 +30,13 @@ IMAGES — CRITICAL:
 - Queries must be generic stock-photo friendly (e.g. "modern office" not "Juan's cybercafe")
 - For avatar-like elements, use colored divs with initials instead of img tags (e.g. <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">JD</div>)
 
+IMAGE OVERLAYS — CRITICAL:
+- When using images as backgrounds or behind text, ALWAYS add a gradient overlay for text readability
+- Pattern: <div class="relative"><img data-image-query="..." alt="..." class="absolute inset-0 w-full h-full object-cover"/><div class="absolute inset-0 bg-gradient-to-r from-primary/80 to-transparent"></div><div class="relative z-10">...text...</div></div>
+- NEVER place text directly on images without an overlay
+- For hero sections with background images: use bg-gradient-to-t from-primary-dark/90 via-primary-dark/50 to-transparent
+- For testimonial/quote backgrounds: use bg-surface/90 backdrop-blur-sm on the card
+
 COLOR SYSTEM — CRITICAL (READ CAREFULLY):
 - Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted, bg-secondary, text-secondary, bg-accent, text-accent
 - NEVER use hardcoded Tailwind color classes: NO bg-gray-*, bg-black, bg-white, bg-indigo-*, bg-blue-*, bg-purple-*, text-gray-*, text-black, text-white, etc.
@@ -39,6 +47,17 @@ COLOR SYSTEM — CRITICAL (READ CAREFULLY):
 - ANTI-PATTERN: NEVER put bg-primary on BOTH the section AND elements inside it. If section is bg-primary, inner cards/elements should be bg-surface. If section is bg-surface, cards can use bg-surface-alt or bg-primary.
 - For gradients: from-primary to-primary-dark, from-surface to-surface-alt
 - For hover: hover:bg-primary-dark, hover:bg-primary-light
+
+COLOR VARIETY — MANDATORY:
+- ALTERNATE section backgrounds: bg-surface → bg-primary → bg-surface-alt → bg-primary-dark → bg-surface
+- Use bg-accent for at least ONE section (CTA or highlight section)
+- Use bg-secondary for at least ONE section (features or stats)
+- Cards on dark sections (bg-primary, bg-primary-dark) MUST be bg-surface (light cards on dark bg = visual pop)
+- Cards on light sections (bg-surface) can use bg-surface-alt or bg-primary-light
+- Use text-accent for decorative elements: labels, badges, icons, highlights, underlines
+- Use text-secondary for secondary information, tags, category labels
+- Gradients: mix colors creatively — from-primary to-accent for CTAs, from-secondary to-primary for headers
+- Buttons: primary CTA = bg-accent text-on-accent, secondary CTA = bg-secondary text-on-secondary or border-primary
 
 DESIGN PHILOSOPHY — what separates good from GREAT:
 - WHITESPACE is your best friend. Generous padding (py-24, py-32, px-8). Let elements breathe.
@@ -79,6 +98,7 @@ TAILWIND v3 NOTES:
 - Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)
 - Borders: border + border-gray-200 for visible borders`;
 
+/** @deprecated Use buildPromptSuffix(prompt) internally. Kept for backward compat. */
 export const PROMPT_SUFFIX = `
 
 OUTPUT FORMAT: NDJSON — one JSON object per line, NO wrapper array, NO markdown fences.
@@ -88,6 +108,26 @@ Generate 7-9 sections. Always start with Hero and end with Footer.
 IMPORTANT: Make each section VISUALLY UNIQUE — different layouts, different background colors, different grid structures.
 Think like a premium design agency creating a $50K landing page.
 NO generic Bootstrap layouts. Use creative grids, bento layouts, overlapping elements, asymmetric columns.`;
+
+function buildPromptSuffix(userPrompt: string): string {
+  // Extract section count from user prompt (e.g. "3 secciones", "2 sections", "dame 4")
+  const countMatch = userPrompt.match(/(\d+)\s*(?:secciones?|sections?|bloques?|blocks?|partes?|pages?)/i)
+    || userPrompt.match(/(?:genera|generar|crea|crear|haz|hazme|dame|quiero)\s*(\d+)/i);
+  const count = countMatch ? parseInt(countMatch[1] || countMatch[2] || "0") : 0;
+  const sectionInstruction = count > 0
+    ? `Generate EXACTLY ${count} sections (no more, no less). Always include Hero as first and Footer as last.`
+    : `Generate 7-9 sections. Always start with Hero and end with Footer.`;
+
+  return `
+
+OUTPUT FORMAT: NDJSON — one JSON object per line, NO wrapper array, NO markdown fences.
+Each line: {"label": "Short Label", "html": "<section>...</section>"}
+
+${sectionInstruction}
+IMPORTANT: Make each section VISUALLY UNIQUE — different layouts, different background colors, different grid structures.
+Think like a premium design agency creating a $50K landing page.
+NO generic Bootstrap layouts. Use creative grids, bento layouts, overlapping elements, asymmetric columns.`;
+}
 
 export interface GenerateOptions {
   anthropicApiKey?: string;
@@ -103,8 +143,10 @@ export interface GenerateOptions {
   onImageUpdate?: (sectionId: string, html: string) => void;
   onDone?: (sections: Section3[]) => void;
   onError?: (error: Error) => void;
-  /** Theme colors to inject into the AI prompt */
+  /** Theme colors to inject into the AI prompt (deprecated — use themeName) */
   themeColors?: Record<string, string>;
+  /** Theme name (e.g. "minimal", "noche", "oceano") — tells the AI the design mood */
+  themeName?: string;
   /** Brand kit info for AI context */
   brandKit?: {
     fonts?: { heading?: string; body?: string };
@@ -116,20 +158,13 @@ export interface GenerateOptions {
 /**
  * Generate a landing page with streaming AI + image enrichment.
  */
-function buildVisualContext(themeColors?: Record<string, string>, brandKit?: GenerateOptions["brandKit"]): string {
-  if (!themeColors && !brandKit) return "";
+function buildVisualContext(themeName?: string, brandKit?: GenerateOptions["brandKit"]): string {
+  if (!themeName && !brandKit) return "";
 
   const lines: string[] = ["\n\n## Visual Context — MANDATORY"];
 
-  if (themeColors) {
-    lines.push("You MUST use these exact semantic color values in your design. The CSS variables are already configured — just use the semantic classes (bg-primary, text-on-surface, etc). Here are the actual color values for reference so you understand the palette:");
-    for (const [key, value] of Object.entries(themeColors)) {
-      lines.push(`- --color-${key}: ${value}`);
-    }
-    const isDark = themeColors.surface && parseInt(themeColors.surface.slice(1, 3), 16) < 128;
-    if (isDark) {
-      lines.push("This is a DARK theme — surfaces are dark, text is light. Design accordingly.");
-    }
+  if (themeName && themeName !== "custom") {
+    lines.push(buildThemePromptContext(themeName));
   }
 
   if (brandKit?.fonts) {
@@ -155,12 +190,13 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
     referenceImage,
     extraInstructions,
     systemPrompt = SYSTEM_PROMPT,
-    themeColors,
+    themeColors: _themeColors,
+    themeName,
     brandKit,
     ...rest
   } = options;
 
-  const visualContext = buildVisualContext(themeColors, brandKit);
+  const visualContext = buildVisualContext(themeName, brandKit);
   const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
   const content: any[] = [];
 
@@ -173,12 +209,12 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
     }
     content.push({
       type: "text",
-      text: `Generate a landing page for: ${prompt}${extra}\n\nIMPORTANT: Use the reference image as a DIRECT visual guide. Replicate its layout structure, grid arrangement, spacing, visual hierarchy, and section organization as closely as possible. Match the number of columns, element positioning, and overall composition. Adapt the content to the prompt but keep the visual DNA of the reference.${PROMPT_SUFFIX}`,
+      text: `Generate a landing page for: ${prompt}${extra}\n\nIMPORTANT: Use the reference image as a DIRECT visual guide. Replicate its layout structure, grid arrangement, spacing, visual hierarchy, and section organization as closely as possible. Match the number of columns, element positioning, and overall composition. Adapt the content to the prompt but keep the visual DNA of the reference.${buildPromptSuffix(prompt)}`,
     });
   } else {
     content.push({
       type: "text",
-      text: `Generate a landing page for: ${prompt}${extra}${PROMPT_SUFFIX}`,
+      text: `Generate a landing page for: ${prompt}${extra}${buildPromptSuffix(prompt)}`,
     });
   }
 

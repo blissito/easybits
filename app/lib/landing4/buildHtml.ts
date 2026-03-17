@@ -1,12 +1,18 @@
 import type { Section3 } from "~/lib/landing3/types";
+import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
 
 /**
  * Build deploy HTML for Landings v4 (GrapesJS).
- * Includes Tailwind CDN + any GrapesJS-generated CSS from the __grapes_css__ section.
+ * Includes Tailwind CDN + theme CSS variables + any GrapesJS-generated CSS.
  */
 export function buildDeployHtmlV4(
   sections: Section3[],
-  opts?: { showBranding?: boolean; title?: string }
+  opts?: {
+    showBranding?: boolean;
+    title?: string;
+    themeName?: string;
+    customColors?: Record<string, string>;
+  }
 ): string {
   const cssSection = sections.find((s) => s.id === "__grapes_css__");
   const contentSections = sections
@@ -18,6 +24,19 @@ export function buildDeployHtmlV4(
   if (cssSection) {
     const match = cssSection.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
     grapesCSS = match?.[1] || "";
+  }
+
+  // Build theme CSS variables
+  let themeCss = "";
+  if (opts?.customColors && Object.keys(opts.customColors).length) {
+    const vars = Object.entries(opts.customColors)
+      .map(([k, v]) => `  --color-${k}: ${v};`)
+      .join("\n");
+    themeCss = `:root {\n${vars}\n}`;
+  } else if (opts?.themeName && opts.themeName !== "custom") {
+    try {
+      themeCss = buildSingleThemeCss(opts.themeName).css || "";
+    } catch { /* fallback: no theme */ }
   }
 
   const body = contentSections
@@ -43,7 +62,11 @@ export function buildDeployHtmlV4(
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${opts?.title || "Landing Page"}</title>
 <script src="https://cdn.tailwindcss.com"><\/script>
+<script>
+tailwind.config={theme:{extend:{colors:{primary:'var(--color-primary)','primary-light':'var(--color-primary-light)','primary-dark':'var(--color-primary-dark)',secondary:'var(--color-secondary)',accent:'var(--color-accent)',surface:'var(--color-surface)','surface-alt':'var(--color-surface-alt)','on-primary':'var(--color-on-primary)','on-secondary':'var(--color-on-secondary)','on-accent':'var(--color-on-accent)','on-surface':'var(--color-on-surface)','on-surface-muted':'var(--color-on-surface-muted)'}}}}
+<\/script>
 <style>
+${themeCss}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{font-family:system-ui,-apple-system,sans-serif}

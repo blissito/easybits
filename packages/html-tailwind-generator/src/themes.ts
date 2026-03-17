@@ -114,6 +114,35 @@ export const LANDING_THEMES: LandingTheme[] = [
   },
 ];
 
+export const THEME_DESCRIPTIONS: Record<string, string> = {
+  minimal: "Clean, light, professional — white surfaces, subtle grays, minimal decoration",
+  calido: "Warm tones — amber/orange primary, cream surfaces, cozy and inviting feel",
+  oceano: "Cool blue tones — deep ocean blues, clean white surfaces, professional and fresh",
+  noche: "DARK theme — very dark surfaces, purple/violet accents, moody and modern. Surfaces are dark, text is light.",
+  bosque: "Nature-inspired — deep green primary, warm earth tones, organic and grounded",
+  rosa: "Soft pink/rose tones — delicate, feminine, elegant with light surfaces",
+};
+
+/**
+ * Build a prompt context string describing the active theme + its hex values.
+ * Used by both generate and refine to give the AI concrete color awareness.
+ */
+export function buildThemePromptContext(themeName: string): string {
+  const desc = THEME_DESCRIPTIONS[themeName] || themeName;
+  const lines: string[] = [];
+  lines.push(`Active theme: "${themeName}" — ${desc}`);
+  lines.push("The CSS variables for this theme are already loaded. Just use the semantic classes (bg-primary, text-on-surface, bg-accent, etc.). The theme handles the actual color values.");
+  const themeObj = LANDING_THEMES.find(t => t.id === themeName);
+  if (themeObj) {
+    lines.push("Actual color values for this theme:");
+    for (const [key, hex] of Object.entries(themeObj.colors)) {
+      lines.push(`  - ${key}: ${hex}`);
+    }
+    lines.push("Use these values to understand the visual mood. Generate designs that COMPLEMENT these specific colors.");
+  }
+  return lines.join("\n");
+}
+
 export interface CustomColors {
   primary: string;
   secondary?: string;

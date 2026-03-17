@@ -67,7 +67,12 @@ export async function deployLanding(ctx: AuthContext, id: string) {
         });
       })()
     : landing.version === 5
-    ? buildDeployHtmlV4(sections as Section3[], { showBranding: !isPaid, title: landing.name })
+    ? buildDeployHtmlV4(sections as Section3[], {
+        showBranding: !isPaid,
+        title: landing.name,
+        themeName: (landingMeta.theme as string) || undefined,
+        customColors: (landingMeta.customColors as Record<string, string>) || undefined,
+      })
     : landing.version === 3
     ? buildDeployHtml(sections as Section3[], (landingMeta.theme as string) || undefined, (landingMeta.customColors as any) || undefined, !isPaid)
     : landing.version === 2

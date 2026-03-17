@@ -2,6 +2,7 @@ import { streamText } from "ai";
 import { enrichImages } from "./images/enrichImages";
 import { sanitizeSemanticColors } from "./sanitizeColors";
 import { resolveModel, currentDateLine } from "./streamCore";
+import { buildThemePromptContext } from "./themes";
 
 export const REFINE_SYSTEM = `You are an expert HTML/Tailwind CSS developer. You receive the current HTML of a landing page section and a user instruction.
 
@@ -20,6 +21,12 @@ COLOR SYSTEM — CRITICAL:
 - The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
 - ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-accent. Use text-primary ONLY on bg-surface/bg-surface-alt (it's the same hue as bg-primary — invisible on primary backgrounds).
 - CONTRAST RULE: on bg-primary or bg-primary-dark → use ONLY text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface, text-on-surface-muted, or text-primary. NEVER use text-primary on bg-primary — they are the SAME COLOR. NEVER put text-on-surface on bg-primary or text-on-primary on bg-surface.
+- Use bg-accent, bg-secondary, text-accent, text-secondary for visual variety — not everything should be primary.
+
+IMAGE OVERLAYS:
+- When placing text over images, ALWAYS add a gradient overlay for readability
+- Pattern: <div class="relative"><img .../><div class="absolute inset-0 bg-gradient-to-r from-primary/80 to-transparent"></div><div class="relative z-10">...text...</div></div>
+- NEVER place text directly on images without an overlay
 
 TAILWIND v3 NOTES:
 - Standard Tailwind v3 classes (shadow-sm, shadow-md, rounded-md, etc.)
@@ -97,8 +104,16 @@ export interface RefineOptions {
   onDone?: (html: string) => void;
   /** Called on error */
   onError?: (error: Error) => void;
-  /** Theme colors for AI context */
+  /** Theme colors for AI context (deprecated — use themeName) */
   themeColors?: Record<string, string>;
+  /** Theme name (e.g. "minimal", "noche") — tells the AI the design mood */
+  themeName?: string;
+  /** Brand kit info for AI context */
+  brandKit?: {
+    fonts?: { heading?: string; body?: string };
+    mood?: string;
+    logoUrl?: string;
+  };
 }
 
 /**
@@ -120,7 +135,9 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     onChunk,
     onDone,
     onError,
-    themeColors,
+    themeColors: _themeColors,
+    themeName,
+    brandKit,
   } = options;
 
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
@@ -149,14 +166,20 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     });
   }
 
-  // Inject theme context if available
+  // Inject theme + brand kit context
   let finalSystem = systemPrompt + currentDateLine();
-  if (themeColors) {
-    const colorLines = Object.entries(themeColors)
-      .map(([k, v]) => `- --color-${k}: ${v}`)
-      .join("\n");
-    const isDark = themeColors.surface && parseInt(themeColors.surface.slice(1, 3), 16) < 128;
-    finalSystem += `\n\n## Active Theme Colors\nThe landing uses these semantic color values. Keep using semantic classes (bg-primary, text-on-surface, etc):\n${colorLines}${isDark ? "\nThis is a DARK theme." : ""}`;
+
+  if (themeName && themeName !== "custom") {
+    finalSystem += `\n\n## Active Theme\n${buildThemePromptContext(themeName)}`;
+  }
+
+  if (brandKit) {
+    const bkLines: string[] = [];
+    if (brandKit.fonts?.heading) bkLines.push(`- Heading font: use font-family: '${brandKit.fonts.heading}' via inline style on h1-h6`);
+    if (brandKit.fonts?.body) bkLines.push(`- Body font: use font-family: '${brandKit.fonts.body}' via inline style on p, li, span`);
+    if (brandKit.mood) bkLines.push(`- Design mood: ${brandKit.mood} — adapt spacing, imagery style, and visual weight to match`);
+    if (brandKit.logoUrl) bkLines.push(`- Brand logo: include <img src="${brandKit.logoUrl}" alt="Logo" class="h-8 w-auto" /> in the navbar/hero area`);
+    if (bkLines.length) finalSystem += `\n\n## Brand Kit\n${bkLines.join("\n")}`;
   }
 
   const result = streamText({
