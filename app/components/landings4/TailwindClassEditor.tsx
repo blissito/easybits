@@ -138,7 +138,15 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const readClasses = useCallback((component: any) => {
-    const el = component?.getEl?.();
+    if (!component) return [];
+    // Read from GrapesJS model attributes (authoritative source)
+    const attrs = component.getAttributes?.() || {};
+    const modelClass = attrs.class || "";
+    if (modelClass) {
+      return modelClass.split(/\s+/).filter((c: string) => c && !c.startsWith("gjs-"));
+    }
+    // Fallback to DOM element
+    const el = component.getEl?.();
     if (!el) return [];
     return (el.className || "")
       .split(/\s+/)
