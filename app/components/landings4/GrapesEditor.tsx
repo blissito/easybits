@@ -78,6 +78,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(null);
     const [activePanel, setActivePanel] = useState<PanelId>("blocks");
     const [ready, setReady] = useState(false);
+    const [themeVersion, setThemeVersion] = useState(0);
 
     useImperativeHandle(ref, () => ({
       getEditor: () => editorRef.current,
@@ -497,6 +498,8 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       doc.body.style.display = "none";
       doc.body.offsetHeight; // trigger reflow
       doc.body.style.display = "";
+      // Bump version so TailwindClassEditor re-resolves color previews (slight delay for repaint)
+      setTimeout(() => setThemeVersion((v) => v + 1), 100);
     }, [theme, customColors]);
 
     return (
@@ -532,7 +535,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             className={`flex-1 overflow-auto ${activePanel === "layers" ? "" : "hidden"}`}
           />
           <div className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}>
-            {ready && <TailwindClassEditor editor={editorRef.current} />}
+            {ready && <TailwindClassEditor editor={editorRef.current} themeVersion={themeVersion} />}
           </div>
           {/* Themes panel */}
           <div className={`flex-1 overflow-auto p-3 ${activePanel === "themes" ? "" : "hidden"}`}>

@@ -4,6 +4,8 @@ import type { Editor } from "grapesjs";
 
 interface Props {
   editor: Editor | null;
+  /** Bumped when theme/customColors change — forces color preview re-resolve */
+  themeVersion?: number;
 }
 
 interface ClassCategory {
@@ -125,7 +127,7 @@ const COMMON_CLASSES = [
   "cursor-pointer", "select-none", "object-cover", "object-contain", "aspect-square", "aspect-video",
 ];
 
-export default function TailwindClassEditor({ editor }: Props) {
+export default function TailwindClassEditor({ editor, themeVersion = 0 }: Props) {
   const [classes, setClasses] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
