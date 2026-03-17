@@ -26,6 +26,53 @@ import type { Route } from "./+types/editor";
 
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
 
+/** Lightweight iframe preview used during streaming generation (no GrapesJS overhead) */
+function StreamingPreview({ sections, themeCssData }: { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string } }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const contentSections = sections.filter((s) => s.id !== "__grapes_css__");
+
+  const srcDoc = useMemo(() => {
+    const allHtml = contentSections
+      .sort((a, b) => a.order - b.order)
+      .map((s) => `<div class="page-section">${s.html}</div>`)
+      .join("\n");
+    return `<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8">
+<script src="https://cdn.tailwindcss.com"><\/script>
+${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; }
+${themeCssData?.css || ""}
+.page-section { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; }
+.page-section > section { min-height: 11in; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.page-section { animation: fade-in 0.4s ease-out; }
+</style></head><body>${allHtml}</body></html>`;
+  }, [contentSections, themeCssData]);
+
+  // Auto-scroll to bottom as new sections arrive
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const tryScroll = () => {
+      try { iframe.contentWindow?.scrollTo({ top: 999999, behavior: "smooth" }); } catch {}
+    };
+    // Delay to let iframe render
+    const t = setTimeout(tryScroll, 200);
+    return () => clearTimeout(t);
+  }, [contentSections.length]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      srcDoc={srcDoc}
+      className="w-full h-full border-none"
+      title="Streaming preview"
+    />
+  );
+}
 
 /** Show brutalist toast with CTA when generation limit is hit */
 function showLimitToast(message: string, upgradeUrl: string) {
@@ -564,12 +611,10 @@ export default function DocumentEditor() {
                   }
                 }
                 setSections([...accumulated]);
-                syncToGrapes([...accumulated]);
               } else if (eventType === "section-update") {
                 const idx = accumulated.findIndex((s) => s.id === d.id);
                 if (idx !== -1) accumulated[idx] = { ...accumulated[idx], html: d.html };
                 setSections([...accumulated]);
-                syncToGrapes([...accumulated]);
               } else if (eventType === "done") {
                 playTone();
               } else if (eventType === "error") {
@@ -583,14 +628,12 @@ export default function DocumentEditor() {
       }
 
       setSections([...accumulated]);
-      syncToGrapes([...accumulated]);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Generation error:", err);
       errorToast((err as Error).message || "Error al generar documento");
       if (accumulated.length > 0) {
         setSections([...accumulated]);
-        syncToGrapes([...accumulated]);
       }
     } finally {
       if (abortRef.current === controller) setIsGenerating(false);
@@ -1623,9 +1666,11 @@ ${sectionsHtml}
           </div>
         )}
 
-        {/* GrapesJS Editor — replaces Canvas + FloatingToolbar */}
+        {/* Editor area — iframe during generation, GrapesJS after */}
         <div className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 h-full overflow-hidden relative`}>
-          {sections.length === 0 && !isGenerating ? (
+          {isGenerating ? (
+            <StreamingPreview sections={sections} themeCssData={themeCssData} />
+          ) : sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-200">
               <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
             </div>
