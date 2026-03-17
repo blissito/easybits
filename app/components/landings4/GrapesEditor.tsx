@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import "grapesjs/dist/css/grapes.min.css";
+import "./grapes-dark.css";
 import type { Editor } from "grapesjs";
 import { LANDING_BLOCKS } from "./blocks";
 import { buildSingleThemeCss, LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
+import TailwindClassEditor from "./TailwindClassEditor";
 
 export interface AiAction {
   type: "refine-element";
@@ -19,6 +21,10 @@ export interface GrapesEditorHandle {
   setHtml: (html: string) => void;
   /** Replace a component's HTML by its GrapesJS ID */
   replaceComponent: (componentId: string, newHtml: string) => void;
+  /** Toggle preview mode, returns new state */
+  togglePreview: () => boolean;
+  /** Toggle sw-visibility (component border guides), returns new state */
+  toggleSwVisibility: () => boolean;
 }
 
 interface BrandKitItem {
@@ -38,7 +44,8 @@ interface Props {
   brandKits?: BrandKitItem[];
   onChange?: (html: string) => void;
   onAiAction?: (action: AiAction) => void;
-  onThemeChange?: (themeId: string) => void;
+  onThemeChange?: (themeId: string, customColors?: Record<string, string>) => void;
+  onBrandKitChange?: (brandKit: BrandKitItem | null) => void;
 }
 
 const PANEL_TABS = [
@@ -51,11 +58,10 @@ const PANEL_TABS = [
 type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange }, ref) => {
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const blocksRef = useRef<HTMLDivElement>(null);
     const layersRef = useRef<HTMLDivElement>(null);
-    const stylesRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<Editor | null>(null);
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
@@ -63,7 +69,15 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     onAiActionRef.current = onAiAction;
     const onThemeChangeRef = useRef(onThemeChange);
     onThemeChangeRef.current = onThemeChange;
+    const onBrandKitChangeRef = useRef(onBrandKitChange);
+    onBrandKitChangeRef.current = onBrandKitChange;
+    const themeRef = useRef(theme);
+    themeRef.current = theme;
+    const customColorsRef = useRef(customColors);
+    customColorsRef.current = customColors;
+    const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(null);
     const [activePanel, setActivePanel] = useState<PanelId>("blocks");
+    const [ready, setReady] = useState(false);
 
     useImperativeHandle(ref, () => ({
       getEditor: () => editorRef.current,
@@ -75,10 +89,38 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         return css ? `<style>${css}</style>\n${html}` : html;
       },
       setHtml: (html: string) => editorRef.current?.setComponents(html),
+      togglePreview: () => {
+        const ed = editorRef.current;
+        if (!ed) return false;
+        const cmd = ed.Commands;
+        if (cmd.isActive("preview")) {
+          cmd.stop("preview");
+          // Restore component borders
+          if (!cmd.isActive("sw-visibility")) cmd.run("sw-visibility");
+          return false;
+        } else {
+          // Hide component borders in preview
+          if (cmd.isActive("sw-visibility")) cmd.stop("sw-visibility");
+          ed.select(null);
+          cmd.run("preview");
+          return true;
+        }
+      },
+      toggleSwVisibility: () => {
+        const ed = editorRef.current;
+        if (!ed) return false;
+        const cmd = ed.Commands;
+        if (cmd.isActive("sw-visibility")) {
+          cmd.stop("sw-visibility");
+          return false;
+        } else {
+          cmd.run("sw-visibility");
+          return true;
+        }
+      },
       replaceComponent: (componentId: string, newHtml: string) => {
         const ed = editorRef.current;
         if (!ed) return;
-        // Search all components recursively for matching ID
         function findById(parent: any): any {
           if (parent.getId() === componentId) return parent;
           for (const child of parent.components().models || []) {
@@ -100,13 +142,19 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
 
     function getThemeCss() {
       try {
-        return buildSingleThemeCss(theme).css || "";
+        const cc = customColorsRef.current;
+        if (cc && Object.keys(cc).length) {
+          const vars = Object.entries(cc)
+            .map(([k, v]) => `  --color-${k}: ${v};`)
+            .join("\n");
+          return `:root {\n${vars}\n}`;
+        }
+        return buildSingleThemeCss(themeRef.current).css || "";
       } catch {
         return "";
       }
     }
 
-    /** Find the closest <section> ancestor (or self) of a component */
     function findSectionAncestor(comp: any): any {
       let current = comp;
       while (current) {
@@ -124,6 +172,26 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         const grapesjs = (await import("grapesjs")).default;
         if (!mounted || !editorContainerRef.current) return;
 
+        // Build initial theme + fallback CSS for the canvas iframe
+        const initialThemeCss = getThemeCss();
+        const COLORS_MAP: Record<string, string> = {
+          primary: "--color-primary", "primary-light": "--color-primary-light", "primary-dark": "--color-primary-dark",
+          secondary: "--color-secondary", accent: "--color-accent",
+          surface: "--color-surface", "surface-alt": "--color-surface-alt",
+          "on-primary": "--color-on-primary", "on-secondary": "--color-on-secondary", "on-accent": "--color-on-accent",
+          "on-surface": "--color-on-surface", "on-surface-muted": "--color-on-surface-muted",
+        };
+        const fallbackRules: string[] = [];
+        for (const [name, cssVar] of Object.entries(COLORS_MAP)) {
+          fallbackRules.push(`.bg-${name} { background-color: var(${cssVar}) !important }`);
+          fallbackRules.push(`.text-${name} { color: var(${cssVar}) !important }`);
+          fallbackRules.push(`.border-${name} { border-color: var(${cssVar}) !important }`);
+          fallbackRules.push(`.from-${name} { --tw-gradient-from: var(${cssVar}) }`);
+          fallbackRules.push(`.to-${name} { --tw-gradient-to: var(${cssVar}) }`);
+          fallbackRules.push(`.hover\\:bg-${name}:hover { background-color: var(${cssVar}) !important }`);
+          fallbackRules.push(`.hover\\:text-${name}:hover { color: var(${cssVar}) !important }`);
+        }
+
         const editor = grapesjs.init({
           container: editorContainerRef.current,
           height: "100%",
@@ -132,7 +200,29 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           storageManager: false,
           panels: { defaults: [] },
           canvas: {
-            scripts: ["https://cdn.tailwindcss.com"],
+            scripts: [
+              // Tailwind config MUST come before CDN so it's picked up on first pass
+              `data:text/javascript,tailwind.config=${encodeURIComponent(JSON.stringify({
+                theme: { extend: { colors: {
+                  primary: "var(--color-primary)",
+                  "primary-light": "var(--color-primary-light)",
+                  "primary-dark": "var(--color-primary-dark)",
+                  secondary: "var(--color-secondary)",
+                  accent: "var(--color-accent)",
+                  surface: "var(--color-surface)",
+                  "surface-alt": "var(--color-surface-alt)",
+                  "on-primary": "var(--color-on-primary)",
+                  "on-secondary": "var(--color-on-secondary)",
+                  "on-accent": "var(--color-on-accent)",
+                  "on-surface": "var(--color-on-surface)",
+                  "on-surface-muted": "var(--color-on-surface-muted)",
+                }}}
+              }))}`,
+              "https://cdn.tailwindcss.com",
+            ],
+            styles: [
+              `data:text/css,${encodeURIComponent(initialThemeCss + "\n" + fallbackRules.join("\n"))}`,
+            ],
           },
           deviceManager: {
             devices: [
@@ -141,56 +231,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
               { name: "Mobile", width: "375px" },
             ],
           },
-          styleManager: {
-            appendTo: stylesRef.current!,
-            sectors: [
-              {
-                name: "Layout",
-                open: false,
-                properties: [
-                  { type: "select", property: "display", options: [
-                    { id: "block", label: "Block" },
-                    { id: "flex", label: "Flex" },
-                    { id: "grid", label: "Grid" },
-                    { id: "none", label: "None" },
-                  ]},
-                  { type: "select", property: "flex-direction", options: [
-                    { id: "row", label: "Row" },
-                    { id: "column", label: "Column" },
-                  ]},
-                  { type: "select", property: "justify-content", options: [
-                    { id: "flex-start", label: "Start" },
-                    { id: "center", label: "Center" },
-                    { id: "flex-end", label: "End" },
-                    { id: "space-between", label: "Between" },
-                  ]},
-                  { type: "select", property: "align-items", options: [
-                    { id: "flex-start", label: "Start" },
-                    { id: "center", label: "Center" },
-                    { id: "flex-end", label: "End" },
-                    { id: "stretch", label: "Stretch" },
-                  ]},
-                  "padding", "margin", "width", "max-width", "min-height",
-                ],
-              },
-              {
-                name: "Typography",
-                open: false,
-                properties: [
-                  "font-family", "font-size", "font-weight",
-                  "line-height", "color", "text-align",
-                ],
-              },
-              {
-                name: "Decoration",
-                open: true,
-                properties: [
-                  "background-color", "border-radius",
-                  "border", "box-shadow", "opacity",
-                ],
-              },
-            ],
-          },
+          styleManager: false as any,
           layerManager: {
             appendTo: layersRef.current!,
           },
@@ -239,7 +280,6 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           const hasAi = toolbar.some((t: any) => t.id === "ai-refine");
           if (hasAi) return;
 
-          const isSection = component.get("tagName") === "section";
           const aiButtons: any[] = [
             {
               id: "ai-menu",
@@ -251,35 +291,98 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           component.set("toolbar", [...toolbar, ...aiButtons]);
         });
 
-        // ─── Theme + Tailwind config ────────────────────
+        // ─── Theme + extras in iframe ────────────────────
         editor.on("canvas:frame:load", ({ window: fw }: { window: Window }) => {
           const doc = fw.document;
+
+          // Dynamic theme style element (updated on theme change via useEffect)
           const style = doc.createElement("style");
           style.id = "easybits-theme";
           style.textContent = getThemeCss();
           doc.head.appendChild(style);
 
-          if ((fw as any).tailwind) {
-            (fw as any).tailwind.config = {
-              theme: {
-                extend: {
-                  colors: {
-                    primary: "var(--color-primary)",
-                    "primary-light": "var(--color-primary-light)",
-                    "primary-dark": "var(--color-primary-dark)",
-                    secondary: "var(--color-secondary)",
-                    accent: "var(--color-accent)",
-                    surface: "var(--color-surface)",
-                    "surface-alt": "var(--color-surface-alt)",
-                    "on-primary": "var(--color-on-primary)",
-                    "on-secondary": "var(--color-on-secondary)",
-                    "on-accent": "var(--color-on-accent)",
-                    "on-surface": "var(--color-on-surface)",
-                    "on-surface-muted": "var(--color-on-surface-muted)",
-                  },
-                },
-              },
-            };
+          // Shimmer animation for AI refine
+          const shimmerStyle = doc.createElement("style");
+          shimmerStyle.textContent = `
+            .easybits-refining { position: relative; overflow: hidden; }
+            .easybits-refining::after {
+              content: '';
+              position: absolute;
+              inset: 0;
+              background: linear-gradient(90deg, transparent 0%, rgba(152,112,237,0.08) 50%, transparent 100%);
+              animation: easybits-shimmer 1.5s infinite;
+              pointer-events: none;
+              z-index: 9999;
+            }
+            @keyframes easybits-shimmer {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(100%); }
+            }
+          `;
+          doc.head.appendChild(shimmerStyle);
+
+          // sw-visibility CSS
+          const swStyle = doc.createElement("style");
+          swStyle.textContent = `
+            .gjs-dashed *[data-gjs-type] {
+              outline: 1px dashed rgba(152,112,237,0.35) !important;
+              outline-offset: -1px;
+            }
+            .gjs-dashed *[data-gjs-type]:hover {
+              outline-color: rgba(152,112,237,0.7) !important;
+            }
+          `;
+          doc.head.appendChild(swStyle);
+
+          // Fix: allow space key in contenteditable buttons/links
+          doc.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key !== " ") return;
+            const el = e.target as HTMLElement;
+            if (!el?.isContentEditable) return;
+            const tag = el.tagName?.toLowerCase();
+            if (tag === "a" || tag === "button" || el.closest("a") || el.closest("button")) {
+              e.preventDefault();
+              doc.execCommand("insertText", false, " ");
+            }
+          });
+
+          // Fallback CSS: semantic color classes via CSS vars (works even if Tailwind CDN doesn't know about them)
+          if (!doc.getElementById("easybits-semantic-fallback")) {
+            const fallback = doc.createElement("style");
+            fallback.id = "easybits-semantic-fallback";
+            const rules: string[] = [];
+            for (const [name, cssVar] of Object.entries(COLORS_MAP)) {
+              rules.push(`.bg-${name} { background-color: var(${cssVar}) !important }`);
+              rules.push(`.text-${name} { color: var(${cssVar}) !important }`);
+              rules.push(`.border-${name} { border-color: var(${cssVar}) !important }`);
+              rules.push(`.from-${name} { --tw-gradient-from: var(${cssVar}) }`);
+              rules.push(`.to-${name} { --tw-gradient-to: var(${cssVar}) }`);
+              rules.push(`.hover\\:bg-${name}:hover { background-color: var(${cssVar}) !important }`);
+              rules.push(`.hover\\:text-${name}:hover { color: var(${cssVar}) !important }`);
+            }
+            fallback.textContent = rules.join("\n");
+            doc.head.appendChild(fallback);
+          }
+
+          // Ensure Tailwind CDN picks up semantic color config
+          const applyTwConfig = () => {
+            if ((fw as any).tailwind) {
+              (fw as any).tailwind.config = {
+                theme: { extend: { colors: Object.fromEntries(
+                  Object.keys(COLORS_MAP).map(name => [name, `var(${COLORS_MAP[name]})`])
+                )}}
+              };
+            }
+          };
+          applyTwConfig();
+          const twScript = doc.querySelector('script[src*="tailwindcss"]');
+          if (twScript) {
+            twScript.addEventListener("load", () => {
+              applyTwConfig();
+              doc.body.style.display = "none";
+              doc.body.offsetHeight;
+              doc.body.style.display = "";
+            });
           }
         });
 
@@ -290,7 +393,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           const wrapper = editor.DomComponents.getWrapper();
           if (!wrapper) return;
           wrapper.components().forEach((comp: any, i: number) => {
-            if (comp.get("custom-name")) return; // already named by user
+            if (comp.get("custom-name")) return;
             const tag = (comp.get("tagName") || "").toLowerCase();
             if (tag !== "section") return;
             const html = comp.toHTML().toLowerCase();
@@ -312,25 +415,13 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           });
         }
         editor.on("load", nameLayers);
-        // Also re-name after generation loads new content
         editor.on("component:add", () => setTimeout(nameLayers, 200));
 
-        // Only start listening after user's first real interaction.
-        // This prevents saving empty HTML during initial setComponents() which
-        // fires component:add/remove events.
         let userHasInteracted = false;
-
-        // These events indicate real user interaction (not programmatic):
         const interactionEvents = [
-          "canvas:drop",
-          "block:drag:stop",
-          "component:drag:end",
-          "component:input",
-          "style:property:update",
-          "undo",
-          "redo",
+          "canvas:drop", "block:drag:stop", "component:drag:end",
+          "component:input", "undo", "redo",
         ];
-
         const markInteracted = () => { userHasInteracted = true; };
         interactionEvents.forEach((evt) => editor.on(evt, markInteracted));
 
@@ -343,21 +434,13 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           onChangeRef.current?.(fullHtml);
         };
 
-        // Listen to all change events for auto-save
         [
-          "component:update",
-          "component:add",
-          "component:remove",
-          "component:drag:end",
-          "component:input",
-          "canvas:drop",
-          "block:drag:stop",
-          "undo",
-          "redo",
-          "style:property:update",
+          "component:update", "component:add", "component:remove",
+          "component:drag:end", "component:input", "canvas:drop",
+          "block:drag:stop", "undo", "redo",
         ].forEach((evt) => editor.on(evt, notify));
 
-        // Collapse all block categories except Basic and CTA
+        // Collapse all block categories except CTA
         try {
           const bm = editor.BlockManager;
           const cats = bm.getCategories?.();
@@ -374,6 +457,21 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         } catch { /* skip */ }
 
         editorRef.current = editor;
+        editor.on("load", () => {
+          setReady(true);
+          // Kill show-offset on startup (it can cause layout issues)
+          let attempts = 0;
+          const interval = setInterval(() => {
+            attempts++;
+            const active = editor.Commands.getActive();
+            for (const cmd of Object.keys(active)) {
+              if (cmd === "show-offset") {
+                try { editor.stopCommand(cmd); } catch {}
+              }
+            }
+            if (attempts >= 30) clearInterval(interval);
+          }, 100);
+        });
       })().catch((err) => {
         console.error("GrapesJS init failed:", err);
       });
@@ -386,19 +484,23 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Update theme CSS dynamically
+    // Update theme CSS dynamically + force repaint in iframe
     useEffect(() => {
       const ed = editorRef.current;
       if (!ed) return;
       const doc = ed.Canvas.getDocument();
       if (!doc) return;
       const el = doc.getElementById("easybits-theme");
-      if (el) el.textContent = getThemeCss();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      if (!el) return;
+      el.textContent = getThemeCss();
+      // Force repaint so CSS variable changes take effect visually
+      doc.body.style.display = "none";
+      doc.body.offsetHeight; // trigger reflow
+      doc.body.style.display = "";
     }, [theme, customColors]);
 
     return (
-      <div className="flex h-full w-full">
+      <div className="flex h-full w-full relative">
         {/* Left sidebar: tabs + panel content */}
         <div className="w-80 shrink-0 flex flex-col bg-gray-900 border-r border-gray-700 overflow-hidden">
           {/* Tab buttons */}
@@ -429,10 +531,9 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             ref={layersRef}
             className={`flex-1 overflow-auto ${activePanel === "layers" ? "" : "hidden"}`}
           />
-          <div
-            ref={stylesRef}
-            className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}
-          />
+          <div className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}>
+            {ready && <TailwindClassEditor editor={editorRef.current} />}
+          </div>
           {/* Themes panel */}
           <div className={`flex-1 overflow-auto p-3 ${activePanel === "themes" ? "" : "hidden"}`}>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">Temas</p>
@@ -444,7 +545,8 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                     key={t.id}
                     onClick={() => {
                       onThemeChangeRef.current?.(t.id);
-                      // Update CSS in canvas immediately
+                      setActiveBrandKitId(null);
+                      onBrandKitChangeRef.current?.(null);
                       const ed = editorRef.current;
                       if (ed) {
                         const doc = ed.Canvas.getDocument();
@@ -464,29 +566,44 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                         : "border-gray-700 hover:border-gray-500"
                     }`}
                   >
-                    {/* Color swatches */}
                     <div className="flex gap-1">
-                      <div
-                        className="w-5 h-5 rounded-full border border-gray-600"
-                        style={{ background: t.colors.primary }}
-                        title="Primary"
-                      />
-                      <div
-                        className="w-5 h-5 rounded-full border border-gray-600"
-                        style={{ background: t.colors.surface }}
-                        title="Surface"
-                      />
-                      <div
-                        className="w-5 h-5 rounded-full border border-gray-600"
-                        style={{ background: t.colors.accent }}
-                        title="Accent"
-                      />
+                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: t.colors.primary }} title="Primary" />
+                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: t.colors.surface }} title="Surface" />
+                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: t.colors.accent }} title="Accent" />
                     </div>
                     <span className="text-[10px] font-bold text-gray-300">{t.label}</span>
                   </button>
                 );
               })}
             </div>
+
+            {/* Active theme colors */}
+            {(() => {
+              const active = LANDING_THEMES.find((t) => t.id === theme);
+              if (!active) return null;
+              const COLOR_LABELS: Record<string, string> = {
+                primary: "Primary", "primary-light": "Primary Light", "primary-dark": "Primary Dark",
+                secondary: "Secondary", accent: "Accent", surface: "Surface",
+                "surface-alt": "Surface Alt", "on-surface": "On Surface",
+                "on-surface-muted": "On Surface Muted", "on-primary": "On Primary",
+              };
+              return (
+                <div className="mt-3 space-y-1">
+                  {Object.entries(active.colors).map(([key, hex]) => (
+                    <button
+                      key={key}
+                      onClick={() => navigator.clipboard.writeText(hex)}
+                      className="flex items-center gap-2 w-full px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors group text-left"
+                      title={`Click to copy ${hex}`}
+                    >
+                      <div className="w-4 h-4 rounded border border-gray-600 shrink-0" style={{ background: hex }} />
+                      <span className="text-[10px] text-gray-400 flex-1 truncate">{COLOR_LABELS[key] || key}</span>
+                      <code className="text-[10px] text-gray-500 group-hover:text-gray-300 font-mono">{hex}</code>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Brand Kits */}
             {brandKits && brandKits.length > 0 && (
@@ -499,8 +616,9 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                       <button
                         key={bk.id}
                         onClick={() => {
-                          // Brand kits use custom theme — apply colors directly
-                          onThemeChangeRef.current?.("custom");
+                          onThemeChangeRef.current?.("custom", colors);
+                          setActiveBrandKitId(bk.id);
+                          onBrandKitChangeRef.current?.(bk);
                           const ed = editorRef.current;
                           if (ed) {
                             const doc = ed.Canvas.getDocument();
@@ -515,7 +633,11 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                             }
                           }
                         }}
-                        className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 border-gray-700 hover:border-gray-500 transition-all"
+                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all ${
+                          activeBrandKitId === bk.id
+                            ? "border-brand-500 bg-brand-500/10"
+                            : "border-gray-700 hover:border-gray-500"
+                        }`}
                       >
                         <div className="flex gap-1">
                           {["primary", "surface", "accent"].map((key) => (
@@ -531,6 +653,27 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                     );
                   })}
                 </div>
+                {activeBrandKitId && (() => {
+                  const bk = brandKits?.find((b) => b.id === activeBrandKitId);
+                  if (!bk) return null;
+                  const colors = bk.colors as Record<string, string>;
+                  return (
+                    <div className="mt-3 space-y-1">
+                      {Object.entries(colors).map(([key, hex]) => (
+                        <button
+                          key={key}
+                          onClick={() => navigator.clipboard.writeText(hex)}
+                          className="flex items-center gap-2 w-full px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors group text-left"
+                          title={`Click to copy ${hex}`}
+                        >
+                          <div className="w-4 h-4 rounded border border-gray-600 shrink-0" style={{ background: hex }} />
+                          <span className="text-[10px] text-gray-400 flex-1 truncate">{key}</span>
+                          <code className="text-[10px] text-gray-500 group-hover:text-gray-300 font-mono">{hex}</code>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>
@@ -538,6 +681,13 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
 
         {/* Canvas */}
         <div ref={editorContainerRef} className="flex-1 h-full" />
+
+        {/* Glass overlay while GrapesJS loads */}
+        <div
+          className={`absolute inset-0 z-50 pointer-events-none bg-gray-950/40 backdrop-blur-[2px] transition-all duration-500 ${
+            ready ? "opacity-0 invisible" : "opacity-100"
+          }`}
+        />
       </div>
     );
   }
