@@ -12,6 +12,8 @@ export interface LandingTheme {
     "on-surface": string;
     "on-surface-muted": string;
     "on-primary": string;
+    "on-secondary": string;
+    "on-accent": string;
   };
 }
 
@@ -30,6 +32,8 @@ export const LANDING_THEMES: LandingTheme[] = [
       "on-surface": "#18181b",
       "on-surface-muted": "#71717a",
       "on-primary": "#ffffff",
+      "on-secondary": "#ffffff",
+      "on-accent": "#ffffff",
     },
   },
   {
@@ -46,6 +50,8 @@ export const LANDING_THEMES: LandingTheme[] = [
       "on-surface": "#1c1917",
       "on-surface-muted": "#78716c",
       "on-primary": "#ffffff",
+      "on-secondary": "#ffffff",
+      "on-accent": "#111827",
     },
   },
   {
@@ -62,6 +68,8 @@ export const LANDING_THEMES: LandingTheme[] = [
       "on-surface": "#0f172a",
       "on-surface-muted": "#64748b",
       "on-primary": "#ffffff",
+      "on-secondary": "#ffffff",
+      "on-accent": "#ffffff",
     },
   },
   {
@@ -70,14 +78,16 @@ export const LANDING_THEMES: LandingTheme[] = [
     colors: {
       primary: "#a78bfa",
       "primary-light": "#c4b5fd",
-      "primary-dark": "#8b5cf6",
+      "primary-dark": "#7c3aed",
       secondary: "#9ca3af",
-      accent: "#a78bfa",
+      accent: "#f472b6",
       surface: "#111827",
       "surface-alt": "#1f2937",
       "on-surface": "#f9fafb",
       "on-surface-muted": "#9ca3af",
       "on-primary": "#111827",
+      "on-secondary": "#111827",
+      "on-accent": "#111827",
     },
   },
   {
@@ -88,12 +98,14 @@ export const LANDING_THEMES: LandingTheme[] = [
       "primary-light": "#22c55e",
       "primary-dark": "#15803d",
       secondary: "#a3a3a3",
-      accent: "#16a34a",
+      accent: "#f59e0b",
       surface: "#0a0a0a",
       "surface-alt": "#171717",
       "on-surface": "#fafafa",
       "on-surface-muted": "#a3a3a3",
-      "on-primary": "#000000",
+      "on-primary": "#ffffff",
+      "on-secondary": "#111827",
+      "on-accent": "#111827",
     },
   },
   {
@@ -104,12 +116,14 @@ export const LANDING_THEMES: LandingTheme[] = [
       "primary-light": "#db2777",
       "primary-dark": "#9d174d",
       secondary: "#6b7280",
-      accent: "#be185d",
+      accent: "#8b5cf6",
       surface: "#ffffff",
       "surface-alt": "#fdf2f8",
       "on-surface": "#1f2937",
       "on-surface-muted": "#6b7280",
       "on-primary": "#ffffff",
+      "on-secondary": "#ffffff",
+      "on-accent": "#ffffff",
     },
   },
 ];
@@ -119,7 +133,7 @@ export const THEME_DESCRIPTIONS: Record<string, string> = {
   calido: "Warm tones — amber/orange primary, cream surfaces, cozy and inviting feel",
   oceano: "Cool blue tones — deep ocean blues, clean white surfaces, professional and fresh",
   noche: "DARK theme — very dark surfaces, purple/violet accents, moody and modern. Surfaces are dark, text is light.",
-  bosque: "Nature-inspired — deep green primary, warm earth tones, organic and grounded",
+  bosque: "DARK nature theme — black surfaces, vibrant green primary, amber accents. Surfaces are dark, text is light.",
   rosa: "Soft pink/rose tones — delicate, feminine, elegant with light surfaces",
 };
 
@@ -181,6 +195,8 @@ export function buildCustomTheme(colors: CustomColors): LandingTheme {
   const { primary, secondary = "#f59e0b", accent = "#06b6d4", surface = "#ffffff" } = colors;
 
   const onPrimary = luminance(primary) > 0.5 ? "#111827" : "#ffffff";
+  const onSecondary = luminance(secondary) > 0.5 ? "#111827" : "#ffffff";
+  const onAccent = luminance(accent) > 0.5 ? "#111827" : "#ffffff";
   const surfaceLum = luminance(surface);
   const isDarkSurface = surfaceLum < 0.5;
 
@@ -198,6 +214,8 @@ export function buildCustomTheme(colors: CustomColors): LandingTheme {
       "on-surface": isDarkSurface ? "#f1f5f9" : "#111827",
       "on-surface-muted": isDarkSurface ? "#94a3b8" : "#6b7280",
       "on-primary": onPrimary,
+      "on-secondary": onSecondary,
+      "on-accent": onAccent,
     },
   };
 }

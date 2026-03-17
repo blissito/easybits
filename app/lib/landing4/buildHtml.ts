@@ -1,5 +1,5 @@
 import type { Section3 } from "~/lib/landing3/types";
-import { buildSingleThemeCss } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 
 /**
  * Build deploy HTML for Landings v4 (GrapesJS).
@@ -29,7 +29,13 @@ export function buildDeployHtmlV4(
   // Build theme CSS variables
   let themeCss = "";
   if (opts?.customColors && Object.keys(opts.customColors).length) {
-    const vars = Object.entries(opts.customColors)
+    let colors = opts.customColors;
+    // Brand kit (only 4 colors) → derive full theme with on-* colors
+    if (!colors["on-primary"] && colors.primary) {
+      const full = buildCustomTheme(colors as any);
+      colors = full.colors;
+    }
+    const vars = Object.entries(colors)
       .map(([k, v]) => `  --color-${k}: ${v};`)
       .join("\n");
     themeCss = `:root {\n${vars}\n}`;

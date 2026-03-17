@@ -3,7 +3,7 @@ import "grapesjs/dist/css/grapes.min.css";
 import "./grapes-dark.css";
 import type { Editor } from "grapesjs";
 import { LANDING_BLOCKS } from "./blocks";
-import { buildSingleThemeCss, LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
 import TailwindClassEditor from "./TailwindClassEditor";
 
 export interface AiAction {
@@ -145,6 +145,15 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       try {
         const cc = customColorsRef.current;
         if (cc && Object.keys(cc).length) {
+          // Brand kit (only 4 colors) → derive full theme with on-* colors
+          if (!cc["on-primary"] && cc.primary) {
+            const full = buildCustomTheme(cc as any);
+            const vars = Object.entries(full.colors)
+              .map(([k, v]) => `  --color-${k}: ${v};`)
+              .join("\n");
+            return `:root {\n${vars}\n}`;
+          }
+          // Full custom colors
           const vars = Object.entries(cc)
             .map(([k, v]) => `  --color-${k}: ${v};`)
             .join("\n");
@@ -472,6 +481,10 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             }
             if (attempts >= 30) clearInterval(interval);
           }, 100);
+          // Start with sw-visibility OFF (user can toggle it on)
+          if (editor.Commands.isActive("sw-visibility")) {
+            editor.Commands.stop("sw-visibility");
+          }
         });
       })().catch((err) => {
         console.error("GrapesJS init failed:", err);

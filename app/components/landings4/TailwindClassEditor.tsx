@@ -156,17 +156,23 @@ export default function TailwindClassEditor({ editor, themeVersion = 0, themeCol
   const writeClasses = useCallback((component: any, newClasses: string[]) => {
     if (!component) return;
     const merged = twMerge(newClasses.join(" "));
+    const newClassList = merged.split(/\s+/).filter(Boolean);
+
+    // Update DOM element directly (preserve gjs-* classes)
     const el = component.getEl();
-    if (!el) return;
-    // Preserve gjs-* classes
-    const gjsClasses = (el.className || "").split(/\s+/).filter((c: string) => c.startsWith("gjs-"));
-    const finalClassName = [...gjsClasses, ...merged.split(/\s+/).filter(Boolean)].join(" ");
-    el.className = finalClassName;
-    // Sync to GrapesJS model
-    const attrs = component.getAttributes();
-    attrs.class = merged;
-    component.setAttributes(attrs);
-    setClasses(merged.split(/\s+/).filter(Boolean));
+    if (el) {
+      const gjsClasses = (el.className || "").split(/\s+/).filter((c: string) => c.startsWith("gjs-"));
+      el.className = [...gjsClasses, ...newClassList].join(" ");
+    }
+
+    // Update GrapesJS model via native class API so getHtml() serializes correctly
+    const currentClasses = component.getClasses();
+    currentClasses.forEach((cls: string) => {
+      if (!cls.startsWith("gjs-")) component.removeClass(cls);
+    });
+    newClassList.forEach((cls: string) => component.addClass(cls));
+
+    setClasses(newClassList);
   }, []);
 
   useEffect(() => {
