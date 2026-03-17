@@ -63,6 +63,10 @@ npm test           # vitest
 npm run e2e        # Playwright e2e tests
 ```
 
+## License
+
+This project is source-available under the [PolyForm Noncommercial 1.0.0](./LICENSE.md) license. You may use, study, and modify the code for **non-commercial purposes only** (personal projects, research, education). Commercial use requires explicit permission from the authors.
+
 ## Authors
 
 Built by [Bliss](https://github.com/blissito) & [Brenda](https://github.com/BrendaOrtega) at [fixter.org](https://fixter.org)

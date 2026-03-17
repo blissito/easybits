@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "por-que-tailwind-en-nuestro-editor-de-documentos",
+    filePath:
+      "app/content/blog/2026-03-17-por-que-tailwind-en-nuestro-editor-de-documentos.mdx",
+    title: "Por que elegimos Tailwind CSS para nuestro editor de documentos",
+    description:
+      "Tailwind CSS es el motor detras del editor de documentos de EasyBits. Te explicamos por que lo elegimos, como funciona con la generacion de AI, y que ventajas tiene para disenadores web.",
+    date: "2026-03-17",
+    author: "EasyBits Team",
+    tags: ["Tailwind CSS", "Editor", "Documentos", "Diseno Web", "AI"],
+    featuredImage:
+      "https://images.unsplash.com/photo-1507721999472-8ed4421c4af2?w=800&auto=format",
+    readingTime: 8,
+    excerpt:
+      "Tailwind CSS es el motor detras del editor de documentos de EasyBits. Te explicamos por que lo elegimos, como funciona con la generacion de AI, y que ventajas tiene para disenadores web.",
+    published: true,
+  },
+  {
     slug: "mcp-apps-ui-easybits-laboratorio",
     filePath:
       "app/content/blog/2026-03-07-mcp-apps-ui-easybits-laboratorio.mdx",
