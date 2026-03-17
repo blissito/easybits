@@ -44,8 +44,10 @@ interface Props {
   brandKits?: BrandKitItem[];
   onChange?: (html: string) => void;
   onAiAction?: (action: AiAction) => void;
-  onThemeChange?: (themeId: string, customColors?: Record<string, string>) => void;
+  onThemeChange?: (themeId: string, customColors?: Record<string, string>, brandKitId?: string) => void;
   onBrandKitChange?: (brandKit: BrandKitItem | null) => void;
+  /** Persisted brand kit ID — restored from metadata on load */
+  initialBrandKitId?: string;
 }
 
 const PANEL_TABS = [
@@ -58,7 +60,7 @@ const PANEL_TABS = [
 type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId }, ref) => {
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const blocksRef = useRef<HTMLDivElement>(null);
     const layersRef = useRef<HTMLDivElement>(null);
@@ -75,7 +77,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     themeRef.current = theme;
     const customColorsRef = useRef(customColors);
     customColorsRef.current = customColors;
-    const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(null);
+    const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(initialBrandKitId || null);
     const [activePanel, setActivePanel] = useState<PanelId>("styles");
     const [ready, setReady] = useState(false);
     const [themeVersion, setThemeVersion] = useState(0);
@@ -578,6 +580,10 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             <div className="grid grid-cols-2 gap-2">
               {LANDING_THEMES.map((t) => {
                 const isActive = theme === t.id;
+                // Show customColors override if this is the active theme
+                const displayColors = isActive && customColors && Object.keys(customColors).length
+                  ? { ...t.colors, ...customColors }
+                  : t.colors;
                 return (
                   <button
                     key={t.id}
@@ -593,9 +599,9 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                     }`}
                   >
                     <div className="flex gap-1">
-                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: t.colors.primary }} title="Primary" />
-                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: t.colors.surface }} title="Surface" />
-                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: t.colors.accent }} title="Accent" />
+                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: displayColors.primary }} title="Primary" />
+                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: displayColors.surface }} title="Surface" />
+                      <div className="w-5 h-5 rounded-full border border-gray-600" style={{ background: displayColors.accent }} title="Accent" />
                     </div>
                     <span className="text-[10px] font-bold text-gray-300">{t.label}</span>
                   </button>
@@ -648,12 +654,16 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-5 mb-3">Brand Kits</p>
                 <div className="grid grid-cols-2 gap-2">
                   {brandKits.map((bk) => {
-                    const colors = bk.colors as Record<string, string>;
+                    const bkBase = bk.colors as Record<string, string>;
+                    // Show customColors if this brand kit is active and user edited colors
+                    const displayColors = activeBrandKitId === bk.id && customColors && Object.keys(customColors).length
+                      ? { ...bkBase, ...customColors }
+                      : bkBase;
                     return (
                       <button
                         key={bk.id}
                         onClick={() => {
-                          onThemeChangeRef.current?.("custom", colors);
+                          onThemeChangeRef.current?.("custom", bkBase, bk.id);
                           setActiveBrandKitId(bk.id);
                           onBrandKitChangeRef.current?.(bk);
                         }}
@@ -668,7 +678,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                             <div
                               key={key}
                               className="w-5 h-5 rounded-full border border-gray-600"
-                              style={{ background: colors[key] || "#888" }}
+                              style={{ background: displayColors[key] || "#888" }}
                             />
                           ))}
                         </div>
@@ -680,7 +690,11 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 {activeBrandKitId && (() => {
                   const bk = brandKits?.find((b) => b.id === activeBrandKitId);
                   if (!bk) return null;
-                  const colors = bk.colors as Record<string, string>;
+                  // Use current customColors (with user edits) over original brand kit colors
+                  const baseColors = bk.colors as Record<string, string>;
+                  const colors = customColors && Object.keys(customColors).length
+                    ? { ...baseColors, ...customColors }
+                    : baseColors;
                   return (
                     <div className="mt-3 space-y-1">
                       {Object.entries(colors).map(([key, hex]) => (
@@ -693,7 +707,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                             value={hex}
                             onChange={(e) => {
                               const updated = { ...colors, [key]: e.target.value };
-                              onThemeChangeRef.current?.("custom", updated);
+                              onThemeChangeRef.current?.("custom", updated, activeBrandKitId || undefined);
                             }}
                             className="w-4 h-4 rounded border border-gray-600 shrink-0 cursor-pointer p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded"
                           />

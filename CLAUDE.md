@@ -194,3 +194,6 @@ The digital asset platform where AI agents can store, manage, and consume files 
 **Prioridad 5 — DX/Onboarding para agentes**:
 - Quickstart claro: conectar agente y usar EasyBits en 2 minutos
 - Errores útiles en SDK/API — mensajes que digan qué hacer, no solo qué falló
+
+**Prioridad 6 — AI Theme Creator**:
+- Creador de temas con IA: el usuario describe el mood/estilo → AI genera paleta completa (12 colores semánticos). Aplica a landings v4, documentos, y presentaciones.

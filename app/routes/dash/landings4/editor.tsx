@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { useBrutalToast } from "~/hooks/useBrutalToast";
 import { Copy } from "~/components/common/Copy";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
@@ -115,6 +116,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     const newTheme = String(formData.get("theme") || "default");
     const customColorsRaw = formData.get("customColors");
     const customColors = customColorsRaw ? JSON.parse(String(customColorsRaw)) : undefined;
+    const brandKitId = formData.get("brandKitId") || undefined;
     await withRetry(async () => {
       const fresh = await db.landing.findUnique({ where: { id: params.id } });
       const existing = (fresh?.metadata as Record<string, unknown>) || {};
@@ -123,6 +125,11 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         meta.customColors = customColors;
       } else if (newTheme !== "custom") {
         delete meta.customColors;
+      }
+      if (brandKitId) {
+        meta.brandKitId = brandKitId;
+      } else {
+        delete meta.brandKitId;
       }
       return db.landing.update({
         where: { id: params.id },
@@ -235,6 +242,7 @@ export default function Landing4Editor() {
     colors?: Record<string, string>;
   } | null>(null);
 
+  const brutalToast = useBrutalToast();
   const getThemeName = useCallback(() => currentTheme, [currentTheme]);
 
   const getBrandKit = useCallback(() => {
@@ -246,12 +254,18 @@ export default function Landing4Editor() {
     };
   }, [activeBrandKit]);
 
-  const handleThemeChange = useCallback((themeId: string, customColors?: Record<string, string>) => {
+  const themeDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const handleThemeChange = useCallback((themeId: string, customColors?: Record<string, string>, brandKitId?: string) => {
     setCurrentTheme(themeId);
     setCurrentCustomColors(customColors);
-    const data: Record<string, string> = { intent: "update-theme", theme: themeId };
-    if (customColors) data.customColors = JSON.stringify(customColors);
-    saveFetcher.submit(data, { method: "post" });
+    // Debounce server save (color picker fires on every mouse move)
+    if (themeDebounce.current) clearTimeout(themeDebounce.current);
+    themeDebounce.current = setTimeout(() => {
+      const data: Record<string, string> = { intent: "update-theme", theme: themeId };
+      if (customColors) data.customColors = JSON.stringify(customColors);
+      if (brandKitId) data.brandKitId = brandKitId;
+      saveFetcher.submit(data, { method: "post" });
+    }, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -262,11 +276,35 @@ export default function Landing4Editor() {
     };
   }, []);
 
+  const lastDeployResult = useRef<string | null>(null);
   useEffect(() => {
     if (deployFetcher.state === "idle") setActiveIntent(null);
     if (deployFetcher.data?.redirect) navigate(deployFetcher.data.redirect);
-    if (deployFetcher.data?.url) setLiveUrl(deployFetcher.data.url);
-    if (deployFetcher.data?.unpublished) setLiveUrl(null);
+    if (deployFetcher.data?.url) {
+      setLiveUrl(deployFetcher.data.url);
+      if (lastDeployResult.current !== deployFetcher.data.url) {
+        lastDeployResult.current = deployFetcher.data.url;
+        brutalToast("Landing publicada correctamente 🚀");
+        try {
+          const ctx = new AudioContext();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.setValueAtTime(880, ctx.currentTime);
+          o.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+          g.gain.setValueAtTime(0.3, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.3);
+        } catch {}
+      }
+    }
+    if (deployFetcher.data?.unpublished) {
+      setLiveUrl(null);
+      if (lastDeployResult.current !== "unpublished") {
+        lastDeployResult.current = "unpublished";
+        brutalToast("Landing despublicada");
+      }
+    }
   }, [deployFetcher.state, deployFetcher.data, navigate]);
 
   useEffect(() => {
@@ -1016,6 +1054,7 @@ export default function Landing4Editor() {
             theme={currentTheme}
             customColors={currentCustomColors}
             brandKits={brandKits as any}
+            initialBrandKitId={(landingMeta?.brandKitId as string) || undefined}
             onChange={handleEditorChange}
             onAiAction={handleAiAction}
             onThemeChange={handleThemeChange}
