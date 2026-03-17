@@ -76,7 +76,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     const customColorsRef = useRef(customColors);
     customColorsRef.current = customColors;
     const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(null);
-    const [activePanel, setActivePanel] = useState<PanelId>("blocks");
+    const [activePanel, setActivePanel] = useState<PanelId>("styles");
     const [ready, setReady] = useState(false);
     const [themeVersion, setThemeVersion] = useState(0);
 
@@ -281,7 +281,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           setActivePanel("styles");
         });
         editor.on("component:deselected", () => {
-          setActivePanel("blocks");
+          // Stay on current panel — don't force switch
         });
 
         // ─── Inject AI buttons into component toolbar on selection ───
