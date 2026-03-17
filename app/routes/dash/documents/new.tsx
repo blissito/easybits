@@ -92,7 +92,7 @@ export default function NewDocument() {
   const dropRef = useRef<HTMLDivElement>(null);
 
   // Logo state
-  const [pageCount, setPageCount] = useState(5);
+  const [pageCount, setPageCount] = useState(4);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState("");
