@@ -466,7 +466,12 @@ export default function DocumentEditor() {
       url.searchParams.delete("generating");
       window.history.replaceState({}, "", url.pathname + url.search);
     }
-    generateSections();
+    if (sections.length > 0) {
+      // Cover preview exists — generate remaining pages only
+      generateSections(undefined, true);
+    } else {
+      generateSections();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -505,14 +510,15 @@ export default function DocumentEditor() {
     setIsGenerating(false);
   }
 
-  async function generateSections(extraInstructions?: string) {
+  async function generateSections(extraInstructions?: string, skipCover?: boolean) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setIsGenerating(true);
-    setSections([]);
-    const accumulated: Section3[] = [];
+    const existingSections = skipCover ? [...sections] : [];
+    if (!skipCover) setSections([]);
+    const accumulated: Section3[] = [...existingSections];
 
     try {
       // Check limit client-side
@@ -536,6 +542,7 @@ export default function DocumentEditor() {
           pageCount: Number(searchParams.get("pages")) || undefined,
           ...(extraInstructions ? { extraInstructions } : {}),
           ...(direction ? { direction } : {}),
+          ...(skipCover ? { skipCover: true } : {}),
         }),
         signal: controller.signal,
       });
@@ -574,7 +581,7 @@ export default function DocumentEditor() {
                 // Pre-create placeholder sections from outline
                 const placeholders = (d.pages as any[]).map((p: any, i: number) => ({
                   id: `__building_${p.pageNumber - 1}__`,
-                  order: i,
+                  order: skipCover ? accumulated.length + i : i,
                   html: `<section class="w-[8.5in] min-h-[11in] relative overflow-hidden bg-gray-50 flex items-center justify-center"><div class="text-center animate-pulse"><div class="w-10 h-10 mx-auto mb-3 rounded-full bg-gray-200"></div><div class="text-sm font-semibold text-gray-400">${p.label}</div><div class="text-xs text-gray-300 mt-1">Generando...</div></div></section>`,
                   label: p.label,
                 }));

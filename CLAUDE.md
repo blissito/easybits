@@ -118,18 +118,30 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Key differences from v2: free-form HTML sections (not block schema), iframe canvas (not React components), semantic color tokens, CodeMirror code editor
 
 ## Documents
-- Editor: `app/routes/dash/documents/editor.tsx` — canvas-based (reuses landings3 Canvas/FloatingToolbar/CodeEditor)
-- New doc flow: `app/routes/dash/documents/new.tsx` → `directions.tsx` (4 design directions + cover previews) → editor with `?generating=1`
+- Editor: `app/routes/dash/documents/editor.tsx` — GrapesJS-based editor (landings4 `GrapesEditor`)
+- New doc flow: `app/routes/dash/documents/new.tsx` → `directions.tsx` (4 design directions) → editor with `?generating=1`
 - Model: reuses `Landing` with `version: 4`, stored in `landing.sections` as Section3[]
 - **Parallel generation** (SDK `generateDocumentParallel`): Phase 1 outline (`generateObject`, fast model ~1s) → Phase 2 N pages in parallel (`streamText` × N, ~8-10s) → Phase 3 sequential image enrichment (Pexels)
+- **Streaming preview**: During full generation, a lightweight iframe replaces GrapesJS for smooth real-time rendering. GrapesJS mounts only after generation completes.
 - API: `/api/v2/document-generate` (SSE: `outline` → `section-building` × N interleaved → `section` × N → `section-update` for images → `done`)
-- Directions: `/api/v2/document-directions` — 4 design directions (fonts, colors, mood) + cover preview per direction
-- AI models: `docDirections`/`docDirectionsPreview` = Gemini 2.5 Flash, `docGenerate` = quality model (Gemini Pro)
+- Directions: `/api/v2/document-directions` — 4 design directions (fonts, colors, mood)
+- AI models: ALL Gemini — configured in DB `AppConfig` key `ai-models` + code defaults in `app/.server/aiModels.ts`
 - Themes: reuses landings3 semantic color system (`buildSingleThemeCss`)
 - Logo: data URL uploaded to Tigris CDN, passed to AI as `<img src>` instruction
 - Export: PDF via `window.print()` with `@page` letter size
 - PageList: `app/components/documents/PageList.tsx` — thumbnails via scaled-down iframes, drag-and-drop reorder, version navigation, image drop zones
-- `skipCover`: when cover preview exists from directions, parallel gen skips cover type and appends content pages
+
+### Document Editor Limitations (GrapesJS)
+
+| Área | Limitación | Causa | Workaround |
+|---|---|---|---|
+| Regenerar página | Sin preview en tiempo real | GrapesJS no soporta hot-swap de HTML parcial — resultado se aplica al final del streaming | Usuario ve spinner, resultado aparece completo |
+| Refine elemento | Matching frágil por string | `openTag` del DOM puede diferir del HTML guardado (GrapesJS modifica attrs) | Fallback: refine de página completa |
+| Clases desde sidebar | Requiere `sidebar:change` event | `component:update` se dispara en init de GrapesJS y corrompe datos si se usa como interaction flag | Custom event `sidebar:change` emitido por `writeClasses` |
+| Thumbnails | Re-render lento en docs grandes | Cada thumbnail es un iframe con Tailwind CDN que debe cargar | Aceptable para <20 páginas |
+| Generación completa | Editor no disponible | iframe de streaming reemplaza GrapesJS durante generación | GrapesJS carga automáticamente al terminar |
+| Overflow de páginas | AI genera contenido que excede 11in | Prompts lo prohíben pero AI lo ignora a veces | Refine pidiendo "reduce contenido" o dividir |
+| `__grapes_css__` | Sección fantasma con CSS de GrapesJS | `grapesToSections` extrae `<style>` como sección especial | Filtrada en PageList, deploy, y listado |
 
 ## Cert Management
 - Audit + cleanup: `app/.server/core/certOperations.ts` — compares Fly certs vs DB (websites, customDomains, users)
