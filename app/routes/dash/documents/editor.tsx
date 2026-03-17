@@ -26,16 +26,15 @@ import type { Route } from "./+types/editor";
 
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
 
-/** Lightweight iframe preview used during streaming generation (no GrapesJS overhead) */
+/** Lightweight iframe preview used during streaming generation (no GrapesJS overhead).
+ * The iframe shell is created once; only the body innerHTML is patched on updates. */
 function StreamingPreview({ sections, themeCssData }: { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string } }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const prevCountRef = useRef(0);
   const contentSections = sections.filter((s) => s.id !== "__grapes_css__");
 
-  const srcDoc = useMemo(() => {
-    const allHtml = contentSections
-      .sort((a, b) => a.order - b.order)
-      .map((s) => `<div class="page-section">${s.html}</div>`)
-      .join("\n");
+  // Build the initial shell only once
+  const shellDoc = useMemo(() => {
     return `<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
 <script src="https://cdn.tailwindcss.com"><\/script>
@@ -49,25 +48,50 @@ ${themeCssData?.css || ""}
 .page-section > section { min-height: 11in; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .page-section { animation: fade-in 0.4s ease-out; }
-</style></head><body>${allHtml}</body></html>`;
-  }, [contentSections, themeCssData]);
+</style></head><body></body></html>`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Auto-scroll to bottom as new sections arrive
+  // Patch iframe body incrementally instead of recreating srcDoc
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const tryScroll = () => {
+    const doc = iframe.contentDocument;
+    if (!doc?.body) return;
+
+    const sorted = [...contentSections].sort((a, b) => a.order - b.order);
+    const existing = doc.body.querySelectorAll(".page-section");
+
+    // Update existing page divs in-place, append new ones
+    sorted.forEach((s, i) => {
+      const html = `<div class="page-section" data-id="${s.id}">${s.html}</div>`;
+      if (i < existing.length) {
+        const el = existing[i];
+        if (el.getAttribute("data-id") !== s.id || el.innerHTML !== s.html) {
+          el.outerHTML = html;
+        }
+      } else {
+        doc.body.insertAdjacentHTML("beforeend", html);
+      }
+    });
+
+    // Remove extra pages if sections were removed
+    const nowExisting = doc.body.querySelectorAll(".page-section");
+    for (let i = sorted.length; i < nowExisting.length; i++) {
+      nowExisting[i].remove();
+    }
+
+    // Auto-scroll when new sections arrive
+    if (contentSections.length > prevCountRef.current) {
       try { iframe.contentWindow?.scrollTo({ top: 999999, behavior: "smooth" }); } catch {}
-    };
-    // Delay to let iframe render
-    const t = setTimeout(tryScroll, 200);
-    return () => clearTimeout(t);
-  }, [contentSections.length]);
+    }
+    prevCountRef.current = contentSections.length;
+  }, [contentSections]);
 
   return (
     <iframe
       ref={iframeRef}
-      srcDoc={srcDoc}
+      srcDoc={shellDoc}
       className="w-full h-full border-none"
       title="Streaming preview"
     />
