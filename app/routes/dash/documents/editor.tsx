@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import {
   useLoaderData,
   useFetcher,
@@ -26,12 +26,25 @@ import type { Route } from "./+types/editor";
 
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
 
+export interface StreamingPreviewHandle {
+  scrollToSection(id: string): void;
+}
+
 /** Lightweight iframe preview used during streaming generation (no GrapesJS overhead).
  * The iframe shell is created once; only the body innerHTML is patched on updates. */
-function StreamingPreview({ sections, themeCssData }: { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string } }) {
+const StreamingPreview = React.forwardRef<StreamingPreviewHandle, { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string } }>(({ sections, themeCssData }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevCountRef = useRef(0);
   const contentSections = sections.filter((s) => s.id !== "__grapes_css__");
+
+  React.useImperativeHandle(ref, () => ({
+    scrollToSection(id: string) {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc) return;
+      const el = doc.querySelector(`[data-id="${id}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+  }));
 
   // Build the initial shell only once
   const shellDoc = useMemo(() => {
@@ -44,8 +57,8 @@ ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/scr
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', sans-serif; background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; }
 ${themeCssData?.css || ""}
-.page-section { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; }
-.page-section > section { min-height: 11in; }
+.page-section { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; }
+.page-section > section { height: 11in; overflow: hidden; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .page-section { animation: fade-in 0.4s ease-out; }
 </style></head><body></body></html>`;
@@ -96,7 +109,7 @@ ${themeCssData?.css || ""}
       title="Streaming preview"
     />
   );
-}
+});
 
 /** Show brutalist toast with CTA when generation limit is hit */
 function showLimitToast(message: string, upgradeUrl: string) {
@@ -369,6 +382,7 @@ export default function DocumentEditor() {
   const abortRef = useRef<AbortController | null>(null);
 
   const editorRef = useRef<GrapesEditorHandle>(null);
+  const streamingRef = useRef<StreamingPreviewHandle>(null);
   const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
@@ -1453,7 +1467,11 @@ ${sectionsHtml}
                         : [...prev, id]
                       : [id]
                   );
-                  editorRef.current?.scrollToSection(id);
+                  if (isGenerating) {
+                streamingRef.current?.scrollToSection(id);
+              } else {
+                editorRef.current?.scrollToSection(id);
+              }
                   setShowMobilePages(false);
                 }}
                 onContextMenu={(sectionIds, position) => {
@@ -1537,7 +1555,11 @@ ${sectionsHtml}
                     : [...prev, id]
                   : [id]
               );
-              editorRef.current?.scrollToSection(id);
+              if (isGenerating) {
+                streamingRef.current?.scrollToSection(id);
+              } else {
+                editorRef.current?.scrollToSection(id);
+              }
             }}
             onContextMenu={(sectionIds, position) => {
               setSelectedSectionIds(sectionIds);
@@ -1700,7 +1722,7 @@ ${sectionsHtml}
         {/* Editor area — iframe during generation, GrapesJS after */}
         <div className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 h-full overflow-hidden relative`}>
           {isGenerating ? (
-            <StreamingPreview sections={sections} themeCssData={themeCssData} />
+            <StreamingPreview ref={streamingRef} sections={sections} themeCssData={themeCssData} />
           ) : sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-200">
               <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
