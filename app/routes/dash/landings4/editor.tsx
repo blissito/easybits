@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import {
-  useLoaderData,
-  useFetcher,
-  useNavigate,
-  Link,
-} from "react-router";
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+} from "react";
+import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Copy } from "~/components/common/Copy";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -12,8 +14,10 @@ import { db } from "~/.server/db";
 import type { Section3 } from "~/lib/landing3/types";
 import { grapesToSections } from "~/lib/landing4/grapesToSections";
 import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
-import { LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
-import type { GrapesEditorHandle, AiAction } from "~/components/landings4/GrapesEditor";
+import type {
+  GrapesEditorHandle,
+  AiAction,
+} from "~/components/landings4/GrapesEditor";
 import type { Route } from "./+types/editor";
 
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
@@ -43,7 +47,15 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
   const brandKits = await db.brandKit.findMany({
     where: { ownerId: user.id },
-    select: { id: true, name: true, colors: true, fonts: true, mood: true, logoUrl: true, isDefault: true },
+    select: {
+      id: true,
+      name: true,
+      colors: true,
+      fonts: true,
+      mood: true,
+      logoUrl: true,
+      isDefault: true,
+    },
   });
 
   return { landing, websiteUrl, brandKits };
@@ -55,7 +67,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
       return await fn();
     } catch (err: any) {
       if (err?.code === "P2034" && i < retries - 1) {
-        await new Promise((r) => setTimeout(r, 50 * 2 ** i + Math.random() * 100));
+        await new Promise((r) =>
+          setTimeout(r, 50 * 2 ** i + Math.random() * 100),
+        );
         continue;
       }
       throw err;
@@ -84,7 +98,10 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
       if (grapesProject) {
         const fresh = await db.landing.findUnique({ where: { id: params.id } });
         const existing = (fresh?.metadata as Record<string, unknown>) || {};
-        updateData.metadata = { ...existing, grapesProject: JSON.parse(grapesProject) };
+        updateData.metadata = {
+          ...existing,
+          grapesProject: JSON.parse(grapesProject),
+        };
       }
       return db.landing.update({
         where: { id: params.id },
@@ -96,12 +113,20 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "update-theme") {
     const newTheme = String(formData.get("theme") || "default");
+    const customColorsRaw = formData.get("customColors");
+    const customColors = customColorsRaw ? JSON.parse(String(customColorsRaw)) : undefined;
     await withRetry(async () => {
       const fresh = await db.landing.findUnique({ where: { id: params.id } });
       const existing = (fresh?.metadata as Record<string, unknown>) || {};
+      const meta: Record<string, unknown> = { ...existing, theme: newTheme };
+      if (customColors) {
+        meta.customColors = customColors;
+      } else if (newTheme !== "custom") {
+        delete meta.customColors;
+      }
       return db.landing.update({
         where: { id: params.id },
-        data: { metadata: { ...existing, theme: newTheme } as any },
+        data: { metadata: meta as any },
       });
     });
     return { ok: true };
@@ -111,27 +136,31 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   if (intent === "deploy") {
     try {
-      const { deployLanding } = await import("~/.server/core/landingOperations");
+      const { deployLanding } =
+        await import("~/.server/core/landingOperations");
       const result = await deployLanding(ctx as any, params.id);
       return result;
     } catch (err: any) {
       console.error("Deploy error:", err);
-      const msg = err instanceof Response
-        ? (await err.json().catch(() => ({}))).error || "Error al publicar"
-        : err?.message || "Error al publicar";
+      const msg =
+        err instanceof Response
+          ? (await err.json().catch(() => ({}))).error || "Error al publicar"
+          : err?.message || "Error al publicar";
       return { error: msg };
     }
   }
 
   if (intent === "unpublish") {
-    const { unpublishLanding } = await import("~/.server/core/landingOperations");
+    const { unpublishLanding } =
+      await import("~/.server/core/landingOperations");
     await unpublishLanding(ctx as any, params.id);
     return { unpublished: true };
   }
 
   if (intent === "delete") {
     if (landing.websiteId) {
-      const { unpublishLanding } = await import("~/.server/core/landingOperations");
+      const { unpublishLanding } =
+        await import("~/.server/core/landingOperations");
       await unpublishLanding(ctx as any, params.id);
     }
     await db.landing.delete({ where: { id: params.id } });
@@ -155,7 +184,9 @@ function playCompletionSound() {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.4);
-  } catch { /* silent fail */ }
+  } catch {
+    /* silent fail */
+  }
 }
 
 export default function Landing4Editor() {
@@ -174,12 +205,16 @@ export default function Landing4Editor() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [showGenModal, setShowGenModal] = useState(false);
+  const [previewActive, setPreviewActive] = useState(false);
+  const [swActive, setSwActive] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<GrapesEditorHandle>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   const sections = useRef<Section3[]>(
-    Array.isArray(landing.sections) ? (landing.sections as unknown as Section3[]) : []
+    Array.isArray(landing.sections)
+      ? (landing.sections as unknown as Section3[])
+      : [],
   );
 
   const initialHtml = (() => {
@@ -188,23 +223,35 @@ export default function Landing4Editor() {
     return sectionsToHtml(secs);
   })();
 
-  const initialTheme = (() => {
-    const meta = landing.metadata as Record<string, unknown> | null;
-    return (meta?.theme as string) || "minimal";
-  })();
+  const landingMeta = landing.metadata as Record<string, unknown> | null;
+  const initialTheme = (landingMeta?.theme as string) || "minimal";
+  const initialCustomColors = (landingMeta?.customColors as Record<string, string>) || undefined;
   const [currentTheme, setCurrentTheme] = useState(initialTheme);
+  const [currentCustomColors, setCurrentCustomColors] = useState<Record<string, string> | undefined>(initialCustomColors);
+  const [activeBrandKit, setActiveBrandKit] = useState<{
+    fonts?: { heading?: string; body?: string } | null;
+    mood?: string | null;
+    logoUrl?: string | null;
+    colors?: Record<string, string>;
+  } | null>(null);
 
-  const getThemeColors = useCallback((): Record<string, string> | undefined => {
-    const t = LANDING_THEMES.find((th) => th.id === currentTheme);
-    return t?.colors;
-  }, [currentTheme]);
+  const getThemeName = useCallback(() => currentTheme, [currentTheme]);
 
-  const handleThemeChange = useCallback((themeId: string) => {
+  const getBrandKit = useCallback(() => {
+    if (!activeBrandKit) return undefined;
+    return {
+      fonts: activeBrandKit.fonts || undefined,
+      mood: activeBrandKit.mood || undefined,
+      logoUrl: activeBrandKit.logoUrl || undefined,
+    };
+  }, [activeBrandKit]);
+
+  const handleThemeChange = useCallback((themeId: string, customColors?: Record<string, string>) => {
     setCurrentTheme(themeId);
-    saveFetcher.submit(
-      { intent: "update-theme", theme: themeId },
-      { method: "post" }
-    );
+    setCurrentCustomColors(customColors);
+    const data: Record<string, string> = { intent: "update-theme", theme: themeId };
+    if (customColors) data.customColors = JSON.stringify(customColors);
+    saveFetcher.submit(data, { method: "post" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -225,7 +272,10 @@ export default function Landing4Editor() {
   useEffect(() => {
     if (!overflowOpen) return;
     function handleClick(e: MouseEvent) {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+      if (
+        overflowRef.current &&
+        !overflowRef.current.contains(e.target as Node)
+      ) {
         setOverflowOpen(false);
       }
     }
@@ -236,19 +286,35 @@ export default function Landing4Editor() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
-      if (aiModal) { setAiModal(null); return; }
-      if (showGenModal) { setShowGenModal(false); return; }
-      if (overflowOpen) { setOverflowOpen(false); return; }
+      if (aiModal) {
+        setAiModal(null);
+        return;
+      }
+      if (showGenModal) {
+        setShowGenModal(false);
+        return;
+      }
+      if (previewActive) {
+        editorRef.current?.togglePreview();
+        setPreviewActive(false);
+        return;
+      }
+      if (overflowOpen) {
+        setOverflowOpen(false);
+        return;
+      }
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [overflowOpen, aiModal, showGenModal]);
+  }, [overflowOpen, aiModal, showGenModal, previewActive]);
 
   // Track the last known good section count to prevent saving empty/degraded state
   const lastSectionCount = useRef(
     Array.isArray(landing.sections)
-      ? (landing.sections as unknown as Section3[]).filter((s: any) => s.id !== "__grapes_css__").length
-      : 0
+      ? (landing.sections as unknown as Section3[]).filter(
+          (s: any) => s.id !== "__grapes_css__",
+        ).length
+      : 0,
   );
   const isSavingLocked = useRef(false);
 
@@ -264,15 +330,29 @@ export default function Landing4Editor() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const newSections = grapesToSections(html);
-      const contentSections = newSections.filter((s) => s.id !== "__grapes_css__");
+      const contentSections = newSections.filter(
+        (s) => s.id !== "__grapes_css__",
+      );
       // GUARD 4: Don't save if sections went from many to zero (wipe detection)
       if (contentSections.length === 0 && lastSectionCount.current > 0) {
-        console.warn("[v4 editor] Blocked save: would wipe", lastSectionCount.current, "sections");
+        console.warn(
+          "[v4 editor] Blocked save: would wipe",
+          lastSectionCount.current,
+          "sections",
+        );
         return;
       }
       // GUARD 5: Don't save if sections dropped by more than 50% (partial wipe)
-      if (lastSectionCount.current > 2 && contentSections.length < lastSectionCount.current * 0.5) {
-        console.warn("[v4 editor] Blocked save: section count dropped from", lastSectionCount.current, "to", contentSections.length);
+      if (
+        lastSectionCount.current > 2 &&
+        contentSections.length < lastSectionCount.current * 0.5
+      ) {
+        console.warn(
+          "[v4 editor] Blocked save: section count dropped from",
+          lastSectionCount.current,
+          "to",
+          contentSections.length,
+        );
         return;
       }
       lastSectionCount.current = contentSections.length;
@@ -281,7 +361,7 @@ export default function Landing4Editor() {
           intent: "update-sections",
           sections: JSON.stringify(newSections),
         },
-        { method: "post" }
+        { method: "post" },
       );
     }, 2000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -290,6 +370,7 @@ export default function Landing4Editor() {
   // AI generation
   const [isGenerating, setIsGenerating] = useState(false);
   const [genPrompt, setGenPrompt] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   const [genSectionCount, setGenSectionCount] = useState(0);
 
@@ -306,19 +387,25 @@ export default function Landing4Editor() {
     setIsGenerating(true);
     setGenSectionCount(0);
     setShowGenModal(false);
-    isSavingLocked.current = true; // Lock auto-save during generation
+    isSavingLocked.current = true;
+
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     const ed = editorRef.current?.getEditor();
+    const allSections: Section3[] = [];
 
     try {
       const res = await fetch("/api/v2/landing3-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
+        signal: ac.signal,
         body: JSON.stringify({
           landingId: landing.id,
           prompt: genPrompt,
-          themeColors: getThemeColors(),
+          themeName: getThemeName(),
+          brandKit: getBrandKit(),
         }),
       });
       if (!res.ok) {
@@ -333,7 +420,6 @@ export default function Landing4Editor() {
       const decoder = new TextDecoder();
       let buf = "";
       let eventType = "";
-      const allSections: Section3[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -362,7 +448,8 @@ export default function Landing4Editor() {
                   // Scroll canvas to bottom
                   requestAnimationFrame(() => {
                     const canvasBody = ed.Canvas.getBody();
-                    if (canvasBody) canvasBody.scrollTop = canvasBody.scrollHeight;
+                    if (canvasBody)
+                      canvasBody.scrollTop = canvasBody.scrollHeight;
                   });
                 }
               } else if (eventType === "section-update") {
@@ -376,24 +463,27 @@ export default function Landing4Editor() {
                   }
                 }
               }
-            } catch { /* skip malformed */ }
+            } catch {
+              /* skip malformed */
+            }
           }
         }
       }
-
-      // Final save to DB
+    } catch (err: any) {
+      if (err?.name !== "AbortError")
+        console.error("AI generation error:", err);
+    } finally {
+      // Save whatever sections were generated (even if stopped early)
       if (allSections.length > 0) {
         saveFetcher.submit(
           {
             intent: "update-sections",
             sections: JSON.stringify(allSections),
           },
-          { method: "post" }
+          { method: "post" },
         );
       }
-    } catch (err) {
-      console.error("AI generation error:", err);
-    } finally {
+      abortRef.current = null;
       setIsGenerating(false);
       setGenSectionCount(0);
       isSavingLocked.current = false;
@@ -408,8 +498,16 @@ export default function Landing4Editor() {
     setShowGenModal(false);
     isSavingLocked.current = true;
 
+    const ac = new AbortController();
+    abortRef.current = ac;
+
     const ed = editorRef.current?.getEditor();
-    if (!ed) { setIsRefining(false); isSavingLocked.current = false; return; }
+    if (!ed) {
+      setIsRefining(false);
+      isSavingLocked.current = false;
+      abortRef.current = null;
+      return;
+    }
 
     const currentHtml = ed.getHtml();
 
@@ -418,13 +516,15 @@ export default function Landing4Editor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
+        signal: ac.signal,
         body: JSON.stringify({
           landingId: landing.id,
           sectionId: "__new__",
           instruction: genPrompt,
           currentHtml,
           skipDbUpdate: true,
-          themeColors: getThemeColors(),
+          themeName: getThemeName(),
+          brandKit: getBrandKit(),
         }),
       });
 
@@ -439,6 +539,7 @@ export default function Landing4Editor() {
       const decoder = new TextDecoder();
       let buf = "";
       let event = "";
+      let latestHtml = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -455,11 +556,22 @@ export default function Landing4Editor() {
             try {
               const data = JSON.parse(line.slice(6));
               if ((event === "chunk" || event === "done") && data.html) {
-                ed.setComponents(data.html);
+                latestHtml = data.html;
               }
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
         }
+      }
+
+      // Apply final result with markdown fence cleanup
+      if (latestHtml) {
+        latestHtml = latestHtml
+          .replace(/^```html?\s*/i, "")
+          .replace(/```\s*$/, "")
+          .trim();
+        ed.setComponents(latestHtml);
       }
 
       // Save
@@ -467,11 +579,12 @@ export default function Landing4Editor() {
       const newSections = grapesToSections(finalHtml);
       saveFetcher.submit(
         { intent: "update-sections", sections: JSON.stringify(newSections) },
-        { method: "post" }
+        { method: "post" },
       );
-    } catch (err) {
-      console.error("AI improve error:", err);
+    } catch (err: any) {
+      if (err?.name !== "AbortError") console.error("AI improve error:", err);
     } finally {
+      abortRef.current = null;
       setIsRefining(false);
       setGenPrompt("");
       isSavingLocked.current = false;
@@ -496,12 +609,14 @@ export default function Landing4Editor() {
     const instruction = aiPrompt.trim();
     if (mode !== "regenerate-section" && !instruction) return;
 
-    const targetId = (mode === "refine-element")
-      ? aiModal.componentId
-      : (aiModal.sectionComponentId || aiModal.componentId);
-    const targetHtml = (mode === "refine-element")
-      ? aiModal.html
-      : (aiModal.sectionHtml || aiModal.html);
+    const targetId =
+      mode === "refine-element"
+        ? aiModal.componentId
+        : aiModal.sectionComponentId || aiModal.componentId;
+    const targetHtml =
+      mode === "refine-element"
+        ? aiModal.html
+        : aiModal.sectionHtml || aiModal.html;
 
     // Capture current full HTML and the target's HTML before closing modal
     const ed = editorRef.current?.getEditor();
@@ -512,16 +627,34 @@ export default function Landing4Editor() {
     setAiModal(null);
     isSavingLocked.current = true;
 
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    // Add shimmer to the target component
+    function findById(parent: any, id: string): any {
+      if (parent.getId() === id) return parent;
+      for (const child of parent.components().models || []) {
+        const found = findById(child, id);
+        if (found) return found;
+      }
+      return null;
+    }
+    const targetComp = findById(ed.DomComponents.getWrapper(), targetId);
+    if (targetComp) targetComp.addClass("easybits-refining");
+
     try {
       const body: Record<string, unknown> = {
         landingId: landing.id,
         sectionId: "__new__",
         currentHtml: targetHtml,
         skipDbUpdate: true,
-        themeColors: getThemeColors(),
-        instruction: mode === "regenerate-section"
-          ? (instruction || "Regenerate this section with a completely fresh design, keep the same purpose and content type but change the visual approach entirely")
-          : instruction,
+        themeName: getThemeName(),
+        brandKit: getBrandKit(),
+        instruction:
+          mode === "regenerate-section"
+            ? instruction ||
+              "Regenerate this section with a completely fresh design, keep the same purpose and content type but change the visual approach entirely"
+            : instruction,
       };
       if (mode === "regenerate-section") body.isVariant = true;
 
@@ -529,6 +662,7 @@ export default function Landing4Editor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
+        signal: ac.signal,
         body: JSON.stringify(body),
       });
 
@@ -545,8 +679,6 @@ export default function Landing4Editor() {
       let buf = "";
       let event = "";
       let latestNewHtml = "";
-      let lastCanvasUpdate = 0;
-      const THROTTLE_MS = 2000;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -564,39 +696,69 @@ export default function Landing4Editor() {
               const data = JSON.parse(line.slice(6));
               if ((event === "chunk" || event === "done") && data.html) {
                 latestNewHtml = data.html;
-                // Throttled canvas update — show progress without crashing
-                const now = Date.now();
-                if (now - lastCanvasUpdate > THROTTLE_MS) {
-                  lastCanvasUpdate = now;
-                  const updatedFull = fullHtmlBefore.replace(targetHtml, latestNewHtml);
-                  ed.setComponents(updatedFull);
-                }
+                // No throttled canvas updates — shimmer provides feedback,
+                // final result applied after stream completes
               }
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
         }
       }
 
-      // Final canvas update with complete result
+      // Clean markdown fences from AI output
       if (latestNewHtml) {
+        latestNewHtml = latestNewHtml
+          .replace(/^```html?\s*/i, "")
+          .replace(/```\s*$/, "")
+          .trim();
         const updatedFull = fullHtmlBefore.replace(targetHtml, latestNewHtml);
         ed.setComponents(updatedFull);
+        // Scroll canvas to the refined section
+        requestAnimationFrame(() => {
+          try {
+            const wrapper = ed.DomComponents.getWrapper();
+            if (wrapper) {
+              const updated = findById(wrapper, targetId);
+              if (updated) {
+                const el = updated.getEl();
+                if (el)
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }
+          } catch {
+            /* skip */
+          }
+        });
       }
 
       // Save after refine completes
       if (latestNewHtml) {
         const finalHtml = editorRef.current?.getHtml() || "";
         const css = ed.getCss();
-        const fullWithCss = css ? `<style>${css}</style>\n${finalHtml}` : finalHtml;
+        const fullWithCss = css
+          ? `<style>${css}</style>\n${finalHtml}`
+          : finalHtml;
         const newSections = grapesToSections(fullWithCss);
         saveFetcher.submit(
           { intent: "update-sections", sections: JSON.stringify(newSections) },
-          { method: "post" }
+          { method: "post" },
         );
       }
-    } catch (err) {
-      console.error("AI refine error:", err);
+    } catch (err: any) {
+      if (err?.name !== "AbortError") console.error("AI refine error:", err);
     } finally {
+      abortRef.current = null;
+      // Remove shimmer
+      try {
+        const wrapper = ed.DomComponents.getWrapper();
+        if (wrapper) {
+          const comp = findById(wrapper, targetId);
+          if (comp) comp.removeClass("easybits-refining");
+        }
+      } catch {
+        /* skip */
+      }
       setIsRefining(false);
       setAiPrompt("");
       isSavingLocked.current = false;
@@ -605,15 +767,20 @@ export default function Landing4Editor() {
   }
 
   return (
-    <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
+    <article className="pt-14 pb-0 md:pl-20 w-full h-screen flex flex-col overflow-hidden">
       {/* Top bar */}
       <div className="grid grid-cols-3 items-center px-4 py-2 shrink-0 border-b border-gray-200 bg-white z-10">
         {/* Left: back + name */}
         <div className="flex items-center gap-3">
-          <Link to="/dash/landings4" className="text-sm font-bold hover:underline">
+          <Link
+            to="/dash/landings4"
+            className="text-sm font-bold hover:underline"
+          >
             &larr;
           </Link>
-          <h1 className="text-lg font-black truncate max-w-xs">{landing.name}</h1>
+          <h1 className="text-lg font-black truncate max-w-xs">
+            {landing.name}
+          </h1>
           {liveUrl && (
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -625,7 +792,11 @@ export default function Landing4Editor() {
               >
                 {liveUrl.replace(/^https?:\/\//, "")}
               </a>
-              <Copy text={liveUrl} mode="ghost" className="relative static p-0" />
+              <Copy
+                text={liveUrl}
+                mode="ghost"
+                className="relative static p-0"
+              />
             </span>
           )}
         </div>
@@ -633,9 +804,57 @@ export default function Landing4Editor() {
         {/* Center: viewport toggle */}
         <div className="flex items-center justify-center gap-1">
           {[
-            { id: "Desktop", label: "Desktop", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v8.5A2.25 2.25 0 0115.75 15h-3.105a3.501 3.501 0 001.1 1.677A.75.75 0 0113.26 18H6.74a.75.75 0 01-.484-1.323A3.501 3.501 0 007.355 15H4.25A2.25 2.25 0 012 12.75v-8.5zm1.5 0a.75.75 0 01.75-.75h11.5a.75.75 0 01.75.75v8.5a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-8.5z" clipRule="evenodd" /></svg> },
-            { id: "Tablet", label: "Tablet", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 1a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2H5zm0 1.5h10a.5.5 0 01.5.5v14a.5.5 0 01-.5.5H5a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5zm4 14a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" /></svg> },
-            { id: "Mobile", label: "Mobile", icon: <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm0 1.5h8a.5.5 0 01.5.5v12a.5.5 0 01-.5.5H6a.5.5 0 01-.5-.5V4a.5.5 0 01.5-.5zm3 13a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" /></svg> },
+            {
+              id: "Desktop",
+              label: "Desktop",
+              icon: (
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v8.5A2.25 2.25 0 0115.75 15h-3.105a3.501 3.501 0 001.1 1.677A.75.75 0 0113.26 18H6.74a.75.75 0 01-.484-1.323A3.501 3.501 0 007.355 15H4.25A2.25 2.25 0 012 12.75v-8.5zm1.5 0a.75.75 0 01.75-.75h11.5a.75.75 0 01.75.75v8.5a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-8.5z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ),
+            },
+            {
+              id: "Tablet",
+              label: "Tablet",
+              icon: (
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5 1a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2H5zm0 1.5h10a.5.5 0 01.5.5v14a.5.5 0 01-.5.5H5a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5zm4 14a1 1 0 112 0 1 1 0 01-2 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ),
+            },
+            {
+              id: "Mobile",
+              label: "Mobile",
+              icon: (
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm0 1.5h8a.5.5 0 01.5.5v12a.5.5 0 01-.5.5H6a.5.5 0 01-.5-.5V4a.5.5 0 01.5-.5zm3 13a1 1 0 112 0 1 1 0 01-2 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ),
+            },
           ].map((d) => (
             <button
               key={d.id}
@@ -651,39 +870,65 @@ export default function Landing4Editor() {
         {/* Right: actions */}
         <div className="flex items-center gap-2 justify-end">
           {/* AI generate/improve button */}
-          <BrutalButton
-            size="chip"
-            mode="ghost"
-            onClick={() => setShowGenModal(true)}
-            isDisabled={isGenerating || isRefining}
-            isLoading={isRefining}
-          >
-            {isGenerating
-              ? `Generando (${genSectionCount})...`
-              : isRefining
-              ? "Regenerando..."
-              : hasContent()
-              ? "Regenerar todo"
-              : "Generar con AI"}
-          </BrutalButton>
+          {isGenerating || isRefining ? (
+            <BrutalButton
+              size="chip"
+              mode="ghost"
+              onClick={() => abortRef.current?.abort()}
+            >
+              <span className="inline-block w-3.5 h-3.5 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin mr-1.5 align-middle" />
+              {isGenerating
+                ? `Generando (${genSectionCount})...`
+                : "Refinando..."}{" "}
+              <span className="text-red-500 font-black">✕</span>
+            </BrutalButton>
+          ) : (
+            <BrutalButton
+              size="chip"
+              mode="ghost"
+              onClick={() => setShowGenModal(true)}
+            >
+              {hasContent() ? "Regenerar todo" : "Generar con AI"}
+            </BrutalButton>
+          )}
 
           {/* Preview toggle */}
           <button
             onClick={() => {
-              const ed = editorRef.current?.getEditor();
-              if (!ed) return;
-              const cmd = ed.Commands;
-              if (cmd.isActive("preview")) {
-                cmd.stop("preview");
-              } else {
-                cmd.run("preview");
-              }
+              const newState = editorRef.current?.togglePreview();
+              setPreviewActive(!!newState);
             }}
-            className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-            title="Preview"
+            className={`p-1.5 rounded-lg transition-colors ${
+              previewActive
+                ? "text-brand-600 bg-brand-50 ring-1 ring-brand-300"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            }`}
+            title={previewActive ? "Salir de preview" : "Preview"}
           >
             <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" /><path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
           </button>
+
+          {/* Toggle component border guides (sw-visibility) */}
+          <button
+            onClick={() => {
+              const newState = editorRef.current?.toggleSwVisibility();
+              setSwActive(!!newState);
+            }}
+            className={`p-1.5 rounded-lg transition-colors ${
+              swActive
+                ? "text-brand-600 bg-brand-50 ring-1 ring-brand-300"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            }`}
+            title={swActive ? "Ocultar guías" : "Mostrar guías"}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="3" y="3" width="14" height="14" rx="2" strokeDasharray="3 2" />
+              <line x1="10" y1="3" x2="10" y2="17" strokeDasharray="3 2" />
+              <line x1="3" y1="10" x2="17" y2="10" strokeDasharray="3 2" />
+            </svg>
+          </button>
+
+
 
           <BrutalButton
             size="chip"
@@ -693,8 +938,11 @@ export default function Landing4Editor() {
               const html = editorRef.current?.getHtml() || "";
               const currentSections = grapesToSections(html);
               saveFetcher.submit(
-                { intent: "update-sections", sections: JSON.stringify(currentSections) },
-                { method: "post" }
+                {
+                  intent: "update-sections",
+                  sections: JSON.stringify(currentSections),
+                },
+                { method: "post" },
               );
               setActiveIntent("deploy");
               deployFetcher.submit({ intent: "deploy" }, { method: "post" });
@@ -720,7 +968,10 @@ export default function Landing4Editor() {
                     onClick={() => {
                       setOverflowOpen(false);
                       setActiveIntent("unpublish");
-                      deployFetcher.submit({ intent: "unpublish" }, { method: "post" });
+                      deployFetcher.submit(
+                        { intent: "unpublish" },
+                        { method: "post" },
+                      );
                     }}
                     disabled={activeIntent !== null}
                     className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-gray-50 disabled:opacity-50"
@@ -734,7 +985,10 @@ export default function Landing4Editor() {
                     setOverflowOpen(false);
                     if (!confirm("Eliminar esta landing?")) return;
                     setActiveIntent("delete");
-                    deployFetcher.submit({ intent: "delete" }, { method: "post" });
+                    deployFetcher.submit(
+                      { intent: "delete" },
+                      { method: "post" },
+                    );
                   }}
                   disabled={activeIntent !== null}
                   className="w-full text-left px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -760,10 +1014,12 @@ export default function Landing4Editor() {
             ref={editorRef}
             initialHtml={initialHtml}
             theme={currentTheme}
+            customColors={currentCustomColors}
             brandKits={brandKits as any}
             onChange={handleEditorChange}
             onAiAction={handleAiAction}
             onThemeChange={handleThemeChange}
+            onBrandKitChange={setActiveBrandKit}
           />
         </Suspense>
       </div>
@@ -777,119 +1033,130 @@ export default function Landing4Editor() {
       )}
 
       {/* AI modal — context-aware */}
-      {aiModal && (() => {
-        const isSection = !!aiModal.isSection;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-black mb-1">
-                ✦ {isSection ? "Secci\u00f3n" : "Elemento"}
-              </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                {isSection
-                  ? "\u00bfQu\u00e9 quieres cambiar de esta secci\u00f3n?"
-                  : "\u00bfQu\u00e9 quieres cambiar de este elemento?"}
-              </p>
+      {aiModal &&
+        (() => {
+          const isSection = !!aiModal.isSection;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
+                <h3 className="text-lg font-black mb-1">
+                  ✦ {isSection ? "Secci\u00f3n" : "Elemento"}
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  {isSection
+                    ? "\u00bfQu\u00e9 quieres cambiar de esta secci\u00f3n?"
+                    : "\u00bfQu\u00e9 quieres cambiar de este elemento?"}
+                </p>
 
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Ej: Mejor copy, m\u00e1s profesional, otro color, m\u00e1s compacto..."
-                rows={3}
-                className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    executeAiAction(isSection ? "refine-section" : "refine-element");
-                  }
-                  if (e.key === "Escape") setAiModal(null);
-                }}
-              />
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Ej: Mejor copy, m\u00e1s profesional, otro color, m\u00e1s compacto..."
+                  rows={3}
+                  className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      executeAiAction(
+                        isSection ? "refine-section" : "refine-element",
+                      );
+                    }
+                    if (e.key === "Escape") setAiModal(null);
+                  }}
+                />
 
-              <div className="flex gap-2 mt-4 justify-end">
-                <BrutalButton
-                  size="chip"
-                  mode="ghost"
-                  onClick={() => { setAiModal(null); setAiPrompt(""); }}
-                >
-                  Cancelar
-                </BrutalButton>
-                {isSection && (
+                <div className="flex gap-2 mt-4 justify-end">
                   <BrutalButton
                     size="chip"
                     mode="ghost"
-                    onClick={() => executeAiAction("regenerate-section")}
-                    isLoading={isRefining && aiMode === "regenerate-section"}
+                    onClick={() => {
+                      setAiModal(null);
+                      setAiPrompt("");
+                    }}
                   >
-                    Regenerar
+                    Cancelar
                   </BrutalButton>
-                )}
-                <BrutalButton
-                  size="chip"
-                  onClick={() => executeAiAction(isSection ? "refine-section" : "refine-element")}
-                  isDisabled={!aiPrompt.trim()}
-                  isLoading={isRefining && aiMode !== "regenerate-section"}
-                >
-                  Refinar
-                </BrutalButton>
+                  {isSection && (
+                    <BrutalButton
+                      size="chip"
+                      mode="ghost"
+                      onClick={() => executeAiAction("regenerate-section")}
+                      isLoading={isRefining && aiMode === "regenerate-section"}
+                    >
+                      Regenerar
+                    </BrutalButton>
+                  )}
+                  <BrutalButton
+                    size="chip"
+                    onClick={() =>
+                      executeAiAction(
+                        isSection ? "refine-section" : "refine-element",
+                      )
+                    }
+                    isDisabled={!aiPrompt.trim()}
+                    isLoading={isRefining && aiMode !== "regenerate-section"}
+                  >
+                    Refinar
+                  </BrutalButton>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* AI Generation/Improve modal */}
-      {showGenModal && (() => {
-        const isImprove = hasContent();
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-black mb-3">
-                {isImprove ? "Regenerar todo" : "Generar con AI"}
-              </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                {isImprove
-                  ? "Se regenerar\u00e1 toda la landing. Describe c\u00f3mo la quieres."
-                  : "Describe tu landing y la AI generar\u00e1 las secciones"}
-              </p>
-              <textarea
-                value={genPrompt}
-                onChange={(e) => setGenPrompt(e.target.value)}
-                placeholder="Ej: Landing para un SaaS de analytics con hero, features, pricing y CTA..."
-                rows={4}
-                className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleGenerate();
-                  }
-                }}
-              />
-              <div className="flex gap-2 mt-4 justify-end">
-                <BrutalButton
-                  size="chip"
-                  mode="ghost"
-                  onClick={() => {
-                    setShowGenModal(false);
-                    setGenPrompt("");
+      {showGenModal &&
+        (() => {
+          const isImprove = hasContent();
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-2xl border-2 border-black shadow-[6px_6px_0_#000] p-6 w-full max-w-md mx-4">
+                <h3 className="text-lg font-black mb-3">
+                  {isImprove ? "Regenerar todo" : "Generar con AI"}
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  {isImprove
+                    ? "Se regenerar\u00e1 toda la landing. Describe c\u00f3mo la quieres."
+                    : "Describe tu landing y la AI generar\u00e1 las secciones"}
+                </p>
+                <textarea
+                  value={genPrompt}
+                  onChange={(e) => setGenPrompt(e.target.value)}
+                  placeholder="Ej: Landing para un SaaS de analytics con hero, features, pricing y CTA..."
+                  rows={4}
+                  className="w-full px-4 py-2 border-2 border-black rounded-xl resize-none focus:outline-none"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleGenerate();
+                    }
                   }}
-                >
-                  Cancelar
-                </BrutalButton>
-                <BrutalButton
-                  size="chip"
-                  onClick={handleGenerate}
-                  isDisabled={!genPrompt.trim()}
-                >
-                  {isImprove ? "Regenerar todo" : "Generar"}
-                </BrutalButton>
+                />
+                <div className="flex gap-2 mt-4 justify-end">
+                  <BrutalButton
+                    size="chip"
+                    mode="ghost"
+                    onClick={() => {
+                      setShowGenModal(false);
+                      setGenPrompt("");
+                    }}
+                  >
+                    Cancelar
+                  </BrutalButton>
+                  <BrutalButton
+                    size="chip"
+                    onClick={handleGenerate}
+                    isDisabled={!genPrompt.trim()}
+                  >
+                    {isImprove ? "Regenerar todo" : "Generar"}
+                  </BrutalButton>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
     </article>
   );
 }

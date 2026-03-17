@@ -6,6 +6,8 @@ interface Props {
   editor: Editor | null;
   /** Bumped when theme/customColors change — forces color preview re-resolve */
   themeVersion?: number;
+  /** Resolved theme colors keyed by semantic name (e.g. "primary" → "#6366f1") */
+  themeColors?: Record<string, string>;
 }
 
 interface ClassCategory {
@@ -54,20 +56,20 @@ function categorize(classes: string[]): ClassCategory[] {
 // Semantic theme color hints — grouped by property
 const THEME_HINTS: { label: string; prefix: string; colors: { cls: string; name: string }[] }[] = [
   {
+    label: "Texto", prefix: "text-",
+    colors: [
+      { cls: "text-on-primary", name: "on-primary" }, { cls: "text-on-secondary", name: "on-secondary" },
+      { cls: "text-on-accent", name: "on-accent" }, { cls: "text-on-surface", name: "on-surface" },
+      { cls: "text-on-surface-muted", name: "on-surface-muted" },
+    ],
+  },
+  {
     label: "Fondo", prefix: "bg-",
     colors: [
       { cls: "bg-primary", name: "primary" }, { cls: "bg-primary-light", name: "primary-light" },
       { cls: "bg-primary-dark", name: "primary-dark" }, { cls: "bg-secondary", name: "secondary" },
       { cls: "bg-accent", name: "accent" }, { cls: "bg-surface", name: "surface" },
       { cls: "bg-surface-alt", name: "surface-alt" },
-    ],
-  },
-  {
-    label: "Texto", prefix: "text-",
-    colors: [
-      { cls: "text-on-primary", name: "on-primary" }, { cls: "text-on-secondary", name: "on-secondary" },
-      { cls: "text-on-accent", name: "on-accent" }, { cls: "text-on-surface", name: "on-surface" },
-      { cls: "text-on-surface-muted", name: "on-surface-muted" },
     ],
   },
   {
@@ -127,7 +129,7 @@ const COMMON_CLASSES = [
   "cursor-pointer", "select-none", "object-cover", "object-contain", "aspect-square", "aspect-video",
 ];
 
-export default function TailwindClassEditor({ editor, themeVersion = 0 }: Props) {
+export default function TailwindClassEditor({ editor, themeVersion = 0, themeColors = {} }: Props) {
   const [classes, setClasses] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -360,7 +362,9 @@ export default function TailwindClassEditor({ editor, themeVersion = 0 }: Props)
               <p className="text-[10px] text-gray-600 mb-1">{group.label}</p>
               <div className="flex flex-wrap gap-1">
                 {group.colors.map(({ cls, name }) => {
-                  const color = getColorPreview(cls);
+                  // Resolve from themeColors prop (instant) — extract semantic name from class
+                  const semanticName = cls.replace(/^(bg-|text-|border-)/, "");
+                  const color = themeColors[semanticName] || getColorPreview(cls);
                   const isActive = classes.includes(cls);
                   return (
                     <button

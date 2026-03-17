@@ -535,7 +535,16 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             className={`flex-1 overflow-auto ${activePanel === "layers" ? "" : "hidden"}`}
           />
           <div className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}>
-            {ready && <TailwindClassEditor editor={editorRef.current} themeVersion={themeVersion} />}
+            {ready && <TailwindClassEditor
+              editor={editorRef.current}
+              themeVersion={themeVersion}
+              themeColors={(() => {
+                // Resolve current theme colors for instant hint swatches
+                if (customColors && Object.keys(customColors).length) return customColors;
+                const t = LANDING_THEMES.find((t) => t.id === theme);
+                return t?.colors || {};
+              })()}
+            />}
           </div>
           {/* Themes panel */}
           <div className={`flex-1 overflow-auto p-3 ${activePanel === "themes" ? "" : "hidden"}`}>
