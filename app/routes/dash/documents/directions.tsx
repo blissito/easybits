@@ -515,14 +515,14 @@ export default function DocumentDirections() {
       {/* Cards grid — 2x2, each card is letter-ratio, centered in cell */}
       <div className="flex-1 min-h-0 flex flex-col gap-2 sm:gap-4 px-2 sm:px-8 py-2 overflow-hidden items-center">
         {[[0, 1], [2, 3]].map((row, ri) => (
-          <div key={ri} className="flex-1 min-h-0 flex gap-2 sm:gap-4 justify-center max-w-4xl w-full">
+          <div key={ri} className="flex-1 min-h-0 flex gap-2 sm:gap-4 justify-center">
             {row.map((i) => {
           const dir = directions[i];
           const preview = previews[i];
           const isSelected = selectedIndex === i;
 
           return (
-            <div key={i} className="flex-1 min-w-0 flex justify-center h-full">
+            <div key={i} className="flex justify-center h-full">
               <div className="relative rounded-xl bg-black h-full group/card" style={{ aspectRatio: "8.5 / 12" }}>
               <div
                 onClick={() => !isLoading && setSelectedIndex(i)}
