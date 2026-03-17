@@ -178,7 +178,7 @@ export function PageList({
         <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-400">
           P&aacute;ginas
         </h3>
-        {onThemeChange && (
+        {false && onThemeChange && (
           <div className="relative" ref={themeRef}>
             <button
               onClick={() => setShowThemes((p) => !p)}
