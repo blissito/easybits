@@ -485,19 +485,32 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Update theme CSS dynamically + force repaint in iframe
+    // Update theme CSS dynamically — remove & recreate style elements to force full CSS re-evaluation
     useEffect(() => {
       const ed = editorRef.current;
       if (!ed) return;
       const doc = ed.Canvas.getDocument();
       if (!doc) return;
-      const el = doc.getElementById("easybits-theme");
-      if (!el) return;
-      el.textContent = getThemeCss();
-      // Force repaint so CSS variable changes take effect visually
-      doc.body.style.display = "none";
-      doc.body.offsetHeight; // trigger reflow
-      doc.body.style.display = "";
+
+      // Remove and recreate theme style — forces browser to re-match all CSS rules
+      const old = doc.getElementById("easybits-theme");
+      if (old) old.remove();
+      const style = doc.createElement("style");
+      style.id = "easybits-theme";
+      style.textContent = getThemeCss();
+      doc.head.appendChild(style);
+
+      // Re-insert fallback rules too (forces browser to re-match all selectors)
+      const oldFallback = doc.getElementById("easybits-semantic-fallback");
+      if (oldFallback) {
+        const content = oldFallback.textContent;
+        oldFallback.remove();
+        const fb = doc.createElement("style");
+        fb.id = "easybits-semantic-fallback";
+        fb.textContent = content;
+        doc.head.appendChild(fb);
+      }
+
       // Bump version so TailwindClassEditor re-resolves color previews (slight delay for repaint)
       setTimeout(() => setThemeVersion((v) => v + 1), 100);
     }, [theme, customColors]);
@@ -559,18 +572,6 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                       onThemeChangeRef.current?.(t.id);
                       setActiveBrandKitId(null);
                       onBrandKitChangeRef.current?.(null);
-                      const ed = editorRef.current;
-                      if (ed) {
-                        const doc = ed.Canvas.getDocument();
-                        if (doc) {
-                          const el = doc.getElementById("easybits-theme");
-                          if (el) {
-                            try {
-                              el.textContent = buildSingleThemeCss(t.id).css || "";
-                            } catch { /* skip */ }
-                          }
-                        }
-                      }
                     }}
                     className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all ${
                       isActive
@@ -631,19 +632,6 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                           onThemeChangeRef.current?.("custom", colors);
                           setActiveBrandKitId(bk.id);
                           onBrandKitChangeRef.current?.(bk);
-                          const ed = editorRef.current;
-                          if (ed) {
-                            const doc = ed.Canvas.getDocument();
-                            if (doc) {
-                              const el = doc.getElementById("easybits-theme");
-                              if (el) {
-                                const vars = Object.entries(colors)
-                                  .map(([k, v]) => `  --color-${k}: ${v};`)
-                                  .join("\n");
-                                el.textContent = `:root {\n${vars}\n}`;
-                              }
-                            }
-                          }
                         }}
                         className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all ${
                           activeBrandKitId === bk.id
