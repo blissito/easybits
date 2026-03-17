@@ -96,11 +96,15 @@ const SideBarItem = ({
 
   const [scope, animate] = useAnimate();
   const handleMouseEnter = () => {
-    animate(scope.current, { opacity: 1, scale: 1 });
+    if (scope.current) {
+      animate(scope.current, { opacity: 1, scale: 1 }, { duration: 0.15 });
+    }
   };
 
   const handleMouseLeave = () => {
-    animate(scope.current, { opacity: 0, scale: 0.0 });
+    if (scope.current) {
+      animate(scope.current, { opacity: 0, scale: 0 }, { duration: 0.1 });
+    }
   };
   const content = (
     <div className="relative group w-full ">
@@ -130,12 +134,13 @@ const SideBarItem = ({
         )}
       </div>{" "}
       {isLogo ? null : (
-        <button
+        <span
           ref={scope}
-          className=" bg-white border scale-0 border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 opacity-0 "
+          style={{ opacity: 0, scale: 0, pointerEvents: "none" }}
+          className="bg-white border border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 z-[60]"
         >
           <span className="whitespace-nowrap ">{title}</span>
-        </button>
+        </span>
       )}
     </div>
   );
