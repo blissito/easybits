@@ -212,7 +212,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           canvas: {
             scripts: [
               // Tailwind config MUST come before CDN so it's picked up on first pass
-              `data:text/javascript,tailwind.config=${encodeURIComponent(JSON.stringify({
+              `data:text/javascript,window.tailwind=${encodeURIComponent(JSON.stringify({config:{
                 theme: { extend: { colors: {
                   primary: "var(--color-primary)",
                   "primary-light": "var(--color-primary-light)",
@@ -226,7 +226,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                   "on-accent": "var(--color-on-accent)",
                   "on-surface": "var(--color-on-surface)",
                   "on-surface-muted": "var(--color-on-surface-muted)",
-                }}}
+                }}}}
               }))}`,
               "https://cdn.tailwindcss.com",
             ],
@@ -603,29 +603,40 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
               })}
             </div>
 
-            {/* Active theme colors */}
+            {/* Active theme colors — editable */}
             {(() => {
               const active = LANDING_THEMES.find((t) => t.id === theme);
-              if (!active) return null;
+              const baseColors: Record<string, string> = active?.colors ? { ...active.colors } : {};
+              const currentColors: Record<string, string> = customColors && Object.keys(customColors).length
+                ? { ...baseColors, ...customColors }
+                : baseColors;
+              if (!Object.keys(currentColors).length) return null;
               const COLOR_LABELS: Record<string, string> = {
                 primary: "Primary", "primary-light": "Primary Light", "primary-dark": "Primary Dark",
                 secondary: "Secondary", accent: "Accent", surface: "Surface",
                 "surface-alt": "Surface Alt", "on-surface": "On Surface",
                 "on-surface-muted": "On Surface Muted", "on-primary": "On Primary",
+                "on-secondary": "On Secondary", "on-accent": "On Accent",
               };
               return (
                 <div className="mt-3 space-y-1">
-                  {Object.entries(active.colors).map(([key, hex]) => (
-                    <button
+                  {Object.entries(currentColors).map(([key, hex]) => (
+                    <label
                       key={key}
-                      onClick={() => navigator.clipboard.writeText(hex)}
-                      className="flex items-center gap-2 w-full px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors group text-left"
-                      title={`Click to copy ${hex}`}
+                      className="flex items-center gap-2 w-full px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors group text-left cursor-pointer"
                     >
-                      <div className="w-4 h-4 rounded border border-gray-600 shrink-0" style={{ background: hex }} />
+                      <input
+                        type="color"
+                        value={hex}
+                        onChange={(e) => {
+                          const updated = { ...currentColors, [key]: e.target.value };
+                          onThemeChangeRef.current?.(themeRef.current, updated);
+                        }}
+                        className="w-4 h-4 rounded border border-gray-600 shrink-0 cursor-pointer p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded"
+                      />
                       <span className="text-[10px] text-gray-400 flex-1 truncate">{COLOR_LABELS[key] || key}</span>
                       <code className="text-[10px] text-gray-500 group-hover:text-gray-300 font-mono">{hex}</code>
-                    </button>
+                    </label>
                   ))}
                 </div>
               );
@@ -673,16 +684,22 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                   return (
                     <div className="mt-3 space-y-1">
                       {Object.entries(colors).map(([key, hex]) => (
-                        <button
+                        <label
                           key={key}
-                          onClick={() => navigator.clipboard.writeText(hex)}
-                          className="flex items-center gap-2 w-full px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors group text-left"
-                          title={`Click to copy ${hex}`}
+                          className="flex items-center gap-2 w-full px-2 py-1 rounded-lg hover:bg-gray-800 transition-colors group text-left cursor-pointer"
                         >
-                          <div className="w-4 h-4 rounded border border-gray-600 shrink-0" style={{ background: hex }} />
+                          <input
+                            type="color"
+                            value={hex}
+                            onChange={(e) => {
+                              const updated = { ...colors, [key]: e.target.value };
+                              onThemeChangeRef.current?.("custom", updated);
+                            }}
+                            className="w-4 h-4 rounded border border-gray-600 shrink-0 cursor-pointer p-0 bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded"
+                          />
                           <span className="text-[10px] text-gray-400 flex-1 truncate">{key}</span>
                           <code className="text-[10px] text-gray-500 group-hover:text-gray-300 font-mono">{hex}</code>
-                        </button>
+                        </label>
                       ))}
                     </div>
                   );
