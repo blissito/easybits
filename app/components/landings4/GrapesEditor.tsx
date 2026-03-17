@@ -486,7 +486,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         let userHasInteracted = false;
         const interactionEvents = [
           "canvas:drop", "block:drag:stop", "component:drag:end",
-          "component:input", "undo", "redo",
+          "component:input", "component:update", "undo", "redo",
         ];
         const markInteracted = () => { userHasInteracted = true; };
         interactionEvents.forEach((evt) => editor.on(evt, markInteracted));

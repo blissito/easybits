@@ -4,7 +4,6 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { data } from "react-router";
-import { nanoid } from "nanoid";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import type { Route } from "./+types/directions";
 
@@ -54,16 +53,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
   } catch {}
 
-  // If we have a cover preview, save it as the first section
-  const sections = previewHtml
-    ? [{ id: nanoid(), label: "Portada", html: previewHtml, order: 0 }]
-    : [];
-
   const landing = await db.landing.create({
     data: {
       name,
       prompt: prompt || "Transforma este contenido en un documento profesional con diseño atractivo",
-      sections: sections as any,
+      sections: [] as any,
       version: 4,
       ownerId: user.id,
       metadata: metadata as any,
