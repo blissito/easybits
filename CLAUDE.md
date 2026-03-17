@@ -178,6 +178,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - FloatingToolbar IMG: diferenciar "subir imagen" (upload/URL) vs "generar imagen con AI" (DALL-E) — actualmente solo hay campo SRC manual y el botón de cámara no distingue entre ambos flujos
 - Streaming para presentaciones (mismo patrón SSE que landings v2)
 - Verificar que color swatches aplican al elemento correcto (bug reportado: bg aplicado a hijo en vez de container)
+- Landings v4: pasar `customColors` al AI en generate/refine/regenerate cuando el tema es "custom" — actualmente solo se manda `themeName`, pero si el usuario eligió colores personalizados el AI no los ve
 
 **Prioridad 2 — Previews de archivos inline (table stakes)**:
 - Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
