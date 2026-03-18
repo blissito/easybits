@@ -34,6 +34,14 @@ h1,h2,h3{font-family:'Fredoka',sans-serif}
 .drop-zone p{font-size:.85rem;color:#999}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
 
+/* Logo field */
+.logo-field{margin-top:12px;width:100%;max-width:480px}
+.logo-label{display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 14px;border:2px dashed rgba(152,112,237,.25);border-radius:12px;background:rgba(255,255,255,.5);transition:all .2s}
+.logo-label:hover{border-color:var(--purple);background:rgba(152,112,237,.04)}
+.logo-preview{width:36px;height:36px;border-radius:8px;background:#f3f3f3;display:flex;align-items:center;justify-content:center;font-size:18px;color:#aaa;overflow:hidden;flex-shrink:0}
+.logo-preview img{width:100%;height:100%;object-fit:contain}
+.logo-text{font-size:.8rem;color:#888}.logo-text small{color:#bbb}
+
 /* Footer links */
 .footer-links{margin-top:24px;font-size:.8rem;color:#aaa;display:flex;flex-direction:column;gap:8px;align-items:center}
 .footer-links a{color:var(--purple);text-decoration:none;font-weight:600}
@@ -98,6 +106,14 @@ h1,h2,h3{font-family:'Fredoka',sans-serif}
     <h3>Suelta tu XML aqui</h3>
     <p>o haz clic para seleccionar</p>
     <input type="file" id="fileInput" accept=".xml" style="display:none">
+  </div>
+
+  <div class="logo-field" id="logoField">
+    <label class="logo-label" id="logoLabel">
+      <span class="logo-preview" id="logoPreview">＋</span>
+      <span class="logo-text">Logo <small>(opcional, para diseño IA)</small></span>
+      <input type="file" id="logoInput" accept="image/*" style="display:none">
+    </label>
   </div>
   <p class="error-msg" id="errorMsg"></p>
 
@@ -491,6 +507,22 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ========== LOGO ==========
+const logoInput = document.getElementById('logoInput');
+const logoPreview = document.getElementById('logoPreview');
+let logoDataUrl = '';
+
+logoInput.addEventListener('change', () => {
+  const file = logoInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    logoDataUrl = e.target.result;
+    logoPreview.innerHTML = `<img src="${logoDataUrl}" alt="Logo">`;
+  };
+  reader.readAsDataURL(file);
+});
+
 // ========== AI GENERATION ==========
 const API_BASE = 'https://www.easybits.cloud';
 const aiBanner = document.getElementById('aiBanner');
@@ -508,7 +540,7 @@ function generateWithAI() {
   fetch(`${API_BASE}/api/v2/public/cfdi-preview${qs}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ xml: lastXml }),
+    body: JSON.stringify({ xml: lastXml, logo: logoDataUrl || undefined }),
   }).then(res => {
     if (res.status === 429) {
       aiBanner.classList.remove('generating');

@@ -51,7 +51,7 @@ export async function action({ request }: { request: Request }) {
   }
 
   const body = await request.json();
-  const { xml } = body;
+  const { xml, logo } = body;
 
   if (!xml || typeof xml !== "string") {
     return Response.json({ error: "xml string required" }, { status: 400, headers });
@@ -90,6 +90,8 @@ REFERENCIA HTML (contiene los datos exactos a usar):
 ${referenceHtml}
 
 ${qrImg ? `OBLIGATORIO — incluye este QR junto al timbre fiscal:\n${qrImg}` : ""}
+
+${logo ? `LOGO DEL EMISOR: Incluye este logo en el header del documento, junto al nombre del emisor:\n<img src="${logo}" alt="Logo" style="max-height:60px;max-width:180px;">` : ""}
 
 REGLAS:
 - UNA SOLA PÁGINA, sin portada
