@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Link, NavLink, useLocation } from "react-router";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
@@ -94,21 +95,24 @@ const SideBarItem = ({
     );
   }, [location.pathname, path]);
 
-  const [scope, animate] = useAnimate();
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+
   const handleMouseEnter = () => {
-    if (scope.current) {
-      animate(scope.current, { opacity: 1, scale: 1 }, { duration: 0.15 });
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setTooltipPos({ top: rect.top + rect.height / 2 - 16, left: rect.right + 8 });
     }
   };
 
   const handleMouseLeave = () => {
-    if (scope.current) {
-      animate(scope.current, { opacity: 0, scale: 0 }, { duration: 0.1 });
-    }
+    setTooltipPos(null);
   };
+
   const content = (
     <div className="relative group w-full ">
       <div
+        ref={triggerRef}
         className="w-full flex justify-center relative"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -132,16 +136,17 @@ const SideBarItem = ({
             <span className="relative z-20 pointer-events-none">{icon}</span>
           </motion.div>
         )}
-      </div>{" "}
-      {isLogo ? null : (
-        <span
-          ref={scope}
-          style={{ opacity: 0, scale: 0, pointerEvents: "none" }}
-          className="bg-white border border-gray-200 absolute left-14 top-[6px] w-fit h-8 flex items-center rounded text-black px-2 z-[60]"
-        >
-          <span className="whitespace-nowrap ">{title}</span>
-        </span>
-      )}
+      </div>
+      {!isLogo && tooltipPos && typeof document !== "undefined" &&
+        createPortal(
+          <span
+            style={{ top: tooltipPos.top, left: tooltipPos.left, pointerEvents: "none" }}
+            className="fixed bg-white border border-gray-200 w-fit h-8 flex items-center rounded text-black px-2 z-[9999] animate-fade-in"
+          >
+            <span className="whitespace-nowrap">{title}</span>
+          </span>,
+          document.body
+        )}
     </div>
   );
 
