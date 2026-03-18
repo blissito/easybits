@@ -6,7 +6,11 @@ let browserPromise: ReturnType<typeof launchBrowser> | null = null;
 
 async function launchBrowser() {
   const { chromium } = await import("playwright-core");
-  return chromium.launch({ channel: "chrome" });
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  return chromium.launch({
+    ...(executablePath ? { executablePath } : {}),
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 }
 
 function getBrowser() {

@@ -21,8 +21,17 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
+
+# Install Chromium for document screenshots (playwright-core)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
