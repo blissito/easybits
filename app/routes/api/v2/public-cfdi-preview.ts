@@ -76,24 +76,26 @@ export async function action({ request }: { request: Request }) {
 
   const sourceContent = serializeCFDIForAI(data);
   const tipoLabel = tipoNames[data.tipo] || "documento fiscal";
-  const prompt = `Diseña un ${tipoLabel} con un diseño ÚNICO, PREMIUM y VISUALMENTE IMPACTANTE. Este NO es un documento genérico — debe verse como diseñado por un estudio de branding profesional.
+  const prompt = `Genera UNA SOLA PÁGINA con un ${tipoLabel} mexicano (CFDI). NO generes portada ni páginas extra — solo el documento fiscal en una página.
 
-DIRECCIÓN CREATIVA:
-- Usa un esquema de color audaz y moderno (NO gris/blanco aburrido). Elige una paleta con personalidad: gradientes sutiles, acentos vibrantes, fondos con textura o color.
-- Tipografía con jerarquía clara: títulos grandes y bold, datos en fuentes limpias.
-- Layout sofisticado: usa cards con sombras, bordes redondeados, iconos decorativos (emoji), separadores con estilo, badges para datos clave.
-- Header impactante: nombre del emisor grande y prominente, tipo de documento como badge de color, serie/folio destacados.
-- Tabla de ${data.tipo === "P" ? "documentos relacionados" : "conceptos"}: con filas alternadas de color, headers con fondo de color, bordes suaves.
-- Totales: sección destacada con fondo de color y tipografía grande.
-- Sección de timbre fiscal: diseño compacto pero completo con todos los datos del timbre (UUID, fecha timbrado, no. certificado SAT, sellos CFDI y SAT truncados a primeros y últimos 8 caracteres).
+LAYOUT (respetar estructura estándar de factura mexicana):
+1. Header: tipo de documento + serie/folio + fecha
+2. Emisor y Receptor: lado a lado (2 columnas), con RFC, nombre, régimen fiscal, uso CFDI, domicilio fiscal
+3. ${data.tipo === "P" ? "Detalle de pagos: monto, fecha, forma de pago, documentos relacionados con parcialidades, saldos" : "Tabla de conceptos: descripción, cantidad, unidad, precio unitario, importe"}
+4. Desglose de impuestos (IVA, ISR, retenciones) y totales
+5. Timbre Fiscal Digital: UUID, fecha timbrado, no. certificado SAT, sellos CFDI y SAT (truncados: primeros y últimos 8 caracteres)
 
-${data.qrUrl ? `OBLIGATORIO — CÓDIGO QR: Incluye esta imagen QR de verificación SAT junto al timbre fiscal:
-<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data.qrUrl)}" alt="QR Verificación SAT" style="width:150px;height:150px;">
-El QR debe ser visible y estar junto a los datos del timbre.` : ""}
+ESTILO (esto es lo que diferencia tu diseño del template genérico):
+- Paleta de color con personalidad (NO gris genérico) — elige un acento de color coherente para headers, bordes y badges
+- Tipografía limpia con buena jerarquía (títulos bold, datos regulares)
+- Tabla con filas alternadas de color, headers con fondo
+- Totales destacados visualmente
+- Spacing generoso, bordes suaves, cards sutiles para emisor/receptor
 
-REGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. No inventes, modifiques ni redondees NINGÚN valor — son datos fiscales legales. Todos los números, RFCs, UUIDs y fechas deben aparecer tal cual.
+${data.qrUrl ? `OBLIGATORIO — CÓDIGO QR: Incluye esta imagen junto al timbre fiscal:
+<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(data.qrUrl)}" alt="QR Verificación SAT" style="width:120px;height:120px;">` : ""}
 
-Incluye: datos del emisor, datos del receptor, ${data.tipo === "P" ? "detalle de pagos y documentos relacionados con parcialidades" : "tabla de conceptos con cantidades/precios"}, desglose de impuestos, totales, y sección completa de timbre fiscal digital.`;
+REGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. NO inventes, modifiques ni redondees ningún valor — son datos fiscales legales.`;
 
   // Resolve AI models (platform keys, no user key needed)
   const docModelId = await getAiModel("docGenerate");
