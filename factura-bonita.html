@@ -294,9 +294,12 @@ function timbreSection(data) {
 
 function headerSection(data, title) {
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
-    <div>
-      <h1 style="font-size:24px;font-weight:800;color:#1a1a1a;margin:0 0 4px 0;">${esc(title)}</h1>
-      <p style="font-size:12px;color:#888;margin:0;">CFDI ${data.version} — ${esc(data.tipoDesc)}</p>
+    <div style="display:flex;align-items:center;gap:12px;">
+      ${logoDataUrl?`<img src="${logoDataUrl}" alt="Logo" style="max-height:48px;max-width:120px;object-fit:contain;">`:""}
+      <div>
+        <h1 style="font-size:24px;font-weight:800;color:#1a1a1a;margin:0 0 4px 0;">${esc(title)}</h1>
+        <p style="font-size:12px;color:#888;margin:0;">CFDI ${data.version} — ${esc(data.tipoDesc)}</p>
+      </div>
     </div>
     <div style="text-align:right;font-size:12px;">
       ${data.serie||data.folio?`<p style="font-weight:700;font-size:16px;color:#1a1a1a;margin:0;">${esc([data.serie,data.folio].filter(Boolean).join(" "))}</p>`:""}
@@ -432,6 +435,7 @@ const resultTitle = document.getElementById('resultTitle');
 
 let lastHtml = '';
 let lastXml = '';
+let logoDataUrl = '';
 
 function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
 function hideError() { errorMsg.style.display = 'none'; }
@@ -510,7 +514,6 @@ document.addEventListener('keydown', e => {
 // ========== LOGO ==========
 const logoInput = document.getElementById('logoInput');
 const logoPreview = document.getElementById('logoPreview');
-let logoDataUrl = '';
 
 logoInput.addEventListener('change', () => {
   const file = logoInput.files[0];
@@ -528,13 +531,38 @@ const API_BASE = 'https://www.easybits.cloud';
 const aiBanner = document.getElementById('aiBanner');
 const aiArrowText = document.getElementById('aiArrowText');
 
+const loadingMessages = [
+  'Generando diseño...',
+  'Ten paciencia, la magia tarda un poco...',
+  'Eligiendo colores y tipografía...',
+  'Casi listo...',
+  'Armando tu factura bonita...',
+  'Aplicando estilo profesional...',
+  'Puliendo los detalles...',
+];
+let loadingInterval = null;
+
+function startLoadingMessages() {
+  let idx = 0;
+  aiArrowText.textContent = loadingMessages[0];
+  loadingInterval = setInterval(() => {
+    idx = (idx + 1) % loadingMessages.length;
+    aiArrowText.textContent = loadingMessages[idx];
+  }, 3000);
+}
+
+function stopLoadingMessages() {
+  if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
+}
+
 function generateWithAI() {
   if (!lastXml || aiBanner.classList.contains('generating')) return;
 
   aiBanner.classList.add('generating');
-  aiArrowText.textContent = 'Generando diseño...';
+  startLoadingMessages();
+  initAIIframe();
 
-  const sections = [];
+  let fullHtml = '';
 
   const qs = isDemoMode() ? '?secret=pelusina' : '';
   fetch(`${API_BASE}/api/v2/public/cfdi-preview${qs}`, {
@@ -543,6 +571,7 @@ function generateWithAI() {
     body: JSON.stringify({ xml: lastXml, logo: logoDataUrl || undefined }),
   }).then(res => {
     if (res.status === 429) {
+      stopLoadingMessages();
       aiBanner.classList.remove('generating');
       aiArrowText.textContent = 'Probar diseño IA →';
       showError('Ya usaste tu preview con IA hoy. Vuelve mañana o crea una cuenta en EasyBits.');
@@ -568,7 +597,23 @@ function generateWithAI() {
           } else if (line.startsWith('data: ') && currentEvent) {
             try {
               const data = JSON.parse(line.slice(6));
-              handleSSE(currentEvent, data, sections);
+              if (currentEvent === 'chunk') {
+                // Append chunk incrementally — no flicker
+                fullHtml += data.html;
+                appendToAIIframe(data.html);
+              } else if (currentEvent === 'done') {
+                // Final HTML — replace body for clean state
+                fullHtml = data.html || fullHtml;
+                finalizeAIIframe(fullHtml);
+                lastHtml = fullHtml;
+                stopLoadingMessages();
+                aiBanner.classList.add('done');
+              } else if (currentEvent === 'error') {
+                stopLoadingMessages();
+                aiBanner.classList.remove('generating');
+                aiArrowText.textContent = 'Probar diseño IA →';
+                showError('Error de IA: ' + (data.message || 'Generación fallida'));
+              }
             } catch {}
             currentEvent = '';
           }
@@ -578,41 +623,16 @@ function generateWithAI() {
     }
     read();
   }).catch(err => {
+    stopLoadingMessages();
     aiBanner.classList.remove('generating');
     aiArrowText.textContent = 'Probar diseño IA →';
     showError('Error al conectar con el servicio de IA: ' + err.message);
   });
 }
 
-const streamingChunks = {};
-
-function handleSSE(event, data, sections) {
-  if (event === 'section-building') {
-    // Partial chunk — accumulate and render live
-    const idx = data.order ?? 0;
-    streamingChunks[idx] = (streamingChunks[idx] || '') + data.html;
-    renderAILive(sections, streamingChunks);
-  } else if (event === 'section') {
-    // Complete page — replace chunk with final
-    delete streamingChunks[data.order];
-    sections.push(data);
-    renderAILive(sections, streamingChunks);
-  } else if (event === 'section-update') {
-    const s = sections.find(s => s.id === data.id);
-    if (s) { s.html = data.html; renderAILive(sections, streamingChunks); }
-  } else if (event === 'done') {
-    aiBanner.classList.add('done');
-  } else if (event === 'error') {
-    aiBanner.classList.remove('generating');
-    aiArrowText.textContent = 'Probar diseño IA →';
-    showError('Error de IA: ' + (data.message || 'Generación fallida'));
-  }
-}
-
 let iframeReady = false;
 
-function initIframe() {
-  if (iframeReady) return;
+function initAIIframe() {
   const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
   doc.open();
   doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -624,20 +644,16 @@ function initIframe() {
   iframeReady = true;
 }
 
-function renderAILive(sections, chunks) {
-  initIframe();
+function appendToAIIframe(html) {
+  if (!iframeReady) return;
   const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
-  const body = doc.body;
-  // Merge completed sections + in-progress chunks, sorted by order
-  const allPages = {};
-  for (const s of sections) allPages[s.order] = s.html;
-  for (const [idx, html] of Object.entries(chunks)) allPages[idx] = html;
-  const sorted = Object.keys(allPages).sort((a,b) => a - b);
-  const pagesHtml = sorted.map(k => allPages[k]).join('');
-  body.innerHTML = pagesHtml;
-  lastHtml = pagesHtml;
-  // Auto-scroll to bottom
-  body.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  doc.body.insertAdjacentHTML('beforeend', html);
+}
+
+function finalizeAIIframe(html) {
+  if (!iframeReady) return;
+  const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
+  doc.body.innerHTML = html;
 }
 </script>
 </body>
