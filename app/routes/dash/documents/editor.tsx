@@ -583,6 +583,17 @@ export default function DocumentEditor() {
           ...(extraInstructions ? { extraInstructions } : {}),
           ...(direction ? { direction } : {}),
           ...(skipCover ? { skipCover: true } : {}),
+          ...(() => {
+            try {
+              const stored = sessionStorage.getItem("doc-new");
+              if (!stored) return {};
+              const parsed = JSON.parse(stored);
+              const result: Record<string, unknown> = {};
+              if (parsed.referenceDataUrl) result.referenceImage = parsed.referenceDataUrl;
+              if (Array.isArray(parsed.referencePages) && parsed.referencePages.length > 0) result.referencePages = parsed.referencePages;
+              return result;
+            } catch { return {}; }
+          })(),
         }),
         signal: controller.signal,
       });
@@ -1918,6 +1929,22 @@ ${sectionsHtml}
               >
                 Cancelar
               </BrutalButton>
+              {!regenTargetId && (
+                <BrutalButton
+                  size="chip"
+                  mode="ghost"
+                  onClick={() => {
+                    setAddPrompt("");
+                    setAddParsedContent("");
+                    setAddRefImage(null);
+                    setAddFiles([]);
+                    handleAddPage();
+                  }}
+                  isDisabled={isAddingSection}
+                >
+                  En blanco
+                </BrutalButton>
+              )}
               <BrutalButton
                 size="chip"
                 onClick={() => {
@@ -1935,7 +1962,7 @@ ${sectionsHtml}
                 isLoading={regenTargetId ? !!variantLoadingId : isAddingSection}
                 isDisabled={regenTargetId
                   ? !!variantLoadingId
-                  : (!addPrompt.trim() && !addParsedContent) || isAddingSection}
+                  : (!addPrompt.trim() && !addParsedContent && !addRefImage) || isAddingSection}
               >
                 {regenTargetId ? (addPrompt.trim() ? "Refinar" : "Variante") : "Generar"}
               </BrutalButton>

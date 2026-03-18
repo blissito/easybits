@@ -15,7 +15,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction, skipCover } = body;
+  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction, skipCover, referenceImage, referencePages } = body;
 
   if (!landingId) {
     return Response.json({ error: "landingId required" }, { status: 400 });
@@ -74,6 +74,8 @@ export async function action({ request }: Route.ActionArgs) {
         await generateDocumentParallel({
           prompt: parts,
           logoUrl: resolvedLogoUrl,
+          referenceImage: referenceImage || undefined,
+          referencePages: Array.isArray(referencePages) ? referencePages : undefined,
           extraInstructions: extraInstructions || undefined,
           direction: direction || undefined,
           pexelsApiKey: process.env.PEXELS_API_KEY,

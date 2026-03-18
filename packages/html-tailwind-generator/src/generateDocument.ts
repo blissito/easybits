@@ -315,6 +315,8 @@ export interface GenerateDocumentParallelOptions {
   prompt: string;
   logoUrl?: string;
   referenceImage?: string;
+  /** Per-page reference images (e.g. rendered from PDF pages). Index matches page order. */
+  referencePages?: string[];
   extraInstructions?: string;
   /** Model for page generation (quality model) */
   model?: string | import("ai").LanguageModel;
@@ -375,6 +377,7 @@ export async function generateDocumentParallel(options: GenerateDocumentParallel
     prompt,
     logoUrl,
     referenceImage,
+    referencePages,
     extraInstructions,
     model: pageModelId,
     outlineModel: outlineModelId,
@@ -470,8 +473,17 @@ ${direction ? `- Design mood: ${direction.mood}, layout approach: ${direction.la
 
       const userContent: any[] = [];
 
-      // Reference image only for cover/visual pages
-      if (referenceImage && (isCover || page.type === "visual")) {
+      // Per-page reference image from PDF (takes priority)
+      const pageRef = referencePages?.[pageIdx];
+      if (pageRef) {
+        const converted = dataUrlToImagePart(pageRef);
+        if (converted) {
+          userContent.push({ type: "image", ...converted });
+        } else {
+          userContent.push({ type: "image", image: pageRef });
+        }
+      } else if (referenceImage && (isCover || page.type === "visual")) {
+        // Fallback: single reference image for cover/visual pages
         const converted = dataUrlToImagePart(referenceImage);
         if (converted) {
           userContent.push({ type: "image", ...converted });
@@ -480,9 +492,11 @@ ${direction ? `- Design mood: ${direction.mood}, layout approach: ${direction.la
         }
       }
 
+      const hasRefImage = !!pageRef || !!(referenceImage && (isCover || page.type === "visual"));
       userContent.push({
         type: "text",
         text: `You are generating PAGE ${page.pageNumber} of ${outline.pages.length} for a professional document.
+${hasRefImage ? "\nREFERENCE IMAGE: The attached image shows the design to replicate. Match its layout, typography style, and visual structure as closely as possible while using the semantic color system and content from the brief." : ""}
 
 FULL DOCUMENT OUTLINE (for context — you are generating ONLY page ${page.pageNumber}):
 ${outlineJson}

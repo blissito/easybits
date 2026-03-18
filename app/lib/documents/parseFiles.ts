@@ -118,6 +118,39 @@ async function parsePdf(file: File): Promise<string> {
   return pages.join("\n\n--- Página " + " ---\n\n");
 }
 
+/**
+ * Render PDF pages as JPEG data URLs using canvas.
+ * Runs client-side only (requires DOM canvas).
+ */
+export async function renderPdfPages(
+  file: File,
+  opts?: { maxPages?: number; scale?: number }
+): Promise<string[]> {
+  const maxPages = opts?.maxPages ?? 20;
+  const scale = opts?.scale ?? 1.5;
+
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pageCount = Math.min(pdf.numPages, maxPages);
+  const dataUrls: string[] = [];
+
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d")!;
+    await (page.render as any)({ canvasContext: ctx, viewport }).promise;
+    dataUrls.push(canvas.toDataURL("image/jpeg", 0.8));
+  }
+
+  return dataUrls;
+}
+
 export function combineContent(parsed: ParsedFile[]): string {
   const valid = parsed.filter((f) => !f.skipped && !f.error);
   if (valid.length === 0) return "";
