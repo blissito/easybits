@@ -22,6 +22,7 @@ import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import { normalizePlan } from "~/lib/plans";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import toast from "react-hot-toast";
+import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import type { Route } from "./+types/editor";
 
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
@@ -376,6 +377,7 @@ export default function DocumentEditor() {
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
   const [livePdfUrl, setLivePdfUrl] = useState<string | undefined>();
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showMobilePages, setShowMobilePages] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
@@ -781,18 +783,19 @@ export default function DocumentEditor() {
     if (targetComp) targetComp.addClass("easybits-refining");
 
     try {
-      const res = await fetch("/api/v2/landing3-refine", {
+      const res = await fetch("/api/v2/document-refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         signal: abortController.signal,
         body: JSON.stringify({
           landingId: landing.id,
-          sectionId: "__new__",
+          sectionId: targetId,
           instruction,
           currentHtml: targetHtml,
           skipDbUpdate: true,
-          themeName: currentTheme,
+          allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
+          ...(direction && { direction }),
         }),
       });
 
@@ -1015,7 +1018,35 @@ export default function DocumentEditor() {
 
 
   async function handleAddPage() {
-    if ((!addPrompt.trim() && !addParsedContent) || isAddingSection) return;
+    if (isAddingSection) return;
+
+    // Blank page: no prompt, no parsed content, no ref image
+    if (!addPrompt.trim() && !addParsedContent && !addRefImage) {
+      const newId = Math.random().toString(36).slice(2, 10);
+      const targetIdx = insertAtIndex;
+      setInsertAtIndex(null);
+      setShowAddPrompt(false);
+      setAddPrompt("");
+      setSections((prev) => {
+        const sorted = [...prev].sort((a, b) => a.order - b.order);
+        const pos = targetIdx !== null ? targetIdx : sorted.length;
+        sorted.splice(pos, 0, {
+          id: newId,
+          order: pos,
+          html: '<section class="w-full min-h-[11in] bg-surface p-12"></section>',
+          label: `Página ${pos + 1}`,
+        });
+        const reordered = sorted.map((s, i) => ({ ...s, order: i }));
+        return reordered;
+      });
+      // Sync and save
+      requestAnimationFrame(() => {
+        syncToGrapes(sectionsRef.current);
+        saveSections(sectionsRef.current);
+      });
+      return;
+    }
+
     setIsAddingSection(true);
     const savedPrompt = addPrompt.trim();
     const savedParsedContent = addParsedContent;
@@ -1283,15 +1314,103 @@ ${sectionsHtml}
     deployFetcher.submit({ intent: "deploy" }, { method: "post" });
   }
 
-
-
+  function renderPageList({ isMobile }: { isMobile: boolean }) {
+    return (
+      <PageList
+        sections={sections}
+        selectedSectionIds={selectedSectionIds}
+        onSelect={(id, multi) => {
+          setSelectedSectionIds((prev) =>
+            multi
+              ? prev.includes(id)
+                ? prev.filter((x) => x !== id)
+                : [...prev, id]
+              : [id]
+          );
+          if (isGenerating) {
+            streamingRef.current?.scrollToSection(id);
+          } else {
+            editorRef.current?.scrollToSection(id);
+          }
+          if (isMobile) setShowMobilePages(false);
+        }}
+        onContextMenu={(sectionIds, position) => {
+          setSelectedSectionIds(sectionIds);
+          setContextMenu({ ...position, sectionIds });
+        }}
+        onOpenCode={(id) => handleOpenCode(id)}
+        onReorder={handleReorder}
+        onDelete={(id) => {
+          const updated = sections
+            .filter((s) => s.id !== id)
+            .map((s, i) => ({ ...s, order: i }));
+          handleSectionsChange(updated);
+        }}
+        onRename={(id, label) => {
+          const updated = sections.map((s) =>
+            s.id === id ? { ...s, label } : s
+          );
+          handleSectionsChange(updated);
+        }}
+        onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
+        onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
+        onDropImage={handleDropImage}
+        theme={currentTheme}
+        onThemeChange={(t: string) => handleThemeChange(t)}
+        customColors={currentCustomColors ?? undefined}
+        onCustomColorChange={(partial: any) => handleThemeChange("custom", { ...currentCustomColors, ...partial })}
+        themeCssData={themeCssData}
+        onGenerateVariant={handleGenerateVariant}
+        onStopVariant={stopVariant}
+        loadingVariantId={variantLoadingId}
+        refiningIds={refiningSections}
+        onRestoreVersion={(sectionId, oldHtml) => {
+          const updated = sections.map((s) => {
+            if (s.id !== sectionId) return s;
+            const sv = s as Section3WithVersions;
+            const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
+            return { ...s, html: oldHtml, versions } as any;
+          });
+          handleSectionsChange(updated);
+        }}
+        onNavigateVersion={(sectionId, html) => {
+          // Preview version in GrapesJS without changing state
+          const ed = editorRef.current?.getEditor();
+          if (!ed) return;
+          isSavingLocked.current = true;
+          const allHtml = sections.map((s) =>
+            s.id === sectionId ? { ...s, html } : s
+          );
+          ed.setComponents(sectionsToHtml(allHtml));
+          editorRef.current?.scrollToSection(sectionId);
+        }}
+        onExitPreview={(sectionId) => {
+          // Restore current section HTML
+          isSavingLocked.current = false;
+          syncToGrapes(sections);
+        }}
+        onRegenerate={(sectionId) => {
+          if (isMobile) setShowMobilePages(false);
+          setRegenTargetId(sectionId);
+          setShowAddPrompt(true);
+        }}
+        brandKits={brandKits as any}
+        onSaveBrandKit={(name) => {
+          const fd = new FormData();
+          fd.set("intent", "save-brand-kit");
+          fd.set("kitName", name);
+          saveFetcher.submit(fd, { method: "POST" });
+          toast.success("Brand Kit guardado");
+        }}
+        onApplyBrandKit={(kit) => {
+          handleThemeChange("custom", kit.colors as Record<string, string>);
+        }}
+      />
+    );
+  }
 
   return (
     <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
-      {/* Experimental banner */}
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-center text-xs text-amber-800 font-medium shrink-0">
-        Experimental — la velocidad de generaci&oacute;n podr&iacute;a no ser la &oacute;ptima. Ten paciencia mientras mejoramos el rendimiento.
-      </div>
       {/* Top bar */}
       <div className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 py-2 shrink-0 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -1402,12 +1521,7 @@ ${sectionsHtml}
                 <button
                   onClick={() => {
                     setOverflowOpen(false);
-                    if (!confirm("Eliminar este documento?")) return;
-                    setActiveIntent("delete");
-                    deployFetcher.submit(
-                      { intent: "delete" },
-                      { method: "post" }
-                    );
+                    setShowDeleteConfirm(true);
                   }}
                   disabled={activeIntent !== null}
                   className="w-full text-left px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -1456,87 +1570,7 @@ ${sectionsHtml}
           <>
             <div className="md:hidden fixed inset-0 bg-black/30 z-40" onClick={() => setShowMobilePages(false)} />
             <div className="md:hidden fixed inset-y-0 left-0 z-40 w-56 bg-white shadow-xl border-r-2 border-black">
-              <PageList
-                sections={sections}
-                selectedSectionIds={selectedSectionIds}
-                onSelect={(id, multi) => {
-                  setSelectedSectionIds((prev) =>
-                    multi
-                      ? prev.includes(id)
-                        ? prev.filter((x) => x !== id)
-                        : [...prev, id]
-                      : [id]
-                  );
-                  if (isGenerating) {
-                streamingRef.current?.scrollToSection(id);
-              } else {
-                editorRef.current?.scrollToSection(id);
-              }
-                  setShowMobilePages(false);
-                }}
-                onContextMenu={(sectionIds, position) => {
-                  setSelectedSectionIds(sectionIds);
-                  setContextMenu({ ...position, sectionIds });
-                }}
-                onOpenCode={(id) => handleOpenCode(id)}
-                onReorder={handleReorder}
-                onDelete={(id) => {
-                  const updated = sections
-                    .filter((s) => s.id !== id)
-                    .map((s, i) => ({ ...s, order: i }));
-                  handleSectionsChange(updated);
-                }}
-                onRename={(id, label) => {
-                  const updated = sections.map((s) =>
-                    s.id === id ? { ...s, label } : s
-                  );
-                  handleSectionsChange(updated);
-                }}
-                onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
-                onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
-                onDropImage={handleDropImage}
-                theme={currentTheme}
-                onThemeChange={(t: string) => handleThemeChange(t)}
-                customColors={currentCustomColors as any}
-                onCustomColorChange={(partial: any) => handleThemeChange("custom", { ...currentCustomColors, ...partial })}
-                themeCssData={themeCssData}
-                onGenerateVariant={handleGenerateVariant}
-                onStopVariant={stopVariant}
-                loadingVariantId={variantLoadingId}
-                refiningIds={refiningSections}
-                onRestoreVersion={(sectionId, oldHtml) => {
-                  // Exit any version preview before generating
-                  const updated = sections.map((s) => {
-                    if (s.id !== sectionId) return s;
-                    const sv = s as Section3WithVersions;
-                    const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
-                    return { ...s, html: oldHtml, versions } as any;
-                  });
-                  handleSectionsChange(updated);
-                }}
-                onNavigateVersion={(sectionId, html) => {
-                  void 0 /* version preview: use Restore instead */;
-                }}
-                onExitPreview={(sectionId) => {
-                  // Exit any version preview before generating
-                }}
-                onRegenerate={(sectionId) => {
-                  setShowMobilePages(false);
-                  setRegenTargetId(sectionId);
-                  setShowAddPrompt(true);
-                }}
-                brandKits={brandKits as any}
-                onSaveBrandKit={(name) => {
-                  const fd = new FormData();
-                  fd.set("intent", "save-brand-kit");
-                  fd.set("kitName", name);
-                  saveFetcher.submit(fd, { method: "POST" });
-                  toast.success("Brand Kit guardado");
-                }}
-                onApplyBrandKit={(kit) => {
-                  handleThemeChange("custom", kit.colors as Record<string, string>);
-                }}
-              />
+              {renderPageList({ isMobile: true })}
             </div>
           </>
         )}
@@ -1544,85 +1578,7 @@ ${sectionsHtml}
         {/* Section list sidebar (desktop) */}
         {!codeViewSectionId && (
           <div className="hidden md:flex">
-          <PageList
-            sections={sections}
-            selectedSectionIds={selectedSectionIds}
-            onSelect={(id, multi) => {
-              setSelectedSectionIds((prev) =>
-                multi
-                  ? prev.includes(id)
-                    ? prev.filter((x) => x !== id)
-                    : [...prev, id]
-                  : [id]
-              );
-              if (isGenerating) {
-                streamingRef.current?.scrollToSection(id);
-              } else {
-                editorRef.current?.scrollToSection(id);
-              }
-            }}
-            onContextMenu={(sectionIds, position) => {
-              setSelectedSectionIds(sectionIds);
-              setContextMenu({ ...position, sectionIds });
-            }}
-            onOpenCode={(id) => handleOpenCode(id)}
-            onReorder={handleReorder}
-            onDelete={(id) => {
-              const updated = sections
-                .filter((s) => s.id !== id)
-                .map((s, i) => ({ ...s, order: i }));
-              handleSectionsChange(updated);
-            }}
-            onRename={(id, label) => {
-              const updated = sections.map((s) =>
-                s.id === id ? { ...s, label } : s
-              );
-              handleSectionsChange(updated);
-            }}
-            onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
-            onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
-            onDropImage={handleDropImage}
-            theme={currentTheme}
-            onThemeChange={(t: string) => handleThemeChange(t)}
-            customColors={currentCustomColors as any}
-            onCustomColorChange={(partial: any) => handleThemeChange("custom", { ...currentCustomColors, ...partial })}
-            themeCssData={themeCssData}
-            onGenerateVariant={handleGenerateVariant}
-            onStopVariant={stopVariant}
-            loadingVariantId={variantLoadingId}
-            refiningIds={refiningSections}
-            onRestoreVersion={(sectionId, oldHtml) => {
-              // Exit any version preview before generating
-              const updated = sections.map((s) => {
-                if (s.id !== sectionId) return s;
-                const sv = s as Section3WithVersions;
-                const versions = [...(sv.versions || []), { html: s.html, timestamp: Date.now() }].slice(-10);
-                return { ...s, html: oldHtml, versions } as any;
-              });
-              handleSectionsChange(updated);
-            }}
-            onNavigateVersion={(sectionId, html) => {
-              void 0 /* version preview: use Restore instead */;
-            }}
-            onExitPreview={(sectionId) => {
-              // Exit any version preview before generating
-            }}
-            onRegenerate={(sectionId) => {
-              setRegenTargetId(sectionId);
-              setShowAddPrompt(true);
-            }}
-            brandKits={brandKits as any}
-            onSaveBrandKit={(name) => {
-              const fd = new FormData();
-              fd.set("intent", "save-brand-kit");
-              fd.set("kitName", name);
-              saveFetcher.submit(fd, { method: "POST" });
-              toast.success("Brand Kit guardado");
-            }}
-            onApplyBrandKit={(kit) => {
-              handleThemeChange("custom", kit.colors as Record<string, string>);
-            }}
-          />
+            {renderPageList({ isMobile: false })}
           </div>
         )}
 
@@ -1987,6 +1943,20 @@ ${sectionsHtml}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Eliminar documento"
+        message="Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          setActiveIntent("delete");
+          deployFetcher.submit({ intent: "delete" }, { method: "post" });
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+        destructive
+      />
     </article>
   );
 }

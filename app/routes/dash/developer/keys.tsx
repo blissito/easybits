@@ -4,6 +4,7 @@ import { listApiKeys } from "~/.server/iam";
 import { createApiKey, revokeApiKey } from "~/.server/iam";
 import { useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import type { Route } from "./+types/keys";
 
 export const meta = () => [
@@ -44,6 +45,7 @@ export default function KeysPage() {
   const { keys } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const [showCreate, setShowCreate] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
 
   const createdKey = fetcher.data && "created" in fetcher.data ? fetcher.data.created : null;
 
@@ -152,25 +154,14 @@ export default function KeysPage() {
                 </td>
                 <td className="px-4 py-3">
                   {k.status === "ACTIVE" && (
-                    <fetcher.Form
-                      method="post"
-                      onSubmit={(e) => {
-                        if (!confirm("¿Revocar la API key \"" + k.name + "\"? Esta acción no se puede deshacer.")) {
-                          e.preventDefault();
-                        }
-                      }}
+                    <BrutalButton
+                      mode="danger"
+                      size="chip"
+                      onClick={() => setRevokeTarget({ id: k.id, name: k.name })}
+                      isLoading={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
                     >
-                      <input type="hidden" name="intent" value="revoke" />
-                      <input type="hidden" name="keyId" value={k.id} />
-                      <BrutalButton
-                        mode="danger"
-                        size="chip"
-                        type="submit"
-                        isLoading={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
-                      >
-                        Revoke
-                      </BrutalButton>
-                    </fetcher.Form>
+                      Revoke
+                    </BrutalButton>
                   )}
                 </td>
               </tr>
@@ -185,6 +176,23 @@ export default function KeysPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!revokeTarget}
+        title="Revocar API key"
+        message={revokeTarget ? `¿Revocar la API key "${revokeTarget.name}"? Esta acción no se puede deshacer.` : ""}
+        confirmLabel="Revocar"
+        onConfirm={() => {
+          if (!revokeTarget) return;
+          fetcher.submit(
+            { intent: "revoke", keyId: revokeTarget.id },
+            { method: "post" }
+          );
+          setRevokeTarget(null);
+        }}
+        onCancel={() => setRevokeTarget(null)}
+        destructive
+      />
     </div>
   );
 }

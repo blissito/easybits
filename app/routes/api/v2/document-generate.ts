@@ -5,24 +5,8 @@ import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { generateDocumentParallel } from "@easybits.cloud/html-tailwind-generator/generateDocument";
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
 import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGenerationLimit";
-import { getPlatformDefaultClient, PUBLIC_BUCKET } from "~/.server/storage";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
-
-async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return dataUrl; // already a URL
-  const buffer = Buffer.from(match[2], "base64");
-  const ext = match[1].includes("png") ? "png" : match[1].includes("svg") ? "svg" : "webp";
-  const key = `logos/${userId}/${crypto.randomUUID()}.${ext}`;
-  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
-  const putUrl = await client.getPutUrl(key, { timeout: 60 });
-  await fetch(putUrl, {
-    method: "PUT",
-    body: buffer,
-    headers: { "Content-Type": match[1] },
-  });
-  return `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${key}`;
-}
+import { uploadLogoToStorage } from "~/.server/core/documentOperations";
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {

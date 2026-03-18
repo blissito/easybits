@@ -398,7 +398,7 @@ interface DirectionOpts {
   layoutHint?: string;
 }
 
-async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
+export async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) return dataUrl;
   const buffer = Buffer.from(match[2], "base64");

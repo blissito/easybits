@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { data } from "react-router";
@@ -161,6 +162,7 @@ export default function DocumentDirections() {
   const abortRef = useRef<AbortController | null>(null);
   const soundedRef = useRef<Set<number>>(new Set());
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const directionsRef = useRef<DesignDirection[]>([]);
   const previewsRef = useRef<(string | null)[]>([null, null, null, null]);
 
@@ -440,15 +442,7 @@ export default function DocumentDirections() {
       const fd = formDataRef.current;
       const direction = directions[selectedIndex];
 
-      // Create the Landing via a direct fetch to avoid needing a server action
-      const res = await fetch("/api/v2/document-directions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ _action: "create", ...fd, direction }),
-      });
-
-      // Actually, let's create via the existing form pattern — POST to a simple endpoint
-      // For simplicity, create the landing client-side by POSTing form data
+      // Create the landing via the existing form action
       const formRes = await fetch("/dash/documents/directions", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -497,7 +491,7 @@ export default function DocumentDirections() {
         <div className="flex-1" />
         <button
           type="button"
-          onClick={() => { if (!confirm("¿Regenerar todas las direcciones?")) return; fetchDirections(); }}
+          onClick={() => setShowRegenConfirm(true)}
           disabled={isLoading}
           className="text-sm font-bold text-gray-500 hover:text-black transition-colors disabled:opacity-40 shrink-0"
         >
@@ -614,6 +608,14 @@ export default function DocumentDirections() {
       <p className="text-sm text-gray-400 text-center px-8 py-3 shrink-0">
         Podr&aacute;s editar colores, im&aacute;genes, textos y cada detalle despu&eacute;s.
       </p>
+      <ConfirmDialog
+        isOpen={showRegenConfirm}
+        title="Regenerar direcciones"
+        message="Se regenerarán todas las direcciones de diseño. ¿Continuar?"
+        confirmLabel="Regenerar"
+        onConfirm={() => { setShowRegenConfirm(false); fetchDirections(); }}
+        onCancel={() => setShowRegenConfirm(false)}
+      />
     </article>
   );
 }

@@ -8,6 +8,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
+import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import type { Route } from "./+types/websites";
 
 export const meta = () => [
@@ -235,6 +236,7 @@ function SiteMenu({
   onRedeploy: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -283,27 +285,33 @@ function SiteMenu({
           >
             Re-deploy
           </button>
-          <deleteFetcher.Form
-            method="post"
-            onSubmit={(e) => {
-              if (!confirm("¿Eliminar este sitio y todos sus archivos?")) {
-                e.preventDefault();
-              }
-              setOpen(false);
-            }}
-          >
-            <input type="hidden" name="intent" value="delete" />
-            <input type="hidden" name="websiteId" value={siteId} />
+          <div>
             <button
-              type="submit"
+              type="button"
               disabled={isDeleting}
+              onClick={() => { setOpen(false); setShowDeleteConfirm(true); }}
               className="w-full text-left px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors border-t-2 border-black"
             >
               {isDeleting ? "Eliminando..." : "Eliminar"}
             </button>
-          </deleteFetcher.Form>
+          </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Eliminar sitio"
+        message="Se eliminará este sitio y todos sus archivos. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          deleteFetcher.submit(
+            { intent: "delete", websiteId: siteId },
+            { method: "post" }
+          );
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+        destructive
+      />
     </div>
   );
 }
