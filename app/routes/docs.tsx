@@ -831,16 +831,110 @@ console.log(url); // https://my-deck.easybits.cloud`}
           {/* Documents */}
           <section id="documents" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Documents</h2>
+            <p className="text-gray-600 mb-6 text-sm">
+              AI-generated professional documents (reports, brochures, catalogs, proposals, CVs) with parallel page generation, design directions, and semantic color themes.
+            </p>
 
-            <div className="mb-6 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm space-y-2">
-              <strong>Coming Soon</strong>
-              <p className="text-gray-700">
-                AI-generated documents with parallel page generation, design directions, and semantic color themes.
-                Create professional reports, brochures, proposals, and more — each page generated in parallel for speed.
-              </p>
-              <p className="text-gray-500 text-xs mt-2">
-                Dashboard-only for now. API endpoints, SDK methods, and MCP tools coming soon.
-              </p>
+            <Endpoint
+              method="GET"
+              path="/documents"
+              description="List all your documents"
+              response={`{ "items": [{ "id": "doc123", "name": "Q1 Report", "status": "DRAFT", "pageCount": 5 }] }`}
+              sdk={`const { items } = await eb.listDocuments();`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/documents/:id"
+              description="Get a document with full page/section data"
+              response={`{ "id": "doc123", "name": "Q1 Report", "theme": "minimal", "sections": [...], "pageCount": 5 }`}
+              sdk={`const doc = await eb.getDocument("doc123");`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/documents"
+              description="Create a new document"
+              body={[
+                { name: "name", type: "string", desc: "Document name (required)" },
+                { name: "prompt", type: "string", desc: "Description for AI generation" },
+                { name: "theme", type: "string", desc: "Theme: minimal, calido, oceano, noche, bosque, rosa" },
+                { name: "customColors", type: "object", desc: "Custom palette: { primary, secondary, accent, surface }" },
+              ]}
+              response={`{ "id": "doc123", "name": "Q1 Report", "status": "DRAFT" }`}
+              sdk={`const doc = await eb.createDocument({ name: "Q1 Report", prompt: "Quarterly review" });`}
+            />
+
+            <Endpoint
+              method="PATCH"
+              path="/documents/:id"
+              description="Update document metadata (name, theme, colors). Use page tools for content changes."
+              body={[
+                { name: "name", type: "string", desc: "New name" },
+                { name: "prompt", type: "string", desc: "Updated prompt" },
+                { name: "theme", type: "string", desc: "Theme name" },
+                { name: "customColors", type: "object", desc: "Custom color palette" },
+              ]}
+              sdk={`await eb.updateDocument("doc123", { theme: "noche" });`}
+            />
+
+            <Endpoint
+              method="DELETE"
+              path="/documents/:id"
+              description="Delete a document"
+              sdk={`await eb.deleteDocument("doc123");`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/documents/:id/deploy"
+              description="Publish as a live website at slug.easybits.cloud"
+              response={`{ "url": "https://my-report.easybits.cloud", "websiteId": "...", "slug": "my-report" }`}
+              sdk={`const { url } = await eb.deployDocument("doc123");`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/documents/:id/unpublish"
+              description="Remove the live website and revert to draft"
+              sdk={`await eb.unpublishDocument("doc123");`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Page Management (MCP)</h3>
+            <p className="text-gray-600 mb-4 text-sm">
+              These tools are available via MCP for surgical page-level editing.
+            </p>
+
+            <div className="space-y-4 mb-8">
+              <McpTool name="get_page_html" params="documentId, pageId" description="Get the HTML and metadata of a single page." />
+              <McpTool name="set_page_html" params="documentId, pageId, html" description="Update a single page's full HTML. Preferred over update_document for content edits." />
+              <McpTool name="get_section_html" params="documentId, pageId, cssSelector" description="Get the outerHTML of a specific element within a page by CSS selector." />
+              <McpTool name="set_section_html" params="documentId, pageId, cssSelector, html" description="Replace a specific element within a page. Enables surgical edits." />
+              <McpTool name="add_page" params="documentId, html?, afterPageIndex?, label?" description="Add a new page. Optionally provide HTML and insertion position." />
+              <McpTool name="delete_page" params="documentId, pageId" description="Remove a page. Cannot delete the last remaining page." />
+              <McpTool name="reorder_pages" params="documentId, pageIds" description="Reorder all pages. pageIds must contain every page ID exactly once." />
+              <McpTool name="get_page_screenshot" params="documentId, pageIndex?" description="Take a screenshot of a page. Returns a PNG image (letter-sized). Prefer this tool to verify edits visually." />
+            </div>
+
+            <h3 className="text-lg font-bold mt-8 mb-4">AI Generation (MCP)</h3>
+            <div className="space-y-4 mb-8">
+              <McpTool name="generate_document" params="documentId, prompt, skipCover?" description="Generate all pages with AI via streaming. Use skipCover: true to add pages without regenerating the cover." />
+              <McpTool name="refine_document_section" params="documentId, sectionId, instruction" description="Surgical AI changes to a specific page. Use get_page_html to see the result." />
+              <McpTool name="regenerate_document_page" params="documentId, sectionId" description="Completely redesign a page while keeping the same content intent." />
+              <McpTool name="enhance_document_prompt" params="name, prompt?, action?" description="Auto-generate a description from the title or improve an existing prompt." />
+              <McpTool name="get_document_directions" params="prompt, pageCount?, sourceContent?" description="Get 4 design directions (fonts, colors, mood). Pass one to generate_document." />
+              <McpTool name="clone_document" params="documentId, name?" description="Duplicate a document with all its pages." />
+            </div>
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Workflow</h3>
+            <div className="text-sm text-gray-700 space-y-1 mb-4">
+              <p>1. <code className="bg-gray-100 px-1 rounded">enhance_document_prompt</code> — auto-generate a description</p>
+              <p>2. <code className="bg-gray-100 px-1 rounded">get_document_directions</code> — get 4 design directions</p>
+              <p>3. <code className="bg-gray-100 px-1 rounded">create_document</code> — create the document</p>
+              <p>4. <code className="bg-gray-100 px-1 rounded">generate_document</code> — AI generates all pages</p>
+              <p>5. <code className="bg-gray-100 px-1 rounded">get_page_screenshot</code> — verify pages visually</p>
+              <p>6. <code className="bg-gray-100 px-1 rounded">refine_document_section</code> — tweak individual pages</p>
+              <p>7. <code className="bg-gray-100 px-1 rounded">deploy_document</code> — publish at slug.easybits.cloud</p>
             </div>
           </section>
 
@@ -1107,6 +1201,19 @@ function ParamTable({ title, items }: { title: string; items: ParamDef[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function McpTool({ name, params, description }: { name: string; params: string; description: string }) {
+  return (
+    <div className="border-2 border-black rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <code className="font-mono text-sm font-bold">{name}</code>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded border border-indigo-300">MCP</span>
+      </div>
+      <p className="text-xs text-gray-500 font-mono mb-2">{params}</p>
+      <p className="text-sm text-gray-600">{description}</p>
     </div>
   );
 }

@@ -234,10 +234,13 @@ Webhooks auto-pause after 5 consecutive delivery failures (non-2xx response or t
 
   websites: `## Websites (Static Site Hosting)
 
-### Deploy flow
+### Deploy flow (recommended — single call)
 1. Create a website: \`POST /websites\` → get \`websiteId\`
-2. Upload files with \`assetId\` set to the websiteId (must include an \`index.html\`)
+2. Deploy files: MCP \`deploy_website_file({ websiteId, fileName: "index.html", content: "<html>..." })\`
 3. Site is live at \`https://www.easybits.cloud/s/<slug>/\`
+
+\`deploy_website_file\` uploads content directly (max 1MB, text or base64). No presigned URL or status update needed.
+For large binary files (>1MB), use \`upload_website_file\` → PUT to presigned URL → \`update_file(status: "DONE")\`.
 
 ### List websites
 \`GET /websites\`
@@ -600,6 +603,10 @@ Auto-generates a description from the document title (\`auto-describe\`) or impr
 MCP: \`get_document_directions({ prompt, pageCount?, sourceContent? })\`
 SDK: \`eb.getDocumentDirections(prompt, { pageCount? })\`
 Generates 4 design directions (fonts, colors, mood, layout hints). Pass one to \`generate_document\` via the \`direction\` parameter.
+
+### Get page screenshot
+MCP: \`get_page_screenshot({ documentId, pageIndex? })\`
+Takes a screenshot of a single document page. Returns a PNG image (letter-sized). Page index is 0-based (default 0). Requires Chrome installed locally — designed for Claude Code MCP usage. **Prefer this tool to verify edits visually** after modifying page HTML.
 
 ### Document object
 \`\`\`json
