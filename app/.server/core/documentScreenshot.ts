@@ -4,6 +4,15 @@ import type { Section3 } from "~/lib/landing3/types";
 
 let browserPromise: ReturnType<typeof launchBrowser> | null = null;
 
+// Semaphore: max 1 concurrent screenshot to avoid overloading the server
+let screenshotQueue: Promise<any> = Promise.resolve();
+
+function enqueueScreenshot<T>(fn: () => Promise<T>): Promise<T> {
+  const result = screenshotQueue.then(fn, fn);
+  screenshotQueue = result.catch(() => {});
+  return result;
+}
+
 async function launchBrowser() {
   const { chromium } = await import("playwright-core");
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -59,22 +68,23 @@ export async function takeDocumentScreenshot(
     customColors: metadata?.customColors,
   });
 
-  try {
-    const browser = await getBrowser();
-    const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
+  return enqueueScreenshot(async () => {
     try {
-      await page.setContent(html, { waitUntil: "networkidle" });
-      const buffer = await page.screenshot({ type: "png" });
-      return { type: "image", mimeType: "image/png", data: buffer.toString("base64") };
-    } finally {
-      await page.close();
+      const browser = await getBrowser();
+      const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
+      try {
+        await page.setContent(html, { waitUntil: "networkidle" });
+        const buffer = await page.screenshot({ type: "png" });
+        return { type: "image", mimeType: "image/png", data: buffer.toString("base64") } as const;
+      } finally {
+        await page.close();
+      }
+    } catch (err: any) {
+      browserPromise = null;
+      return {
+        type: "text" as const,
+        text: `Screenshot unavailable: ${err.message}. This tool requires Chrome installed locally (designed for Claude Code MCP usage, not production).`,
+      };
     }
-  } catch (err: any) {
-    // Graceful fallback — no Chrome available (e.g. production server)
-    browserPromise = null;
-    return {
-      type: "text",
-      text: `Screenshot unavailable: ${err.message}. This tool requires Chrome installed locally (designed for Claude Code MCP usage, not production).`,
-    };
-  }
+  });
 }
