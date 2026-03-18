@@ -455,6 +455,7 @@ function tryAnother() {
   resultFrame.srcdoc = '';
   lastHtml = '';
   lastXml = '';
+  iframeReady = false;
   aiBanner.classList.remove('generating', 'done');
   aiArrowText.textContent = 'Probar diseño IA →';
 }
@@ -576,20 +577,35 @@ function handleSSE(event, data, sections) {
   }
 }
 
+let iframeReady = false;
+
+function initIframe() {
+  if (iframeReady) return;
+  const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>body{margin:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px}section{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;overflow:hidden;animation:fade-in .4s ease-out}@keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}</style>
+    </head><body></body></html>`);
+  doc.close();
+  iframeReady = true;
+}
+
 function renderAILive(sections, chunks) {
+  initIframe();
+  const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
+  const body = doc.body;
   // Merge completed sections + in-progress chunks, sorted by order
   const allPages = {};
   for (const s of sections) allPages[s.order] = s.html;
   for (const [idx, html] of Object.entries(chunks)) allPages[idx] = html;
   const sorted = Object.keys(allPages).sort((a,b) => a - b);
   const pagesHtml = sorted.map(k => allPages[k]).join('');
-  const fullDoc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <style>body{margin:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px}section{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;overflow:hidden;}@keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}section{animation:fade-in .4s ease-out}</style>
-    </head><body>${pagesHtml}</body></html>`;
+  body.innerHTML = pagesHtml;
   lastHtml = pagesHtml;
-  resultFrame.srcdoc = fullDoc;
+  // Auto-scroll to bottom
+  body.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 </script>
 </body>

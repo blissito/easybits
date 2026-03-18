@@ -4,7 +4,7 @@
  * ⚠️ TEMPORARY — disable after demos.
  */
 import { parseCFDI } from "~/lib/cfdi/parseCFDI";
-import { serializeCFDIForAI } from "~/lib/cfdi/templates";
+import { serializeCFDIForAI, buildCFDIDocument } from "~/lib/cfdi/templates";
 import { generateDocumentParallel } from "@easybits.cloud/html-tailwind-generator/generateDocument";
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
@@ -74,28 +74,29 @@ export async function action({ request }: { request: Request }) {
     I: "Factura", P: "Recibo de Pago", E: "Nota de Crédito", T: "Carta Porte", N: "Nómina",
   };
 
-  const sourceContent = serializeCFDIForAI(data);
   const tipoLabel = tipoNames[data.tipo] || "documento fiscal";
-  const prompt = `Genera UNA SOLA PÁGINA con un ${tipoLabel} mexicano (CFDI). NO generes portada ni páginas extra — solo el documento fiscal en una página.
+  // Pre-render the HTML with exact data — AI must only restyle it
+  const referenceHtml = buildCFDIDocument(data);
+  const qrImg = data.qrUrl
+    ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(data.qrUrl)}" alt="QR Verificación SAT" style="width:120px;height:120px;">`
+    : "";
 
-LAYOUT (respetar estructura estándar de factura mexicana):
-1. Header: tipo de documento + serie/folio + fecha
-2. Emisor y Receptor: lado a lado (2 columnas), con RFC, nombre, régimen fiscal, uso CFDI, domicilio fiscal
-3. ${data.tipo === "P" ? "Detalle de pagos: monto, fecha, forma de pago, documentos relacionados con parcialidades, saldos" : "Tabla de conceptos: descripción, cantidad, unidad, precio unitario, importe"}
-4. Desglose de impuestos (IVA, ISR, retenciones) y totales
-5. Timbre Fiscal Digital: UUID, fecha timbrado, no. certificado SAT, sellos CFDI y SAT (truncados: primeros y últimos 8 caracteres)
+  const prompt = `Rediseña este ${tipoLabel} mexicano (CFDI) con un estilo visual más profesional y atractivo.
 
-ESTILO (esto es lo que diferencia tu diseño del template genérico):
-- Paleta de color con personalidad (NO gris genérico) — elige un acento de color coherente para headers, bordes y badges
-- Tipografía limpia con buena jerarquía (títulos bold, datos regulares)
-- Tabla con filas alternadas de color, headers con fondo
-- Totales destacados visualmente
-- Spacing generoso, bordes suaves, cards sutiles para emisor/receptor
+CRITICAL — DATOS EXACTOS:
+El HTML de referencia contiene TODOS los datos fiscales correctos. Tu trabajo es SOLO rediseñar el estilo visual. NUNCA cambies, redondees, inventes ni modifiques ningún número, RFC, UUID, fecha, monto ni texto. Copia cada valor EXACTAMENTE como aparece en el HTML de referencia. Si un monto dice $10,440.00 DEBE decir $10,440.00 — no $10,400, no $10.440, no otro número.
 
-${data.qrUrl ? `OBLIGATORIO — CÓDIGO QR: Incluye esta imagen junto al timbre fiscal:
-<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(data.qrUrl)}" alt="QR Verificación SAT" style="width:120px;height:120px;">` : ""}
+REFERENCIA HTML (contiene los datos exactos a usar):
+${referenceHtml}
 
-REGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. NO inventes, modifiques ni redondees ningún valor — son datos fiscales legales.`;
+${qrImg ? `OBLIGATORIO — incluye este QR junto al timbre fiscal:\n${qrImg}` : ""}
+
+REGLAS:
+- UNA SOLA PÁGINA, sin portada
+- Mismo layout de factura: header → emisor/receptor → conceptos/pagos → impuestos → totales → timbre fiscal
+- Mejora SOLO el estilo: colores con personalidad, tipografía con jerarquía, tabla con filas alternadas, spacing generoso, cards para emisor/receptor
+- Todos los datos del timbre fiscal deben aparecer (UUID, fecha timbrado, certificado SAT, sellos truncados)
+- REPITO: NO modifiques NINGÚN valor numérico, fecha, RFC ni texto del HTML de referencia`;
 
   // Resolve AI models (platform keys, no user key needed)
   const docModelId = await getAiModel("docGenerate");
@@ -104,7 +105,7 @@ REGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. NO inventes, modifique
   const outlineModel = resolveModelLocal(outlineModelId);
 
   const allSections: Section3[] = [];
-  const fullPrompt = `Transform this content into beautiful document pages:\n\n${sourceContent.substring(0, 15000)}\n\nInstructions: ${prompt}`;
+  const fullPrompt = `Restyle this fiscal document into a beautiful single page:\n\n${prompt}`;
 
   const stream = new ReadableStream({
     async start(controller) {
