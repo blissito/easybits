@@ -1066,6 +1066,21 @@ export function createMcpServer() {
     })
   );
 
+  server.tool(
+    "get_document_screenshot",
+    "Take a screenshot of a document page. Returns a PNG image. Requires Chrome installed locally — designed for Claude Code MCP usage. Use this to verify your edits visually.",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageIndex: z.number().optional().describe("Page index (0-based, default 0)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { takeDocumentScreenshot } = await import("../core/documentScreenshot");
+      const result = await takeDocumentScreenshot(ctx.user.id, params.documentId, params.pageIndex ?? 0);
+      return { content: [result] };
+    })
+  );
+
   // --- Database Tools ---
 
   server.tool(
