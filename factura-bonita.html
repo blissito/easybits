@@ -53,6 +53,7 @@ h1,h2,h3{font-family:'Fredoka',sans-serif}
 .btn-secondary:hover{background:#e8e8e8}
 .btn-purple{background:var(--purple);color:white}
 .btn-purple:hover{background:#8560d9}
+.result-toolbar{position:relative}
 .ai-banner{display:flex;align-items:center;gap:16px;padding:10px 20px;background:linear-gradient(135deg,#f3edff 0%,#ede4ff 50%,#e8dbff 100%);border-bottom:1px solid rgba(152,112,237,.15);flex-shrink:0;cursor:pointer;transition:all .2s;text-decoration:none;color:inherit}
 .ai-banner:hover{background:linear-gradient(135deg,#ede4ff 0%,#e4d6ff 50%,#dbc8ff 100%)}
 .ai-banner .ai-sparkle{font-size:28px;flex-shrink:0;animation:sparkle-pulse 2s ease-in-out infinite}
@@ -107,12 +108,12 @@ h1,h2,h3{font-family:'Fredoka',sans-serif}
 </div>
 
 <!-- RESULT OVERLAY (hidden) -->
-<div class="result-overlay" id="resultOverlay" style="display:none">
+<div class="result-overlay" id="resultOverlay" style="display:none" onclick="if(event.target===this)tryAnother()">
   <div class="result-container">
     <div class="result-toolbar">
       <h3 id="resultTitle">Tu factura bonita</h3>
       <div class="btns">
-        <button class="btn btn-secondary" onclick="tryAnother()">Probar otro</button>
+        <button class="btn btn-secondary" onclick="tryAnother()">✕ Cerrar</button>
         <button class="btn btn-primary" onclick="downloadPDF()">Descargar PDF</button>
       </div>
     </div>
@@ -420,25 +421,11 @@ function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = '
 function hideError() { errorMsg.style.display = 'none'; }
 
 function isDemoMode() { return sessionStorage.getItem('fb-demo')==='1'; }
-function checkRateLimit() {
-  if(isDemoMode()) return true;
-  const today = new Date().toISOString().slice(0,10);
-  const last = localStorage.getItem('factura-bonita-last');
-  return last !== today;
-}
-function markUsed() {
-  const today = new Date().toISOString().slice(0,10);
-  localStorage.setItem('factura-bonita-last', today);
-}
 
 function processFile(file) {
   hideError();
   if (!file || !file.name.toLowerCase().endsWith('.xml')) {
     showError('Solo se aceptan archivos XML del SAT.');
-    return;
-  }
-  if (!checkRateLimit()) {
-    showError('Ya usaste tu prueba de hoy. Vuelve mañana o explora EasyBits para uso ilimitado.');
     return;
   }
   const reader = new FileReader();
@@ -449,7 +436,6 @@ function processFile(file) {
       const html = buildCFDIDocument(data);
       lastHtml = html;
       lastXml = e.target.result;
-      markUsed();
 
       const tipoNames = {I:"Factura",P:"Recibo de Pago",E:"Nota de Crédito",T:"Traslado",N:"Nómina"};
       resultTitle.textContent = (tipoNames[data.tipo]||"Documento") + " — " + (data.emisor.nombre||data.emisor.rfc);
@@ -565,13 +551,22 @@ function generateWithAI() {
   });
 }
 
+const streamingChunks = {};
+
 function handleSSE(event, data, sections) {
-  if (event === 'section') {
+  if (event === 'section-building') {
+    // Partial chunk — accumulate and render live
+    const idx = data.order ?? 0;
+    streamingChunks[idx] = (streamingChunks[idx] || '') + data.html;
+    renderAILive(sections, streamingChunks);
+  } else if (event === 'section') {
+    // Complete page — replace chunk with final
+    delete streamingChunks[data.order];
     sections.push(data);
-    renderAISections(sections);
+    renderAILive(sections, streamingChunks);
   } else if (event === 'section-update') {
     const s = sections.find(s => s.id === data.id);
-    if (s) { s.html = data.html; renderAISections(sections); }
+    if (s) { s.html = data.html; renderAILive(sections, streamingChunks); }
   } else if (event === 'done') {
     aiBanner.classList.add('done');
   } else if (event === 'error') {
@@ -581,13 +576,17 @@ function handleSSE(event, data, sections) {
   }
 }
 
-function renderAISections(sections) {
-  const sorted = [...sections].sort((a, b) => a.order - b.order);
-  const pagesHtml = sorted.map(s => s.html).join('');
+function renderAILive(sections, chunks) {
+  // Merge completed sections + in-progress chunks, sorted by order
+  const allPages = {};
+  for (const s of sections) allPages[s.order] = s.html;
+  for (const [idx, html] of Object.entries(chunks)) allPages[idx] = html;
+  const sorted = Object.keys(allPages).sort((a,b) => a - b);
+  const pagesHtml = sorted.map(k => allPages[k]).join('');
   const fullDoc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"><\/script>
-    <style>body{margin:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px}section{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;overflow:hidden;}</style>
+    <style>body{margin:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px}section{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;overflow:hidden;}@keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}section{animation:fade-in .4s ease-out}</style>
     </head><body>${pagesHtml}</body></html>`;
   lastHtml = pagesHtml;
   resultFrame.srcdoc = fullDoc;

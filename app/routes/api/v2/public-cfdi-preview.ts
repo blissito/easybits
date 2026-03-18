@@ -76,13 +76,24 @@ export async function action({ request }: { request: Request }) {
 
   const sourceContent = serializeCFDIForAI(data);
   const tipoLabel = tipoNames[data.tipo] || "documento fiscal";
-  const prompt = `Diseña un ${tipoLabel} profesional con estos datos fiscales mexicanos (CFDI).
+  const prompt = `Diseña un ${tipoLabel} con un diseño ÚNICO, PREMIUM y VISUALMENTE IMPACTANTE. Este NO es un documento genérico — debe verse como diseñado por un estudio de branding profesional.
 
-REGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. No inventes, modifiques ni redondees ningún valor — son datos fiscales legales. Todos los números, RFCs, UUIDs y fechas deben aparecer tal cual.
+DIRECCIÓN CREATIVA:
+- Usa un esquema de color audaz y moderno (NO gris/blanco aburrido). Elige una paleta con personalidad: gradientes sutiles, acentos vibrantes, fondos con textura o color.
+- Tipografía con jerarquía clara: títulos grandes y bold, datos en fuentes limpias.
+- Layout sofisticado: usa cards con sombras, bordes redondeados, iconos decorativos (emoji), separadores con estilo, badges para datos clave.
+- Header impactante: nombre del emisor grande y prominente, tipo de documento como badge de color, serie/folio destacados.
+- Tabla de ${data.tipo === "P" ? "documentos relacionados" : "conceptos"}: con filas alternadas de color, headers con fondo de color, bordes suaves.
+- Totales: sección destacada con fondo de color y tipografía grande.
+- Sección de timbre fiscal: diseño compacto pero completo con todos los datos del timbre (UUID, fecha timbrado, no. certificado SAT, sellos CFDI y SAT truncados a primeros y últimos 8 caracteres).
 
-Incluye: datos del emisor, datos del receptor, ${data.tipo === "P" ? "detalle de pagos y documentos relacionados" : "tabla de conceptos con cantidades/precios"}, desglose de impuestos, totales, y sección de timbre fiscal digital (UUID, sellos truncados).
+${data.qrUrl ? `OBLIGATORIO — CÓDIGO QR: Incluye esta imagen QR de verificación SAT junto al timbre fiscal:
+<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data.qrUrl)}" alt="QR Verificación SAT" style="width:150px;height:150px;">
+El QR debe ser visible y estar junto a los datos del timbre.` : ""}
 
-${data.qrUrl ? `Al final incluye el link de verificación SAT: ${data.qrUrl}` : ""}`;
+REGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. No inventes, modifiques ni redondees NINGÚN valor — son datos fiscales legales. Todos los números, RFCs, UUIDs y fechas deben aparecer tal cual.
+
+Incluye: datos del emisor, datos del receptor, ${data.tipo === "P" ? "detalle de pagos y documentos relacionados con parcialidades" : "tabla de conceptos con cantidades/precios"}, desglose de impuestos, totales, y sección completa de timbre fiscal digital.`;
 
   // Resolve AI models (platform keys, no user key needed)
   const docModelId = await getAiModel("docGenerate");
