@@ -1159,8 +1159,8 @@ export function createMcpServer() {
   );
 
   server.tool(
-    "get_document_screenshot",
-    "Take a screenshot of a document page. Returns a PNG image. Requires Chrome installed locally — designed for Claude Code MCP usage. Use this to verify your edits visually.",
+    "get_page_screenshot",
+    "Take a screenshot of a single document page. Returns a PNG image of one page (letter-sized). Requires Chrome installed locally — designed for Claude Code MCP usage.",
     {
       documentId: z.string().describe("The document ID"),
       pageIndex: z.number().optional().describe("Page index (0-based, default 0)"),
@@ -1336,7 +1336,7 @@ export function createMcpServer() {
 
   server.tool(
     "upload_website_file",
-    "Upload a file directly to a website. Returns a putUrl for uploading the file content. The file will be stored with the website's prefix (sites/{websiteId}/fileName).",
+    "Upload a file to a website via presigned URL. Returns a putUrl — you must PUT the content there, then call update_file(status: 'DONE'). Best for large/binary files (>1MB). For text files <1MB (HTML/CSS/JS), prefer deploy_website_file which does everything in one call.",
     {
       websiteId: z.string().describe("The website ID"),
       fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'images/logo.png')"),
@@ -1348,6 +1348,26 @@ export function createMcpServer() {
       const { uploadWebsiteFile } = await import("../core/operations");
       const result = await uploadWebsiteFile(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, putUrl: result.putUrl }, null, 2) }] };
+    })
+  );
+
+  // --- Deploy Website File (single-call) ---
+
+  server.tool(
+    "deploy_website_file",
+    "Deploy a file to a website in a single call — no presigned URL or status update needed. Pass the file content directly (text or base64). Max 1MB. The file is immediately live at https://{slug}.easybits.cloud/{fileName}.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'script.js')"),
+      content: z.string().describe("File content as text (or base64 if encoding is 'base64')"),
+      contentType: z.string().optional().default("text/html").describe("MIME type (default: 'text/html')"),
+      encoding: z.enum(["text", "base64"]).optional().default("text").describe("Content encoding: 'text' (default) or 'base64' for binary"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deployWebsiteFile } = await import("../core/operations");
+      const result = await deployWebsiteFile(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, url: result.file.url }, null, 2) }] };
     })
   );
 
