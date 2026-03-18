@@ -1020,11 +1020,12 @@ export default function DocumentEditor() {
   }
 
   function handleReorder(fromIndex: number, toIndex: number) {
-    const sorted = [...sections].sort((a, b) => a.order - b.order);
-    const [moved] = sorted.splice(fromIndex, 1);
-    sorted.splice(toIndex, 0, moved);
-    const reordered = sorted.map((s, i) => ({ ...s, order: i }));
-    handleSectionsChange(reordered);
+    const grapesCss = sections.filter(s => s.id === "__grapes_css__");
+    const pages = sections.filter(s => s.id !== "__grapes_css__").sort((a, b) => a.order - b.order);
+    const [moved] = pages.splice(fromIndex, 1);
+    pages.splice(toIndex, 0, moved);
+    const reordered = pages.map((s, i) => ({ ...s, order: i }));
+    handleSectionsChange([...grapesCss, ...reordered]);
   }
 
 
@@ -1039,16 +1040,17 @@ export default function DocumentEditor() {
       setShowAddPrompt(false);
       setAddPrompt("");
       setSections((prev) => {
-        const sorted = [...prev].sort((a, b) => a.order - b.order);
-        const pos = targetIdx !== null ? targetIdx : sorted.length;
-        sorted.splice(pos, 0, {
+        const grapesCss = prev.filter(s => s.id === "__grapes_css__");
+        const pages = prev.filter(s => s.id !== "__grapes_css__").sort((a, b) => a.order - b.order);
+        const pos = targetIdx !== null ? targetIdx : pages.length;
+        pages.splice(pos, 0, {
           id: newId,
           order: pos,
           html: '<section class="w-full min-h-[11in] bg-surface p-12"></section>',
           label: `Página ${pos + 1}`,
         });
-        const reordered = sorted.map((s, i) => ({ ...s, order: i }));
-        return reordered;
+        const reordered = pages.map((s, i) => ({ ...s, order: i }));
+        return [...grapesCss, ...reordered];
       });
       // Sync and save
       requestAnimationFrame(() => {
@@ -1105,15 +1107,16 @@ export default function DocumentEditor() {
       const targetIdx = insertAtIndex;
       setInsertAtIndex(null);
       setSections((prev) => {
-        const sorted = [...prev].sort((a, b) => a.order - b.order);
-        const pos = targetIdx !== null ? targetIdx : sorted.length;
-        sorted.splice(pos, 0, {
+        const grapesCss = prev.filter(s => s.id === "__grapes_css__");
+        const pages = prev.filter(s => s.id !== "__grapes_css__").sort((a, b) => a.order - b.order);
+        const pos = targetIdx !== null ? targetIdx : pages.length;
+        pages.splice(pos, 0, {
           id: newId,
           order: pos,
           html: "<section></section>",
           label: `Página ${pos + 1}`,
         });
-        return sorted.map((s, i) => ({ ...s, order: i }));
+        return [...grapesCss, ...pages.map((s, i) => ({ ...s, order: i }))];
       });
 
       const reader = res.body!.getReader();
@@ -1138,10 +1141,11 @@ export default function DocumentEditor() {
                   // Multiple pages returned — replace placeholder with all pages
                   let lastNewId = "";
                   setSections((prev) => {
-                    const without = prev.filter((s) => s.id !== newId);
-                    const sorted = [...without].sort((a, b) => a.order - b.order);
+                    const grapesCss = prev.filter(s => s.id === "__grapes_css__");
+                    const without = prev.filter((s) => s.id !== newId && s.id !== "__grapes_css__");
+                    const pages = [...without].sort((a, b) => a.order - b.order);
                     // Find where the placeholder was to insert at that position
-                    const placeholderOrder = prev.find((s) => s.id === newId)?.order ?? sorted.length;
+                    const placeholderOrder = prev.find((s) => s.id === newId)?.order ?? pages.length;
                     const newSections = d.sections.map((html: string, i: number) => ({
                       id: Math.random().toString(36).slice(2, 10),
                       order: placeholderOrder + i,
@@ -1149,10 +1153,10 @@ export default function DocumentEditor() {
                       label: `Página ${placeholderOrder + i + 1}`,
                     }));
                     lastNewId = newSections[newSections.length - 1].id;
-                    sorted.splice(placeholderOrder, 0, ...newSections);
-                    const updated = sorted.map((s, i) => ({ ...s, order: i }));
-                    saveSections(updated);
-                    return updated;
+                    pages.splice(placeholderOrder, 0, ...newSections);
+                    const updated = pages.map((s, i) => ({ ...s, order: i }));
+                    saveSections([...grapesCss, ...updated]);
+                    return [...grapesCss, ...updated];
                   });
                   playTone();
                   setSelectedSectionIds([lastNewId]);
@@ -1194,15 +1198,16 @@ export default function DocumentEditor() {
   async function handleDropImage(afterIndex: number, file: File) {
     const dataUrl = await resizeImageToDataUrl(file, 1024);
     const newId = Math.random().toString(36).slice(2, 10);
-    const sorted = [...sections].sort((a, b) => a.order - b.order);
-    sorted.splice(afterIndex, 0, {
+    const grapesCss = sections.filter(s => s.id === "__grapes_css__");
+    const pages = sections.filter(s => s.id !== "__grapes_css__").sort((a, b) => a.order - b.order);
+    pages.splice(afterIndex, 0, {
       id: newId,
       order: afterIndex,
       html: `<section style="width:8.5in;min-height:11in;display:flex;align-items:center;justify-content:center;background:#fff"><img src="${dataUrl}" style="max-width:100%;max-height:100%;object-fit:contain"></section>`,
       label: "Imagen",
     });
-    const updated = sorted.map((s, i) => ({ ...s, order: i }));
-    handleSectionsChange(updated);
+    const updated = pages.map((s, i) => ({ ...s, order: i }));
+    handleSectionsChange([...grapesCss, ...updated]);
   }
 
   function handleOpenCode(sectionId: string) {

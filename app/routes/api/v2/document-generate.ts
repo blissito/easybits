@@ -15,7 +15,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction, skipCover, referenceImage, referencePages } = body;
+  const { landingId, prompt, sourceContent, logoUrl, extraInstructions, pageCount, direction, skipCover, referenceImage, referencePages, pageFormat, brandKitId } = body;
 
   if (!landingId) {
     return Response.json({ error: "landingId required" }, { status: 400 });
@@ -42,8 +42,18 @@ export async function action({ request }: Route.ActionArgs) {
   const startTime = Date.now();
   let usageTokens = { inputTokens: 0, outputTokens: 0 };
 
+  // Resolve brand kit → direction + logo
+  let resolvedDirection = direction || undefined;
+  let resolvedLogo = logoUrl;
+  if (brandKitId && !resolvedDirection) {
+    const { getBrandKit, brandKitToDirection } = await import("~/.server/core/brandKitOperations");
+    const kit = await getBrandKit(brandKitId, ctx.user.id);
+    resolvedDirection = brandKitToDirection(kit);
+    if (!resolvedLogo && kit.logoUrl) resolvedLogo = kit.logoUrl;
+  }
+
   // Upload logo to public storage so AI gets a short URL instead of huge data URL
-  const resolvedLogoUrl = logoUrl ? await uploadLogoToStorage(logoUrl, ctx.user.id) : undefined;
+  const resolvedLogoUrl = resolvedLogo ? await uploadLogoToStorage(resolvedLogo, ctx.user.id) : undefined;
 
   // Build the prompt combining source content + user instructions
   const parts = [
@@ -77,12 +87,13 @@ export async function action({ request }: Route.ActionArgs) {
           referenceImage: referenceImage || undefined,
           referencePages: Array.isArray(referencePages) ? referencePages : undefined,
           extraInstructions: extraInstructions || undefined,
-          direction: direction || undefined,
+          direction: resolvedDirection,
           pexelsApiKey: process.env.PEXELS_API_KEY,
           model: docModel,
           outlineModel,
           pageCount: pageCount ? Number(pageCount) : undefined,
           skipCover: !!skipCover,
+          pageFormat: pageFormat || "letter",
           onOutline(outline) {
             send("outline", { pages: outline.pages.map((p) => ({ pageNumber: p.pageNumber, label: p.label, type: p.type })) });
           },

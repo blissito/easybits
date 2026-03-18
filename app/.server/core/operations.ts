@@ -978,6 +978,66 @@ export async function listWebsiteFiles(
   return { items, nextCursor };
 }
 
+// --- Upload Website File ---
+
+export async function uploadWebsiteFile(
+  ctx: AuthContext,
+  opts: { websiteId: string; fileName: string; contentType: string; size: number; access?: "public" | "private" }
+) {
+  requireScope(ctx, "WRITE");
+
+  const website = await db.website.findUnique({ where: { id: opts.websiteId } });
+  if (!website || website.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (opts.size <= 0 || opts.size > 5_368_709_120) {
+    throw new Response(JSON.stringify({ error: "Invalid file size" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const storageKey = `${ctx.user.id}/${nanoid(6)}`;
+  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const putUrl = await client.getPutUrl(storageKey);
+  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+
+  const name = `${website.prefix}${opts.fileName}`;
+
+  // Upsert: if file with same name exists, update it
+  const existing = await db.file.findFirst({
+    where: { ownerId: ctx.user.id, name, status: { not: "DELETED" } },
+  });
+
+  let file;
+  if (existing) {
+    file = await db.file.update({
+      where: { id: existing.id },
+      data: { storageKey, size: opts.size, contentType: opts.contentType, status: "PENDING", url: publicUrl },
+    });
+  } else {
+    file = await db.file.create({
+      data: {
+        name,
+        storageKey,
+        slug: storageKey,
+        size: opts.size,
+        contentType: opts.contentType,
+        ownerId: ctx.user.id,
+        access: opts.access || "public",
+        url: publicUrl,
+        status: "PENDING",
+      },
+    });
+  }
+
+  return { file, putUrl };
+}
+
 // --- List Deleted Files ---
 
 export async function listDeletedFiles(

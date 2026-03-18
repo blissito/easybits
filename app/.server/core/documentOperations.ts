@@ -74,6 +74,7 @@ export async function createDocument(
     sections?: Array<{ id: string; order: number; html?: string; type?: string; name?: string }>;
     theme?: string;
     customColors?: Record<string, string>;
+    brandKitId?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -82,6 +83,17 @@ export async function createDocument(
 
   const metadata: Record<string, unknown> = {};
   if (opts.theme) metadata.theme = opts.theme;
+
+  // Brand kit → customColors + metadata.brandKitId
+  if (opts.brandKitId) {
+    const { getBrandKit } = await import("./brandKitOperations");
+    const kit = await getBrandKit(opts.brandKitId, ctx.user.id);
+    metadata.brandKitId = kit.id;
+    if (!opts.customColors) {
+      const c = kit.colors as any;
+      metadata.customColors = { primary: c.primary, secondary: c.secondary, accent: c.accent, surface: c.surface };
+    }
+  }
   if (opts.customColors) metadata.customColors = opts.customColors;
 
   return db.landing.create({
@@ -472,6 +484,8 @@ export async function generateDocumentAI(
     logoUrl?: string;
     referenceImage?: string;
     skipCover?: boolean;
+    pageFormat?: "letter" | "web";
+    brandKitId?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -483,9 +497,19 @@ export async function generateDocumentAI(
   const genLimit = await checkAiGenerationLimit(ctx.user.id);
   if (!genLimit.allowed) throwJson(`Generation limit reached (${genLimit.limit})`, 429);
 
+  // Resolve brand kit → direction + logo
+  let direction = opts.direction;
+  let logoUrl = opts.logoUrl;
+  if (opts.brandKitId && !direction) {
+    const { getBrandKit, brandKitToDirection } = await import("./brandKitOperations");
+    const kit = await getBrandKit(opts.brandKitId, ctx.user.id);
+    direction = brandKitToDirection(kit);
+    if (!logoUrl && kit.logoUrl) logoUrl = kit.logoUrl;
+  }
+
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
-  const resolvedLogoUrl = opts.logoUrl ? await uploadLogoToStorage(opts.logoUrl, ctx.user.id) : undefined;
+  const resolvedLogoUrl = logoUrl ? await uploadLogoToStorage(logoUrl, ctx.user.id) : undefined;
 
   const docModelId = await getAiModel("docGenerate");
   const docModel = resolveModelLocal(docModelId, openaiKey || undefined, userKey || undefined);
@@ -501,12 +525,13 @@ export async function generateDocumentAI(
     logoUrl: resolvedLogoUrl,
     referenceImage: opts.referenceImage,
     extraInstructions: opts.extraInstructions,
-    direction: opts.direction,
+    direction,
     pexelsApiKey: process.env.PEXELS_API_KEY,
     model: docModel,
     outlineModel,
     pageCount: opts.pageCount,
     skipCover: !!opts.skipCover,
+    pageFormat: opts.pageFormat,
     onOutline() {},
     onPageChunk() {},
     async onPageComplete(_pageIndex, section) {
@@ -546,6 +571,76 @@ export async function generateDocumentAI(
   });
 
   return { sections: allSections, total: allSections.length };
+}
+
+// --- Template System (data-slot) ---
+
+export async function getTemplateSlots(ctx: AuthContext, id: string) {
+  requireScope(ctx, "READ");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const { JSDOM } = await import("jsdom");
+  const slots: Array<{ slot: string; currentValue: string; pageId: string; pageIndex: number }> = [];
+
+  for (let i = 0; i < sections.length; i++) {
+    const s = sections[i];
+    if (!s.html) continue;
+    const dom = new JSDOM(s.html);
+    const els = dom.window.document.querySelectorAll("[data-slot]");
+    for (const el of els) {
+      slots.push({
+        slot: el.getAttribute("data-slot")!,
+        currentValue: el.textContent || "",
+        pageId: s.id,
+        pageIndex: i,
+      });
+    }
+  }
+
+  return { documentId: id, slots };
+}
+
+export async function fillTemplate(
+  ctx: AuthContext,
+  id: string,
+  data: Record<string, string>
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const { JSDOM } = await import("jsdom");
+  let filledSlots = 0;
+
+  for (const s of sections) {
+    if (!s.html) continue;
+    const dom = new JSDOM(s.html);
+    const els = dom.window.document.querySelectorAll("[data-slot]");
+    let changed = false;
+    for (const el of els) {
+      const key = el.getAttribute("data-slot")!;
+      if (key in data) {
+        el.textContent = data[key];
+        filledSlots++;
+        changed = true;
+      }
+    }
+    if (changed) {
+      s.html = dom.window.document.body.innerHTML;
+    }
+  }
+
+  await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  docEvents.emit("doc:changed", { id, sections, updatedAt: new Date() });
+
+  return { filledSlots, totalDataKeys: Object.keys(data).length };
 }
 
 const VARIANT_SYSTEM_PROMPT = `You are an elite document designer. You create stunning visual variants of document pages for letter-sized (8.5" × 11") format.
@@ -612,7 +707,7 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 async function _refineInternal(
   ctx: AuthContext,
   id: string,
-  opts: { sectionId: string; instruction?: string; direction?: DirectionOpts },
+  opts: { sectionId: string; instruction?: string; direction?: DirectionOpts; pageFormat?: "letter" | "web" },
   isVariant: boolean
 ) {
   requireScope(ctx, "WRITE");
@@ -647,7 +742,15 @@ async function _refineInternal(
 - Colors: primary=${colors.primary || "N/A"}, accent=${colors.accent || "N/A"}, surface=${colors.surface || "N/A"}`;
   }
 
-  const systemPrompt = isVariant ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+  const isWeb = opts.pageFormat === "web";
+  let systemPrompt = isVariant ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+  if (isWeb) {
+    systemPrompt = systemPrompt
+      .replace(/letter-sized \(8\.5" × 11"\)/g, "web-optimized (1280px wide, flexible height)")
+      .replace(/w-\[8\.5in\] h-\[11in\]/g, "w-[1280px] min-h-[800px]")
+      .replace(/EXACTLY 11in tall — content MUST fit, never exceed/g, "flexible height — content determines the height, use min-h-[800px]")
+      .replace(/7" × 9\.5" effective area with 0\.75" margins/g, "comfortable padding for web reading");
+  }
   const userMessage = isVariant
     ? `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${docContext}${directionContext}\n\nOutput ONLY the new <section> HTML.`
     : `Current HTML:\n${pageHtml}\n\nInstruction: ${opts.instruction}${docContext}${directionContext}\n\nOutput ONLY the refined <section> HTML.`;
@@ -732,7 +835,7 @@ async function _refineInternal(
 export async function refineDocumentSection(
   ctx: AuthContext,
   id: string,
-  opts: { sectionId: string; instruction: string; direction?: DirectionOpts }
+  opts: { sectionId: string; instruction: string; direction?: DirectionOpts; pageFormat?: "letter" | "web" }
 ) {
   return _refineInternal(ctx, id, opts, false);
 }
@@ -740,7 +843,43 @@ export async function refineDocumentSection(
 export async function regenerateDocumentPage(
   ctx: AuthContext,
   id: string,
-  opts: { sectionId: string; direction?: DirectionOpts }
+  opts: { sectionId: string; direction?: DirectionOpts; pageFormat?: "letter" | "web" }
 ) {
   return _refineInternal(ctx, id, { ...opts, instruction: "VARIANT_MODE" }, true);
+}
+
+export async function createDocumentFromCFDI(
+  ctx: AuthContext,
+  opts: { xml: string; theme?: string; customColors?: Record<string, string> }
+) {
+  requireScope(ctx, "WRITE");
+  const { parseCFDI } = await import("~/lib/cfdi/parseCFDI");
+  const { buildCFDIDocument } = await import("~/lib/cfdi/templates");
+
+  const data = parseCFDI(opts.xml);
+  const html = buildCFDIDocument(data);
+
+  const tipoNames: Record<string, string> = { I: "Factura", P: "Recibo de Pago", E: "Nota de Crédito", T: "Carta Porte", N: "Nómina" };
+  const name = `${tipoNames[data.tipo] || "CFDI"} — ${data.emisor.nombre || data.emisor.rfc}${data.serie || data.folio ? ` (${[data.serie, data.folio].filter(Boolean).join(" ")})` : ""}`;
+
+  const sectionId = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+  const sections = [{ id: sectionId, order: 0, html, type: "content", name: tipoNames[data.tipo] || "CFDI" }];
+
+  const metadata: Record<string, unknown> = { cfdi: { uuid: data.timbre?.uuid, tipo: data.tipo, emisorRfc: data.emisor.rfc, receptorRfc: data.receptor.rfc, total: data.total, moneda: data.moneda, fecha: data.fecha } };
+  if (opts.theme) metadata.theme = opts.theme;
+  if (opts.customColors) metadata.customColors = opts.customColors;
+
+  const doc = await db.landing.create({
+    data: {
+      name,
+      prompt: `CFDI ${data.tipoDesc} — ${data.emisor.nombre} → ${data.receptor.nombre}`,
+      sections: sections as any,
+      version: 4,
+      theme: opts.theme || "default",
+      metadata,
+      ownerId: ctx.user.id,
+    },
+  });
+
+  return { ...doc, cfdiData: data };
 }

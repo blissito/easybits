@@ -9,8 +9,13 @@ import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-gene
 import { generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
 import { sanitizeSemanticColors } from "~/.server/sanitizeColors";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
+import type { PageFormat } from "@easybits.cloud/html-tailwind-generator/generateDocument";
+import { PAGE_FORMAT_CONFIG } from "@easybits.cloud/html-tailwind-generator/generateDocument";
 
-const VARIANT_SYSTEM_PROMPT = `You are an elite document designer. You create stunning visual variants of document pages for letter-sized (8.5" × 11") format.
+function getVariantPrompt(fmt: PageFormat = "letter") {
+  const cfg = PAGE_FORMAT_CONFIG[fmt];
+  const isWeb = fmt === "web";
+  return `You are an elite document designer. You create stunning visual variants of document pages for ${cfg.description}.
 
 TASK: Given an existing page, create a COMPLETELY DIFFERENT visual design while keeping the SAME text content and the SAME color theme.
 
@@ -19,16 +24,18 @@ RULES:
 - Keep ALL the same text/data content — change ONLY the visual presentation
 - Redesign layout structure, typography scale, decorative elements, spacing, alignment — but KEEP the same color theme
 - Use bold, confident design choices — large type contrasts, asymmetric layouts, dramatic whitespace
-- Page structure: <section class="w-[8.5in] h-[11in] flex flex-col relative overflow-hidden">
+- Page structure: <section class="${cfg.container} flex flex-col relative overflow-hidden">
 - Content area uses flex-1 overflow-hidden, footer/header bands use shrink-0
-- The section is EXACTLY 11in tall — content MUST fit, never exceed
-- Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
+- ${isWeb ? "Each section has flexible height — content determines the height" : "The section is EXACTLY 11in tall — content MUST fit, never exceed"}
+- Keep content within page boundaries${isWeb ? "" : ' (7" × 9.5" effective area with 0.75" margins)'}
 - Decorative elements with absolute positioning MUST stay fully inside the page — no negative coordinates, no elements beyond the right edge
 - Large decorative text (text-[200px] etc.) MUST have opacity-5 AND overflow-hidden on container
 - For charts/data viz, use pure CSS bars/progress — NEVER Chart.js or canvas
 - For complex charts: <div data-svg-chart="description with data" class="w-full"></div>
 - For images: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/>
 - NEVER use emojis — use SVG icons or geometric shapes instead
+- NEVER draw SVG paths manually — use data-icon-query for icons
+- For icons: <span data-icon-query="icon-name" class="inline-block w-5 h-5 text-primary"></span> — uses Lucide names (star, check, arrow-right, zap, shield, users, mail, etc.)
 - Ensure strong contrast: dark text on light, light text on dark
 
 COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colors):
@@ -59,8 +66,12 @@ IMAGE PRESERVATION — CRITICAL:
 - Only use data-image-query="..." for NEW images that don't exist yet
 - If the user asks to change a specific image, update ONLY that image's data-image-query (remove data-enriched and the old src so the system re-resolves it)
 - All other images on the page MUST remain exactly as they are`;
+}
 
-const REFINE_SYSTEM_PROMPT = `You are a professional document designer. You refine HTML content for letter-sized (8.5" × 11") document pages.
+function getRefinePrompt(fmt: PageFormat = "letter") {
+  const cfg = PAGE_FORMAT_CONFIG[fmt];
+  const isWeb = fmt === "web";
+  return `You are a professional document designer. You refine HTML content for ${cfg.description}.
 
 CRITICAL PRIORITY RULES — SURGICAL EDITS:
 - Make the SMALLEST possible change to fulfill the instruction
@@ -72,10 +83,10 @@ CRITICAL PRIORITY RULES — SURGICAL EDITS:
 
 GENERAL RULES:
 - Output ONLY the refined HTML <section>...</section> — no markdown, no explanation
-- Page structure: <section class="w-[8.5in] h-[11in] flex flex-col relative overflow-hidden">
+- Page structure: <section class="${cfg.container} flex flex-col relative overflow-hidden">
 - Content area uses flex-1 overflow-hidden, footer/header bands use shrink-0
-- The section is EXACTLY 11in tall — content MUST fit, never exceed
-- Keep content within page boundaries (7" × 9.5" effective area with 0.75" margins)
+- ${isWeb ? "Each section has flexible height — content determines the height" : "The section is EXACTLY 11in tall — content MUST fit, never exceed"}
+- Keep content within page boundaries${isWeb ? "" : ' (7" × 9.5" effective area with 0.75" margins)'}
 - Use Tailwind CSS classes for styling
 - Maintain professional, colorful design with geometric elements, gradients, SVG icons
 - For charts and data visualization, use pure CSS bars/progress elements — NEVER use Chart.js or canvas
@@ -90,6 +101,8 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 - For complex charts/diagrams, use: <div data-svg-chart="description with data" class="w-full"></div> — the system generates SVGs automatically
 - For images, use: <img data-image-query="english search query" alt="description" class="w-full h-auto object-cover rounded-xl"/> — the system resolves real images
 - NEVER use emojis anywhere — use SVG icons or geometric shapes instead
+- NEVER draw SVG paths manually — use data-icon-query for icons
+- For icons: <span data-icon-query="icon-name" class="inline-block w-5 h-5 text-primary"></span> — uses Lucide names (star, check, arrow-right, zap, shield, users, mail, etc.)
 - Ensure strong contrast: dark text on light backgrounds, light text on dark backgrounds
 
 IMAGE PRESERVATION — CRITICAL:
@@ -98,8 +111,10 @@ IMAGE PRESERVATION — CRITICAL:
 - Only use data-image-query="..." for NEW images that don't exist yet
 - If the user asks to change a specific image, update ONLY that image's data-image-query (remove data-enriched and the old src so the system re-resolves it)
 - All other images on the page MUST remain exactly as they are`;
+}
 
-const ELEMENT_REFINE_SYSTEM_PROMPT = `You edit a single HTML element. Output ONLY the edited element — same wrapping tag.
+function getElementRefinePrompt(_fmt: PageFormat = "letter") {
+  return `You edit a single HTML element. Output ONLY the edited element — same wrapping tag.
 Rules:
 - Make the smallest change to fulfill the instruction
 - Keep all existing classes, styles, and child structure unless the instruction says otherwise
@@ -109,7 +124,9 @@ Rules:
 - For images: <img data-image-query="english search query" alt="description" class="..."/>
 - If an image has data-enriched="true" and a real src URL (https://...), keep it exactly as-is
 - Only use data-image-query for NEW images — never replace an enriched image unless explicitly asked
-- NEVER use emojis — use SVG icons or geometric shapes instead`;
+- NEVER use emojis — use SVG icons or geometric shapes instead
+- NEVER draw SVG paths manually — use data-icon-query for icons: <span data-icon-query="icon-name" class="inline-block w-5 h-5 text-primary"></span>`;
+}
 
 /** Extract a complete element from HTML starting at startIdx for the given tagName */
 function extractElement(html: string, startIdx: number, tagName: string): string {
@@ -145,7 +162,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { landingId, sectionId, instruction, currentHtml, referenceImage, direction, openTag, elementText } =
+  const { landingId, sectionId, instruction, currentHtml, referenceImage, direction, openTag, elementText, pageFormat } =
     body;
 
   if (!landingId || !sectionId || !instruction) {
@@ -274,15 +291,18 @@ TYPOGRAPHY — CRITICAL: Maintain these fonts on ALL elements:
     }
   }
 
-  const systemPrompt = elementRefine ? ELEMENT_REFINE_SYSTEM_PROMPT : isVariantMode ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+  const fmt = (pageFormat as PageFormat) || "letter";
+  const systemPrompt = elementRefine ? getElementRefinePrompt(fmt) : isVariantMode ? getVariantPrompt(fmt) : getRefinePrompt(fmt);
 
+  const fmtCfg = PAGE_FORMAT_CONFIG[fmt];
+  const isWebFmt = fmt === "web";
   const multiPageHint = isNewSection
     ? `\n\nYou may output MULTIPLE <section> tags if the user requests multiple pages. Each <section> becomes a separate page.
-CRITICAL: Each section MUST use this exact structure: <section class="w-[8.5in] h-[11in] flex flex-col relative overflow-hidden ...">
-The section MUST be exactly 8.5in wide and 11in tall (letter size). Content must fit within the page. Use overflow-hidden.
-Do NOT use w-full, min-h-screen, or responsive classes — this is a fixed-size print document.
+CRITICAL: Each section MUST use this exact structure: <section class="${fmtCfg.container} flex flex-col relative overflow-hidden ...">
+${isWebFmt ? "Each section has flexible height — content determines the height." : "The section MUST be exactly 8.5in wide and 11in tall (letter size). Content must fit within the page. Use overflow-hidden."}
+${isWebFmt ? "" : "Do NOT use w-full, min-h-screen, or responsive classes — this is a fixed-size print document."}
 ALWAYS output one <section> per page. NEVER put multiple pages of content inside a single <section>.
-Each <section> = exactly one letter-sized page. If content needs 3 pages, output 3 separate <section> tags.`
+Each <section> = exactly one page. If content needs 3 pages, output 3 separate <section> tags.`
     : "";
   const outputHint = isNewSection
     ? "Output the <section> HTML (multiple <section> tags for multiple pages)."
@@ -448,6 +468,14 @@ Each <section> = exactly one letter-sized page. If content needs 3 pages, output
               finalHtml = finalHtml.replace(r.value.fullMatch, r.value.svg);
             }
           }
+          send("chunk", { html: finalHtml });
+        }
+
+        // Enrich icons (data-icon-query → Iconify SVGs)
+        const { enrichSectionIcons } = await import("@easybits.cloud/html-tailwind-generator/images");
+        const iconEnrichedHtml = await enrichSectionIcons(finalHtml);
+        if (iconEnrichedHtml !== finalHtml) {
+          finalHtml = iconEnrichedHtml;
           send("chunk", { html: finalHtml });
         }
 

@@ -5,6 +5,7 @@ import { findImageSlots } from "./images/enrichImages";
 import { searchImage } from "./images/pexels";
 import { generateImage } from "./images/dalleImages";
 import { generateSvg } from "./images/svgGenerator";
+import { enrichSectionIcons } from "./images/enrichIcons";
 import type { Section3 } from "./types";
 import { sanitizeSemanticColors } from "./sanitizeColors";
 
@@ -234,6 +235,18 @@ export async function enrichSectionSvgCharts(
   }
 }
 
+/** Enrich a section's icon placeholders (data-icon-query → Iconify SVGs). Mutates section.html in place. */
+export async function enrichSectionIconSlots(
+  section: Section3,
+  opts?: { onImageUpdate?: (sectionId: string, html: string) => void }
+): Promise<void> {
+  const before = section.html;
+  section.html = await enrichSectionIcons(section.html);
+  if (section.html !== before) {
+    opts?.onImageUpdate?.(section.id, section.html);
+  }
+}
+
 export interface StreamGenerateOptions {
   /** Anthropic API key */
   anthropicApiKey?: string;
@@ -393,6 +406,16 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
     onSection?.(section);
     enrichSection(section);
     enrichSvgCharts(section);
+    // Enrich icons (data-icon-query → real SVGs from Iconify)
+    imagePromises.push(
+      (async () => {
+        const before = section.html;
+        section.html = await enrichSectionIcons(section.html);
+        if (section.html !== before) {
+          onImageUpdate?.(section.id, section.html);
+        }
+      })()
+    );
   }
 
   try {

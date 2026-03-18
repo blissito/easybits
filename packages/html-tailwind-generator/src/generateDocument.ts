@@ -11,17 +11,41 @@ import {
   addSvgLoadingPlaceholders,
   enrichSectionImages,
   enrichSectionSvgCharts,
+  enrichSectionIconSlots,
 } from "./streamCore";
 import { sanitizeSemanticColors } from "./sanitizeColors";
 import type { Section3 } from "./types";
 import type { DesignDirection } from "./directions";
 
-export const DOCUMENT_SYSTEM_PROMPT = `You are a professional document designer who creates stunning letter-sized (8.5" × 11") document pages using HTML + Tailwind CSS.
+export type PageFormat = "letter" | "web";
+
+export const PAGE_FORMAT_CONFIG = {
+  letter: {
+    container: "w-[8.5in] h-[11in]",
+    bodyText: "text-sm or text-base (10-11px)",
+    maxColumns: 2,
+    heightMode: "fixed at 11in",
+    description: 'letter-sized (8.5" × 11") document pages',
+  },
+  web: {
+    container: "w-[1280px] min-h-[800px]",
+    bodyText: "text-base or text-lg (16-18px)",
+    maxColumns: 1,
+    heightMode: "flexible, no max height",
+    description: "web-optimized document sections",
+  },
+} as const;
+
+export function getDocumentSystemPrompt(format: PageFormat = "letter"): string {
+  const cfg = PAGE_FORMAT_CONFIG[format];
+  const isWeb = format === "web";
+
+  return `You are a professional document designer who creates stunning ${cfg.description} using HTML + Tailwind CSS.
 
 RULES:
-- Each page is a <section> element sized for letter paper
-- Page structure: <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col">
-- The section is EXACTLY 11in tall — content MUST fit, never exceed. Use flex flex-col so children can use flex-1.
+- Each page is a <section> element${isWeb ? " optimized for web viewing" : " sized for letter paper"}
+- Page structure: <section class="${cfg.container} relative overflow-hidden flex flex-col">
+- ${isWeb ? "Each section has flexible height — content determines the height. Use min-h-[800px] but allow natural growth." : "The section is EXACTLY 11in tall — content MUST fit, never exceed. Use flex flex-col so children can use flex-1."}
 - The section itself has NO padding — backgrounds, gradients, and decorative elements go edge-to-edge
 - Use slot layout: shrink-0 for header/footer bands, flex-1 overflow-hidden for main content area
 - For text content, use an inner wrapper: <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">...content...</div>
@@ -32,28 +56,28 @@ RULES:
 - NO JavaScript, only HTML+Tailwind
 - All text content in Spanish unless the prompt specifies otherwise
 - Use real content from the source material, not Lorem ipsum
-- NOT responsive — fixed letter size, no breakpoints needed
+- NOT responsive — fixed ${isWeb ? "width" : "letter size"}, no breakpoints needed
 - Sections can have ANY background — full-bleed color, gradients, or white. Not limited to white paper.
 
 STRICT PROHIBITIONS:
 1. **NO EMOJI** — Never use emoji characters (🚀❌✅📊 etc.). Instead use inline SVG icons or colored divs. For bullet decorators use small colored circles (<span class="w-2 h-2 rounded-full bg-primary inline-block"></span>) or simple SVG.
 2. **NO Chart.js / NO JavaScript** — Never reference Chart.js, canvas, or any JS library. For data visualization use pure CSS: progress bars (div with percentage width + bg-primary), horizontal bars, styled tables with colored cells. Never use <canvas> or <script>.
-3. **NO buttons or CTAs** — This is a print document, not a web page. No "Contactar", "Ver más", "Comprar" buttons. Use text with contact info instead.
+3. **NO buttons or CTAs** — This is a ${isWeb ? "document" : "print document"}, not a ${isWeb ? "landing page" : "web page"}. No "Contactar", "Ver más", "Comprar" buttons. Use text with contact info instead.
 4. **CONTRAST IS MANDATORY** — Dark/colored backgrounds (bg-primary, bg-primary-dark, bg-secondary, dark gradients) MUST use text-white or text-on-primary. Light backgrounds (white, bg-surface, bg-surface-alt) MUST use text-gray-900 or text-on-surface. NEVER use dark text on dark backgrounds or light text on light backgrounds.
 5. **Max 2 font weights per page** — Pick 2 (e.g. font-semibold + font-normal, or font-bold + font-light). Don't mix 4-5 weights.
 6. **Generous whitespace** — Don't fill every centimeter. Leave breathing room. Use py-8, py-12, gap-6, gap-8 liberally. Less content per page = more professional.
 
 LAYOUT OVERFLOW PREVENTION — CRITICAL:
-- Max 2 columns side by side — each with w-1/2. NEVER use 3+ columns.
+- Max ${cfg.maxColumns} column${cfg.maxColumns === 1 ? "" : "s"} side by side${cfg.maxColumns === 2 ? " — each with w-1/2" : ""}. NEVER use ${cfg.maxColumns + 1}+ columns.
 - Decorative sidebars: max w-16 (4rem). NEVER use w-[2.5in] or wider sidebars — they steal too much space.
 - Stats/metric grids: max 3 items per row (grid-cols-3). Use gap-4 or gap-6.
 - Tables: max 4 columns, use text-xs or text-sm for cell text, px-3 py-2 cell padding.
 - Images: always w-full or max-w-[50%] — never fixed pixel widths.
-- Text: never use text-6xl or larger except for cover page title. Body text: text-sm or text-base.
+- Text: never use text-6xl or larger except for cover page title. Body text: ${cfg.bodyText}.
 - NEVER use absolute positioning that could overflow — prefer flex/grid layouts.
 - Decorative shapes with absolute positioning MUST stay fully inside the page. Use overflow-hidden on parent AND keep coordinates positive (no negative right/left values).
 - Large decorative text (text-[200px], text-[10rem] etc.) MUST have opacity-5 or lower AND overflow-hidden on its container. These giant texts frequently overflow — be extra careful.
-- NEVER place elements beyond the right edge — all content and decorations must fit within 8.5in width.
+- NEVER place elements beyond the right edge — all content and decorations must fit within ${isWeb ? "1280px" : "8.5in"} width.
 
 DESIGN — ADAPT to the document type. Read the prompt carefully and match the visual style:
 
@@ -104,6 +128,14 @@ IMAGES — USE GENEROUSLY:
 - Each data-image-query should be a UNIQUE, specific search query in English (e.g. "modern office workspace aerial view", "team brainstorming whiteboard", "abstract blue technology network")
 - Use images to break up text-heavy pages and add visual interest
 
+ICONS — use data-icon-query for professional icons:
+- <span data-icon-query="icon-name" class="inline-block w-5 h-5 text-primary"></span>
+- Use common Lucide icon names in English: star, check, arrow-right, heart, zap, shield, users, mail, phone, calendar, clock, map-pin, briefcase, trending-up, award, target, layers, globe, etc.
+- Use in: feature lists, stat cards, CTAs, list items, contact info, section headers
+- Sizes: w-4 h-4 (small), w-5 h-5 (default), w-8 h-8 (large). Color inherits from text-* class.
+- NEVER draw SVG paths manually — ALWAYS use data-icon-query instead
+- The system auto-replaces data-icon-query with real SVG icons from Iconify
+
 CHARTS & DATA VISUALIZATION (SVG):
 - For charts, diagrams, and decorative data graphics, use:
   <div data-svg-chart="bar chart showing Q1 revenue: Jan $45K, Feb $52K, Mar $61K" class="w-full"></div>
@@ -117,7 +149,7 @@ TAILWIND v3 NOTES:
 - Borders: border + border-gray-200 for visible borders
 
 EXAMPLE — Cover page (simple, no wide sidebars):
-<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-white">
+<section class="${cfg.container} relative overflow-hidden flex flex-col bg-white">
   <div class="absolute left-0 top-0 w-2 h-full bg-primary"></div>
   <div class="flex-1 overflow-hidden flex flex-col justify-center px-[1in]">
     <div class="text-sm font-normal text-primary mb-4">Marzo 2026 · Versión 1.0</div>
@@ -128,9 +160,9 @@ EXAMPLE — Cover page (simple, no wide sidebars):
 </section>
 
 EXAMPLE — Marketing/brochure page (bold, visual):
-<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-primary">
+<section class="${cfg.container} relative overflow-hidden flex flex-col bg-primary">
   <div class="flex flex-1 overflow-hidden">
-    <div class="w-1/2 flex flex-col justify-center px-[0.75in]">
+    <div class="${isWeb ? "flex-1" : "w-1/2"} flex flex-col justify-center px-[0.75in]">
       <span class="text-sm font-normal text-on-primary opacity-70 uppercase tracking-widest mb-3">Solución Premium</span>
       <h2 class="text-4xl font-bold text-on-primary leading-tight mb-6">Transforma tu negocio digital</h2>
       <p class="text-base font-normal text-on-primary opacity-80 mb-8">Herramientas inteligentes que simplifican la gestión de tus activos digitales.</p>
@@ -139,14 +171,14 @@ EXAMPLE — Marketing/brochure page (bold, visual):
         <div><div class="text-3xl font-bold text-accent">2.4K</div><div class="text-xs text-on-primary opacity-70">Empresas</div></div>
       </div>
     </div>
-    <div class="w-1/2 relative">
+    <div class="${isWeb ? "flex-1" : "w-1/2"} relative">
       <img data-image-query="modern office team collaboration technology" alt="Team working" class="absolute inset-0 w-full h-full object-cover" />
     </div>
   </div>
 </section>
 
 EXAMPLE — Catalog/product grid page:
-<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-surface">
+<section class="${cfg.container} relative overflow-hidden flex flex-col bg-surface">
   <div class="shrink-0 h-1 bg-primary w-full"></div>
   <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">
     <div class="flex justify-between items-baseline mb-6">
@@ -172,7 +204,7 @@ EXAMPLE — Catalog/product grid page:
 </section>
 
 EXAMPLE — Content page with table + progress bars:
-<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-white">
+<section class="${cfg.container} relative overflow-hidden flex flex-col bg-white">
   <div class="shrink-0 h-1.5 bg-primary w-full"></div>
   <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in]">
     <h2 class="text-2xl font-bold text-gray-900 mb-1">Métricas de Rendimiento</h2>
@@ -182,7 +214,7 @@ EXAMPLE — Content page with table + progress bars:
       <tbody>
         <tr class="bg-surface-alt"><td class="px-4 py-3 text-gray-900">Ingresos</td><td class="px-4 py-3 text-gray-900">$1.2M</td><td class="px-4 py-3 text-gray-900">$1.5M</td></tr>
         <tr><td class="px-4 py-3 text-gray-900">Clientes nuevos</td><td class="px-4 py-3 text-gray-900">340</td><td class="px-4 py-3 text-gray-900">300</td></tr>
-        <tr class="bg-surface-alt"><td class="px-4 py-3 text-gray-900">Retención</td><td class="px-4 py-3 text-gray-900">92%</td><td class="px-4 py-3 text-gray-900">90%</td></tr>
+        <tr class="bg-surface-alt"><td class="px-4 py-3 text-gray-900">Retención</td><td class="px-4 py-3 text-gray-900">92%</td><td class="px-4 py-3 text-gray-900">${"90%"}</td></tr>
       </tbody>
     </table>
     <h3 class="text-lg font-bold text-gray-900 mb-4">Progreso por Área</h3>
@@ -193,16 +225,25 @@ EXAMPLE — Content page with table + progress bars:
     </div>
   </div>
 </section>`;
+}
 
-export const DOCUMENT_PROMPT_SUFFIX = `
+export const DOCUMENT_SYSTEM_PROMPT = getDocumentSystemPrompt("letter");
+
+export function getDocumentPromptSuffix(format: PageFormat = "letter"): string {
+  const cfg = PAGE_FORMAT_CONFIG[format];
+  const isWeb = format === "web";
+  return `
 
 OUTPUT FORMAT: NDJSON — one JSON object per line, NO wrapper array, NO markdown fences.
-Each line: {"label": "Page Title", "html": "<section class='w-[8.5in] h-[11in] relative overflow-hidden flex flex-col'>...</section>"}
+Each line: {"label": "Page Title", "html": "<section class='${cfg.container} relative overflow-hidden flex flex-col'>...</section>"}
 
 Generate 3-8 pages depending on content length. First page = cover/title page.
-Each page must fit within letter size (8.5" × 11"). Be conservative with spacing.
+${isWeb ? "Each section should have comfortable spacing for web reading." : "Each page must fit within letter size (8.5\" × 11\"). Be conservative with spacing."}
 Make each page visually distinct — different layouts, different accent placements.
 IMPORTANT: Adapt your design style to match the type of document — not everything is a report. Brochures should feel bold and visual, catalogs should showcase products, invitations should feel elegant, etc.`;
+}
+
+export const DOCUMENT_PROMPT_SUFFIX = getDocumentPromptSuffix("letter");
 
 export interface GenerateDocumentOptions {
   anthropicApiKey?: string;
@@ -327,6 +368,7 @@ export interface GenerateDocumentParallelOptions {
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   pageCount?: number;
   skipCover?: boolean;
+  pageFormat?: PageFormat;
   onOutline?: (outline: DocumentOutline) => void;
   onPageChunk?: (pageIndex: number, partialHtml: string) => void;
   onPageComplete?: (pageIndex: number, section: Section3) => void;
@@ -386,6 +428,7 @@ export async function generateDocumentParallel(options: GenerateDocumentParallel
     persistImage,
     pageCount,
     skipCover,
+    pageFormat = "letter",
     onOutline,
     onPageChunk,
     onPageComplete,
@@ -513,13 +556,13 @@ ${isCover ? logoInstruction : logoUrl ? `\nSmall logo header: <img src="${logoUr
 ${directionInstruction}
 
 OUTPUT: A single JSON object on ONE line, no markdown fences:
-{"label": "${page.label}", "html": "<section class='w-[8.5in] h-[11in] relative overflow-hidden flex flex-col'>...</section>"}`,
+{"label": "${page.label}", "html": "<section class='${PAGE_FORMAT_CONFIG[pageFormat].container} relative overflow-hidden flex flex-col'>...</section>"}`,
       });
 
       try {
         const result = streamText({
           model: pageModel,
-          system: DOCUMENT_SYSTEM_PROMPT + currentDateLine(),
+          system: getDocumentSystemPrompt(pageFormat || "letter") + currentDateLine(),
           messages: [{ role: "user", content: userContent }],
         });
 
@@ -599,6 +642,7 @@ OUTPUT: A single JSON object on ONE line, no markdown fences:
         anthropicApiKey,
         onImageUpdate,
       });
+      await enrichSectionIconSlots(section, { onImageUpdate });
     }
 
     // Final fallback for images without src

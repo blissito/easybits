@@ -16,7 +16,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json();
-  const { prompt, sourceContent, referenceImage, _action, direction: singleDir, index: singleIndex } = body;
+  const { prompt, sourceContent, referenceImage, _action, direction: singleDir, index: singleIndex, pageFormat } = body;
 
   if (!prompt) {
     return Response.json({ error: "prompt required" }, { status: 400 });

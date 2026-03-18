@@ -80,6 +80,33 @@ export async function deleteBrandKit(id: string, userId: string) {
   return db.brandKit.delete({ where: { id } });
 }
 
+export function brandKitToDirection(kit: {
+  colors: any;
+  fonts?: any;
+  mood?: string | null;
+}) {
+  const c = kit.colors as BrandKitColors;
+  const f = kit.fonts as BrandKitFonts | undefined;
+  return {
+    colors: {
+      primary: c.primary,
+      accent: c.accent,
+      surface: c.surface,
+      surfaceAlt: c.secondary,
+      text: "#1a1a1a",
+    },
+    headingFont: f?.heading,
+    bodyFont: f?.body,
+    mood: kit.mood || undefined,
+  };
+}
+
+export async function getBrandKit(id: string, userId: string) {
+  const kit = await db.brandKit.findUnique({ where: { id } });
+  if (!kit || kit.ownerId !== userId) throw new Error("Brand kit not found");
+  return kit;
+}
+
 export async function extractFromDocument(
   landingId: string,
   userId: string,

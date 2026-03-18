@@ -75,6 +75,7 @@ import {
   getSectionHtml,
   setSectionHtmlBySelector,
   enhanceDocumentPrompt,
+  createDocumentFromCFDI,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -778,6 +779,7 @@ export function createMcpServer() {
       })).optional().describe("Array of pages/sections"),
       theme: z.string().optional().describe("Theme name (e.g. minimal, corporate, elegant)"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
+      brandKitId: z.string().optional().describe("Brand kit ID — auto-applies colors/fonts from the kit"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -980,6 +982,8 @@ export function createMcpServer() {
       logoUrl: z.string().optional().describe("Logo URL or data URL to include in the document"),
       referenceImage: z.string().optional().describe("Reference image as base64 data URL or image URL — AI will replicate this design"),
       skipCover: z.boolean().optional().describe("Skip generating a cover page (useful when adding pages to existing doc)"),
+      pageFormat: z.enum(["letter", "web"]).optional().describe("Page format: 'letter' (8.5×11in, default) or 'web' (1280px wide, flexible height)"),
+      brandKitId: z.string().optional().describe("Brand kit ID — auto-applies colors/fonts/logo from the kit as the design direction"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -997,11 +1001,12 @@ export function createMcpServer() {
       sectionId: z.string().describe("The section/page ID to refine (from get_document sections)"),
       instruction: z.string().describe("What to change (e.g. 'Change the title to Q2 Report', 'Make the chart bigger', 'Add a footer with page numbers')"),
       direction: directionSchema,
+      pageFormat: z.enum(["letter", "web"]).optional().describe("Page format: 'letter' (8.5×11in, default) or 'web' (1280px wide, flexible height)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { documentId, sectionId, instruction, direction } = params;
-      const result = await refineDocumentSection(ctx, documentId, { sectionId, instruction, direction });
+      const { documentId, sectionId, instruction, direction, pageFormat } = params;
+      const result = await refineDocumentSection(ctx, documentId, { sectionId, instruction, direction, pageFormat });
       return { content: [{ type: "text", text: JSON.stringify({ success: true, sectionId, htmlLength: result.html.length, hint: "Use get_page_html to retrieve the updated content" }, null, 2) }] };
     })
   );
@@ -1013,11 +1018,12 @@ export function createMcpServer() {
       documentId: z.string().describe("The document ID"),
       sectionId: z.string().describe("The section/page ID to regenerate (from get_document sections)"),
       direction: directionSchema,
+      pageFormat: z.enum(["letter", "web"]).optional().describe("Page format: 'letter' (8.5×11in, default) or 'web' (1280px wide, flexible height)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { documentId, sectionId, direction } = params;
-      const result = await regenerateDocumentPage(ctx, documentId, { sectionId, direction });
+      const { documentId, sectionId, direction, pageFormat } = params;
+      const result = await regenerateDocumentPage(ctx, documentId, { sectionId, direction, pageFormat });
       return { content: [{ type: "text", text: JSON.stringify({ success: true, sectionId, htmlLength: result.html.length, hint: "Use get_page_html to retrieve the updated content" }, null, 2) }] };
     })
   );
@@ -1044,6 +1050,7 @@ export function createMcpServer() {
       prompt: z.string().describe("What the document is about"),
       pageCount: z.number().optional().describe("Expected page count (helps calibrate direction complexity)"),
       sourceContent: z.string().optional().describe("Optional source content to base the document on"),
+      pageFormat: z.enum(["letter", "web"]).optional().describe("Page format: 'letter' (8.5×11in, default) or 'web' (1280px wide, flexible height)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1078,6 +1085,184 @@ export function createMcpServer() {
       const { takeDocumentScreenshot } = await import("../core/documentScreenshot");
       const result = await takeDocumentScreenshot(ctx.user.id, params.documentId, params.pageIndex ?? 0);
       return { content: [result] };
+    })
+  );
+
+  // --- Clone Document Tool ---
+
+  server.tool(
+    "clone_document",
+    "Clone an existing document. Creates a copy with all pages, theme, and metadata.",
+    {
+      documentId: z.string().describe("The document ID to clone"),
+      name: z.string().optional().describe("Name for the cloned document (default: original name + ' (copia)')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { cloneDocument } = await import("../core/landingOperations");
+      const result = await cloneDocument(ctx, params.documentId, params.name);
+      return { content: [{ type: "text", text: JSON.stringify({ id: result.id, name: result.name }, null, 2) }] };
+    })
+  );
+
+  // --- Brand Kit Tools ---
+
+  server.tool(
+    "list_brand_kits",
+    "List your brand kits (color palettes, fonts, logos for consistent document styling).",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listBrandKits } = await import("../core/brandKitOperations");
+      const kits = await listBrandKits(ctx.user.id);
+      return { content: [{ type: "text", text: JSON.stringify(kits, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "create_brand_kit",
+    "Create a brand kit with colors, fonts, and logo for consistent document styling.",
+    {
+      name: z.string().describe("Brand kit name"),
+      colors: z.object({
+        primary: z.string().describe("Primary color hex"),
+        secondary: z.string().describe("Secondary color hex"),
+        accent: z.string().describe("Accent color hex"),
+        surface: z.string().describe("Surface/background color hex"),
+      }).describe("Color palette"),
+      fonts: z.object({
+        heading: z.string().describe("Heading font name"),
+        body: z.string().describe("Body font name"),
+      }).optional().describe("Font pairing"),
+      logoUrl: z.string().optional().describe("Logo URL"),
+      mood: z.string().optional().describe("Design mood (e.g. 'professional', 'playful', 'elegant')"),
+      isDefault: z.boolean().optional().describe("Set as default brand kit"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { createBrandKit } = await import("../core/brandKitOperations");
+      const kit = await createBrandKit(ctx.user.id, params);
+      return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "update_brand_kit",
+    "Update a brand kit's colors, fonts, logo, or other properties.",
+    {
+      brandKitId: z.string().describe("The brand kit ID to update"),
+      name: z.string().optional(),
+      colors: z.object({
+        primary: z.string(),
+        secondary: z.string(),
+        accent: z.string(),
+        surface: z.string(),
+      }).optional(),
+      fonts: z.object({
+        heading: z.string(),
+        body: z.string(),
+      }).optional(),
+      logoUrl: z.string().optional(),
+      mood: z.string().optional(),
+      isDefault: z.boolean().optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { updateBrandKit } = await import("../core/brandKitOperations");
+      const { brandKitId, ...data } = params;
+      const kit = await updateBrandKit(brandKitId, ctx.user.id, data);
+      return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_brand_kit",
+    "Delete a brand kit.",
+    {
+      brandKitId: z.string().describe("The brand kit ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deleteBrandKit } = await import("../core/brandKitOperations");
+      await deleteBrandKit(params.brandKitId, ctx.user.id);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true }, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "extract_brand_kit",
+    "Extract a brand kit (colors, fonts, logo, mood) from an existing document's design. Creates a new brand kit you can reuse.",
+    {
+      documentId: z.string().describe("The document ID to extract styling from"),
+      name: z.string().describe("Name for the new brand kit"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { extractFromDocument } = await import("../core/brandKitOperations");
+      const kit = await extractFromDocument(params.documentId, ctx.user.id, params.name);
+      return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
+    })
+  );
+
+  // --- Template Tools ---
+
+  server.tool(
+    "get_template_slots",
+    "Get all data-slot placeholders in a document. Returns slot names and current values. Use with fill_template for deterministic data filling.",
+    {
+      documentId: z.string().describe("The document ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getTemplateSlots } = await import("../core/documentOperations");
+      const result = await getTemplateSlots(ctx, params.documentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "fill_template",
+    "Fill data-slot placeholders in a document with exact values. No AI involved — deterministic text replacement. Use after cloning a template document.",
+    {
+      documentId: z.string().describe("The document ID to fill"),
+      data: z.record(z.string()).describe("Map of slot names to values (e.g. { 'item_price': '$500', 'client_name': 'Acme Corp' })"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { fillTemplate } = await import("../core/documentOperations");
+      const result = await fillTemplate(ctx, params.documentId, params.data);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  // --- Theme Tools ---
+
+  server.tool(
+    "list_themes",
+    "List available document/landing themes with their color palettes. Use a theme ID when creating documents.",
+    {},
+    wrapHandler(async () => {
+      const { LANDING_THEMES } = await import("@easybits.cloud/html-tailwind-generator");
+      return { content: [{ type: "text", text: JSON.stringify(LANDING_THEMES, null, 2) }] };
+    })
+  );
+
+  // --- Website File Upload Tool ---
+
+  server.tool(
+    "upload_website_file",
+    "Upload a file directly to a website. Returns a putUrl for uploading the file content. The file will be stored with the website's prefix (sites/{websiteId}/fileName).",
+    {
+      websiteId: z.string().describe("The website ID"),
+      fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'images/logo.png')"),
+      contentType: z.string().describe("MIME type (e.g. 'text/html', 'text/css', 'image/png')"),
+      size: z.number().describe("File size in bytes"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { uploadWebsiteFile } = await import("../core/operations");
+      const result = await uploadWebsiteFile(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, putUrl: result.putUrl }, null, 2) }] };
     })
   );
 

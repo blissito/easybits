@@ -30,6 +30,14 @@ IMAGES — CRITICAL:
 - Queries must be generic stock-photo friendly (e.g. "modern office" not "Juan's cybercafe")
 - For avatar-like elements, use colored divs with initials instead of img tags (e.g. <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">JD</div>)
 
+ICONS — use data-icon-query for professional icons:
+- <span data-icon-query="icon-name" class="inline-block w-5 h-5 text-primary"></span>
+- Use common Lucide icon names in English: star, check, arrow-right, heart, zap, shield, users, mail, phone, calendar, clock, map-pin, briefcase, trending-up, award, target, layers, globe, etc.
+- Use in: feature lists, stat cards, CTAs, list items, contact info, section headers
+- Sizes: w-4 h-4 (small), w-5 h-5 (default), w-8 h-8 (large). Color inherits from text-* class.
+- NEVER draw SVG paths manually — ALWAYS use data-icon-query instead
+- The system auto-replaces data-icon-query with real SVG icons from Iconify
+
 IMAGE OVERLAYS — CRITICAL:
 - When using images as backgrounds or behind text, ALWAYS add a gradient overlay for text readability
 - Pattern: <div class="relative"><img data-image-query="..." alt="..." class="absolute inset-0 w-full h-full object-cover"/><div class="absolute inset-0 bg-gradient-to-r from-primary/80 to-transparent"></div><div class="relative z-10">...text...</div></div>

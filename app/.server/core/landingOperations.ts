@@ -378,3 +378,24 @@ export async function unpublishLanding(ctx: AuthContext, id: string) {
 
   return { success: true };
 }
+
+export async function cloneDocument(ctx: AuthContext, documentId: string, newName?: string) {
+  requireScope(ctx, "WRITE");
+  const landing = await db.landing.findUnique({ where: { id: documentId } });
+  if (!landing || landing.ownerId !== ctx.user.id || landing.version !== 4)
+    throwJson("Document not found", 404);
+
+  const clone = await db.landing.create({
+    data: {
+      name: newName || `${landing.name} (copia)`,
+      ownerId: ctx.user.id,
+      version: 4,
+      theme: landing.theme,
+      customColors: landing.customColors as any,
+      sections: landing.sections as any,
+      metadata: landing.metadata as any,
+      prompt: landing.prompt,
+    },
+  });
+  return clone;
+}
