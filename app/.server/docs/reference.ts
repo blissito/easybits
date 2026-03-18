@@ -531,7 +531,7 @@ MCP: \`create_document({ name, prompt?, theme?, customColors? })\`
 \`PATCH /documents/:id\`
 Body: \`{ name?, prompt?, theme?, customColors?, sections? }\`
 SDK: \`eb.updateDocument(id, { name?, prompt?, sections? })\`
-MCP: \`update_document({ documentId, name?, prompt?, theme?, customColors?, sections? })\`
+MCP: \`update_document({ documentId, name?, prompt?, theme?, customColors? })\` — metadata only; use page tools for content changes
 
 ### Delete document
 \`DELETE /documents/:id\`
@@ -572,12 +572,34 @@ MCP: \`generate_document({ documentId, prompt, skipCover? })\`
 Generates pages with AI via streaming. Use \`skipCover: true\` to add content pages to an existing document without regenerating the cover.
 
 ### Refine section (AI)
-MCP: \`refine_document_section({ documentId, sectionId, instruction, html })\`
-Makes surgical AI-powered changes to a specific page. Ideal for targeted edits without regenerating.
+MCP: \`refine_document_section({ documentId, sectionId, instruction })\`
+Makes surgical AI-powered changes to a specific page. Returns \`{ success, sectionId, htmlLength }\` — use \`get_page_html\` to retrieve the updated content.
 
 ### Regenerate page (AI)
-MCP: \`regenerate_document_page({ documentId, sectionId, instruction? })\`
-Completely regenerates a single page with AI.
+MCP: \`regenerate_document_page({ documentId, sectionId })\`
+Completely redesigns a single page while keeping the same content. Returns \`{ success, sectionId, htmlLength }\` — use \`get_page_html\` to retrieve the updated content.
+
+### Add page
+MCP: \`add_page({ documentId, html?, afterPageIndex?, label? })\`
+Adds a new page to the document. Optionally provide HTML content and insertion position.
+
+### Delete page
+MCP: \`delete_page({ documentId, pageId })\`
+Removes a page from the document. Cannot delete the last remaining page.
+
+### Reorder pages
+MCP: \`reorder_pages({ documentId, pageIds })\`
+Reorder all pages. \`pageIds\` must contain every existing page ID exactly once.
+
+### Enhance document prompt (AI)
+MCP: \`enhance_document_prompt({ name, prompt?, action? })\`
+SDK: \`eb.enhanceDocumentPrompt(name, prompt?)\`
+Auto-generates a description from the document title (\`auto-describe\`) or improves an existing prompt with design suggestions (\`enhance\`).
+
+### Get document directions (AI)
+MCP: \`get_document_directions({ prompt, pageCount?, sourceContent? })\`
+SDK: \`eb.getDocumentDirections(prompt, { pageCount? })\`
+Generates 4 design directions (fonts, colors, mood, layout hints). Pass one to \`generate_document\` via the \`direction\` parameter.
 
 ### Document object
 \`\`\`json
@@ -620,19 +642,24 @@ When creating documents from the dashboard, 4 design directions are generated fi
 \`\`\`
 
 ### Tips for agents
-- Use \`set_page_html\` to update a full page — \`update_document\` with \`sections\` replaces ALL pages.
+- Use \`set_page_html\` to update a full page — \`update_document\` is for metadata only (name, theme, colors).
+- Use \`add_page\` / \`delete_page\` / \`reorder_pages\` for page management.
 - Use \`get_section_html\` / \`set_section_html\` to read/edit a specific element within a page by CSS selector.
 - Use \`generate_document\` with \`skipCover: true\` to add pages to an existing document.
-- Use \`refine_document_section\` for surgical AI changes to one page.
+- Use \`refine_document_section\` for surgical AI changes — then \`get_page_html\` to see the result.
+- Use \`enhance_document_prompt\` to improve a prompt before generating.
+- Use \`get_document_directions\` to get 4 design directions, then pass one to \`generate_document\`.
 - Pages use semantic color classes (\`bg-primary\`, \`text-on-surface\`, etc.) — changing the theme updates all pages.
 - Export to PDF: deploy the document and use \`window.print()\` or a headless browser on the live URL.
 
 ### Workflow
-1. \`create_document({ name, prompt })\` — create a document
-2. \`generate_document({ documentId, prompt })\` — AI generates all pages
-3. \`refine_document_section({ documentId, sectionId, instruction })\` — tweak individual pages
-4. \`deploy_document({ documentId })\` — publish → live URL at \`slug.easybits.cloud\`
-5. \`unpublish_document({ documentId })\` — take down when done
+1. \`enhance_document_prompt({ name })\` — auto-generate a description from the title
+2. \`get_document_directions({ prompt })\` — get 4 design directions
+3. \`create_document({ name, prompt })\` — create a document
+4. \`generate_document({ documentId, prompt, direction })\` — AI generates all pages
+5. \`refine_document_section({ documentId, sectionId, instruction })\` — tweak individual pages
+6. \`deploy_document({ documentId })\` — publish → live URL at \`slug.easybits.cloud\`
+7. \`unpublish_document({ documentId })\` — take down when done
 
 ### HTML Authoring Guide (for agents writing document HTML)
 

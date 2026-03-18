@@ -100,6 +100,23 @@ const eb = await createClientFromEnv();
 | `updateWebsite(websiteId, params)` | Update website name/status |
 | `deleteWebsite(websiteId)` | Delete website and its files |
 
+### Documents
+
+| Method | Description |
+|--------|-------------|
+| `listDocuments()` | List your documents |
+| `getDocument(id)` | Get document with all pages |
+| `createDocument(params)` | Create a document |
+| `updateDocument(id, params)` | Update document metadata (name, theme, colors) |
+| `deleteDocument(id)` | Delete a document |
+| `deployDocument(id)` | Publish as live website |
+| `unpublishDocument(id)` | Unpublish document |
+| `generateDocument(id, params)` | AI-generate pages (parallel, streaming) |
+| `refineDocument(id, params)` | Surgical AI edits to a page |
+| `regenerateDocumentPage(id, params)` | Redesign a page keeping content |
+| `enhanceDocumentPrompt(name, prompt?)` | Auto-describe or enhance a prompt |
+| `getDocumentDirections(prompt, opts?)` | Get 4 design directions (fonts, colors, mood) |
+
 ### Account
 
 | Method | Description |
