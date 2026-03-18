@@ -789,6 +789,21 @@ export function createMcpServer() {
   );
 
   server.tool(
+    "create_document_from_cfdi",
+    "Create a professional document from a Mexican CFDI XML (SAT electronic invoice). Supports types: I (factura), P (complemento de pago), E (nota de crédito). Parses the XML and generates a formatted document with all fiscal data.",
+    {
+      xml: z.string().describe("The raw CFDI XML string"),
+      theme: z.string().optional().describe("Theme name (e.g. minimal, corporate, elegant)"),
+      customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createDocumentFromCFDI(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
     "update_document",
     "Update a document's metadata (name, theme, colors, prompt). To modify pages, use set_page_html, add_page, delete_page, or reorder_pages instead.",
     {
