@@ -94,6 +94,15 @@ async function run() {
     next();
   });
 
+  // CORS preflight for public API endpoints
+  app.options("/api/v2/public/*", (req, res) => {
+    res.set({
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    }).status(204).end();
+  });
+
   // Logging (after bot filter so probes don't pollute logs)
   app.use(morgan("tiny"));
 
