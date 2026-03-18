@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EasyBits SDK — Genera documentos con tu data</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .fade-in { animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  pre { tab-size: 2; }
+  .log-entry { border-left: 3px solid #6366f1; }
+</style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-gray-800 px-6 py-4 flex items-center gap-3">
+  <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-sm">EB</div>
+  <h1 class="text-lg font-semibold">EasyBits SDK Demo</h1>
+  <span class="text-xs bg-indigo-600/20 text-indigo-400 px-2 py-0.5 rounded-full">Documents API</span>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+  <!-- Left: Code + Controls -->
+  <div class="space-y-6">
+    <div>
+      <h2 class="text-xl font-bold mb-2">Genera cotizaciones, reportes y mas desde tu app</h2>
+      <p class="text-gray-400 text-sm">Pasa tu data como JSON, el AI genera un documento profesional con tus datos reales. Despues editalo pagina por pagina o deployalo como sitio web.</p>
+    </div>
+
+    <!-- API Key -->
+    <div>
+      <label class="text-xs text-gray-500 uppercase tracking-wide">API Key</label>
+      <input id="apiKey" type="password" placeholder="eb_sk_live_..."
+        class="w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none">
+      <p class="text-xs text-gray-600 mt-1">No tienes key? <a href="https://www.easybits.cloud/dash/developer/keys" target="_blank" class="text-indigo-400 hover:text-indigo-300 underline">Crea una aqui</a></p>
+    </div>
+
+    <!-- Template from existing doc -->
+    <div>
+      <label class="text-xs text-gray-500 uppercase tracking-wide">Usar documento existente como plantilla (opcional)</label>
+      <div class="flex gap-2 mt-1">
+        <input id="templateId" type="text" placeholder="ID del documento base (ej: 69ba213fe7b861ebb3c39b50)"
+          class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none">
+        <button onclick="loadTemplate()" id="btnTemplate" class="px-3 py-2 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg whitespace-nowrap">
+          Cargar
+        </button>
+      </div>
+      <p id="templateStatus" class="text-xs text-gray-600 mt-1"></p>
+    </div>
+
+    <!-- JSON Data -->
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <label class="text-xs text-gray-500 uppercase tracking-wide">Tu data (JSON)</label>
+        <button onclick="loadExample()" class="text-xs text-indigo-400 hover:text-indigo-300">Cargar ejemplo</button>
+      </div>
+      <textarea id="jsonData" rows="12" placeholder='{"empresa": "Mi Empresa", "cliente": "ACME Corp", ...}'
+        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono outline-none resize-none"></textarea>
+    </div>
+
+    <!-- Document type -->
+    <div>
+      <label class="text-xs text-gray-500 uppercase tracking-wide">Tipo de documento</label>
+      <select id="docType" class="w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none">
+        <option value="cotizacion">Cotizacion / Presupuesto</option>
+        <option value="factura">Factura / Comprobante de pago</option>
+        <option value="cfdi">XML CFDI (SAT) → Documento profesional</option>
+        <option value="reporte">Reporte mensual</option>
+        <option value="propuesta">Propuesta comercial</option>
+        <option value="cv">CV / Resume</option>
+        <option value="custom">Prompt personalizado...</option>
+      </select>
+      <textarea id="customPrompt" rows="2" placeholder="Describe el documento que necesitas..."
+        class="hidden w-full mt-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono outline-none resize-none"></textarea>
+      <!-- CFDI XML upload -->
+      <div id="cfdiPanel" class="hidden mt-2">
+        <label class="block border-2 border-dashed border-gray-700 hover:border-indigo-500 rounded-lg p-4 cursor-pointer text-center transition-colors">
+          <input type="file" id="cfdiFile" accept=".xml" class="hidden">
+          <p class="text-sm text-gray-400">Arrastra o selecciona tu archivo <span class="text-indigo-400 font-medium">.xml CFDI</span></p>
+          <p class="text-xs text-gray-600 mt-1">Soporta: Factura (I), Complemento de Pago (P), Nota de Crédito (E)</p>
+        </label>
+        <p id="cfdiStatus" class="text-xs mt-1 text-gray-600"></p>
+        <textarea id="cfdiXml" rows="6" placeholder="...o pega el XML aqui"
+          class="w-full mt-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono outline-none resize-none text-gray-400"></textarea>
+        <!-- AI vs Template toggle -->
+        <div class="flex items-center gap-3 mt-3 bg-gray-900 border border-gray-700 rounded-lg p-3">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="cfdiMode" value="template" checked class="text-indigo-600">
+            <span class="text-sm text-gray-300">Template rapido</span>
+            <span class="text-xs text-gray-600">(gratis, instantaneo)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="cfdiMode" value="ai" class="text-indigo-600">
+            <span class="text-sm text-gray-300">Diseno AI</span>
+            <span class="text-xs text-gray-600">(1 generacion, ~10s)</span>
+          </label>
+        </div>
+        <!-- AI prompt (only visible in AI mode) -->
+        <textarea id="cfdiPrompt" rows="2" placeholder="Instrucciones opcionales para el AI: ej. 'Estilo minimalista', 'Diseño corporativo con logo grande', 'Colores oscuros'..."
+          class="hidden w-full mt-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs outline-none resize-none text-gray-300"></textarea>
+      </div>
+    </div>
+
+    <!-- Theme -->
+    <div>
+      <label class="text-xs text-gray-500 uppercase tracking-wide">Tema</label>
+      <div class="flex flex-wrap gap-2 mt-1" id="themeButtons"></div>
+    </div>
+
+    <!-- Custom colors toggle -->
+    <div>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" id="useCustomColors" class="rounded border-gray-600 bg-gray-800">
+        <span class="text-xs text-gray-400">Usar colores personalizados en vez de tema</span>
+      </label>
+      <div id="customColorsPanel" class="hidden mt-2 grid grid-cols-2 gap-2">
+        <div class="flex items-center gap-2">
+          <input type="color" id="cc-primary" value="#2563eb" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+          <span class="text-xs text-gray-500">Primary</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="color" id="cc-secondary" value="#1e40af" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+          <span class="text-xs text-gray-500">Secondary</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="color" id="cc-accent" value="#f59e0b" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+          <span class="text-xs text-gray-500">Accent</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="color" id="cc-surface" value="#ffffff" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+          <span class="text-xs text-gray-500">Surface</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-3">
+      <button id="btnGenerate" onclick="runDemo()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm transition-colors">
+        Generar documento
+      </button>
+      <button id="btnDeploy" onclick="deployDoc()" disabled class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 px-4 rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+        Deployar
+      </button>
+    </div>
+
+    <!-- Code preview -->
+    <details class="group">
+      <summary class="text-xs text-gray-500 uppercase tracking-wide cursor-pointer hover:text-gray-300">Ver codigo equivalente</summary>
+      <pre id="codePreview" class="mt-2 bg-gray-900 border border-gray-800 rounded-lg p-4 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap"></pre>
+    </details>
+  </div>
+
+  <!-- Right: Log + Result -->
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Resultado</h3>
+      <span id="status" class="text-xs text-gray-600"></span>
+    </div>
+
+    <!-- Log -->
+    <div id="logContainer" class="bg-gray-900 border border-gray-800 rounded-lg p-4 h-[200px] overflow-y-auto space-y-2 text-xs font-mono">
+      <p class="text-gray-600">Esperando...</p>
+    </div>
+
+    <!-- Document preview -->
+    <div id="previewContainer" class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden" style="min-height:400px">
+      <div class="flex items-center justify-center h-[400px] text-gray-600 text-sm">
+        El documento aparecera aqui
+      </div>
+    </div>
+
+    <!-- Deploy URL -->
+    <div id="deployResult" class="hidden fade-in bg-green-900/30 border border-green-700 rounded-lg p-4">
+      <p class="text-green-400 text-sm font-medium">Documento publicado</p>
+      <a id="deployUrl" href="#" target="_blank" class="text-green-300 text-sm underline hover:text-green-200 break-all"></a>
+    </div>
+  </div>
+</main>
+
+<!-- Footer -->
+<footer class="border-t border-gray-800 px-6 py-4 mt-8 text-center text-xs text-gray-600">
+  <code>npm i @easybits.cloud/sdk</code> &mdash;
+  <a href="https://easybits.cloud" target="_blank" class="text-indigo-400 hover:underline">easybits.cloud</a> &mdash;
+  <a href="https://easybits.cloud/docs" target="_blank" class="text-indigo-400 hover:underline">Docs</a>
+</footer>
+
+<script>
+// ─── Real themes from SDK ───
+const THEMES = {
+  minimal: {
+    label: "Minimal",
+    colors: { primary:"#18181b","primary-light":"#3f3f46","primary-dark":"#09090b",secondary:"#71717a",accent:"#2563eb",surface:"#ffffff","surface-alt":"#f4f4f5","on-surface":"#18181b","on-surface-muted":"#71717a","on-primary":"#ffffff","on-secondary":"#ffffff","on-accent":"#ffffff" }
+  },
+  calido: {
+    label: "Calido",
+    colors: { primary:"#9a3412","primary-light":"#c2410c","primary-dark":"#7c2d12",secondary:"#78716c",accent:"#d97706",surface:"#fafaf9","surface-alt":"#f5f5f4","on-surface":"#1c1917","on-surface-muted":"#78716c","on-primary":"#ffffff","on-secondary":"#ffffff","on-accent":"#111827" }
+  },
+  oceano: {
+    label: "Oceano",
+    colors: { primary:"#0f4c75","primary-light":"#1a6fa0","primary-dark":"#0a3555",secondary:"#6b7280",accent:"#0d9488",surface:"#ffffff","surface-alt":"#f0fdfa","on-surface":"#0f172a","on-surface-muted":"#64748b","on-primary":"#ffffff","on-secondary":"#ffffff","on-accent":"#ffffff" }
+  },
+  noche: {
+    label: "Noche",
+    colors: { primary:"#a78bfa","primary-light":"#c4b5fd","primary-dark":"#7c3aed",secondary:"#9ca3af",accent:"#f472b6",surface:"#111827","surface-alt":"#1f2937","on-surface":"#f9fafb","on-surface-muted":"#9ca3af","on-primary":"#111827","on-secondary":"#111827","on-accent":"#111827" }
+  },
+  bosque: {
+    label: "Bosque",
+    colors: { primary:"#16a34a","primary-light":"#22c55e","primary-dark":"#15803d",secondary:"#a3a3a3",accent:"#f59e0b",surface:"#0a0a0a","surface-alt":"#171717","on-surface":"#fafafa","on-surface-muted":"#a3a3a3","on-primary":"#ffffff","on-secondary":"#111827","on-accent":"#111827" }
+  },
+  rosa: {
+    label: "Rosa",
+    colors: { primary:"#db2777","primary-light":"#ec4899","primary-dark":"#be185d",secondary:"#a78bfa",accent:"#f59e0b",surface:"#fdf2f8","surface-alt":"#fce7f3","on-surface":"#1f2937","on-surface-muted":"#6b7280","on-primary":"#ffffff","on-secondary":"#ffffff","on-accent":"#111827" }
+  }
+};
+
+// ─── State ───
+let selectedTheme = 'calido';
+let currentDocId = null;
+let templateHtml = null; // HTML from a template doc
+const BASE = 'https://www.easybits.cloud/api/v2';
+
+// ─── Render theme buttons with real colors ───
+function renderThemeButtons() {
+  const container = document.getElementById('themeButtons');
+  const noThemeActive = selectedTheme === null;
+  const noThemeBtn = `<button onclick="pickTheme(this,null)"
+    class="theme-btn flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border ${noThemeActive ? 'border-indigo-500 bg-indigo-600/20 text-indigo-400' : 'border-gray-700 bg-gray-900 hover:border-indigo-500'}">
+    <span class="w-3 h-3 rounded-full border border-gray-700 flex items-center justify-center text-[8px]">✦</span>
+    AI decide
+  </button>`;
+  const themeBtns = Object.entries(THEMES).map(([id, t]) => {
+    const active = id === selectedTheme;
+    const colors = t.colors;
+    return `<button onclick="pickTheme(this,'${id}')" data-theme="${id}"
+      class="theme-btn flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border ${active ? 'border-indigo-500 bg-indigo-600/20 text-indigo-400' : 'border-gray-700 bg-gray-900 hover:border-indigo-500'}">
+      <span class="flex gap-0.5">
+        <span class="w-3 h-3 rounded-full border border-gray-700" style="background:${colors.primary}"></span>
+        <span class="w-3 h-3 rounded-full border border-gray-700" style="background:${colors.accent}"></span>
+        <span class="w-3 h-3 rounded-full border border-gray-700" style="background:${colors.surface}"></span>
+      </span>
+      ${t.label}
+    </button>`;
+  }).join('');
+  container.innerHTML = noThemeBtn + themeBtns;
+}
+
+// ─── Example data ───
+const EXAMPLES = {
+  cotizacion: {
+    empresa: "TechSolutions MX",
+    rfc: "TSM220415AB1",
+    direccion: "Av. Reforma 222, CDMX",
+    telefono: "+52 55 1234 5678",
+    email: "ventas@techsolutions.mx",
+    cliente: "Corporativo ACME S.A. de C.V.",
+    clienteRfc: "CAC190301XY2",
+    fecha: new Date().toISOString().split('T')[0],
+    vigencia: "30 dias",
+    numero: "COT-2026-0847",
+    partidas: [
+      { cantidad: 3, descripcion: "Laptop Dell Latitude 5540 i7/16GB/512GB", unitario: 28500, total: 85500 },
+      { cantidad: 3, descripcion: "Monitor LG 27\" 4K USB-C", unitario: 8900, total: 26700 },
+      { cantidad: 1, descripcion: "Servidor HPE ProLiant DL380 Gen11", unitario: 145000, total: 145000 },
+      { cantidad: 10, descripcion: "Licencia Microsoft 365 Business (anual)", unitario: 3200, total: 32000 },
+      { cantidad: 1, descripcion: "Instalacion y configuracion de red", unitario: 18500, total: 18500 },
+    ],
+    subtotal: 307700,
+    iva: 49232,
+    total: 356932,
+    moneda: "MXN",
+    condiciones: "50% anticipo, 50% contra entrega. Precios sujetos a disponibilidad.",
+    notas: "Garantia de 3 anos en equipos. Soporte tecnico incluido por 6 meses."
+  },
+  factura: {
+    empresa: "Soluciones Digitales SA de CV",
+    rfc: "SDI210301AB1",
+    folio: "FAC-A-003291",
+    fecha: new Date().toISOString().split('T')[0],
+    cliente: "Juan Perez Martinez",
+    clienteRfc: "PEMJ850612XX1",
+    conceptos: [
+      { cantidad: 1, descripcion: "Desarrollo de app movil (fase 1)", unitario: 85000, total: 85000 },
+      { cantidad: 40, descripcion: "Horas de consultoria tecnica", unitario: 1200, total: 48000 },
+    ],
+    subtotal: 133000,
+    iva: 21280,
+    total: 154280,
+    formaPago: "Transferencia bancaria",
+    metodoPago: "PUE - Pago en una sola exhibicion"
+  },
+  reporte: {
+    empresa: "CloudStore MX",
+    periodo: "Febrero 2026",
+    metricas: {
+      ingresos: "$2,847,320 MXN",
+      crecimiento: "+18.3% vs enero",
+      clientesNuevos: 142,
+      churnRate: "2.1%",
+      nps: 72,
+      ticketsResueltos: 834,
+      tiempoRespuesta: "4.2 hrs promedio",
+      uptime: "99.97%"
+    },
+    highlights: [
+      "Lanzamiento exitoso del plan Enterprise con 12 cuentas nuevas",
+      "Reduccion del 35% en tiempo de onboarding gracias al nuevo wizard",
+      "Integracion con Slack completada y en beta con 50 usuarios"
+    ],
+    riesgos: [
+      "Costos de infraestructura subieron 22% por migracion a GPU",
+      "2 clientes enterprise en riesgo de churn — requieren reunion urgente"
+    ]
+  },
+  propuesta: {
+    empresa: "Innovatech Digital",
+    cliente: "Grupo Restaurantero La Mesa SA de CV",
+    proyecto: "Sistema de pedidos en linea + app de delivery",
+    fecha: new Date().toISOString().split('T')[0],
+    fases: [
+      { nombre: "Discovery y UX", duracion: "3 semanas", costo: 95000 },
+      { nombre: "Desarrollo MVP", duracion: "8 semanas", costo: 380000 },
+      { nombre: "QA y lanzamiento", duracion: "2 semanas", costo: 65000 },
+      { nombre: "Soporte post-launch", duracion: "4 semanas", costo: 48000 },
+    ],
+    totalProyecto: 588000,
+    tecnologias: ["React Native", "Node.js", "PostgreSQL", "Stripe", "AWS"],
+    garantia: "6 meses de garantia sobre bugs. SLA de respuesta: 4 horas habiles."
+  },
+  cv: {
+    nombre: "Maria Fernanda Lopez Garcia",
+    titulo: "Senior Product Designer",
+    email: "mflopez@email.com",
+    telefono: "+52 33 9876 5432",
+    ubicacion: "Guadalajara, Jalisco",
+    resumen: "Disenadora de producto con 8 anos de experiencia en startups y empresas tech. Especialista en design systems, investigacion de usuario y prototipado de alta fidelidad.",
+    experiencia: [
+      { empresa: "Rappi", puesto: "Lead Product Designer", periodo: "2023 - presente", logros: "Redisene del flujo de checkout (+12% conversion). Lidere equipo de 4 disenadores." },
+      { empresa: "Kavak", puesto: "Senior UX Designer", periodo: "2020 - 2023", logros: "Cree el design system usado por 15 equipos. Mejore NPS de la app de 45 a 68." },
+      { empresa: "Wizeline", puesto: "UX Designer", periodo: "2018 - 2020", logros: "Consultoria de UX para clientes enterprise (Google, Fox, Santander)." },
+    ],
+    educacion: "Lic. Diseno de la Comunicacion Grafica — UAM Xochimilco (2014-2018)",
+    skills: ["Figma", "Protopie", "Design Systems", "User Research", "A/B Testing", "React basics"]
+  }
+};
+
+// ─── Helpers ───
+function log(msg, type = 'info') {
+  const el = document.getElementById('logContainer');
+  if (el.querySelector('.text-gray-600:only-child')) el.innerHTML = '';
+  const colors = { info: 'text-gray-300', success: 'text-green-400', error: 'text-red-400', wait: 'text-yellow-400' };
+  const time = new Date().toLocaleTimeString('es-MX', { hour12: false });
+  el.innerHTML += `<div class="log-entry pl-2 py-0.5 fade-in ${colors[type] || colors.info}"><span class="text-gray-600">${time}</span> ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(text) {
+  document.getElementById('status').textContent = text;
+}
+
+function pickTheme(btn, theme) {
+  selectedTheme = theme;
+  renderThemeButtons();
+  updateCodePreview();
+}
+
+function loadExample() {
+  const type = document.getElementById('docType').value;
+  if (type === 'custom') return;
+  document.getElementById('jsonData').value = JSON.stringify(EXAMPLES[type] || EXAMPLES.cotizacion, null, 2);
+  updateCodePreview();
+}
+
+function getCustomColors() {
+  if (!document.getElementById('useCustomColors').checked) return null;
+  return {
+    primary: document.getElementById('cc-primary').value,
+    secondary: document.getElementById('cc-secondary').value,
+    accent: document.getElementById('cc-accent').value,
+    surface: document.getElementById('cc-surface').value,
+  };
+}
+
+function buildPrompt() {
+  const type = document.getElementById('docType').value;
+  if (type === 'custom') return document.getElementById('customPrompt').value;
+
+  const data = document.getElementById('jsonData').value;
+  let base = '';
+  if (templateHtml) {
+    base = `\n\nUSA ESTE DOCUMENTO COMO PLANTILLA DE REFERENCIA para el layout, estructura y estilo visual. Replica su diseno pero con los nuevos datos:\n<template>\n${templateHtml.substring(0, 3000)}\n</template>`;
+  }
+
+  const prompts = {
+    cotizacion: `Cotizacion profesional con los siguientes datos. Usa EXACTAMENTE estos numeros y datos, no inventes nada:\n\n${data}${base}`,
+    factura: `Comprobante de pago / factura profesional. Usa EXACTAMENTE estos datos:\n\n${data}${base}`,
+    reporte: `Reporte mensual ejecutivo con metricas y analisis. Datos reales:\n\n${data}${base}`,
+    propuesta: `Propuesta comercial profesional. Usa estos datos exactos:\n\n${data}${base}`,
+    cv: `Curriculum vitae / resume profesional y moderno. Datos del candidato:\n\n${data}${base}`,
+  };
+  return prompts[type] || prompts.cotizacion;
+}
+
+function updateCodePreview() {
+  const type = document.getElementById('docType').value;
+  const theme = selectedTheme;
+  const cc = getCustomColors();
+
+  if (type === 'cfdi') {
+    const cfdiMode = document.querySelector('input[name="cfdiMode"]:checked')?.value || 'template';
+    const colorsLine = cc ? `  customColors: ${JSON.stringify(cc)},` : theme ? `  theme: "${theme}",` : `  // sin tema — AI elige colores`;
+    const modeComment = cfdiMode === 'ai'
+      ? '// 2. Crear documento con diseño AI (~10s, 1 generación)'
+      : '// 2. Crear documento — template instantáneo, gratis';
+    document.getElementById('codePreview').textContent = `import { EasybitsClient } from "@easybits.cloud/sdk";
+import { readFileSync } from "fs";
+
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// 1. Leer el XML CFDI
+const xml = readFileSync("factura.xml", "utf-8");
+
+${modeComment}
+const doc = await eb.createDocumentFromCFDI({
+  xml,
+${colorsLine}
+  mode: "${cfdiMode}",
+});
+// doc.cfdiData → datos parseados (emisor, receptor, conceptos, timbre, etc.)
+
+// 3. Publicar
+const { url } = await eb.deployDocument(doc.id);
+console.log("Listo:", url);`;
+    return;
+  }
+  const templateLine = templateHtml
+    ? `\n// (opcional) Cargar un doc existente como plantilla\nconst template = await eb.getDocument("${document.getElementById('templateId').value}");\nconst templateHtml = template.sections.map(s => s.html).join("\\n");\n`
+    : '';
+  const colorsLine = cc
+    ? `  customColors: ${JSON.stringify(cc)},`
+    : theme ? `  theme: "${theme}",` : `  // sin tema — AI elige colores`;
+  const promptExtra = templateHtml ? ' + plantilla de referencia' : '';
+
+  document.getElementById('codePreview').textContent = `import { EasybitsClient } from "@easybits.cloud/sdk";
+
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// 1. Tu data
+const data = ${document.getElementById('jsonData').value || '{ /* tu JSON */ }'};
+${templateLine}
+// 2. Crear documento
+const doc = await eb.createDocument({
+  name: "Mi ${type}",
+${colorsLine}
+});
+
+// 3. Generar con AI${promptExtra}
+const result = await eb.generateDocument(doc.id, {
+  prompt: \`Genera un/a ${type} profesional con estos datos:\\n\${JSON.stringify(data)}\`,
+});
+// result.sections → array de paginas con { id, html, order }
+
+// 4. Editar una pagina especifica
+await eb.setPageHtml(doc.id, result.sections[0].id, "<section>...</section>");
+
+// 5. Publicar como sitio web
+const { url } = await eb.deployDocument(doc.id);
+console.log("Listo:", url); // → slug.easybits.cloud`;
+}
+
+// ─── Toggle custom prompt ───
+document.getElementById('docType').addEventListener('change', (e) => {
+  const val = e.target.value;
+  document.getElementById('customPrompt').classList.toggle('hidden', val !== 'custom');
+  document.getElementById('cfdiPanel').classList.toggle('hidden', val !== 'cfdi');
+  // Hide/show JSON data for CFDI mode
+  document.getElementById('jsonData').closest('div').style.display = val === 'cfdi' ? 'none' : '';
+  updateCodePreview();
+});
+
+// CFDI file upload
+document.getElementById('cfdiFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById('cfdiXml').value = reader.result;
+    document.getElementById('cfdiStatus').textContent = `Archivo cargado: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+    document.getElementById('cfdiStatus').className = 'text-xs mt-1 text-green-400';
+  };
+  reader.readAsText(file);
+});
+
+document.querySelectorAll('input[name="cfdiMode"]').forEach(r => r.addEventListener('change', (e) => {
+  document.getElementById('cfdiPrompt').classList.toggle('hidden', e.target.value !== 'ai');
+  updateCodePreview();
+}));
+
+document.getElementById('useCustomColors').addEventListener('change', (e) => {
+  document.getElementById('customColorsPanel').classList.toggle('hidden', !e.target.checked);
+  updateCodePreview();
+});
+
+// ─── Load template doc ───
+async function loadTemplate() {
+  const id = document.getElementById('templateId').value.trim();
+  if (!id) return;
+  const btn = document.getElementById('btnTemplate');
+  const status = document.getElementById('templateStatus');
+  btn.disabled = true;
+  btn.textContent = 'Cargando...';
+  status.textContent = '';
+  try {
+    const doc = await apiCall('GET', `/documents/${id}`);
+    const sections = (doc.sections || []).filter(s => s.id !== '__grapes_css__').sort((a, b) => a.order - b.order);
+    templateHtml = sections.map(s => s.html).join('\n');
+    status.textContent = `Plantilla cargada: "${doc.name}" (${sections.length} paginas)`;
+    status.className = 'text-xs text-green-400 mt-1';
+    log(`Plantilla cargada: ${doc.name} — ${sections.length} paginas`, 'success');
+    updateCodePreview();
+  } catch (err) {
+    status.textContent = `Error: ${err.message}`;
+    status.className = 'text-xs text-red-400 mt-1';
+    templateHtml = null;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Cargar';
+  }
+}
+
+// ─── API calls ───
+async function apiCall(method, path, body) {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) throw new Error('Ingresa tu API key');
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiSSE(path, body, onEvent) {
+  const key = document.getElementById('apiKey').value.trim();
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(line.slice(6));
+          onEvent(event);
+        } catch {}
+      }
+    }
+  }
+}
+
+// ─── Main flow ───
+async function runDemo() {
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  btn.textContent = 'Generando...';
+  document.getElementById('deployResult').classList.add('hidden');
+  document.getElementById('logContainer').innerHTML = '';
+  currentDocId = null;
+
+  try {
+    const type = document.getElementById('docType').value;
+    const cc = getCustomColors();
+
+    // ─── CFDI mode ───
+    if (type === 'cfdi') {
+      const xml = document.getElementById('cfdiXml').value.trim();
+      if (!xml) throw new Error('Sube o pega un XML CFDI');
+      const cfdiMode = document.querySelector('input[name="cfdiMode"]:checked')?.value || 'template';
+      const params = { xml, mode: cfdiMode };
+      if (cc) params.customColors = cc;
+      else if (selectedTheme) params.theme = selectedTheme;
+      const cfdiPrompt = document.getElementById('cfdiPrompt').value.trim();
+      if (cfdiPrompt && cfdiMode === 'ai') params.extraInstructions = cfdiPrompt;
+
+      if (cfdiMode === 'ai') {
+        // AI mode: SSE streaming
+        log('Generando documento CFDI con AI...', 'wait');
+        setStatus('Generando con AI...');
+        const sections = [];
+        await apiSSE('/document-from-cfdi', params, (event) => {
+          if (event.type === 'doc-created') {
+            currentDocId = event.data?.id;
+            log(`Documento creado: <span class="text-indigo-400">${event.data?.id}</span>`, 'success');
+            if (event.data?.cfdiData) {
+              log(`CFDI tipo ${event.data.cfdiData.tipoDesc || '?'} — ${event.data.cfdiData.emisor?.nombre || ''}`, 'info');
+              log(`UUID: ${event.data.cfdiData.timbre?.uuid || 'sin timbre'}`, 'info');
+            }
+          }
+          if (event.type === 'outline') {
+            log(`Outline: ${event.data?.pages?.length || '?'} paginas planificadas`, 'info');
+          }
+          if (event.type === 'section-building') {
+            log(`Construyendo pagina ${(event.data?.order ?? 0) + 1}...`, 'wait');
+          }
+          if (event.type === 'section') {
+            sections.push(event.data);
+            log(`Pagina ${sections.length} lista`, 'success');
+            renderPreview(sections);
+          }
+          if (event.type === 'section-update') {
+            const s = sections.find(s => s.id === event.data?.id);
+            if (s) { s.html = event.data.html; renderPreview(sections); }
+          }
+          if (event.type === 'done') {
+            log(`Generacion completa: ${sections.length} paginas`, 'success');
+          }
+          if (event.type === 'error') {
+            log(`Error: ${event.data?.message || 'desconocido'}`, 'error');
+          }
+        });
+        setStatus(`${sections.length} paginas — CFDI con AI`);
+        document.getElementById('btnDeploy').disabled = false;
+        log('Listo. Puedes deployar o editar en easybits.cloud/dash/documents/' + currentDocId, 'success');
+        return;
+      }
+
+      // Template mode: single API call
+      log('Parseando XML CFDI...', 'wait');
+      setStatus('Procesando CFDI...');
+      const result = await apiCall('POST', '/document-from-cfdi', params);
+      currentDocId = result.id;
+      const sections = (result.sections || []).filter(s => s.id !== '__grapes_css__');
+      log(`Documento creado: <span class="text-indigo-400">${result.id}</span>`, 'success');
+      log(`CFDI tipo ${result.cfdiData?.tipoDesc || '?'} — ${result.cfdiData?.emisor?.nombre || ''}`, 'info');
+      log(`UUID: ${result.cfdiData?.timbre?.uuid || 'sin timbre'}`, 'info');
+      renderPreview(sections);
+      setStatus(`${sections.length} pagina(s) — CFDI procesado`);
+      document.getElementById('btnDeploy').disabled = false;
+      log('Listo. Puedes deployar o editar en easybits.cloud/dash/documents/' + currentDocId, 'success');
+      return;
+    }
+
+    const prompt = buildPrompt();
+    if (!prompt) throw new Error('Escribe un prompt o carga datos de ejemplo');
+
+    // Step 1: Create
+    log('Creando documento...', 'wait');
+    setStatus('Creando...');
+    const createParams = {
+      name: `${type.charAt(0).toUpperCase() + type.slice(1)} — SDK Demo`,
+    };
+    if (cc) {
+      createParams.customColors = cc;
+    } else if (selectedTheme) {
+      createParams.theme = selectedTheme;
+    }
+    const doc = await apiCall('POST', '/documents', createParams);
+    currentDocId = doc.id;
+    log(`Documento creado: <span class="text-indigo-400">${doc.id}</span>`, 'success');
+
+    // Step 2: Generate via SSE
+    log('Generando paginas con AI...', 'wait');
+    setStatus('Generando...');
+    const sections = [];
+    const genParams = { landingId: doc.id, prompt };
+    if (!cc && selectedTheme) genParams.theme = selectedTheme;
+
+    await apiSSE('/document-generate', genParams, (event) => {
+      if (event.type === 'outline') {
+        log(`Outline: ${event.data?.pageCount || '?'} paginas planificadas`, 'info');
+      }
+      if (event.type === 'section-building') {
+        log(`Construyendo pagina ${(event.data?.order ?? 0) + 1}...`, 'wait');
+      }
+      if (event.type === 'section') {
+        sections.push(event.data);
+        log(`Pagina ${sections.length} lista (${(event.data?.html?.length || 0).toLocaleString()} chars)`, 'success');
+        renderPreview(sections);
+      }
+      if (event.type === 'section-update') {
+        const s = sections.find(s => s.id === event.data?.id);
+        if (s) { s.html = event.data.html; renderPreview(sections); }
+        log(`Imagen enriquecida en pagina`, 'info');
+      }
+      if (event.type === 'done') {
+        log(`Generacion completa: ${sections.length} paginas`, 'success');
+      }
+      if (event.type === 'error') {
+        log(`Error: ${event.data?.message || 'desconocido'}`, 'error');
+      }
+    });
+
+    setStatus(`${sections.length} paginas generadas`);
+    document.getElementById('btnDeploy').disabled = false;
+    log('Listo. Puedes deployar o editar en easybits.cloud/dash/documents/' + currentDocId, 'success');
+
+  } catch (err) {
+    log(`Error: ${err.message}`, 'error');
+    setStatus('Error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generar documento';
+  }
+}
+
+function getThemeVars() {
+  const cc = getCustomColors();
+  if (cc) {
+    return `--color-primary:${cc.primary};--color-secondary:${cc.secondary};--color-accent:${cc.accent};--color-surface:${cc.surface};--color-surface-alt:${cc.surface};--color-on-primary:#ffffff;--color-on-secondary:#ffffff;--color-on-accent:#ffffff;--color-on-surface:#1f2937;--color-on-surface-muted:#6b7280;--color-primary-light:${cc.primary};--color-primary-dark:${cc.primary}`;
+  }
+  if (!selectedTheme) return '--color-primary:#2563eb;--color-secondary:#1e40af;--color-accent:#f59e0b;--color-surface:#ffffff;--color-surface-alt:#f4f4f5;--color-on-primary:#ffffff;--color-on-secondary:#ffffff;--color-on-accent:#111827;--color-on-surface:#1f2937;--color-on-surface-muted:#6b7280;--color-primary-light:#3b82f6;--color-primary-dark:#1d4ed8';
+  const t = THEMES[selectedTheme] || THEMES.calido;
+  return Object.entries(t.colors).map(([k,v]) => `--color-${k}:${v}`).join(';');
+}
+
+function renderPreview(sections) {
+  const container = document.getElementById('previewContainer');
+  const vars = getThemeVars();
+  container.innerHTML = sections.map((s, i) => `
+    <div class="border-b border-gray-800 last:border-b-0">
+      <div class="bg-gray-800/50 px-3 py-1 text-xs text-gray-500 flex justify-between">
+        <span>Pagina ${i + 1}</span>
+        <span>${(s.html?.length || 0).toLocaleString()} chars</span>
+      </div>
+      <div class="relative overflow-hidden" style="height:300px">
+        <iframe srcdoc="${escapeAttr(buildPageHtml(s.html, vars))}"
+          class="absolute top-0 left-0 border-0"
+          style="width:816px;height:1056px;transform:scale(${300/1056});transform-origin:top left;pointer-events:none"
+          sandbox="allow-same-origin"></iframe>
+      </div>
+    </div>
+  `).join('');
+}
+
+function buildPageHtml(sectionHtml, themeVars) {
+  return `<!DOCTYPE html><html><head>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <script>tailwind.config={theme:{extend:{colors:{primary:'var(--color-primary)','primary-light':'var(--color-primary-light)','primary-dark':'var(--color-primary-dark)',secondary:'var(--color-secondary)',accent:'var(--color-accent)',surface:'var(--color-surface)','surface-alt':'var(--color-surface-alt)','on-primary':'var(--color-on-primary)','on-secondary':'var(--color-on-secondary)','on-accent':'var(--color-on-accent)','on-surface':'var(--color-on-surface)','on-surface-muted':'var(--color-on-surface-muted)'}}}}
+    <\/script>
+    <style>:root{${themeVars}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif}img{max-width:100%;height:auto}</style>
+    </head><body>${sectionHtml || ''}</body></html>`;
+}
+
+function escapeAttr(str) {
+  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function deployDoc() {
+  if (!currentDocId) return;
+  const btn = document.getElementById('btnDeploy');
+  btn.disabled = true;
+  btn.textContent = 'Publicando...';
+  try {
+    log('Deployando documento...', 'wait');
+    const result = await apiCall('POST', `/documents/${currentDocId}/deploy`);
+    const url = result.url || `https://${result.slug}.easybits.cloud`;
+    log(`Publicado en: ${url}`, 'success');
+    const el = document.getElementById('deployResult');
+    el.classList.remove('hidden');
+    document.getElementById('deployUrl').href = url;
+    document.getElementById('deployUrl').textContent = url;
+  } catch (err) {
+    log(`Error al deployar: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Deployar';
+  }
+}
+
+// Init
+renderThemeButtons();
+loadExample();
+updateCodePreview();
+</script>
+</body>
+</html>

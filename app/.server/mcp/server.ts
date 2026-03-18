@@ -795,9 +795,79 @@ export function createMcpServer() {
       xml: z.string().describe("The raw CFDI XML string"),
       theme: z.string().optional().describe("Theme name (e.g. minimal, corporate, elegant)"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
+      mode: z.enum(["template", "ai"]).optional().describe("'template' (default) = instant static layout, 'ai' = AI-designed document (costs 1 generation, ~10s)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
+
+      if (params.mode === "ai") {
+        const { parseCFDI } = await import("~/lib/cfdi/parseCFDI");
+        const { serializeCFDIForAI } = await import("~/lib/cfdi/templates");
+        const { resolveAiKey } = await import("~/.server/core/aiKeyOperations");
+        const { generateDocumentParallel } = await import("@easybits.cloud/html-tailwind-generator/generateDocument");
+        const { checkAiGenerationLimit, incrementAiGeneration } = await import("~/.server/aiGenerationLimit");
+        const { getAiModel, resolveModelLocal } = await import("~/.server/aiModels");
+
+        const data = parseCFDI(params.xml);
+        const genLimit = await checkAiGenerationLimit(ctx.user.id);
+        if (!genLimit.allowed) {
+          return { content: [{ type: "text", text: `Error: Has usado todas tus ${genLimit.limit} generaciones.` }] };
+        }
+
+        const tipoNames: Record<string, string> = { I: "Factura", P: "Recibo de Pago", E: "Nota de Crédito" };
+        const docName = `${tipoNames[data.tipo] || "CFDI"} — ${data.emisor.nombre || data.emisor.rfc}`;
+
+        const doc = await db.landing.create({
+          data: {
+            name: docName,
+            prompt: `CFDI ${data.tipoDesc} — ${data.emisor.nombre} → ${data.receptor.nombre}`,
+            sections: [], version: 4, theme: params.theme || "default",
+            metadata: { cfdi: { uuid: data.timbre?.uuid, tipo: data.tipo, emisorRfc: data.emisor.rfc, receptorRfc: data.receptor.rfc, total: data.total, moneda: data.moneda, fecha: data.fecha } },
+            ownerId: ctx.user.id,
+          },
+        });
+
+        const sourceContent = serializeCFDIForAI(data);
+        const tipoLabel = tipoNames[data.tipo] || "documento fiscal";
+        const aiPrompt = `Diseña un ${tipoLabel} profesional con estos datos fiscales mexicanos (CFDI).\n\nREGLA ABSOLUTA: Usa EXACTAMENTE los datos proporcionados. No inventes, modifiques ni redondees ningún valor.\n\n${data.qrUrl ? `Link de verificación SAT: ${data.qrUrl}` : ""}`;
+
+        const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
+        const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
+        const docModelId = await getAiModel("docGenerate");
+        const docModel = resolveModelLocal(docModelId, openaiKey || undefined, userKey || undefined);
+        const outlineModelId = await getAiModel("docDirections");
+        const outlineModel = resolveModelLocal(outlineModelId, openaiKey || undefined, userKey || undefined);
+
+        const allSections: any[] = [];
+        const startTime = Date.now();
+        let usageTokens = { inputTokens: 0, outputTokens: 0 };
+
+        await generateDocumentParallel({
+          prompt: `Transform this content into beautiful document pages:\n\n${sourceContent.substring(0, 15000)}\n\nInstructions: ${aiPrompt}`,
+          pexelsApiKey: process.env.PEXELS_API_KEY,
+          model: docModel, outlineModel, pageFormat: "letter", skipCover: false,
+          onOutline() {}, onPageChunk() {},
+          async onPageComplete(_i: number, section: any) { allSections.push(section); },
+          onUsage(usage: any) { usageTokens = usage; },
+          onImageUpdate(sectionId: string, html: string) { const s = allSections.find((x: any) => x.id === sectionId); if (s) s.html = html; },
+          async onDone() {
+            await incrementAiGeneration(ctx.user.id, undefined, {
+              type: "generate", product: "document", modelId: docModelId,
+              inputTokens: usageTokens.inputTokens, outputTokens: usageTokens.outputTokens,
+              resourceId: doc.id, pageCount: allSections.length, durationMs: Date.now() - startTime,
+            });
+            if (allSections.length > 0) {
+              allSections.sort((a: any, b: any) => a.order - b.order);
+              await db.landing.update({ where: { id: doc.id }, data: { sections: allSections as any } });
+            }
+          },
+          onError(err: Error) { throw err; },
+        });
+
+        const result = await db.landing.findUnique({ where: { id: doc.id } });
+        return { content: [{ type: "text", text: JSON.stringify({ ...result, cfdiData: data }, null, 2) }] };
+      }
+
       const result = await createDocumentFromCFDI(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })

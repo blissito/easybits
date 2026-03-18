@@ -207,6 +207,100 @@ export function buildNotaCreditoHTML(data: CFDIData): string {
   return inner.replace("FACTURA", "NOTA DE CRÉDITO");
 }
 
+// --- Serialize for AI ---
+export function serializeCFDIForAI(data: CFDIData): string {
+  const lines: string[] = [];
+  const tipoNames: Record<string, string> = { I: "Factura", P: "Complemento de Pago", E: "Nota de Crédito", T: "Carta Porte", N: "Nómina" };
+  lines.push(`TIPO DE DOCUMENTO: ${tipoNames[data.tipo] || data.tipoDesc} (${data.tipo})`);
+  lines.push(`VERSIÓN CFDI: ${data.version}`);
+  if (data.serie || data.folio) lines.push(`SERIE/FOLIO: ${[data.serie, data.folio].filter(Boolean).join(" ")}`);
+  lines.push(`FECHA: ${fmtDate(data.fecha)}`);
+  if (data.lugarExpedicion) lines.push(`LUGAR DE EXPEDICIÓN: ${data.lugarExpedicion}`);
+  lines.push("");
+
+  lines.push("EMISOR:");
+  lines.push(`  Nombre: ${data.emisor.nombre}`);
+  lines.push(`  RFC: ${data.emisor.rfc}`);
+  if (data.emisor.regimenFiscalDesc) lines.push(`  Régimen fiscal: ${data.emisor.regimenFiscalDesc}`);
+  lines.push("");
+
+  lines.push("RECEPTOR:");
+  lines.push(`  Nombre: ${data.receptor.nombre}`);
+  lines.push(`  RFC: ${data.receptor.rfc}`);
+  if (data.receptor.usoCFDIDesc) lines.push(`  Uso CFDI: ${data.receptor.usoCFDIDesc}`);
+  if (data.receptor.regimenFiscalDesc) lines.push(`  Régimen fiscal: ${data.receptor.regimenFiscalDesc}`);
+  if (data.receptor.domicilioFiscal) lines.push(`  C.P.: ${data.receptor.domicilioFiscal}`);
+  lines.push("");
+
+  if (data.tipo === "P" && data.pagos.length > 0) {
+    for (const [i, p] of data.pagos.entries()) {
+      lines.push(`PAGO ${data.pagos.length > 1 ? i + 1 : ""}:`);
+      lines.push(`  Monto: $${fmt(p.monto)} ${p.moneda}`);
+      lines.push(`  Fecha de pago: ${fmtDate(p.fechaPago)}`);
+      lines.push(`  Forma de pago: ${p.formaPagoDesc || p.formaPago}`);
+      if (p.numOperacion) lines.push(`  No. operación: ${p.numOperacion}`);
+      if (p.rfcBeneficiario) lines.push(`  RFC banco beneficiario: ${p.rfcBeneficiario}`);
+      if (p.docRelacionados.length > 0) {
+        lines.push("  Documentos relacionados:");
+        for (const d of p.docRelacionados) {
+          lines.push(`    - UUID: ${d.idDocumento}`);
+          if (d.serie || d.folio) lines.push(`      Serie/Folio: ${[d.serie, d.folio].filter(Boolean).join(" ")}`);
+          if (d.impSaldoAnt != null) lines.push(`      Saldo anterior: $${fmt(d.impSaldoAnt)}`);
+          if (d.impPagado != null) lines.push(`      Monto pagado: $${fmt(d.impPagado)}`);
+          if (d.impSaldoInsoluto != null) lines.push(`      Saldo insoluto: $${fmt(d.impSaldoInsoluto)}`);
+        }
+      }
+      lines.push("");
+    }
+  } else if (data.conceptos.length > 0) {
+    lines.push("CONCEPTOS:");
+    for (const c of data.conceptos) {
+      lines.push(`  - ${c.descripcion}`);
+      lines.push(`    Cantidad: ${c.cantidad} ${c.unidad || c.claveUnidad}`);
+      lines.push(`    Precio unitario: $${fmt(c.valorUnitario)}`);
+      lines.push(`    Importe: $${fmt(c.importe)}`);
+      if (c.descuento) lines.push(`    Descuento: $${fmt(c.descuento)}`);
+    }
+    lines.push("");
+
+    if (data.formaPagoDesc) lines.push(`FORMA DE PAGO: ${data.formaPagoDesc}`);
+    if (data.metodoPagoDesc) lines.push(`MÉTODO DE PAGO: ${data.metodoPagoDesc}`);
+    lines.push("");
+  }
+
+  lines.push("TOTALES:");
+  lines.push(`  Subtotal: $${fmt(data.subTotal)}`);
+  if (data.descuento) lines.push(`  Descuento: -$${fmt(data.descuento)}`);
+  if (data.impuestos?.traslados) {
+    for (const t of data.impuestos.traslados) {
+      lines.push(`  ${t.impuestoDesc} (${(t.tasaOCuota * 100).toFixed(0)}%): $${fmt(t.importe)}`);
+    }
+  }
+  if (data.impuestos?.retenciones) {
+    for (const r of data.impuestos.retenciones) {
+      lines.push(`  ${r.impuestoDesc} retención: -$${fmt(r.importe)}`);
+    }
+  }
+  lines.push(`  TOTAL: $${fmt(data.total)} ${data.monedaDesc || data.moneda}`);
+  lines.push("");
+
+  if (data.timbre) {
+    lines.push("TIMBRE FISCAL DIGITAL:");
+    lines.push(`  UUID: ${data.timbre.uuid}`);
+    lines.push(`  Fecha timbrado: ${fmtDate(data.timbre.fechaTimbrado)}`);
+    lines.push(`  No. certificado SAT: ${data.timbre.noCertificadoSAT}`);
+    lines.push(`  Sello CFDI: ${data.timbre.selloCFD.slice(0, 40)}...${data.timbre.selloCFD.slice(-40)}`);
+    lines.push(`  Sello SAT: ${data.timbre.selloSAT.slice(0, 40)}...${data.timbre.selloSAT.slice(-40)}`);
+    lines.push("");
+  }
+
+  if (data.qrUrl) {
+    lines.push(`VERIFICACIÓN SAT: ${data.qrUrl}`);
+  }
+
+  return lines.join("\n");
+}
+
 // --- Entry point ---
 export function buildCFDIDocument(data: CFDIData): string {
   switch (data.tipo) {
