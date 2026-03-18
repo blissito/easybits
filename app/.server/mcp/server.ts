@@ -74,6 +74,7 @@ import {
   getPageHtml,
   getSectionHtml,
   setSectionHtmlBySelector,
+  enhanceDocumentPrompt,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -787,18 +788,11 @@ export function createMcpServer() {
 
   server.tool(
     "update_document",
-    "Update a document's name, pages, theme, colors, or prompt. Each section has: { id, order, html, type?, name? }.",
+    "Update a document's metadata (name, theme, colors, prompt). To modify pages, use set_page_html, add_page, delete_page, or reorder_pages instead.",
     {
       documentId: z.string().describe("The document ID"),
       name: z.string().optional().describe("New name"),
       prompt: z.string().optional().describe("New prompt/description"),
-      sections: z.array(z.object({
-        id: z.string().describe("Unique section ID"),
-        order: z.number().describe("Page order (0-based)"),
-        html: z.string().optional().describe("HTML content of the page"),
-        type: z.string().optional().describe("Section type"),
-        name: z.string().optional().describe("Section name"),
-      })).optional().describe("Replace all pages/sections"),
       theme: z.string().optional().describe("Theme name"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides"),
     },
@@ -984,6 +978,7 @@ export function createMcpServer() {
       direction: directionSchema,
       extraInstructions: z.string().optional().describe("Additional instructions for the AI (e.g. 'Include charts', 'Use Spanish')"),
       logoUrl: z.string().optional().describe("Logo URL or data URL to include in the document"),
+      referenceImage: z.string().optional().describe("Reference image as base64 data URL or image URL — AI will replicate this design"),
       skipCover: z.boolean().optional().describe("Skip generating a cover page (useful when adding pages to existing doc)"),
     },
     wrapHandler(async (params, extra) => {
@@ -1007,7 +1002,7 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, sectionId, instruction, direction } = params;
       const result = await refineDocumentSection(ctx, documentId, { sectionId, instruction, direction });
-      return { content: [{ type: "text", text: JSON.stringify({ success: true, html: result.html.substring(0, 500) + "..." }, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, sectionId, htmlLength: result.html.length, hint: "Use get_page_html to retrieve the updated content" }, null, 2) }] };
     })
   );
 
@@ -1023,7 +1018,51 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, sectionId, direction } = params;
       const result = await regenerateDocumentPage(ctx, documentId, { sectionId, direction });
-      return { content: [{ type: "text", text: JSON.stringify({ success: true, html: result.html.substring(0, 500) + "..." }, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify({ success: true, sectionId, htmlLength: result.html.length, hint: "Use get_page_html to retrieve the updated content" }, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "enhance_document_prompt",
+    "Enhance a document prompt or auto-generate a description from the document name. Use 'auto-describe' to generate a description from just the title, or 'enhance' to improve an existing prompt with design suggestions.",
+    {
+      name: z.string().describe("Document name/title"),
+      prompt: z.string().optional().describe("Existing prompt to enhance (omit for auto-describe)"),
+      action: z.enum(["enhance", "auto-describe"]).optional().describe("Action type (default: auto-describe if no prompt, enhance if prompt provided)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await enhanceDocumentPrompt(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_document_directions",
+    "Generate 4 design directions for a document. Each direction includes fonts, colors, mood, and layout hints. Use one of the returned directions when calling generate_document.",
+    {
+      prompt: z.string().describe("What the document is about"),
+      pageCount: z.number().optional().describe("Expected page count (helps calibrate direction complexity)"),
+      sourceContent: z.string().optional().describe("Optional source content to base the document on"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { resolveAiKey } = await import("../core/aiKeyOperations");
+      const { getAiModel, resolveModelLocal } = await import("../aiModels");
+      const { generateDirections } = await import("@easybits.cloud/html-tailwind-generator/directions");
+
+      const anthropicKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
+      const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;
+
+      const brief = params.sourceContent
+        ? `${params.prompt}\n\nSource content preview: ${params.sourceContent.substring(0, 500)}`
+        : params.prompt;
+
+      const modelId = await getAiModel("docDirections");
+      const model = resolveModelLocal(modelId, openaiKey || undefined, anthropicKey || undefined);
+      const directions = await generateDirections({ prompt: brief, count: 4, model });
+
+      return { content: [{ type: "text", text: JSON.stringify(directions, null, 2) }] };
     })
   );
 

@@ -387,6 +387,57 @@ export async function unpublishDocument(ctx: AuthContext, id: string) {
   return unpublishLanding(ctx, id);
 }
 
+// --- Document Enhance ---
+
+export async function enhanceDocumentPrompt(
+  ctx: AuthContext,
+  opts: { name: string; prompt?: string; action?: "enhance" | "auto-describe" }
+) {
+  requireScope(ctx, "READ");
+  const { generateText } = await import("ai");
+  const { getAiModel, resolveModelLocal } = await import("../aiModels");
+  const { logAiUsage } = await import("../aiGenerationLimit");
+
+  const action = opts.action || (opts.prompt ? "enhance" : "auto-describe");
+
+  if (action === "auto-describe") {
+    if (!opts.name) throw new Error("Name required");
+    const modelId = await getAiModel("docAutoDescribe");
+    const model = resolveModelLocal(modelId);
+    const { text, usage } = await generateText({
+      model,
+      system: `You are a creative assistant. Given a document title, write a brief description (2-3 sentences in Spanish) of what the document should contain and how it should look. Be specific about content structure and design style. Do NOT add greetings or explanations, just the description.`,
+      prompt: `Document title: "${opts.name}"\n\nWrite a brief description for this document:`,
+    });
+    logAiUsage(ctx.user.id, { type: "enhance", product: "document", modelId, inputTokens: usage?.inputTokens, outputTokens: usage?.outputTokens });
+    return { description: text.trim() };
+  }
+
+  if (!opts.prompt) throw new Error("Prompt required");
+  const modelId = await getAiModel("docDirections");
+  const model = resolveModelLocal(modelId);
+  const { text, usage } = await generateText({
+    model,
+    system: `You are a creative director helping a user write better instructions for an AI document generator.
+The user will give you a brief description of what they want. Your job is to enhance it into a detailed, actionable prompt that will produce a beautiful, professional document.
+
+RULES:
+- Keep the user's original intent intact
+- Add specific design suggestions (colors, layout, typography style)
+- Suggest content structure (sections, charts, tables if relevant)
+- Keep it under 3-4 sentences, concise but rich
+- Write in Spanish
+- Do NOT add greetings or explanations, just the improved prompt
+- If the user mentions data/numbers, suggest visualizations`,
+    prompt: `Document name: "${opts.name}"
+User's description: "${opts.prompt}"
+
+Write an enhanced version of this description:`,
+  });
+  logAiUsage(ctx.user.id, { type: "enhance", product: "document", modelId, inputTokens: usage?.inputTokens, outputTokens: usage?.outputTokens });
+  return { enhanced: text.trim() };
+}
+
 // --- AI Document Operations ---
 
 interface DirectionOpts {
@@ -419,6 +470,7 @@ export async function generateDocumentAI(
     direction?: DirectionOpts;
     extraInstructions?: string;
     logoUrl?: string;
+    referenceImage?: string;
     skipCover?: boolean;
   }
 ) {
@@ -447,6 +499,7 @@ export async function generateDocumentAI(
   await generateDocumentParallel({
     prompt: opts.prompt,
     logoUrl: resolvedLogoUrl,
+    referenceImage: opts.referenceImage,
     extraInstructions: opts.extraInstructions,
     direction: opts.direction,
     pexelsApiKey: process.env.PEXELS_API_KEY,

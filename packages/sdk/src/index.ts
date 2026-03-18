@@ -368,6 +368,63 @@ export interface DeployDocumentResponse {
   customUrl?: string;
 }
 
+export interface AddPageParams {
+  html?: string;
+  afterPageIndex?: number;
+  label?: string;
+}
+
+export interface GenerateDocumentParams {
+  prompt: string;
+  pageCount?: number;
+  direction?: {
+    name?: string;
+    headingFont?: string;
+    bodyFont?: string;
+    colors?: { primary: string; accent: string; surface: string; surfaceAlt: string; text: string };
+    mood?: string;
+    layoutHint?: string;
+  };
+  extraInstructions?: string;
+  logoUrl?: string;
+  skipCover?: boolean;
+  sourceContent?: string;
+  /** Single reference image as base64 data URL or image URL — AI will replicate this design */
+  referenceImage?: string;
+  /** Per-page reference images (e.g. rendered from PDF pages) — each index maps to a page */
+  referencePages?: string[];
+}
+
+export interface GenerateDocumentResult {
+  sections: DocumentSection[];
+  total: number;
+}
+
+export interface RefineDocumentParams {
+  sectionId: string;
+  instruction: string;
+  direction?: GenerateDocumentParams["direction"];
+}
+
+export interface RegeneratePageParams {
+  sectionId: string;
+  direction?: GenerateDocumentParams["direction"];
+}
+
+export interface DocumentDirection {
+  name: string;
+  headingFont: string;
+  bodyFont: string;
+  colors: Record<string, string>;
+  mood: string;
+  layoutHint: string;
+  coverHtml?: string;
+}
+
+export interface EnhancePromptResult {
+  enhanced: string;
+}
+
 export class EasybitsError extends Error {
   constructor(
     public status: number,
@@ -714,6 +771,148 @@ export class EasybitsClient {
     return this.request<{ success: boolean }>(`/documents/${documentId}/unpublish`, {
       method: "POST",
     });
+  }
+
+  // ── Document Pages ──────────────────────────────────────────
+
+  async addPage(documentId: string, params?: AddPageParams): Promise<DocumentSection> {
+    return this.request<DocumentSection>(`/documents/${documentId}/pages`, {
+      method: "POST",
+      body: JSON.stringify(params || {}),
+    });
+  }
+
+  async deletePage(documentId: string, pageId: string): Promise<{ success: boolean; remainingPages: number }> {
+    return this.request<{ success: boolean; remainingPages: number }>(`/documents/${documentId}/pages/${pageId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async reorderPages(documentId: string, pageIds: string[]): Promise<Array<{ id: string; order: number; name?: string }>> {
+    return this.request<Array<{ id: string; order: number; name?: string }>>(`/documents/${documentId}/pages/reorder`, {
+      method: "PUT",
+      body: JSON.stringify({ pageIds }),
+    });
+  }
+
+  async getPageHtml(documentId: string, pageId: string): Promise<DocumentSection> {
+    return this.request<DocumentSection>(`/documents/${documentId}/pages/${pageId}`);
+  }
+
+  async setPageHtml(documentId: string, pageId: string, html: string): Promise<{ success: boolean; pageId: string }> {
+    return this.request<{ success: boolean; pageId: string }>(`/documents/${documentId}/pages/${pageId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ html }),
+    });
+  }
+
+  async getSectionHtml(documentId: string, pageId: string, selector: string): Promise<{ html: string; tagName: string }> {
+    return this.request<{ html: string; tagName: string }>(
+      `/documents/${documentId}/pages/${pageId}/element?selector=${encodeURIComponent(selector)}`
+    );
+  }
+
+  async setSectionHtml(documentId: string, pageId: string, selector: string, html: string): Promise<{ success: boolean; pageId: string; cssSelector: string }> {
+    return this.request<{ success: boolean; pageId: string; cssSelector: string }>(
+      `/documents/${documentId}/pages/${pageId}/element?selector=${encodeURIComponent(selector)}`,
+      { method: "PATCH", body: JSON.stringify({ html }) }
+    );
+  }
+
+  // ── Document AI ─────────────────────────────────────────────
+
+  async generateDocument(documentId: string, params: GenerateDocumentParams): Promise<GenerateDocumentResult> {
+    return this.consumeSSE<GenerateDocumentResult>("/document-generate", {
+      method: "POST",
+      body: JSON.stringify({ landingId: documentId, ...params }),
+    }, (events) => {
+      const sections: DocumentSection[] = [];
+      for (const e of events) {
+        if (e.type === "section" && e.data) sections.push(e.data as DocumentSection);
+        if (e.type === "section-update" && e.data) {
+          const update = e.data as { id: string; html: string };
+          const s = sections.find((s) => s.id === update.id);
+          if (s) s.html = update.html;
+        }
+      }
+      return { sections, total: sections.length };
+    });
+  }
+
+  async refineDocument(documentId: string, params: RefineDocumentParams): Promise<{ html: string }> {
+    return this.consumeSSE<{ html: string }>("/document-refine", {
+      method: "POST",
+      body: JSON.stringify({ landingId: documentId, ...params }),
+    }, (events) => {
+      const last = events.filter((e) => e.type === "result" || e.type === "done").pop();
+      return { html: (last?.data as any)?.html || "" };
+    });
+  }
+
+  async regenerateDocumentPage(documentId: string, params: RegeneratePageParams): Promise<{ html: string }> {
+    return this.refineDocument(documentId, { ...params, instruction: "__VARIANT__" });
+  }
+
+  async getDocumentDirections(prompt: string, opts?: { pageCount?: number }): Promise<DocumentDirection[]> {
+    return this.consumeSSE<DocumentDirection[]>("/document-directions", {
+      method: "POST",
+      body: JSON.stringify({ prompt, pageCount: opts?.pageCount }),
+    }, (events) => {
+      return events
+        .filter((e) => e.type === "direction")
+        .map((e) => e.data as DocumentDirection);
+    });
+  }
+
+  async enhanceDocumentPrompt(name: string, prompt?: string): Promise<EnhancePromptResult> {
+    const action = prompt ? "enhance" : "auto-describe";
+    const result = await this.request<{ enhanced?: string; description?: string }>("/document-enhance", {
+      method: "POST",
+      body: JSON.stringify({ name, prompt, _action: action }),
+    });
+    return { enhanced: result.enhanced || result.description || "" };
+  }
+
+  // ── SSE helper ──────────────────────────────────────────────
+
+  private async consumeSSE<T>(
+    path: string,
+    opts: RequestInit,
+    collect: (events: Array<{ type: string; data: unknown }>) => T
+  ): Promise<T> {
+    const res = await fetch(`${this.baseUrl}/api/v2${path}`, {
+      ...opts,
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        ...opts.headers,
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new EasybitsError(res.status, body);
+    }
+
+    const text = await res.text();
+    const events: Array<{ type: string; data: unknown }> = [];
+    let currentType = "";
+
+    for (const line of text.split("\n")) {
+      if (line.startsWith("event: ")) {
+        currentType = line.slice(7).trim();
+      } else if (line.startsWith("data: ")) {
+        const raw = line.slice(6);
+        try {
+          events.push({ type: currentType || "message", data: JSON.parse(raw) });
+        } catch {
+          events.push({ type: currentType || "message", data: raw });
+        }
+        currentType = "";
+      }
+    }
+
+    return collect(events);
   }
 
   // ── Databases ─────────────────────────────────────────────

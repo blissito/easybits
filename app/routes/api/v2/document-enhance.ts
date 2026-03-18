@@ -1,12 +1,13 @@
 import { data } from "react-router";
 import { generateText } from "ai";
-import { getUserOrRedirect } from "~/.server/getters";
+import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { resolveModelLocal, getAiModel } from "~/.server/aiModels";
 import { logAiUsage } from "~/.server/aiGenerationLimit";
 import type { Route } from "./+types/document-enhance";
 
 export const action = async ({ request }: Route.ActionArgs) => {
-  const user = await getUserOrRedirect(request);
+  const ctx = requireAuth(await authenticateRequest(request));
+  const user = ctx.user;
   const body = await request.json();
   const action = String(body._action || "enhance");
   const name = String(body.name || "").trim();
