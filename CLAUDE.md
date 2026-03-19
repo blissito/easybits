@@ -160,6 +160,52 @@ The digital asset platform where AI agents can store, manage, and consume files 
 8. **P3 — Drag & drop**: Upgrade to `@dnd-kit/core` (low priority)
 9. **P3 — Evaluate generation model**: 4o-mini vs Sonnet for HTML slides (low priority, Sonnet works well)
 
+## Vision: Forms + DBs + Actions — EasyBits como mini-backend
+
+**Objetivo**: Que las landings/documentos publicados en EasyBits tengan backend funcional sin que el usuario escriba código. Forms que guardan datos, acciones que se ejecutan server-side, y DBs consultables por agentes.
+
+### Flujo completo
+```
+Usuario crea DB "leads" (schema: nombre, email, teléfono)
+     ↓
+En el editor, conecta un <form> a esa DB + configura acciones
+     ↓
+Visitante llena form en landing publicada
+     ↓
+POST /api/v2/forms/:landingId/submit (público, rate-limited)
+     ↓
+Pipeline de acciones (configurada por usuario o agente):
+  → db_insert: guarda row en DB "leads"
+  → send_email: notifica al dueño
+  → webhook: dispara a Slack/n8n/Make
+  → create_file: genera PDF con los datos
+```
+
+### Modelo de datos
+- **FormPipeline**: `landingId`, `trigger: "form_submit"`, `actions[]`
+- **Action types** (built-in, extensibles):
+  - `db_insert` — inserta en DB del usuario con field mapping
+  - `send_email` — email con template configurable
+  - `webhook` — POST a URL externa
+  - `create_file` — genera archivo en EasyBits storage
+- **Field mapping**: conecta campos del form → columnas de la DB (`{ "nombre": "field_name", "email": "field_email" }`)
+
+### Piezas existentes que se reutilizan
+- DBs del usuario: MCP tools `db_create`, `db_query`, `db_list`, `db_exec` ya existen
+- Webhooks engine: `app/.server/webhooks.ts` — fire-and-forget + HMAC
+- Email infra: `app/.server/emails/`
+- Nuevo evento webhook: `form.submitted` (payload: formId, data, landingName)
+
+### Fases de implementación
+1. **Endpoint submit + FormSubmission model + webhook `form.submitted`** — poco código, el usuario conecta automatizaciones externas
+2. **Actions built-in** — `db_insert` + `send_email`. El form funciona end-to-end sin nada externo
+3. **UI en editor** — seleccionar form → panel "Acciones al enviar" → agregar/quitar actions
+4. **MCP tools** — `list_form_submissions`, `create_form_action`, `list_form_actions`
+5. **Actions marketplace** — la comunidad o agentes crean plugins custom
+
+### Diferenciador
+EasyBits se convierte en hosting + DB + forms + actions — un mini Firebase/Supabase controlado por agentes. El usuario publica una landing y ya tiene backend funcional.
+
 ## TODOs & Technical Debt
 - Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure

@@ -166,7 +166,7 @@ export function parseCFDI(xmlString: string): CFDIData {
   const comp =
     parsed.Comprobante ??
     parsed["cfdi:Comprobante"] ??
-    Object.values(parsed).find((v: any) => v?.Comprobante)?.Comprobante ??
+    (Object.values(parsed).find((v: any) => v?.Comprobante) as any)?.Comprobante ??
     parsed;
 
   const tipo = attr(comp, "TipoDeComprobante") ?? "";

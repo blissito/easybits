@@ -24,6 +24,7 @@ export type StorageClient = {
   getPutUrl(key: string, opts?: { timeout?: number }): Promise<string>;
   getReadUrl(key: string, expiresIn?: number): Promise<string>;
   deleteObject(key: string): Promise<void>;
+  putObject(key: string, body: Buffer, contentType: string): Promise<void>;
   createMultipart(key: string): Promise<{ uploadId: string }>;
   getPutPartUrl(key: string, uploadId: string, partNumber: number): Promise<string>;
   completeMultipart(key: string, uploadId: string, etags: string[]): Promise<void>;
@@ -96,6 +97,12 @@ function buildStorageClient(s3: S3Client, bucket: string, prefix = DEFAULT_PREFI
     async deleteObject(key) {
       await s3.send(
         new DeleteObjectCommand({ Bucket: bucket, Key: prefix + key })
+      );
+    },
+
+    async putObject(key, body: Buffer, contentType: string) {
+      await s3.send(
+        new PutObjectCommand({ Bucket: bucket, Key: prefix + key, Body: body, ContentType: contentType })
       );
     },
 
