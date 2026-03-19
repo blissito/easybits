@@ -1017,7 +1017,7 @@ export async function uploadWebsiteFile(
   if (existing) {
     file = await db.file.update({
       where: { id: existing.id },
-      data: { storageKey, size: opts.size, contentType: opts.contentType, status: "PENDING", url: publicUrl },
+      data: { storageKey, size: opts.size, contentType: opts.contentType, status: "DONE", url: publicUrl },
     });
   } else {
     file = await db.file.create({
@@ -1030,12 +1030,84 @@ export async function uploadWebsiteFile(
         ownerId: ctx.user.id,
         access: opts.access || "public",
         url: publicUrl,
-        status: "PENDING",
+        status: "DONE",
       },
     });
   }
 
   return { file, putUrl };
+}
+
+// --- Deploy Website File (direct content upload, no presigned URL) ---
+
+export async function deployWebsiteFile(
+  ctx: AuthContext,
+  opts: {
+    websiteId: string;
+    fileName: string;
+    contentType: string;
+    content: string;
+    encoding?: "text" | "base64";
+  }
+) {
+  requireScope(ctx, "WRITE");
+
+  const website = await db.website.findUnique({ where: { id: opts.websiteId } });
+  if (!website || website.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const body = opts.encoding === "base64"
+    ? Buffer.from(opts.content, "base64")
+    : Buffer.from(opts.content, "utf-8");
+
+  if (body.length > 1_048_576) {
+    throw new Response(JSON.stringify({ error: "Content too large. Max 1MB for direct upload. Use upload_website_file for larger files." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const storageKey = `${ctx.user.id}/${nanoid(6)}`;
+  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  await client.putObject(storageKey, body, opts.contentType);
+  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+
+  const name = `${website.prefix}${opts.fileName}`;
+
+  // Upsert: if file with same name exists, update it
+  const existing = await db.file.findFirst({
+    where: { ownerId: ctx.user.id, name, status: { not: "DELETED" } },
+  });
+
+  let file;
+  if (existing) {
+    // Delete old storage object
+    try { await client.deleteObject(existing.storageKey); } catch {}
+    file = await db.file.update({
+      where: { id: existing.id },
+      data: { storageKey, size: body.length, contentType: opts.contentType, status: "DONE", url: publicUrl },
+    });
+  } else {
+    file = await db.file.create({
+      data: {
+        name,
+        storageKey,
+        slug: storageKey,
+        size: body.length,
+        contentType: opts.contentType,
+        ownerId: ctx.user.id,
+        access: "public",
+        url: publicUrl,
+        status: "DONE",
+      },
+    });
+  }
+
+  return { file };
 }
 
 // --- List Deleted Files ---
