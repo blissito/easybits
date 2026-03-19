@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { buildDeployHtmlV4 } from "~/lib/landing4/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
+import { compileTailwindCSS } from "../tailwind";
 
 let browserPromise: ReturnType<typeof launchBrowser> | null = null;
 
@@ -68,12 +69,19 @@ export async function takeDocumentScreenshot(
     customColors: metadata?.customColors,
   });
 
+  // Compile Tailwind server-side and replace CDN script with inline CSS
+  const tailwindCSS = await compileTailwindCSS(html);
+  const optimizedHtml = html
+    .replace(/<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>/, "")
+    .replace(/<script>\s*tailwind\.config\s*=\s*\{.*?\}\s*<\/script>/s, "")
+    .replace("<style>", `<style>\n${tailwindCSS}\n`);
+
   return enqueueScreenshot(async () => {
     try {
       const browser = await getBrowser();
       const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
       try {
-        await page.setContent(html, { waitUntil: "networkidle" });
+        await page.setContent(optimizedHtml, { waitUntil: "domcontentloaded" });
         const buffer = await page.screenshot({ type: "png" });
         return { type: "image", mimeType: "image/png", data: buffer.toString("base64") } as const;
       } finally {
