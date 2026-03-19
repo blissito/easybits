@@ -120,11 +120,14 @@ export function buildDocumentHtml(
     .page-nav button:hover { background: #333; }
     .page-nav button:disabled { opacity: 0.3; cursor: default; }
     .flipbook-container {
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      padding: 24px 16px;
+      flex: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 16px 16px;
       overflow: hidden;
       position: relative;
       min-height: 0;
+    }
+    @media (min-width: 768px) {
+      .flipbook-container { align-items: center; padding: 24px 16px; }
     }
     #flipbook {
       display: flex; align-items: center; justify-content: center;
