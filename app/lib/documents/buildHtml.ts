@@ -1,5 +1,9 @@
 import type { Section3 } from "~/lib/landing3/types";
 
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 /**
  * Build deployed document HTML — flipbook viewer with StPageFlip.
  * Desktop: double-page spread. Mobile: single page. Touch/swipe/keyboard.
@@ -12,6 +16,9 @@ export function buildDocumentHtml(
     tailwindConfig?: string;
     title?: string;
     pdfUrl?: string;
+    description?: string;
+    url?: string;
+    ogImage?: string;
   }
 ): string {
   const sorted = [...sections]
@@ -61,6 +68,16 @@ export function buildDocumentHtml(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
+  ${options?.description ? `<meta name="description" content="${escapeAttr(options.description)}">` : ""}
+  <meta property="og:title" content="${escapeAttr(title)}">
+  ${options?.description ? `<meta property="og:description" content="${escapeAttr(options.description)}">` : ""}
+  <meta property="og:type" content="article">
+  ${options?.url ? `<meta property="og:url" content="${escapeAttr(options.url)}">` : ""}
+  ${options?.ogImage ? `<meta property="og:image" content="${escapeAttr(options.ogImage)}">` : ""}
+  <meta name="twitter:card" content="${options?.ogImage ? "summary_large_image" : "summary"}">
+  <meta name="twitter:title" content="${escapeAttr(title)}">
+  ${options?.description ? `<meta name="twitter:description" content="${escapeAttr(options.description)}">` : ""}
+  ${options?.ogImage ? `<meta name="twitter:image" content="${escapeAttr(options.ogImage)}">` : ""}
   <script src="https://cdn.tailwindcss.com"><\/script>
   ${options?.tailwindConfig ? `<script>tailwind.config = ${options.tailwindConfig}<\/script>` : ""}
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">

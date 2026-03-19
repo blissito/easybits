@@ -65,6 +65,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           themeCss,
           tailwindConfig,
           title: landing.name,
+          description: landing.prompt || undefined,
         });
       })()
     : landing.version === 5
@@ -260,6 +261,8 @@ export async function deployLanding(ctx: AuthContext, id: string) {
         themeCss,
         tailwindConfig,
         title: landing.name,
+        description: landing.prompt || undefined,
+        url: `https://${slug}.easybits.cloud`,
         pdfUrl,
       });
       const updatedBuffer = Buffer.from(updatedHtml, "utf-8");
