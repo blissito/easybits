@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { buildDeployHtmlV4 } from "~/lib/landing4/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
-import { compileTailwindCSS } from "../tailwind";
+import { replaceCdnWithCompiledCSS } from "../tailwind";
 
 let browserPromise: ReturnType<typeof launchBrowser> | null = null;
 
@@ -69,12 +69,8 @@ export async function takeDocumentScreenshot(
     customColors: metadata?.customColors,
   });
 
-  // Compile Tailwind server-side and replace CDN script with inline CSS
-  const tailwindCSS = await compileTailwindCSS(html);
-  const optimizedHtml = html
-    .replace(/<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>/, "")
-    .replace(/<script>\s*tailwind\.config\s*=\s*\{.*?\}\s*<\/script>/s, "")
-    .replace("<style>", `<style>\n${tailwindCSS}\n`);
+  // Compile Tailwind server-side — eliminates CDN download + browser JIT
+  const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
   return enqueueScreenshot(async () => {
     try {

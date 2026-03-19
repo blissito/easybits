@@ -38,3 +38,20 @@ export async function compileTailwindCSS(html: string): Promise<string> {
   const result = await processor.process(INPUT_CSS, { from: undefined });
   return result.css;
 }
+
+/**
+ * Replace Tailwind CDN `<script>` + config script with a compiled `<style>` block.
+ * Works on any HTML that uses the CDN pattern. Returns the optimized HTML.
+ */
+export async function replaceCdnWithCompiledCSS(
+  html: string
+): Promise<string> {
+  const css = await compileTailwindCSS(html);
+  return html
+    .replace(
+      /<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>/,
+      ""
+    )
+    .replace(/<script>\s*tailwind\.config\s*=\s*\{.*?\}\s*<\/script>/s, "")
+    .replace("<style>", `<style>\n${css}\n`);
+}

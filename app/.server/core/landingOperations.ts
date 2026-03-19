@@ -16,6 +16,7 @@ import type { LandingBlock } from "~/lib/landing2/blockTypes";
 import type { Section3 } from "~/lib/landing3/types";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
+import { replaceCdnWithCompiledCSS } from "../tailwind";
 
 function throwJson(error: string, status: number): never {
   throw new Response(JSON.stringify({ error }), {
@@ -78,7 +79,12 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     : landing.version === 2
     ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
     : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);
-  const htmlBuffer = Buffer.from(html, "utf-8");
+
+  // Compile Tailwind server-side for versions that use CDN (v4 docs, v5 landings)
+  const needsCompile = landing.version === 4 || landing.version === 5;
+  const finalHtml = needsCompile ? await replaceCdnWithCompiledCSS(html) : html;
+  const finalPrintHtml = printHtml && needsCompile ? await replaceCdnWithCompiledCSS(printHtml) : printHtml;
+  const htmlBuffer = Buffer.from(finalHtml, "utf-8");
 
   // Create or reuse website
   let websiteId = landing.websiteId;
@@ -152,8 +158,8 @@ export async function deployLanding(ctx: AuthContext, id: string) {
 
   // Upload print.html + generate PDF for documents
   let pdfUrl: string | undefined;
-  if (printHtml) {
-    const printBuffer = Buffer.from(printHtml, "utf-8");
+  if (finalPrintHtml) {
+    const printBuffer = Buffer.from(finalPrintHtml, "utf-8");
     const printStorageKey = `${ctx.user.id}/${nanoid(6)}`;
     const printPublicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${printStorageKey}`;
     const printPutUrl = await client.getPutUrl(printStorageKey);
