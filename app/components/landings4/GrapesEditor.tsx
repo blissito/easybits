@@ -6,12 +6,20 @@ import { LANDING_BLOCKS } from "./blocks";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
 import TailwindClassEditor from "./TailwindClassEditor";
 
-/** Strip non-string entries (e.g. extras array) from customColors */
-function stripExtras(colors: Record<string, any> | undefined): Record<string, string> | undefined {
+/** Flatten brand kit colors: keep string entries and convert extras array to named colors */
+function flattenColors(colors: Record<string, any> | undefined): Record<string, string> | undefined {
   if (!colors) return undefined;
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(colors)) {
-    if (typeof v === "string") out[k] = v;
+    if (typeof v === "string") {
+      out[k] = v;
+    } else if (k === "extras" && Array.isArray(v)) {
+      v.forEach((extra: { name?: string; hex?: string }, i: number) => {
+        if (extra?.hex) {
+          out[extra.name || `extra-${i + 1}`] = extra.hex;
+        }
+      });
+    }
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -82,7 +90,7 @@ export type PanelId = (typeof PANEL_TABS)[number]["id"];
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
   ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left" }, ref) => {
     // Strip non-string entries (e.g. extras array from brand kits)
-    const customColors = stripExtras(rawCustomColors);
+    const customColors = flattenColors(rawCustomColors);
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const blocksRef = useRef<HTMLDivElement>(null);
     const layersRef = useRef<HTMLDivElement>(null);
@@ -722,7 +730,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-5 mb-3">Brand Kits</p>
                 <div className="grid grid-cols-2 gap-2">
                   {brandKits.map((bk) => {
-                    const bkBase = stripExtras(bk.colors as Record<string, any>) || {};
+                    const bkBase = flattenColors(bk.colors as Record<string, any>) || {};
                     // Show customColors if this brand kit is active and user edited colors
                     const displayColors = activeBrandKitId === bk.id && customColors && Object.keys(customColors).length
                       ? { ...bkBase, ...customColors }
@@ -759,7 +767,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                   const bk = brandKits?.find((b) => b.id === activeBrandKitId);
                   if (!bk) return null;
                   // Use current customColors (with user edits) over original brand kit colors
-                  const baseColors = stripExtras(bk.colors as Record<string, any>) || {};
+                  const baseColors = flattenColors(bk.colors as Record<string, any>) || {};
                   const colors = customColors && Object.keys(customColors).length
                     ? { ...baseColors, ...customColors }
                     : baseColors;
