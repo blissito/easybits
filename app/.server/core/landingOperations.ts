@@ -241,36 +241,28 @@ export async function deployLanding(ctx: AuthContext, id: string) {
       }
     }
 
-    // Generate og:image from cover page via Gotenberg screenshot
+    // Generate og:image from cover page via Playwright screenshot (documents only)
     let ogImageUrl: string | undefined;
-    if (pdfServiceUrl) {
-      try {
-        const ssUrl = pdfServiceUrl.replace(/\/forms\/.*$/, "/forms/chromium/screenshot/url");
-        const ssFormData = new FormData();
-        ssFormData.append("url", `https://${slug!}.easybits.cloud/print.html`);
-        ssFormData.append("width", "1200");
-        ssFormData.append("height", "630");
-        ssFormData.append("clip", "true");
-        ssFormData.append("waitDelay", "3s");
-        const ssRes = await fetch(ssUrl, { method: "POST", body: ssFormData });
-        if (ssRes.ok) {
-          const ssBuffer = Buffer.from(await ssRes.arrayBuffer());
-          const ogStorageKey = `${ctx.user.id}/${nanoid(6)}`;
-          const ogPutUrl = await client.getPutUrl(ogStorageKey);
-          const ogUploadRes = await fetch(ogPutUrl, {
-            method: "PUT",
-            body: ssBuffer,
-            headers: { "Content-Type": "image/png" },
-          });
-          if (ogUploadRes.ok) {
-            ogImageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${ogStorageKey}`;
-          }
-        } else {
-          console.error(`[deployLanding] og:image screenshot failed: ${ssRes.status}`);
+    if (landing.version === 4) try {
+      const { takeDocumentScreenshot } = await import("./documentScreenshot");
+      const ssResult = await takeDocumentScreenshot(ctx.user.id, landing.id, 0);
+      if (ssResult.type === "image") {
+        const ssBuffer = Buffer.from(ssResult.data, "base64");
+        const ogStorageKey = `${ctx.user.id}/${nanoid(6)}`;
+        const ogPutUrl = await client.getPutUrl(ogStorageKey);
+        const ogUploadRes = await fetch(ogPutUrl, {
+          method: "PUT",
+          body: ssBuffer,
+          headers: { "Content-Type": "image/png" },
+        });
+        if (ogUploadRes.ok) {
+          ogImageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${ogStorageKey}`;
         }
-      } catch (err) {
-        console.error("[deployLanding] og:image screenshot error:", err);
+      } else {
+        console.error(`[deployLanding] og:image screenshot failed: ${ssResult.text}`);
       }
+    } catch (err) {
+      console.error("[deployLanding] og:image screenshot error:", err);
     }
 
     // Re-build flipbook HTML with pdfUrl/ogImage now that we have them
