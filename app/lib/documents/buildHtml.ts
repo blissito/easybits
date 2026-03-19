@@ -123,6 +123,10 @@ export function buildDocumentHtml(
       padding: 24px 16px;
       overflow: hidden;
       position: relative;
+      min-height: 0;
+    }
+    #flipbook {
+      display: flex; align-items: center; justify-content: center;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
