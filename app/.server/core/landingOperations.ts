@@ -241,67 +241,75 @@ export async function deployLanding(ctx: AuthContext, id: string) {
       }
     }
 
-    // Generate og:image from cover page via Playwright screenshot (documents only)
-    let ogImageUrl: string | undefined;
-    if (landing.version === 4) try {
-      const { takeDocumentScreenshot } = await import("./documentScreenshot");
-      const ssResult = await takeDocumentScreenshot(ctx.user.id, landing.id, 0);
-      if (ssResult.type === "image") {
-        const ssBuffer = Buffer.from(ssResult.data, "base64");
-        const ogStorageKey = `${ctx.user.id}/${nanoid(6)}`;
-        const ogPutUrl = await client.getPutUrl(ogStorageKey);
-        const ogUploadRes = await fetch(ogPutUrl, {
-          method: "PUT",
-          body: ssBuffer,
-          headers: { "Content-Type": "image/png" },
-        });
-        if (ogUploadRes.ok) {
-          ogImageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${ogStorageKey}`;
-        }
-      } else {
-        console.error(`[deployLanding] og:image screenshot failed: ${ssResult.text}`);
-      }
-    } catch (err) {
-      console.error("[deployLanding] og:image screenshot error:", err);
-    }
+    // Generate og:image in background (non-blocking) — re-uploads HTML with meta tag when ready
+    if (landing.version === 4) {
+      const bgSlug = slug!;
+      const bgStorageKey = storageKey;
+      const bgSections = sections;
+      const bgLandingMeta = landingMeta;
+      const bgIsPaid = isPaid;
+      const bgLandingName = landing.name;
+      const bgLandingPrompt = landing.prompt;
+      const bgUserId = ctx.user.id;
+      const bgLandingId = landing.id;
+      const bgExistingFileId = existingFile?.id;
 
-    // Re-build flipbook HTML with pdfUrl/ogImage now that we have them
-    if (pdfUrl || ogImageUrl) {
-      const { buildDocumentHtml: rebuildDoc } = await import("~/lib/documents/buildHtml");
-      const docTheme = (landingMeta.theme as string) || undefined;
-      let themeCss: string | undefined;
-      let tailwindConfig: string | undefined;
-      if (docTheme === "custom" && landingMeta.customColors) {
-        const t = buildCustomTheme(landingMeta.customColors as any);
-        themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]: [string, unknown]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
-        tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
-      } else if (docTheme) {
-        const docThemeCss = buildSingleThemeCss(docTheme);
-        themeCss = docThemeCss.css;
-        tailwindConfig = docThemeCss.tailwindConfig;
-      }
-      const updatedHtml = rebuildDoc(sections as Section3[], {
-        showBranding: !isPaid,
-        themeCss,
-        tailwindConfig,
-        title: landing.name,
-        description: landing.prompt || undefined,
-        url: `https://${slug}.easybits.cloud`,
-        pdfUrl,
-        ogImage: ogImageUrl,
-      });
-      const updatedBuffer = Buffer.from(updatedHtml, "utf-8");
-      // Re-upload index.html with pdfUrl
-      const reUploadUrl = await client.getPutUrl(storageKey);
-      await fetch(reUploadUrl, {
-        method: "PUT",
-        body: updatedBuffer,
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
-      // Update file size
-      if (existingFile) {
-        await db.file.update({ where: { id: existingFile.id }, data: { size: updatedBuffer.length } });
-      }
+      (async () => {
+        try {
+          const { takeOgScreenshot } = await import("./documentScreenshot");
+          const ssBuffer = await takeOgScreenshot(bgUserId, bgLandingId);
+          if (!ssBuffer) {
+            console.error("[deployLanding] og:image screenshot failed");
+            return;
+          }
+          const ogStorageKey = `${bgUserId}/${nanoid(6)}`;
+          const ogPutUrl = await client.getPutUrl(ogStorageKey);
+          const ogUploadRes = await fetch(ogPutUrl, {
+            method: "PUT",
+            body: new Uint8Array(ssBuffer),
+            headers: { "Content-Type": "image/png" },
+          });
+          if (!ogUploadRes.ok) return;
+          const ogImageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${ogStorageKey}`;
+
+          // Re-build HTML with og:image
+          const { buildDocumentHtml: rebuildDoc } = await import("~/lib/documents/buildHtml");
+          const docTheme = (bgLandingMeta.theme as string) || undefined;
+          let themeCss: string | undefined;
+          let tailwindConfig: string | undefined;
+          if (docTheme === "custom" && bgLandingMeta.customColors) {
+            const t = buildCustomTheme(bgLandingMeta.customColors as any);
+            themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]: [string, unknown]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+            tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
+          } else if (docTheme) {
+            const docThemeCss = buildSingleThemeCss(docTheme);
+            themeCss = docThemeCss.css;
+            tailwindConfig = docThemeCss.tailwindConfig;
+          }
+          const updatedHtml = rebuildDoc(bgSections as Section3[], {
+            showBranding: !bgIsPaid,
+            themeCss,
+            tailwindConfig,
+            title: bgLandingName,
+            description: bgLandingPrompt || undefined,
+            url: `https://${bgSlug}.easybits.cloud`,
+            ogImage: ogImageUrl,
+          });
+          const updatedBuffer = Buffer.from(updatedHtml, "utf-8");
+          const reUploadUrl = await client.getPutUrl(bgStorageKey);
+          await fetch(reUploadUrl, {
+            method: "PUT",
+            body: updatedBuffer,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+          if (bgExistingFileId) {
+            await db.file.update({ where: { id: bgExistingFileId }, data: { size: updatedBuffer.length } });
+          }
+          console.log(`[deployLanding] og:image ready: ${ogImageUrl}`);
+        } catch (err) {
+          console.error("[deployLanding] og:image background error:", err);
+        }
+      })();
     }
   }
 

@@ -94,3 +94,61 @@ export async function takeDocumentScreenshot(
     }
   });
 }
+
+/** Take an OG-sized screenshot (1200×630) of the cover page, scaled to fit */
+export async function takeOgScreenshot(
+  userId: string,
+  documentId: string
+): Promise<Buffer | null> {
+  if (!/^[0-9a-fA-F]{24}$/.test(documentId)) return null;
+
+  const doc = await db.landing.findUnique({ where: { id: documentId } });
+  if (!doc || doc.ownerId !== userId || doc.version !== 4) return null;
+
+  const sections = (doc.sections as unknown as Section3[]) || [];
+  const contentSections = sections
+    .filter((s) => s.id !== "__grapes_css__")
+    .sort((a, b) => a.order - b.order);
+  if (contentSections.length === 0) return null;
+
+  const cssSections = sections.filter((s) => s.id === "__grapes_css__");
+  const pageSections = [...cssSections, contentSections[0]];
+
+  const metadata = doc.metadata as Record<string, any> | null;
+  const html = buildDeployHtmlV4(pageSections, {
+    showBranding: false,
+    title: doc.name || "Document",
+    themeName: metadata?.theme,
+    customColors: metadata?.customColors,
+  });
+
+  const optimizedHtml = await replaceCdnWithCompiledCSS(html);
+
+  // Scale letter page (816px) to 1200px wide, clip to 630px tall for OG ratio
+  const scale = 1200 / 816;
+  const ogHtml = optimizedHtml.replace(
+    "</head>",
+    `<style>
+      body { margin: 0; overflow: hidden; }
+      section { transform-origin: top left; transform: scale(${scale}); }
+    </style></head>`
+  );
+
+  return enqueueScreenshot(async () => {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
+      try {
+        await page.setContent(ogHtml, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+        return await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
+      } finally {
+        await page.close();
+      }
+    } catch (err: any) {
+      browserPromise = null;
+      console.error("[takeOgScreenshot] error:", err.message);
+      return null;
+    }
+  });
+}
