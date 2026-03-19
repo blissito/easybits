@@ -78,6 +78,8 @@ export async function takeDocumentScreenshot(
       const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
       try {
         await page.setContent(optimizedHtml, { waitUntil: "domcontentloaded" });
+        // Wait for fonts to load (fast — only network request left after Tailwind compilation)
+        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
         const buffer = await page.screenshot({ type: "png" });
         return { type: "image", mimeType: "image/png", data: buffer.toString("base64") } as const;
       } finally {
