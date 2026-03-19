@@ -241,8 +241,40 @@ export async function deployLanding(ctx: AuthContext, id: string) {
       }
     }
 
-    // Re-build flipbook HTML with pdfUrl now that we have it
-    if (pdfUrl) {
+    // Generate og:image from cover page via Gotenberg screenshot
+    let ogImageUrl: string | undefined;
+    if (pdfServiceUrl) {
+      try {
+        const ssUrl = pdfServiceUrl.replace(/\/forms\/.*$/, "/forms/chromium/screenshot/url");
+        const ssFormData = new FormData();
+        ssFormData.append("url", `https://${slug!}.easybits.cloud/print.html`);
+        ssFormData.append("width", "1200");
+        ssFormData.append("height", "630");
+        ssFormData.append("clip", "true");
+        ssFormData.append("waitDelay", "3s");
+        const ssRes = await fetch(ssUrl, { method: "POST", body: ssFormData });
+        if (ssRes.ok) {
+          const ssBuffer = Buffer.from(await ssRes.arrayBuffer());
+          const ogStorageKey = `${ctx.user.id}/${nanoid(6)}`;
+          const ogPutUrl = await client.getPutUrl(ogStorageKey);
+          const ogUploadRes = await fetch(ogPutUrl, {
+            method: "PUT",
+            body: ssBuffer,
+            headers: { "Content-Type": "image/png" },
+          });
+          if (ogUploadRes.ok) {
+            ogImageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${ogStorageKey}`;
+          }
+        } else {
+          console.error(`[deployLanding] og:image screenshot failed: ${ssRes.status}`);
+        }
+      } catch (err) {
+        console.error("[deployLanding] og:image screenshot error:", err);
+      }
+    }
+
+    // Re-build flipbook HTML with pdfUrl/ogImage now that we have them
+    if (pdfUrl || ogImageUrl) {
       const { buildDocumentHtml: rebuildDoc } = await import("~/lib/documents/buildHtml");
       const docTheme = (landingMeta.theme as string) || undefined;
       let themeCss: string | undefined;
@@ -264,6 +296,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
         description: landing.prompt || undefined,
         url: `https://${slug}.easybits.cloud`,
         pdfUrl,
+        ogImage: ogImageUrl,
       });
       const updatedBuffer = Buffer.from(updatedHtml, "utf-8");
       // Re-upload index.html with pdfUrl
