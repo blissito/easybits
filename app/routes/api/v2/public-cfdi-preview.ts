@@ -128,13 +128,27 @@ INSTRUCCIONES DE DISEÑO:
         });
 
         let fullHtml = "";
+        let strippedFence = false;
 
         for await (const chunk of result.textStream) {
           fullHtml += chunk;
-          send("chunk", { html: chunk });
+          // Strip markdown fences that some models add despite instructions
+          let clean = fullHtml;
+          if (!strippedFence && clean.trimStart().startsWith("```")) {
+            clean = clean.replace(/^[\s]*```(?:html)?\s*\n?/, "");
+            strippedFence = true;
+          }
+          if (strippedFence) {
+            clean = clean.replace(/\n?```[\s]*$/, "");
+          }
+          send("chunk", { html: clean, full: true });
         }
 
-        send("done", { html: fullHtml });
+        // Final cleanup
+        let finalHtml = fullHtml;
+        finalHtml = finalHtml.replace(/^[\s]*```(?:html)?\s*\n?/, "").replace(/\n?```[\s]*$/, "");
+
+        send("done", { html: finalHtml });
         controller.close();
       } catch (err: any) {
         send("error", { message: err.message || "Generation failed" });

@@ -70,7 +70,10 @@ h1,h2,h3{font-family:'Fredoka',sans-serif}
 .ai-banner .ai-text span{font-size:.75rem;color:#8b6fc0;line-height:1.3}
 .ai-banner .ai-arrow{font-size:.8rem;font-weight:700;color:#9870ED;white-space:nowrap;background:white;border-radius:99px;padding:6px 14px;border:1.5px solid rgba(152,112,237,.3);flex-shrink:0;transition:all .2s}
 .ai-banner:hover .ai-arrow{background:var(--purple);color:white;border-color:var(--purple)}
-.ai-banner.generating{pointer-events:none;opacity:.85}
+.ai-banner .ai-cancel{display:none;font-size:.8rem;font-weight:700;color:var(--coral);white-space:nowrap;background:white;border-radius:99px;padding:6px 14px;border:1.5px solid rgba(255,107,107,.3);flex-shrink:0;cursor:pointer;transition:all .2s}
+.ai-banner .ai-cancel:hover{background:var(--coral);color:white;border-color:var(--coral)}
+.ai-banner.generating{pointer-events:none}
+.ai-banner.generating .ai-cancel{display:block;pointer-events:auto}
 .ai-banner.generating .ai-arrow{background:var(--purple);color:white;border-color:var(--purple);animation:sparkle-pulse 1.5s ease-in-out infinite}
 .ai-banner.done{display:none}
 @keyframes sparkle-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.15)}}
@@ -140,6 +143,7 @@ h1,h2,h3{font-family:'Fredoka',sans-serif}
         <span>La IA de EasyBits genera un documento profesional con tu XML — colores, tipografía y layout personalizados.</span>
       </div>
       <div class="ai-arrow" id="aiArrowText">Probar diseño IA →</div>
+      <div class="ai-cancel" id="aiCancelBtn" onclick="event.stopPropagation();cancelAI()">✕ Cancelar</div>
     </div>
     <div class="result-iframe-wrap">
       <iframe id="resultFrame"></iframe>
@@ -555,11 +559,23 @@ function stopLoadingMessages() {
   if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
 }
 
-function generateWithAI() {
-  if (!lastXml || aiBanner.classList.contains('generating')) return;
+let abortController = null;
 
+function cancelAI() {
+  if (abortController) { abortController.abort(); abortController = null; }
+  stopLoadingMessages();
+  aiBanner.classList.remove('generating');
+  aiArrowText.textContent = 'Probar diseño IA →';
+}
+
+function generateWithAI() {
+  if (!lastXml) return;
+  if (aiBanner.classList.contains('generating')) { cancelAI(); return; }
+
+  abortController = new AbortController();
   aiBanner.classList.add('generating');
   startLoadingMessages();
+  accumulatedHtml = '';
   initAIIframe();
 
   let fullHtml = '';
@@ -569,11 +585,16 @@ function generateWithAI() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ xml: lastXml, logo: logoDataUrl || undefined }),
+    signal: abortController.signal,
   }).then(res => {
     if (res.status === 429) {
       stopLoadingMessages();
       aiBanner.classList.remove('generating');
       aiArrowText.textContent = 'Probar diseño IA →';
+      aiArrowText.style.background = '#FFF0F0';
+      aiArrowText.style.color = 'var(--coral)';
+      aiArrowText.style.borderColor = 'var(--coral)';
+      setTimeout(() => { aiArrowText.style.cssText = ''; }, 5000);
       showError('Ya usaste tu preview con IA hoy. Vuelve mañana o crea una cuenta en EasyBits.');
       return;
     }
@@ -598,9 +619,9 @@ function generateWithAI() {
             try {
               const data = JSON.parse(line.slice(6));
               if (currentEvent === 'chunk') {
-                // Append chunk incrementally — no flicker
-                fullHtml += data.html;
-                appendToAIIframe(data.html);
+                // Server sends full accumulated HTML (cleaned of markdown fences)
+                fullHtml = data.full ? data.html : (fullHtml + data.html);
+                updateAIIframe(fullHtml);
               } else if (currentEvent === 'done') {
                 // Final HTML — replace body for clean state
                 fullHtml = data.html || fullHtml;
@@ -623,6 +644,7 @@ function generateWithAI() {
     }
     read();
   }).catch(err => {
+    if (err.name === 'AbortError') return; // user cancelled
     stopLoadingMessages();
     aiBanner.classList.remove('generating');
     aiArrowText.textContent = 'Probar diseño IA →';
@@ -638,22 +660,76 @@ function initAIIframe() {
   doc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"><\/script>
-    <style>body{margin:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px}section{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;overflow:hidden;animation:fade-in .4s ease-out}@keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}</style>
-    </head><body></body></html>`);
+    <style>
+      body{margin:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px}
+      section{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;overflow:hidden;animation:fade-in .4s ease-out}
+      @keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+      @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+      .skeleton{background:white;box-shadow:0 2px 20px rgba(0,0,0,.08);border-radius:8px;width:8.5in;min-height:11in;padding:40px;animation:fade-in .4s ease-out}
+      .skel-line{height:14px;border-radius:6px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:400px 100%;animation:shimmer 1.5s infinite linear;margin-bottom:12px}
+      .skel-line.w60{width:60%}.skel-line.w80{width:80%}.skel-line.w40{width:40%}.skel-line.w90{width:90%}.skel-line.w70{width:70%}
+      .skel-line.thick{height:22px;margin-bottom:16px}
+      .skel-block{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:24px 0}
+      .skel-card{background:#f8f8f8;border-radius:8px;padding:16px}
+      .skel-table{margin:24px 0}.skel-table .skel-line{margin-bottom:8px}
+      .skel-spacer{height:32px}
+    </style>
+    </head><body>
+      <div id="ai-content"></div>
+      <div class="skeleton" id="skeleton">
+        <div style="display:flex;justify-content:space-between;margin-bottom:24px">
+          <div style="flex:1"><div class="skel-line thick w40"></div><div class="skel-line w60" style="height:10px"></div></div>
+          <div style="text-align:right"><div class="skel-line thick w40" style="margin-left:auto"></div><div class="skel-line w60" style="height:10px;margin-left:auto"></div></div>
+        </div>
+        <div class="skel-block">
+          <div class="skel-card"><div class="skel-line w40" style="height:10px"></div><div class="skel-line w80"></div><div class="skel-line w60" style="height:10px"></div></div>
+          <div class="skel-card"><div class="skel-line w40" style="height:10px"></div><div class="skel-line w80"></div><div class="skel-line w60" style="height:10px"></div></div>
+        </div>
+        <div class="skel-table">
+          <div class="skel-line w90"></div><div class="skel-line w80"></div><div class="skel-line w90"></div><div class="skel-line w70"></div><div class="skel-line w80"></div>
+        </div>
+        <div class="skel-spacer"></div>
+        <div style="display:flex;justify-content:flex-end"><div style="width:280px"><div class="skel-line w80"></div><div class="skel-line w60"></div><div class="skel-line thick w90"></div></div></div>
+        <div class="skel-spacer"></div>
+        <div class="skel-line w40" style="height:10px"></div>
+        <div style="display:flex;gap:16px"><div class="skel-line" style="width:120px;height:120px;border-radius:8px;flex-shrink:0"></div><div style="flex:1"><div class="skel-line w90" style="height:10px"></div><div class="skel-line w80" style="height:10px"></div><div class="skel-line w70" style="height:10px"></div><div class="skel-line w90" style="height:10px"></div></div></div>
+      </div>
+    </body></html>`);
   doc.close();
   iframeReady = true;
 }
 
-function appendToAIIframe(html) {
+let accumulatedHtml = '';
+
+let renderPending = false;
+let latestHtml = '';
+
+function updateAIIframe(html) {
   if (!iframeReady) return;
-  const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
-  doc.body.insertAdjacentHTML('beforeend', html);
+  latestHtml = html;
+  if (!renderPending) {
+    renderPending = true;
+    requestAnimationFrame(() => {
+      renderPending = false;
+      const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
+      if (!doc) return;
+      const skel = doc.getElementById('skeleton');
+      if (skel) skel.style.display = 'none';
+      const container = doc.getElementById('ai-content');
+      if (container) container.innerHTML = latestHtml;
+      doc.defaultView?.scrollTo({ top: doc.body.scrollHeight, behavior: 'smooth' });
+    });
+  }
 }
 
 function finalizeAIIframe(html) {
   if (!iframeReady) return;
   const doc = resultFrame.contentDocument || resultFrame.contentWindow.document;
-  doc.body.innerHTML = html;
+  if (!doc) return;
+  const skel = doc.getElementById('skeleton');
+  if (skel) skel.remove();
+  const container = doc.getElementById('ai-content');
+  if (container) container.innerHTML = html;
 }
 </script>
 </body>
