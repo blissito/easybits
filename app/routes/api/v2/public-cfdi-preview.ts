@@ -105,8 +105,8 @@ INSTRUCCIONES DE DISEÑO:
 - Todos los datos del timbre fiscal deben aparecer (UUID, fecha timbrado, certificado SAT, sellos truncados)
 - Responde SOLO con el HTML de la sección, sin explicaciones ni markdown`;
 
-  // Resolve AI model
-  const docModelId = await getAiModel("docGenerate");
+  // Use Flash for speed — Pro is too slow with large reference HTML
+  const docModelId = await getAiModel("docDirections");
   const docModel = resolveModelLocal(docModelId);
 
   const stream = new ReadableStream({
