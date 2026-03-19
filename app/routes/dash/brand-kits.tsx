@@ -73,9 +73,14 @@ const DEFAULT_COLORS = {
   surface: "#f8fafc",
 };
 
+interface ExtraColor {
+  name: string;
+  hex: string;
+}
+
 interface BrandKitForm {
   name: string;
-  colors: typeof DEFAULT_COLORS;
+  colors: typeof DEFAULT_COLORS & { extras?: ExtraColor[] };
   fonts: { heading: string; body: string };
   mood: string;
 }
@@ -104,9 +109,10 @@ export default function BrandKitsPage() {
 
   function openEdit(kit: any) {
     setEditId(kit.id);
+    const c = kit.colors as any;
     setForm({
       name: kit.name,
-      colors: kit.colors as typeof DEFAULT_COLORS,
+      colors: { primary: c.primary, secondary: c.secondary, accent: c.accent, surface: c.surface, extras: c.extras || [] },
       fonts: (kit.fonts as any) || { heading: "Inter", body: "Inter" },
       mood: kit.mood || "",
     });
@@ -179,6 +185,62 @@ export default function BrandKitsPage() {
                     />
                     {c.label}
                   </label>
+                ))}
+              </div>
+
+              {/* Extra colors */}
+              <div className="mt-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-bold text-gray-500">Colores extra</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        colors: {
+                          ...form.colors,
+                          extras: [...(form.colors.extras || []), { name: "", hex: "#000000" }],
+                        },
+                      })
+                    }
+                    className="text-xs font-bold text-brand-600 hover:text-brand-800"
+                  >
+                    + Agregar color
+                  </button>
+                </div>
+                {(form.colors.extras || []).map((extra, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-2">
+                    <input
+                      type="color"
+                      value={extra.hex}
+                      onChange={(e) => {
+                        const extras = [...(form.colors.extras || [])];
+                        extras[i] = { ...extras[i], hex: e.target.value };
+                        setForm({ ...form, colors: { ...form.colors, extras } });
+                      }}
+                      className="w-8 h-8 rounded cursor-pointer border-2 border-black p-0"
+                    />
+                    <input
+                      value={extra.name}
+                      onChange={(e) => {
+                        const extras = [...(form.colors.extras || [])];
+                        extras[i] = { ...extras[i], name: e.target.value };
+                        setForm({ ...form, colors: { ...form.colors, extras } });
+                      }}
+                      placeholder="Nombre del color"
+                      className="flex-1 px-2 py-1 text-sm border-2 border-black rounded-lg bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const extras = (form.colors.extras || []).filter((_, j) => j !== i);
+                        setForm({ ...form, colors: { ...form.colors, extras } });
+                      }}
+                      className="text-red-500 hover:text-red-700 font-bold text-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -288,13 +350,21 @@ export default function BrandKitsPage() {
               </div>
 
               {/* Color swatches */}
-              <div className="flex gap-1.5 mb-3">
+              <div className="flex gap-1.5 mb-3 flex-wrap">
                 {["primary", "secondary", "accent", "surface"].map((key) => (
                   <div
                     key={key}
                     className="w-8 h-8 rounded-lg border-2 border-black"
                     style={{ backgroundColor: (kit.colors as any)?.[key] || "#ccc" }}
                     title={key}
+                  />
+                ))}
+                {((kit.colors as any)?.extras || []).map((extra: any, i: number) => (
+                  <div
+                    key={`extra-${i}`}
+                    className="w-8 h-8 rounded-lg border-2 border-black"
+                    style={{ backgroundColor: extra.hex }}
+                    title={extra.name || `extra ${i + 1}`}
                   />
                 ))}
               </div>

@@ -5,6 +5,7 @@ interface BrandKitColors {
   secondary: string;
   accent: string;
   surface: string;
+  extras?: Array<{ name: string; hex: string }>;
 }
 
 interface BrandKitFonts {
@@ -98,6 +99,7 @@ export function brandKitToDirection(kit: {
     headingFont: f?.heading,
     bodyFont: f?.body,
     mood: kit.mood || undefined,
+    extras: c.extras,
   };
 }
 

@@ -1214,6 +1214,7 @@ export function createMcpServer() {
         secondary: z.string().describe("Secondary color hex"),
         accent: z.string().describe("Accent color hex"),
         surface: z.string().describe("Surface/background color hex"),
+      extras: z.array(z.object({ name: z.string(), hex: z.string() })).optional().describe("Extra named colors beyond the 4 semantic slots"),
       }).describe("Color palette"),
       fonts: z.object({
         heading: z.string().describe("Heading font name"),
@@ -1242,6 +1243,7 @@ export function createMcpServer() {
         secondary: z.string(),
         accent: z.string(),
         surface: z.string(),
+        extras: z.array(z.object({ name: z.string(), hex: z.string() })).optional().describe("Extra named colors"),
       }).optional(),
       fonts: z.object({
         heading: z.string(),
