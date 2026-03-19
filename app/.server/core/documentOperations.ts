@@ -194,6 +194,44 @@ export async function setPageHtml(
 /** @deprecated Use setPageHtml instead */
 export const setSectionHtml = setPageHtml;
 
+/** Replace a specific HTML substring within a page (string-based, like Claude Code's edit model) */
+export async function replaceHtmlInPage(
+  ctx: AuthContext,
+  id: string,
+  pageId: string,
+  oldHtml: string,
+  newHtml: string
+) {
+  requireScope(ctx, "WRITE");
+  validateObjectId(id);
+  const doc = await db.landing.findUnique({ where: { id } });
+  if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
+    throwJson("Document not found", 404);
+
+  const sections = (doc.sections || []) as unknown as Section3[];
+  const idx = sections.findIndex((s) => s.id === pageId);
+  if (idx === -1) throwJson("Page not found", 404);
+
+  const currentHtml = sections[idx].html || "";
+  if (!currentHtml.includes(oldHtml)) {
+    throwJson(
+      `old_html not found in page. Use get_page_html to see the current HTML and copy the exact substring you want to replace.`,
+      400
+    );
+  }
+
+  const previousSections = JSON.parse(JSON.stringify(sections));
+  const updatedHtml = currentHtml.replace(oldHtml, newHtml);
+  sections[idx] = { ...sections[idx], html: updatedHtml };
+
+  const result = await db.landing.update({
+    where: { id },
+    data: { sections: sections as any, previousSections },
+  });
+  docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
+  return { success: true, pageId };
+}
+
 /** Get the HTML and metadata of a single page */
 export async function getPageHtml(
   ctx: AuthContext,
@@ -259,17 +297,18 @@ export async function setSectionHtmlBySelector(
   const { JSDOM } = await import("jsdom");
   const dom = new JSDOM(sections[idx].html || "<section></section>");
   const el = dom.window.document.querySelector(cssSelector);
-  if (!el) throwJson(`No element matches selector: ${cssSelector}`, 404);
+  if (!el) throwJson(`No element matches selector: ${cssSelector}. Tip: use replace_html for string-based edits instead — it's more reliable for surgical changes.`, 404);
 
-  // Use JSDOM fragment + replaceWith instead of outerHTML assignment
-  // (outerHTML assignment in JSDOM can silently fail to persist)
-  const fragment = JSDOM.fragment(html);
-  el.replaceWith(fragment);
+  // Parse new HTML in the same document context to avoid cross-document fragment issues
+  const template = dom.window.document.createElement("template");
+  template.innerHTML = html;
+  el.replaceWith(template.content);
 
   // Serialize the updated page HTML
+  const previousSections = JSON.parse(JSON.stringify(sections));
   const updatedHtml = dom.window.document.body.innerHTML;
   sections[idx] = { ...sections[idx], html: updatedHtml };
-  const result = await db.landing.update({ where: { id }, data: { sections: sections as any } });
+  const result = await db.landing.update({ where: { id }, data: { sections: sections as any, previousSections } });
   docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
   return { success: true, pageId, cssSelector };
 }

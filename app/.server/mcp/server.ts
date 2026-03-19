@@ -74,6 +74,7 @@ import {
   getPageHtml,
   getSectionHtml,
   setSectionHtmlBySelector,
+  replaceHtmlInPage,
   enhanceDocumentPrompt,
   createDocumentFromCFDI,
 } from "../core/documentOperations";
@@ -1034,6 +1035,22 @@ export function createMcpServer() {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setSectionHtmlBySelector(ctx, params.documentId, params.pageId, params.cssSelector, params.html);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "replace_html",
+    "Replace a specific HTML substring within a page (string-based, like Claude Code's edit model). This is the PREFERRED tool for surgical edits — find the exact HTML snippet you want to change using get_page_html, then replace it. More reliable than set_section_html because it doesn't depend on CSS selectors.",
+    {
+      documentId: z.string().describe("The document ID"),
+      pageId: z.string().describe("The page ID containing the HTML to edit"),
+      old_html: z.string().describe("The exact HTML substring to find and replace (must match current page HTML exactly)"),
+      new_html: z.string().describe("The new HTML to replace it with"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await replaceHtmlInPage(ctx, params.documentId, params.pageId, params.old_html, params.new_html);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
