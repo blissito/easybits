@@ -6,6 +6,16 @@ import { LANDING_BLOCKS } from "./blocks";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES } from "@easybits.cloud/html-tailwind-generator";
 import TailwindClassEditor from "./TailwindClassEditor";
 
+/** Strip non-string entries (e.g. extras array) from customColors */
+function stripExtras(colors: Record<string, any> | undefined): Record<string, string> | undefined {
+  if (!colors) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(colors)) {
+    if (typeof v === "string") out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export interface AiAction {
   type: "refine-element";
   componentId: string;
@@ -70,7 +80,9 @@ const PANEL_TABS = [
 export type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left" }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left" }, ref) => {
+    // Strip non-string entries (e.g. extras array from brand kits)
+    const customColors = stripExtras(rawCustomColors);
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const blocksRef = useRef<HTMLDivElement>(null);
     const layersRef = useRef<HTMLDivElement>(null);
