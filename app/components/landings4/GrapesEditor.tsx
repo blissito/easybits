@@ -722,7 +722,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-5 mb-3">Brand Kits</p>
                 <div className="grid grid-cols-2 gap-2">
                   {brandKits.map((bk) => {
-                    const bkBase = bk.colors as Record<string, string>;
+                    const bkBase = stripExtras(bk.colors as Record<string, any>) || {};
                     // Show customColors if this brand kit is active and user edited colors
                     const displayColors = activeBrandKitId === bk.id && customColors && Object.keys(customColors).length
                       ? { ...bkBase, ...customColors }
@@ -759,7 +759,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                   const bk = brandKits?.find((b) => b.id === activeBrandKitId);
                   if (!bk) return null;
                   // Use current customColors (with user edits) over original brand kit colors
-                  const baseColors = bk.colors as Record<string, string>;
+                  const baseColors = stripExtras(bk.colors as Record<string, any>) || {};
                   const colors = customColors && Object.keys(customColors).length
                     ? { ...baseColors, ...customColors }
                     : baseColors;
