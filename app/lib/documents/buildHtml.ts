@@ -85,12 +85,13 @@ export function buildDocumentHtml(
   <style>
     ${options?.themeCss || ""}
     ${grapesCss}
+    html { height: 100%; }
     body {
       box-sizing: border-box;
       font-family: 'Inter', sans-serif;
       background: #1a1a1a;
       color: var(--color-on-surface, #111);
-      min-height: 100vh;
+      height: 100%;
       margin: 0;
       display: flex;
       flex-direction: column;
