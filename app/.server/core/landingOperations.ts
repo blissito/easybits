@@ -295,13 +295,15 @@ export async function deployLanding(ctx: AuthContext, id: string) {
             url: `https://${bgSlug}.easybits.cloud`,
             ogImage: ogImageUrl,
           });
-          const updatedBuffer = Buffer.from(updatedHtml, "utf-8");
+          const compiledHtml = await replaceCdnWithCompiledCSS(updatedHtml);
+          const updatedBuffer = Buffer.from(compiledHtml, "utf-8");
           const reUploadUrl = await client.getPutUrl(bgStorageKey);
-          await fetch(reUploadUrl, {
+          const reUploadRes = await fetch(reUploadUrl, {
             method: "PUT",
             body: updatedBuffer,
             headers: { "Content-Type": "text/html; charset=utf-8" },
           });
+          console.log(`[deployLanding] og:image re-upload status: ${reUploadRes.status}, key: ${bgStorageKey}`);
           if (bgExistingFileId) {
             await db.file.update({ where: { id: bgExistingFileId }, data: { size: updatedBuffer.length } });
           }
