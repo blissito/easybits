@@ -33,7 +33,7 @@ export interface StreamingPreviewHandle {
 
 /** Lightweight iframe preview used during streaming generation (no GrapesJS overhead).
  * The iframe shell is created once; only the body innerHTML is patched on updates. */
-const StreamingPreview = React.forwardRef<StreamingPreviewHandle, { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string } }>(({ sections, themeCssData }, ref) => {
+const StreamingPreview = React.forwardRef<StreamingPreviewHandle, { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string }; onVisibleSectionChange?: (sectionId: string) => void }>(({ sections, themeCssData, onVisibleSectionChange }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevCountRef = useRef(0);
   const contentSections = sections.filter((s) => s.id !== "__grapes_css__");
@@ -101,6 +101,40 @@ ${themeCssData?.css || ""}
     }
     prevCountRef.current = contentSections.length;
   }, [contentSections]);
+
+  // Scroll-spy: detect most visible section
+  useEffect(() => {
+    if (!onVisibleSectionChange) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const setup = () => {
+      const fw = iframe.contentWindow;
+      const doc = iframe.contentDocument;
+      if (!fw || !doc) return;
+      let raf = 0;
+      const onScroll = () => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          const els = doc.querySelectorAll("[data-id]");
+          if (!els.length) return;
+          const viewH = fw.innerHeight;
+          let bestId = "";
+          let bestVisible = 0;
+          els.forEach((el) => {
+            const rect = el.getBoundingClientRect();
+            const visible = Math.max(0, Math.min(viewH, rect.bottom) - Math.max(0, rect.top));
+            if (visible > bestVisible) { bestVisible = visible; bestId = el.getAttribute("data-id") || ""; }
+          });
+          if (bestId) onVisibleSectionChange(bestId);
+        });
+      };
+      fw.addEventListener("scroll", onScroll, { passive: true });
+      return () => fw.removeEventListener("scroll", onScroll);
+    };
+    // iframe may not be loaded yet
+    const timer = setTimeout(setup, 500);
+    return () => clearTimeout(timer);
+  }, [onVisibleSectionChange]);
 
   return (
     <iframe
@@ -349,6 +383,13 @@ export default function DocumentEditor() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sectionIds: string[] } | null>(null);
 
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
+  // Track which section was last set by scroll-spy to avoid re-triggering scroll
+  const scrollSpySectionRef = useRef<string | null>(null);
+  const handleVisibleSectionChange = useCallback((sectionId: string) => {
+    if (scrollSpySectionRef.current === sectionId) return;
+    scrollSpySectionRef.current = sectionId;
+    setSelectedSectionIds([sectionId]);
+  }, []);
 
   const [sections, _setSections] = useState<Section3[]>(() => {
     const raw = landing.sections;
@@ -1726,7 +1767,7 @@ ${sectionsHtml}
         {/* Editor area — iframe during generation, GrapesJS after */}
         <div className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 h-full overflow-hidden relative`}>
           {isGenerating ? (
-            <StreamingPreview ref={streamingRef} sections={sections} themeCssData={themeCssData} />
+            <StreamingPreview ref={streamingRef} sections={sections} themeCssData={themeCssData} onVisibleSectionChange={handleVisibleSectionChange} />
           ) : sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-200">
               <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
@@ -1746,6 +1787,7 @@ ${sectionsHtml}
                 onChange={handleEditorChange}
                 onAiAction={handleAiAction}
                 onThemeChange={handleThemeChange}
+                onVisibleSectionChange={handleVisibleSectionChange}
               />
             </Suspense>
           )}

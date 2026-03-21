@@ -82,6 +82,8 @@ interface Props {
   panelSide?: "left" | "right";
   /** Override default blocks (LANDING_BLOCKS). Pass custom blocks for different editors (e.g. presentations). */
   blocks?: { id: string; label: string; category: string; content: string | object; media?: string }[];
+  /** Called when the most visible section changes due to canvas scroll */
+  onVisibleSectionChange?: (sectionId: string) => void;
 }
 
 const PANEL_TABS = [
@@ -94,7 +96,7 @@ const PANEL_TABS = [
 export type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks, onVisibleSectionChange }, ref) => {
     // Strip non-string entries (e.g. extras array from brand kits)
     const customColors = flattenColors(rawCustomColors);
     const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +107,8 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     onChangeRef.current = onChange;
     const onAiActionRef = useRef(onAiAction);
     onAiActionRef.current = onAiAction;
+    const onVisibleSectionChangeRef = useRef(onVisibleSectionChange);
+    onVisibleSectionChangeRef.current = onVisibleSectionChange;
     const onThemeChangeRef = useRef(onThemeChange);
     onThemeChangeRef.current = onThemeChange;
     const onBrandKitChangeRef = useRef(onBrandKitChange);
@@ -481,6 +485,34 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
               doc.body.offsetHeight;
               doc.body.style.display = "";
             });
+          }
+
+          // Scroll-spy: detect which section is most visible and notify parent
+          {
+            let scrollRaf = 0;
+            const onScroll = () => {
+              cancelAnimationFrame(scrollRaf);
+              scrollRaf = requestAnimationFrame(() => {
+                if (!onVisibleSectionChangeRef.current) return;
+                const sectionEls = doc.querySelectorAll("[data-section-id]");
+                if (!sectionEls.length) return;
+                const viewH = fw.innerHeight;
+                let bestId = "";
+                let bestVisible = 0;
+                sectionEls.forEach((el) => {
+                  const rect = el.getBoundingClientRect();
+                  const top = Math.max(0, rect.top);
+                  const bottom = Math.min(viewH, rect.bottom);
+                  const visible = Math.max(0, bottom - top);
+                  if (visible > bestVisible) {
+                    bestVisible = visible;
+                    bestId = el.getAttribute("data-section-id") || "";
+                  }
+                });
+                if (bestId) onVisibleSectionChangeRef.current(bestId);
+              });
+            };
+            fw.addEventListener("scroll", onScroll, { passive: true });
           }
         });
 
