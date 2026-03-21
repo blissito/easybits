@@ -25,11 +25,24 @@ export const meta = () => [
 ];
 
 // ─── Conversions: slides ↔ sections ──────────────────
+function stripLegacyScripts(html: string): string {
+  // Remove reveal.js and other legacy script/link tags that crash in GrapesJS iframe
+  return html
+    .replace(/<script[^>]*reveal[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<script[^>]*reveal[^>]*\/>/gi, "")
+    .replace(/<link[^>]*reveal[^>]*\/?\s*>/gi, "")
+    .replace(/<style[^>]*reveal[^>]*>[\s\S]*?<\/style>/gi, "");
+}
+
 function slidesToSections(slides: Slide[]): Section3[] {
   return slides
     .sort((a, b) => a.order - b.order)
     .map((s) => {
-      let html = s.html || "";
+      let html = stripLegacyScripts(s.html || "");
+
+      // Strip inline style from outer section (legacy slides may have width:100% etc.)
+      html = html.replace(/^(<section\b[^>]*?)\s+style="[^"]*"/i, "$1");
+
       // If already a proper section with data-section-id, use as-is
       if (html.trim().startsWith("<section") && html.includes("data-section-id")) {
         return { id: s.id, order: s.order, html, label: `Slide ${s.order + 1}` };
