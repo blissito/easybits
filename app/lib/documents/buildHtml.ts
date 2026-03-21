@@ -151,7 +151,7 @@ export function buildDocumentHtml(
       .side-nav.right { right: 8px; }
     }
     .flipbook-page {
-      background: white;
+      background: transparent;
       overflow: hidden;
     }
     .page-inner {
