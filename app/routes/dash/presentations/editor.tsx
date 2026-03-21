@@ -361,9 +361,9 @@ export default function PresentationEditor() {
   const contentSections = sections.filter((s) => s.id !== "__grapes_css__").sort((a, b) => a.order - b.order);
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
+    <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b-2 border-black bg-white shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white shrink-0">
         <div className="flex items-center gap-3">
           <Link to="/dash/presentations" className="text-sm font-bold hover:underline">
             &larr; Presentaciones
@@ -415,7 +415,7 @@ export default function PresentationEditor() {
       </div>
 
       {/* Main area: sidebar + editor */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* Slide list sidebar */}
         <div className="w-48 shrink-0 border-r-2 border-black bg-gray-50 overflow-y-auto p-3 flex flex-col gap-3">
           {contentSections.map((s, i) => (
@@ -454,7 +454,7 @@ export default function PresentationEditor() {
         </div>
 
         {/* GrapesJS editor — takes remaining space */}
-        <div className="flex-1 min-w-0 h-full">
+        <div className="flex-1 h-full overflow-hidden relative">
           {contentSections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-900">
               <p className="text-gray-500 text-sm mb-4">Sin slides</p>
@@ -493,6 +493,6 @@ export default function PresentationEditor() {
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
