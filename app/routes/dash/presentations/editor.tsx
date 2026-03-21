@@ -96,7 +96,12 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     }
   }
 
-  return { presentation, websiteUrl };
+  const brandKits = await db.brandKit.findMany({
+    where: { ownerId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { presentation, websiteUrl, brandKits };
 };
 
 // ─── Action ──────────────────────────────────────────
@@ -264,7 +269,7 @@ section{width:960px;height:540px;overflow:hidden}
 
 // ─── Main Editor Component ───────────────────────────
 export default function PresentationEditor() {
-  const { presentation, websiteUrl } = useLoaderData<typeof loader>();
+  const { presentation, websiteUrl, brandKits } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   const initialSlides = (presentation.slides as unknown as Slide[]) || [];
@@ -481,6 +486,7 @@ export default function PresentationEditor() {
                 initialHtml={sectionsToHtml(sections)}
                 theme={currentTheme}
                 customColors={currentCustomColors}
+                brandKits={brandKits as any}
                 canvasStyles={slideCanvasCss}
                 devices={false}
                 panelSide="right"
