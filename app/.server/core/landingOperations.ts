@@ -44,7 +44,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
         const docTheme = (landingMeta.theme as string) || undefined;
         let themeCss: string | undefined;
         let tailwindConfig: string | undefined;
-        if (docTheme === "custom" && landingMeta.customColors) {
+        if (landingMeta.customColors) {
           const t = buildCustomTheme(landingMeta.customColors as any);
           themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
           tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;

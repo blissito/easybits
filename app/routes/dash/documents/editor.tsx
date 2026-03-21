@@ -494,7 +494,7 @@ export default function DocumentEditor() {
 
   // For PDF export
   const themeCssData = useMemo(() => {
-    if (currentTheme === "custom" && currentCustomColors) {
+    if (currentCustomColors) {
       const t = buildCustomTheme(currentCustomColors as any);
       const css = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
       const { tailwindConfig } = buildSingleThemeCss("minimal");
