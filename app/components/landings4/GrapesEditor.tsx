@@ -553,12 +553,15 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           let attempts = 0;
           const interval = setInterval(() => {
             attempts++;
-            const active = editor.Commands.getActive();
-            for (const cmd of Object.keys(active)) {
-              if (cmd === "show-offset") {
-                try { editor.stopCommand(cmd); } catch {}
+            try {
+              const active = editor.Commands?.getActive();
+              if (!active) { clearInterval(interval); return; }
+              for (const cmd of Object.keys(active)) {
+                if (cmd === "show-offset") {
+                  editor.stopCommand(cmd);
+                }
               }
-            }
+            } catch {}
             if (attempts >= 30) clearInterval(interval);
           }, 100);
           // Start with sw-visibility OFF (user can toggle it on)

@@ -60,8 +60,8 @@
 
 /* Canvas — full width, no padding */
 .gjs-cv-canvas { background-color: #000000 !important; }
-.gjs-frame-wrapper { padding: 0 !important; width: 100% !important; height: 100% !important; left: 0 !important; top: 0 !important; position: absolute !important; }
-.gjs-frame { width: 100% !important; height: 100% !important; left: 0 !important; top: 0 !important; }
+.gjs-frame-wrapper { padding: 0 !important; }
+.gjs-frame { width: 100% !important; left: 0 !important; }
 
 /* Toolbar on selected component */
 .gjs-toolbar { background-color: #9870ED !important; }
