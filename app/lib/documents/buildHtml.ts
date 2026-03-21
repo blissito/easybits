@@ -4,6 +4,15 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Default theme CSS — always injected so semantic color classes work even if server fails to generate themeCss
+const DEFAULT_THEME_CSS = `:root {
+  --color-primary: #18181b; --color-primary-light: #3f3f46; --color-primary-dark: #09090b;
+  --color-secondary: #71717a; --color-accent: #2563eb;
+  --color-surface: #ffffff; --color-surface-alt: #f4f4f5;
+  --color-on-surface: #18181b; --color-on-surface-muted: #71717a;
+  --color-on-primary: #ffffff; --color-on-secondary: #ffffff; --color-on-accent: #ffffff;
+}`;
+
 /**
  * Build deployed document HTML — flipbook viewer with StPageFlip.
  * Desktop: double-page spread. Mobile: single page. Touch/swipe/keyboard.
@@ -83,7 +92,7 @@ export function buildDocumentHtml(
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"><\/script>
   <style>
-    ${options?.themeCss || ""}
+    ${options?.themeCss || DEFAULT_THEME_CSS}
     ${grapesCss}
     html { height: 100%; }
     body {
@@ -340,7 +349,7 @@ export function buildDocumentPrintHtml(
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     @page { size: letter; margin: 0; }
-    ${options?.themeCss || ""}
+    ${options?.themeCss || DEFAULT_THEME_CSS}
     ${grapesCss}
     body { font-family: 'Inter', sans-serif; margin: 0; color: var(--color-on-surface, #111); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
