@@ -102,7 +102,7 @@ export async function createDocument(
       prompt: opts.prompt || "",
       sections: (opts.sections ?? []) as any,
       version: 4,
-      theme: "default",
+      theme: metadata.customColors ? "custom" : (opts.theme || "default"),
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       ownerId: ctx.user.id,
     },
@@ -159,6 +159,7 @@ export async function updateDocument(
     const existing = (doc.metadata as Record<string, unknown>) || {};
     if (opts.theme !== undefined) existing.theme = opts.theme;
     if (opts.customColors !== undefined) existing.customColors = opts.customColors;
+    if (opts.customColors && existing.theme !== "custom") existing.theme = "custom";
     updates.metadata = existing;
   }
 
