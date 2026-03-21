@@ -48,8 +48,9 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           const t = buildCustomTheme(landingMeta.customColors as any);
           themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
           tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
-        } else if (docTheme) {
-          const docThemeCss = buildSingleThemeCss(docTheme);
+        } else {
+          const themeId = docTheme || (landing.theme as string) || "default";
+          const docThemeCss = buildSingleThemeCss(themeId);
           themeCss = docThemeCss.css;
           tailwindConfig = docThemeCss.tailwindConfig;
         }
