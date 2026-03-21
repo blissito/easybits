@@ -186,6 +186,18 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   return { error: "Intent no valido" };
 };
 
+// ─── Semantic color fallback CSS (mirrors GrapesEditor COLORS_MAP) ───
+const SEMANTIC_COLORS: Record<string, string> = {
+  primary: "--color-primary", "primary-light": "--color-primary-light", "primary-dark": "--color-primary-dark",
+  secondary: "--color-secondary", accent: "--color-accent",
+  surface: "--color-surface", "surface-alt": "--color-surface-alt",
+  "on-primary": "--color-on-primary", "on-secondary": "--color-on-secondary", "on-accent": "--color-on-accent",
+  "on-surface": "--color-on-surface", "on-surface-muted": "--color-on-surface-muted",
+};
+const semanticFallbackCss = Object.entries(SEMANTIC_COLORS).map(([name, cssVar]) =>
+  `.bg-${name}{background-color:var(${cssVar})!important}.text-${name}{color:var(${cssVar})!important}.border-${name}{border-color:var(${cssVar})!important}`
+).join("\n");
+
 // ─── Canvas CSS for 16:9 slides ─────────────────────
 const slideCanvasCss = `
   body {
@@ -236,6 +248,7 @@ ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/scr
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;overflow:hidden}
 section{width:960px;height:540px;overflow:hidden}
 ${themeCssData?.css || ""}
+${semanticFallbackCss}
 </style></head><body>${section.html}</body></html>`;
 
   return (
