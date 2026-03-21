@@ -492,7 +492,7 @@ export default function PresentationEditor() {
             <Suspense fallback={<div className="flex items-center justify-center h-full w-full bg-gray-900 text-gray-400">Cargando editor...</div>}>
               <GrapesEditor
                 ref={editorRef}
-                initialHtml={sectionsToHtml(sections)}
+                initialHtml={`<style>${slideCanvasCss}</style>\n${sectionsToHtml(sections)}`}
                 theme={currentTheme}
                 customColors={currentCustomColors}
                 canvasStyles={slideCanvasCss}
