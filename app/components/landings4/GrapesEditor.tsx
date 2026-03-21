@@ -301,7 +301,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
               "https://cdn.tailwindcss.com",
             ],
             styles: [
-              `data:text/css,${encodeURIComponent(initialThemeCss + "\n" + fallbackRules.join("\n"))}`,
+              `data:text/css,${encodeURIComponent(initialThemeCss + "\n" + fallbackRules.join("\n") + (canvasStyles ? "\n" + canvasStyles : ""))}`,
             ],
           },
           deviceManager: devices === false ? false as any : {
