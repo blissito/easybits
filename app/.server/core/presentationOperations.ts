@@ -5,6 +5,8 @@ import { requireScope } from "../apiAuth";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
 import { buildRevealHtml, type Slide } from "~/lib/buildRevealHtml";
+import { buildPresentationHtml } from "~/lib/presentation/buildHtml";
+import type { Section3 } from "~/lib/landing3/types";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
 
@@ -43,7 +45,7 @@ export async function getPresentation(ctx: AuthContext, id: string) {
 
 export async function createPresentation(
   ctx: AuthContext,
-  opts: { name: string; prompt: string; slides?: Slide[]; theme?: string }
+  opts: { name: string; prompt: string; slides?: Slide[]; theme?: string; paletteId?: string; transition?: string }
 ) {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim();
@@ -56,6 +58,8 @@ export async function createPresentation(
       prompt: opts.prompt,
       slides: (opts.slides ?? []) as any,
       theme: opts.theme ?? "black",
+      ...(opts.paletteId && { paletteId: opts.paletteId }),
+      ...(opts.transition && { transition: opts.transition }),
       ownerId: ctx.user.id,
     },
   });
@@ -64,7 +68,7 @@ export async function createPresentation(
 export async function updatePresentation(
   ctx: AuthContext,
   id: string,
-  opts: { name?: string; slides?: Slide[]; theme?: string; prompt?: string }
+  opts: { name?: string; slides?: Slide[]; theme?: string; prompt?: string; paletteId?: string; transition?: string }
 ) {
   requireScope(ctx, "WRITE");
   const p = await db.presentation.findUnique({ where: { id } });
@@ -75,6 +79,8 @@ export async function updatePresentation(
   if (opts.slides !== undefined) updates.slides = opts.slides as any;
   if (opts.theme !== undefined) updates.theme = opts.theme;
   if (opts.prompt !== undefined) updates.prompt = opts.prompt;
+  if (opts.paletteId !== undefined) updates.paletteId = opts.paletteId;
+  if (opts.transition !== undefined) updates.transition = opts.transition;
 
   return db.presentation.update({ where: { id }, data: updates });
 }
@@ -95,7 +101,18 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   const slides = (p.slides as unknown as Slide[]) || [];
   if (slides.length === 0) throwJson("No slides to deploy", 400);
 
-  const html = buildRevealHtml(slides, p.theme, (p as any).paletteId);
+  // Use v2 builder (Tailwind + reveal.js) — backward compatible with any HTML
+  const sections = slides.map((s) => ({
+    id: s.id,
+    order: s.order,
+    html: s.html ? (s.html.trim().startsWith("<section") ? s.html : `<section>${s.html}</section>`) : "<section></section>",
+  })) as Section3[];
+  const html = buildPresentationHtml(sections, {
+    title: p.name,
+    transition: (p as any).transition || "slide",
+    themeName: "minimal",
+    customColors: (p.customColors as Record<string, string>) || undefined,
+  });
   const htmlBuffer = Buffer.from(html, "utf-8");
 
   // Create or reuse website

@@ -458,6 +458,7 @@ model Presentation {
   slides       Json     // { id, html, order }[]
   theme        String   @default("black")
   paletteId    String?  // reference to PRESENTATION_PALETTES
+  transition   String   @default("slide") // reveal.js transition: slide, fade, convex, concave, zoom, none
   customColors Json?    // color overrides (future)
   status       String   @default("DRAFT") // DRAFT | PUBLISHED
   ownerId      String   @db.ObjectId

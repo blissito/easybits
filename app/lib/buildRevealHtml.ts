@@ -835,7 +835,7 @@ function buildThreeScripts(slides: Slide[]): string {
   return result;
 }
 
-export function buildRevealHtml(slides: Slide[], theme = "black", paletteId?: string | null): string {
+export function buildRevealHtml(slides: Slide[], theme = "black", paletteId?: string | null, transition = "slide"): string {
   const palette = getPalette(paletteId);
   const resolvedTheme = palette.baseTheme;
   const sorted = [...slides].map(normalizeSlide).sort((a, b) => a.order - b.order);
@@ -1004,7 +1004,7 @@ ${sections}
   >Powered by EasyBits</a>
   <script src="${REVEAL_CDN}/dist/reveal.js"><\/script>
   <script>
-    Reveal.initialize({ hash: true, transition: 'slide', width: 960, height: 540, margin: 0.04, minScale: 0.2, maxScale: 1.4 });
+    Reveal.initialize({ hash: true, transition: '${transition}', width: 960, height: 540, margin: 0.04, minScale: 0.2, maxScale: 1.4 });
     window.addEventListener('message', function(e) {
       if (e.data && e.data.type === 'goToSlide' && typeof e.data.index === 'number') {
         Reveal.slide(e.data.index);

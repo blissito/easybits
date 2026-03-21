@@ -669,6 +669,8 @@ export function createMcpServer() {
         html: z.string().optional().describe("HTML content of the slide"),
       })).optional().describe("Array of slides"),
       theme: z.string().optional().describe("Reveal.js theme (default: black). Options: black, white, league, beige, night, serif, simple, solarized, moon, dracula, sky, blood"),
+      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
+      transition: z.string().optional().describe("Slide transition (default: slide). Options: slide, fade, convex, concave, zoom, none"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -691,6 +693,8 @@ export function createMcpServer() {
         html: z.string().optional().describe("HTML content of the slide"),
       })).optional().describe("Replace all slides"),
       theme: z.string().optional().describe("Reveal.js theme"),
+      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
+      transition: z.string().optional().describe("Slide transition. Options: slide, fade, convex, concave, zoom, none"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -736,6 +740,21 @@ export function createMcpServer() {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unpublishPresentation(ctx, params.presentationId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_slide_screenshot",
+    "Take a screenshot of a single presentation slide. Returns a PNG image (960x540). Requires Chrome installed locally — designed for Claude Code MCP usage.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideIndex: z.number().optional().describe("Slide index (0-based, default 0)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
+      const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, params.slideIndex ?? 0);
+      return { content: [result] };
     })
   );
 

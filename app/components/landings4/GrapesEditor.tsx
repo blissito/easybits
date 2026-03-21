@@ -76,6 +76,8 @@ interface Props {
   devices?: false;
   /** Which side to render the panel sidebar — default "left" */
   panelSide?: "left" | "right";
+  /** Override default blocks (LANDING_BLOCKS). Pass custom blocks for different editors (e.g. presentations). */
+  blocks?: { id: string; label: string; category: string; content: string | object; media?: string }[];
 }
 
 const PANEL_TABS = [
@@ -88,7 +90,7 @@ const PANEL_TABS = [
 export type PanelId = (typeof PANEL_TABS)[number]["id"];
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left" }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks }, ref) => {
     // Strip non-string entries (e.g. extras array from brand kits)
     const customColors = flattenColors(rawCustomColors);
     const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -315,7 +317,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           },
           blockManager: hiddenTabs.includes("blocks") ? false as any : {
             appendTo: blocksRef.current!,
-            blocks: LANDING_BLOCKS.map((b) => ({
+            blocks: (customBlocks || LANDING_BLOCKS).map((b) => ({
               id: b.id,
               label: b.label,
               category: b.category,
