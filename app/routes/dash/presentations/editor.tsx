@@ -158,11 +158,13 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
 // ─── Slide canvas CSS (16:9, 960×540) ────────────────
 const slideCanvasCss = `
-  body { padding: 24px; background: #0f0f1a; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+  body { padding: 24px; background: #1a1a2e; display: flex; flex-direction: column; align-items: center; gap: 24px; font-family: system-ui, -apple-system, sans-serif; }
   section, [data-section-id] {
-    width: 960px; height: 540px;
-    overflow: hidden;
-    background: #1a1a2e;
+    width: 960px !important;
+    min-height: 540px !important;
+    max-height: 540px !important;
+    overflow: hidden !important;
+    background: var(--color-surface, #1e1b4b);
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     border-radius: 8px;
     box-sizing: border-box;

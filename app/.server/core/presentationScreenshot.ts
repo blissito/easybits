@@ -1,8 +1,5 @@
 import { db } from "../db";
-import { buildPresentationHtml } from "~/lib/presentation/buildHtml";
-import type { Section3 } from "~/lib/landing3/types";
-import { buildRevealHtml, type Slide } from "~/lib/buildRevealHtml";
-import { replaceCdnWithCompiledCSS } from "../tailwind";
+import type { Slide } from "~/lib/buildRevealHtml";
 
 let browserPromise: ReturnType<typeof launchBrowser> | null = null;
 let screenshotQueue: Promise<any> = Promise.resolve();
@@ -50,9 +47,15 @@ export async function takeSlideScreenshot(
     return { type: "text", text: `Invalid slideIndex: ${slideIndex}. Presentation has ${slides.length} slide(s) (0-${slides.length - 1}).` };
   }
 
-  // Build HTML for a single slide
+  // Build simple HTML for a single slide (no reveal.js)
   const slide = slides[slideIndex];
-  const html = buildRevealHtml([{ ...slide, order: 0 }], pres.theme, (pres as any).paletteId, (pres as any).transition);
+  const { buildPresentationHtml } = await import("~/lib/presentation/buildHtml");
+  const section = { id: slide.id, order: 0, html: slide.html || "<section></section>" } as any;
+  const html = buildPresentationHtml([section], {
+    title: pres.name,
+    themeName: "minimal",
+    customColors: (pres.customColors as Record<string, string>) || undefined,
+  });
 
   return enqueueScreenshot(async () => {
     try {
@@ -61,8 +64,6 @@ export async function takeSlideScreenshot(
       try {
         await page.setContent(html, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
-        // Wait for reveal.js to initialize
-        await page.waitForFunction(() => (window as any).Reveal?.isReady?.(), { timeout: 5000 }).catch(() => {});
         const buffer = await page.screenshot({ type: "png" });
         return { type: "image", mimeType: "image/png", data: buffer.toString("base64") } as const;
       } finally {
