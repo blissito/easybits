@@ -175,3 +175,66 @@ export async function execDatabase(
   const results = await sqldExec(database.namespace, statements);
   return { results };
 }
+
+const IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const MAX_IMPORT_ROWS = 10_000;
+
+export async function importDatabase(
+  ctx: AuthContext,
+  dbId: string,
+  table: string,
+  columns: string[],
+  rows: unknown[][],
+  onConflict?: "ignore" | "replace"
+) {
+  requireScope(ctx, "WRITE");
+
+  if (!IDENTIFIER_RE.test(table)) {
+    throw new Response(
+      JSON.stringify({ error: "Invalid table name. Use letters, digits, underscores only." }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  if (!columns.length || columns.some((c) => !IDENTIFIER_RE.test(c))) {
+    throw new Response(
+      JSON.stringify({ error: "Invalid column names. Use letters, digits, underscores only." }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  if (!rows.length || rows.length > MAX_IMPORT_ROWS) {
+    throw new Response(
+      JSON.stringify({ error: `Provide 1-${MAX_IMPORT_ROWS} rows` }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const database = await db.database.findUnique({ where: { id: dbId } });
+  if (!database || database.userId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Database not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const verb = onConflict === "ignore"
+    ? "INSERT OR IGNORE"
+    : onConflict === "replace"
+      ? "INSERT OR REPLACE"
+      : "INSERT";
+
+  const colList = columns.map((c) => `"${c}"`).join(", ");
+  const placeholders = columns.map(() => "?").join(", ");
+  const sql = `${verb} INTO "${table}" (${colList}) VALUES (${placeholders})`;
+
+  const statements = rows.map((row) => ({ sql, args: row }));
+  const results = await sqldExec(database.namespace, statements);
+
+  const totalAffected = results.reduce(
+    (sum, r) => sum + (r.affected_row_count || 0),
+    0
+  );
+
+  return { imported: totalAffected, total: rows.length };
+}

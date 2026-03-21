@@ -485,6 +485,13 @@ Body: \`{ statements: [{ sql, args? }] }\` (max 20)
 Returns: \`{ results: Result[] }\`
 MCP: \`db_exec({ dbId, statements })\`
 
+### Bulk import
+\`POST /databases/:dbId/query\`
+Body: \`{ table: string, columns: string[], rows: any[][], onConflict?: "ignore" | "replace" }\`
+Up to 10,000 rows per request. Column/table names must be alphanumeric + underscores.
+Returns: \`{ imported: number, total: number }\`
+MCP: \`db_import({ dbId, table, columns, rows, onConflict? })\`
+
 ### Database object
 \`\`\`json
 {

@@ -46,6 +46,7 @@ import {
   deleteDatabase,
   queryDatabase,
   execDatabase,
+  importDatabase,
 } from "../core/databaseOperations";
 import {
   listPresentations,
@@ -1490,6 +1491,23 @@ export function createMcpServer() {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await execDatabase(ctx, params.dbId, params.statements);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "db_import",
+    "Bulk import rows into a table. Up to 10,000 rows per request. Much faster than db_exec for large inserts.",
+    {
+      dbId: z.string().describe("The database ID"),
+      table: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).describe("Target table name"),
+      columns: z.array(z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/)).min(1).describe("Column names"),
+      rows: z.array(z.array(z.unknown())).min(1).max(10000).describe("Array of row values (each row is an array matching columns order)"),
+      onConflict: z.enum(["ignore", "replace"]).optional().describe("Conflict handling: 'ignore' skips duplicates, 'replace' upserts"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await importDatabase(ctx, params.dbId, params.table, params.columns, params.rows, params.onConflict);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

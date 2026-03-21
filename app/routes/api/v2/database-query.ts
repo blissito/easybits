@@ -1,6 +1,6 @@
 import type { Route } from "./+types/database-query";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { queryDatabase, execDatabase } from "~/.server/core/databaseOperations";
+import { queryDatabase, execDatabase, importDatabase } from "~/.server/core/databaseOperations";
 
 // POST /api/v2/databases/:dbId/query
 export async function action({ request, params }: Route.ActionArgs) {
@@ -11,6 +11,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const body = await request.json();
+
+  // Import mode: { table, columns, rows, onConflict? }
+  if (body.table && body.columns && body.rows) {
+    const result = await importDatabase(ctx, params.dbId!, body.table, body.columns, body.rows, body.onConflict);
+    return Response.json(result);
+  }
 
   // Batch mode: { statements: [{ sql, args }, ...] }
   if (body.statements && Array.isArray(body.statements)) {
