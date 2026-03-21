@@ -9,7 +9,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-title",
     label: "Title Slide",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col items-center justify-center text-center bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col items-center justify-center text-center bg-surface p-16">
   <h1 class="text-6xl font-black text-on-surface leading-tight">Your Title</h1>
   <p class="text-2xl text-on-surface-muted mt-4">Subtitle or tagline</p>
 </section>`,
@@ -19,7 +19,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-title-body",
     label: "Title + Body",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col bg-surface p-16">
   <h2 class="text-4xl font-bold text-on-surface mb-6">Section Title</h2>
   <ul class="space-y-3 text-xl text-on-surface-muted">
     <li class="flex items-start gap-3"><span class="text-primary font-bold">-</span> First point goes here</li>
@@ -33,7 +33,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-two-col",
     label: "Two Columns",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex bg-surface p-16 gap-12">
+    content: `<section data-section-id="" class="flex bg-surface p-16 gap-12">
   <div class="flex-1 flex flex-col justify-center">
     <h2 class="text-4xl font-bold text-on-surface mb-4">Left Side</h2>
     <p class="text-lg text-on-surface-muted">Explain your point with supporting text on this side of the slide.</p>
@@ -49,7 +49,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-image-text",
     label: "Image + Text",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex bg-surface p-16 gap-12">
+    content: `<section data-section-id="" class="flex bg-surface p-16 gap-12">
   <div class="flex-1 flex items-center justify-center bg-surface-alt rounded-2xl overflow-hidden">
     <img src="https://placehold.co/400x280/1a1a2e/eee?text=Image" alt="" class="w-full h-full object-cover" />
   </div>
@@ -64,7 +64,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-cards",
     label: "Cards Grid",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col bg-surface p-16">
   <h2 class="text-4xl font-bold text-on-surface mb-8 text-center">Key Features</h2>
   <div class="grid grid-cols-3 gap-6 flex-1">
     <div class="bg-surface-alt rounded-2xl p-6 flex flex-col">
@@ -90,7 +90,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-stats",
     label: "Stats / KPIs",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col items-center justify-center bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col items-center justify-center bg-surface p-16">
   <h2 class="text-4xl font-bold text-on-surface mb-12 text-center">By the Numbers</h2>
   <div class="grid grid-cols-3 gap-16">
     <div class="text-center">
@@ -113,7 +113,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-quote",
     label: "Quote",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col items-center justify-center bg-surface p-20">
+    content: `<section data-section-id="" class="flex flex-col items-center justify-center bg-surface p-20">
   <div class="text-8xl text-primary opacity-30 leading-none mb-4">"</div>
   <blockquote class="text-3xl font-light text-on-surface text-center max-w-2xl leading-relaxed">
     The best way to predict the future is to invent it.
@@ -126,7 +126,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-timeline",
     label: "Timeline",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col bg-surface p-16">
   <h2 class="text-4xl font-bold text-on-surface mb-8 text-center">Process</h2>
   <div class="flex items-start justify-between flex-1 gap-4">
     <div class="flex-1 text-center">
@@ -157,7 +157,7 @@ export const PRESENTATION_BLOCKS = [
     id: "slide-code",
     label: "Code Block",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col bg-surface p-16">
   <h2 class="text-4xl font-bold text-on-surface mb-6">Code Example</h2>
   <div class="flex-1 bg-gray-900 rounded-2xl p-8 font-mono text-sm text-green-400 overflow-hidden">
     <pre><code>// Connect your agent
@@ -178,7 +178,7 @@ console.log(file.url);</code></pre>
     id: "slide-blank",
     label: "Blank Slide",
     category: "Slides",
-    content: `<section data-section-id="" class="w-full h-full flex flex-col items-center justify-center bg-surface p-16">
+    content: `<section data-section-id="" class="flex flex-col items-center justify-center bg-surface p-16">
   <p class="text-on-surface-muted">Start from scratch</p>
 </section>`,
     media: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`,

@@ -186,19 +186,14 @@ const slideCanvasCss = `
     font-family: system-ui, -apple-system, sans-serif;
   }
   section, [data-section-id] {
-    width: 960px;
-    min-height: 540px;
-    max-height: 540px;
-    overflow: hidden;
+    width: 960px !important;
+    min-height: 540px !important;
+    max-height: 540px !important;
+    overflow: hidden !important;
     background: var(--color-surface, #1e1b4b);
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     border-radius: 8px;
-    box-sizing: border-box;
-  }
-  /* Kill any inline height/width that legacy slides might have */
-  section > *, [data-section-id] > * {
-    height: auto !important;
-    max-height: 540px;
+    box-sizing: border-box !important;
   }
 `;
 
@@ -441,7 +436,7 @@ export default function PresentationEditor() {
               const newSection: Section3 = {
                 id: newId,
                 order: contentSections.length,
-                html: `<section data-section-id="${newId}" class="w-full h-full flex flex-col items-center justify-center bg-surface p-16"><h2 class="text-4xl font-bold text-on-surface">Nueva slide</h2><p class="text-xl text-on-surface-muted mt-4">Edita el contenido</p></section>`,
+                html: `<section data-section-id="${newId}" class="flex flex-col items-center justify-center bg-surface p-16"><h2 class="text-4xl font-bold text-on-surface">Nueva slide</h2><p class="text-xl text-on-surface-muted mt-4">Edita el contenido</p></section>`,
                 label: `Slide ${contentSections.length + 1}`,
               };
               const updated = [...sections, newSection];
@@ -470,7 +465,7 @@ export default function PresentationEditor() {
                   const newSection: Section3 = {
                     id: newId,
                     order: 0,
-                    html: `<section data-section-id="${newId}" class="w-full h-full flex flex-col items-center justify-center bg-surface p-16"><h1 class="text-6xl font-black text-on-surface">Tu Título</h1><p class="text-2xl text-on-surface-muted mt-4">Subtítulo</p></section>`,
+                    html: `<section data-section-id="${newId}" class="flex flex-col items-center justify-center bg-surface p-16"><h1 class="text-6xl font-black text-on-surface">Tu Título</h1><p class="text-2xl text-on-surface-muted mt-4">Subtítulo</p></section>`,
                     label: "Slide 1",
                   };
                   setSections([newSection]);
