@@ -20,45 +20,39 @@ import type { Route } from "./+types/editor";
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
 
 export const meta = () => [
-  { title: "Editor Presentación — EasyBits" },
+  { title: "Editor Presentacion — EasyBits" },
   { name: "robots", content: "noindex" },
 ];
 
-// ─── Conversions: slides ↔ sections ──────────────────
-function stripLegacyScripts(html: string): string {
-  // Remove reveal.js and other legacy script/link tags that crash in GrapesJS iframe
+// ─── Strip legacy reveal.js artifacts ────────────────
+function stripLegacy(html: string): string {
   return html
     .replace(/<script[^>]*reveal[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<script[^>]*reveal[^>]*\/>/gi, "")
     .replace(/<link[^>]*reveal[^>]*\/?\s*>/gi, "")
-    .replace(/<style[^>]*reveal[^>]*>[\s\S]*?<\/style>/gi, "");
+    .replace(/<style[^>]*reveal[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/^(<section\b[^>]*?)\s+style="[^"]*"/i, "$1");
 }
 
+// ─── Conversions: slides <-> sections ────────────────
 function slidesToSections(slides: Slide[]): Section3[] {
   return slides
     .sort((a, b) => a.order - b.order)
     .map((s) => {
-      let html = stripLegacyScripts(s.html || "");
+      let html = stripLegacy(s.html || "");
 
-      // Strip inline style from outer section (legacy slides may have width:100% etc.)
-      html = html.replace(/^(<section\b[^>]*?)\s+style="[^"]*"/i, "$1");
-
-      // If already a proper section with data-section-id, use as-is
       if (html.trim().startsWith("<section") && html.includes("data-section-id")) {
         return { id: s.id, order: s.order, html, label: `Slide ${s.order + 1}` };
       }
 
-      // Legacy slides: strip outer wrappers and rebuild as clean section
       html = html.trim();
-      // Remove wrapping <section> without data-section-id
       const sectionMatch = html.match(/^<section[^>]*>([\s\S]*)<\/section>$/i);
       if (sectionMatch) html = sectionMatch[1];
-      // Remove wrapping <div style="..."> (legacy inline styles that break GrapesJS canvas)
       const divMatch = html.match(/^<div\s+style="[^"]*">([\s\S]*)<\/div>$/i);
       if (divMatch) html = divMatch[1];
 
       if (!html.trim()) {
-        html = `<p class="text-on-surface-muted text-center">Slide vacío</p>`;
+        html = `<p class="text-on-surface-muted text-center">Slide vacio</p>`;
       }
 
       return {
@@ -183,29 +177,28 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     return { ok: true, unpublished: true };
   }
 
-  return { error: "Intent no válido" };
+  return { error: "Intent no valido" };
 };
 
-// ─── Slide canvas CSS (16:9, 960×540) ────────────────
-// Same pattern as documents (8.5in×11in) but for 16:9 slides
+// ─── Canvas CSS for 16:9 slides ─────────────────────
 const slideCanvasCss = `
   body {
-    padding: 24px;
-    background: #1a1a2e;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-    font-family: system-ui, -apple-system, sans-serif;
+    padding: 24px !important;
+    background: #1a1a2e !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 24px !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
   }
   section, [data-section-id] {
     width: 960px !important;
     min-height: 540px !important;
     max-height: 540px !important;
     overflow: hidden !important;
-    background: var(--color-surface, #1e1b4b);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-    border-radius: 8px;
+    background: var(--color-surface, #1e1b4b) !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
+    border-radius: 8px !important;
     box-sizing: border-box !important;
   }
 `;
@@ -232,7 +225,6 @@ function SlideThumbnail({ section, idx, onClick, isSelected }: {
 
   const srcDoc = `<!DOCTYPE html><html><head>
 <script src="https://cdn.tailwindcss.com"><\/script>
-<script>tailwind.config={theme:{extend:{colors:{primary:'var(--color-primary)','primary-light':'var(--color-primary-light)',secondary:'var(--color-secondary)',accent:'var(--color-accent)',surface:'var(--color-surface)','surface-alt':'var(--color-surface-alt)','on-primary':'var(--color-on-primary)','on-secondary':'var(--color-on-secondary)','on-surface':'var(--color-on-surface)','on-surface-muted':'var(--color-on-surface-muted)'}}}}<\/script>
 <style>
 :root{--color-primary:#6366f1;--color-primary-light:#818cf8;--color-secondary:#ec4899;--color-accent:#06b6d4;--color-surface:#1e1b4b;--color-surface-alt:#312e81;--color-on-primary:#fff;--color-on-secondary:#fff;--color-on-surface:#f1f5f9;--color-on-surface-muted:#94a3b8}
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;overflow:hidden}
@@ -275,7 +267,6 @@ export default function PresentationEditor() {
   const { presentation, websiteUrl } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  // Convert stored slides to Section3 for GrapesJS
   const initialSlides = (presentation.slides as unknown as Slide[]) || [];
   const [sections, setSections] = useState<Section3[]>(() =>
     slidesToSections(initialSlides)
@@ -329,7 +320,6 @@ export default function PresentationEditor() {
     const newSections = grapesToSections(html);
     const contentSections = newSections.filter((s) => s.id !== "__grapes_css__");
 
-    // Wipe protection
     if (contentSections.length === 0 && lastSectionCount.current > 0) return;
     if (lastSectionCount.current > 2 && contentSections.length < lastSectionCount.current * 0.5) return;
     lastSectionCount.current = contentSections.length;
@@ -357,11 +347,11 @@ export default function PresentationEditor() {
     actionFetcher.submit({ intent: "deploy" }, { method: "post" });
   };
 
-  // Close modals on ESC
+  // ESC handler
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // nothing to close yet — future modals
+        // future modals
       }
     };
     document.addEventListener("keydown", handler);
@@ -375,10 +365,7 @@ export default function PresentationEditor() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b-2 border-black bg-white shrink-0">
         <div className="flex items-center gap-3">
-          <Link
-            to="/dash/presentations"
-            className="text-sm font-bold hover:underline"
-          >
+          <Link to="/dash/presentations" className="text-sm font-bold hover:underline">
             &larr; Presentaciones
           </Link>
           <span className="text-sm text-gray-400">/</span>
@@ -416,7 +403,7 @@ export default function PresentationEditor() {
 
           <button
             onClick={() => {
-              if (window.confirm("¿Eliminar esta presentación?")) {
+              if (window.confirm("Eliminar esta presentacion?")) {
                 actionFetcher.submit({ intent: "delete" }, { method: "post" });
               }
             }}
@@ -428,7 +415,7 @@ export default function PresentationEditor() {
       </div>
 
       {/* Main area: sidebar + editor */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0">
         {/* Slide list sidebar */}
         <div className="w-48 shrink-0 border-r-2 border-black bg-gray-50 overflow-y-auto p-3 flex flex-col gap-3">
           {contentSections.map((s, i) => (
@@ -455,7 +442,6 @@ export default function PresentationEditor() {
               const updated = [...sections, newSection];
               setSections(updated);
               saveSections(updated);
-              // Sync to GrapesJS
               setTimeout(() => {
                 editorRef.current?.setHtml(sectionsToHtml(updated));
                 editorRef.current?.scrollToSection(newId);
@@ -467,8 +453,8 @@ export default function PresentationEditor() {
           </button>
         </div>
 
-        {/* GrapesJS editor */}
-        <div className="flex-1 h-full overflow-hidden relative">
+        {/* GrapesJS editor — takes remaining space */}
+        <div className="flex-1 min-w-0 h-full">
           {contentSections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-900">
               <p className="text-gray-500 text-sm mb-4">Sin slides</p>
@@ -478,7 +464,7 @@ export default function PresentationEditor() {
                   const newSection: Section3 = {
                     id: newId,
                     order: 0,
-                    html: `<section data-section-id="${newId}" class="flex flex-col items-center justify-center bg-surface p-16"><h1 class="text-6xl font-black text-on-surface">Tu Título</h1><p class="text-2xl text-on-surface-muted mt-4">Subtítulo</p></section>`,
+                    html: `<section data-section-id="${newId}" class="flex flex-col items-center justify-center bg-surface p-16"><h1 class="text-6xl font-black text-on-surface">Tu Titulo</h1><p class="text-2xl text-on-surface-muted mt-4">Subtitulo</p></section>`,
                     label: "Slide 1",
                   };
                   setSections([newSection]);
@@ -492,7 +478,7 @@ export default function PresentationEditor() {
             <Suspense fallback={<div className="flex items-center justify-center h-full w-full bg-gray-900 text-gray-400">Cargando editor...</div>}>
               <GrapesEditor
                 ref={editorRef}
-                initialHtml={`<style>${slideCanvasCss}</style>\n${sectionsToHtml(sections)}`}
+                initialHtml={sectionsToHtml(sections)}
                 theme={currentTheme}
                 customColors={currentCustomColors}
                 canvasStyles={slideCanvasCss}
