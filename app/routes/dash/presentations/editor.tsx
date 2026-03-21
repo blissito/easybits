@@ -484,6 +484,7 @@ export default function PresentationEditor() {
                 canvasStyles={slideCanvasCss}
                 devices={false}
                 panelSide="right"
+                hiddenTabs={["blocks", "layers"]}
                 blocks={PRESENTATION_BLOCKS}
                 onChange={handleEditorChange}
                 onThemeChange={handleThemeChange}
