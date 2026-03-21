@@ -51,6 +51,16 @@ export function grapesToSections(html: string): Section3[] {
 
   let order = 0;
   for (const el of children) {
+    // Skip empty non-section elements without data-section-id (GrapesJS ghost wrappers)
+    if (
+      el.tagName !== "SECTION" &&
+      !el.getAttribute("data-section-id") &&
+      !el.textContent?.trim() &&
+      !el.querySelector("img, video, svg, canvas, iframe")
+    ) {
+      continue;
+    }
+
     const id =
       el.getAttribute("data-section-id") || stableId();
 

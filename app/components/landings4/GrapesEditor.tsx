@@ -45,6 +45,10 @@ export interface GrapesEditorHandle {
   toggleSwVisibility: () => boolean;
   /** Scroll the canvas iframe to a section by data-section-id */
   scrollToSection: (sectionId: string) => void;
+  /** Set canvas zoom level (percentage, e.g. 50 = 50%) */
+  setZoom: (value: number) => void;
+  /** Get current canvas zoom level */
+  getZoom: () => number;
 }
 
 interface BrandKitItem {
@@ -208,6 +212,12 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         } else {
           console.warn("[replaceComponent] Component not found:", componentId);
         }
+      },
+      setZoom: (value: number) => {
+        editorRef.current?.Canvas.setZoom(value);
+      },
+      getZoom: () => {
+        return editorRef.current?.Canvas.getZoom() ?? 100;
       },
     }));
 

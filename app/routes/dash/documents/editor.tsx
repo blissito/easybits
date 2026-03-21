@@ -432,6 +432,38 @@ export default function DocumentEditor() {
     section, [data-section-id] { width: 8.5in; min-height: 11in; max-height: 11in; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }
   `;
 
+  // Zoom
+  const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150];
+  const [zoomPct, setZoomPct] = useState(100);
+  const zoomIn = useCallback(() => setZoomPct((z) => {
+    const idx = ZOOM_LEVELS.indexOf(z);
+    const next = idx >= 0 ? ZOOM_LEVELS[Math.min(idx + 1, ZOOM_LEVELS.length - 1)] : z;
+    editorRef.current?.setZoom(next);
+    return next;
+  }), []);
+  const zoomOut = useCallback(() => setZoomPct((z) => {
+    const idx = ZOOM_LEVELS.indexOf(z);
+    const next = idx >= 0 ? ZOOM_LEVELS[Math.max(idx - 1, 0)] : z;
+    editorRef.current?.setZoom(next);
+    return next;
+  }), []);
+  const zoomFit = useCallback(() => {
+    setZoomPct(75);
+    editorRef.current?.setZoom(75);
+  }, []);
+
+  // Cmd/Ctrl + scroll to zoom
+  useEffect(() => {
+    function handleWheel(e: WheelEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      if (e.deltaY < 0) zoomIn();
+      else zoomOut();
+    }
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
+  }, [zoomIn, zoomOut]);
+
   const [addFiles, setAddFiles] = useState<File[]>([]);
   const [addRefImage, setAddRefImage] = useState<string | null>(null);
   const [addParsedContent, setAddParsedContent] = useState("");
@@ -1740,6 +1772,14 @@ ${sectionsHtml}
               <span className="block w-4 h-4 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
               <span className="text-sm font-bold">Generando...</span>
               <button onClick={stopGeneration} className="text-xs font-bold text-red-500 hover:underline ml-1">Detener</button>
+            </div>
+          )}
+          {/* Zoom controls */}
+          {!isGenerating && sections.length > 0 && (
+            <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white border-2 border-black rounded-xl px-2 py-1 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-30 select-none">
+              <button onClick={zoomOut} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Alejar">−</button>
+              <button onClick={zoomFit} className="min-w-[3rem] text-center text-xs font-bold hover:bg-gray-100 rounded px-1 py-1" title="Ajustar">{zoomPct}%</button>
+              <button onClick={zoomIn} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Acercar">+</button>
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import {
   useLoaderData,
   useFetcher,
@@ -15,6 +15,7 @@ import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
 import { PRESENTATION_BLOCKS } from "~/components/presentations/blocks";
 import type { Section3 } from "~/lib/landing3/types";
 import type { Slide } from "~/lib/buildRevealHtml";
+import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import type { Route } from "./+types/editor";
 
 const GrapesEditor = lazy(() => import("~/components/landings4/GrapesEditor"));
@@ -41,7 +42,7 @@ function slidesToSections(slides: Slide[]): Section3[] {
     .map((s) => {
       let html = stripLegacy(s.html || "");
 
-      if (html.trim().startsWith("<section") && html.includes("data-section-id")) {
+      if (html.trim().match(/^<section\b[^>]*data-section-id=/i)) {
         return { id: s.id, order: s.order, html, label: `Slide ${s.order + 1}` };
       }
 
@@ -209,11 +210,12 @@ const slideCanvasCss = `
 `;
 
 // ─── Slide Thumbnail ─────────────────────────────────
-function SlideThumbnail({ section, idx, onClick, isSelected }: {
+function SlideThumbnail({ section, idx, onClick, isSelected, themeCssData }: {
   section: Section3;
   idx: number;
   onClick: () => void;
   isSelected: boolean;
+  themeCssData?: { css: string; tailwindConfig: string };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
@@ -230,10 +232,11 @@ function SlideThumbnail({ section, idx, onClick, isSelected }: {
 
   const srcDoc = `<!DOCTYPE html><html><head>
 <script src="https://cdn.tailwindcss.com"><\/script>
+${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
 <style>
-:root{--color-primary:#6366f1;--color-primary-light:#818cf8;--color-secondary:#ec4899;--color-accent:#06b6d4;--color-surface:#1e1b4b;--color-surface-alt:#312e81;--color-on-primary:#fff;--color-on-secondary:#fff;--color-on-surface:#f1f5f9;--color-on-surface-muted:#94a3b8}
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;overflow:hidden}
 section{width:960px;height:540px;overflow:hidden}
+${themeCssData?.css || ""}
 </style></head><body>${section.html}</body></html>`;
 
   return (
@@ -363,6 +366,16 @@ export default function PresentationEditor() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
+  const themeCssData = useMemo(() => {
+    if (currentTheme === "custom" && currentCustomColors) {
+      const t = buildCustomTheme(currentCustomColors as any);
+      const css = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+      const { tailwindConfig } = buildSingleThemeCss("minimal");
+      return { css, tailwindConfig };
+    }
+    return buildSingleThemeCss(currentTheme);
+  }, [currentTheme, currentCustomColors]);
+
   const contentSections = sections.filter((s) => s.id !== "__grapes_css__").sort((a, b) => a.order - b.order);
 
   return (
@@ -429,6 +442,7 @@ export default function PresentationEditor() {
               section={s}
               idx={i}
               isSelected={selectedIdx === i}
+              themeCssData={themeCssData}
               onClick={() => {
                 setSelectedIdx(i);
                 editorRef.current?.scrollToSection(s.id);

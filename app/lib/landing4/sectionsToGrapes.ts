@@ -23,8 +23,14 @@ export function sectionsToHtml(sections: Section3[]): string {
     const html = s.html.trim();
     const match = html.match(/^<(\w+)/);
     if (match) {
+      // Strip data-section-id/data-label only from the root opening tag, not nested elements
+      const tagEnd = html.indexOf(">");
+      const openTag = html.slice(0, tagEnd)
+        .replace(/\s+data-section-id="[^"]*"/, "")
+        .replace(/\s+data-label="[^"]*"/, "");
+      const clean = openTag + html.slice(tagEnd);
       parts.push(
-        html.replace(
+        clean.replace(
           new RegExp(`^<${match[1]}`),
           `<${match[1]} data-section-id="${s.id}" data-label="${s.label || ""}"`
         )
