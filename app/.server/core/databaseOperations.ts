@@ -158,9 +158,9 @@ export async function execDatabase(
 ) {
   requireScope(ctx, "WRITE");
 
-  if (!statements.length || statements.length > 20) {
+  if (!statements.length || statements.length > 50) {
     throw new Response(
-      JSON.stringify({ error: "Provide 1-20 statements" }),
+      JSON.stringify({ error: "Provide 1-50 statements" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }

@@ -11,15 +11,15 @@ const SQLD_ADMIN_URL = process.env.SQLD_ADMIN_URL || "http://localhost:9090";
 
 interface StmtArg {
   type: "integer" | "float" | "text" | "blob" | "null";
-  value?: string | number;
+  value?: string;
 }
 
 function toSqldArg(v: unknown): StmtArg {
   if (v === null || v === undefined) return { type: "null" };
   if (typeof v === "number") {
     return Number.isInteger(v)
-      ? { type: "integer", value: v }
-      : { type: "float", value: v };
+      ? { type: "integer", value: String(v) }
+      : { type: "float", value: String(v) };
   }
   if (typeof v === "string") return { type: "text", value: v };
   return { type: "text", value: String(v) };

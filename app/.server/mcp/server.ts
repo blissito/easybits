@@ -1480,13 +1480,13 @@ export function createMcpServer() {
 
   server.tool(
     "db_exec",
-    "Execute multiple SQL statements in a batch (max 20). Useful for migrations or multi-step operations.",
+    "Execute multiple SQL statements in a batch (max 50). Useful for migrations or multi-step operations.",
     {
       dbId: z.string().describe("The database ID"),
       statements: z.array(z.object({
         sql: z.string().describe("SQL statement"),
         args: z.array(z.unknown()).optional().describe("Positional arguments"),
-      })).describe("Array of SQL statements (1-20)"),
+      })).describe("Array of SQL statements (1-50)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1497,7 +1497,7 @@ export function createMcpServer() {
 
   server.tool(
     "db_import",
-    "Bulk import rows into a table. Up to 10,000 rows per request. Much faster than db_exec for large inserts.",
+    "Bulk import rows into a table. Up to 10,000 rows per request. Values are auto-converted to strings (sqld requirement). Much faster than db_exec for large inserts.",
     {
       dbId: z.string().describe("The database ID"),
       table: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).describe("Target table name"),
