@@ -40,12 +40,20 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   // For documents (version 4), we also build a print HTML for PDF generation
   let printHtml: string | undefined;
   const html = landing.version === 4
-    ? (() => {
+    ? await (async () => {
         const docTheme = (landingMeta.theme as string) || undefined;
         let themeCss: string | undefined;
         let tailwindConfig: string | undefined;
-        if (landingMeta.customColors) {
-          const t = buildCustomTheme(landingMeta.customColors as any);
+        // Resolve custom colors: from metadata, or from brand kit if referenced
+        let customColors = landingMeta.customColors as Record<string, string> | undefined;
+        if (!customColors && landingMeta.brandKitId) {
+          const brandKit = await db.brandKit.findUnique({ where: { id: landingMeta.brandKitId as string } });
+          if (brandKit?.colors) {
+            customColors = brandKit.colors as Record<string, string>;
+          }
+        }
+        if (customColors) {
+          const t = buildCustomTheme(customColors as any);
           themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
           tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
         } else {
