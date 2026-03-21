@@ -28,16 +28,33 @@ export const meta = () => [
 function slidesToSections(slides: Slide[]): Section3[] {
   return slides
     .sort((a, b) => a.order - b.order)
-    .map((s) => ({
-      id: s.id,
-      order: s.order,
-      html: s.html
-        ? s.html.trim().startsWith("<section")
-          ? s.html
-          : `<section data-section-id="${s.id}" class="w-full h-full flex flex-col bg-surface p-12 box-border">${s.html}</section>`
-        : `<section data-section-id="${s.id}" class="w-full h-full flex flex-col items-center justify-center bg-surface p-12"><p class="text-on-surface-muted">Slide vacío</p></section>`,
-      label: `Slide ${s.order + 1}`,
-    }));
+    .map((s) => {
+      let html = s.html || "";
+      // If already a proper section with data-section-id, use as-is
+      if (html.trim().startsWith("<section") && html.includes("data-section-id")) {
+        return { id: s.id, order: s.order, html, label: `Slide ${s.order + 1}` };
+      }
+
+      // Legacy slides: strip outer wrappers and rebuild as clean section
+      html = html.trim();
+      // Remove wrapping <section> without data-section-id
+      const sectionMatch = html.match(/^<section[^>]*>([\s\S]*)<\/section>$/i);
+      if (sectionMatch) html = sectionMatch[1];
+      // Remove wrapping <div style="..."> (legacy inline styles that break GrapesJS canvas)
+      const divMatch = html.match(/^<div\s+style="[^"]*">([\s\S]*)<\/div>$/i);
+      if (divMatch) html = divMatch[1];
+
+      if (!html.trim()) {
+        html = `<p class="text-on-surface-muted text-center">Slide vacío</p>`;
+      }
+
+      return {
+        id: s.id,
+        order: s.order,
+        html: `<section data-section-id="${s.id}" class="flex flex-col items-center justify-center p-12">${html}</section>`,
+        label: `Slide ${s.order + 1}`,
+      };
+    });
 }
 
 function sectionsToSlides(sections: Section3[]): Slide[] {
@@ -157,17 +174,31 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 };
 
 // ─── Slide canvas CSS (16:9, 960×540) ────────────────
+// Same pattern as documents (8.5in×11in) but for 16:9 slides
 const slideCanvasCss = `
-  body { padding: 24px; background: #1a1a2e; display: flex; flex-direction: column; align-items: center; gap: 24px; font-family: system-ui, -apple-system, sans-serif; }
+  body {
+    padding: 24px;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
   section, [data-section-id] {
-    width: 960px !important;
-    min-height: 540px !important;
-    max-height: 540px !important;
-    overflow: hidden !important;
+    width: 960px;
+    min-height: 540px;
+    max-height: 540px;
+    overflow: hidden;
     background: var(--color-surface, #1e1b4b);
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     border-radius: 8px;
     box-sizing: border-box;
+  }
+  /* Kill any inline height/width that legacy slides might have */
+  section > *, [data-section-id] > * {
+    height: auto !important;
+    max-height: 540px;
   }
 `;
 
