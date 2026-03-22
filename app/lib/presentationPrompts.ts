@@ -233,12 +233,13 @@ IMAGE HANDLING
 
 IMPORTANT: Use .three-bg on title and closing slides for maximum visual impact. Use the richest, most varied layouts possible — cards, timelines, KPIs, charts, comparisons. Make every slide visually distinct.`;
 
-export const CLONE_SLIDE_PROMPT = `You are looking at a screenshot of a presentation slide. Reproduce it as faithfully as possible in HTML + Tailwind CSS.
+/** @deprecated Clone now uses CLONE_HYBRID_PROMPT in presentationClone.ts */
+export const CLONE_SLIDE_PROMPT = `You are looking at a screenshot of a PDF page. Reproduce it as faithfully as possible in HTML + Tailwind CSS.
 
 RULES:
 - Output ONLY the inner HTML content (no <html>, <head>, <body>, <section> wrappers)
 - Use Tailwind CSS utility classes for ALL styling — no custom CSS, no <style> tags
-- The slide is 960×540px. Use w-full h-full as the root container, with overflow-hidden
+- The user will tell you the exact page dimensions. Use w-full h-full as the root container, with overflow-hidden
 - Replicate layout, colors, typography, spacing, and visual hierarchy exactly
 - Reproduce ALL text content faithfully — headings, body text, numbers, labels, quotes
 - For images: <img data-image-query="english search keywords" alt="description" class="..." /> — the system will resolve real photos automatically. Choose search queries that match what the image shows.

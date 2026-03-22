@@ -763,7 +763,7 @@ export function createMcpServer() {
 
   server.tool(
     "clone_presentation",
-    "Clone or get inspired by a PDF to create a presentation. Upload a PDF first with upload_file, then pass the fileId. Mode 'clone' reproduces each page faithfully. Mode 'inspire' extracts the design style and applies it to new content. Returns immediately — poll with get_presentation to see slides appear.",
+    "[EXPERIMENTAL] Clone or get inspired by a PDF to create a presentation. Upload a PDF first with upload_file, then pass the fileId. Mode 'clone' reproduces each page as HTML+Tailwind (best effort, quality varies). Mode 'inspire' extracts the design style and applies it to new content. Returns immediately — poll with get_presentation to see slides appear. Default model: gemini-2.5-pro.",
     {
       fileId: z.string().describe("EasyBits file ID of the uploaded PDF"),
       mode: z.enum(["clone", "inspire"]).describe("'clone' = faithful reproduction, 'inspire' = extract style for new content"),
@@ -771,6 +771,7 @@ export function createMcpServer() {
       content: z.string().optional().describe("For 'inspire' mode: the topic/content for the new presentation"),
       styleId: z.string().optional().describe("Reuse a previously saved style instead of extracting from the PDF"),
       maxPages: z.number().optional().describe("Max pages to process (default 20)"),
+      model: z.string().optional().describe("AI model to use (default: gemini-2.5-flash)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;

@@ -1,3 +1,9 @@
+/**
+ * EXPERIMENTAL — PDF clone/inspire for presentations.
+ * Quality is not production-grade yet. Best results with Gemini Pro + hybrid prompt.
+ * Next: test with Claude Sonnet, SSIM scoring, section-by-section cloning.
+ * See memory/project_pdf_clone.md for findings.
+ */
 import { nanoid } from "nanoid";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -6,11 +12,45 @@ import { getReadClientForPlatformFile, getClientForFile } from "../storage";
 import { streamText } from "ai";
 import { resolveModelLocal } from "../aiModels";
 import { pdfToImages } from "./pdfToImages";
+import type { PdfPage } from "./pdfToImages";
 import { savePresentationStyle } from "./presentationStyles";
-import { CLONE_SLIDE_PROMPT, CLONE_CORRECTION_PROMPT, CLONE_SCORE_PROMPT, INSPIRE_SLIDE_PROMPT } from "~/lib/presentationPrompts";
+import { CLONE_CORRECTION_PROMPT, CLONE_SCORE_PROMPT, INSPIRE_SLIDE_PROMPT } from "~/lib/presentationPrompts";
 import { enrichImages } from "../images/enrichImages";
 
-const CLONE_MODEL = "gemini-2.5-flash";
+const CLONE_MODEL = "gemini-2.5-pro";
+
+/**
+ * Hybrid clone prompt: absolute positioning for decorations, normal flow for content.
+ * This approach produces the best z-index handling and text readability.
+ */
+const CLONE_HYBRID_PROMPT = `You are a world-class HTML/CSS developer. Reproduce this PDF page as faithfully as possible using HTML + Tailwind CSS.
+
+STRATEGY — HYBRID layout:
+1. Root container: position:relative, exact page dimensions, overflow:hidden, white background
+2. DECORATIVE LAYERS (background shapes, blobs, accent areas): position:absolute, z-[0] to z-[5]. These go BEHIND everything.
+3. CONTENT (text columns, headings, body text): normal document flow using flexbox/grid, with position:relative z-[10]. Text flows naturally this way.
+4. OVERLAPPING PHOTOS: position:absolute with z-[15-20], sized and placed to match the original.
+
+TYPOGRAPHY — CRITICAL, get this right:
+- Headlines: LARGE. Use text-5xl, text-6xl, text-7xl, text-8xl for big titles. Match the visual weight.
+- Section titles: text-2xl to text-4xl
+- Body text: text-sm or text-base, NEVER smaller. Leading-relaxed for readability.
+- Bold text: font-bold or font-semibold
+- Reproduce EVERY word. Do not summarize or skip text.
+- Same language as original.
+
+COLORS — use exact hex values:
+- bg-[#hex], text-[#hex] — extract precise colors from the image
+
+IMAGES:
+- <img data-image-query="descriptive english keywords" alt="desc" class="w-full h-full object-cover" />
+- People photos: describe specifically ("professional woman in gray blazer holding pen")
+
+DECORATIVE SHAPES:
+- Organic blobs: large divs with rounded-full or rounded-[40%_60%_50%_70%], correct color, position:absolute
+- Must be BEHIND content (low z-index)
+
+Output ONLY the inner HTML content. No <html>, <head>, <body> wrappers. No markdown fences. No explanations.`;
 
 function throwJson(error: string, status: number): never {
   throw new Response(JSON.stringify({ error }), {
@@ -23,12 +63,6 @@ function getModel(modelId?: string) {
   return resolveModelLocal(modelId || CLONE_MODEL);
 }
 
-/** Collect full text from a streamText result */
-async function collectStream(stream: ReturnType<typeof streamText>): Promise<string> {
-  const result = await stream;
-  return result.text;
-}
-
 interface CloneOpts {
   fileId: string;
   mode: "clone" | "inspire";
@@ -36,16 +70,17 @@ interface CloneOpts {
   content?: string;
   styleId?: string;
   maxPages?: number;
+  model?: string;
 }
 
 /**
- * Clone or get inspired by a PDF to create a presentation.
+ * EXPERIMENTAL: Clone or get inspired by a PDF to create a presentation.
  * Creates the presentation immediately, then generates slides in background.
  */
 export async function clonePresentationFromPdf(ctx: AuthContext, opts: CloneOpts) {
   requireScope(ctx, "WRITE");
 
-  const { fileId, mode, name, content, styleId, maxPages = 20 } = opts;
+  const { fileId, mode, name, content, styleId, maxPages = 20, model } = opts;
 
   // 1. Fetch PDF from EasyBits storage
   const file = await db.file.findUnique({ where: { id: fileId } });
@@ -60,10 +95,10 @@ export async function clonePresentationFromPdf(ctx: AuthContext, opts: CloneOpts
   if (!pdfResponse.ok) throwJson("Failed to read PDF file", 500);
   const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
 
-  // 2. Convert PDF to images
-  const pageImages = await pdfToImages(pdfBuffer, { maxPages });
+  // 2. Convert PDF to images (native dimensions)
+  const pages = await pdfToImages(pdfBuffer, { maxPages });
 
-  if (pageImages.length === 0) throwJson("PDF has no pages", 400);
+  if (pages.length === 0) throwJson("PDF has no pages", 400);
 
   // 3. Create empty presentation
   const presentation = await db.presentation.create({
@@ -78,30 +113,33 @@ export async function clonePresentationFromPdf(ctx: AuthContext, opts: CloneOpts
   });
 
   // 4. Launch background generation (fire-and-forget)
-  generateSlidesInBackground(ctx, presentation.id, pageImages, {
+  generateSlidesInBackground(ctx, presentation.id, pages, {
     mode,
     content,
     styleId,
     sourceFileId: fileId,
     fileName: file.name,
+    model,
   }).catch((err) => {
     console.error(`[clonePresentation] background generation failed for ${presentation.id}:`, err);
   });
 
   return {
     presentationId: presentation.id,
-    totalPages: pageImages.length,
+    totalPages: pages.length,
+    pageDimensions: { width: pages[0].width, height: pages[0].height },
     status: "generating",
-    message: `Converting ${pageImages.length} pages. Poll with get_presentation to see progress.`,
+    message: `Converting ${pages.length} pages. Poll with get_presentation to see progress.`,
   };
 }
 
 async function generateSlidesInBackground(
   ctx: AuthContext,
   presentationId: string,
-  pageImages: string[],
-  opts: { mode: "clone" | "inspire"; content?: string; styleId?: string; sourceFileId: string; fileName: string }
+  pages: PdfPage[],
+  opts: { mode: "clone" | "inspire"; content?: string; styleId?: string; sourceFileId: string; fileName: string; model?: string }
 ) {
+  const pageImages = pages.map((p) => p.image);
   let designSystem: any = null;
 
   // For inspire mode, extract or load design system first
@@ -132,13 +170,14 @@ async function generateSlidesInBackground(
   // Generate slides one by one
   const slides: any[] = [];
 
-  for (let i = 0; i < pageImages.length; i++) {
+  for (let i = 0; i < pages.length; i++) {
     try {
+      const { width: pw, height: ph } = pages[i];
       const html = opts.mode === "clone"
-        ? await cloneSingleSlide(pageImages[i])
-        : await inspireSingleSlide(designSystem, opts.content || "", i, pageImages.length);
+        ? await cloneSingleSlide(pageImages[i], pw, ph, 3, opts.model)
+        : await inspireSingleSlide(designSystem, opts.content || "", i, pages.length, opts.model);
 
-      slides.push({ id: nanoid(8), order: i, type: "2d", html });
+      slides.push({ id: nanoid(8), order: i, type: "2d", html, width: pw, height: ph });
 
       await db.presentation.update({
         where: { id: presentationId },
@@ -160,19 +199,19 @@ async function generateSlidesInBackground(
   }
 }
 
-async function cloneSingleSlide(pageImage: string, maxIterations = 3): Promise<string> {
+async function cloneSingleSlide(pageImage: string, pageWidth: number, pageHeight: number, maxIterations = 3, modelId?: string): Promise<string> {
   const originalBuf = Buffer.from(pageImage, "base64");
-  const model = getModel();
+  const model = getModel(modelId);
 
-  // 1. First generation
+  // 1. First generation using hybrid prompt
   const result = streamText({
     model,
-    system: CLONE_SLIDE_PROMPT,
+    system: CLONE_HYBRID_PROMPT,
     messages: [{
       role: "user",
       content: [
         { type: "image", image: originalBuf },
-        { type: "text", text: "Reproduce this slide as faithfully as possible in HTML + Tailwind." },
+        { type: "text", text: `Reproduce this page exactly. Dimensions: ${pageWidth}×${pageHeight}px.` },
       ],
     }],
   });
@@ -181,7 +220,7 @@ async function cloneSingleSlide(pageImage: string, maxIterations = 3): Promise<s
   html = await enrichImages(html).catch(() => html);
 
   // Score initial attempt
-  let renderedBuf = await screenshotHtml(html);
+  let renderedBuf = await screenshotHtml(html, pageWidth, pageHeight);
   if (!renderedBuf) return html;
 
   let bestHtml = html;
@@ -211,7 +250,7 @@ async function cloneSingleSlide(pageImage: string, maxIterations = 3): Promise<s
 
     const correctedHtml = cleanHtmlResponse(response);
     const enrichedHtml = await enrichImages(correctedHtml).catch(() => correctedHtml);
-    const correctedBuf = await screenshotHtml(enrichedHtml);
+    const correctedBuf = await screenshotHtml(enrichedHtml, pageWidth, pageHeight);
     if (!correctedBuf) break;
 
     const newScore = await scoreReproduction(originalBuf, correctedBuf);
@@ -272,16 +311,16 @@ function getScreenshotBrowser() {
   return screenshotBrowserPromise;
 }
 
-/** Screenshot an HTML slide at 960x540 using a reusable browser */
-async function screenshotHtml(slideHtml: string): Promise<Buffer | null> {
+/** Screenshot an HTML page at given dimensions using a reusable browser */
+async function screenshotHtml(slideHtml: string, width = 960, height = 540): Promise<Buffer | null> {
   const fullHtml = `<!DOCTYPE html><html><head>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>body{margin:0;}</style>
-</head><body><div style="width:960px;height:540px;overflow:hidden;">${slideHtml}</div></body></html>`;
+</head><body><div style="width:${width}px;height:${height}px;position:relative;overflow:hidden;">${slideHtml}</div></body></html>`;
 
   try {
     const browser = await getScreenshotBrowser();
-    const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+    const page = await browser.newPage({ viewport: { width, height } });
     try {
       await page.setContent(fullHtml, { waitUntil: "networkidle", timeout: 15000 });
       await page.waitForTimeout(2000);
@@ -300,13 +339,14 @@ async function inspireSingleSlide(
   designSystem: any,
   content: string,
   slideIndex: number,
-  totalSlides: number
+  totalSlides: number,
+  modelId?: string,
 ): Promise<string> {
   const slidePosition = slideIndex === 0 ? "title/opening" :
     slideIndex === totalSlides - 1 ? "closing/CTA" : `content (slide ${slideIndex + 1} of ${totalSlides})`;
 
   const result = streamText({
-    model: getModel(),
+    model: getModel(modelId),
     system: INSPIRE_SLIDE_PROMPT,
     messages: [{
       role: "user",

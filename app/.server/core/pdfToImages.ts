@@ -1,6 +1,6 @@
 /**
  * Convert PDF pages to base64 PNG images using Playwright + pdf.js.
- * Renders each page to canvas at presentation dimensions (960x540).
+ * Detects each page's native dimensions and renders at correct aspect ratio.
  */
 
 let browserPromise: ReturnType<typeof launchBrowser> | null = null;
@@ -28,13 +28,22 @@ function getBrowser() {
 
 const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155";
 
+export interface PdfPage {
+  image: string; // base64 PNG
+  width: number; // rendered pixel width
+  height: number; // rendered pixel height
+}
+
+/**
+ * Convert PDF to images. Returns page images with their native dimensions.
+ * @param maxWidth - max render width (default 1200). Height is calculated from PDF aspect ratio.
+ */
 export async function pdfToImages(
   pdfBuffer: Buffer,
-  opts: { maxPages?: number; width?: number; height?: number } = {}
-): Promise<string[]> {
-  const { maxPages = 20, width = 960, height = 540 } = opts;
+  opts: { maxPages?: number; maxWidth?: number } = {}
+): Promise<PdfPage[]> {
+  const { maxPages = 20, maxWidth = 1200 } = opts;
 
-  // Minimal page that loads pdf.js and waits for data via window.__pdfBytes
   const html = `<!DOCTYPE html>
 <html><head></head><body>
 <canvas id="canvas"></canvas>
@@ -42,7 +51,7 @@ export async function pdfToImages(
   import * as pdfjsLib from "${PDFJS_CDN}/pdf.min.mjs";
   pdfjsLib.GlobalWorkerOptions.workerSrc = "${PDFJS_CDN}/pdf.worker.min.mjs";
 
-  async function render(pdfBytes, maxPages, w, h) {
+  async function render(pdfBytes, maxPages, maxW) {
     const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
     const total = Math.min(pdf.numPages, maxPages);
     const canvas = document.getElementById("canvas");
@@ -52,19 +61,21 @@ export async function pdfToImages(
     for (let i = 1; i <= total; i++) {
       const page = await pdf.getPage(i);
       const vp = page.getViewport({ scale: 1 });
-      const scale = Math.min(w / vp.width, h / vp.height);
+      // Scale to fit maxWidth, preserve aspect ratio
+      const scale = Math.min(maxW / vp.width, 2.0); // cap at 2x
       const viewport = page.getViewport({ scale });
+      const w = Math.round(viewport.width);
+      const h = Math.round(viewport.height);
       canvas.width = w;
       canvas.height = h;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
-      const offsetX = (w - viewport.width) / 2;
-      const offsetY = (h - viewport.height) / 2;
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
       await page.render({ canvasContext: ctx, viewport }).promise;
-      ctx.restore();
-      results.push(canvas.toDataURL("image/png").split(",")[1]);
+      results.push({
+        image: canvas.toDataURL("image/png").split(",")[1],
+        width: w,
+        height: h,
+      });
     }
     return results;
   }
@@ -75,22 +86,23 @@ export async function pdfToImages(
   return enqueuePdfJob(async () => {
     try {
       const browser = await getBrowser();
-      const page = await browser.newPage({ viewport: { width, height } });
+      const page = await browser.newPage({ viewport: { width: maxWidth, height: maxWidth } });
       try {
         await page.setContent(html, { waitUntil: "networkidle", timeout: 30000 });
-        // Wait for the render function to be available
         await page.waitForFunction(() => typeof (window as any).__renderPdf === "function", { timeout: 15000 });
 
-        // Pass PDF bytes via evaluate (chunked transfer, avoids inline HTML bloat)
+        const b64 = pdfBuffer.toString("base64");
         const results = await page.evaluate(
-          async ({ bytes, maxPages, w, h }) => {
-            const uint8 = new Uint8Array(bytes);
-            return (window as any).__renderPdf(uint8, maxPages, w, h);
+          async ({ b64, maxPages, maxW }) => {
+            const binary = atob(b64);
+            const uint8 = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) uint8[i] = binary.charCodeAt(i);
+            return (window as any).__renderPdf(uint8, maxPages, maxW);
           },
-          { bytes: Array.from(pdfBuffer), maxPages, w: width, h: height }
+          { b64, maxPages, maxW: maxWidth }
         );
 
-        return results as string[];
+        return results as PdfPage[];
       } finally {
         await page.close();
       }
