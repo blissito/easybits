@@ -759,6 +759,94 @@ export function createMcpServer() {
     })
   );
 
+  // --- Presentation Clone & Styles ---
+
+  server.tool(
+    "clone_presentation",
+    "Clone or get inspired by a PDF to create a presentation. Upload a PDF first with upload_file, then pass the fileId. Mode 'clone' reproduces each page faithfully. Mode 'inspire' extracts the design style and applies it to new content. Returns immediately — poll with get_presentation to see slides appear.",
+    {
+      fileId: z.string().describe("EasyBits file ID of the uploaded PDF"),
+      mode: z.enum(["clone", "inspire"]).describe("'clone' = faithful reproduction, 'inspire' = extract style for new content"),
+      name: z.string().describe("Name for the new presentation"),
+      content: z.string().optional().describe("For 'inspire' mode: the topic/content for the new presentation"),
+      styleId: z.string().optional().describe("Reuse a previously saved style instead of extracting from the PDF"),
+      maxPages: z.number().optional().describe("Max pages to process (default 20)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { clonePresentationFromPdf } = await import("../core/presentationClone");
+      const result = await clonePresentationFromPdf(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "save_presentation_style",
+    "Extract and save the visual style from a presentation as a reusable 'Style LoRA'. Once saved, use the styleId with clone_presentation in 'inspire' mode to generate unlimited presentations with that style.",
+    {
+      presentationId: z.string().describe("The presentation ID to extract style from"),
+      name: z.string().describe("Name for the style (e.g. 'Udemy Corporate 2026')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getPresentation } = await import("../core/presentationOperations");
+      const { savePresentationStyle } = await import("../core/presentationStyles");
+      const { pdfToImages } = await import("../core/pdfToImages");
+
+      // Get presentation slides, render them as images for style extraction
+      const pres = await getPresentation(ctx, params.presentationId);
+      const slides = (pres.slides as any[]) || [];
+      if (slides.length === 0) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "Presentation has no slides" }) }] };
+      }
+
+      // Take screenshots of representative slides for style extraction
+      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
+      const indices = slides.length <= 4
+        ? slides.map((_: any, i: number) => i)
+        : [0, Math.floor(slides.length / 3), Math.floor(2 * slides.length / 3), slides.length - 1];
+
+      const pageImages: string[] = [];
+      for (const idx of indices) {
+        const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, idx);
+        if (result.type === "image") pageImages.push(result.data);
+      }
+
+      if (pageImages.length === 0) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "Could not capture slide screenshots" }) }] };
+      }
+
+      const style = await savePresentationStyle(ctx, { name: params.name, pageImages });
+      return { content: [{ type: "text", text: JSON.stringify(style, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "list_presentation_styles",
+    "List your saved presentation styles ('Style LoRAs'). Use a styleId with clone_presentation to generate presentations in that style.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listPresentationStyles } = await import("../core/presentationStyles");
+      const styles = await listPresentationStyles(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(styles, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_presentation_style",
+    "Delete a saved presentation style.",
+    {
+      styleId: z.string().describe("The style ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deletePresentationStyle } = await import("../core/presentationStyles");
+      const result = await deletePresentationStyle(ctx, params.styleId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
   // --- Document Tools ---
 
   server.tool(

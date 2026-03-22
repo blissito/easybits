@@ -189,8 +189,9 @@ model User {
   websites         Website[]
   webhooks         Webhook[]
   databases        Database[]
-  presentations    Presentation[]
-  landings         Landing[]
+  presentations      Presentation[]
+  presentationStyles PresentationStyle[]
+  landings           Landing[]
   customDomains    CustomDomain[]
   referrals        Referral[]     @relation("Referrals")
   referredBy       Referral?      @relation("ReferredBy")
@@ -466,6 +467,19 @@ model Presentation {
   websiteId    String?  @db.ObjectId
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model PresentationStyle {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  designSystem  Json     // { colors, typography, spacing, layouts, decorativeElements, mood }
+  sampleImages  Json?    // [base64 thumbnails of 3-4 key pages]
+  sourceFileId  String?  @db.ObjectId // original PDF file reference
+  ownerId       String   @db.ObjectId
+  owner         User     @relation(fields: [ownerId], references: [id])
+  createdAt     DateTime @default(now())
 
   @@index([ownerId])
 }
