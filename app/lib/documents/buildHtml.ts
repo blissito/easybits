@@ -141,7 +141,6 @@ export function buildDocumentHtml(
     }
     #flipbook {
       display: flex; align-items: center; justify-content: center;
-      overflow: hidden;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
