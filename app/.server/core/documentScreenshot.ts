@@ -1,7 +1,9 @@
 import { db } from "../db";
 import { buildDeployHtmlV4 } from "~/lib/landing4/buildHtml";
+import { buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
+import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 
 let browserPromise: ReturnType<typeof launchBrowser> | null = null;
 
@@ -91,6 +93,62 @@ export async function takeDocumentScreenshot(
         type: "text" as const,
         text: `Screenshot unavailable: ${err.message}. This tool requires Chrome installed locally (designed for Claude Code MCP usage, not production).`,
       };
+    }
+  });
+}
+
+/** Generate a PDF of the entire document using Playwright. Returns Buffer or null. */
+export async function takeDocumentPdf(
+  userId: string,
+  documentId: string
+): Promise<Buffer | null> {
+  if (!/^[0-9a-fA-F]{24}$/.test(documentId)) return null;
+
+  const doc = await db.landing.findUnique({ where: { id: documentId } });
+  if (!doc || doc.ownerId !== userId || doc.version !== 4) return null;
+
+  const sections = (doc.sections as unknown as Section3[]) || [];
+  const contentSections = sections
+    .filter((s) => s.id !== "__grapes_css__")
+    .sort((a, b) => a.order - b.order);
+  if (contentSections.length === 0) return null;
+
+  // Resolve theme (same logic as landingOperations deploy)
+  const metadata = doc.metadata as Record<string, any> | null;
+  const docTheme = metadata?.theme;
+  const customColors = metadata?.customColors;
+  let themeCss: string | undefined;
+  let tailwindConfig: string | undefined;
+
+  if (customColors) {
+    const t = buildCustomTheme(customColors as any);
+    themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+    tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
+  } else {
+    const themeId = docTheme || "default";
+    const docThemeCss = buildSingleThemeCss(themeId);
+    themeCss = docThemeCss.css;
+    tailwindConfig = docThemeCss.tailwindConfig;
+  }
+
+  const html = buildDocumentPrintHtml(sections, { themeCss, tailwindConfig, title: doc.name || "Document" });
+  const optimizedHtml = await replaceCdnWithCompiledCSS(html);
+
+  return enqueueScreenshot(async () => {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
+      try {
+        await page.setContent(optimizedHtml, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+        return await page.pdf({ format: "Letter", printBackground: true });
+      } finally {
+        await page.close();
+      }
+    } catch (err: any) {
+      browserPromise = null;
+      console.error("[takeDocumentPdf] error:", err.message);
+      return null;
     }
   });
 }

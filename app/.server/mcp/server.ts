@@ -1299,6 +1299,34 @@ export function createMcpServer() {
     })
   );
 
+  // --- Document PDF Tool ---
+
+  server.tool(
+    "get_document_pdf",
+    "Generate a PDF of a document. Returns the PDF as base64-encoded data. Requires Chrome installed locally — designed for Claude Code MCP usage.",
+    {
+      documentId: z.string().describe("The document ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { takeDocumentPdf } = await import("../core/documentScreenshot");
+      const pdf = await takeDocumentPdf(ctx.user.id, params.documentId);
+      if (!pdf) {
+        return { content: [{ type: "text" as const, text: "Document not found or has no pages" }], isError: true };
+      }
+      return {
+        content: [{
+          type: "resource" as const,
+          resource: {
+            uri: `easybits://documents/${params.documentId}/pdf`,
+            mimeType: "application/pdf",
+            blob: pdf.toString("base64"),
+          },
+        }],
+      };
+    })
+  );
+
   // --- Clone Document Tool ---
 
   server.tool(
