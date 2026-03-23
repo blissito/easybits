@@ -4,7 +4,6 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import type { Route } from "./+types/list";
-import type { Section3 } from "~/lib/landing3/types";
 import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 
 export const meta = () => [
@@ -14,48 +13,104 @@ export const meta = () => [
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  const documents = await db.landing.findMany({
-    where: { ownerId: user.id, version: 4 },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      prompt: true,
-      sections: true,
-      metadata: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  const url = new URL(request.url);
+  const all = url.searchParams.get("all") === "1";
 
-  const items = documents.map((d) => {
-    const sections = (Array.isArray(d.sections) ? d.sections : []) as unknown as Section3[];
-    const meta = (d.metadata || {}) as Record<string, any>;
+  // Use raw aggregation to avoid fetching full sections JSON (can be MBs per doc)
+  const pipeline: Record<string, unknown>[] = [
+    { $match: { ownerId: { $oid: user.id }, version: 4 } },
+    { $sort: { createdAt: -1 } },
+    ...(!all ? [{ $limit: 12 }] : []),
+    {
+      $project: {
+        name: 1,
+        status: 1,
+        prompt: 1,
+        metadata: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        pageCount: {
+          $size: {
+            $filter: {
+              input: { $ifNull: ["$sections", []] },
+              as: "s",
+              cond: {
+                $and: [
+                  { $ne: ["$$s.id", "__grapes_css__"] },
+                  { $ne: ["$$s.label", "__css__"] },
+                ],
+              },
+            },
+          },
+        },
+        coverHtml: {
+          $let: {
+            vars: {
+              sorted: {
+                $sortArray: {
+                  input: {
+                    $filter: {
+                      input: { $ifNull: ["$sections", []] },
+                      as: "s",
+                      cond: {
+                        $and: [
+                          { $ne: ["$$s.id", "__grapes_css__"] },
+                          { $ne: ["$$s.label", "__css__"] },
+                        ],
+                      },
+                    },
+                  },
+                  sortBy: { order: 1 },
+                },
+              },
+            },
+            in: { $ifNull: [{ $arrayElemAt: ["$$sorted.html", 0] }, ""] },
+          },
+        },
+      },
+    },
+  ];
+
+  const raw = (await db.landing.aggregateRaw({ pipeline })) as unknown as Array<{
+    _id: { $oid: string };
+    name: string;
+    status: string;
+    prompt: string;
+    metadata?: Record<string, unknown>;
+    createdAt: { $date: string };
+    updatedAt?: { $date: string };
+    pageCount: number;
+    coverHtml: string;
+  }>;
+
+  const items = raw.map((d) => {
+    const meta = (d.metadata || {}) as Record<string, unknown>;
     const theme = (meta.theme as string) || "minimal";
     const customColors = meta.customColors as CustomColors | undefined;
-    // First content section HTML for thumbnail (skip __grapes_css__)
-    const contentSections = sections.filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__");
-    const coverHtml = contentSections.sort((a, b) => a.order - b.order)[0]?.html || "";
     return {
-      id: d.id,
+      id: d._id.$oid,
       name: d.name,
       status: d.status,
       prompt: d.prompt,
-      pageCount: contentSections.length,
-      coverHtml,
+      pageCount: d.pageCount,
+      coverHtml: d.coverHtml,
       theme,
       customColors: theme === "custom" ? customColors : undefined,
-      createdAt: d.createdAt,
-      updatedAt: d.updatedAt,
+      createdAt: d.createdAt.$date,
+      updatedAt: d.updatedAt?.$date ?? d.createdAt.$date,
     };
   });
 
-  return { items };
+  // Total count for "load all" button
+  const total = all
+    ? items.length
+    : await db.landing.count({ where: { ownerId: user.id, version: 4 } });
+
+  return { items, total, showingAll: all || items.length >= total };
 };
 
 export default function DocumentsList() {
-  const { items } = useLoaderData<typeof loader>();
+  const { items, total, showingAll } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   return (
@@ -66,8 +121,8 @@ export default function DocumentsList() {
             Documentos
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Transforma archivos en PDFs hermosos &middot; {items.length}{" "}
-            {items.length === 1 ? "documento" : "documentos"}
+            Transforma archivos en PDFs hermosos &middot; {total}{" "}
+            {total === 1 ? "documento" : "documentos"}
           </p>
         </div>
         <BrutalButton onClick={() => navigate("/dash/documents/new")}>
@@ -140,6 +195,16 @@ export default function DocumentsList() {
               </motion.div>
             ))}
           </AnimatePresence>
+        </div>
+      )}
+
+      {!showingAll && items.length > 0 && (
+        <div className="flex justify-center mt-8">
+          <BrutalButton
+            onClick={() => navigate("?all=1")}
+          >
+            Cargar todos ({total})
+          </BrutalButton>
         </div>
       )}
     </article>
