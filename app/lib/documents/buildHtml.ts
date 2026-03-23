@@ -222,8 +222,7 @@ ${branding}
 <script>
 (function() {
   var el = document.getElementById('flipbook');
-  var isMobile = window.innerWidth < 768;
-  var W = isMobile ? Math.min(window.innerWidth - 32, 612) : 612;
+  var W = Math.min(window.innerWidth - 32, 612);
   var H = Math.round(W * (11 / 8.5));
 
   var flip = new St.PageFlip(el, {
@@ -236,7 +235,7 @@ ${branding}
     maxHeight: 792,
     showCover: true,
     mobileScrollSupport: false,
-    usePortrait: isMobile,
+    usePortrait: true,
     startPage: 0,
     drawShadow: true,
     flippingTime: 600,
@@ -296,10 +295,9 @@ ${branding}
 
   // Responsive resize
   window.addEventListener('resize', function() {
-    var mobile = window.innerWidth < 768;
-    W = mobile ? Math.min(window.innerWidth - 32, 612) : 612;
+    W = Math.min(window.innerWidth - 32, 612);
     H = Math.round(W * (11 / 8.5));
-    flip.updateSetting({ width: W, height: H, usePortrait: mobile });
+    flip.updateSetting({ width: W, height: H });
     flip.update();
     scalePages();
   });
