@@ -67,3 +67,12 @@ export {
   ViewportToggle,
   type Viewport,
 } from "./components/index";
+
+// V4 HTML builders
+export { buildDeployHtmlV4 } from "./buildHtmlV4";
+
+// V4 GrapesJS ↔ Section3 conversion (browser-only)
+export { grapesToSections } from "./grapesToSections";
+
+// Hooks
+export { useThumbnailCapture } from "./hooks/useThumbnailCapture";

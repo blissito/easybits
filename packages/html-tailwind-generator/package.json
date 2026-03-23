@@ -38,6 +38,22 @@
     "./directions": {
       "types": "./dist/directions.d.ts",
       "import": "./dist/directions.js"
+    },
+    "./components4": {
+      "types": "./dist/components4.d.ts",
+      "import": "./dist/components4.js"
+    },
+    "./buildHtmlV4": {
+      "types": "./dist/buildHtmlV4.d.ts",
+      "import": "./dist/buildHtmlV4.js"
+    },
+    "./grapesToSections": {
+      "types": "./dist/grapesToSections.d.ts",
+      "import": "./dist/grapesToSections.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/useThumbnailCapture.d.ts",
+      "import": "./dist/hooks/useThumbnailCapture.js"
     }
   },
   "files": [
@@ -61,7 +77,9 @@
     "ai": ">=4",
     "react": ">=18",
     "react-dom": ">=18",
-    "react-icons": ">=5"
+    "react-icons": ">=5",
+    "grapesjs": ">=0.21",
+    "tailwind-merge": ">=2"
   },
   "peerDependenciesMeta": {
     "@codemirror/lang-html": {
@@ -95,6 +113,12 @@
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "grapesjs": {
+      "optional": true
+    },
+    "tailwind-merge": {
       "optional": true
     }
   },

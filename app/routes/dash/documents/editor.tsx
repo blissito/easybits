@@ -4,6 +4,7 @@ import {
   useFetcher,
   useSearchParams,
   useNavigate,
+  useRevalidator,
   Link,
 } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -371,6 +372,7 @@ export default function DocumentEditor() {
   } = useLoaderData<typeof loader>();
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [searchParams] = useSearchParams();
   const saveFetcher = useFetcher();
   const deployFetcher = useFetcher<{
@@ -440,32 +442,39 @@ export default function DocumentEditor() {
   // Track when we last saved locally — ignore SSE echoes of our own saves
   const lastLocalSaveAt = useRef(0);
 
-  // SSE live reload — watch for MCP/API updates
-  useEffect(() => {
-    if (isGenerating) return;
-    const source = new EventSource(`/api/v2/document-watch?id=${landing.id}`);
-    source.addEventListener("doc-update", (e) => {
-      // Ignore SSE updates that are echoes of our own saves (within 5s window)
-      if (Date.now() - lastLocalSaveAt.current < 5_000) return;
-      const data = JSON.parse(e.data);
-      const serverSections: Section3[] = data.sections || [];
-      setSections((prev) => {
-        return serverSections.map((s) => {
-          const local = prev.find((ls) => ls.id === s.id);
-          if (local && local.html === s.html) return local;
-          return { ...s, versions: (local as any)?.versions || [] };
-        });
-      });
-      // Sync GrapesJS canvas with external changes
-      syncToGrapes(serverSections);
-    });
-    return () => source.close();
-  }, [landing.id, isGenerating, setSections]);
-
   // Helper: sync sections state to GrapesJS canvas
   const syncToGrapes = useCallback((secs: Section3[]) => {
     editorRef.current?.setHtml(sectionsToHtml(secs));
   }, []);
+
+  // Sync sections when loader revalidates (triggered by SSE or navigation)
+  const landingUpdatedAt = (landing as any).updatedAt;
+  const prevUpdatedAtRef = useRef(landingUpdatedAt);
+  useEffect(() => {
+    if (landingUpdatedAt === prevUpdatedAtRef.current) return;
+    prevUpdatedAtRef.current = landingUpdatedAt;
+    if (Date.now() - lastLocalSaveAt.current < 10_000) return;
+    const raw = landing.sections;
+    const serverSections = Array.isArray(raw) ? (raw as unknown as Section3[]) : [];
+    setSections((prev) => {
+      return serverSections.map((s) => {
+        const local = prev.find((ls) => ls.id === s.id);
+        return { ...s, versions: (local as any)?.versions || [] };
+      });
+    });
+    syncToGrapes(serverSections);
+  }, [landingUpdatedAt, landing.sections, setSections, syncToGrapes]);
+
+  // SSE live reload — lightweight: server sends only { updatedAt }, client revalidates loader
+  useEffect(() => {
+    if (isGenerating) return;
+    const source = new EventSource(`/api/v2/document-watch?id=${landing.id}`);
+    source.addEventListener("doc-update", () => {
+      if (Date.now() - lastLocalSaveAt.current < 10_000) return;
+      if (revalidator.state === "idle") revalidator.revalidate();
+    });
+    return () => source.close();
+  }, [landing.id, isGenerating, revalidator]);
 
   // Document-specific CSS for GrapesJS canvas iframe
   const documentCanvasCss = `

@@ -25,24 +25,24 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
       let lastUpdatedAt: string | null = null;
 
-      // Poll DB for changes every 3 seconds
+      // Poll DB for changes every 5 seconds — lightweight, only sends timestamp
       const poll = setInterval(async () => {
         try {
           const current = await db.landing.findUnique({
             where: { id },
-            select: { updatedAt: true, sections: true },
+            select: { updatedAt: true },
           });
           if (!current) return;
 
           const ts = current.updatedAt.toISOString();
           if (lastUpdatedAt !== null && ts !== lastUpdatedAt) {
-            send("doc-update", { sections: current.sections, updatedAt: ts });
+            send("doc-update", { updatedAt: ts });
           }
           lastUpdatedAt = ts;
         } catch {
           // DB error — skip this tick
         }
-      }, 3_000);
+      }, 5_000);
 
       // Heartbeat every 15s
       const heartbeat = setInterval(() => {
