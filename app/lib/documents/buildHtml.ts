@@ -140,7 +140,8 @@ export function buildDocumentHtml(
       .flipbook-container { align-items: center; padding: 24px 16px; }
     }
     #flipbook {
-      display: block;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
@@ -241,7 +242,7 @@ ${branding}
     drawShadow: true,
     flippingTime: 600,
     startZIndex: 0,
-    autoSize: false,
+    autoSize: true,
     maxShadowOpacity: 0.3,
   });
 
