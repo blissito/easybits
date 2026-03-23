@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.47",
-    "@prisma/client": "^6.19.2",
     "@ai-sdk/google": "^3.0.43",
     "@ai-sdk/openai": "^3.0.33",
     "@aws-sdk/client-chime-sdk-meetings": "^3.1003.0",
@@ -30,7 +29,7 @@
     "@codemirror/state": "^6.5.4",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.39.16",
-    "@easybits.cloud/html-tailwind-generator": "^0.2.126",
+    "@easybits.cloud/html-tailwind-generator": "^0.2.127",
     "@grapesjs/react": "^2.0.0",
     "@headlessui/react": "^2.2.2",
     "@livekit/components-react": "^2.8.1",
@@ -39,6 +38,7 @@
     "@mdx-js/react": "^3.1.0",
     "@modelcontextprotocol/ext-apps": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@prisma/client": "^6.19.2",
     "@react-router/dev": "^7.7.0",
     "@react-router/express": "^7.13.1",
     "@react-router/node": "^7.1.1",
@@ -100,6 +100,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.5.207",
     "playwright-core": "^1.58.2",
+    "postcss": "^8.4.49",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.0.0",
@@ -122,12 +123,11 @@
     "streamdown": "^2.3.0",
     "stripe": "^13.11.0",
     "tailwind-merge": "^2.6.0",
+    "tailwindcss": "^3.4.16",
     "vite-node": "^3.0.6",
     "winston": "^3.17.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.24.1",
-    "tailwindcss": "^3.4.16",
-    "postcss": "^8.4.49"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.1",
