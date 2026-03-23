@@ -731,6 +731,155 @@ Error response format:
 { "error": "Human-readable message" }
 \`\`\`
 `,
+
+  "document-design": `## Document Page Design Guide
+
+This guide defines the mandatory layout rules for document pages. Follow these rules when using set_page_html, add_page, or create_document with custom HTML.
+
+### Page Skeleton (letter size: 8.5" x 11")
+
+\`\`\`html
+<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col bg-surface text-on-surface">
+  <!-- Optional top accent bar -->
+  <div class="shrink-0 h-1.5 bg-primary w-full"></div>
+
+  <!-- Content area — MUST be flex-1 overflow-hidden -->
+  <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in] flex flex-col">
+
+    <!-- Header: shrink-0 -->
+    <div class="shrink-0 mb-6">
+      <h2 class="text-3xl font-bold text-on-surface">Page Title</h2>
+      <p class="text-sm text-on-surface-muted mt-1">Subtitle or description.</p>
+    </div>
+
+    <!-- Body: flex-1 min-h-0 for proper overflow control -->
+    <div class="flex-1 min-h-0">
+      <!-- Your content here -->
+    </div>
+
+    <!-- Optional notes: shrink-0 -->
+    <div class="shrink-0 mt-4 pt-3 border-t border-gray-200">
+      <p class="text-[10px] text-on-surface-muted">Footnote text.</p>
+    </div>
+
+  </div>
+
+  <!-- Footer — MUST be shrink-0, direct child of section -->
+  <div class="shrink-0 w-full px-[0.75in] py-3 flex justify-between items-center border-t border-gray-200">
+    <span class="text-xs text-on-surface-muted">Company Name</span>
+    <span class="text-xs font-semibold text-on-surface-muted">Page X of Y</span>
+  </div>
+</section>
+\`\`\`
+
+### Mandatory Rules
+
+| Rule | Detail |
+|------|--------|
+| Root element | \`<section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col">\` |
+| Content area | \`flex-1 overflow-hidden\` — prevents page overflow |
+| Headers/footers | Always \`shrink-0\` |
+| Flex children sharing space | Add \`min-h-0\` alongside \`flex-1\` |
+| Tables | Max 5 columns, \`text-xs\`, never cause horizontal scroll |
+| Grids | Max \`grid-cols-2\` for content (\`grid-cols-4\` only for small KPI cards), \`gap-6\` |
+| Images | Max \`h-40\` inside content pages, \`w-full object-cover rounded-lg\` |
+| Text sizes | Body: \`text-sm\`/\`text-base\`. Headers: \`text-3xl\` max. \`text-6xl\` ONLY on covers |
+| Colors | ONLY semantic classes: \`bg-primary\`, \`text-on-surface\`, \`bg-surface-alt\`, etc. Never hex |
+| Positioning | NO \`absolute\` that escapes the section. NO \`fixed\`. |
+| Charts | CSS only: \`conic-gradient\` for donuts, \`width: XX%\` bars. NO JavaScript, NO Chart.js |
+| Icons | Inline SVG (Lucide style) or \`data-icon-query="icon-name"\` |
+| Images | \`data-image-query="english search query"\` for auto Pexels enrichment |
+
+### Validated Patterns
+
+**KPI Row (4 cards):**
+\`\`\`html
+<div class="shrink-0 grid grid-cols-4 gap-4 mb-6">
+  <div class="bg-surface rounded-lg p-4 text-center shadow-sm">
+    <div class="text-3xl font-bold text-primary">258</div>
+    <div class="text-[10px] font-semibold text-on-surface-muted uppercase tracking-wider mt-1">Label</div>
+  </div>
+  <!-- repeat for each KPI -->
+</div>
+\`\`\`
+
+**Data Table:**
+\`\`\`html
+<div class="border border-gray-200 rounded-lg overflow-hidden">
+  <table class="w-full text-xs">
+    <thead>
+      <tr class="bg-primary text-on-primary">
+        <th class="px-3 py-2.5 text-left font-bold">Col 1</th>
+        <!-- max 5 columns -->
+      </tr>
+    </thead>
+    <tbody class="text-on-surface">
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2.5 font-semibold">Row data</td>
+      </tr>
+      <tr class="border-t border-gray-100 bg-surface-alt/50">
+        <td class="px-3 py-2.5 font-semibold">Alternating row</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr class="bg-primary-dark text-on-primary font-bold">
+        <td class="px-3 py-2.5">TOTAL</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+\`\`\`
+
+**Horizontal Bar Chart:**
+\`\`\`html
+<div class="space-y-3">
+  <div>
+    <div class="flex justify-between text-xs mb-1">
+      <span class="font-semibold text-on-surface">Category</span>
+      <span class="font-bold text-on-surface">45%</span>
+    </div>
+    <div class="w-full bg-gray-100 rounded-full h-2.5">
+      <div class="h-2.5 rounded-full bg-primary" style="width:45%"></div>
+    </div>
+  </div>
+</div>
+\`\`\`
+
+**Donut Chart (conic-gradient):**
+\`\`\`html
+<div class="relative w-28 h-28">
+  <div class="absolute inset-0 rounded-full" style="background-image: conic-gradient(var(--color-primary) 0% 49%, var(--color-secondary) 49% 73%, var(--color-accent) 73% 100%)"></div>
+  <div class="absolute inset-5 rounded-full bg-surface-alt flex items-center justify-center">
+    <span class="text-[10px] font-bold text-on-surface-muted text-center">Label</span>
+  </div>
+</div>
+\`\`\`
+
+**Timeline:**
+\`\`\`html
+<div class="flex flex-col gap-5 pl-6 relative">
+  <div class="absolute left-[7px] top-1 bottom-1 w-px bg-primary/30"></div>
+  <div class="relative">
+    <div class="absolute -left-[21px] top-0.5 w-3.5 h-3.5 rounded-full border-[3px] border-primary bg-surface"></div>
+    <p class="text-[10px] font-bold text-primary uppercase tracking-wider">Date</p>
+    <h4 class="text-sm font-bold text-on-surface mt-0.5">Phase Title</h4>
+    <p class="text-xs text-on-surface-muted mt-1">Description.</p>
+  </div>
+</div>
+\`\`\`
+
+### Common Bugs to Avoid
+
+| Bug | Cause | Fix |
+|-----|-------|-----|
+| Content overflows page | Missing \`overflow-hidden\` on content wrapper | Add \`flex-1 overflow-hidden\` |
+| Horizontal scroll | Table too wide or grid > 2 cols | Max 5 table cols with \`text-xs\`, max \`grid-cols-2\` |
+| Elements overlapping | Absolute positioning without constraints | Avoid \`absolute\` or keep within \`relative overflow-hidden\` parent |
+| Empty page (blank white) | \`visibility: hidden\` or \`display: none\` left on | Never hide sections |
+| Colors don't change with theme | Hardcoded hex values | Use semantic classes only |
+| Image stretches page | Image without height constraint | Always \`h-40 max\` + \`object-cover\` |
+| Footer detached from bottom | Footer inside content wrapper | Footer must be direct child of \`<section>\` with \`shrink-0\` |
+`,
 };
 
 const PITCH = `## About EasyBits

@@ -876,7 +876,7 @@ export function createMcpServer() {
 
   server.tool(
     "create_document",
-    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }.",
+    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints.",
     {
       name: z.string().describe("Document name"),
       prompt: z.string().optional().describe("Description or prompt for the document"),
@@ -1016,7 +1016,7 @@ export function createMcpServer() {
 
   server.tool(
     "add_page",
-    "Add a new page to a document. If html is omitted, adds a blank page. afterPageIndex is 0-based; omit to append at the end.",
+    "Add a new page to a document. If html is omitted, adds a blank page. afterPageIndex is 0-based; omit to append at the end. If providing html, it MUST follow letter-page layout rules: root <section class=\"w-[8.5in] h-[11in] relative overflow-hidden flex flex-col\">, shrink-0 headers/footers, flex-1 overflow-hidden content area, semantic color classes only. See set_page_html description or call get_docs(\"document-design\") for full rules.",
     {
       documentId: z.string().describe("The document ID"),
       html: z.string().optional().describe("HTML content for the new page. Omit for a blank page"),
@@ -1090,7 +1090,25 @@ export function createMcpServer() {
 
   server.tool(
     "set_page_html",
-    "Replace the ENTIRE HTML of a single page. This is the primary tool for editing pages — use it when rewriting or significantly changing a page. Only requires pageId (from get_document sections[].id) and the new HTML. For surgical edits to a specific element within a page, use set_section_html instead.",
+    `Replace the ENTIRE HTML of a single page. This is the primary tool for editing pages — use it when rewriting or significantly changing a page. Only requires pageId (from get_document sections[].id) and the new HTML. For surgical edits to a specific element within a page, use set_section_html instead.
+
+DOCUMENT PAGE LAYOUT RULES (MANDATORY):
+- Root element: <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col">
+- Top bar: <div class="shrink-0 h-1.5 bg-primary w-full"></div>
+- Content wrapper: <div class="flex-1 overflow-hidden px-[0.75in] py-[0.5in] flex flex-col">
+- Footer: <div class="shrink-0 w-full px-[0.75in] py-3 flex justify-between items-center border-t border-gray-200">
+- Headers/footers use shrink-0. Content area uses flex-1 overflow-hidden.
+- Nested flex children that should share space: add min-h-0 alongside flex-1.
+- Tables: max 5 columns, text-xs, never cause horizontal scroll.
+- Grids: max grid-cols-2 for content (grid-cols-4 only for small KPI cards), gap-6.
+- Images: max h-40 inside content pages, w-full object-cover rounded-lg.
+- Text sizes: body text-sm/text-base, headings text-3xl max (text-6xl ONLY on cover pages).
+- Colors: ONLY semantic classes (bg-primary, text-on-surface, bg-surface-alt, etc.) — never hardcoded hex.
+- NO absolute positioning that escapes the section container.
+- NO JavaScript, NO Chart.js — use CSS bars/conic-gradient for charts.
+- Icons: use inline SVG (Lucide style) or data-icon-query="icon-name".
+- Images: use data-image-query="english search query" for auto-enrichment via Pexels.
+Call get_docs("document-design") for full design guide with validated patterns.`,
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID to update (from get_document sections)"),
