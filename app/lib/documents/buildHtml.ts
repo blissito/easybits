@@ -134,13 +134,17 @@ export function buildDocumentHtml(
       overflow: hidden;
       position: relative;
       min-height: 0;
+      height: 0;
     }
     @media (min-width: 768px) {
       .flipbook-container { align-items: center; padding: 24px 16px; }
     }
     #flipbook {
-      display: flex; align-items: center; justify-content: center;
+      display: block;
     }
+    /* Hide pages until StPageFlip initializes */
+    .flipbook-page { visibility: hidden; }
+    .flipbook-page:first-child { visibility: visible; }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
       width: 48px; height: 48px; border-radius: 50%;
@@ -162,12 +166,16 @@ export function buildDocumentHtml(
     .flipbook-page {
       background: white;
       overflow: hidden;
+      position: relative;
     }
     .page-inner {
       width: 816px;
       height: 1056px;
       transform-origin: top left;
       overflow: hidden;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
     /* Print: show pages vertically, hide toolbar */
     @page { size: letter; margin: 0; }
@@ -240,11 +248,15 @@ ${branding}
     drawShadow: true,
     flippingTime: 600,
     startZIndex: 0,
-    autoSize: true,
+    autoSize: false,
     maxShadowOpacity: 0.3,
   });
 
   flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
+
+  // Show all pages after StPageFlip takes control
+  var allPages = document.querySelectorAll('.flipbook-page');
+  for (var p = 0; p < allPages.length; p++) { allPages[p].style.visibility = 'visible'; }
 
   // Scale page content to fit the flipbook page size
   function scalePages() {
