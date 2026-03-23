@@ -822,6 +822,7 @@ export default function DocumentEditor() {
     if (lastSectionCount.current > 2 && contentSections.length < lastSectionCount.current * 0.5) return;
     lastSectionCount.current = contentSections.length;
 
+    lastLocalSaveAt.current = Date.now();
     setSections(newSections);
     saveSections(newSections);
   }, [setSections, saveSections]);
