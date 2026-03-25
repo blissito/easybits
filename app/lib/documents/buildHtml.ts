@@ -50,7 +50,7 @@ export function buildDocumentHtml(
   const pagesHtml = sorted
     .map(
       (s, i) =>
-        `<div class="flipbook-page" data-page="${i + 1}"><div class="page-inner">${s.html}</div></div>`
+        `<div class="doc-page${i === 0 ? " active" : ""}" data-page="${i + 1}"><div class="page-inner">${s.html}</div></div>`
     )
     .join("\n");
 
@@ -90,7 +90,6 @@ export function buildDocumentHtml(
   <script src="https://cdn.tailwindcss.com"><\/script>
   ${options?.tailwindConfig ? `<script>tailwind.config = ${options.tailwindConfig}<\/script>` : ""}
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"><\/script>
   <style>
     ${options?.themeCss || DEFAULT_THEME_CSS}
     ${grapesCss}
@@ -128,11 +127,11 @@ export function buildDocumentHtml(
     }
     .page-nav button:hover { background: #333; }
     .page-nav button:disabled { opacity: 0.3; cursor: default; }
-    .flipbook-container {
+    .viewer-container {
       flex: 1; display: flex; align-items: center; justify-content: center;
       padding: 16px;
       position: relative;
-      min-height: 0;
+      overflow: hidden;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
@@ -152,10 +151,18 @@ export function buildDocumentHtml(
       .side-nav.left { left: 8px; }
       .side-nav.right { right: 8px; }
     }
-    .flipbook-page {
+    .doc-page {
+      display: none;
       background: white;
       overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+      border-radius: 4px;
     }
+    .doc-page.active {
+      display: block;
+      animation: fadeIn 0.25s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .page-inner {
       width: 816px;
       height: 1056px;
@@ -165,7 +172,7 @@ export function buildDocumentHtml(
     /* Print: show pages vertically, hide toolbar */
     @page { size: letter; margin: 0; }
     @media print {
-      .doc-toolbar, .page-nav, .flipbook-container { display: none !important; }
+      .doc-toolbar, .page-nav, .viewer-container { display: none !important; }
       body { background: white; }
       .print-pages { display: block !important; }
       .print-page {
@@ -192,9 +199,9 @@ export function buildDocumentHtml(
   </div>
 </div>
 
-<div class="flipbook-container">
+<div class="viewer-container">
   <button id="side-prev" class="side-nav left" aria-label="Anterior">&#8249;</button>
-  <div id="flipbook">
+  <div id="viewer">
     ${pagesHtml}
   </div>
   <button id="side-next" class="side-nav right" aria-label="Siguiente">&#8250;</button>
@@ -214,102 +221,70 @@ ${branding}
 
 <script>
 (function() {
-  var el = document.getElementById('flipbook');
-  var W = Math.min(window.innerWidth - 32, 612);
-  var H = Math.round(W * (11 / 8.5));
-
-  // Give container explicit dimensions so StPageFlip can render
-  el.style.width = W + 'px';
-  el.style.height = H + 'px';
-
-  if (typeof St === 'undefined' || !St.PageFlip) {
-    console.error('StPageFlip not loaded');
-    return;
-  }
-
-  var flip = new St.PageFlip(el, {
-    width: W,
-    height: H,
-    size: 'fixed',
-    minWidth: 300,
-    maxWidth: 612,
-    minHeight: 400,
-    maxHeight: 792,
-    showCover: true,
-    mobileScrollSupport: false,
-    usePortrait: true,
-    startPage: 0,
-    drawShadow: true,
-    flippingTime: 600,
-    startZIndex: 0,
-    autoSize: false,
-    maxShadowOpacity: 0.3,
-  });
-
-  try {
-    flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
-  } catch(e) {
-    console.error('StPageFlip init failed:', e);
-    return;
-  }
-
-  // Scale page content to fit the flipbook page size
-  function scalePages() {
-    var pages = document.querySelectorAll('.page-inner');
-    var scaleX = W / 816;
-    var scaleY = H / 1056;
-    var scale = Math.min(scaleX, scaleY);
-    for (var i = 0; i < pages.length; i++) {
-      pages[i].style.transform = 'scale(' + scale + ')';
-    }
-  }
-  scalePages();
+  var pages = document.querySelectorAll('.doc-page');
+  var total = pages.length;
+  var current = 0;
 
   var indicator = document.getElementById('page-indicator');
   var prevBtn = document.getElementById('prev-btn');
   var nextBtn = document.getElementById('next-btn');
   var sidePrev = document.getElementById('side-prev');
   var sideNext = document.getElementById('side-next');
-  var total = ${totalPages};
+  var hint = document.getElementById('page-hint');
 
-  function updateNav() {
-    var current = flip.getCurrentPageIndex() + 1;
-    indicator.textContent = current + ' / ' + total;
-    prevBtn.disabled = current <= 1;
-    nextBtn.disabled = current >= total;
-    sidePrev.disabled = current <= 1;
-    sideNext.disabled = current >= total;
+  function scalePages() {
+    var maxW = Math.min(window.innerWidth - 32, 816);
+    var maxH = window.innerHeight - 80;
+    var scaleX = maxW / 816;
+    var scaleY = maxH / 1056;
+    var scale = Math.min(scaleX, scaleY, 1);
+    var inners = document.querySelectorAll('.page-inner');
+    for (var i = 0; i < inners.length; i++) {
+      inners[i].style.transform = 'scale(' + scale + ')';
+    }
+    for (var j = 0; j < pages.length; j++) {
+      pages[j].style.width = Math.round(816 * scale) + 'px';
+      pages[j].style.height = Math.round(1056 * scale) + 'px';
+    }
   }
 
-  flip.on('flip', updateNav);
-  updateNav();
+  function showPage(n) {
+    if (n < 0 || n >= total) return;
+    pages[current].classList.remove('active');
+    current = n;
+    pages[current].classList.add('active');
+    indicator.textContent = (current + 1) + ' / ' + total;
+    prevBtn.disabled = current <= 0;
+    nextBtn.disabled = current >= total - 1;
+    sidePrev.disabled = current <= 0;
+    sideNext.disabled = current >= total - 1;
+    if (hint) { hint.style.opacity = '0'; setTimeout(function() { if (hint.parentNode) hint.remove(); }, 500); hint = null; }
+  }
 
-  prevBtn.addEventListener('click', function() { flip.flipPrev(); });
-  nextBtn.addEventListener('click', function() { flip.flipNext(); });
-  sidePrev.addEventListener('click', function() { flip.flipPrev(); });
-  sideNext.addEventListener('click', function() { flip.flipNext(); });
+  scalePages();
+  showPage(0);
+
+  prevBtn.addEventListener('click', function() { showPage(current - 1); });
+  nextBtn.addEventListener('click', function() { showPage(current + 1); });
+  sidePrev.addEventListener('click', function() { showPage(current - 1); });
+  sideNext.addEventListener('click', function() { showPage(current + 1); });
 
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { flip.flipPrev(); }
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { flip.flipNext(); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') showPage(current - 1);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); showPage(current + 1); }
   });
 
-  // Dismiss hint after first flip or after 4 seconds
-  var hint = document.getElementById('page-hint');
-  function hideHint() { if (hint) { hint.style.opacity = '0'; setTimeout(function() { hint.remove(); }, 500); } }
-  flip.on('flip', function() { hideHint(); });
-  setTimeout(hideHint, 4000);
-
-  // Responsive resize
-  window.addEventListener('resize', function() {
-    W = Math.min(window.innerWidth - 32, 612);
-    H = Math.round(W * (11 / 8.5));
-    el.style.width = W + 'px';
-    el.style.height = H + 'px';
-    flip.updateSetting({ width: W, height: H });
-    flip.update();
-    scalePages();
+  // Touch swipe
+  var touchX = 0;
+  document.addEventListener('touchstart', function(e) { touchX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) { dx < 0 ? showPage(current + 1) : showPage(current - 1); }
   });
+
+  setTimeout(function() { if (hint) { hint.style.opacity = '0'; setTimeout(function() { if (hint && hint.parentNode) hint.remove(); }, 500); } }, 4000);
+
+  window.addEventListener('resize', scalePages);
 })();
 <\/script>
 </body>
