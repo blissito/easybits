@@ -13,3 +13,4 @@ yarn.lock
 respaldo.json
 .mcp.json
 .claude/
+pdf_examples/
