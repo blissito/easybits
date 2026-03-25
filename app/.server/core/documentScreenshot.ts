@@ -79,9 +79,7 @@ export async function takeDocumentScreenshot(
       const browser = await getBrowser();
       const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
       try {
-        await page.setContent(optimizedHtml, { waitUntil: "domcontentloaded" });
-        // Wait for fonts to load (fast — only network request left after Tailwind compilation)
-        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+        await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
         const buffer = await page.screenshot({ type: "png" });
         return { type: "image", mimeType: "image/png", data: buffer.toString("base64") } as const;
       } finally {
@@ -139,8 +137,7 @@ export async function takeDocumentPdf(
       const browser = await getBrowser();
       const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
       try {
-        await page.setContent(optimizedHtml, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+        await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
         return await page.pdf({ format: "Letter", printBackground: true });
       } finally {
         await page.close();
@@ -197,8 +194,7 @@ export async function takeOgScreenshot(
       const browser = await getBrowser();
       const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
       try {
-        await page.setContent(ogHtml, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+        await page.setContent(ogHtml, { waitUntil: "networkidle" });
         return await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
       } finally {
         await page.close();
