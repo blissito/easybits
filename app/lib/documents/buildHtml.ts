@@ -129,24 +129,10 @@ export function buildDocumentHtml(
     .page-nav button:hover { background: #333; }
     .page-nav button:disabled { opacity: 0.3; cursor: default; }
     .flipbook-container {
-      flex: 1; display: flex; align-items: flex-start; justify-content: center;
-      padding: 16px 16px;
-      overflow: hidden;
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 16px;
       position: relative;
       min-height: 0;
-      height: 0;
-    }
-    @media (min-width: 768px) {
-      .flipbook-container { align-items: center; padding: 24px 16px; }
-    }
-    #flipbook {
-      overflow: hidden;
-    }
-    #flipbook:not(.ready) {
-      max-height: 80vh;
-    }
-    #flipbook:not(.ready) .flipbook-page:not(:first-child) {
-      display: none;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
@@ -232,12 +218,11 @@ ${branding}
   var W = Math.min(window.innerWidth - 32, 612);
   var H = Math.round(W * (11 / 8.5));
 
+  // Give container explicit dimensions so StPageFlip can render
+  el.style.width = W + 'px';
+  el.style.height = H + 'px';
+
   if (typeof St === 'undefined' || !St.PageFlip) {
-    el.classList.add('ready');
-    el.style.display = 'flex';
-    el.style.flexDirection = 'column';
-    el.style.alignItems = 'center';
-    el.style.gap = '24px';
     console.error('StPageFlip not loaded');
     return;
   }
@@ -257,7 +242,7 @@ ${branding}
     drawShadow: true,
     flippingTime: 600,
     startZIndex: 0,
-    autoSize: true,
+    autoSize: false,
     maxShadowOpacity: 0.3,
   });
 
@@ -265,14 +250,8 @@ ${branding}
     flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
   } catch(e) {
     console.error('StPageFlip init failed:', e);
-    el.classList.add('ready');
-    el.style.display = 'flex';
-    el.style.flexDirection = 'column';
-    el.style.alignItems = 'center';
-    el.style.gap = '24px';
     return;
   }
-  el.classList.add('ready');
 
   // Scale page content to fit the flipbook page size
   function scalePages() {
@@ -325,6 +304,8 @@ ${branding}
   window.addEventListener('resize', function() {
     W = Math.min(window.innerWidth - 32, 612);
     H = Math.round(W * (11 / 8.5));
+    el.style.width = W + 'px';
+    el.style.height = H + 'px';
     flip.updateSetting({ width: W, height: H });
     flip.update();
     scalePages();
