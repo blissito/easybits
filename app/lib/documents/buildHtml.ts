@@ -140,7 +140,13 @@ export function buildDocumentHtml(
       .flipbook-container { align-items: center; padding: 24px 16px; }
     }
     #flipbook {
-      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    #flipbook:not(.ready) {
+      max-height: 80vh;
+    }
+    #flipbook:not(.ready) .flipbook-page:not(:first-child) {
+      display: none;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
@@ -226,6 +232,16 @@ ${branding}
   var W = Math.min(window.innerWidth - 32, 612);
   var H = Math.round(W * (11 / 8.5));
 
+  if (typeof St === 'undefined' || !St.PageFlip) {
+    el.classList.add('ready');
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.alignItems = 'center';
+    el.style.gap = '24px';
+    console.error('StPageFlip not loaded');
+    return;
+  }
+
   var flip = new St.PageFlip(el, {
     width: W,
     height: H,
@@ -245,7 +261,18 @@ ${branding}
     maxShadowOpacity: 0.3,
   });
 
-  flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
+  try {
+    flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
+  } catch(e) {
+    console.error('StPageFlip init failed:', e);
+    el.classList.add('ready');
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.alignItems = 'center';
+    el.style.gap = '24px';
+    return;
+  }
+  el.classList.add('ready');
 
   // Scale page content to fit the flipbook page size
   function scalePages() {
