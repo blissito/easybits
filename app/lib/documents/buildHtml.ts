@@ -4,6 +4,41 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * Fix unbalanced HTML tags that break StPageFlip.
+ * AI agents sometimes generate extra closing tags (e.g. </div> after </svg>).
+ * This counts open/close tags for div/section/article/main and appends or
+ * trims to balance them. Does NOT parse full DOM — just a safety net.
+ */
+function balanceHtmlTags(html: string): string {
+  const tags = ["div", "section", "article", "main", "header", "footer", "nav", "aside"];
+  let result = html;
+  for (const tag of tags) {
+    const openRe = new RegExp(`<${tag}[\\s>]`, "gi");
+    const closeRe = new RegExp(`</${tag}>`, "gi");
+    const opens = (result.match(openRe) || []).length;
+    const closes = (result.match(closeRe) || []).length;
+    if (closes > opens) {
+      // Remove extra closing tags from the end
+      let diff = closes - opens;
+      while (diff > 0) {
+        const idx = result.lastIndexOf(`</${tag}>`);
+        if (idx === -1) break;
+        result = result.slice(0, idx) + result.slice(idx + tag.length + 3);
+        diff--;
+      }
+    } else if (opens > closes) {
+      // Append missing closing tags
+      let diff = opens - closes;
+      while (diff > 0) {
+        result += `</${tag}>`;
+        diff--;
+      }
+    }
+  }
+  return result;
+}
+
 // Default theme CSS — always injected so semantic color classes work even if server fails to generate themeCss
 const DEFAULT_THEME_CSS = `:root {
   --color-primary: #18181b; --color-primary-light: #3f3f46; --color-primary-dark: #09090b;
@@ -50,7 +85,7 @@ export function buildDocumentHtml(
   const pagesHtml = sorted
     .map(
       (s, i) =>
-        `<div class="flipbook-page" data-page="${i + 1}"><div class="page-inner">${s.html}</div></div>`
+        `<div class="flipbook-page" data-page="${i + 1}"><div class="page-inner">${balanceHtmlTags(s.html)}</div></div>`
     )
     .join("\n");
 

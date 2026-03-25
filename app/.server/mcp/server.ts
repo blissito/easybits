@@ -1016,7 +1016,7 @@ export function createMcpServer() {
 
   server.tool(
     "add_page",
-    "Add a new page to a document. If html is omitted, adds a blank page. afterPageIndex is 0-based; omit to append at the end. If providing html, it MUST follow letter-page layout rules: root <section class=\"w-[8.5in] h-[11in] relative overflow-hidden flex flex-col\">, shrink-0 headers/footers, flex-1 overflow-hidden content area, semantic color classes only. See set_page_html description or call get_docs(\"document-design\") for full rules.",
+    "Add a new page to a document. If html is omitted, adds a blank page. afterPageIndex is 0-based; omit to append at the end. If providing html, it MUST follow letter-page layout rules: root <section class=\"w-[8.5in] h-[11in] relative overflow-hidden flex flex-col\">, shrink-0 headers/footers, flex-1 overflow-hidden content area, semantic color classes only. CRITICAL: HTML must be well-formed with balanced tags — unbalanced tags break the flipbook viewer. See set_page_html description or call get_docs(\"document-design\") for full rules.",
     {
       documentId: z.string().describe("The document ID"),
       html: z.string().optional().describe("HTML content for the new page. Omit for a blank page"),
@@ -1108,6 +1108,7 @@ DOCUMENT PAGE LAYOUT RULES (MANDATORY):
 - NO JavaScript, NO Chart.js — use CSS bars/conic-gradient for charts.
 - Icons: use inline SVG (Lucide style) or data-icon-query="icon-name".
 - Images: use data-image-query="english search query" for auto-enrichment via Pexels.
+- CRITICAL: HTML MUST be well-formed. Every <div> needs a </div>, every <section> needs a </section>. Unbalanced tags BREAK the flipbook viewer and corrupt the document. Double-check tag balance before submitting, especially around SVG elements — do NOT add extra </div> after </svg>.
 Call get_docs("document-design") for full design guide with validated patterns.`,
     {
       documentId: z.string().describe("The document ID"),
