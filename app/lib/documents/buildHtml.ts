@@ -129,10 +129,18 @@ export function buildDocumentHtml(
     .page-nav button:hover { background: #333; }
     .page-nav button:disabled { opacity: 0.3; cursor: default; }
     .flipbook-container {
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      padding: 16px;
+      flex: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 16px 16px;
+      overflow: hidden;
       position: relative;
       min-height: 0;
+      height: 0;
+    }
+    @media (min-width: 768px) {
+      .flipbook-container { align-items: center; padding: 24px 16px; }
+    }
+    #flipbook {
+      display: flex; align-items: center; justify-content: center;
     }
     .side-nav {
       position: absolute; top: 50%; transform: translateY(-50%);
@@ -218,15 +226,6 @@ ${branding}
   var W = Math.min(window.innerWidth - 32, 612);
   var H = Math.round(W * (11 / 8.5));
 
-  // Give container explicit dimensions so StPageFlip can render
-  el.style.width = W + 'px';
-  el.style.height = H + 'px';
-
-  if (typeof St === 'undefined' || !St.PageFlip) {
-    console.error('StPageFlip not loaded');
-    return;
-  }
-
   var flip = new St.PageFlip(el, {
     width: W,
     height: H,
@@ -242,16 +241,11 @@ ${branding}
     drawShadow: true,
     flippingTime: 600,
     startZIndex: 0,
-    autoSize: false,
+    autoSize: true,
     maxShadowOpacity: 0.3,
   });
 
-  try {
-    flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
-  } catch(e) {
-    console.error('StPageFlip init failed:', e);
-    return;
-  }
+  flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
 
   // Scale page content to fit the flipbook page size
   function scalePages() {
@@ -304,8 +298,6 @@ ${branding}
   window.addEventListener('resize', function() {
     W = Math.min(window.innerWidth - 32, 612);
     H = Math.round(W * (11 / 8.5));
-    el.style.width = W + 'px';
-    el.style.height = H + 'px';
     flip.updateSetting({ width: W, height: H });
     flip.update();
     scalePages();
