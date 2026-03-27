@@ -78,6 +78,7 @@ import {
   replaceHtmlInPage,
   enhanceDocumentPrompt,
   createDocumentFromCFDI,
+  createQuotation,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -876,7 +877,7 @@ export function createMcpServer() {
 
   server.tool(
     "create_document",
-    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints.",
+    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints. TIP: For quotations, estimates, invoices, or remission notes use create_quotation instead — it's a single-step tool that creates, paginates, and optionally deploys in one call.",
     {
       name: z.string().describe("Document name"),
       prompt: z.string().optional().describe("Description or prompt for the document"),
@@ -979,6 +980,42 @@ export function createMcpServer() {
       }
 
       const result = await createDocumentFromCFDI(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "create_quotation",
+    `PREFERRED tool for quotations, estimates, invoices, proformas, and remission notes. Creates a complete document in ONE step (replaces the create_document → add_page → set_page_html → deploy_document multi-step flow).
+
+You provide the full HTML for each page with complete editorial freedom. Each page MUST be a <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col"> following letter-page layout.
+
+DESIGN GUIDELINES for professional quotations:
+- Top color bar: 2px div in brand color (shrink-0)
+- Header: company name/logo LEFT, "COTIZACIÓN" + folio + date + validity RIGHT
+- Client block: rounded card with bg-gray-50, client name, company, contact info
+- Items table: colored header row (brand color bg, white text), alternating row backgrounds, columns for description/qty/unit price/total. Add code/SKU column only if items have codes. Add discount column only if items have discounts.
+- Totals: right-aligned block — subtotal, tax (IVA), discounts if any, TOTAL in bold brand color
+- Notes/conditions: rounded card with bullet points
+- Footer: shrink-0, company address left, "Página X de Y" right, border-top
+- Typography: Inter or system sans-serif, text-sm for body, text-3xl max for headings
+- Colors: use inline styles for brand color flexibility. Ensure WCAG AA contrast (4.5:1 minimum for text).
+- Content area: flex-1 overflow-hidden px-[0.75in] py-[0.5in]
+- Calculate all totals, taxes, and formatting yourself — present exact amounts.
+- For multi-page quotes (>8 items): split items across pages, totals on last page only.
+
+Set deploy: true to instantly publish to a shareable public URL.`,
+    {
+      name: z.string().describe("Document name, e.g. 'Cotización SIIQTEC - Bobina FAPSA TR180'"),
+      pages: z.array(z.string()).describe("Array of complete <section> HTML strings. Each section must use w-[8.5in] h-[11in] letter-page layout with flex-col structure."),
+      theme: z.string().optional().describe("Theme name (e.g. minimal, corporate). Default: corporate"),
+      customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
+      brandKitId: z.string().optional().describe("Brand kit ID — auto-applies brand colors/fonts"),
+      deploy: z.boolean().optional().describe("Auto-publish to a shareable public URL (default: false)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createQuotation(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

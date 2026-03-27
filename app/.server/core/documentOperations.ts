@@ -923,3 +923,52 @@ export async function createDocumentFromCFDI(
 
   return { ...doc, cfdiData: data };
 }
+
+export async function createQuotation(
+  ctx: AuthContext,
+  opts: {
+    name: string;
+    pages: string[];
+    theme?: string;
+    customColors?: Record<string, string>;
+    brandKitId?: string;
+    deploy?: boolean;
+  }
+) {
+  requireScope(ctx, "WRITE");
+  if (!opts.pages.length) throw new Error("At least one page is required");
+
+  const metadata = {
+    ...(opts.theme && { theme: opts.theme }),
+    ...(opts.customColors && { customColors: opts.customColors }),
+    ...(opts.brandKitId && { brandKitId: opts.brandKitId }),
+  };
+
+  const sections = opts.pages.map((html, i) => ({
+    id: crypto.randomUUID().replace(/-/g, "").slice(0, 24),
+    order: i,
+    html,
+    type: "content",
+    name: i === 0 ? "Cotización" : `Página ${i + 1}`,
+  }));
+
+  const doc = await db.landing.create({
+    data: {
+      name: opts.name,
+      prompt: opts.name,
+      sections: sections as any,
+      version: 4,
+      theme: opts.theme || "corporate",
+      metadata: metadata as any,
+      ownerId: ctx.user.id,
+    },
+  });
+
+  if (opts.deploy) {
+    await deployDocument(ctx, doc.id);
+    const deployed = await db.landing.findUnique({ where: { id: doc.id } });
+    return deployed;
+  }
+
+  return doc;
+}
