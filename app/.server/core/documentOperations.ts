@@ -932,7 +932,6 @@ export async function createQuotation(
     theme?: string;
     customColors?: Record<string, string>;
     brandKitId?: string;
-    deploy?: boolean;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -964,11 +963,9 @@ export async function createQuotation(
     },
   });
 
-  if (opts.deploy) {
-    await deployDocument(ctx, doc.id);
-    const deployed = await db.landing.findUnique({ where: { id: doc.id } });
-    return deployed;
-  }
+  // Generate PDF via Playwright (no deploy, no S3)
+  const { takeDocumentPdf } = await import("./documentScreenshot");
+  const pdf = await takeDocumentPdf(ctx.user.id, doc.id);
 
-  return doc;
+  return { document: doc, pdf };
 }

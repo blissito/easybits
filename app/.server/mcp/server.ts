@@ -986,7 +986,7 @@ export function createMcpServer() {
 
   server.tool(
     "create_quotation",
-    `PREFERRED tool for quotations, estimates, invoices, proformas, and remission notes. Creates a complete document in ONE step (replaces the create_document → add_page → set_page_html → deploy_document multi-step flow).
+    `PREFERRED tool for quotations, estimates, invoices, proformas, and remission notes. Creates a complete document and returns the PDF in ONE step.
 
 You provide the full HTML for each page with complete editorial freedom. Each page MUST be a <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col"> following letter-page layout.
 
@@ -1004,19 +1004,29 @@ DESIGN GUIDELINES for professional quotations:
 - Calculate all totals, taxes, and formatting yourself — present exact amounts.
 - For multi-page quotes (>8 items): split items across pages, totals on last page only.
 
-Set deploy: true to instantly publish to a shareable public URL.`,
+Returns the document metadata + PDF as base64 blob.`,
     {
       name: z.string().describe("Document name, e.g. 'Cotización SIIQTEC - Bobina FAPSA TR180'"),
       pages: z.array(z.string()).describe("Array of complete <section> HTML strings. Each section must use w-[8.5in] h-[11in] letter-page layout with flex-col structure."),
       theme: z.string().optional().describe("Theme name (e.g. minimal, corporate). Default: corporate"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
       brandKitId: z.string().optional().describe("Brand kit ID — auto-applies brand colors/fonts"),
-      deploy: z.boolean().optional().describe("Auto-publish to a shareable public URL (default: false)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createQuotation(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const { document, pdf } = await createQuotation(ctx, params);
+      const content: any[] = [{ type: "text", text: JSON.stringify(document, null, 2) }];
+      if (pdf) {
+        content.push({
+          type: "resource",
+          resource: {
+            uri: `easybits://documents/${document.id}/pdf`,
+            mimeType: "application/pdf",
+            blob: pdf.toString("base64"),
+          },
+        });
+      }
+      return { content };
     })
   );
 
