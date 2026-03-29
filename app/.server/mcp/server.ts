@@ -1249,13 +1249,12 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     `Template-based tool. Pass structured match data (tournamentName, matches[], courts, etc.) and the template auto-generates a professional calendar grid document with time rows, court columns, and color-coded match cards. Do NOT pass HTML — this tool builds it from your data. For custom HTML use create_document instead.`,
     {
       name: z.string().optional().describe("Document name. Default: 'Calendario — {tournamentName} — {gameDate}'"),
-      pages: z.array(z.string()).optional().describe("Optional: raw HTML pages for full control. Each page must be a <section> with letter-page layout. When provided, structured fields (matches, courts, etc.) are ignored."),
-      tournamentName: z.string().optional().describe("Tournament name (e.g. 'Torneo Smatch'). Required when not using 'pages'."),
+      tournamentName: z.string().describe("Tournament name (e.g. 'Torneo Smatch')"),
       dateRange: z.string().optional().describe("Tournament date range (e.g. 'Del 19 de diciembre al 31 de enero de 2026')"),
-      clubName: z.string().optional().describe("Club/venue name (e.g. 'Smatch Padel Club'). Required when not using 'pages'."),
-      location: z.string().optional().describe("City/state (e.g. 'Pachuca, Hidalgo'). Required when not using 'pages'."),
-      gameDate: z.string().optional().describe("Specific day for this schedule (e.g. '20 de diciembre 2025'). Required when not using 'pages'."),
-      matches: z.array(tournamentMatchSchema).optional().describe("Matches for a single-day schedule. Required when not using 'pages' or 'days'."),
+      clubName: z.string().describe("Club/venue name (e.g. 'Smatch Padel Club')"),
+      location: z.string().describe("City/state (e.g. 'Pachuca, Hidalgo')"),
+      gameDate: z.string().optional().describe("Specific day for this schedule (e.g. '20 de diciembre 2025'). Required for single-day, omit for multi-day (use 'days' instead)."),
+      matches: z.array(tournamentMatchSchema).optional().describe("Matches for a single-day schedule. Required if not using 'days'."),
       days: z.array(z.object({
         gameDate: z.string().describe("Day label (e.g. '20 de diciembre 2025')"),
         matches: z.array(tournamentMatchSchema).describe("Matches for this day"),
@@ -1270,11 +1269,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { name, pages, ...data } = params;
-      if (pages?.length) {
-        const result = await createTournamentSchedule(ctx, { pages, name });
-        return quotationResultHandler(result);
-      }
+      const { name, ...data } = params;
       const result = await createTournamentSchedule(ctx, { data: data as any, name });
       return quotationResultHandler(result);
     })
@@ -1286,7 +1281,6 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     {
       documentId: z.string().describe("ID of the tournament schedule document to edit"),
       name: z.string().optional().describe("New document name"),
-      pages: z.array(z.string()).optional().describe("Optional: raw HTML pages for full control. When provided, structured fields are ignored."),
       tournamentName: z.string().optional().describe("Tournament name"),
       dateRange: z.string().optional().describe("Tournament date range"),
       clubName: z.string().optional().describe("Club/venue name"),
@@ -1307,11 +1301,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { documentId, name, pages, ...data } = params;
-      if (pages?.length) {
-        const result = await editTournamentSchedule(ctx, { documentId, pages, name });
-        return quotationResultHandler(result);
-      }
+      const { documentId, name, ...data } = params;
       const result = await editTournamentSchedule(ctx, { documentId, data: data as any, name });
       return quotationResultHandler(result);
     })
