@@ -88,16 +88,9 @@ export function buildTournamentScheduleHTML(data: TournamentScheduleData): strin
   const courts = data.courts || [...new Set(data.matches.map((m) => m.court))].sort();
   const courtCount = courts.length;
 
-  // Determine hour range
-  let minHour = 24, maxHour = 0;
-  for (const m of data.matches) {
-    const sh = Math.floor(parseTime(m.startTime) / 60);
-    const eh = Math.ceil(parseTime(m.endTime) / 60);
-    if (sh < minHour) minHour = sh;
-    if (eh > maxHour) maxHour = eh;
-  }
-  const startHour = data.startHour ?? minHour;
-  const endHour = data.endHour ?? Math.min(24, maxHour + 1);
+  // Fixed hour range — always the same grid, matches placed on top
+  const startHour = data.startHour ?? 6;
+  const endHour = data.endHour ?? 21; // 6 AM to 8 PM (inclusive label)
   const totalHours = endHour - startHour;
 
   // Portrait letter: grid ALWAYS fills available page space
