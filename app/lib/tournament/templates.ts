@@ -100,11 +100,17 @@ export function buildTournamentScheduleHTML(data: TournamentScheduleData): strin
   const endHour = data.endHour ?? Math.min(24, maxHour + 1);
   const totalHours = endHour - startHour;
 
-  // Portrait letter: 11in (1056px) minus header (~90px), subtitle (~25px), disclaimer (~40px), padding (~80px) ≈ ~820px max
-  const GRID_HEIGHT = Math.min(totalHours * 46, 820);
+  // Portrait letter: grid ALWAYS fills available page space
+  const GRID_HEIGHT = 820;
   const ROW_H = Math.floor(GRID_HEIGHT / totalHours);
   const TIME_COL_W = 60;
   const COL_W = `calc((100% - ${TIME_COL_W}px) / ${courtCount})`;
+
+  // ─── Default Smatch logo (full wordmark + bird icon) ───
+  const smatchLogoSvg = `<svg style="height:48px;width:auto" width="421" height="64" viewBox="0 0 421 64" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_187_1352)"><path d="M99.2283 30.7507C99.2283 30.0144 99.2831 29.0588 99.6197 28.0406H114.728C114.673 28.1502 114.673 28.7142 114.673 28.8317C114.673 30.8055 116.927 31.6514 120.2 31.6514C123.863 31.6514 126.626 30.5235 126.626 28.3226C126.626 26.5759 124.654 25.8396 122.509 25.5577L117.327 24.8214C110.454 23.8658 102.782 21.61 102.782 14.4981C102.782 4.57418 114.109 0.399414 126.736 0.399414C137.39 0.399414 145.508 3.83792 145.508 10.2136C145.508 11.0047 145.398 11.9055 145.281 12.8062H129.554C129.609 12.4146 129.664 12.0151 129.664 11.6783C129.664 9.47737 127.746 8.80377 125.382 8.80377C122.227 8.80377 119.519 9.87683 119.519 12.3598C119.519 14.2239 121.1 14.5607 123.691 15.0698L129.382 16.1429C135.864 17.3804 143.191 19.6989 143.191 26.5211C143.191 36.2805 132.928 41.1837 118.391 41.1837C107.51 41.1837 99.2283 37.6903 99.2283 30.7507Z" fill="${escapeHtml(bc)}"/><path d="M205.361 40.5651H191.497L197.306 13.2685L182.253 40.5651H169.735L166.299 12.8143L160.381 40.5651H146.517L154.909 1.08105H176.781L179.654 24.4848L191.544 1.08105H213.753L205.353 40.5573L205.361 40.5651Z" fill="${escapeHtml(bc)}"/><path d="M243.679 35.3721H229.135L226.598 40.5573H209.69L234.27 1.08105H251.687L260.541 40.5573H244.196L243.687 35.3721H243.679ZM242.951 27.4768L241.37 10.441L233.025 27.4768H242.943H242.951Z" fill="${escapeHtml(bc)}"/><path d="M312.613 10.6681H296.323L289.951 40.5573H273.715L280.087 10.6681H263.742L265.77 1.08105H314.64L312.613 10.6681Z" fill="${escapeHtml(bc)}"/><path d="M314.695 26.4037C314.695 9.14855 325.122 0.344727 344.121 0.344727C353.875 0.344727 364.529 2.93731 364.529 12.3599C364.529 13.4878 364.356 14.6157 364.075 15.7436H348.121C348.176 15.4068 348.176 15.1248 348.176 14.8428C348.176 11.4043 345.749 9.82215 342.031 9.82215C334.195 9.82215 331.205 17.5451 331.205 25.503C331.205 29.5602 333.177 31.7612 337.404 31.7612C341.631 31.7612 344.677 29.897 345.749 25.8946H362.039C359.894 37.2283 350.031 41.2386 335.432 41.2386C324.105 41.2386 314.687 37.9646 314.687 26.4037H314.695Z" fill="${escapeHtml(bc)}"/><path d="M421 1.08105L412.601 40.5573H396.365L399.52 25.6675H384.185L381.03 40.5573H364.795L373.194 1.08105H389.43L386.22 16.0804H401.547L404.757 1.08105H420.992H421Z" fill="${escapeHtml(bc)}"/><path d="M46.5299 2.92929C41.3086 6.57144 38.8819 12.7278 39.7273 18.6258C39.8291 18.7511 39.9308 18.8764 40.0483 18.9939C41.2146 20.2158 42.7724 20.8032 44.7999 20.8032C47.0778 20.8032 49.4028 20.255 51.8529 19.6753C55.8452 18.7354 59.9785 17.7642 64.1273 19.2211C66.7419 20.1453 68.8633 22.0173 69.9905 24.3201C72.9887 19.0331 72.8947 12.2814 69.1921 6.96307C64.049 -0.415216 53.9039 -2.22454 46.5299 2.91363V2.92929Z" fill="${escapeHtml(bc)}"/><path d="M65.145 29.6463C66.3113 28.8317 67.3368 27.8918 68.2214 26.8579C68.2214 26.8344 68.2136 26.8031 68.2057 26.7796C67.6734 24.5081 65.7399 22.4795 63.2897 21.6179C59.8375 20.4038 56.2445 21.2498 52.4322 22.1427C49.9429 22.7301 47.3753 23.3332 44.7999 23.3332C43.3125 23.3332 41.9896 23.0669 40.8154 22.5421C41.2538 23.5917 41.8096 24.6178 42.4906 25.5968C47.6336 32.9751 57.7788 34.7844 65.1528 29.6463H65.145Z" fill="${escapeHtml(bc)}"/><path d="M40.0483 33.2886L0 64.0001C0 64.0001 36.0403 43.1576 45.387 37.1814C43.4535 36.171 41.653 34.8708 40.0483 33.2886Z" fill="${escapeHtml(bc)}"/><path d="M34.4121 24.1011L0.31311 49.8233L37.011 29.5682C35.8759 27.8294 35.007 25.9966 34.4121 24.1089V24.1011Z" fill="${escapeHtml(bc)}"/><path d="M34.099 11.6626L3.71832 34.3692L33.3866 18.1166C33.3083 15.9392 33.551 13.7696 34.099 11.6704V11.6626Z" fill="${escapeHtml(bc)}"/></g><defs><clipPath id="clip0_187_1352"><rect width="421" height="64" fill="${escapeHtml(bc)}"/></clipPath></defs></svg>`;
+
+  // Resolve logo: explicit > default Smatch logo
+  const resolvedLogoSvg = data.logoSvg || (!data.logoUrl ? smatchLogoSvg : "");
 
   // ─── Header ───
   let html = `<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
@@ -115,7 +121,7 @@ export function buildTournamentScheduleHTML(data: TournamentScheduleData): strin
       <p style="font-size:11px; color:#666; margin:0;">${escapeHtml(data.location)}</p>
     </div>
     ${data.logoUrl ? `<img src="${escapeHtml(data.logoUrl)}" style="height:48px; object-fit:contain;" alt="Logo" />` : ""}
-    ${data.logoSvg ? data.logoSvg.replace(/var\(--primary\)/g, "#5b69b8") : ""}
+    ${resolvedLogoSvg ? resolvedLogoSvg.replace(/var\(--primary\)/g, escapeHtml(bc)) : ""}
   </div>`;
 
   html += `<p style="font-size:13px; font-weight:600; margin:0 0 10px 0; color:#333;">Calendario de juegos - ${escapeHtml(data.gameDate)}</p>`;
