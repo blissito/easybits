@@ -103,7 +103,7 @@ export async function createDocument(
       sections: (opts.sections ?? []) as any,
       version: 4,
       theme: metadata.customColors ? "custom" : (opts.theme || "default"),
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      metadata: Object.keys(metadata).length > 0 ? metadata as any : undefined,
       ownerId: ctx.user.id,
     },
   });
@@ -332,7 +332,7 @@ export async function addPage(
     id: crypto.randomUUID(),
     order: 0,
     html: opts.html || "<section class=\"w-[8.5in] h-[11in] flex flex-col relative overflow-hidden bg-surface\"><div class=\"flex-1 flex items-center justify-center text-on-surface-muted\">New page</div></section>",
-    name: opts.label || `Page ${sections.length + 1}`,
+    label: opts.label || `Page ${sections.length + 1}`,
   };
 
   const insertAt = opts.afterPageIndex !== undefined
@@ -409,7 +409,7 @@ export async function reorderPages(
     data: { sections: reordered as any, previousSections },
   });
   docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
-  return reordered.map((s) => ({ id: s.id, order: s.order, name: s.name }));
+  return reordered.map((s) => ({ id: s.id, order: s.order, label: s.label }));
 }
 
 export async function deleteDocument(ctx: AuthContext, id: string) {
@@ -565,7 +565,7 @@ export async function generateDocumentAI(
     logoUrl: resolvedLogoUrl,
     referenceImage: opts.referenceImage,
     extraInstructions: opts.extraInstructions,
-    direction,
+    direction: direction as any,
     pexelsApiKey: process.env.PEXELS_API_KEY,
     model: docModel,
     outlineModel,
@@ -773,7 +773,7 @@ async function _refineInternal(
   let directionContext = "";
   if (opts.direction?.headingFont || opts.direction?.bodyFont) {
     const d = opts.direction;
-    const colors = d.colors || {};
+    const colors = (d.colors || {}) as Record<string, string>;
     directionContext = `\n\nDESIGN DIRECTION:
 - Mood: ${d.mood || "professional"}
 - Layout hint: ${d.layoutHint || "clean and structured"}
@@ -802,7 +802,7 @@ async function _refineInternal(
     model: resolveModelLocal(modelId, openaiKey || undefined, userKey || undefined),
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
-    maxTokens: 8000,
+    maxOutputTokens: 8000,
   });
 
   let fullHtml = "";
@@ -916,7 +916,7 @@ export async function createDocumentFromCFDI(
       sections: sections as any,
       version: 4,
       theme: opts.theme || "default",
-      metadata,
+      metadata: metadata as any,
       ownerId: ctx.user.id,
     },
   });

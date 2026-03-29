@@ -254,7 +254,7 @@ export default function Landing4Editor() {
     };
   }, [activeBrandKit]);
 
-  const themeDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const themeDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
   const handleThemeChange = useCallback((themeId: string, customColors?: Record<string, string>, brandKitId?: string) => {
     setCurrentTheme(themeId);
     setCurrentCustomColors(customColors);

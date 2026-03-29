@@ -326,10 +326,10 @@ export function PageList({
                 return t ? (
                   <>
                     <span className="flex gap-0.5">
-                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: t.colors.primary }} />
-                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: t.colors.accent }} />
+                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: t!.colors.primary }} />
+                      <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: t!.colors.accent }} />
                     </span>
-                    {t.label}
+                    {t!.label}
                   </>
                 ) : "Tema";
               })()}
@@ -340,7 +340,7 @@ export function PageList({
                   <button
                     key={t.id}
                     onClick={() => {
-                      onThemeChange(t.id);
+                      onThemeChange?.(t.id);
                       setShowThemes(false);
                     }}
                     className={`w-full text-left px-3 py-1.5 text-xs font-bold flex items-center gap-2 hover:bg-gray-50 ${theme === t.id ? "bg-brand-50 text-brand-700" : ""}`}
@@ -361,13 +361,13 @@ export function PageList({
                     <div className={`px-3 py-1.5 ${theme === "custom" ? "bg-brand-50" : ""}`}>
                       <button
                         onClick={() => {
-                          onThemeChange("custom");
+                          onThemeChange?.("custom");
                         }}
                         className={`w-full text-left text-xs font-bold flex items-center gap-2 ${theme === "custom" ? "text-brand-700" : ""}`}
                       >
                         <span
                           className="w-2.5 h-2.5 rounded-sm border border-gray-300"
-                          style={customColors?.primary ? { backgroundColor: customColors.primary, borderColor: customColors.primary } : undefined}
+                          style={customColors?.primary ? { backgroundColor: customColors?.primary, borderColor: customColors?.primary } : undefined}
                         />
                         Custom
                       </button>
@@ -384,7 +384,7 @@ export function PageList({
                                 type="color"
                                 className="w-5 h-5 rounded cursor-pointer border-0 p-0"
                                 value={customColors?.[c.key] || c.fallback}
-                                onChange={(e) => onCustomColorChange({ [c.key]: e.target.value })}
+                                onChange={(e) => onCustomColorChange?.({ [c.key]: e.target.value })}
                               />
                               {c.label}
                             </label>
@@ -395,17 +395,17 @@ export function PageList({
                   </>
                 )}
                 {/* Brand Kits section */}
-                {brandKits && brandKits.length > 0 && onApplyBrandKit && (
+                {brandKits && brandKits!.length > 0 && onApplyBrandKit && (
                   <>
                     <div className="border-t border-gray-100 my-1" />
                     <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-gray-400">
                       Mis Brand Kits
                     </div>
-                    {brandKits.map((kit) => (
+                    {brandKits!.map((kit) => (
                       <button
                         key={kit.id}
                         onClick={() => {
-                          onApplyBrandKit(kit);
+                          onApplyBrandKit?.(kit);
                           setShowThemes(false);
                         }}
                         className="w-full text-left px-3 py-1.5 text-xs font-bold flex items-center gap-2 hover:bg-gray-50"
@@ -434,7 +434,7 @@ export function PageList({
                           onChange={(e) => setKitName(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && kitName.trim()) {
-                              onSaveBrandKit(kitName.trim());
+                              onSaveBrandKit?.(kitName.trim());
                               setKitName("");
                               setShowSaveKit(false);
                               setShowThemes(false);
@@ -448,7 +448,7 @@ export function PageList({
                           <button
                             onClick={() => {
                               if (kitName.trim()) {
-                                onSaveBrandKit(kitName.trim());
+                                onSaveBrandKit?.(kitName.trim());
                                 setKitName("");
                                 setShowSaveKit(false);
                                 setShowThemes(false);

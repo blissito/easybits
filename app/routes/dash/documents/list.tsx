@@ -71,7 +71,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     },
   ];
 
-  const raw = (await db.landing.aggregateRaw({ pipeline })) as unknown as Array<{
+  const raw = (await db.landing.aggregateRaw({ pipeline: pipeline as any })) as unknown as Array<{
     _id: { $oid: string };
     name: string;
     status: string;

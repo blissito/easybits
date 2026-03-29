@@ -71,8 +71,8 @@ Write an enhanced version of this description:`,
     type: "enhance",
     product: "document",
     modelId: enhanceModelId,
-    inputTokens: enhanceUsage?.promptTokens,
-    outputTokens: enhanceUsage?.completionTokens,
+    inputTokens: enhanceUsage?.inputTokens,
+    outputTokens: enhanceUsage?.outputTokens,
   });
 
   return data({ enhanced: text.trim() });

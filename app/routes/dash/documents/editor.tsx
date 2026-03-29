@@ -17,7 +17,7 @@ import type { Section3 } from "~/lib/landing3/types";
 import type { GrapesEditorHandle, AiAction } from "~/components/landings4/GrapesEditor";
 import { grapesToSections } from "~/lib/landing4/grapesToSections";
 import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
-import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
+import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import { normalizePlan } from "~/lib/plans";
@@ -1456,7 +1456,7 @@ ${sectionsHtml}
         onDropImage={handleDropImage}
         theme={currentTheme}
         onThemeChange={(t: string) => handleThemeChange(t)}
-        customColors={currentCustomColors ?? undefined}
+        customColors={(currentCustomColors ?? undefined) as CustomColors | undefined}
         onCustomColorChange={(partial: any) => handleThemeChange("custom", { ...currentCustomColors, ...partial })}
         themeCssData={themeCssData}
         onGenerateVariant={handleGenerateVariant}

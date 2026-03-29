@@ -83,7 +83,7 @@ export default function NewPresentation() {
   const [promptValue, setPromptValue] = useState("");
   const [selectedPalette, setSelectedPalette] = useState("midnight");
   const lastSuggestion = useRef("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Auto-suggest description when name changes
   useEffect(() => {

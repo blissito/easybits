@@ -357,7 +357,7 @@ Each <section> = exactly one page. If content needs 3 pages, output 3 separate <
           model: resolveModelLocal(modelId, openaiKey || undefined, userKey || undefined),
           system: systemPrompt,
           messages,
-          maxTokens: isVariantMode ? 8000 : isNewSection ? 12000 : elementRefine ? 2000 : 4000,
+          maxOutputTokens: isVariantMode ? 8000 : isNewSection ? 12000 : elementRefine ? 2000 : 4000,
         });
 
         let fullHtml = "";

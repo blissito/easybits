@@ -1459,7 +1459,7 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, ...opts } = params;
       const result = await generateDocumentAI(ctx, documentId, opts);
-      return { content: [{ type: "text", text: JSON.stringify({ total: result.total, sections: result.sections.map(s => ({ id: s.id, order: s.order, type: s.type, name: s.name })) }, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify({ total: result.total, sections: result.sections.map((s: any) => ({ id: s.id, order: s.order, type: s.type, name: s.label })) }, null, 2) }] };
     })
   );
 

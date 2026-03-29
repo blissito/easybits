@@ -67,7 +67,7 @@ export default function NewLanding3() {
   const [nameValue, setNameValue] = useState("");
   const [promptValue, setPromptValue] = useState("");
   const lastSuggestion = useRef("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

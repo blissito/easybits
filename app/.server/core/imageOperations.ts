@@ -69,7 +69,7 @@ export async function optimizeImage(
   const contentType = format === "avif" ? "image/avif" : "image/webp";
   const putResponse = await fetch(putUrl, {
     method: "PUT",
-    body: optimizedBuffer,
+    body: new Uint8Array(optimizedBuffer),
     headers: { "Content-Type": contentType },
   });
   if (!putResponse.ok) {
@@ -216,7 +216,7 @@ export async function transformImage(
   const putUrl = await client.getPutUrl(storageKey);
   const putResponse = await fetch(putUrl, {
     method: "PUT",
-    body: transformedBuffer,
+    body: new Uint8Array(transformedBuffer),
     headers: { "Content-Type": newContentType },
   });
   if (!putResponse.ok) {
