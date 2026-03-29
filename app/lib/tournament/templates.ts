@@ -171,13 +171,13 @@ export function buildTournamentScheduleHTML(data: TournamentScheduleData): strin
     const timeStr = `${formatTimeAmPm(match.startTime)} - ${formatTimeAmPm(match.endTime)}`;
 
     html += `<div style="position:absolute; left:${leftCalc}; width:${widthCalc}; top:${topPx}px; height:${heightPx}px; background:${colors.bg}; border-left:3px solid ${colors.border}; border-radius:8px; padding:5px 7px; overflow:hidden; box-sizing:border-box; z-index:2;">`;
-    html += `<p style="font-weight:700; font-size:8px; margin:0 0 1px 0; color:${colors.text}; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.25;">${escapeHtml(title)}</p>`;
-    html += `<p style="font-size:7.5px; color:${colors.text}; opacity:0.85; margin:0 0 1px 0;">⏱ ${escapeHtml(timeStr)}</p>`;
+    html += `<p style="font-weight:700; font-size:10px; margin:0 0 1px 0; color:${colors.text}; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.25;">${escapeHtml(title)}</p>`;
+    html += `<p style="font-size:8.5px; color:${colors.text}; opacity:0.85; margin:0 0 1px 0;">⏱ ${escapeHtml(timeStr)}</p>`;
     if (match.teamA) {
-      html += `<p style="font-size:7.5px; color:${colors.text}; opacity:0.85; margin:0;">🏸 ${escapeHtml(match.teamA)}${match.teamB ? ` y ${escapeHtml(match.teamB)}` : ""}</p>`;
+      html += `<p style="font-size:8.5px; color:${colors.text}; opacity:0.85; margin:0;">🏸 ${escapeHtml(match.teamA)}${match.teamB ? ` y ${escapeHtml(match.teamB)}` : ""}</p>`;
     }
     if (match.notes) {
-      html += `<p style="font-size:7.5px; color:${colors.text}; opacity:0.7; margin:1px 0 0 0;">⚡ ${escapeHtml(match.notes)}</p>`;
+      html += `<p style="font-size:8.5px; color:${colors.text}; opacity:0.7; margin:1px 0 0 0;">⚡ ${escapeHtml(match.notes)}</p>`;
     }
     html += `</div>`;
   }
@@ -187,7 +187,7 @@ export function buildTournamentScheduleHTML(data: TournamentScheduleData): strin
 
   // ─── Disclaimer footer ───
   if (data.disclaimer) {
-    html += `<p style="font-size:8px; color:#999; margin-top:10px; line-height:1.4;">${escapeHtml(data.disclaimer)}</p>`;
+    html += `<p style="font-size:10px; color:#999; margin-top:10px; line-height:1.4;">${escapeHtml(data.disclaimer)}</p>`;
   }
 
   // Portrait letter page (8.5in × 11in)
