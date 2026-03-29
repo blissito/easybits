@@ -1,28 +1,6 @@
 import { db } from "../db";
 import type { Slide } from "~/lib/buildRevealHtml";
-
-let browserPromise: ReturnType<typeof launchBrowser> | null = null;
-let screenshotQueue: Promise<any> = Promise.resolve();
-
-function enqueueScreenshot<T>(fn: () => Promise<T>): Promise<T> {
-  const result = screenshotQueue.then(fn, fn);
-  screenshotQueue = result.catch(() => {});
-  return result;
-}
-
-async function launchBrowser() {
-  const { chromium } = await import("playwright-core");
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-  return chromium.launch({
-    ...(executablePath ? { executablePath } : {}),
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-}
-
-function getBrowser() {
-  if (!browserPromise) browserPromise = launchBrowser();
-  return browserPromise;
-}
+import { withPage } from "./browserPool";
 
 export async function takeSlideScreenshot(
   userId: string,
@@ -47,7 +25,6 @@ export async function takeSlideScreenshot(
     return { type: "text", text: `Invalid slideIndex: ${slideIndex}. Presentation has ${slides.length} slide(s) (0-${slides.length - 1}).` };
   }
 
-  // Build simple HTML for a single slide (no reveal.js)
   const slide = slides[slideIndex];
   const { buildPresentationHtml } = await import("~/lib/presentation/buildHtml");
   const section = { id: slide.id, order: 0, html: slide.html || "<section></section>" } as any;
@@ -57,24 +34,17 @@ export async function takeSlideScreenshot(
     customColors: (pres.customColors as Record<string, string>) || undefined,
   });
 
-  return enqueueScreenshot(async () => {
-    try {
-      const browser = await getBrowser();
-      const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
-      try {
-        await page.setContent(html, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
-        const buffer = await page.screenshot({ type: "png" });
-        return { type: "image", mimeType: "image/png", data: buffer.toString("base64") } as const;
-      } finally {
-        await page.close();
-      }
-    } catch (err: any) {
-      browserPromise = null;
-      return {
-        type: "text" as const,
-        text: `Screenshot unavailable: ${err.message}. This tool requires Chrome installed locally.`,
-      };
-    }
-  });
+  try {
+    return await withPage(async (page) => {
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+      const buffer = await page.screenshot({ type: "png" });
+      return { type: "image" as const, mimeType: "image/png" as const, data: buffer.toString("base64") };
+    }, { viewport: { width: 960, height: 540 } });
+  } catch (err: any) {
+    return {
+      type: "text" as const,
+      text: `Screenshot unavailable: ${err.message}. This tool requires Chrome installed locally.`,
+    };
+  }
 }

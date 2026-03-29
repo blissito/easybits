@@ -969,3 +969,154 @@ export async function createQuotation(
 
   return { document: doc, pdf };
 }
+
+// ─── Structured document helpers ─────────────────────────────────────
+
+function buildSections(pages: string[], defaultName: string) {
+  return pages.map((html, i) => ({
+    id: crypto.randomUUID().replace(/-/g, "").slice(0, 24),
+    order: i,
+    html,
+    type: "content",
+    name: i === 0 ? defaultName : `Página ${i + 1}`,
+  }));
+}
+
+async function createStructuredDoc(
+  ctx: AuthContext,
+  opts: { name: string; prompt: string; pages: string[]; sectionName: string; theme?: string; customColors?: Record<string, string> }
+) {
+  requireScope(ctx, "WRITE");
+  if (!opts.pages.length) throw new Error("At least one page is required");
+
+  const metadata = {
+    ...(opts.theme && { theme: opts.theme }),
+    ...(opts.customColors && { customColors: opts.customColors }),
+  };
+
+  const doc = await db.landing.create({
+    data: {
+      name: opts.name,
+      prompt: opts.prompt,
+      sections: buildSections(opts.pages, opts.sectionName) as any,
+      version: 4,
+      theme: opts.theme || "minimal",
+      metadata: metadata as any,
+      ownerId: ctx.user.id,
+    },
+  });
+
+  const { takeDocumentPdf } = await import("./documentScreenshot");
+  const pdf = await takeDocumentPdf(ctx.user.id, doc.id);
+  return { document: doc, pdf };
+}
+
+async function editStructuredDoc(
+  ctx: AuthContext,
+  opts: { documentId: string; pages: string[]; sectionName: string; name?: string }
+) {
+  requireScope(ctx, "WRITE");
+  const doc = await db.landing.findUnique({ where: { id: opts.documentId } });
+  if (!doc || doc.ownerId !== ctx.user.id) throw new Error("Document not found");
+
+  const sections = buildSections(opts.pages, opts.sectionName);
+  const updated = await db.landing.update({
+    where: { id: opts.documentId },
+    data: {
+      sections: sections as any,
+      ...(opts.name && { name: opts.name }),
+    },
+  });
+
+  const { takeDocumentPdf } = await import("./documentScreenshot");
+  const pdf = await takeDocumentPdf(ctx.user.id, updated.id);
+  return { document: updated, pdf };
+}
+
+// ─── Edit Quotation ──────────────────────────────────────────────────
+
+import type { QuotationData } from "~/lib/quotation/templates";
+
+export async function editQuotation(
+  ctx: AuthContext,
+  opts: { documentId: string; data: QuotationData; name?: string }
+) {
+  const { buildQuotationHTML } = await import("~/lib/quotation/templates");
+  const pages = buildQuotationHTML(opts.data);
+  return editStructuredDoc(ctx, {
+    documentId: opts.documentId,
+    pages,
+    sectionName: "Cotización",
+    name: opts.name,
+  });
+}
+
+// ─── Screening Reports ───────────────────────────────────────────────
+
+import type { ScreeningReportData } from "~/lib/screening/templates";
+
+export async function createScreeningReport(
+  ctx: AuthContext,
+  opts: { data: ScreeningReportData; name?: string; theme?: string; customColors?: Record<string, string> }
+) {
+  const { buildScreeningReportHTML } = await import("~/lib/screening/templates");
+  const html = buildScreeningReportHTML(opts.data);
+  const name = opts.name || `Reporte Screening — ${opts.data.subject.name}`;
+  return createStructuredDoc(ctx, {
+    name,
+    prompt: `Reporte screening ${opts.data.riskLevel === "none" ? "negativo" : opts.data.riskLevel} — ${opts.data.subject.name}`,
+    pages: [html],
+    sectionName: "Reporte",
+    theme: opts.theme || "minimal",
+    customColors: opts.customColors,
+  });
+}
+
+export async function editScreeningReport(
+  ctx: AuthContext,
+  opts: { documentId: string; data: ScreeningReportData; name?: string }
+) {
+  const { buildScreeningReportHTML } = await import("~/lib/screening/templates");
+  const html = buildScreeningReportHTML(opts.data);
+  return editStructuredDoc(ctx, {
+    documentId: opts.documentId,
+    pages: [html],
+    sectionName: "Reporte",
+    name: opts.name,
+  });
+}
+
+// ─── GEO Scorecards ─────────────────────────────────────────────────
+
+import type { GeoScorecardData } from "~/lib/geo/templates";
+
+export async function createGeoScorecard(
+  ctx: AuthContext,
+  opts: { data: GeoScorecardData; name?: string; theme?: string; customColors?: Record<string, string> }
+) {
+  const { buildGeoScorecardHTML } = await import("~/lib/geo/templates");
+  const pages = buildGeoScorecardHTML(opts.data);
+  const name = opts.name || `GEO Scorecard — ${opts.data.domain}`;
+  return createStructuredDoc(ctx, {
+    name,
+    prompt: `GEO Scorecard ${opts.data.domain} — ${opts.data.overallScore}/${opts.data.maxScore || 10}`,
+    pages,
+    sectionName: "Scorecard",
+    theme: opts.theme || "minimal",
+    customColors: opts.customColors,
+  });
+}
+
+export async function editGeoScorecard(
+  ctx: AuthContext,
+  opts: { documentId: string; data: GeoScorecardData; name?: string }
+) {
+  const { buildGeoScorecardHTML } = await import("~/lib/geo/templates");
+  const pages = buildGeoScorecardHTML(opts.data);
+  return editStructuredDoc(ctx, {
+    documentId: opts.documentId,
+    pages,
+    sectionName: "Scorecard",
+    name: opts.name,
+  });
+}

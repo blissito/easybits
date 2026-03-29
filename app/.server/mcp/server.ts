@@ -79,6 +79,11 @@ import {
   enhanceDocumentPrompt,
   createDocumentFromCFDI,
   createQuotation,
+  editQuotation,
+  createScreeningReport,
+  editScreeningReport,
+  createGeoScorecard,
+  editGeoScorecard,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -1027,6 +1032,194 @@ Returns the document metadata + PDF as base64 blob.`,
         });
       }
       return { content };
+    })
+  );
+
+  // ─── Structured document tools ─────────────────────────────────────
+
+  const quotationResultHandler = (result: any) => {
+    const content: any[] = [{ type: "text", text: JSON.stringify(result.document, null, 2) }];
+    if (result.pdf) {
+      content.push({
+        type: "resource",
+        resource: {
+          uri: `easybits://documents/${result.document.id}/pdf`,
+          mimeType: "application/pdf",
+          blob: result.pdf.toString("base64"),
+        },
+      });
+    }
+    return { content };
+  };
+
+  const quotationItemSchema = z.object({
+    description: z.string().describe("Item description"),
+    quantity: z.number().describe("Quantity"),
+    unit: z.string().optional().describe("Unit (e.g. 'pz', 'kg', 'hr')"),
+    unitPrice: z.number().describe("Unit price"),
+    total: z.number().describe("Line total (quantity × unitPrice - discount)"),
+    code: z.string().optional().describe("SKU or product code"),
+    discount: z.number().optional().describe("Line discount amount"),
+  });
+
+  const companySchema = z.object({
+    name: z.string().describe("Company name"),
+    address: z.string().optional().describe("Company address"),
+    phone: z.string().optional().describe("Company phone"),
+    email: z.string().optional().describe("Company email"),
+    rfc: z.string().optional().describe("Company RFC"),
+  });
+
+  const clientSchema = z.object({
+    name: z.string().describe("Client name"),
+    company: z.string().optional().describe("Client company"),
+    email: z.string().optional().describe("Client email"),
+    phone: z.string().optional().describe("Client phone"),
+    address: z.string().optional().describe("Client address"),
+  });
+
+  server.tool(
+    "edit_quotation",
+    `Edit an existing quotation document with structured data. Rebuilds the HTML from typed fields and regenerates the PDF.
+Pass the structured data (company, client, items, totals) instead of raw HTML — the template handles layout, pagination, and formatting automatically.
+Auto-paginates: >8 items splits across pages. Totals appear on last page only.`,
+    {
+      documentId: z.string().describe("ID of the quotation document to edit"),
+      name: z.string().optional().describe("New document name"),
+      company: companySchema,
+      client: clientSchema,
+      folio: z.string().optional().describe("Quotation number (e.g. 'COT-2026-055')"),
+      date: z.string().optional().describe("Date (ISO string or readable). Defaults to today."),
+      validity: z.string().optional().describe("Validity period (e.g. '15 días')"),
+      items: z.array(quotationItemSchema).describe("Line items"),
+      notes: z.array(z.string()).optional().describe("Notes and conditions"),
+      subtotal: z.number().describe("Subtotal before tax/discount"),
+      tax: z.number().optional().describe("Tax amount (e.g. IVA)"),
+      taxRate: z.number().optional().describe("Tax rate percentage (e.g. 16)"),
+      discount: z.number().optional().describe("Total discount amount"),
+      total: z.number().describe("Grand total"),
+      brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
+      currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, name, ...data } = params;
+      const result = await editQuotation(ctx, { documentId, data, name });
+      return quotationResultHandler(result);
+    })
+  );
+
+  const listResultSchema = z.object({
+    name: z.string().describe("List name (e.g. 'OFAC SDN', 'PEP México Federal', 'UIF Lista de Bloqueados', 'Interpol', 'EU Sanctions')"),
+    searched: z.boolean().describe("Whether this list was searched"),
+    match: z.boolean().describe("Whether a match was found"),
+    details: z.string().optional().describe("Match details or additional info"),
+  });
+
+  const subjectSchema = z.object({
+    name: z.string().describe("Full name of the person being screened"),
+    rfc: z.string().optional().describe("RFC (tax ID)"),
+    curp: z.string().optional().describe("CURP"),
+    dob: z.string().optional().describe("Date of birth (ISO string)"),
+    nationality: z.string().optional().describe("Nationality"),
+  });
+
+  server.tool(
+    "create_screening_report",
+    `Create a screening/compliance report (BlackPLD, PEP, sanctions) from structured data. Returns the document + PDF.
+The template generates a professional single-page report with: subject card, risk level badge, lists results table (with checkmarks/alerts), findings section, and analyst signature.`,
+    {
+      name: z.string().optional().describe("Document name. Default: 'Reporte Screening — {subject.name}'"),
+      subject: subjectSchema,
+      searchDate: z.string().describe("Date the search was performed (ISO string)"),
+      lists: z.array(listResultSchema).describe("Results from each list/database searched"),
+      riskLevel: z.enum(["none", "low", "medium", "high", "critical"]).describe("Overall risk assessment"),
+      findings: z.array(z.string()).optional().describe("Key findings or observations"),
+      analyst: z.string().optional().describe("Name of the analyst who performed the screening"),
+      folio: z.string().optional().describe("Report folio/number"),
+      notes: z.string().optional().describe("Additional notes"),
+      companyName: z.string().optional().describe("Company name for header (default: 'BlackPLD')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { name, ...data } = params;
+      const result = await createScreeningReport(ctx, { data, name });
+      return quotationResultHandler(result);
+    })
+  );
+
+  server.tool(
+    "edit_screening_report",
+    `Edit an existing screening report with updated structured data. Rebuilds the HTML and regenerates the PDF.`,
+    {
+      documentId: z.string().describe("ID of the screening report document to edit"),
+      name: z.string().optional().describe("New document name"),
+      subject: subjectSchema,
+      searchDate: z.string().describe("Date the search was performed (ISO string)"),
+      lists: z.array(listResultSchema).describe("Results from each list/database searched"),
+      riskLevel: z.enum(["none", "low", "medium", "high", "critical"]).describe("Overall risk assessment"),
+      findings: z.array(z.string()).optional().describe("Key findings or observations"),
+      analyst: z.string().optional().describe("Analyst name"),
+      folio: z.string().optional().describe("Report folio/number"),
+      notes: z.string().optional().describe("Additional notes"),
+      companyName: z.string().optional().describe("Company name for header"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, name, ...data } = params;
+      const result = await editScreeningReport(ctx, { documentId, data, name });
+      return quotationResultHandler(result);
+    })
+  );
+
+  const dimensionSchema = z.object({
+    name: z.string().describe("Dimension name (e.g. 'Structured Data', 'Content Authority', 'Technical SEO')"),
+    score: z.number().describe("Score for this dimension"),
+    maxScore: z.number().describe("Maximum possible score for this dimension"),
+    details: z.string().optional().describe("Brief explanation of the score"),
+  });
+
+  server.tool(
+    "create_geo_scorecard",
+    `Create a GEO (Generative Engine Optimization) scorecard from structured data. Returns the document + PDF.
+The template generates a dark-themed multi-page scorecard with: domain header, overall score badge, dimension progress bars, and recommendations list.`,
+    {
+      name: z.string().optional().describe("Document name. Default: 'GEO Scorecard — {domain}'"),
+      domain: z.string().describe("Domain being evaluated (e.g. 'example.com')"),
+      overallScore: z.number().describe("Overall GEO score"),
+      maxScore: z.number().optional().describe("Maximum possible score (default: 10)"),
+      dimensions: z.array(dimensionSchema).describe("Individual scoring dimensions"),
+      recommendations: z.array(z.string()).optional().describe("Actionable recommendations (generates page 2 if provided)"),
+      date: z.string().optional().describe("Evaluation date. Default: today"),
+      analyst: z.string().optional().describe("Analyst name"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { name, ...data } = params;
+      const result = await createGeoScorecard(ctx, { data, name });
+      return quotationResultHandler(result);
+    })
+  );
+
+  server.tool(
+    "edit_geo_scorecard",
+    `Edit an existing GEO scorecard with updated structured data. Rebuilds the HTML and regenerates the PDF.`,
+    {
+      documentId: z.string().describe("ID of the GEO scorecard document to edit"),
+      name: z.string().optional().describe("New document name"),
+      domain: z.string().describe("Domain being evaluated"),
+      overallScore: z.number().describe("Overall GEO score"),
+      maxScore: z.number().optional().describe("Maximum possible score (default: 10)"),
+      dimensions: z.array(dimensionSchema).describe("Individual scoring dimensions"),
+      recommendations: z.array(z.string()).optional().describe("Actionable recommendations"),
+      date: z.string().optional().describe("Evaluation date"),
+      analyst: z.string().optional().describe("Analyst name"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, name, ...data } = params;
+      const result = await editGeoScorecard(ctx, { documentId, data, name });
+      return quotationResultHandler(result);
     })
   );
 

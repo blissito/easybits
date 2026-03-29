@@ -1,22 +1,5 @@
 import type { CFDIData } from "./parseCFDI";
-
-function fmt(n: number): string {
-  return n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtDate(dateStr: string): string {
-  if (!dateStr) return "";
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
-  } catch {
-    return dateStr;
-  }
-}
-
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { fmt, fmtDate, escapeHtml } from "../document-helpers";
 
 function truncateSello(sello: string, chars = 40): string {
   if (!sello || sello.length <= chars * 2) return escapeHtml(sello || "");
