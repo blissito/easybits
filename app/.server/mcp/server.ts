@@ -84,6 +84,8 @@ import {
   editScreeningReport,
   createGeoScorecard,
   editGeoScorecard,
+  createTournamentSchedule,
+  editTournamentSchedule,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -1223,6 +1225,98 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, name, ...data } = params;
       const result = await editGeoScorecard(ctx, { documentId, data, name });
+      return quotationResultHandler(result);
+    })
+  );
+
+  // ─── Tournament Schedule ──────────────────────────────────────────
+
+  const tournamentMatchSchema = z.object({
+    court: z.string().describe("Court name (e.g. 'Cancha 1')"),
+    startTime: z.string().describe("Start time in HH:mm 24h format (e.g. '03:00')"),
+    endTime: z.string().describe("End time in HH:mm 24h format (e.g. '04:30')"),
+    category: z.string().describe("Category (e.g. 'Primera Varonil Pro')"),
+    phase: z.string().describe("Phase: 'playoff', 'semifinal', 'final', 'Fase de grupos', etc. Determines card color (green for playoff/final, blue for grupos, yellow for other)"),
+    teamA: z.string().optional().describe("First team/player"),
+    teamB: z.string().optional().describe("Second team/player"),
+    group: z.string().optional().describe("Group name (e.g. 'Varonil')"),
+    notes: z.string().optional().describe("Extra info (e.g. 'Por definir')"),
+    color: z.string().optional().describe("Override card color: 'green', 'blue', 'yellow', 'purple'. Default: auto from phase"),
+  });
+
+  server.tool(
+    "create_tournament_schedule",
+    `Create a tournament schedule calendar from match data. Returns document + PDF.
+
+PREFERRED: Pass structured match data (tournamentName, matches[], etc.) to auto-generate a professional calendar grid with time rows, court columns, and color-coded cards (green=playoff/final, blue=grupos, yellow=other). Ideal for padel, tennis, futbol, or any court-based tournament.
+
+Alternatively, pass 'pages' with complete HTML for full editorial control (like create_quotation). When 'pages' is provided, structured fields are ignored.`,
+    {
+      name: z.string().optional().describe("Document name. Default: 'Calendario — {tournamentName} — {gameDate}'"),
+      pages: z.array(z.string()).optional().describe("Optional: raw HTML pages for full control. Each page must be a <section> with letter-page layout. When provided, structured fields (matches, courts, etc.) are ignored."),
+      tournamentName: z.string().optional().describe("Tournament name (e.g. 'Torneo Smatch'). Required when not using 'pages'."),
+      dateRange: z.string().optional().describe("Tournament date range (e.g. 'Del 19 de diciembre al 31 de enero de 2026')"),
+      clubName: z.string().optional().describe("Club/venue name (e.g. 'Smatch Padel Club'). Required when not using 'pages'."),
+      location: z.string().optional().describe("City/state (e.g. 'Pachuca, Hidalgo'). Required when not using 'pages'."),
+      gameDate: z.string().optional().describe("Specific day for this schedule (e.g. '20 de diciembre 2025'). Required when not using 'pages'."),
+      matches: z.array(tournamentMatchSchema).optional().describe("Matches for a single-day schedule. Required when not using 'pages' or 'days'."),
+      days: z.array(z.object({
+        gameDate: z.string().describe("Day label (e.g. '20 de diciembre 2025')"),
+        matches: z.array(tournamentMatchSchema).describe("Matches for this day"),
+      })).optional().describe("Multi-day schedule: one page per day. Use instead of 'matches' for tournaments spanning multiple days."),
+      courts: z.array(z.string()).optional().describe("Court names in order. Auto-detected from matches if omitted"),
+      logoUrl: z.string().optional().describe("Logo URL or data URI"),
+      logoSvg: z.string().optional().describe("Raw SVG string for inline logo (alternative to logoUrl). CSS var(--primary) in the SVG will be replaced with brandColor."),
+      brandColor: z.string().optional().describe("Primary brand color (hex). Default: '#1a1a1a'"),
+      disclaimer: z.string().optional().describe("Footer disclaimer text"),
+      startHour: z.number().optional().describe("Grid start hour (0-23). Default: auto from matches"),
+      endHour: z.number().optional().describe("Grid end hour (1-24). Default: auto from matches"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { name, pages, ...data } = params;
+      if (pages?.length) {
+        const result = await createTournamentSchedule(ctx, { pages, name });
+        return quotationResultHandler(result);
+      }
+      const result = await createTournamentSchedule(ctx, { data: data as any, name });
+      return quotationResultHandler(result);
+    })
+  );
+
+  server.tool(
+    "edit_tournament_schedule",
+    `Edit an existing tournament schedule. Pass structured data or raw HTML pages. Rebuilds the HTML and regenerates the PDF.`,
+    {
+      documentId: z.string().describe("ID of the tournament schedule document to edit"),
+      name: z.string().optional().describe("New document name"),
+      pages: z.array(z.string()).optional().describe("Optional: raw HTML pages for full control. When provided, structured fields are ignored."),
+      tournamentName: z.string().optional().describe("Tournament name"),
+      dateRange: z.string().optional().describe("Tournament date range"),
+      clubName: z.string().optional().describe("Club/venue name"),
+      location: z.string().optional().describe("City/state"),
+      gameDate: z.string().optional().describe("Specific day for this schedule"),
+      matches: z.array(tournamentMatchSchema).optional().describe("Matches for single-day schedule"),
+      days: z.array(z.object({
+        gameDate: z.string().describe("Day label"),
+        matches: z.array(tournamentMatchSchema).describe("Matches for this day"),
+      })).optional().describe("Multi-day: one page per day"),
+      courts: z.array(z.string()).optional().describe("Court names in order"),
+      logoUrl: z.string().optional().describe("Logo URL or data URI"),
+      logoSvg: z.string().optional().describe("Raw SVG string for inline logo"),
+      brandColor: z.string().optional().describe("Primary brand color (hex)"),
+      disclaimer: z.string().optional().describe("Footer disclaimer text"),
+      startHour: z.number().optional().describe("Grid start hour"),
+      endHour: z.number().optional().describe("Grid end hour"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { documentId, name, pages, ...data } = params;
+      if (pages?.length) {
+        const result = await editTournamentSchedule(ctx, { documentId, pages, name });
+        return quotationResultHandler(result);
+      }
+      const result = await editTournamentSchedule(ctx, { documentId, data: data as any, name });
       return quotationResultHandler(result);
     })
   );

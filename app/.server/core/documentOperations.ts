@@ -1120,3 +1120,65 @@ export async function editGeoScorecard(
     name: opts.name,
   });
 }
+
+// ─── Tournament Schedules ───────────────────────────────────────────
+
+import type { TournamentScheduleData } from "~/lib/tournament/templates";
+
+/** Build pages from structured data — supports single-day or multi-day via `days` array */
+async function buildTournamentPages(
+  data: TournamentScheduleData & { days?: Array<{ gameDate: string; matches: TournamentScheduleData["matches"] }> }
+): Promise<string[]> {
+  const { buildTournamentScheduleHTML } = await import("~/lib/tournament/templates");
+  if (data.days?.length) {
+    // Multi-day: generate one page per day, sharing common fields
+    return data.days.map((day) =>
+      buildTournamentScheduleHTML({ ...data, gameDate: day.gameDate, matches: day.matches })
+    );
+  }
+  // Single day
+  return [buildTournamentScheduleHTML(data)];
+}
+
+export async function createTournamentSchedule(
+  ctx: AuthContext,
+  opts: { data?: TournamentScheduleData & { days?: Array<{ gameDate: string; matches: TournamentScheduleData["matches"] }> }; pages?: string[]; name?: string }
+) {
+  let pages: string[];
+  if (opts.pages?.length) {
+    pages = opts.pages;
+  } else if (opts.data) {
+    pages = await buildTournamentPages(opts.data);
+  } else {
+    throw new Error("Either 'matches' (structured data) or 'pages' (raw HTML) is required");
+  }
+  const name = opts.name || (opts.data ? `Calendario — ${opts.data.tournamentName}` : "Calendario de torneo");
+  const prompt = opts.data ? `Calendario ${opts.data.tournamentName}` : name;
+  return createStructuredDoc(ctx, {
+    name,
+    prompt,
+    pages,
+    sectionName: "Calendario",
+    theme: "minimal",
+  });
+}
+
+export async function editTournamentSchedule(
+  ctx: AuthContext,
+  opts: { documentId: string; data?: TournamentScheduleData & { days?: Array<{ gameDate: string; matches: TournamentScheduleData["matches"] }> }; pages?: string[]; name?: string }
+) {
+  let pages: string[];
+  if (opts.pages?.length) {
+    pages = opts.pages;
+  } else if (opts.data) {
+    pages = await buildTournamentPages(opts.data);
+  } else {
+    throw new Error("Either 'matches' (structured data) or 'pages' (raw HTML) is required");
+  }
+  return editStructuredDoc(ctx, {
+    documentId: opts.documentId,
+    pages,
+    sectionName: "Calendario",
+    name: opts.name,
+  });
+}

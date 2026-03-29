@@ -100,7 +100,9 @@ export async function takeDocumentPdf(
   try {
     return await withPage(async (page) => {
       await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
-      return await page.pdf({ format: "Letter", printBackground: true });
+      // Detect landscape sections (w-[11in] h-[8.5in])
+      const isLandscape = contentSections.some((s) => s.html?.includes('w-[11in]'));
+      return await page.pdf({ format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) });
     });
   } catch (err: any) {
     console.error("[takeDocumentPdf] error:", err.message);
