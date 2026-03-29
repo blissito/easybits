@@ -611,6 +611,10 @@ MCP: \`get_document_directions({ prompt, pageCount?, sourceContent? })\`
 SDK: \`eb.getDocumentDirections(prompt, { pageCount? })\`
 Generates 4 design directions (fonts, colors, mood, layout hints). Pass one to \`generate_document\` via the \`direction\` parameter.
 
+### PDF to images
+MCP: \`pdf_to_images({ base64?, fileId?, maxPages? })\`
+Convert a PDF to PNG images (one per page). Accepts either \`base64\` (raw PDF in memory — no upload needed) or \`fileId\` (uploaded PDF). Returns image content items. **To clone a PDF as a document**: (1) \`pdf_to_images\` to get page images, (2) use vision to generate HTML per page following \`get_docs('document-design')\` rules, (3) \`create_document\` with sections.
+
 ### Get page screenshot
 MCP: \`get_page_screenshot({ documentId, pageIndex? })\`
 Takes a screenshot of a single document page. Returns a PNG image (letter-sized). Page index is 0-based (default 0). Requires Chrome installed locally — designed for Claude Code MCP usage. **Prefer this tool to verify edits visually** after modifying page HTML.
