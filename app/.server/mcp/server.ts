@@ -1246,11 +1246,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
 
   server.tool(
     "create_tournament_schedule",
-    `Create a tournament schedule calendar from match data. Returns document + PDF.
-
-PREFERRED: Pass structured match data (tournamentName, matches[], etc.) to auto-generate a professional calendar grid with time rows, court columns, and color-coded cards (green=playoff/final, blue=grupos, yellow=other). Ideal for padel, tennis, futbol, or any court-based tournament.
-
-Alternatively, pass 'pages' with complete HTML for full editorial control (like create_quotation). When 'pages' is provided, structured fields are ignored.`,
+    `Template-based tool. Pass structured match data (tournamentName, matches[], courts, etc.) and the template auto-generates a professional calendar grid document with time rows, court columns, and color-coded match cards. Do NOT pass HTML — this tool builds it from your data. For custom HTML use create_document instead.`,
     {
       name: z.string().optional().describe("Document name. Default: 'Calendario — {tournamentName} — {gameDate}'"),
       pages: z.array(z.string()).optional().describe("Optional: raw HTML pages for full control. Each page must be a <section> with letter-page layout. When provided, structured fields (matches, courts, etc.) are ignored."),
@@ -1286,7 +1282,7 @@ Alternatively, pass 'pages' with complete HTML for full editorial control (like 
 
   server.tool(
     "edit_tournament_schedule",
-    `Edit an existing tournament schedule. Pass structured data or raw HTML pages. Rebuilds the HTML and regenerates the PDF.`,
+    `Edit an existing tournament schedule. Pass updated structured data — the template rebuilds the HTML and regenerates the PDF. Do NOT pass HTML.`,
     {
       documentId: z.string().describe("ID of the tournament schedule document to edit"),
       name: z.string().optional().describe("New document name"),
