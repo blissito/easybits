@@ -409,11 +409,15 @@ export function createMcpServer() {
 
   server.tool(
     "transform_image",
-    "Resize, rotate, flip, convert, or apply grayscale to an image. Creates a new file (original unchanged). Returns `{ file, originalSize, transformedSize, transforms }`.",
+    "Crop, resize, rotate, flip, convert, or apply grayscale to an image. Creates a new file (original unchanged). Returns `{ file, originalSize, transformedSize, transforms }`.",
     {
       fileId: z.string().describe("ID of the image file to transform"),
-      width: z.number().optional().describe("Target width in pixels"),
-      height: z.number().optional().describe("Target height in pixels"),
+      cropLeft: z.number().optional().describe("Crop region left offset in pixels"),
+      cropTop: z.number().optional().describe("Crop region top offset in pixels"),
+      cropWidth: z.number().optional().describe("Crop region width in pixels (required with cropHeight)"),
+      cropHeight: z.number().optional().describe("Crop region height in pixels (required with cropWidth)"),
+      width: z.number().optional().describe("Target width in pixels (applied after crop)"),
+      height: z.number().optional().describe("Target height in pixels (applied after crop)"),
       fit: z.enum(["cover", "contain", "fill", "inside", "outside"]).default("inside").describe("How to fit the image when resizing"),
       format: z.enum(["webp", "avif", "png", "jpeg"]).optional().describe("Output format (keeps original if not specified)"),
       quality: z.number().min(1).max(100).optional().describe("Quality 1-100"),

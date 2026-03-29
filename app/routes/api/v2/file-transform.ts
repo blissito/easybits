@@ -20,6 +20,10 @@ export async function action({ request, params }: Route.ActionArgs) {
     rotate: body.rotate,
     flip: body.flip,
     grayscale: body.grayscale,
+    cropLeft: body.cropLeft,
+    cropTop: body.cropTop,
+    cropWidth: body.cropWidth,
+    cropHeight: body.cropHeight,
   });
   return Response.json(result, { status: 201 });
 }

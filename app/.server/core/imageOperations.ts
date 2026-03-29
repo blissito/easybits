@@ -124,6 +124,10 @@ export async function transformImage(
     rotate?: number;
     flip?: boolean;
     grayscale?: boolean;
+    cropLeft?: number;
+    cropTop?: number;
+    cropWidth?: number;
+    cropHeight?: number;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -154,6 +158,16 @@ export async function transformImage(
   // Build sharp pipeline
   let pipeline = sharp(sourceBuffer);
   const transforms: string[] = [];
+
+  if (params.cropWidth && params.cropHeight) {
+    pipeline = pipeline.extract({
+      left: params.cropLeft ?? 0,
+      top: params.cropTop ?? 0,
+      width: params.cropWidth,
+      height: params.cropHeight,
+    });
+    transforms.push(`crop:${params.cropLeft ?? 0},${params.cropTop ?? 0},${params.cropWidth}x${params.cropHeight}`);
+  }
 
   if (params.width || params.height) {
     pipeline = pipeline.resize({
