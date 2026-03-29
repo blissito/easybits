@@ -882,7 +882,7 @@ export function createMcpServer() {
 
   server.tool(
     "create_document",
-    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints. TIP: For quotations, estimates, invoices, or remission notes use create_quotation instead — it's a single-step tool that creates, paginates, and optionally deploys in one call.",
+    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints. TO CLONE A PDF: (1) upload_file the PDF, (2) pdf_to_images to get page images, (3) generate HTML per page using vision + get_docs('document-design') rules, (4) create_document with sections. TIP: For quotations, estimates, invoices, or remission notes use create_quotation instead — it's a single-step tool that creates, paginates, and optionally deploys in one call.",
     {
       name: z.string().describe("Document name"),
       prompt: z.string().optional().describe("Description or prompt for the document"),
@@ -1540,6 +1540,60 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       const directions = await generateDirections({ prompt: brief, count: 4, model });
 
       return { content: [{ type: "text", text: JSON.stringify(directions, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "pdf_to_images",
+    "Convert a PDF to page images (PNG). Accepts either a fileId of an uploaded PDF OR raw base64 PDF data. Returns one image per page. Use these images with vision to generate HTML, then create a document with create_document following get_docs('document-design') rules.",
+    {
+      fileId: z.string().optional().describe("File ID of an uploaded PDF (alternative to base64)"),
+      base64: z.string().optional().describe("Raw PDF as base64 string (alternative to fileId — avoids uploading)"),
+      maxPages: z.number().optional().describe("Max pages to convert (default 20)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+
+      let pdfBuffer: Buffer;
+
+      if (params.base64) {
+        pdfBuffer = Buffer.from(params.base64, "base64");
+      } else if (params.fileId) {
+        const file = await db.file.findUnique({ where: { id: params.fileId } });
+        if (!file || file.ownerId !== ctx.user.id) {
+          return { content: [{ type: "text", text: "File not found" }], isError: true };
+        }
+        if (!file.contentType?.includes("pdf")) {
+          return { content: [{ type: "text", text: "File must be a PDF" }], isError: true };
+        }
+        const { getReadClientForPlatformFile, getClientForFile } = await import("../storage");
+        const client = file.storageProviderId
+          ? await getClientForFile(file.storageProviderId, ctx.user.id)
+          : getReadClientForPlatformFile(file);
+        const readUrl = await client.getReadUrl(file.storageKey);
+        const resp = await fetch(readUrl);
+        if (!resp.ok) {
+          return { content: [{ type: "text", text: "Failed to read PDF file" }], isError: true };
+        }
+        pdfBuffer = Buffer.from(await resp.arrayBuffer());
+      } else {
+        return { content: [{ type: "text", text: "Provide either fileId or base64" }], isError: true };
+      }
+
+      const { pdfToImages } = await import("../core/pdfToImages");
+      const pages = await pdfToImages(pdfBuffer, { maxPages: params.maxPages ?? 20 });
+
+      if (pages.length === 0) {
+        return { content: [{ type: "text", text: "PDF has no pages" }], isError: true };
+      }
+
+      return {
+        content: pages.map((p, i) => ({
+          type: "image" as const,
+          mimeType: "image/png" as const,
+          data: p.image,
+        })),
+      };
     })
   );
 
