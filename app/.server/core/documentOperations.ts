@@ -13,6 +13,15 @@ import { docEvents } from "./docEvents";
 import type { Section3 } from "~/lib/landing3/types";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 
+/** Upload a PDF buffer to storage and return a presigned read URL (1h) */
+export async function uploadPdfToStorage(userId: string, pdf: Buffer, docName: string) {
+  const client = getPlatformDefaultClient();
+  const key = `${userId}/pdf-${crypto.randomUUID().slice(0, 8)}`;
+  await client.putObject(key, pdf, "application/pdf");
+  const readUrl = await client.getReadUrl(key);
+  return { readUrl };
+}
+
 function throwJson(error: string, status: number): never {
   throw new Response(JSON.stringify({ error }), {
     status,
@@ -928,14 +937,25 @@ export async function createQuotation(
   ctx: AuthContext,
   opts: {
     name: string;
-    pages: string[];
+    pages?: string[];
+    data?: QuotationData;
     theme?: string;
     customColors?: Record<string, string>;
     brandKitId?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
-  if (!opts.pages.length) throw new Error("At least one page is required");
+
+  let pages: string[];
+  if (opts.data) {
+    const { buildQuotationHTML, fixQuotationMath } = await import("~/lib/quotation/templates");
+    fixQuotationMath(opts.data);
+    pages = buildQuotationHTML(opts.data);
+  } else if (opts.pages?.length) {
+    pages = opts.pages;
+  } else {
+    throw new Error("Either structured data or HTML pages are required");
+  }
 
   const metadata = {
     ...(opts.theme && { theme: opts.theme }),
@@ -943,19 +963,11 @@ export async function createQuotation(
     ...(opts.brandKitId && { brandKitId: opts.brandKitId }),
   };
 
-  const sections = opts.pages.map((html, i) => ({
-    id: crypto.randomUUID().replace(/-/g, "").slice(0, 24),
-    order: i,
-    html,
-    type: "content",
-    name: i === 0 ? "Cotización" : `Página ${i + 1}`,
-  }));
-
   const doc = await db.landing.create({
     data: {
       name: opts.name,
       prompt: opts.name,
-      sections: sections as any,
+      sections: buildSections(pages, "Cotización") as any,
       version: 4,
       theme: opts.theme || "corporate",
       metadata: metadata as any,

@@ -86,6 +86,7 @@ import {
   editGeoScorecard,
   createTournamentSchedule,
   editTournamentSchedule,
+  uploadPdfToStorage,
 } from "../core/documentOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -995,72 +996,7 @@ export function createMcpServer() {
     })
   );
 
-  server.tool(
-    "create_quotation",
-    `PREFERRED tool for quotations, estimates, invoices, proformas, and remission notes. Creates a complete document and returns the PDF in ONE step.
-
-You provide the full HTML for each page with complete editorial freedom. Each page MUST be a <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col"> following letter-page layout.
-
-DESIGN GUIDELINES for professional quotations:
-- Top color bar: 2px div in brand color (shrink-0)
-- Header: company name/logo LEFT, "COTIZACIÓN" + folio + date + validity RIGHT
-- Client block: rounded card with bg-gray-50, client name, company, contact info
-- Items table: colored header row (brand color bg, white text), alternating row backgrounds, columns for description/qty/unit price/total. Add code/SKU column only if items have codes. Add discount column only if items have discounts.
-- Totals: right-aligned block — subtotal, tax (IVA), discounts if any, TOTAL in bold brand color
-- Notes/conditions: rounded card with bullet points
-- Footer: shrink-0, company address left, "Página X de Y" right, border-top
-- Typography: Inter or system sans-serif, text-sm for body, text-3xl max for headings
-- Colors: use inline styles for brand color flexibility. Ensure WCAG AA contrast (4.5:1 minimum for text).
-- Content area: flex-1 overflow-hidden px-[0.75in] py-[0.5in]
-- Calculate all totals, taxes, and formatting yourself — present exact amounts.
-- For multi-page quotes (>8 items): split items across pages, totals on last page only.
-
-Returns the document metadata + PDF as base64 blob.`,
-    {
-      name: z.string().describe("Document name, e.g. 'Cotización SIIQTEC - Bobina FAPSA TR180'"),
-      pages: z.array(z.string()).describe("Array of complete <section> HTML strings. Each section must use w-[8.5in] h-[11in] letter-page layout with flex-col structure."),
-      theme: z.string().optional().describe("Theme name (e.g. minimal, corporate). Default: corporate"),
-      customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
-      brandKitId: z.string().optional().describe("Brand kit ID — auto-applies brand colors/fonts"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { document, pdf } = await createQuotation(ctx, params);
-      const content: any[] = [{ type: "text", text: JSON.stringify(document, null, 2) }];
-      if (pdf) {
-        content.push({
-          type: "resource",
-          resource: {
-            uri: `easybits://documents/${document.id}/pdf`,
-            mimeType: "application/pdf",
-            blob: pdf.toString("base64"),
-          },
-        });
-      } else {
-        content.push({ type: "text", text: "WARNING: PDF generation failed. Document saved but PDF unavailable. Use get_document_pdf to retry." });
-      }
-      return { content };
-    })
-  );
-
-  // ─── Structured document tools ─────────────────────────────────────
-
-  const quotationResultHandler = (result: any) => {
-    const content: any[] = [{ type: "text", text: JSON.stringify(result.document, null, 2) }];
-    if (result.pdf) {
-      content.push({
-        type: "resource",
-        resource: {
-          uri: `easybits://documents/${result.document.id}/pdf`,
-          mimeType: "application/pdf",
-          blob: result.pdf.toString("base64"),
-        },
-      });
-    } else {
-      content.push({ type: "text", text: "WARNING: PDF generation failed. Document saved but PDF unavailable. Use get_document_pdf to retry." });
-    }
-    return { content };
-  };
+  // ─── Quotation schemas & helpers ──────────────────────────────────
 
   const quotationItemSchema = z.object({
     description: z.string().describe("Item description"),
@@ -1088,6 +1024,97 @@ Returns the document metadata + PDF as base64 blob.`,
     address: z.string().optional().describe("Client address"),
   });
 
+  async function quotationPdfResponse(document: any, pdf: Buffer | null, inline_pdf: boolean | undefined, ctx: any) {
+    const content: any[] = [{ type: "text", text: JSON.stringify({ id: document.id, name: document.name }, null, 2) }];
+    if (pdf) {
+      if (inline_pdf) {
+        content.push({
+          type: "resource",
+          resource: {
+            uri: `easybits://documents/${document.id}/pdf`,
+            mimeType: "application/pdf",
+            blob: pdf.toString("base64"),
+          },
+        });
+      } else {
+        const { readUrl } = await uploadPdfToStorage(ctx.user.id, pdf, document.name);
+        content.push({ type: "text", text: JSON.stringify({ pdfUrl: readUrl }, null, 2) });
+      }
+    } else {
+      content.push({ type: "text", text: "WARNING: PDF generation failed. Document saved but PDF unavailable. Use get_document_pdf to retry." });
+    }
+    return { content };
+  }
+
+  server.tool(
+    "create_quotation",
+    `PREFERRED tool for quotations, estimates, invoices, proformas, and remission notes. Creates a complete document and returns the PDF URL in ONE step.
+Pass structured data (company, client, items, totals) and the template handles layout, pagination, and formatting automatically. Auto-paginates: >8 items splits across pages. Totals appear on last page only. Arithmetic is auto-corrected.
+Alternatively, pass raw HTML pages for full editorial control (advanced).`,
+    {
+      name: z.string().describe("Document name, e.g. 'Cotización SIIQTEC - Bobina FAPSA TR180'"),
+      // Structured data (preferred path)
+      company: companySchema.optional().describe("Company info (required when using structured mode)"),
+      client: clientSchema.optional().describe("Client info (required when using structured mode)"),
+      folio: z.string().optional().describe("Quotation number (e.g. 'COT-2026-055')"),
+      date: z.string().optional().describe("Date (ISO string or readable). Defaults to today."),
+      validity: z.string().optional().describe("Validity period (e.g. '15 días')"),
+      items: z.array(quotationItemSchema).optional().describe("Line items (required when using structured mode)"),
+      notes: z.array(z.string()).optional().describe("Notes and conditions"),
+      subtotal: z.number().optional().describe("Subtotal before tax/discount"),
+      tax: z.number().optional().describe("Tax amount (e.g. IVA)"),
+      taxRate: z.number().optional().describe("Tax rate percentage (e.g. 16)"),
+      discount: z.number().optional().describe("Total discount amount"),
+      total: z.number().optional().describe("Grand total"),
+      brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
+      currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
+      // Raw HTML (advanced path)
+      pages: z.array(z.string()).optional().describe("Raw HTML pages (advanced). Omit to use structured data."),
+      // Options
+      theme: z.string().optional().describe("Theme name (e.g. minimal, corporate). Default: corporate"),
+      customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
+      brandKitId: z.string().optional().describe("Brand kit ID — auto-applies brand colors/fonts"),
+      inline_pdf: z.boolean().optional().describe("Return PDF as base64 blob instead of URL. Default: false"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { company, client, items, subtotal, total, folio, date, validity, notes, tax, taxRate, discount, brandColor, currency, pages, name, theme, customColors, brandKitId, inline_pdf } = params;
+
+      const structuredData = (company && client && items && subtotal != null && total != null)
+        ? { company, client, items, subtotal, total, folio, date, validity, notes, tax, taxRate, discount, brandColor, currency } as any
+        : undefined;
+
+      const { document, pdf } = await createQuotation(ctx, {
+        name,
+        data: structuredData,
+        pages: !structuredData ? pages : undefined,
+        theme,
+        customColors,
+        brandKitId,
+      });
+
+      return quotationPdfResponse(document, pdf, inline_pdf, ctx);
+    })
+  );
+
+  /** Legacy handler for non-quotation structured docs (screening, scorecard, tournament) — still returns base64 */
+  const structuredDocResultHandler = (result: any) => {
+    const content: any[] = [{ type: "text", text: JSON.stringify(result.document, null, 2) }];
+    if (result.pdf) {
+      content.push({
+        type: "resource",
+        resource: {
+          uri: `easybits://documents/${result.document.id}/pdf`,
+          mimeType: "application/pdf",
+          blob: result.pdf.toString("base64"),
+        },
+      });
+    } else {
+      content.push({ type: "text", text: "WARNING: PDF generation failed. Document saved but PDF unavailable. Use get_document_pdf to retry." });
+    }
+    return { content };
+  };
+
   server.tool(
     "edit_quotation",
     `Edit an existing quotation document with structured data. Rebuilds the HTML from typed fields and regenerates the PDF.
@@ -1110,12 +1137,13 @@ Auto-paginates: >8 items splits across pages. Totals appear on last page only.`,
       total: z.number().describe("Grand total"),
       brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
       currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
+      inline_pdf: z.boolean().optional().describe("Return PDF as base64 blob instead of URL. Default: false"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { documentId, name, ...data } = params;
+      const { documentId, name, inline_pdf, ...data } = params;
       const result = await editQuotation(ctx, { documentId, data, name });
-      return quotationResultHandler(result);
+      return quotationPdfResponse(result.document, result.pdf, inline_pdf, ctx);
     })
   );
 
@@ -1154,7 +1182,7 @@ The template generates a professional single-page report with: subject card, ris
       const ctx = extra.authInfo as unknown as AuthContext;
       const { name, ...data } = params;
       const result = await createScreeningReport(ctx, { data, name });
-      return quotationResultHandler(result);
+      return structuredDocResultHandler(result);
     })
   );
 
@@ -1178,7 +1206,7 @@ The template generates a professional single-page report with: subject card, ris
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, name, ...data } = params;
       const result = await editScreeningReport(ctx, { documentId, data, name });
-      return quotationResultHandler(result);
+      return structuredDocResultHandler(result);
     })
   );
 
@@ -1207,7 +1235,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const { name, ...data } = params;
       const result = await createGeoScorecard(ctx, { data, name });
-      return quotationResultHandler(result);
+      return structuredDocResultHandler(result);
     })
   );
 
@@ -1229,7 +1257,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, name, ...data } = params;
       const result = await editGeoScorecard(ctx, { documentId, data, name });
-      return quotationResultHandler(result);
+      return structuredDocResultHandler(result);
     })
   );
 
@@ -1275,7 +1303,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const { name, ...data } = params;
       const result = await createTournamentSchedule(ctx, { data: data as any, name });
-      return quotationResultHandler(result);
+      return structuredDocResultHandler(result);
     })
   );
 
@@ -1307,7 +1335,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const { documentId, name, ...data } = params;
       const result = await editTournamentSchedule(ctx, { documentId, data: data as any, name });
-      return quotationResultHandler(result);
+      return structuredDocResultHandler(result);
     })
   );
 
