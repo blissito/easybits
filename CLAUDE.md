@@ -207,6 +207,7 @@ Pipeline de acciones (configurada por usuario o agente):
 EasyBits se convierte en hosting + DB + forms + actions — un mini Firebase/Supabase controlado por agentes. El usuario publica una landing y ya tiene backend funcional.
 
 ## TODOs & Technical Debt
+- **PENDIENTE DISCUSIÓN: Rendimiento de generación de documentos** — Gemini 2.5 Pro promedia 87s por generación (p95: 111s), ~23K tokens input/output. Bajar a Flash no es opción (afecta calidad). Explorar: reducir tokens en prompts, caching de system prompt, batching más eficiente en generación paralela. Script diagnóstico: `scripts/ai-gen-log-diagnostics.ts`
 - Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
 - **Planned**: RAG as a Service — allow agents to index and query files via retrieval-augmented generation

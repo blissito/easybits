@@ -63,7 +63,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     const redirectCookie = await getRedirectCookie(request);
     const refCode = redirectCookie["ref"] as string | undefined;
     session = await createGoogleSession(code, request, refCode);
-    sendConfrimation(session.get("email"), { validate: true }); // @revisit
+    sendConfrimation(session.get("email"));
     // Clear ref from cookie
     if (refCode) {
       redirectCookie["ref"] = undefined;

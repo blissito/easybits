@@ -1041,7 +1041,8 @@ export async function editQuotation(
   ctx: AuthContext,
   opts: { documentId: string; data: QuotationData; name?: string }
 ) {
-  const { buildQuotationHTML } = await import("~/lib/quotation/templates");
+  const { buildQuotationHTML, fixQuotationMath } = await import("~/lib/quotation/templates");
+  fixQuotationMath(opts.data);
   const pages = buildQuotationHTML(opts.data);
   return editStructuredDoc(ctx, {
     documentId: opts.documentId,

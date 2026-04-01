@@ -45,6 +45,34 @@ export interface QuotationData {
 
 const ITEMS_PER_PAGE = 8;
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Recalculate all totals from unit prices — LLMs often get arithmetic wrong */
+export function fixQuotationMath(data: QuotationData): QuotationData {
+  let corrected = false;
+  for (const item of data.items) {
+    const expected = round2(item.quantity * item.unitPrice - (item.discount || 0));
+    if (item.total !== expected) {
+      corrected = true;
+      item.total = expected;
+    }
+  }
+  const subtotal = round2(data.items.reduce((s, i) => s + i.total, 0));
+  if (data.subtotal !== subtotal) { corrected = true; data.subtotal = subtotal; }
+
+  if (data.taxRate != null) {
+    const taxBase = subtotal - (data.discount || 0);
+    const tax = round2(taxBase * data.taxRate / 100);
+    if (data.tax !== tax) { corrected = true; data.tax = tax; }
+  }
+
+  const total = round2(data.subtotal - (data.discount || 0) + (data.tax || 0));
+  if (data.total !== total) { corrected = true; data.total = total; }
+
+  if (corrected) console.info("[fixQuotationMath] Corrected arithmetic in quotation data");
+  return data;
+}
+
 function headerHtml(data: QuotationData): string {
   const bc = data.brandColor || "#1a1a1a";
   const date = data.date ? fmtDate(data.date) : fmtDate(new Date().toISOString());

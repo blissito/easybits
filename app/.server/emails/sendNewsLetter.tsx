@@ -13,6 +13,7 @@ const isDev = process.env.NODE_ENV === "development";
 const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
 let timer = 0;
+const recentConfirmations = new Map<string, number>();
 export const sendMagicLink = (email: string, data: any) => {
   if (timer > Date.now()) {
     console.error("Avoided: rate limited");
@@ -33,19 +34,24 @@ export const sendMagicLink = (email: string, data: any) => {
     .catch((e: Error) => console.error(e));
 };
 
-type SendConfirmationData = { displayName: string; validate: boolean };
+type SendConfirmationData = { displayName?: string };
 export const sendConfrimation = async (
   email: string,
-  data: SendConfirmationData // @todo fix mixed propuses
-  // getTemplate?: (data: SendConfirmationData) => string
+  data?: SendConfirmationData
 ) => {
-  const { validate = false } = data || {};
+  email = emailSchema.parse(email);
 
-  if (validate) {
-    email = emailSchema.parse(email); // validation
-    const user = await db.user.findUnique({ where: { email } }); // DB query
-    if (user?.confirmed) return false; // sending avoided
+  // Skip if already confirmed
+  const user = await db.user.findUnique({ where: { email } });
+  if (user?.confirmed) return false;
+
+  // Max 1 confirmation per 24h per email
+  const cooldownUntil = recentConfirmations.get(email);
+  if (cooldownUntil && cooldownUntil > Date.now()) {
+    console.info(`Confirmation rate-limited: ${email}`);
+    return false;
   }
+  recentConfirmations.set(email, Date.now() + 24 * 60 * 60 * 1000);
 
   const confirmationToken = generateUserToken({ ...data, email });
   const url = new URL(`${location}/api/v1/tokens`);

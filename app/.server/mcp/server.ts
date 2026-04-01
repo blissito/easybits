@@ -1036,6 +1036,8 @@ Returns the document metadata + PDF as base64 blob.`,
             blob: pdf.toString("base64"),
           },
         });
+      } else {
+        content.push({ type: "text", text: "WARNING: PDF generation failed. Document saved but PDF unavailable. Use get_document_pdf to retry." });
       }
       return { content };
     })
@@ -1054,6 +1056,8 @@ Returns the document metadata + PDF as base64 blob.`,
           blob: result.pdf.toString("base64"),
         },
       });
+    } else {
+      content.push({ type: "text", text: "WARNING: PDF generation failed. Document saved but PDF unavailable. Use get_document_pdf to retry." });
     }
     return { content };
   };
