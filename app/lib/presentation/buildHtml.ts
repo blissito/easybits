@@ -100,6 +100,18 @@ img { max-width: 100%; border-radius: 8px; }
   .nav-btn.left { left: 8px; }
   .nav-btn.right { right: 8px; }
 }
+.pdf-btn { position: fixed; top: 12px; right: 16px; z-index: 50; background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.6); font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 14px; border-radius: 6px; backdrop-filter: blur(4px); display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-family: system-ui, sans-serif; }
+.pdf-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.pdf-btn svg { width: 14px; height: 14px; }
+@page { size: 960px 540px; margin: 0; }
+@media print {
+  html, body { background: white; overflow: visible; height: auto; }
+  .viewport { container-type: normal; display: block; width: auto; height: auto; overflow: visible; }
+  .slide-container { scale: 1; transform: none; width: 960px; height: auto; overflow: visible; position: static; }
+  .nav-btn, .progress, .slide-counter, .branding, .pdf-btn { display: none !important; }
+  .slide { position: relative !important; width: 960px !important; height: 540px !important; opacity: 1 !important; transform: none !important; display: block !important; page-break-after: always; break-after: page; overflow: hidden; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+}
 ${grapesCSS}
 </style>
 </head>
@@ -114,6 +126,7 @@ ${slidesHtml}
 <div class="progress" id="progress"></div>
 <div class="slide-counter" id="counter"></div>
 <div class="branding"><a href="https://easybits.cloud" target="_blank">Powered by EasyBits</a></div>
+<button class="pdf-btn" onclick="window.print()" aria-label="Download PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PDF</button>
 <script>
   let current = 0;
   const slides = document.querySelectorAll('.slide');

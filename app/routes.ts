@@ -182,6 +182,7 @@ export default [
     route("documents/:id", "routes/api/v2/document.ts"),
     route("documents/:id/deploy", "routes/api/v2/document-deploy.ts"),
     route("documents/:id/pdf", "routes/api/v2/document-pdf.ts"),
+    route("presentations/:id/pdf", "routes/api/v2/presentation-pdf.ts"),
     route("documents/:id/unpublish", "routes/api/v2/document-unpublish.ts"),
     route("documents/:id/clone", "routes/api/v2/document-clone.ts"),
     route("document-from-cfdi", "routes/api/v2/document-from-cfdi.ts"),
