@@ -59,11 +59,9 @@ export function buildPresentationHtml(
         .replace(/\s+data-gjs[^=]*="[^"]*"/gi, "")
         .replace(/\s+data-section-id="[^"]*"/gi, "")
         .replace(/\s+data-label="[^"]*"/gi, "");
-      // Strip outer <section> wrapper if present — we add our own
+      // Keep original HTML intact — it has all the layout/color classes
       let inner = cleanHtml.trim();
-      const sectionMatch = inner.match(/^<section[^>]*>([\s\S]*)<\/section>$/i);
-      if (sectionMatch) inner = sectionMatch[1];
-      return `<div class="slide${i === 0 ? " active" : ""}" data-index="${i}"><section class="w-full h-full overflow-hidden box-border">${inner}</section></div>`;
+      return `<div class="slide${i === 0 ? " active" : ""}" data-index="${i}">${inner}</div>`;
     })
     .join("\n");
 
@@ -81,17 +79,10 @@ tailwind.config={theme:{extend:{colors:{primary:'var(--color-primary)','primary-
 ${themeCss}
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; font-family: system-ui, -apple-system, sans-serif; }
-.viewport { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
-.slide-container { position: relative; width: 960px; height: 540px; overflow: hidden; }
-@media (max-width: 960px) {
-  .slide-container { width: 100vw; height: 56.25vw; }
-}
-@media (max-height: 540px) {
-  .slide-container { height: 100vh; width: 177.78vh; }
-}
-.slide { position: absolute; inset: 0; }
+.viewport { width: 100vw; height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; container-type: size; }
+.slide-container { width: 960px; height: 540px; position: relative; transform-origin: center center; scale: min(calc(100cqw / 960), calc(100cqh / 540)); }
+.slide { position: absolute; inset: 0; width: 960px; height: 540px; overflow: hidden; }
 ${transitionCss}
-.slide section { width: 100%; height: 100%; }
 img { max-width: 100%; border-radius: 8px; }
 
 /* Navigation */
@@ -104,6 +95,11 @@ img { max-width: 100%; border-radius: 8px; }
 .branding { position: fixed; bottom: 12px; left: 16px; font-size: 10px; z-index: 50; }
 .branding a { color: rgba(255,255,255,0.3); text-decoration: none; }
 .branding a:hover { color: rgba(255,255,255,0.6); }
+@media (max-width: 640px) {
+  .nav-btn { width: 36px; height: 36px; font-size: 16px; }
+  .nav-btn.left { left: 8px; }
+  .nav-btn.right { right: 8px; }
+}
 ${grapesCSS}
 </style>
 </head>
