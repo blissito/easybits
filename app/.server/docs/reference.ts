@@ -436,11 +436,23 @@ Available Reveal.js themes: \`black\` (default), \`white\`, \`league\`, \`beige\
 }
 \`\`\`
 
+### Slide editing (MCP tools)
+- \`get_slide_html({ presentationId, slideId })\` — read a single slide's HTML
+- \`set_slide_html({ presentationId, slideId, html })\` — edit a single slide
+- \`add_slide({ presentationId, html?, afterSlideId? })\` — add a slide
+- \`delete_slide({ presentationId, slideId })\` — remove a slide
+- \`reorder_slides({ presentationId, slideIds[] })\` — reorder slides
+- \`get_presentation_pdf({ presentationId })\` — export as PDF
+
+**IMPORTANT:** Slide HTML must follow layout rules. Call \`get_docs("presentation-design")\` for the full design guide with mandatory constraints, validated patterns, and available CSS layout classes.
+
 ### Workflow
-1. \`createPresentation({ name, prompt, slides, theme })\` — create with slides
-2. \`updatePresentation(id, { slides })\` — edit slides as needed
-3. \`deployPresentation(id)\` — publish → get live URL at \`slug.easybits.cloud\`
-4. \`unpublishPresentation(id)\` — take down when done
+1. \`createPresentation({ name, prompt })\` — create presentation
+2. \`add_slide({ presentationId, html })\` — add slides following presentation-design rules
+3. \`set_slide_html({ presentationId, slideId, html })\` — edit individual slides
+4. \`deployPresentation(id)\` — publish → get live URL at \`slug.easybits.cloud\`
+5. \`get_presentation_pdf({ presentationId })\` — export as PDF
+6. \`unpublishPresentation(id)\` — take down when done
 `,
 
   databases: `## Databases (SQLite-as-a-Service)
@@ -883,6 +895,209 @@ This guide defines the mandatory layout rules for document pages. Follow these r
 | Colors don't change with theme | Hardcoded hex values | Use semantic classes only |
 | Image stretches page | Image without height constraint | Always \`h-40 max\` + \`object-cover\` |
 | Footer detached from bottom | Footer inside content wrapper | Footer must be direct child of \`<section>\` with \`shrink-0\` |
+`,
+
+  "presentation-design": `## Presentation Slide Design Guide
+
+This guide defines the mandatory layout rules for presentation slides. Follow these rules when using set_slide_html, add_slide, or create_presentation with custom HTML.
+
+### Slide Skeleton (960×540px, 16:9)
+
+\`\`\`html
+<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col bg-surface text-on-surface p-12">
+  <!-- Header — shrink-0 -->
+  <div class="shrink-0 mb-6">
+    <h2 class="text-3xl font-bold text-on-surface">Slide Title</h2>
+    <p class="text-sm text-on-surface-muted mt-1">Subtitle or description.</p>
+  </div>
+
+  <!-- Body — flex-1 min-h-0 for overflow control -->
+  <div class="flex-1 min-h-0 flex items-start">
+    <!-- Your content here -->
+  </div>
+
+  <!-- Optional footer — shrink-0 -->
+  <div class="shrink-0 mt-auto pt-3 flex justify-between items-center text-xs text-on-surface-muted">
+    <span>Company Name</span>
+    <span>Slide X</span>
+  </div>
+</section>
+\`\`\`
+
+### Mandatory Rules
+
+| Rule | Detail |
+|------|--------|
+| Root element | \`<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">\` |
+| Content area | \`flex-1 min-h-0\` — prevents overflow |
+| Text sizes | Title: \`text-3xl\` max (\`text-4xl\` ONLY on cover). Body: \`text-sm\`/\`text-base\`. Never \`text-5xl\`+ |
+| Bullet lists | Max 5 items, max 8 words per item |
+| Card grids | Max 3 cards. Card title: max 2 words. Description: max 6 words |
+| KPI rows | Max 3 items. Label: max 2 words |
+| Timeline | Max 4 items |
+| Tables | Max 4 columns, \`text-xs\` |
+| Columns | Max 2 columns side by side |
+| Colors | ONLY semantic classes: \`bg-primary\`, \`text-on-surface\`, \`bg-surface-alt\`, etc. Never hex |
+| Contrast | Dark bg → \`text-white\` or \`text-on-primary\`. Light bg → \`text-gray-900\` or \`text-on-surface\` |
+| Positioning | NO \`absolute\` that escapes section. NO \`fixed\` |
+| Inline styles | FORBIDDEN — use CSS classes only (exception: \`style="width:XX%"\` for progress bars) |
+| JavaScript | NO \`<script>\`, NO Chart.js — use inline SVG or CSS for charts |
+| Emoji | NO emoji — use inline SVG icons or \`data-icon-query="icon-name"\` |
+| Images | \`data-image-query="english search terms"\` for auto Pexels enrichment. Never use placeholder URLs |
+| HTML balance | Every \`<div>\` needs \`</div>\`. Unbalanced tags break the presentation viewer |
+
+### Available CSS Layout Classes
+
+Use ONLY these classes (they are defined in the presentation viewer):
+
+| Class | Use for |
+|-------|---------|
+| \`.columns\` + \`.col\` | 2-column flexbox layout |
+| \`.centered\` | Vertical + horizontal center (titles, closing) |
+| \`.card-grid\` + \`.card\` | Feature/benefit cards (max 3) |
+| \`.timeline\` + \`.timeline-item\` | Process, roadmap, history (max 4 items) |
+| \`.kpi-row\` + \`.kpi\` | Big numbers / metrics (max 3) |
+| \`.blockquote-card\` | Quotes / testimonials |
+| \`.vs-grid\` | Before/after comparison (3-col) |
+| \`.pill-row\` + \`.pill\` | Tags / technologies |
+| \`.icon-list\` | Benefits with icons |
+| \`.data-table\` | Styled data table (max 4 cols) |
+| \`.progress-bar\` + \`.progress-fill\` | Progress/skill bars |
+| \`.diagram\` | Centered SVG container |
+| \`.three-bg\` | Animated particle bg (title/closing only) |
+
+### Validated Patterns
+
+**Title Slide:**
+\`\`\`html
+<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col">
+  <div class="centered three-bg flex-1 flex flex-col items-center justify-center">
+    <h1 class="text-4xl font-bold text-white">Presentation Title</h1>
+    <p class="text-lg text-white/80 mt-2">Subtitle or tagline</p>
+  </div>
+</section>
+\`\`\`
+
+**KPI Row (3 metrics):**
+\`\`\`html
+<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col bg-surface text-on-surface p-12">
+  <h2 class="shrink-0 text-3xl font-bold mb-8">Key Results</h2>
+  <div class="kpi-row flex-1 flex items-center justify-center gap-12">
+    <div class="kpi text-center">
+      <p class="kpi-value text-4xl font-bold text-primary">3.2M</p>
+      <p class="kpi-label text-sm text-on-surface-muted mt-1">Users</p>
+    </div>
+    <div class="kpi text-center">
+      <p class="kpi-value text-4xl font-bold text-primary">99.9%</p>
+      <p class="kpi-label text-sm text-on-surface-muted mt-1">Uptime</p>
+    </div>
+    <div class="kpi text-center">
+      <p class="kpi-value text-4xl font-bold text-primary">47ms</p>
+      <p class="kpi-label text-sm text-on-surface-muted mt-1">Latency</p>
+    </div>
+  </div>
+</section>
+\`\`\`
+
+**Card Grid (3 features):**
+\`\`\`html
+<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col bg-surface text-on-surface p-12">
+  <h2 class="shrink-0 text-3xl font-bold mb-6">Features</h2>
+  <div class="card-grid flex-1 grid grid-cols-3 gap-6 items-start">
+    <div class="card bg-surface-alt rounded-lg p-6">
+      <span data-icon-query="zap" class="inline-block w-8 h-8 text-primary mb-3"></span>
+      <h3 class="text-base font-bold">Fast</h3>
+      <p class="text-sm text-on-surface-muted mt-1">Deploy in seconds</p>
+    </div>
+    <div class="card bg-surface-alt rounded-lg p-6">
+      <span data-icon-query="shield" class="inline-block w-8 h-8 text-primary mb-3"></span>
+      <h3 class="text-base font-bold">Secure</h3>
+      <p class="text-sm text-on-surface-muted mt-1">Enterprise encryption</p>
+    </div>
+    <div class="card bg-surface-alt rounded-lg p-6">
+      <span data-icon-query="globe" class="inline-block w-8 h-8 text-primary mb-3"></span>
+      <h3 class="text-base font-bold">Global</h3>
+      <p class="text-sm text-on-surface-muted mt-1">190+ countries</p>
+    </div>
+  </div>
+</section>
+\`\`\`
+
+**Timeline (max 4 items):**
+\`\`\`html
+<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col bg-surface text-on-surface p-12">
+  <h2 class="shrink-0 text-3xl font-bold mb-6">Roadmap</h2>
+  <div class="timeline flex-1 flex flex-col gap-4 pl-6 relative">
+    <div class="absolute left-[7px] top-1 bottom-1 w-px bg-primary/30"></div>
+    <div class="relative">
+      <div class="absolute -left-[21px] top-0.5 w-3.5 h-3.5 rounded-full border-[3px] border-primary bg-surface"></div>
+      <p class="text-xs font-bold text-primary uppercase tracking-wider">Q1</p>
+      <h4 class="text-base font-bold mt-0.5">Phase One</h4>
+      <p class="text-sm text-on-surface-muted mt-1">Launch core platform</p>
+    </div>
+    <!-- repeat max 3 more items -->
+  </div>
+</section>
+\`\`\`
+
+**Comparison (Before vs After):**
+\`\`\`html
+<section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col bg-surface text-on-surface p-12">
+  <h2 class="shrink-0 text-3xl font-bold mb-6">Before vs After</h2>
+  <div class="vs-grid flex-1 grid grid-cols-3 gap-4 items-start">
+    <div class="vs-left bg-red-50 rounded-lg p-6 border-t-4 border-red-400">
+      <h3 class="text-base font-bold text-red-700">Before</h3>
+      <ul class="mt-3 space-y-2 text-sm text-on-surface-muted">
+        <li>Manual deploys</li>
+        <li>2-hour downtime</li>
+      </ul>
+    </div>
+    <div class="vs-divider flex items-center justify-center text-2xl font-bold text-on-surface-muted">VS</div>
+    <div class="vs-right bg-green-50 rounded-lg p-6 border-t-4 border-green-400">
+      <h3 class="text-base font-bold text-green-700">After</h3>
+      <ul class="mt-3 space-y-2 text-sm text-on-surface-muted">
+        <li>CI/CD pipeline</li>
+        <li>Zero downtime</li>
+      </ul>
+    </div>
+  </div>
+</section>
+\`\`\`
+
+### Color Palettes
+
+Available palettes (set via \`paletteId\` on create/update): \`midnight\`, \`ocean\`, \`forest\`, \`corporate\`, \`neon\`, \`sunset\`, \`slate\`, \`rosé\`, \`sand\`, \`aurora\`, \`galaxy\`, \`easybits\`, \`minimal\`, \`brutal\`, \`retro\`.
+
+Each palette defines semantic CSS variables: \`--color-primary\`, \`--color-secondary\`, \`--color-accent\`, \`--color-surface\`, \`--color-on-surface\`, etc. Use \`bg-primary\`, \`text-on-surface\`, \`bg-surface-alt\` — never hardcoded hex colors.
+
+### SVG Diagrams
+
+For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
+- \`viewBox="0 0 800 400"\`
+- Colors: use \`var(--color-primary)\` and \`var(--color-accent)\`, or \`#00d4aa\` and \`#9870ed\` as fallback
+- Font-size: 14-20px
+- Max 3-6 data points
+- Always include \`xmlns="http://www.w3.org/2000/svg"\`
+
+### Common Bugs to Avoid
+
+| Bug | Cause | Fix |
+|-----|-------|-----|
+| Content overflows slide | Too many items or large text | Reduce items, use \`text-sm\`, max 5 bullets |
+| Horizontal scroll on mobile | Fixed pixel widths inside content | Use relative widths (\`w-full\`, grid classes) |
+| Colors don't change with palette | Hardcoded hex values | Use semantic classes only |
+| Slide looks blank | Missing content or \`display:none\` | Never hide sections |
+| Text unreadable | No contrast (dark on dark) | Always pair bg/text: \`bg-primary\` + \`text-on-primary\` |
+| Tags break viewer | Unbalanced HTML tags | Double-check every \`<div>\` has \`</div>\` |
+
+### Workflow
+
+1. \`create_presentation({ name, prompt })\` — create presentation
+2. \`add_slide({ presentationId, html })\` — add slides one by one following this guide
+3. \`get_slide_html({ presentationId, slideId })\` — read a slide's HTML
+4. \`set_slide_html({ presentationId, slideId, html })\` — edit a slide's HTML
+5. \`deploy_presentation({ presentationId })\` — publish to slug.easybits.cloud
+6. \`get_presentation_pdf({ presentationId })\` — export as PDF
 `,
 };
 

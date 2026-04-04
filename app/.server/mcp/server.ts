@@ -672,7 +672,16 @@ export function createMcpServer() {
 
   server.tool(
     "create_presentation",
-    "Create a new presentation. Slides are optional — you can add them later via update_presentation. Each slide has: { id, order, html }.",
+    `Create a new presentation. Slides are optional — you can add them later via add_slide or update_presentation.
+
+If providing slide html, each slide MUST follow these rules:
+- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
+- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
+- Max 3 cards, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
+- Colors: ONLY semantic classes (bg-primary, text-on-surface, etc.) — never hex.
+- NO emoji, NO JavaScript, NO inline styles. Images: data-image-query="english keywords".
+- HTML must be well-formed (balanced tags).
+Call get_docs("presentation-design") for the full design guide with validated patterns and layout classes.`,
     {
       name: z.string().describe("Presentation name"),
       prompt: z.string().describe("Description or prompt for the presentation"),
@@ -695,7 +704,7 @@ export function createMcpServer() {
 
   server.tool(
     "update_presentation",
-    "Update a presentation's name, slides, theme, or prompt. Each slide has: { id, order, html }.",
+    "Update a presentation's name, slides, theme, or prompt. Replaces ALL slides when slides[] is provided — for editing a single slide, use set_slide_html instead. Each slide: { id, order, html }. Slide HTML must follow layout rules — call get_docs('presentation-design') for the full guide.",
     {
       presentationId: z.string().describe("The presentation ID"),
       name: z.string().optional().describe("New name"),
@@ -769,6 +778,130 @@ export function createMcpServer() {
       const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
       const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, params.slideIndex ?? 0);
       return { content: [result] };
+    })
+  );
+
+  // --- Granular Slide CRUD ---
+
+  server.tool(
+    "get_slide_html",
+    "Get the HTML content of a single slide. Returns { slideId, order, html }. Use this to read a slide before editing it with set_slide_html.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideId: z.string().describe("The slide ID (from get_presentation slides[].id)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getSlideHtml } = await import("../core/presentationOperations");
+      const result = await getSlideHtml(ctx, params.presentationId, params.slideId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "set_slide_html",
+    `Replace the ENTIRE HTML of a single slide. This is the primary tool for editing slides — use it when rewriting or changing a slide's content.
+
+SLIDE LAYOUT RULES (MANDATORY):
+- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
+- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
+- Max 3 cards in grids, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
+- Max 2 columns side by side. Tables: max 4 columns, text-xs.
+- Colors: ONLY semantic classes (bg-primary, text-on-surface, bg-surface-alt, etc.) — never hardcoded hex.
+- Contrast: dark bg → text-white or text-on-primary. Light bg → text-gray-900 or text-on-surface.
+- NO emoji — use data-icon-query="icon-name" for icons (auto-resolved to SVG).
+- NO JavaScript, NO inline styles (exception: style="width:XX%" for progress bars).
+- Images: <img data-image-query="english search keywords" class="..." /> for auto Pexels enrichment.
+- CRITICAL: HTML MUST be well-formed. Every <div> needs </div>. Unbalanced tags break the viewer.
+- Use the CSS layout classes: .card-grid, .timeline, .kpi-row, .vs-grid, .blockquote-card, .pill-row, .icon-list, .data-table, .progress-bar, .diagram, .centered, .columns+.col, .three-bg.
+Call get_docs("presentation-design") for the full design guide with validated patterns.`,
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideId: z.string().describe("The slide ID to update (from get_presentation slides[].id)"),
+      html: z.string().describe("New HTML content for the slide"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { setSlideHtml } = await import("../core/presentationOperations");
+      const result = await setSlideHtml(ctx, params.presentationId, params.slideId, params.html);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "add_slide",
+    `Add a new slide to a presentation. If html is omitted, adds a blank slide. Use afterSlideId to insert after a specific slide; omit to append at the end.
+
+If providing html, it MUST follow slide layout rules: root <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">, semantic colors only, max 3 cards/KPIs, max 5 bullets, no emoji, no JS, no inline styles. See set_slide_html description or call get_docs("presentation-design") for full rules.`,
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      html: z.string().optional().describe("HTML content for the new slide. Omit for a blank slide"),
+      afterSlideId: z.string().optional().describe("Insert after this slide ID. Omit to append at end"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { addSlide } = await import("../core/presentationOperations");
+      const result = await addSlide(ctx, params.presentationId, {
+        html: params.html,
+        afterSlideId: params.afterSlideId,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_slide",
+    "Delete a single slide from a presentation. Remaining slides are automatically reindexed.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideId: z.string().describe("The slide ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deleteSlide } = await import("../core/presentationOperations");
+      const result = await deleteSlide(ctx, params.presentationId, params.slideId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "reorder_slides",
+    "Reorder slides in a presentation. Pass the complete array of slide IDs in the desired order. Any slides not in the array are appended at the end.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideIds: z.array(z.string()).describe("Ordered array of slide IDs"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { reorderSlides } = await import("../core/presentationOperations");
+      const result = await reorderSlides(ctx, params.presentationId, params.slideIds);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_presentation_pdf",
+    "Export a presentation as a PDF file (one slide per page, 960×540px landscape). Returns base64-encoded PDF data. Requires Chrome installed locally — designed for Claude Code MCP usage.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { takePresentationPdf } = await import("../core/presentationScreenshot");
+      const pdf = await takePresentationPdf(ctx.user.id, params.presentationId);
+      if (!pdf) {
+        return { content: [{ type: "text", text: "Failed to generate PDF. Ensure the presentation has slides and Chrome is installed." }] };
+      }
+      return {
+        content: [{
+          type: "resource",
+          resource: {
+            uri: `easybits://presentation/${params.presentationId}/pdf`,
+            mimeType: "application/pdf",
+            blob: pdf.toString("base64"),
+          },
+        }],
+      };
     })
   );
 
@@ -2177,7 +2310,7 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     "get_docs",
     "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
     {
-      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, presentations, documents, account, sdk, errors"),
+      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, presentations, presentation-design, documents, document-design, account, sdk, errors"),
     },
     async (params) => {
       const markdown = getDocsMarkdown(params.section);

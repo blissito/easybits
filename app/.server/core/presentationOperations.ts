@@ -212,6 +212,98 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   return { url, cdnUrl: publicUrl, websiteId, slug };
 }
 
+// ─── Granular slide CRUD ───
+
+export async function getSlideHtml(ctx: AuthContext, presentationId: string, slideId: string) {
+  requireScope(ctx, "READ");
+  const p = await db.presentation.findUnique({ where: { id: presentationId } });
+  if (!p || p.ownerId !== ctx.user.id) throwJson("Presentation not found", 404);
+  const slides = (p.slides as unknown as Slide[]) || [];
+  const slide = slides.find((s) => s.id === slideId);
+  if (!slide) throwJson(`Slide "${slideId}" not found`, 404);
+  return { slideId: slide.id, order: slide.order, html: slide.html || "" };
+}
+
+export async function setSlideHtml(ctx: AuthContext, presentationId: string, slideId: string, html: string) {
+  requireScope(ctx, "WRITE");
+  const p = await db.presentation.findUnique({ where: { id: presentationId } });
+  if (!p || p.ownerId !== ctx.user.id) throwJson("Presentation not found", 404);
+  const slides = (p.slides as unknown as Slide[]) || [];
+  const idx = slides.findIndex((s) => s.id === slideId);
+  if (idx === -1) throwJson(`Slide "${slideId}" not found`, 404);
+  slides[idx] = { ...slides[idx], html };
+  await db.presentation.update({ where: { id: presentationId }, data: { slides: slides as any } });
+  return { slideId, html };
+}
+
+export async function addSlide(
+  ctx: AuthContext,
+  presentationId: string,
+  opts: { html?: string; afterSlideId?: string }
+) {
+  requireScope(ctx, "WRITE");
+  const p = await db.presentation.findUnique({ where: { id: presentationId } });
+  if (!p || p.ownerId !== ctx.user.id) throwJson("Presentation not found", 404);
+  const slides = (p.slides as unknown as Slide[]) || [];
+
+  let insertIdx = slides.length;
+  if (opts.afterSlideId) {
+    const afterIdx = slides.findIndex((s) => s.id === opts.afterSlideId);
+    if (afterIdx === -1) throwJson(`Slide "${opts.afterSlideId}" not found`, 404);
+    insertIdx = afterIdx + 1;
+  }
+
+  const newSlide: Slide = {
+    id: nanoid(8),
+    order: insertIdx,
+    type: "2d",
+    html: opts.html || "<section></section>",
+  };
+  slides.splice(insertIdx, 0, newSlide);
+  // Reindex orders
+  slides.forEach((s, i) => { s.order = i; });
+
+  await db.presentation.update({ where: { id: presentationId }, data: { slides: slides as any } });
+  return { slide: newSlide, totalSlides: slides.length };
+}
+
+export async function deleteSlide(ctx: AuthContext, presentationId: string, slideId: string) {
+  requireScope(ctx, "WRITE");
+  const p = await db.presentation.findUnique({ where: { id: presentationId } });
+  if (!p || p.ownerId !== ctx.user.id) throwJson("Presentation not found", 404);
+  const slides = (p.slides as unknown as Slide[]) || [];
+  const idx = slides.findIndex((s) => s.id === slideId);
+  if (idx === -1) throwJson(`Slide "${slideId}" not found`, 404);
+  slides.splice(idx, 1);
+  slides.forEach((s, i) => { s.order = i; });
+  await db.presentation.update({ where: { id: presentationId }, data: { slides: slides as any } });
+  return { success: true, totalSlides: slides.length };
+}
+
+export async function reorderSlides(ctx: AuthContext, presentationId: string, slideIds: string[]) {
+  requireScope(ctx, "WRITE");
+  const p = await db.presentation.findUnique({ where: { id: presentationId } });
+  if (!p || p.ownerId !== ctx.user.id) throwJson("Presentation not found", 404);
+  const slides = (p.slides as unknown as Slide[]) || [];
+  const slideMap = new Map(slides.map((s) => [s.id, s]));
+
+  const reordered: Slide[] = [];
+  for (const id of slideIds) {
+    const s = slideMap.get(id);
+    if (!s) throwJson(`Slide "${id}" not found`, 404);
+    reordered.push({ ...s, order: reordered.length });
+  }
+  // Append any slides not in the list (safety)
+  for (const s of slides) {
+    if (!slideIds.includes(s.id)) {
+      reordered.push({ ...s, order: reordered.length });
+    }
+  }
+
+  await db.presentation.update({ where: { id: presentationId }, data: { slides: reordered as any } });
+  return { slideIds: reordered.map((s) => s.id) };
+}
+
 export async function unpublishPresentation(ctx: AuthContext, id: string) {
   requireScope(ctx, "WRITE");
   const p = await db.presentation.findUnique({ where: { id } });
