@@ -4,7 +4,7 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
-import { buildRevealHtml, type Slide } from "~/lib/buildRevealHtml";
+import { buildRevealHtml, type Slide, getPalette } from "~/lib/buildRevealHtml";
 import { buildPresentationHtml } from "~/lib/presentation/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
@@ -107,11 +107,31 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
     order: s.order,
     html: s.html ? (s.html.trim().startsWith("<section") ? s.html : `<section>${s.html}</section>`) : "<section></section>",
   })) as Section3[];
+  // Convert palette to semantic colors for the v2 viewer
+  let customColors = (p.customColors as Record<string, string>) || undefined;
+  if (!customColors && (p as any).paletteId) {
+    const palette = getPalette((p as any).paletteId);
+    const isLight = palette.baseTheme === "white" || palette.baseTheme === "beige";
+    customColors = {
+      primary: palette.vars.accent,
+      "primary-light": palette.vars.accent + "cc",
+      "primary-dark": palette.vars.heading,
+      secondary: palette.vars.body,
+      accent: palette.vars.kpi || palette.vars.accent,
+      surface: palette.vars.bg,
+      "surface-alt": palette.vars.cardBg.startsWith("rgba") ? (isLight ? "#f5f5f5" : "#1a1a1a") : palette.vars.cardBg,
+      "on-surface": isLight ? "#1a1a1a" : "#f5f5f5",
+      "on-surface-muted": palette.vars.body,
+      "on-primary": isLight ? "#ffffff" : "#ffffff",
+      "on-secondary": isLight ? "#1a1a1a" : "#f5f5f5",
+      "on-accent": "#ffffff",
+    };
+  }
   const html = buildPresentationHtml(sections, {
     title: p.name,
     transition: (p as any).transition || "slide",
-    themeName: "minimal",
-    customColors: (p.customColors as Record<string, string>) || undefined,
+    themeName: customColors ? undefined : "minimal",
+    customColors,
   });
   const htmlBuffer = Buffer.from(html, "utf-8");
 

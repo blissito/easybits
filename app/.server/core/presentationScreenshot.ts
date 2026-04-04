@@ -1,8 +1,28 @@
 import { db } from "../db";
 import type { Slide } from "~/lib/buildRevealHtml";
+import { getPalette } from "~/lib/buildRevealHtml";
 import { withPage } from "./browserPool";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
+
+function paletteToSemanticColors(paletteId: string): Record<string, string> {
+  const palette = getPalette(paletteId);
+  const isLight = palette.baseTheme === "white" || palette.baseTheme === "beige";
+  return {
+    primary: palette.vars.accent,
+    "primary-light": palette.vars.accent + "cc",
+    "primary-dark": palette.vars.heading,
+    secondary: palette.vars.body,
+    accent: palette.vars.kpi || palette.vars.accent,
+    surface: palette.vars.bg,
+    "surface-alt": palette.vars.cardBg.startsWith("rgba") ? (isLight ? "#f5f5f5" : "#1a1a1a") : palette.vars.cardBg,
+    "on-surface": isLight ? "#1a1a1a" : "#f5f5f5",
+    "on-surface-muted": palette.vars.body,
+    "on-primary": "#ffffff",
+    "on-secondary": isLight ? "#1a1a1a" : "#f5f5f5",
+    "on-accent": "#ffffff",
+  };
+}
 
 export async function takeSlideScreenshot(
   userId: string,
@@ -30,10 +50,14 @@ export async function takeSlideScreenshot(
   const slide = slides[slideIndex];
   const { buildPresentationHtml } = await import("~/lib/presentation/buildHtml");
   const section = { id: slide.id, order: 0, html: slide.html || "<section></section>" } as any;
+  let customColors = (pres.customColors as Record<string, string>) || undefined;
+  if (!customColors && (pres as any).paletteId) {
+    customColors = paletteToSemanticColors((pres as any).paletteId);
+  }
   const html = buildPresentationHtml([section], {
     title: pres.name,
-    themeName: "minimal",
-    customColors: (pres.customColors as Record<string, string>) || undefined,
+    themeName: customColors ? undefined : "minimal",
+    customColors,
   });
 
   try {
