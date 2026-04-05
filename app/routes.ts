@@ -208,6 +208,7 @@ export default [
     route("themes", "routes/api/v2/themes.ts"),
     route("brand-kits", "routes/api/v2/brand-kits.ts"),
     route("brand-kits/:id", "routes/api/v2/brand-kit.ts"),
+    route("forms/:formId/submit", "routes/api/v2/forms.$formId.submit.ts"),
   ]),
   // v1
   ...prefix("api/v1", [

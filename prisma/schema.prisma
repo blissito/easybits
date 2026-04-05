@@ -201,6 +201,7 @@ model User {
   aiGenerationsResetAt DateTime?
   aiGenerationsBonus   Int?       @default(0)
   brandKits            BrandKit[]
+  formConfigs          FormConfig[]
 }
 
 enum FileStatus {
@@ -608,4 +609,31 @@ model AppConfig {
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model FormConfig {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  websiteId      String   @db.ObjectId
+  name           String   @default("Contacto")
+  fields         Json     // FormField[] — [{name, type, label, required, placeholder, options}]
+  dbId           String?  // EasyBits DB ID to insert submissions
+  tableName      String?  // Table name in the DB
+  successMessage String   @default("¡Gracias! Te contactaremos pronto.")
+  ownerId        String   @db.ObjectId
+  owner          User     @relation(fields: [ownerId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([websiteId])
+  @@index([ownerId])
+}
+
+model FormSubmission {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  formConfigId String   @db.ObjectId
+  data         Json
+  ip           String?
+  createdAt    DateTime @default(now())
+
+  @@index([formConfigId])
 }
