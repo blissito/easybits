@@ -168,6 +168,9 @@ export function createMcpServer(groups?: string[]) {
     "create_quotation",
     "get_usage_stats",
     "create_form",
+    "deploy_website_file",
+    "list_websites",
+    "create_website",
   ]);
 
   // When core-only, intercept server.tool to filter
