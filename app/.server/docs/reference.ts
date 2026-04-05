@@ -1324,19 +1324,22 @@ SECTIONS.about = PITCH;
 
 SECTIONS["tool-groups"] = `## Tool Groups
 
-By default the MCP server loads only **core** tools (~35 tools: files, sharing, DB, webhooks, AI keys, utilities).
-Additional groups can be enabled on demand to keep the tool list small and focused.
+By default the MCP server loads only **12 core tools** to minimize token usage:
+\`list_files\`, \`get_file\`, \`upload_file\`, \`db_list\`, \`db_create\`, \`db_query\`, \`list_documents\`, \`create_document\`, \`set_page_html\`, \`get_page_html\`, \`create_quotation\`, \`get_usage_stats\`.
+
+Enable additional groups with \`--tools\` to unlock more capabilities.
 
 ### Available groups
 
 | Group | Tools | Description |
 |-------|-------|-------------|
-| \`core\` | ~35 | Files, sharing, DB, webhooks, AI keys, utilities (loaded by default) |
-| \`docs\` | ~35 | Documents: CRUD, pages, AI generation, PDF, quotations, screening reports, scorecards, tournament schedules |
-| \`slides\` | ~18 | Presentations: CRUD, slides, deploy, clone, styles |
+| \`core\` | 12 | Files, DB, documents, quotations, usage stats (default) |
+| \`files\` | ~37 | All file ops: bulk, sharing, permissions, webhooks, image transforms, AI keys |
+| \`docs\` | ~33 | All document tools: AI generation, refine, screenshots, structured docs |
+| \`slides\` | ~18 | Presentations: slides, deploy, PDF, style templates |
 | \`sites\` | ~8 | Websites: CRUD, file upload, deploy |
 | \`brand\` | ~8 | Brand kits, templates, themes |
-| \`all\` | ~99 | Everything |
+| \`all\` | ~104 | Everything |
 
 ### Usage with stdio (Claude Code, Claude Desktop)
 \`\`\`bash
