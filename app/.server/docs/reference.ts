@@ -40,7 +40,15 @@ claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY
 }
 \`\`\`
 
-By default only 12 core tools load. Add \`--tools docs,slides,all\` for more. See [Tool Groups](#tool-groups).
+By default only 12 core tools load. Enable more with \`--tools\`:
+\`\`\`bash
+# Core + documents + presentations
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools docs,slides
+
+# Everything (~104 tools)
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools all
+\`\`\`
+Available groups: \`core\` (default), \`files\`, \`docs\`, \`slides\`, \`sites\`, \`brand\`, \`all\`. See [Tool Groups](#tool-groups).
 `,
 
   files: `## Files
