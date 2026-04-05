@@ -88,7 +88,7 @@ import {
   editTournamentSchedule,
   uploadPdfToStorage,
 } from "../core/documentOperations";
-import { createFormConfig, generateFormHtml } from "../core/formOperations";
+import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 
@@ -169,22 +169,38 @@ export function createMcpServer(groups?: string[]) {
     "get_usage_stats",
     "create_form",
     "list_form_submissions",
+    "create_lead_magnet",
     "deploy_website_file",
     "inject_html",
     "list_websites",
     "create_website",
   ]);
 
-  // When core-only, intercept server.tool to filter
-  if (coreOnly) {
+  // Magnet group: focused toolset for lead magnet creation
+  const MAGNET_ALLOWLIST = new Set([
+    "create_lead_magnet",
+    "create_form", "list_form_submissions",
+    "create_document", "set_page_html", "get_page_html",
+    "deploy_website_file", "inject_html",
+    "create_website", "list_websites",
+    "upload_file", "get_file",
+    "get_usage_stats",
+  ]);
+
+  // Determine which allowlist to use
+  const activeAllowlist = enabled.has("magnet") ? MAGNET_ALLOWLIST
+    : coreOnly ? CORE_ALLOWLIST
+    : null;
+
+  // When using an allowlist, intercept server.tool to filter
+  if (activeAllowlist) {
     const originalTool = server.tool.bind(server);
     (server as any).tool = (...args: any[]) => {
       const toolName = typeof args[0] === "string" ? args[0] : undefined;
-      if (toolName && !CORE_ALLOWLIST.has(toolName)) return;
+      if (toolName && !activeAllowlist.has(toolName)) return;
       return (originalTool as any)(...args);
     };
   }
-
 
   if (enabled.has("all")) {
     registerCoreTools(server);
@@ -192,11 +208,14 @@ export function createMcpServer(groups?: string[]) {
     registerSlideTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
-  } else if (coreOnly) {
-    // Register all categories — the interceptor filters to CORE_ALLOWLIST
+  } else if (enabled.has("magnet")) {
     registerCoreTools(server);
     registerDocTools(server);
-    registerSiteTools(server); // create_form is in CORE_ALLOWLIST
+    registerSiteTools(server);
+  } else if (coreOnly) {
+    registerCoreTools(server);
+    registerDocTools(server);
+    registerSiteTools(server);
   } else {
     if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
     if (enabled.has("docs")) registerDocTools(server);
@@ -2383,6 +2402,139 @@ Use this to check leads/contacts that have been submitted through a form on a we
               data: s.data,
               createdAt: s.createdAt,
             })),
+          }, null, 2),
+        }],
+      };
+    })
+  );
+
+  // --- Lead Magnet (all-in-one) ---
+
+  server.tool(
+    "create_lead_magnet",
+    `Create a complete lead magnet in ONE call: landing page + capture form + delivery to your content.
+
+The user fills the form → gets redirected to your content (e.g. a published EasyBits document/flipbook).
+The content URL is NOT visible on the landing — only revealed after form submission.
+A dedicated DB is created automatically to store leads.
+
+WORKFLOW for the agent:
+1. First create your content (e.g. create_document + set_page_html + deploy) and get its URL
+2. Then call create_lead_magnet with that URL as deliveryUrl
+3. Done — share the landing URL with your audience
+
+The landing is a professional, responsive page with a gradient background, preview image, and capture form. Powered by Formmy.`,
+    {
+      name: z.string().describe("Lead magnet name (e.g. 'Guía de Cerámica', 'Checklist SEO')"),
+      description: z.string().describe("Marketing copy for the landing — what the user gets and why"),
+      deliveryUrl: z.string().describe("URL to redirect after form submission (e.g. published document URL like https://slug.easybits.cloud)"),
+      previewImageUrl: z.string().optional().describe("Image URL for the landing teaser (e.g. cover page screenshot)"),
+      websiteId: z.string().optional().describe("Existing website ID, or a new one is created"),
+      fields: z.array(z.object({
+        name: z.string(),
+        type: z.enum(["text", "email", "tel", "textarea", "select"]),
+        label: z.string(),
+        required: z.boolean().optional().default(false),
+        placeholder: z.string().optional(),
+      })).optional().describe("Form fields. Default: name + email"),
+      submitLabel: z.string().optional().default("Descargar gratis").describe("Submit button text"),
+      brandColor: z.string().optional().default("#6366f1").describe("Primary brand color (hex)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+
+      // 1. Website — reuse or create
+      let websiteId = params.websiteId;
+      let websiteSlug: string;
+      if (websiteId) {
+        const existing = await db.website.findUnique({ where: { id: websiteId } });
+        if (!existing || existing.ownerId !== ctx.user.id) {
+          throw new Response(JSON.stringify({ error: "Website not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+        }
+        websiteSlug = existing.slug;
+      } else {
+        const result = await createWebsite(ctx, { name: `Magnet — ${params.name}` });
+        websiteId = result.id;
+        websiteSlug = result.slug;
+      }
+
+      // 2. Form — with deliveryUrl for redirect
+      const defaultFields = [
+        { name: "name", type: "text" as const, label: "Nombre", required: true, placeholder: "Tu nombre" },
+        { name: "email", type: "email" as const, label: "Email", required: true, placeholder: "tu@email.com" },
+      ];
+      const fields = params.fields?.length ? params.fields : defaultFields;
+
+      const formConfig = await createFormConfig(ctx, {
+        websiteId,
+        name: params.name,
+        fields,
+        submitLabel: params.submitLabel,
+        successMessage: "¡Listo! Redirigiendo...",
+        deliveryUrl: params.deliveryUrl,
+      });
+
+      const formHtml = generateFormHtml(formConfig, { submitLabel: params.submitLabel });
+
+      // 3. Landing HTML — professional template
+      const color = params.brandColor || "#6366f1";
+      const previewImg = params.previewImageUrl
+        ? `<img src="${params.previewImageUrl}" alt="Preview" style="width:100%;max-width:400px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.15);margin:0 auto 2rem" />`
+        : `<div style="width:100%;max-width:400px;height:200px;background:linear-gradient(135deg,${color}22,${color}44);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 2rem">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>`;
+
+      const landingHtml = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(params.name)}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh;background:linear-gradient(135deg,${color}08 0%,${color}18 50%,${color}08 100%);display:flex;align-items:center;justify-content:center;padding:1rem}
+.card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08);max-width:480px;width:100%;padding:2.5rem;text-align:center}
+h1{font-size:1.75rem;font-weight:700;color:#1a1a2e;margin-bottom:0.5rem;line-height:1.3}
+.desc{color:#555;font-size:1rem;line-height:1.6;margin-bottom:1.5rem}
+form label{display:flex;flex-direction:column;text-align:left;gap:4px;margin-bottom:0.75rem}
+form label span{font-size:0.8rem;font-weight:600;color:#333}
+form input,form textarea,form select{width:100%;padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:0.95rem;transition:border-color 0.2s}
+form input:focus,form textarea:focus,form select:focus{outline:none;border-color:${color}}
+form button[type=submit]{width:100%;padding:12px;background:${color};color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;transition:opacity 0.2s;margin-top:0.5rem}
+form button[type=submit]:hover{opacity:0.9}
+form button[type=submit]:disabled{opacity:0.6;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="card">
+${previewImg}
+<h1>${escapeHtml(params.name)}</h1>
+<p class="desc">${escapeHtml(params.description)}</p>
+${formHtml}
+</div>
+</body>
+</html>`;
+
+      // 4. Deploy
+      const { deployWebsiteFile } = await import("../core/operations");
+      await deployWebsiteFile(ctx, {
+        websiteId,
+        fileName: "index.html",
+        contentType: "text/html",
+        content: landingHtml,
+      });
+
+      const landingUrl = `https://${websiteSlug}.easybits.cloud`;
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            landingUrl,
+            formId: formConfig.id,
+            dbId: formConfig.dbId,
+            deliveryUrl: params.deliveryUrl,
+            message: `Lead magnet created! Share ${landingUrl} — leads fill the form and get redirected to your content. Powered by Formmy (https://formmy.app).`,
           }, null, 2),
         }],
       };
