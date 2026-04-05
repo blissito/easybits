@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: "documents", label: "Documents" },
   { id: "account", label: "Account & Usage" },
   { id: "errors", label: "Errors & Rate Limits" },
+  { id: "tool-groups", label: "Tool Groups" },
   { id: "mcp-apps", label: "MCP Apps UI" },
 ] as const;
 
@@ -209,7 +210,7 @@ const { items } = await eb.listFiles();` },
             <p className="text-gray-500 text-xs mt-3">
               <Link to="/dash/developer" className="underline font-medium">Get your API key</Link>.{" "}
               By default 12 core tools load. Add <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> for more.{" "}
-              <Link to="/dash/developer/setup" className="underline">See tool groups</Link>.
+              <a href="#tool-groups" className="underline">See tool groups</a>.
             </p>
           </section>
 
@@ -1013,6 +1014,56 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                 Rate limits: 100 requests per 15 minutes for all plans.
               </p>
             </div>
+          </section>
+
+          {/* Tool Groups */}
+          <section id="tool-groups" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Tool Groups</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              By default the MCP server loads <strong>12 core tools</strong> to minimize token usage.
+              Enable additional groups to unlock more capabilities.
+            </p>
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2">Group</th>
+                    <th className="text-left px-4 py-2">Tools</th>
+                    <th className="text-left px-4 py-2">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["core", "12", "Files, DB, documents, quotations, usage stats (default)"],
+                    ["files", "~37", "All file ops: bulk, sharing, permissions, webhooks, image transforms, AI keys"],
+                    ["docs", "~33", "All document tools: AI generation, refine, screenshots, structured docs"],
+                    ["slides", "~18", "Presentations: slides, deploy, PDF, style templates"],
+                    ["sites", "~8", "Websites: CRUD, file upload, deploy"],
+                    ["brand", "~8", "Brand kits, templates, themes"],
+                    ["all", "~104", "Everything"],
+                  ].map(([group, count, desc]) => (
+                    <tr key={group} className="border-t border-gray-200">
+                      <td className="px-4 py-2 font-mono font-bold">{group}</td>
+                      <td className="px-4 py-2">{count}</td>
+                      <td className="px-4 py-2 text-gray-600">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="text-lg font-bold mb-3">Usage</h3>
+            <TabbedCode
+              tabs={[
+                { label: "Claude Code", code: `# Core + documents + presentations
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools docs,slides
+
+# Everything
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools all` },
+                { label: "Streamable HTTP", code: `// Append ?tools= to the URL
+https://www.easybits.cloud/api/mcp?tools=docs,slides
+https://www.easybits.cloud/api/mcp?tools=all` },
+              ]}
+            />
           </section>
 
           {/* MCP Apps UI */}
