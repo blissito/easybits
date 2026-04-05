@@ -84,37 +84,27 @@ function subMonths(date: Date, months: number): Date {
 
 // Devuelve datos de visitas agrupados por mes para la gráfica de dashboard
 export async function getVisitsChartData(ownerId: string) {
-  const threeMonthsAgo = startOfMonth(subMonths(new Date(), 2));
-  const visitsByMonth = await db.telemetryEvent.groupBy({
-    by: ["timestamp"],
-    where: {
-      ownerId,
-      eventType: "visit",
-      timestamp: {
-        gte: threeMonthsAgo,
-      },
-    },
-    _count: true,
-    orderBy: {
-      timestamp: "asc",
-    },
-  });
-  // Agrupar por mes
-  const visitsPerMonth: Record<string, number> = {};
-  visitsByMonth.forEach((row) => {
-    const date = new Date(row.timestamp);
-    const monthKey = `${date.getFullYear()}-${String(
-      date.getMonth() + 1
-    ).padStart(2, "0")}`;
-    visitsPerMonth[monthKey] = (visitsPerMonth[monthKey] || 0) + row._count;
-  });
   const months = Array.from({ length: 3 }).map((_, i) => {
     const date = subMonths(new Date(), 2 - i);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}`;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
   });
+
+  // Count per month individually to avoid groupBy memory issues
+  const visitsPerMonth: Record<string, number> = {};
+  await Promise.all(
+    months.map(async (month) => {
+      const [year, m] = month.split("-").map(Number);
+      const start = new Date(year, m - 1, 1);
+      const end = new Date(year, m, 1);
+      visitsPerMonth[month] = await db.telemetryEvent.count({
+        where: {
+          ownerId,
+          eventType: "visit",
+          timestamp: { gte: start, lt: end },
+        },
+      });
+    })
+  );
   return {
     labels: months.map((month) => {
       const [year, monthNum] = month.split("-").map(Number);

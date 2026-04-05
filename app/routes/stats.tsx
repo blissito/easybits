@@ -1,146 +1,120 @@
-import StatsComponent from "~/components/stats/StatsComponent";
 import { getUserOrRedirect } from "~/.server/getters";
-import Logo from "/icons/easybits-logo.svg";
 import { db } from "~/.server/db";
+import { getUserPlan, PLANS, NEXT_PLAN, formatPrice, type PlanKey } from "~/lib/plans";
+import { getStorageStats } from "~/components/common/StorageBar";
+import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import type { Route } from "./+types/stats";
-import type { User, Order } from "@prisma/client";
-import { getVisitsChartData } from "~/.server/telemetry";
+import StatsComponent from "~/components/stats/StatsComponent";
 
-type StatsLoaderData = {
-  user: User;
-  orders: Order[];
-  visits: number;
-  chartData: any;
-};
+function subMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() - months);
+  return result;
+}
 
-type OrdersByAsset = {
-  [assetId: string]: {
-    asset: Order["asset"];
-    orders: Order[];
-  };
-};
-
-type GroupedByMonth = {
-  [month: string]: {
-    total: number;
-    count: number;
-  };
-};
-
-type MostSoldProduct = {
-  imageUrl: string;
-  title: string;
-  soldTimes: number;
-  unitPrice: number;
-};
-
-export const loader = async ({
-  request,
-}: Route.LoaderArgs): Promise<StatsLoaderData> => {
+export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  const planKey = getUserPlan(user);
+  const usedGB = await getStorageStats(user.id, db);
+  const genLimit = await checkAiGenerationLimit(user.id);
 
-  // Contar visitas a la tienda del usuario y a los detalles de asset
-  const visits = await db.telemetryEvent.count({
-    where: {
-      ownerId: user.id,
-      eventType: "visit",
-      OR: [{ linkType: "store" }, { linkType: "assetDetail" }],
-    },
+  const [fileCount, landingCount, presentationCount, documentCount, databaseCount, recentFiles] = await Promise.all([
+    db.file.count({ where: { ownerId: user.id, status: { not: "DELETED" } } }),
+    db.landing.count({ where: { ownerId: user.id, version: { not: 4 } } }),
+    db.presentation.count({ where: { ownerId: user.id } }),
+    db.landing.count({ where: { ownerId: user.id, version: 4 } }),
+    db.database.count({ where: { userId: user.id } }),
+    db.file.findMany({
+      where: { ownerId: user.id, status: { not: "DELETED" }, NOT: { name: { startsWith: "sites/" } } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, name: true, size: true, createdAt: true, contentType: true },
+    }),
+  ]);
+
+  // Activity history by month (last 3 months)
+  const months = Array.from({ length: 3 }).map((_, i) => {
+    const d = subMonths(new Date(), 2 - i);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  // Usar función auxiliar para obtener datos de la gráfica de visitas
-  const chartData = await getVisitsChartData(user.id);
+  const genByMonth: Record<string, { documents: number; landings: number; presentations: number }> = {};
+  const filesByMonth: number[] = [];
 
-  const orders = await db.order.findMany({
-    where: {
-      merchantId: user.id,
-    },
-    include: {
-      asset: true,
-    },
+  await Promise.all(
+    months.map(async (month, idx) => {
+      const [year, m] = month.split("-").map(Number);
+      const start = new Date(year, m - 1, 1);
+      const end = new Date(year, m, 1);
+      const where = { userId: user.id, createdAt: { gte: start, lt: end } as any };
+      const [documents, landings, presentations, files] = await Promise.all([
+        db.aiGenerationLog.count({ where: { ...where, product: "document" } }),
+        db.aiGenerationLog.count({ where: { ...where, product: "landing" } }),
+        db.aiGenerationLog.count({ where: { ...where, product: "presentation" } }),
+        db.file.count({ where: { ownerId: user.id, status: { not: "DELETED" }, createdAt: { gte: start, lt: end } } }),
+      ]);
+      genByMonth[month] = { documents, landings, presentations };
+      filesByMonth[idx] = files;
+    })
+  );
+
+  // Chart data for LineChart
+  const monthLabels = months.map((m) => {
+    const [year, mo] = m.split("-").map(Number);
+    const d = new Date(Date.UTC(year, mo - 1));
+    const raw = new Intl.DateTimeFormat("es", { month: "short" }).format(d);
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
   });
 
-  return { user, orders, visits, chartData };
+  const chartData = {
+    labels: monthLabels,
+    datasets: [
+      {
+        label: "AI Generaciones",
+        data: months.map((m) => {
+          const g = genByMonth[m] || { documents: 0, landings: 0, presentations: 0 };
+          return g.documents + g.landings + g.presentations;
+        }),
+        borderColor: "#9870ED",
+        backgroundColor: "rgba(152, 112, 237, 0.1)",
+        borderWidth: 2,
+        pointBorderColor: "#9870ED",
+        pointBackgroundColor: "#9870ED",
+        tension: 0.3,
+        fill: true,
+      },
+      {
+        label: "Archivos subidos",
+        data: filesByMonth,
+        borderColor: "#34d399",
+        backgroundColor: "rgba(52, 211, 153, 0.1)",
+        borderWidth: 2,
+        pointBorderColor: "#34d399",
+        pointBackgroundColor: "#34d399",
+        tension: 0.3,
+        fill: true,
+      },
+    ],
+  };
+
+  return {
+    user: { displayName: user.displayName, email: user.email },
+    planKey,
+    usedGB,
+    genLimit: {
+      used: genLimit.used,
+      limit: genLimit.limit,
+      remaining: genLimit.limit !== null ? Math.max(0, genLimit.limit - genLimit.used + genLimit.bonus) : null,
+      bonus: genLimit.bonus,
+    },
+    counts: { files: fileCount, landings: landingCount, presentations: presentationCount, documents: documentCount, databases: databaseCount },
+    recentFiles,
+    genByMonth,
+    months,
+    chartData,
+  };
 };
 
-export default function Stats({ loaderData }: { loaderData: StatsLoaderData }) {
-  const { user, orders, visits, chartData } = loaderData;
-
-  // --- Group orders by asset ---
-  const ordersByAsset: OrdersByAsset = orders.reduce((acc, order) => {
-    const key = order.assetId;
-    if (!acc[key]) {
-      acc[key] = {
-        asset: order["asset"],
-        orders: [],
-      };
-    }
-    acc[key].orders.push(order);
-    return acc;
-  }, {} as OrdersByAsset);
-
-  const listOfOrdersByAsset: MostSoldProduct[] = Object.values(ordersByAsset)
-    .map(({ asset, orders }) => ({
-      imageUrl: asset?.gallery?.[0] || Logo,
-      title: asset?.title || "",
-      soldTimes: orders.length,
-      unitPrice: asset?.price || 0,
-    }))
-    .sort((a, b) => b.soldTimes - a.soldTimes);
-
-  // --- Group orders by month ---
-  const groupedByMonth: GroupedByMonth = orders.reduce((acc, order) => {
-    const date = new Date(order.createdAt);
-    const monthKey = `${date.getFullYear()}-${String(
-      date.getMonth() + 1
-    ).padStart(2, "0")}`;
-    if (!acc[monthKey]) {
-      acc[monthKey] = { total: 0, count: 0 };
-    }
-    acc[monthKey].total += Number(order.total);
-    acc[monthKey].count += 1;
-    return acc;
-  }, {} as GroupedByMonth);
-
-  const getCurrentMonthTotal = () => {
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}`;
-    const formatted = new Intl.NumberFormat("es", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 2,
-    }).format(groupedByMonth[currentMonthKey]?.total || 0);
-    return formatted;
-  };
-
-  const getGrandTotal = () => {
-    const total = orders.reduce((sum, order) => sum + Number(order.total), 0);
-    const formatted = new Intl.NumberFormat("es", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 2,
-    }).format(total);
-    return formatted;
-  };
-
-  // Usar chartData del loader para la gráfica de visitas
-  // const chartData = ... (eliminado para evitar redeclaración)
-
-  const currentMonthTotal = getCurrentMonthTotal();
-  const grandTotal = getGrandTotal();
-
-  return (
-    <div className="relative z-10 w-full h-full">
-      <StatsComponent
-        user={user}
-        mostSoldProducts={listOfOrdersByAsset}
-        chartData={chartData} // Ahora muestra visitas, no ventas
-        currentMonthTotal={currentMonthTotal}
-        grandTotal={grandTotal}
-        visits={visits}
-      />
-    </div>
-  );
+export default function Stats({ loaderData }: Route.ComponentProps) {
+  return <StatsComponent data={loaderData as any} />;
 }

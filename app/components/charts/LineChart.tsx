@@ -33,7 +33,8 @@ const LineChart = ({ data }: LineChartProps) => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: "bottom" as const,
       },
       tooltip: {
         enabled: true,
