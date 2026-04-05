@@ -10,6 +10,19 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "nuevos-planes-easybits-storage-para-agentes",
+    filePath: "app/content/blog/2026-04-04-nuevos-planes-easybits-storage-para-agentes.mdx",
+    title: "Nuevos planes EasyBits: storage agentic desde $299 MXN",
+    description: "Rediseñamos nuestros planes para agentes AI. Byte gratis con 100 MB, Mega desde $299 MXN con 10 GB y 50 generaciones AI, Tera desde $1,499 MXN con 100 GB.",
+    date: "2026-04-04",
+    author: "Equipo EasyBits",
+    tags: ["planes", "pricing", "agentes-ai", "mcp", "storage"],
+    featuredImage: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&auto=format",
+    readingTime: 4,
+    excerpt: "Rediseñamos nuestros planes para agentes AI. Byte gratis, Mega y Tera para producción.",
+    published: true,
+  },
+  {
     slug: "por-que-tailwind-en-nuestro-editor-de-documentos",
     filePath:
       "app/content/blog/2026-03-17-por-que-tailwind-en-nuestro-editor-de-documentos.mdx",
