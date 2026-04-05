@@ -70,6 +70,30 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
   }
 
+  if (intent === "download") {
+    const dbId = formData.get("dbId") as string;
+    try {
+      const schema = await queryDatabase(ctx, dbId, "SELECT sql FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name");
+      const tables = await queryDatabase(ctx, dbId, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+      const lines: string[] = [];
+      for (const row of schema.rows) {
+        if (row[0]) lines.push((row[0] as string) + ";");
+      }
+      for (const row of tables.rows) {
+        const name = row[0] as string;
+        const data = await queryDatabase(ctx, dbId, `SELECT * FROM "${name}"`);
+        for (const r of data.rows) {
+          const vals = r.map((v) => v === null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`).join(", ");
+          lines.push(`INSERT INTO "${name}" VALUES (${vals});`);
+        }
+      }
+      return { downloadSql: lines.join("\n\n"), downloadDbId: dbId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Download failed";
+      return data({ error: message }, { status: 500 });
+    }
+  }
+
   if (intent === "generate_sql") {
     const dbId = formData.get("dbId") as string;
     const prompt = formData.get("prompt") as string;
@@ -363,6 +387,26 @@ function DatabaseRow({
 }) {
   const generateFetcher = useFetcher<typeof action>();
   const schemaFetcher = useFetcher<typeof action>();
+  const downloadFetcher = useFetcher<typeof action>();
+
+  const handleDownload = () => {
+    downloadFetcher.submit(
+      { intent: "download", dbId: dbItem.id },
+      { method: "post" }
+    );
+  };
+
+  // Trigger file download when data arrives
+  useEffect(() => {
+    const dData = downloadFetcher.data as Record<string, unknown> | null | undefined;
+    if (dData?.downloadDbId === dbItem.id && dData?.downloadSql) {
+      const blob = new Blob([dData.downloadSql as string], { type: "application/sql" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${dbItem.name}.sql`; a.click();
+      URL.revokeObjectURL(url);
+    }
+  }, [downloadFetcher.data]);
   const [sqlValue, setSqlValue] = useState("");
   const [nlPrompt, setNlPrompt] = useState("");
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
@@ -444,7 +488,7 @@ function DatabaseRow({
 
   return (
     <>
-      <tr className="border-t-2 border-black hover:bg-brand-100 transition-colors">
+      <tr className="group border-t-2 border-black hover:bg-brand-100 transition-colors">
         <td className="px-4 py-3 font-mono text-xs font-bold">{dbItem.name}</td>
         <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate hidden md:table-cell">
           {dbItem.description || "—"}
@@ -452,13 +496,21 @@ function DatabaseRow({
         <td className="px-4 py-3 font-mono text-xs hidden md:table-cell">
           {new Date(dbItem.createdAt).toLocaleDateString()}
         </td>
-        <td className="px-4 py-3 flex gap-2 justify-end">
+        <td className="px-4 py-3 flex gap-2 justify-end items-center">
           <BrutalButton size="chip" onClick={onToggleQuery}>
             {queryOpen ? "Close" : "Query"}
           </BrutalButton>
-          <BrutalButton mode="danger" size="chip" onClick={onDelete}>
-            Delete
+          <BrutalButton size="chip" onClick={handleDownload} isLoading={downloadFetcher.state !== "idle"}>
+            Download
           </BrutalButton>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-100 text-gray-400 hover:text-red-600"
+            title="Delete database"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
         </td>
       </tr>
       {queryOpen && (
