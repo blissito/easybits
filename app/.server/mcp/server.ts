@@ -179,30 +179,6 @@ export function createMcpServer(groups?: string[]) {
     };
   }
 
-  // --- Tool discovery (always available) ---
-  server.tool(
-    "list_tool_groups",
-    "List available tool groups. Default loads ~18 essential tools. Enable more with --tools flag.",
-    {},
-    async () => ({
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify({
-          loaded: Array.from(enabled),
-          available: {
-            core: { tools: 15, description: "Files, DB, documents, quotations — the essentials" },
-            files: { tools: 37, description: "All file ops: bulk, sharing, permissions, webhooks, image transforms, AI keys" },
-            docs: { tools: 33, description: "All document tools: AI generation, refine, screenshots, structured docs" },
-            slides: { tools: 18, description: "Presentations, slides, deploy, PDF, style templates" },
-            sites: { tools: 8, description: "Static websites, file upload, deploy" },
-            brand: { tools: 8, description: "Brand kits, templates, themes" },
-            all: { description: "All ~104 tools" },
-          },
-          howToEnable: "Reconnect with --tools docs,slides (stdio) or ?tools=docs,slides (HTTP)",
-        }, null, 2),
-      }],
-    })
-  );
 
   if (enabled.has("all")) {
     registerCoreTools(server);
