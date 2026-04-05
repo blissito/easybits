@@ -274,17 +274,10 @@ export async function action({ request }: ActionFunctionArgs) {
       case "customer.subscription.updated":
         const subscriptionEvent = event.data.object as Stripe.Subscription;
         const custId = subscriptionEvent.customer as string;
-        let subscriptionUser = await db.user.findFirst({
+        const subscriptionUser = await db.user.findFirst({
           where: { stripeIds: { has: custId } },
           select: { id: true, email: true, roles: true },
         });
-        // Fallback: search by customer field (legacy records)
-        if (!subscriptionUser) {
-          subscriptionUser = await db.user.findFirst({
-            where: { customer: custId },
-            select: { id: true, email: true, roles: true },
-          });
-        }
         if (!subscriptionUser) return new Response("User not found", { status: 404 });
 
         // On cancellation/failure, remove plan roles so user falls back to Byte
