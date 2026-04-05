@@ -234,20 +234,31 @@ export async function action({ request }: ActionFunctionArgs) {
         const email = checkoutSession.customer_email || checkoutSession.customer_details?.email || checkoutSession.metadata.customer_email;
         if (!email) return new Response("No email found", { status: 400 });
 
+        const customerId2 = typeof checkoutSession.customer === "string" ? checkoutSession.customer : null;
         let user = await db.user.findUnique({ where: { email } });
         if (!user) {
           user = await db.user.create({
-            data: { email, customer: checkoutSession.customer },
+            data: {
+              email,
+              ...(customerId2 ? { customer: customerId2, stripeIds: [customerId2] } : {}),
+            },
           });
         }
         
         const plan = checkoutSession.metadata.plan;
         if (!plan) return new Response("No plan received", { status: 404 });
 
-        const roles = [...new Set([...(user.roles || []), plan])];
+        const customerId = typeof checkoutSession.customer === "string" ? checkoutSession.customer : null;
+        const roles = [...stripPlanRoles(user.roles || []), plan];
         await db.user.update({
           where: { id: user.id },
-          data: { roles, customer: checkoutSession.customer },
+          data: {
+            roles,
+            ...(customerId ? {
+              customer: customerId,
+              stripeIds: { push: customerId },
+            } : {}),
+          },
         });
 
         // Award referral upgrade bonus if referred user upgrades to paid plan
@@ -262,18 +273,18 @@ export async function action({ request }: ActionFunctionArgs) {
       case "customer.subscription.deleted":
       case "customer.subscription.updated":
         const subscriptionEvent = event.data.object as Stripe.Subscription;
-        const subscriptionUser = await db.user.findFirst({
-          where: { 
-            stripeIds: {
-              has: subscriptionEvent.customer as string
-            }
-          },
-          select: { 
-            id: true,
-            email: true,
-            roles: true
-          }
+        const custId = subscriptionEvent.customer as string;
+        let subscriptionUser = await db.user.findFirst({
+          where: { stripeIds: { has: custId } },
+          select: { id: true, email: true, roles: true },
         });
+        // Fallback: search by customer field (legacy records)
+        if (!subscriptionUser) {
+          subscriptionUser = await db.user.findFirst({
+            where: { customer: custId },
+            select: { id: true, email: true, roles: true },
+          });
+        }
         if (!subscriptionUser) return new Response("User not found", { status: 404 });
 
         // On cancellation/failure, remove plan roles so user falls back to Byte

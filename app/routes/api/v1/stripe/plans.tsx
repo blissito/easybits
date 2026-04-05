@@ -31,8 +31,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
         quantity: 1,
       },
     ],
-    success_url: `${config.baseUrl}/api/v1/stripe/plans?plan=${planKey}&success=1`,
-    cancel_url: `${config.baseUrl}/api/v1/stripe/plans?plan=${planKey}&success=0`,
+    success_url: `${config.baseUrl}/planes?success=1`,
+    cancel_url: `${config.baseUrl}/planes?cancel=1`,
     allow_promotion_codes: true,
   });
 
@@ -41,9 +41,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
 export const loader = ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
-
-  // @todo success/cancel purchase screen
-  if (url.searchParams.has("priceId") && url.searchParams.has("success")) {
+  if (url.searchParams.has("success")) {
     return redirect("/planes");
   }
   return { by: "blissmo", message: "t(*_*t)" };

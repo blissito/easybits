@@ -42,7 +42,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   },
   Mega: {
     name: "Mega",
-    price: 349,
+    price: 299,
     storageGB: 10,
     aiGenerationsPerMonth: 50,
     stripeIntent: "flow_plan",
