@@ -37,29 +37,54 @@ export async function createFormConfig(
     });
   }
 
-  // Auto-create a dedicated DB for this form
   const formName = opts.name || "Contacto";
-  const dbName = `form-${formName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now().toString(36)}`;
 
-  const database = await db.database.create({
-    data: {
-      name: dbName,
-      namespace: "",
-      description: `Submissions for form: ${formName}`,
-      userId: ctx.user.id,
-    },
+  // Check if a form with the same name already exists on this website — reuse its DB
+  const existingForm = await db.formConfig.findFirst({
+    where: { websiteId: opts.websiteId, name: formName, ownerId: ctx.user.id },
   });
-  const namespace = database.id;
-  await sqldCreateNamespace(namespace);
-  await db.database.update({ where: { id: database.id }, data: { namespace } });
 
-  // Create submissions table with columns matching form fields
+  let dbId: string;
   const tableName = "submissions";
-  const columns = opts.fields
-    .map((f) => `"${f.name}" TEXT`)
-    .join(", ");
-  const createSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT, ${columns}, submitted_at TEXT DEFAULT (datetime('now')))`;
-  await sqldQuery(namespace, createSql, []);
+
+  if (existingForm?.dbId) {
+    // Reuse existing DB
+    dbId = existingForm.dbId;
+    // Ensure new columns exist (ALTER TABLE ADD COLUMN for any new fields)
+    const database = await db.database.findUnique({ where: { id: dbId } });
+    if (database) {
+      for (const f of opts.fields) {
+        try {
+          await sqldQuery(database.namespace, `ALTER TABLE "${tableName}" ADD COLUMN "${f.name}" TEXT`, []);
+        } catch {
+          // Column already exists — ignore
+        }
+      }
+    }
+  } else {
+    // Create a dedicated DB for this form
+    const dbName = `form-${formName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now().toString(36)}`;
+    const database = await db.database.create({
+      data: {
+        name: dbName,
+        namespace: "",
+        description: `Submissions for form: ${formName}`,
+        userId: ctx.user.id,
+      },
+    });
+    const namespace = database.id;
+    await sqldCreateNamespace(namespace);
+    await db.database.update({ where: { id: database.id }, data: { namespace } });
+
+    const columns = opts.fields
+      .map((f) => `"${f.name}" TEXT`)
+      .join(", ");
+    const createSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT, ${columns}, submitted_at TEXT DEFAULT (datetime('now')))`;
+    await sqldQuery(namespace, createSql, []);
+
+    dbId = database.id;
+    dispatchWebhooks(ctx.user.id, "database.created", { id: database.id, name: dbName });
+  }
 
   const formConfig = await db.formConfig.create({
     data: {
@@ -67,13 +92,11 @@ export async function createFormConfig(
       name: formName,
       fields: opts.fields as any,
       successMessage: opts.successMessage || "¡Gracias! Te contactaremos pronto.",
-      dbId: database.id,
+      dbId,
       tableName,
       ownerId: ctx.user.id,
     },
   });
-
-  dispatchWebhooks(ctx.user.id, "database.created", { id: database.id, name: dbName });
 
   return formConfig;
 }
