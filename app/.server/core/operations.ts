@@ -16,7 +16,7 @@ import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
-import { PLANS, getUserPlan } from "~/lib/plans";
+import { PLANS, NEXT_PLAN, getUserPlan, formatPrice, type PlanKey } from "~/lib/plans";
 import { dispatchWebhooks } from "../webhooks";
 import { checkAiGenerationLimit } from "../aiGenerationLimit";
 
@@ -140,7 +140,7 @@ export async function uploadFile(
   const currentUsage = usage._sum.size ?? 0;
   if (currentUsage + opts.size > maxBytes) {
     throw new Response(
-      JSON.stringify({ error: `Storage quota exceeded. Plan ${planKey}: ${PLANS[planKey].storageGB}GB limit` }),
+      JSON.stringify({ error: `Storage quota exceeded (${PLANS[planKey].storageGB}GB on ${planKey}). Upgrade at https://www.easybits.cloud/planes` }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -744,6 +744,21 @@ export async function getUsageStats(ctx: AuthContext) {
       limit: genLimit.limit,
       remaining: genLimit.limit !== null ? Math.max(0, genLimit.limit - genLimit.used + genLimit.bonus) : null,
       bonus: genLimit.bonus,
+    },
+    ...buildUpgradeHint(planKey),
+  };
+}
+
+function buildUpgradeHint(planKey: PlanKey) {
+  const next = NEXT_PLAN[planKey];
+  if (!next) return {};
+  const p = PLANS[next];
+  return {
+    upgrade: {
+      nextPlan: next,
+      price: `${formatPrice(p.price)} MXN/mes`,
+      url: "https://www.easybits.cloud/planes",
+      highlights: p.features.slice(0, 4),
     },
   };
 }

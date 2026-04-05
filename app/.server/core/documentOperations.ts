@@ -544,7 +544,7 @@ export async function generateDocumentAI(
     throwJson("Document not found", 404);
 
   const genLimit = await checkAiGenerationLimit(ctx.user.id);
-  if (!genLimit.allowed) throwJson(`Generation limit reached (${genLimit.limit})`, 429);
+  if (!genLimit.allowed) throwJson(`Generation limit reached (${genLimit.limit}/month). Upgrade or buy a pack at https://www.easybits.cloud/planes`, 429);
 
   // Resolve brand kit → direction + logo
   let direction = opts.direction;
@@ -770,7 +770,7 @@ async function _refineInternal(
   if (!section) throwJson("Section not found", 404);
 
   const genLimit = await checkAiGenerationLimit(ctx.user.id);
-  if (!genLimit.allowed) throwJson(`Generation limit reached (${genLimit.limit})`, 429);
+  if (!genLimit.allowed) throwJson(`Generation limit reached (${genLimit.limit}/month). Upgrade or buy a pack at https://www.easybits.cloud/planes`, 429);
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
   const openaiKey = await resolveAiKey(ctx.user.id, "OPENAI") || process.env.OPENAI_API_KEY;

@@ -50,7 +50,7 @@ export async function createDatabase(
   const count = await db.database.count({ where: { userId: ctx.user.id } });
   if (count >= maxDbs) {
     throw new Response(
-      JSON.stringify({ error: `Max ${maxDbs} databases on plan ${planKey}. Upgrade for more.` }),
+      JSON.stringify({ error: `Max ${maxDbs} databases on plan ${planKey}. Upgrade at https://www.easybits.cloud/planes` }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }

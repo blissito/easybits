@@ -1,0 +1,96 @@
+---
+title: "Nuevos planes EasyBits: storage agentic desde $349 MXN"
+description: "Rediseñamos nuestros planes para agentes AI. Byte gratis con 100 MB, Mega desde $349 MXN con 10 GB y 50 generaciones AI, Tera desde $1,499 MXN con 100 GB. MCP, SDK, API, bases de datos y generación AI incluidos."
+date: "2026-04-04"
+author: "Equipo EasyBits"
+tags: ["planes", "pricing", "agentes-ai", "mcp", "storage"]
+featuredImage: "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=800&auto=format"
+published: true
+---
+
+# Nuevos planes EasyBits: storage para agentes AI desde $349 MXN/mes
+
+Hoy actualizamos nuestros planes para que arrancar sea gratis y escalar sea simple. Si tu agente AI necesita guardar archivos, consultar bases de datos o generar documentos, ahora tiene un camino claro.
+
+## Los tres planes
+
+### Byte — Gratis
+
+Perfecto para probar. Tu agente conecta por MCP, SDK o API y tiene todo lo esencial:
+
+- **100 MB** de almacenamiento
+- **2 generaciones AI/mes** (documentos, landings, presentaciones)
+- **1 base de datos** libSQL
+- Webhooks, landing pages, preview de archivos
+- Packs de generaciones desde $29 MXN
+
+Con 100 MB y 2 generaciones puedes validar tu flujo completo antes de comprometerte.
+
+### Mega — $349 MXN/mes
+
+Para agentes en producción que procesan archivos todos los días:
+
+- **10 GB** de almacenamiento
+- **50 generaciones AI/mes**
+- **5 bases de datos**
+- Subidas ilimitadas
+- Websites estáticos, streaming HLS, transformación de imágenes
+- Sin branding en landings
+
+A $349 MXN (~$17 USD) es menos de la mitad de lo que cuesta Supabase Pro, y EasyBits incluye generación AI y 30+ herramientas MCP que Supabase no tiene.
+
+### Tera — $1,499 MXN/mes
+
+Para operaciones grandes o equipos con múltiples agentes:
+
+- **100 GB** de almacenamiento
+- **200 generaciones AI/mes**
+- **20 bases de datos**
+- Proveedores de storage custom (AWS S3, Cloudflare R2)
+- Dominios custom
+- Soporte prioritario
+
+## Precios en MXN, sin sorpresas
+
+Todos los precios están en pesos mexicanos con IVA incluido. Sin cargos por egress, sin fees ocultos por API calls. Pagas tu plan y listo.
+
+## Qué incluyen todos los planes
+
+No importa si estás en Byte o Tera, tienes acceso completo a:
+
+- **30+ herramientas MCP** — tu agente sube, descarga, busca, transforma archivos directo desde Claude, Cursor o cualquier cliente MCP
+- **SDK tipado** (`@easybits.cloud/sdk`) — TypeScript con autocompletado para todo
+- **API REST v2** — para integraciones custom
+- **Webhooks** — reacciona a eventos de archivos en tiempo real
+- **Bases de datos libSQL** — tu agente puede crear tablas, insertar y consultar datos
+- **Generación AI** — documentos profesionales, landing pages y presentaciones
+
+## ¿Por qué cambiamos los planes?
+
+El plan gratis anterior era demasiado generoso. 1 GB de storage y 5 generaciones permitían usar la plataforma indefinidamente sin pagar. Eso no es sostenible.
+
+Ahora el plan gratis es para probar, y los planes de pago son para producción. Simple.
+
+## Cómo empezar
+
+1. Crea una cuenta gratis en [easybits.cloud](https://www.easybits.cloud)
+2. Genera una API key en el dashboard
+3. Conecta tu agente por MCP:
+
+```json
+{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "tu-api-key"
+      }
+    }
+  }
+}
+```
+
+Tu agente ya puede subir archivos, crear bases de datos y generar documentos. Cuando necesites más espacio o generaciones, upgrade desde el dashboard.
+
+[Ver planes completos →](https://www.easybits.cloud/planes)

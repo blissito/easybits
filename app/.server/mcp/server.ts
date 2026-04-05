@@ -1067,7 +1067,7 @@ If providing html, it MUST follow slide layout rules: root <section class="w-[96
         const data = parseCFDI(params.xml);
         const genLimit = await checkAiGenerationLimit(ctx.user.id);
         if (!genLimit.allowed) {
-          return { content: [{ type: "text", text: `Error: Has usado todas tus ${genLimit.limit} generaciones.` }] };
+          return { content: [{ type: "text", text: `Error: Has usado todas tus ${genLimit.limit} generaciones/mes. Upgrade o compra un pack en https://www.easybits.cloud/planes` }] };
         }
 
         const tipoNames: Record<string, string> = { I: "Factura", P: "Recibo de Pago", E: "Nota de Crédito" };
@@ -2195,7 +2195,7 @@ Call get_docs("document-design") for full design guide with validated patterns.`
 
   server.tool(
     "get_usage_stats",
-    "Get account usage statistics: storage used/limit, file counts, AI generations used/remaining, plan info.",
+    "Get account usage statistics: storage used/limit, file counts, AI generations used/remaining, plan info, and upgrade recommendations.",
     {},
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
