@@ -142,7 +142,7 @@ export default function DocsPage() {
 
       <div className="max-w-7xl mx-auto flex">
         {/* Sidebar */}
-        <aside className="hidden md:block w-56 shrink-0 border-r-2 border-black sticky top-[57px] overflow-y-auto max-h-[calc(100vh-57px)] p-4">
+        <aside className="hidden md:block w-56 shrink-0 border-r-2 border-black sticky top-[57px] self-start p-4">
           <h2 className="font-bold text-xs uppercase text-gray-500 mb-3">
             API Reference
           </h2>
@@ -207,6 +207,7 @@ const { items } = await eb.listFiles();` },
               ]}
             />
             <p className="text-gray-500 text-xs mt-3">
+              <Link to="/dash/developer" className="underline font-medium">Get your API key</Link>.{" "}
               By default 12 core tools load. Add <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> for more.{" "}
               <a href="#mcp-tools" className="underline">See tool groups</a>.
             </p>
