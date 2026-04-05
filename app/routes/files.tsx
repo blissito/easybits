@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import type { Route } from "./+types/files";
 import { EmptyFiles } from "./files/EmptyFiles";
 import { FilesFormModal } from "~/components/forms/files/FilesFormModal";
@@ -13,20 +13,38 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { PLANS, type PlanKey } from "~/lib/plans";
 import { Link, data, useFetcher } from "react-router";
 
+const PAGE_SIZE = 50;
+
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  const url = new URL(request.url);
+  const cursor = url.searchParams.get("cursor") || undefined;
   const plan = user.roles.find((r) => r === "Creative" || r === "Expert");
+
+  const where = {
+    ownerId: user.id,
+    status: { not: "DELETED" as const },
+    NOT: { name: { startsWith: "sites/" } },
+  };
+
   const files = await db.file.findMany({
     orderBy: { createdAt: "desc" },
-    where: {
-      ownerId: user.id,
-      status: { not: "DELETED" },
-      NOT: { name: { startsWith: "sites/" } },
-    },
+    where,
+    take: PAGE_SIZE + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
-  const total = files.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024 / 1024; // GB
 
-  return { plan, files, total };
+  const hasMore = files.length > PAGE_SIZE;
+  const items = hasMore ? files.slice(0, PAGE_SIZE) : files;
+  const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+  const totalAgg = await db.file.aggregate({
+    where,
+    _sum: { size: true },
+  });
+  const total = (totalAgg._sum.size ?? 0) / 1024 / 1024 / 1024;
+
+  return { plan, files: items, total, nextCursor };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -64,13 +82,35 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const { files, plan = "Byte", total } = loaderData;
+  const { files: initialFiles, plan = "Byte", total, nextCursor } = loaderData;
+  const [allFiles, setAllFiles] = useState<File[]>(initialFiles);
+  const [cursor, setCursor] = useState<string | null>(nextCursor);
   const [showModal, setShowModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<null | File>(null);
   const open = () => setShowModal(true);
-  // tokens
   const [tokenFor, setTokenFor] = useState<File | null>(null);
   const openTokensModal = (file: File) => setTokenFor(file);
+  const loadMoreFetcher = useFetcher<typeof loader>();
+  const [appendedCursors, setAppendedCursors] = useState<Set<string>>(new Set());
+
+  // Append loaded files when fetcher completes
+  useEffect(() => {
+    if (loadMoreFetcher.data && loadMoreFetcher.state === "idle") {
+      const d = loadMoreFetcher.data;
+      const newFiles = d.files as File[];
+      const firstId = newFiles[0]?.id;
+      if (firstId && !appendedCursors.has(firstId)) {
+        setAllFiles((prev) => [...prev, ...newFiles]);
+        setCursor(d.nextCursor);
+        setAppendedCursors((prev) => new Set(prev).add(firstId));
+      }
+    }
+  }, [loadMoreFetcher.data, loadMoreFetcher.state]);
+
+  const handleLoadMore = () => {
+    if (!cursor) return;
+    loadMoreFetcher.load(`/dash/archivos?cursor=${cursor}`);
+  };
 
   return (
     <>
@@ -78,7 +118,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         plan={plan}
         used={total}
         cta={
-          files.length > 0 && (
+          allFiles.length > 0 && (
             <BrutalButton
               isDisabled={PLANS[plan as PlanKey]?.storageGB ?? 1 < total}
               onClick={open}
@@ -89,15 +129,28 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           )
         }
       >
-        {files.length < 1 && <EmptyFiles onClick={() => setShowModal(true)} />}
-        {files.length > 0 && (
-          <FilesTable
-            onTokenClick={openTokensModal}
-            files={files}
-            onDetail={(file: File) => {
-              setPreviewFile(file);
-            }}
-          />
+        {allFiles.length < 1 && <EmptyFiles onClick={() => setShowModal(true)} />}
+        {allFiles.length > 0 && (
+          <>
+            <FilesTable
+              onTokenClick={openTokensModal}
+              files={allFiles}
+              onDetail={(file: File) => {
+                setPreviewFile(file);
+              }}
+            />
+            {cursor && (
+              <div className="flex justify-center mt-6">
+                <BrutalButton
+                  size="chip"
+                  onClick={handleLoadMore}
+                  isLoading={loadMoreFetcher.state !== "idle"}
+                >
+                  Cargar más
+                </BrutalButton>
+              </div>
+            )}
+          </>
         )}
       </Layout>
       <FilesFormModal isOpen={showModal} onClose={() => setShowModal(false)} />
@@ -129,13 +182,31 @@ const Layout = ({
             <h2 className="text-3xl lg:text-4xl font-semibold">
               Almacenamiento de archivos
             </h2>
-            <p>
-              Usado: <strong>{used < 1 ? `${(used * 1024).toFixed(1)} MB` : `${used.toFixed(2)} GB`}</strong> de{" "}
-              <strong>{PLANS[plan as PlanKey]?.storageGB ?? 1} GB </strong>(Plan {plan}){" "}
-              <Link to="/planes" className="text-xs underline text-brand-500">
-                Mejorar plan
-              </Link>
-            </p>
+            <div>
+              <p>
+                Usado: <strong>{used < 1 ? `${(used * 1024).toFixed(1)} MB` : `${used.toFixed(2)} GB`}</strong> de{" "}
+                <strong>{(PLANS[plan as PlanKey]?.storageGB ?? 0.1) < 1 ? `${Math.round((PLANS[plan as PlanKey]?.storageGB ?? 0.1) * 1000)} MB` : `${PLANS[plan as PlanKey]?.storageGB} GB`} </strong>(Plan {plan}){" "}
+                <Link to="/planes" className="text-xs underline text-brand-500">
+                  Mejorar plan
+                </Link>
+              </p>
+              {(() => {
+                const maxGB = PLANS[plan as PlanKey]?.storageGB ?? 0.1;
+                const pct = Math.min((used / maxGB) * 100, 100);
+                const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-yellow-500" : "bg-brand-500";
+                return (
+                  <div className="flex items-center gap-3 mt-2 max-w-md">
+                    <div className="h-3 bg-gray-200 w-full rounded-full border border-black relative overflow-hidden">
+                      <div
+                        style={{ width: `${pct}%` }}
+                        className={`${barColor} absolute inset-0 rounded-full transition-all`}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500 whitespace-nowrap">{pct.toFixed(0)}%</span>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
           {cta}
         </div>
