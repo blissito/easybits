@@ -1100,6 +1100,165 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 5. \`deploy_presentation({ presentationId })\` — publish to slug.easybits.cloud
 6. \`get_presentation_pdf({ presentationId })\` — export as PDF
 `,
+
+  "all-mcp-tools": `## All MCP Tools (99 tools)
+
+### Files (14 tools)
+| Tool | Description |
+|------|-------------|
+| \`list_files\` | List files with pagination |
+| \`get_file\` | Get file metadata + signed download URL (1h) |
+| \`upload_file\` | Create file record + get presigned upload URL |
+| \`delete_file\` | Soft-delete a file (moves to trash) |
+| \`restore_file\` | Restore a file from trash |
+| \`update_file\` | Update file metadata (name, access) |
+| \`share_file\` | Share a file with another user by email |
+| \`search_files\` | AI-powered natural language file search |
+| \`duplicate_file\` | Create a copy of a file |
+| \`bulk_delete_files\` | Delete multiple files at once |
+| \`bulk_upload_files\` | Upload multiple files at once |
+| \`list_deleted_files\` | List files in trash |
+| \`optimize_image\` | Convert image to WebP/AVIF (original unchanged) |
+| \`transform_image\` | Crop, resize, rotate, flip, convert images |
+
+### Sharing & Permissions (5 tools)
+| Tool | Description |
+|------|-------------|
+| \`generate_share_token\` | Temporary public URL for private files (1h–7 days) |
+| \`list_share_tokens\` | List active share tokens for a file |
+| \`revoke_share_token\` | Invalidate a share token |
+| \`list_permissions\` | List who has access to a file |
+| \`revoke_permission\` | Remove someone's access to a file |
+
+### Databases (6 tools)
+| Tool | Description |
+|------|-------------|
+| \`db_list\` | List all databases |
+| \`db_create\` | Create a new libSQL database |
+| \`db_get\` | Get database details |
+| \`db_delete\` | Delete a database and all data |
+| \`db_query\` | Execute SQL (SELECT, INSERT, UPDATE, DELETE, CREATE TABLE) |
+| \`db_exec\` | Execute multiple SQL statements in batch (max 50) |
+| \`db_import\` | Bulk import data into a table |
+
+### Documents (18 tools)
+| Tool | Description |
+|------|-------------|
+| \`list_documents\` | List all documents |
+| \`get_document\` | Get document metadata |
+| \`create_document\` | Create a new document |
+| \`update_document\` | Update document metadata |
+| \`delete_document\` | Delete a document |
+| \`clone_document\` | Duplicate a document with all pages |
+| \`add_page\` | Add a page to a document |
+| \`delete_page\` | Remove a page |
+| \`reorder_pages\` | Reorganize page sequence |
+| \`get_page_html\` | Get page HTML content |
+| \`set_page_html\` | Update full page HTML |
+| \`get_section_html\` | Extract element HTML via CSS selector |
+| \`set_section_html\` | Replace element within a page |
+| \`replace_html\` | Find and replace HTML content |
+| \`get_page_screenshot\` | Capture page as PNG |
+| \`get_document_pdf\` | Export document as PDF |
+| \`deploy_document\` | Publish to slug.easybits.cloud |
+| \`unpublish_document\` | Take down a published document |
+
+### Document AI Generation (5 tools)
+| Tool | Description |
+|------|-------------|
+| \`generate_document\` | AI generates pages — reports, proposals, brochures |
+| \`refine_document_section\` | Surgical AI changes to specific areas |
+| \`regenerate_document_page\` | Redesign a page preserving intent |
+| \`enhance_document_prompt\` | Improve a prompt before generating |
+| \`get_document_directions\` | Get 4 design direction options |
+
+### Structured Documents (8 tools)
+| Tool | Description |
+|------|-------------|
+| \`create_quotation\` | Generate quotation/invoice PDF in one step |
+| \`edit_quotation\` | Edit existing quotation |
+| \`create_screening_report\` | Create screening report |
+| \`edit_screening_report\` | Edit screening report |
+| \`create_geo_scorecard\` | Create geographic scorecard |
+| \`edit_geo_scorecard\` | Edit geographic scorecard |
+| \`create_tournament_schedule\` | Create tournament schedule |
+| \`edit_tournament_schedule\` | Edit tournament schedule |
+| \`create_document_from_cfdi\` | Create document from Mexican CFDI XML |
+
+### Presentations (17 tools)
+| Tool | Description |
+|------|-------------|
+| \`list_presentations\` | List all presentations |
+| \`get_presentation\` | Get presentation details |
+| \`create_presentation\` | Create a new presentation |
+| \`update_presentation\` | Update presentation metadata |
+| \`delete_presentation\` | Delete a presentation |
+| \`clone_presentation\` | Duplicate with optional style |
+| \`add_slide\` | Add a slide with HTML content |
+| \`delete_slide\` | Remove a slide |
+| \`reorder_slides\` | Reorganize slide order |
+| \`get_slide_html\` | Get slide HTML |
+| \`set_slide_html\` | Update slide HTML |
+| \`get_slide_screenshot\` | Capture slide as PNG |
+| \`get_presentation_pdf\` | Export as PDF |
+| \`deploy_presentation\` | Publish to slug.easybits.cloud |
+| \`unpublish_presentation\` | Take down |
+| \`save_presentation_style\` | Save style as reusable template |
+| \`list_presentation_styles\` | List saved styles |
+| \`delete_presentation_style\` | Delete a saved style |
+
+### Websites (5 tools)
+| Tool | Description |
+|------|-------------|
+| \`list_websites\` | List all websites |
+| \`create_website\` | Create a static website |
+| \`get_website\` | Get website details |
+| \`update_website\` | Update website metadata |
+| \`delete_website\` | Delete a website |
+| \`upload_website_file\` | Upload HTML/CSS/JS to website |
+| \`deploy_website_file\` | Deploy a file to the website |
+| \`list_website_files\` | List files in a website |
+
+### Webhooks (5 tools)
+| Tool | Description |
+|------|-------------|
+| \`list_webhooks\` | List all webhooks |
+| \`create_webhook\` | Create a webhook (file.created, file.updated, etc.) |
+| \`get_webhook\` | Get webhook details |
+| \`update_webhook\` | Update webhook URL/events |
+| \`delete_webhook\` | Delete a webhook |
+
+### Brand Kits (4 tools)
+| Tool | Description |
+|------|-------------|
+| \`list_brand_kits\` | List brand kits |
+| \`create_brand_kit\` | Create brand kit (logo, colors, fonts) |
+| \`update_brand_kit\` | Update brand kit |
+| \`delete_brand_kit\` | Delete brand kit |
+| \`extract_brand_kit\` | Extract brand from a URL or image |
+
+### Templates & Themes (3 tools)
+| Tool | Description |
+|------|-------------|
+| \`get_template_slots\` | Get fillable slots in a template |
+| \`fill_template\` | Fill a template with data |
+| \`list_themes\` | List available themes |
+
+### AI Keys & Providers (3 tools)
+| Tool | Description |
+|------|-------------|
+| \`set_ai_key\` | Set an AI provider key |
+| \`list_ai_keys\` | List configured AI keys |
+| \`delete_ai_key\` | Remove an AI key |
+| \`list_providers\` | List storage providers |
+
+### Utilities (3 tools)
+| Tool | Description |
+|------|-------------|
+| \`get_usage_stats\` | Storage, files, AI gens, plan info + upgrade hints |
+| \`pdf_to_images\` | Convert PDF pages to images |
+| \`get_docs\` | Get this API reference |
+`,
 };
 
 const PITCH = `## About EasyBits
