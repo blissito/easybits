@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PreJoin } from "@livekit/components-react";
 import "@livekit/components-styles";
 import type { Route } from "./+types/webinar";

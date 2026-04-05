@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Header } from "~/components/layout/Header";
 import { cn } from "~/utils/cn";

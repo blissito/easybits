@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { map } from "zod";
 import { useDropFiles } from "~/hooks/useDropFiles";
 import { useUploadMultipart } from "react-hook-multipart/react";

@@ -133,7 +133,7 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function daysUntilPurge(deletedAt: string | null) {
+function daysUntilPurge(deletedAt: string | Date | null) {
   if (!deletedAt) return null;
   const deleted = new Date(deletedAt).getTime();
   const purgeAt = deleted + 7 * 24 * 60 * 60 * 1000;

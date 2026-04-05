@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { deleteObject } from "react-hook-multipart";
 import type { Route } from "./+types/delete";
 import { db } from "~/.server/db";

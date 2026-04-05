@@ -25,7 +25,7 @@ export const generateDescription = async (
   //   const answer = await server.processUserQuery(chat);
 };
 // MCP SERVER
-let server: MCPServer;
+let server: ReturnType<typeof createMCPServer>;
 const getMCPServer = async () => {
   if (server) return server;
 

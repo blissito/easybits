@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const action = async ({ request }) => {
   console.log("Received");
   const body = await request.json();

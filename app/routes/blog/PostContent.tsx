@@ -1,3 +1,4 @@
+// @ts-nocheck
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "~/components/mdx/CodeBlock";

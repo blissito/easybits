@@ -31,7 +31,7 @@ export const decodeToken = (token: string) => {
 
 export const decode = (
   token: string
-): { error?: string; [x: string]: string } => {
+): { error?: string; [x: string]: string | undefined } => {
   const tokenData = decodeToken(token);
   if (!tokenData?.success) {
     return { error: "Corrupt token" };

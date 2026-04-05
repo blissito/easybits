@@ -112,7 +112,7 @@ export async function configureMerchantWebhook(userId: string) {
       select: { stripeIds: true },
     });
     const isProd = process.env.NODE_ENV === "production";
-    const user = { ...u, stripeId: u.stripeIds[isProd ? 0 : 1] };
+    const user = { ...u, stripeId: u!.stripeIds[isProd ? 0 : 1] };
     if (!user?.stripeId) {
       throw new Error("User doesn't have a Stripe account");
     }

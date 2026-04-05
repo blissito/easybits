@@ -50,7 +50,7 @@ export const DevAdmin = () => {
   ) : null;
 };
 
-const Access = ({ onClose, onClick, isActive }) => {
+const Access = ({ onClose, onClick, isActive }: { onClose: () => void; onClick: () => void; isActive: boolean }) => {
   const [email, set] = useState("");
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
@@ -103,7 +103,7 @@ const Access = ({ onClose, onClick, isActive }) => {
   );
 };
 
-const LoginAs = ({ onClick, isActive, onClose }) => {
+const LoginAs = ({ onClick, isActive, onClose }: { onClick: () => void; isActive: boolean; onClose: () => void }) => {
   const [email, set] = useState("");
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";

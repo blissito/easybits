@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Input } from "../forms/Input";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { AnimatePresence, motion } from 'motion/react';

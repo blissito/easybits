@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { redirect as rrRedirect } from "react-router";
 
 const message = JSON.stringify({

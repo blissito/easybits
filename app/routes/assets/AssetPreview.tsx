@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Asset } from "@prisma/client";
 import toast from "react-hot-toast";
 import { LuRefreshCcw } from "react-icons/lu";

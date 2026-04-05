@@ -3,7 +3,8 @@ import { db } from "./db";
 type ReviewType = {
   id: string;
   userId: string;
-  productId: string;
+  assetId: string;
+  productId?: string;
   rating: number;
   comment: string;
 };

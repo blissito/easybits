@@ -4,7 +4,7 @@ import { cn } from "~/utils/cn";
 import { motion } from "motion/react";
 
 interface InputProps {
-  type?: "textarea" | "number";
+  type?: "textarea" | "number" | "email" | "text" | "password";
   bgColor?: string;
   children?: ReactNode;
   onClick?: () => void;
@@ -51,7 +51,7 @@ export const Input = ({
       <div className="relative flex-1">
         <ElementName
           autoFocus
-          defaultValue={defaultValue}
+          defaultValue={defaultValue ?? undefined}
           className={cn(
             "rounded-xl p-4 text-lg h-12 w-full placeholder:text-tale placeholder:font-light  border border-black  bg-white text-black",
             "focus:border-brand-500 focus:outline-none focus:ring-brand-500",
@@ -87,7 +87,7 @@ const CopyMagnetButton = ({ text }: { text: string }) => {
       className="absolute right-px top-px bg-gray-700 p-auto w-24 h-[60px] rounded-r-xl grid place-content-center text-xl"
     >
       <motion.span
-        key={timeout}
+        key={timeout ? String(timeout) : null}
         initial={{ filter: "blur(4px)" }}
         animate={{ filter: "blur(0px)" }}
       >

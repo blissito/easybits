@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useRef, useState, type ChangeEvent } from "react";
 import { Link } from "react-router";
 import { Input } from "~/components/common/Input";

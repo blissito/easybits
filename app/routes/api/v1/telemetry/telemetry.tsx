@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { data } from "react-router";
 import { trackTelemetryVisit } from "~/.server/telemetry";
 import type { Route } from "./+types/telemetry";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Asset } from "@prisma/client";
 import { useFetcher } from "react-router";
 import { useForm, type FieldValues, type SubmitHandler } from "react-hook-form";

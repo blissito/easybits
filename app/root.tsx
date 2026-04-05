@@ -124,7 +124,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   return null;
 };
 
-export default function App({ loaderData }) {
+export default function App({ loaderData }: { loaderData: any }) {
   // @todo This coould be moved into a second app (just for custom domains)
   const {
     screen, // @todo revisit. Not used
@@ -137,12 +137,12 @@ export default function App({ loaderData }) {
   } = loaderData || {};
   if (screen === "public_store") {
     // @todo make this componente fetch data from client
-    return <StoreComponent assets={assets} user={user} />;
+    return <StoreComponent assets={assets} user={user} variant="default" />;
   }
   if (screen === "public_detail") {
     // @todo revisit
     return (
-      <Page loaderData={{ asset, publishableKey, files, successStripeId }} />
+      <Page {...{ loaderData: { asset, publishableKey, files, successStripeId }, params: {}, matches: [] } as any} />
     );
   }
   return <Outlet />;

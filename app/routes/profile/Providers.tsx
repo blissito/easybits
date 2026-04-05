@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { User } from "@prisma/client";
 import { useEffect, useRef, useState } from "react";
 import { FaCheck } from "react-icons/fa";

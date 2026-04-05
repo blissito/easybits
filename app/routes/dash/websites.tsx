@@ -22,8 +22,8 @@ const FolderUploader = () => {
           className="underline"
           onClick={async () => {
             setIsLoading(true);
-            const handle = await showDirectoryPicker();
-            const out = {};
+            const handle = await (window as any).showDirectoryPicker();
+            const out: Record<string, any> = {};
             await handleDirectoryEntry(handle, out);
             for await (const entry of handle.values()) {
               console.log("Entry: ", entry);
@@ -39,7 +39,7 @@ const FolderUploader = () => {
   );
 };
 
-async function handleDirectoryEntry(dirHandle, out) {
+async function handleDirectoryEntry(dirHandle: any, out: Record<string, any>) {
   for await (const entry of dirHandle.values()) {
     if (entry.kind === "file") {
       const file = await entry.getFile();

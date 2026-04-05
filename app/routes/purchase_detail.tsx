@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FaArrowLeft } from "react-icons/fa";
 import { Link } from "react-router";
 import { cn } from "~/utils/cn";

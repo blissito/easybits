@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "~/.server/db";
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 

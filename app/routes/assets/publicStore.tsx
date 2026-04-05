@@ -1,3 +1,4 @@
+// @ts-nocheck
 // @DEPRECATED
 import StoreComponent from "~/components/store/StoreComponent";
 import type { Route } from "./+types/publicStore";

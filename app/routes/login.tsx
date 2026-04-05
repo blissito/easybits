@@ -32,7 +32,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const next = url.searchParams.get("next") as string;
   const ref = url.searchParams.get("ref");
 
-  let cookie = { next: "" } as Cookie<{ next: string }>;
+  let cookie = { next: "" } as any;
   if (next || ref) {
     // saving next and/or ref
     cookie = await setRedirectCookie(request, next || "");
@@ -63,7 +63,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     const redirectCookie = await getRedirectCookie(request);
     const refCode = redirectCookie["ref"] as string | undefined;
     session = await createGoogleSession(code, request, refCode);
-    sendConfrimation(session.get("email"));
+    sendConfrimation(session.get("email")!);
     // Clear ref from cookie
     if (refCode) {
       redirectCookie["ref"] = undefined;

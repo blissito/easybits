@@ -2,7 +2,13 @@ import { redirect } from "react-router";
 import { db } from "./db";
 import type { Order, Prisma } from "@prisma/client";
 
-export const updateUser = async ({ userId, data }) => {
+export const updateUser = async ({
+  userId,
+  data,
+}: {
+  userId: string;
+  data: Prisma.UserUpdateInput;
+}) => {
   console.log({ userId, data });
   return await db.user.update({
     where: {

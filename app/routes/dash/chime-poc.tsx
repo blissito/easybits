@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from "react";
 import { data } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";

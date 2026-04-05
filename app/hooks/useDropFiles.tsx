@@ -75,11 +75,13 @@ export const useDropFiles = <T extends HTMLElement>(config?: {
     });
     input.accept = type!
     document.body.appendChild(input);
-    input.onchange = (ev: ChangeEvent<HTMLInputElement>) => {
-      if (!ev.currentTarget?.files || ev.currentTarget.files.length < 1) {
+    input.onchange = (ev) => {
+      const inputEv = ev as unknown as ChangeEvent<HTMLInputElement>;
+      const target = inputEv.currentTarget;
+      if (!target?.files || target.files.length < 1) {
         return;
       }
-      addFiles([...ev.currentTarget.files]);
+      addFiles([...target.files]);
     };
     input.click();
   };

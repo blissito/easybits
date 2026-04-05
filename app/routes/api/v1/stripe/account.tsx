@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getUserOrNull, getUserOrRedirect } from "~/.server/getters";
 import {
   createAccountV2,

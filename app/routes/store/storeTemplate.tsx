@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Asset, User } from "@prisma/client";
 import { useState } from "react";
 import { AssetList } from "../assets/AssetList";

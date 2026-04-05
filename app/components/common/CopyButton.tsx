@@ -18,7 +18,7 @@ export const CopyButton = ({
   const { placeTimeout } = useTimeout();
   const brutalToast = useBrutalToast();
 
-  const handleCopyToClipboard = (text: string) => (ev: MouseEvent) => {
+  const handleCopyToClipboard = (text: string) => (ev: React.MouseEvent) => {
     ev.stopPropagation();
     navigator.clipboard.writeText(text);
     setCopied(true);

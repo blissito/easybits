@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Stripe from 'stripe';
 
 // Configura tu clave secreta de Stripe

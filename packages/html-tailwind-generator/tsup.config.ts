@@ -39,5 +39,6 @@ export default defineConfig({
     "grapesjs",
     "tailwind-merge",
   ],
+  // @ts-expect-error jsx option works at runtime but is not in tsup types
   jsx: "automatic",
 });

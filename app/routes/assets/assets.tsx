@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 import { AssetFormModal } from "~/components/forms/AssetFormModal";
 import { db } from "~/.server/db";

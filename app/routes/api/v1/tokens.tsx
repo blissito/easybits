@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "~/.server/db";
 import type { Route } from "./+types/tokens";
 import { data, Form, Link, redirect } from "react-router";

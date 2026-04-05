@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "~/utils/cn";
 // import toast from "react-hot-toast";

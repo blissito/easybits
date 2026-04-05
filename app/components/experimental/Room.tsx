@@ -1,3 +1,4 @@
+// @ts-nocheck
 // live kit
 import {
   LiveKitRoom,

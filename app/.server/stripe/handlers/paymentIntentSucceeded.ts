@@ -9,7 +9,7 @@ export const paymentIntentSucceeded = async (event: Stripe.Event, request: Reque
     const customer_email = getEmailFromEvent(event);
         if (customer_email) {
 
-const paymentIntent = event.data.object;
+const paymentIntent = event.data.object as Stripe.PaymentIntent;
 const assetId = paymentIntent.metadata?.assetId;
 
           if(!assetId ||!paymentIntent) {

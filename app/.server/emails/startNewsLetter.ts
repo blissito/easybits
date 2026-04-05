@@ -147,7 +147,7 @@ getAgenda().define("send_newsletter", async (job: Job) => {
     // @todo el token?
     // @todo avoid if already current is grater
   });
-  const isOk = result.response.includes("OK");
+  const isOk = (result as any)?.response?.includes("OK");
   if (!isOk) return; // if first sent failed stops
   // if(result.error) return; @todo
   //set n to newsletter state

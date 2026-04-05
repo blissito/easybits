@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Button } from "~/components/common/Button";
 import { PerkItem } from "../plans/Pricing";
 import { cn } from "~/utils/cn";

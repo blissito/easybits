@@ -1,5 +1,13 @@
 import { createCookie, createCookieSessionStorage } from "react-router";
 
+interface SessionData {
+  email: string;
+}
+
+interface SessionFlashData {
+  error: string;
+}
+
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret)
@@ -7,11 +15,13 @@ function getJwtSecret(): string {
   return secret;
 }
 
-let _sessionStorage: ReturnType<typeof createCookieSessionStorage>;
+let _sessionStorage: ReturnType<
+  typeof createCookieSessionStorage<SessionData, SessionFlashData>
+>;
 
 function getSessionStorage() {
   if (!_sessionStorage) {
-    _sessionStorage = createCookieSessionStorage({
+    _sessionStorage = createCookieSessionStorage<SessionData, SessionFlashData>({
       cookie: {
         name: "__session",
         maxAge: 3600 * 24 * 7 * 4,

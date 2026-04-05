@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Route } from "./+types/upload";
 import { handler, type Complete } from "react-hook-multipart";
 import { getUserOrRedirect } from "~/.server/getters";

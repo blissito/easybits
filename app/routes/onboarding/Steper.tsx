@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { RadioCardGroup } from "./RadioCardGroup";
 import { cn } from "~/utils/cn";

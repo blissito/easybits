@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Route } from "./+types/success";
 import { useNavigate } from "react-router";

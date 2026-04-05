@@ -94,6 +94,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
   }
 
+  if (intent === "export_xlsx") {
+    const dbId = formData.get("dbId") as string;
+    try {
+      const tables = await queryDatabase(ctx, dbId, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+      const sheets: { name: string; cols: string[]; rows: unknown[][] }[] = [];
+      for (const row of tables.rows) {
+        const name = row[0] as string;
+        const result = await queryDatabase(ctx, dbId, `SELECT * FROM "${name}"`);
+        sheets.push({ name, cols: result.cols, rows: result.rows });
+      }
+      return { xlsxSheets: sheets, xlsxDbId: dbId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Export failed";
+      return data({ error: message }, { status: 500 });
+    }
+  }
+
   if (intent === "generate_sql") {
     const dbId = formData.get("dbId") as string;
     const prompt = formData.get("prompt") as string;
@@ -398,6 +415,8 @@ function DatabaseRow({
   const schemaFetcher = useFetcher<typeof action>();
   const downloadFetcher = useFetcher<typeof action>();
 
+  const xlsxFetcher = useFetcher<typeof action>();
+
   const handleDownload = () => {
     downloadFetcher.submit(
       { intent: "download", dbId: dbItem.id },
@@ -405,7 +424,14 @@ function DatabaseRow({
     );
   };
 
-  // Trigger file download when data arrives
+  const handleExportXlsx = () => {
+    xlsxFetcher.submit(
+      { intent: "export_xlsx", dbId: dbItem.id },
+      { method: "post" }
+    );
+  };
+
+  // Trigger SQL file download when data arrives
   useEffect(() => {
     const dData = downloadFetcher.data as Record<string, unknown> | null | undefined;
     if (dData?.downloadDbId === dbItem.id && dData?.downloadSql) {
@@ -416,6 +442,22 @@ function DatabaseRow({
       URL.revokeObjectURL(url);
     }
   }, [downloadFetcher.data]);
+
+  // Trigger XLSX download when data arrives
+  useEffect(() => {
+    const xData = xlsxFetcher.data as Record<string, unknown> | null | undefined;
+    if (xData?.xlsxDbId === dbItem.id && xData?.xlsxSheets) {
+      (async () => {
+        const XLSX = await import("xlsx");
+        const wb = XLSX.utils.book_new();
+        for (const sheet of xData.xlsxSheets as { name: string; cols: string[]; rows: unknown[][] }[]) {
+          const ws = XLSX.utils.aoa_to_sheet([sheet.cols, ...sheet.rows]);
+          XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
+        }
+        XLSX.writeFile(wb, `${dbItem.name}.xlsx`);
+      })();
+    }
+  }, [xlsxFetcher.data]);
   const [sqlValue, setSqlValue] = useState("");
   const [nlPrompt, setNlPrompt] = useState("");
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
@@ -511,6 +553,9 @@ function DatabaseRow({
           </BrutalButton>
           <BrutalButton size="chip" onClick={handleDownload} isLoading={downloadFetcher.state !== "idle"}>
             Download
+          </BrutalButton>
+          <BrutalButton size="chip" onClick={handleExportXlsx} isLoading={xlsxFetcher.state !== "idle"} className="bg-green-200">
+            XLSX
           </BrutalButton>
           <button
             type="button"

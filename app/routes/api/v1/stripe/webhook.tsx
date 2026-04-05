@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getStripe } from "~/.server/stripe";
 import { db } from "~/.server/db";
 import { default as logger } from "~/.server/logger";

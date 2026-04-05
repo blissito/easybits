@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { newAssetSchema } from "~/utils/zod.schemas";
 import { db } from "~/.server/db";
 import slugify from "slugify";

@@ -37,7 +37,7 @@ export class RateLimiter {
   private windowMs: number;
   private maxRequests: number;
 
-  constructor(options = rateLimitConfig) {
+  constructor(options: { windowMs: number; maxRequests: number } = rateLimitConfig) {
     this.windowMs = options.windowMs;
     this.maxRequests = options.maxRequests;
   }

@@ -1,4 +1,4 @@
-import type { String } from "aws-sdk/clients/cloudsearchdomain";
+// removed unused aws-sdk import
 import { stagger, useAnimate } from "motion/react";
 import { useEffect, useState } from "react";
 import { cn } from "~/utils/cn";

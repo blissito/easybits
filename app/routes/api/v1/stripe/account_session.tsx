@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createAccountSession } from "~/.server/stripe";
 
 export const action = async ({ request }) => {

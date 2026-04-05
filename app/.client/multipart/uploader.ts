@@ -1,3 +1,4 @@
+// @ts-expect-error no type declarations for async-retry
 import retry from "async-retry";
 
 type CreateMultipartResponse = {
@@ -111,7 +112,7 @@ const createMultipartUpload = async (
   try {
     response = await fetch(handleUploadUrl, options).then((res) => res.json());
   } catch (error: unknown) {
-    throw new Error(error);
+    throw new Error(String(error));
   }
   return response;
 };
@@ -153,7 +154,7 @@ const uploadOnePartAndRetry = async ({
 }) => {
   let retryCount = 0;
   return await retry(
-    async (bail) => {
+    async (bail: (e: Error) => void) => {
       const response = await fetch(url, {
         method: "PUT",
         body: blob,
@@ -170,7 +171,7 @@ const uploadOnePartAndRetry = async ({
     },
     {
       retries: attempts,
-      onRetry: (error) => {
+      onRetry: (error: Error) => {
         retryCount = retryCount + 1;
         if (error instanceof Error) {
           console.log(`retrying #${retryCount} Put request of ${url}`);

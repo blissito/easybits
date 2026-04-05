@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from "react";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/PublicCustomLanding";

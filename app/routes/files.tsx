@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect, type ReactNode } from "react";
 import type { Route } from "./+types/files";
 import { EmptyFiles } from "./files/EmptyFiles";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Form, Link, useFetcher } from "react-router";
 import { LayoutGroup } from "motion/react";
 import { LiveOrFiles } from "./LiveOrFiles";

@@ -34,7 +34,7 @@ export function Banners({
 
   const background = useMotionTemplate`radial-gradient(at ${X}px ${Y}px, #5158f6 1%, black 80%)`;
 
-  const hadleMouseMove = (e) => {
+  const hadleMouseMove = (e: React.MouseEvent) => {
     x.set(e.pageX);
     y.set(e.pageY);
   };

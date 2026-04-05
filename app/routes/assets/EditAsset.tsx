@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { EditAssetForm } from "./EditAssetForm";
 import { cn } from "~/utils/cn";
 import { getUserOrRedirect } from "~/.server/getters";

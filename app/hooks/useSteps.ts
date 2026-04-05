@@ -1,14 +1,14 @@
 import { useState } from "react";
 
-export function useStep({ initialStep, steps }) {
+export function useStep({ initialStep, steps }: { initialStep: number; steps: any[] }) {
   const [currentStep, setCurrentStep] = useState(initialStep);
 
   const next = () => {
-    setCurrentStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
+    setCurrentStep((prev: number) => (prev < steps.length - 1 ? prev + 1 : prev));
   };
 
   const previous = () => {
-    setCurrentStep((prev) => (prev > 0 ? prev - 1 : prev));
+    setCurrentStep((prev: number) => (prev > 0 ? prev - 1 : prev));
   };
 
   const goTo = (step: number) => {

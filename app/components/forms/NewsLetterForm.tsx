@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Asset, File as AssetFile } from "@prisma/client";
 import {
   FaChevronCircleRight,

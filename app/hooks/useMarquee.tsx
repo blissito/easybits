@@ -14,7 +14,7 @@ export const useMarquee = (reversed: boolean = false) => {
   const direction = useScrollDirection();
   // Movemennt 🛸
   const x = useMotionValue(0);
-  const ref = useRef<HTMLDivElement>();
+  const ref = useRef<HTMLDivElement>(null);
   // valocity
   const { scrollY } = useScroll();
   const scrollVelocity = useVelocity(scrollY);

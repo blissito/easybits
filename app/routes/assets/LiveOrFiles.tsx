@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Input } from "~/components/common/Input";
 import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";

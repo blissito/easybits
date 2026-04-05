@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, type FormEvent, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";

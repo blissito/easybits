@@ -29,7 +29,7 @@ const ButtonGroupInput = ({
   selectedShadowClassName = "",
   renderOption, // (option, isSelected) => JSX
 }: ButtonGroupProps) => {
-  const handleClick = (val) => {
+  const handleClick = (val: string) => {
     if (val !== value) {
       onChange?.(val);
     }

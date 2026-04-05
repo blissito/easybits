@@ -4,9 +4,9 @@ type Particle = {
   x: number;
   y: number;
   size: number;
-  speedX: number;
-  speedY: number;
-  rotation: number;
+  speedX?: number;
+  speedY?: number;
+  rotation?: number;
   color: string; // `hsl(${Math.random() * 360}, 80%, 60%)`
   tiltAngle: number;
   tilt: number;

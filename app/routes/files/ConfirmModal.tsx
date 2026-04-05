@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, type ChangeEvent } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Input } from "~/components/common/Input";

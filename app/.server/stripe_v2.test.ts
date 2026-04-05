@@ -90,7 +90,10 @@ const mockUser = {
   customer: null,
   newsletters: [],
   stripeIds: [],
-};
+  aiGenerationsCount: 0,
+  aiGenerationsResetAt: null,
+  aiGenerationsBonus: 0,
+} as any;
 
 describe("stripe_v2", () => {
   let assetSpy: any;
@@ -121,7 +124,7 @@ describe("stripe_v2", () => {
   });
 
   it("createCheckoutURL retorna la url de checkout", async () => {
-    const url = await stripeV2.createCheckoutURL("asset_123");
+    const url = await stripeV2.createCheckoutURL(mockAsset as any, mockUser as any);
     expect(url).toBe("https://checkout.stripe.com/session/xyz");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     // Verifica que la segunda llamada fue para actualizar metadata

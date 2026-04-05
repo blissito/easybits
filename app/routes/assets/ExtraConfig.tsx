@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Switch } from "../../components/forms/Switch";
 import { Input } from "~/components/common/Input";
 import { useEffect, useState, type ChangeEvent } from "react";

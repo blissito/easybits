@@ -1,4 +1,11 @@
 import type { User } from "@prisma/client";
+
+type DnsConfig = {
+  clientStatus?: string;
+  dnsValidationTarget?: string;
+  dnsValidationHostname?: string;
+  dnsValidationInstructions?: string;
+};
 import {
   useEffect,
   useRef,
@@ -47,8 +54,8 @@ export const useDisclosure = ({ user }: { user: User }) => {
   };
 };
 
-export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
-  const [localHost, setLocalHost] = useState(user.host);
+export const DNSModal = ({ user, isOpen, onOpen, onClose }: { user: User; isOpen: boolean; onOpen: () => void; onClose: () => void }) => {
+  const [localHost, setLocalHost] = useState(user.host ?? "");
   const [domain, setDomain] = useState<string>(user.domain || "");
   const fetcher = useFetcher();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -98,7 +105,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
   };
 
   const handleClose = () => {
-    setLocalHost(user.host);
+    setLocalHost(user.host ?? "");
     setIsConfigOpen(false);
     onClose?.();
   };
@@ -122,7 +129,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
                 </BrutalButton>
               }
               value={localHost}
-              defaultValue={user.host}
+              defaultValue={user.host ?? undefined}
               onChange={(e: ChangeType) => setLocalHost(formatHost(e))}
               error={error}
             />
@@ -203,13 +210,7 @@ export const DNSModal = ({ user, isOpen, onOpen, onClose }) => {
             />
             <DNSConfig user={user} />
             <IPsInfo user={user} />
-            {/* <p className="text-xs">
-              Algunos provedores de DNS solo necesitan el nombre del subdominio:
-              <strong>
-                {user.dnsConfig?.dnsValidationTarget.split(".")[0]}
-              </strong>{" "}
-              o @ si es la raíz del dominio
-            </p> */}
+            {/* Commented out: DNS subdomain hint */}
             <nav className="flex justify-between w-full mt-6">
               <BrutalButton
                 onClick={() => setIsConfigOpen(false)}
@@ -276,7 +277,7 @@ const IPsInfo = ({ user }: { user: User }) => {
         <span>A</span>
         <div className="flex items-center">
           <p className="truncate"> {user.domain}</p>
-          <CopyButton className="ml-1" text={user.domain} />
+          <CopyButton className="ml-1" text={user.domain ?? ""} />
         </div>
 
         <div className="col-span-1 w-max items-center flex">
@@ -289,7 +290,7 @@ const IPsInfo = ({ user }: { user: User }) => {
         <span>AAAA</span>
         <div className="flex items-center">
           <p className="truncate"> {user.domain}</p>
-          <CopyButton className="ml-1" text={user.domain} />
+          <CopyButton className="ml-1" text={user.domain ?? ""} />
         </div>
 
         <div className="col-span-1 w-max items-center flex">
@@ -302,6 +303,7 @@ const IPsInfo = ({ user }: { user: User }) => {
 };
 
 const DNSConfig = ({ user }: { user: User }) => {
+  const dnsConfig = user.dnsConfig as DnsConfig | null;
   return (
     <>
       {/* Header */}
@@ -315,12 +317,12 @@ const DNSConfig = ({ user }: { user: User }) => {
           <span className="col-span-1 ">Tipo de registro</span>
           <span className="col-span-1">Nombre del dominio</span>
           <span className="col-span-1">Valor</span>{" "}
-          {[statuses[0]].includes(user.dnsConfig?.clientStatus) && (
+          {[statuses[0]].includes(dnsConfig?.clientStatus as string) && (
             <div className="absolute text-yellow-600 right-2 top-2">
               <IoWarningOutline />
             </div>
           )}
-          {![statuses[0]].includes(user.dnsConfig?.clientStatus) && (
+          {![statuses[0]].includes(dnsConfig?.clientStatus as string) && (
             <div className="absolute text-green-600 right-2 top-2">
               <FaCheck />
             </div>
@@ -329,24 +331,24 @@ const DNSConfig = ({ user }: { user: User }) => {
         {/* Content */}
         <section className="border border-black rounded-b-lg p-1 grid grid-cols-3 place-content-center text-xs gap-2">
           <span className="flex items-center">
-            {user.dnsConfig?.dnsValidationInstructions.split(" ")[0]}{" "}
+            {dnsConfig?.dnsValidationInstructions?.split(" ")[0]}{" "}
           </span>
           <div className="flex items-center">
             <p className="truncate">
               {" "}
-              {user.dnsConfig?.dnsValidationHostname.split(".")[0]}
+              {dnsConfig?.dnsValidationHostname?.split(".")[0]}
             </p>
             <CopyButton
               className="ml-1"
-              text={user.dnsConfig?.dnsValidationHostname.split(".")[0]}
+              text={dnsConfig?.dnsValidationHostname?.split(".")[0] ?? ""}
             />
           </div>
 
           <div className="col-span-1 w-max items-center flex">
-            <p className="truncate"> {user.dnsConfig?.dnsValidationTarget}</p>
+            <p className="truncate"> {dnsConfig?.dnsValidationTarget}</p>
             <CopyButton
               className="ml-1"
-              text={user.dnsConfig?.dnsValidationTarget}
+              text={dnsConfig?.dnsValidationTarget ?? ""}
             />
           </div>
         </section>
@@ -355,7 +357,7 @@ const DNSConfig = ({ user }: { user: User }) => {
   );
 };
 
-export const EditButton = ({ isDisabled, onClick }) => {
+export const EditButton = ({ isDisabled, onClick }: { isDisabled?: boolean; onClick?: () => void }) => {
   return (
     <button
       disabled={isDisabled}

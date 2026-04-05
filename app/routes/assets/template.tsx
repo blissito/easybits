@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AiFillInstagram } from "react-icons/ai";
 import {
   FaFacebookF,

@@ -75,7 +75,7 @@ export const getGoogleURL = () => {
 // export to use in loader
 export const createGoogleSession = async (code: string, request: Request, ref?: string) => {
   const { error, access_token, refresh_token } =
-    await validateGoogleAccessToken(code);
+    (await validateGoogleAccessToken(code)) as any;
   if (error) {
     console.error("::CODE_ERROR::", error);
     throw new Error("wrong google code", error);

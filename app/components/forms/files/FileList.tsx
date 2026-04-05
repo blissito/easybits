@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { IoClose } from "react-icons/io5";

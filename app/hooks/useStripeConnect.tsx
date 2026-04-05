@@ -32,7 +32,7 @@ export const useStripeConnect = ({
         if (!response.ok) {
           // Handle errors on the client side here
           const { error } = await response.json();
-          throw ("An error occurred: ", error);
+          throw new Error("An error occurred: " + error);
         } else {
           const data = await response.text();
           return data;

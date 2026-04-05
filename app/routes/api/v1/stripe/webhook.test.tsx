@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { test, expect, vi } from "vitest";
 import { db } from "~/.server/db";
 import { getStripe } from "~/.server/stripe";

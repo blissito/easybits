@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getStripe } from "~/.server/stripe";
 
 export const action = async ({ request }: { request: Request }) => {

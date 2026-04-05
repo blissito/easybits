@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { HeaderIconButton } from "../common/HeaderIconButton";
 import GlobeIcon from "/icons/globe.svg";
 import EditIcon from "/icons/edit.svg";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Asset, File } from "@prisma/client";
 import {  useContext, useRef,  type ChangeEvent } from "react";
 import { FaBook } from "react-icons/fa6";

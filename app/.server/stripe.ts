@@ -106,7 +106,7 @@ export const createPackCheckout = async ({
 /*
  * create account session
  */
-export const createAccountSession = async ({ account }) => {
+export const createAccountSession = async ({ account }: { account: string }) => {
   try {
     const accountSession = await getStripe().accountSessions.create({
       account: account,
@@ -122,7 +122,7 @@ export const createAccountSession = async ({ account }) => {
       "An error occurred when calling the Stripe API to create an account session",
       error
     );
-    throw error.message;
+    throw (error as Error).message;
   }
 };
 
@@ -161,7 +161,7 @@ export const createAccount = async () => {
       "An error occurred when calling the Stripe API to create an account",
       error
     );
-    throw error.message;
+    throw (error as Error).message;
   }
 };
 
@@ -178,7 +178,7 @@ export const fetchAccount = async ({ accountId }: { accountId: string }) => {
       "An error occurred when calling the Stripe API to create an account",
       error
     );
-    return error.message;
+    return (error as Error).message;
   }
 };
 
@@ -186,7 +186,20 @@ export const fetchAccount = async ({ accountId }: { accountId: string }) => {
  * create checkout session
  */
 
-export const createCheckoutSession = async ({ stripeAccount, asset }) => {
+export const createCheckoutSession = async ({
+  stripeAccount,
+  asset,
+}: {
+  stripeAccount: string;
+  asset: {
+    slug: string;
+    price: number;
+    title?: string | null;
+    currency: string;
+    id: string;
+    user?: { email: string } | null;
+  };
+}) => {
   const { slug, price, title, currency, id, user } = asset;
   const email = user?.email;
   const applicationFee = price * 0.5 * 100;

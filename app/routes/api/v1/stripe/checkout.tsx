@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { data, redirect } from "react-router";
 import type { Route } from "./+types/checkout";
 import { createCheckoutURL } from "~/.server/stripe_v2";

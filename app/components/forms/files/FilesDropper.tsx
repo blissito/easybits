@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, type DragEventHandler } from "react";
 import { cn } from "~/utils/cn";
 

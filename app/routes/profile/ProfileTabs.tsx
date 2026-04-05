@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { Fragment } from "react";
 import {

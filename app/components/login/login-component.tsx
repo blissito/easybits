@@ -15,7 +15,7 @@ const transition = {
   duration: 0.3,
   delay: 0.1,
   ease: [0, 0.71, 0.2, 1.01],
-};
+} as const;
 
 export default function LoginComponent({ state }: { state?: string }) {
   const fetcher = useFetcher();
@@ -162,6 +162,13 @@ const SocialButtons = ({
   handleLogin,
   onEmailClick,
   cta,
+}: {
+  isGoogleLoading: boolean;
+  SELECTED_STRINGS: { title: string; actionQuestion?: string; action?: string };
+  isStripeLoading: boolean;
+  handleLogin: (auth: "google" | "stripe") => () => void;
+  onEmailClick: () => void;
+  cta?: React.ReactNode;
 }) => {
   return (
     <motion.div
@@ -223,7 +230,10 @@ const EmailForm = ({
   noName = false,
 }: {
   noName?: boolean;
-  SELECTED_STRINGS: typeof SELECTED_STRINGS;
+  SELECTED_STRINGS: { title?: string; formTitle: string; formSubmit: string; formAction: string };
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  isLoading: boolean;
+  onAction: () => void;
 }) => {
   return (
     <motion.form

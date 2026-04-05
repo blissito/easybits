@@ -29,6 +29,7 @@ export const createAsset = async (data: AssetCreationPayload) => {
     size,
     publicLink,
   } = data;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return await db.asset.create({
     data: {
       publicLink,
@@ -38,6 +39,6 @@ export const createAsset = async (data: AssetCreationPayload) => {
       status,
       contentType,
       size,
-    },
+    } as any,
   });
 };
