@@ -7,7 +7,7 @@ import { CodeBlock } from "~/components/mdx/CodeBlock";
 export const meta = () => [
   ...getBasicMetaTags({
     title: "EasyBits API Docs — Agentic-First File Storage",
-    description: "Complete API reference for the EasyBits REST API v2. 30+ endpoints for AI agents to manage files, webhooks, and storage.",
+    description: "Complete API reference for the EasyBits REST API v2. 100+ endpoints for AI agents to manage files, webhooks, and storage.",
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/docs" },
 ];
@@ -58,7 +58,7 @@ export default function DocsPage() {
               {
                 "@type": "WebAPI",
                 name: "EasyBits API",
-                description: "Agentic-first file storage REST API. 30+ endpoints for AI agents to manage, share, and transform files.",
+                description: "Agentic-first file storage REST API. 100+ endpoints for AI agents to manage, share, and transform files.",
                 url: "https://www.easybits.cloud/docs",
                 documentation: "https://www.easybits.cloud/docs",
                 provider: {
@@ -87,7 +87,7 @@ export default function DocsPage() {
                 "@type": "SoftwareApplication",
                 name: "@easybits.cloud/mcp",
                 applicationCategory: "DeveloperApplication",
-                description: "MCP server with 30+ tools for AI agents to store, manage, and consume files. Works with Claude, ChatGPT, and any MCP-compatible client.",
+                description: "MCP server with 100+ tools for AI agents (12 core by default) to store, manage, and consume files. Works with Claude, ChatGPT, and any MCP-compatible client.",
                 url: "https://www.npmjs.com/package/@easybits.cloud/mcp",
                 offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
                 provider: {
@@ -175,7 +175,7 @@ export default function DocsPage() {
             </p>
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>3 ways to integrate:</strong> REST API (below), <a href="#sdk" className="underline font-medium">typed SDK</a> ({`npm i @easybits.cloud/sdk`}), or{" "}
-              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">MCP server</a> (30+ tools for AI agents).
+              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">MCP server</a> (100+ tools for AI agents (12 core by default)).
             </div>
 
             <h2 className="text-xl font-bold mb-4">Quick Start</h2>
@@ -209,7 +209,7 @@ const { items } = await eb.listFiles();` },
             <p className="text-gray-500 text-xs mt-3">
               <Link to="/dash/developer" className="underline font-medium">Get your API key</Link>.{" "}
               By default 12 core tools load. Add <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> for more.{" "}
-              <a href="#mcp-tools" className="underline">See tool groups</a>.
+              <Link to="/dash/developer/setup" className="underline">See tool groups</Link>.
             </p>
           </section>
 
@@ -963,7 +963,7 @@ console.log(url); // https://my-deck.easybits.cloud`}
               method="GET"
               path="/usage"
               description="Get account usage statistics: storage, file counts, plan info"
-              response={`{ "plan": "Byte", "storage": { "usedGB": 0.5, "maxGB": 1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
+              response={`{ "plan": "Byte", "storage": { "usedGB": 0.05, "maxGB": 0.1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
               sdk={`const stats = await eb.getUsageStats();
 console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             />
@@ -1010,7 +1010,7 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                 All error responses include a JSON body: <code className="bg-gray-100 px-1 rounded">{`{"error": "message"}`}</code>
               </p>
               <p className="text-gray-600">
-                Rate limits vary by plan. Free tier: 100 requests/minute. Pro: 1,000/minute. Business: 10,000/minute.
+                Rate limits: 100 requests per 15 minutes for all plans.
               </p>
             </div>
           </section>

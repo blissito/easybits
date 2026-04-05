@@ -8,7 +8,7 @@ export const meta = () =>
   getBasicMetaTags({
     title: "Conecta EasyBits a Claude — MCP",
     description:
-      "Conecta tu agente AI a EasyBits en un solo comando. 40+ herramientas MCP para gestionar archivos desde Claude, Cursor y más.",
+      "Conecta tu agente AI a EasyBits en un solo comando. 100+ herramientas MCP para gestionar archivos desde Claude, Cursor y más.",
   });
 
 const MCP_COMMAND = "claude mcp add easybits -- npx -y @easybits.cloud/mcp";
@@ -131,7 +131,7 @@ export default function McpPage() {
               Conecta EasyBits a Claude
             </h1>
             <p className="text-gray-600 mb-6">
-              Un comando. 40+ herramientas para gestionar archivos desde tu agente AI.
+              Un comando. 100+ herramientas para gestionar archivos desde tu agente AI.
             </p>
 
             {/* Command block */}
