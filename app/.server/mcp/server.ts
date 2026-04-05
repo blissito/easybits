@@ -157,11 +157,32 @@ export function createMcpServer(groups?: string[]) {
 
   // --- Register tool groups ---
   const enabled = new Set(groups?.length ? groups : ["core"]);
+  const coreOnly = enabled.has("core") && enabled.size === 1;
+
+  // Essential tools loaded when only "core" is requested (~18 tools)
+  const CORE_ALLOWLIST = new Set([
+    "list_files", "get_file", "upload_file", "search_files",
+    "generate_share_token",
+    "db_list", "db_create", "db_query",
+    "create_document", "set_page_html", "get_page_html",
+    "create_quotation",
+    "get_usage_stats", "get_docs",
+  ]);
+
+  // When core-only, intercept server.tool to filter
+  if (coreOnly) {
+    const originalTool = server.tool.bind(server);
+    (server as any).tool = (...args: any[]) => {
+      const toolName = typeof args[0] === "string" ? args[0] : undefined;
+      if (toolName && !CORE_ALLOWLIST.has(toolName)) return;
+      return (originalTool as any)(...args);
+    };
+  }
 
   // --- Tool discovery (always available) ---
   server.tool(
     "list_tool_groups",
-    "List available tool groups that can be enabled. By default only 'core' tools are loaded (~37 tools). Use this to discover additional capabilities like document generation, presentations, websites, and brand kits.",
+    "List available tool groups. Default loads ~18 essential tools. Enable more with --tools flag.",
     {},
     async () => ({
       content: [{
@@ -169,26 +190,32 @@ export function createMcpServer(groups?: string[]) {
         text: JSON.stringify({
           loaded: Array.from(enabled),
           available: {
-            core: { tools: 37, description: "Files, databases, webhooks, sharing, images, AI keys, utilities" },
-            docs: { tools: 33, description: "Documents, AI generation, quotations, PDF export, deploy to web" },
-            slides: { tools: 18, description: "Presentations, slides, deploy, PDF export, style templates" },
+            core: { tools: 15, description: "Files, DB, documents, quotations — the essentials" },
+            files: { tools: 37, description: "All file ops: bulk, sharing, permissions, webhooks, image transforms, AI keys" },
+            docs: { tools: 33, description: "All document tools: AI generation, refine, screenshots, structured docs" },
+            slides: { tools: 18, description: "Presentations, slides, deploy, PDF, style templates" },
             sites: { tools: 8, description: "Static websites, file upload, deploy" },
             brand: { tools: 8, description: "Brand kits, templates, themes" },
-            all: { tools: 104, description: "All tools" },
+            all: { description: "All ~104 tools" },
           },
           howToEnable: "Reconnect with --tools docs,slides (stdio) or ?tools=docs,slides (HTTP)",
         }, null, 2),
       }],
     })
   );
+
   if (enabled.has("all")) {
     registerCoreTools(server);
     registerDocTools(server);
     registerSlideTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
+  } else if (coreOnly) {
+    // Register all categories — the interceptor filters to CORE_ALLOWLIST
+    registerCoreTools(server);
+    registerDocTools(server);
   } else {
-    if (enabled.has("core")) registerCoreTools(server);
+    if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
     if (enabled.has("docs")) registerDocTools(server);
     if (enabled.has("slides")) registerSlideTools(server);
     if (enabled.has("sites")) registerSiteTools(server);
