@@ -141,11 +141,12 @@ Body: \`{ targetEmail, canRead?: true, canWrite?: false, canDelete?: false }\`
 Target user must exist on EasyBits.
 SDK: \`eb.shareFile({ fileId, targetEmail, canRead?, canWrite?, canDelete? })\`
 
-### Generate share token (presigned URL)
+### Generate share token (temporary public URL)
 \`POST /files/:fileId/share-token\`
-Body: \`{ expiresIn?: seconds }\` (default 3600, min 60, max 604800)
-Returns: \`{ url, token }\`
+Body: \`{ expiresIn?: seconds }\` (default 3600, min 60, max 604800 = 7 days)
+Returns: \`{ url, token }\` — the URL is a temporary public link to the private file.
 SDK: \`eb.generateShareToken(fileId, expiresIn?)\`
+MCP: \`generate_share_token({ fileId, expiresIn? })\`
 
 ### List share tokens
 \`GET /share-tokens?fileId=&limit=&cursor=\`

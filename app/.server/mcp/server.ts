@@ -440,7 +440,7 @@ export function createMcpServer() {
 
   server.tool(
     "generate_share_token",
-    "Generate a presigned download URL for a file and record it as a ShareToken. Returns `{ url, token }`. Default expiration: 1 hour (3600s).",
+    "Generate a temporary public URL for a private file — perfect for sharing previews without making the file permanently public. Returns `{ url, token }`. Default expiration: 1 hour. Max: 7 days (604800s).",
     {
       fileId: z.string().describe("The file ID"),
       expiresIn: z.number().min(60).max(604800).optional().describe("Expiration in seconds (default 3600, min 60, max 604800)"),
@@ -742,7 +742,7 @@ Call get_docs("presentation-design") for the full design guide with validated pa
 
   server.tool(
     "deploy_presentation",
-    "Publish a presentation as a live website. Returns the public URL (slug.easybits.cloud). Requires at least one slide.",
+    "Publish a presentation as a live website at slug.easybits.cloud — shareable link, no hosting needed. Returns the public URL. Requires at least one slide.",
     {
       presentationId: z.string().describe("The presentation ID to deploy"),
     },
@@ -1553,7 +1553,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
 
   server.tool(
     "deploy_document",
-    "Publish a document as a live website (slug.easybits.cloud). Requires at least one page/section.",
+    "Publish a document as a live website at slug.easybits.cloud — instant hosting, shareable link. Requires at least one page/section.",
     {
       documentId: z.string().describe("The document ID to deploy"),
     },
@@ -1691,7 +1691,7 @@ Call get_docs("document-design") for full design guide with validated patterns.`
 
   server.tool(
     "generate_document",
-    "Generate document pages with AI. Creates professional letter-sized pages using parallel generation. Takes 10-30s depending on page count. Returns generated sections.",
+    "Generate professional document pages with AI — reports, proposals, brochures, one-pagers. Creates letter-sized pages with layout, images, and typography. Takes 10-30s. Deploy with deploy_document for instant sharing.",
     {
       documentId: z.string().describe("The document ID to generate pages for"),
       prompt: z.string().describe("What the document is about (e.g. 'Quarterly report Q1 2026 for Acme Corp')"),
