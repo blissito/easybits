@@ -161,12 +161,11 @@ export function createMcpServer(groups?: string[]) {
 
   // Essential tools loaded when only "core" is requested (~18 tools)
   const CORE_ALLOWLIST = new Set([
-    "list_files", "get_file", "upload_file", "search_files",
-    "generate_share_token",
+    "list_files", "get_file", "upload_file",
     "db_list", "db_create", "db_query",
-    "create_document", "set_page_html", "get_page_html",
+    "create_document", "set_page_html",
     "create_quotation",
-    "get_usage_stats", "get_docs",
+    "get_usage_stats",
   ]);
 
   // When core-only, intercept server.tool to filter
