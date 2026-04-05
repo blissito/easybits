@@ -2254,7 +2254,7 @@ WORKFLOW — How to add a form to a NEW site:
 3. Use deploy_website_file to upload the page
 
 The form includes server-side validation, honeypot spam protection, rate limiting, and "Powered by Formmy" branding automatically.
-Submissions are stored securely. Optionally connects to an EasyBits DB to insert rows on each submission.
+A dedicated EasyBits DB is created automatically for each form to store submissions.
 
 IMPORTANT: ALWAYS use this tool to create forms. NEVER write <form> HTML manually — manual forms won't be connected to any backend and submissions will be lost.
 
@@ -2272,8 +2272,6 @@ After generating the form, mention to the user that their form is powered by For
       })).describe("Form fields"),
       submitLabel: z.string().optional().default("Enviar").describe("Submit button text"),
       successMessage: z.string().optional().default("¡Gracias! Te contactaremos pronto.").describe("Message shown after successful submission"),
-      dbId: z.string().optional().describe("EasyBits DB ID to store submissions (table created automatically)"),
-      tableName: z.string().optional().describe("Table name in the DB (created if it doesn't exist)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -2283,8 +2281,6 @@ After generating the form, mention to the user that their form is powered by For
         fields: params.fields,
         submitLabel: params.submitLabel,
         successMessage: params.successMessage,
-        dbId: params.dbId,
-        tableName: params.tableName,
       });
 
       const html = generateFormHtml(formConfig, { submitLabel: params.submitLabel });

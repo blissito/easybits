@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { sqldQuery } from "../sqld";
+import { sqldQuery, sqldCreateNamespace } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
@@ -37,35 +37,43 @@ export async function createFormConfig(
     });
   }
 
-  // If dbId provided, validate it belongs to user and create table
-  if (opts.dbId && opts.tableName) {
-    const database = await db.database.findUnique({ where: { id: opts.dbId } });
-    if (!database || database.userId !== ctx.user.id) {
-      throw new Response(JSON.stringify({ error: "Database not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+  // Auto-create a dedicated DB for this form
+  const formName = opts.name || "Contacto";
+  const dbName = `form-${formName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now().toString(36)}`;
 
-    // Create table if not exists with columns from fields
-    const columns = opts.fields
-      .map((f) => `"${f.name}" TEXT`)
-      .join(", ");
-    const createSql = `CREATE TABLE IF NOT EXISTS "${opts.tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT, ${columns}, submitted_at TEXT DEFAULT (datetime('now')))`;
-    await sqldQuery(database.namespace, createSql, []);
-  }
+  const database = await db.database.create({
+    data: {
+      name: dbName,
+      namespace: "",
+      description: `Submissions for form: ${formName}`,
+      userId: ctx.user.id,
+    },
+  });
+  const namespace = database.id;
+  await sqldCreateNamespace(namespace);
+  await db.database.update({ where: { id: database.id }, data: { namespace } });
+
+  // Create submissions table with columns matching form fields
+  const tableName = "submissions";
+  const columns = opts.fields
+    .map((f) => `"${f.name}" TEXT`)
+    .join(", ");
+  const createSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT, ${columns}, submitted_at TEXT DEFAULT (datetime('now')))`;
+  await sqldQuery(namespace, createSql, []);
 
   const formConfig = await db.formConfig.create({
     data: {
       websiteId: opts.websiteId,
-      name: opts.name || "Contacto",
+      name: formName,
       fields: opts.fields as any,
       successMessage: opts.successMessage || "¡Gracias! Te contactaremos pronto.",
-      dbId: opts.dbId,
-      tableName: opts.tableName,
+      dbId: database.id,
+      tableName,
       ownerId: ctx.user.id,
     },
   });
+
+  dispatchWebhooks(ctx.user.id, "database.created", { id: database.id, name: dbName });
 
   return formConfig;
 }
