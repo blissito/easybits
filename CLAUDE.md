@@ -247,7 +247,16 @@ EasyBits se convierte en hosting + DB + forms + actions — un mini Firebase/Sup
 - TipTap editor inline (P0) — reemplazar textarea
 - Slide layouts pro (P1) — 8 layouts que eleven la calidad visual
 
-**Prioridad 4 — Experiencia de plataforma**:
+**Prioridad 4 — HLS Streaming (diseñar UI + MCP)**:
+- Auto-transcode: al subir video, FFmpeg genera `.m3u8` + segments en background
+- MCP: `get_file` devuelve `hlsUrl` para videos transcodificados
+- MCP: nuevo tool `transcode_video` para triggear manualmente (calidad, resolución)
+- UI: player HLS inline en dashboard de archivos (video.js o hls.js)
+- UI: status de transcoding (pending → processing → ready)
+- Approach comunidad: FFmpeg-MCP wrapper + auto-detect video MIME type
+- Infra: FFmpeg worker en Fly Machine (se levanta bajo demanda, no siempre corriendo)
+
+**Prioridad 5 — Experiencia de plataforma**:
 - Logs de actividad — qué hizo mi agente, cuándo, qué archivos tocó
 - Dashboard con métricas reales — storage usado, requests/día, archivos por tipo
 
