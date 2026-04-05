@@ -1,5 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, Link } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
 import { cn } from "~/utils/cn";
@@ -110,13 +110,15 @@ export const PlanCard = ({
   cta?: ReactNode;
 }) => {
   const button = cta || (
-    <BrutalButton
-      className={cn("w-full bg-[#F6DB7F]", classNameButton)}
-      containerClassName="w-full"
-      id="EmpezarPlanes"
-    >
-      <span>¡Empezar!</span>
-    </BrutalButton>
+    <Link to="/login">
+      <BrutalButton
+        className={cn("w-full bg-[#F6DB7F]", classNameButton)}
+        containerClassName="w-full"
+        id="EmpezarPlanes"
+      >
+        <span>¡Empezar!</span>
+      </BrutalButton>
+    </Link>
   );
   return (
     <section className="h-full rounded-xl group max-w-[340px] md:max-w-none mx-auto">
