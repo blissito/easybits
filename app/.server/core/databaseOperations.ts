@@ -3,8 +3,9 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { sqldQuery, sqldExec, sqldCreateNamespace, sqldDeleteNamespace } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
+import { getUserPlan, PLANS, type PlanKey } from "~/lib/plans";
 
-const MAX_DATABASES_PER_USER = 5;
+const DB_LIMITS: Record<PlanKey, number> = { Byte: 1, Mega: 5, Tera: 20 };
 
 export async function listDatabases(ctx: AuthContext) {
   requireScope(ctx, "READ");
@@ -44,10 +45,12 @@ export async function createDatabase(
     );
   }
 
+  const planKey = getUserPlan(ctx.user);
+  const maxDbs = DB_LIMITS[planKey];
   const count = await db.database.count({ where: { userId: ctx.user.id } });
-  if (count >= MAX_DATABASES_PER_USER) {
+  if (count >= maxDbs) {
     throw new Response(
-      JSON.stringify({ error: `Max ${MAX_DATABASES_PER_USER} databases per account` }),
+      JSON.stringify({ error: `Max ${maxDbs} databases on plan ${planKey}. Upgrade for more.` }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }

@@ -1,32 +1,42 @@
 import { redirect } from "react-router";
-import { getStripeCheckout } from "~/.server/stripe";
+import { getStripe } from "~/.server/stripe";
+import { PLANS, type PlanKey } from "~/lib/plans";
+import { config } from "~/.server/config";
 import type { Route } from "./+types/plans";
+
+const PLAN_BY_INTENT: Record<string, PlanKey> = {
+  flow_plan: "Mega",
+  studio_plan: "Tera",
+};
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = String(formData.get("intent") ?? "");
+  const planKey = PLAN_BY_INTENT[intent];
+  if (!planKey) return null;
 
-  if (intent === "creative_plan") {
-    throw redirect(
-      await getStripeCheckout({
-        priceId: "price_1RCmryIW1Nfyq2zeLLyg0gT9", // this is prod
-        secret: process.env.STRIPE_SECRET_KEY,
-        // secret: process.env.DEV_STRIPE_SECRET_KEY,
-        plan: "creative",
-      })
-    );
-  }
+  const plan = PLANS[planKey];
+  const stripe = getStripe();
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    metadata: { plan: planKey },
+    line_items: [
+      {
+        price_data: {
+          currency: "mxn",
+          recurring: { interval: "month" },
+          product_data: { name: `EasyBits ${plan.name}` },
+          unit_amount: plan.price * 100,
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${config.baseUrl}/api/v1/stripe/plans?plan=${planKey}&success=1`,
+    cancel_url: `${config.baseUrl}/api/v1/stripe/plans?plan=${planKey}&success=0`,
+    allow_promotion_codes: true,
+  });
 
-  if (intent === "expert_plan") {
-    const url = await getStripeCheckout({
-      plan: "expert",
-      priceId: "price_1RCmssIW1Nfyq2zeGz8uiNoA", // prod
-      secret: process.env.STRIPE_SECRET_KEY,
-    });
-    throw redirect(url);
-  }
-
-  return null;
+  throw redirect(session.url || "/404");
 };
 
 export const loader = ({ request }: Route.LoaderArgs) => {

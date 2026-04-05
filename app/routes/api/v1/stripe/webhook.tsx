@@ -7,23 +7,11 @@ import type { ActionFunctionArgs } from "~/.server/types/react-router";
 import Stripe from "stripe";
 import { isPaidPlan, normalizePlan } from "~/lib/plans";
 
-// Función para manejar eventos de suscripción
-async function handleSubscriptionEvent(
-  subscriptionEvent: Stripe.Subscription,
-  currentRoles: string[]
-): Promise<string[]> {
-  let roles = [...currentRoles];
-  
-  // Agregar o remover roles según el plan de suscripción
-  if (subscriptionEvent.items?.data[0]?.plan?.id === 'premium_plan') {
-    if (!roles.includes('premium')) {
-      roles.push('premium');
-    }
-  } else {
-    roles = roles.filter(role => role !== 'premium');
-  }
+const PLAN_ROLES = ["Byte", "Mega", "Tera", "Spark", "Flow", "Studio"];
 
-  return roles;
+/** Remove all plan roles from user (used on cancellation/update) */
+function stripPlanRoles(roles: string[]): string[] {
+  return roles.filter((r) => !PLAN_ROLES.includes(r));
 }
 
 // Estado de la asignación de asset
@@ -288,11 +276,16 @@ export async function action({ request }: ActionFunctionArgs) {
         });
         if (!subscriptionUser) return new Response("User not found", { status: 404 });
 
-        const updatedRoles = await handleSubscriptionEvent(subscriptionEvent, subscriptionUser.roles || []);
-        await db.user.update({
-          where: { id: subscriptionUser.id },
-          data: { roles: updatedRoles }
-        });
+        // On cancellation/failure, remove plan roles so user falls back to Byte
+        if (
+          event.type === "customer.subscription.deleted" ||
+          event.type === "invoice.payment_failed"
+        ) {
+          await db.user.update({
+            where: { id: subscriptionUser.id },
+            data: { roles: stripPlanRoles(subscriptionUser.roles || []) },
+          });
+        }
         break;
     }
 
