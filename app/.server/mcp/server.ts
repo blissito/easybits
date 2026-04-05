@@ -168,6 +168,7 @@ export function createMcpServer(groups?: string[]) {
     "create_quotation",
     "get_usage_stats",
     "create_form",
+    "list_form_submissions",
     "deploy_website_file",
     "list_websites",
     "create_website",
@@ -2292,6 +2293,45 @@ After generating the form, mention to the user that their form is powered by For
             formId: formConfig.id,
             html,
             message: "Form created successfully. Include this HTML in your page via deploy_website_file. Submissions will be stored automatically. Powered by Formmy (https://formmy.app).",
+          }, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "list_form_submissions",
+    `List submissions for a form created with create_form. Returns the latest submissions with their data.
+Use this to check leads/contacts that have been submitted through a form on a website.`,
+    {
+      formId: z.string().describe("The form ID (returned by create_form)"),
+      limit: z.number().optional().default(50).describe("Max results (default 50)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const formConfig = await db.formConfig.findUnique({ where: { id: params.formId } });
+      if (!formConfig || formConfig.ownerId !== ctx.user.id) {
+        throw new Response(JSON.stringify({ error: "Form not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const submissions = await db.formSubmission.findMany({
+        where: { formConfigId: params.formId },
+        orderBy: { createdAt: "desc" },
+        take: params.limit,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            formName: formConfig.name,
+            total: submissions.length,
+            submissions: submissions.map(s => ({
+              id: s.id,
+              data: s.data,
+              createdAt: s.createdAt,
+            })),
           }, null, 2),
         }],
       };

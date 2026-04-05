@@ -370,6 +370,15 @@ function downloadCsv(cols: string[], rows: unknown[][], filename: string) {
   URL.revokeObjectURL(url);
 }
 
+async function downloadXlsx(cols: string[], rows: unknown[][], filename: string) {
+  const XLSX = await import("xlsx");
+  const data = [cols, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.writeFile(wb, filename);
+}
+
 type SchemaTable = { name: string; columns: { name: string; type: string; pk: boolean }[] };
 
 function DatabaseRow({
@@ -652,13 +661,22 @@ function DatabaseRow({
                     <span className="text-xs font-bold text-gray-500">
                       {queryResult.rows.length} row{queryResult.rows.length !== 1 ? "s" : ""} returned
                     </span>
-                    <button
-                      type="button"
-                      className="text-xs font-bold text-brand-500 hover:text-brand-700 transition-colors"
-                      onClick={() => downloadCsv(queryResult.cols, queryResult.rows, `${dbItem.name}-export.csv`)}
-                    >
-                      Export CSV
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-brand-500 hover:text-brand-700 transition-colors"
+                        onClick={() => downloadCsv(queryResult.cols, queryResult.rows, `${dbItem.name}-export.csv`)}
+                      >
+                        Export CSV
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-brand-500 hover:text-brand-700 transition-colors"
+                        onClick={() => downloadXlsx(queryResult.cols, queryResult.rows, `${dbItem.name}-export.xlsx`)}
+                      >
+                        Export XLSX
+                      </button>
+                    </div>
                   </div>
                   <table className="w-full text-xs border-2 border-black rounded-lg overflow-hidden">
                     <thead className="bg-black text-white">
