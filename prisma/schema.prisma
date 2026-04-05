@@ -619,6 +619,7 @@ model FormConfig {
   dbId           String?  // EasyBits DB ID to insert submissions
   tableName      String?  // Table name in the DB
   successMessage String   @default("¡Gracias! Te contactaremos pronto.")
+  deliveryUrl    String?  // URL to redirect after form submission (e.g. flipbook PDF viewer)
   ownerId        String   @db.ObjectId
   owner          User     @relation(fields: [ownerId], references: [id])
   createdAt      DateTime @default(now())

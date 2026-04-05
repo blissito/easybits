@@ -22,6 +22,7 @@ export async function createFormConfig(
     fields: FormField[];
     submitLabel?: string;
     successMessage?: string;
+    deliveryUrl?: string;
     dbId?: string;
     tableName?: string;
   }
@@ -92,6 +93,7 @@ export async function createFormConfig(
       name: formName,
       fields: opts.fields as any,
       successMessage: opts.successMessage || "¡Gracias! Te contactaremos pronto.",
+      deliveryUrl: opts.deliveryUrl || null,
       dbId,
       tableName,
       ownerId: ctx.user.id,
@@ -103,13 +105,14 @@ export async function createFormConfig(
 
 // ─── Public: Generate form HTML ────────────────────────────────
 export function generateFormHtml(
-  formConfig: { id: string; fields: any; successMessage: string },
+  formConfig: { id: string; fields: any; successMessage: string; deliveryUrl?: string | null },
   opts: { submitLabel?: string } = {}
 ): string {
   const fields = formConfig.fields as FormField[];
   const submitLabel = opts.submitLabel || "Enviar";
   const formId = formConfig.id;
   const successMsg = formConfig.successMessage;
+  const deliveryUrl = formConfig.deliveryUrl;
 
   const fieldHtml = fields
     .map((f) => {
@@ -130,8 +133,13 @@ export function generateFormHtml(
     })
     .join("\n");
 
+  // Success handler: redirect to delivery URL or show success message
+  const successHandler = deliveryUrl
+    ? `if(d.ok&&d.deliveryUrl)window.location.href=d.deliveryUrl;else if(d.ok)this.innerHTML='<p style=\\'text-align:center;padding:2rem;color:#16a34a\\'>${escapeHtml(successMsg)}</p>'`
+    : `if(d.ok)this.innerHTML='<p style=\\'text-align:center;padding:2rem;color:#16a34a\\'>${escapeHtml(successMsg)}</p>'`;
+
   return `<!-- Powered by Formmy — https://formmy.app -->
-<form data-formmy="${formId}" onsubmit="event.preventDefault();var b=this.querySelector('[type=submit]'),hp=this.querySelector('[name=_hp]');if(hp&&hp.value)return;b.disabled=true;b.textContent='Enviando...';fetch('https://www.easybits.cloud/api/v2/forms/${formId}/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(this)))}).then(function(r){return r.json()}).then(function(d){if(d.ok)this.innerHTML='<p style=\\'text-align:center;padding:2rem;color:#16a34a\\'>${escapeHtml(successMsg)}</p>';else{b.disabled=false;b.textContent='Error, intenta de nuevo'}}.bind(this)).catch(function(){b.disabled=false;b.textContent='Error, intenta de nuevo'})">
+<form data-formmy="${formId}" onsubmit="event.preventDefault();var b=this.querySelector('[type=submit]'),hp=this.querySelector('[name=_hp]');if(hp&&hp.value)return;b.disabled=true;b.textContent='Enviando...';fetch('https://www.easybits.cloud/api/v2/forms/${formId}/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(this)))}).then(function(r){return r.json()}).then(function(d){${successHandler};if(!d.ok){b.disabled=false;b.textContent='Error, intenta de nuevo'}}.bind(this)).catch(function(){b.disabled=false;b.textContent='Error, intenta de nuevo'})">
 ${fieldHtml}
   <input name="_hp" style="display:none" tabindex="-1" autocomplete="off" />
   <button type="submit">${escapeHtml(submitLabel)}</button>
@@ -232,7 +240,11 @@ export async function handleFormSubmission(
     data: cleanData,
   });
 
-  return { ok: true };
+  const result: { ok: true; deliveryUrl?: string } = { ok: true };
+  if (formConfig.deliveryUrl) {
+    result.deliveryUrl = formConfig.deliveryUrl;
+  }
+  return result;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
