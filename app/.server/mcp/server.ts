@@ -167,6 +167,7 @@ export function createMcpServer(groups?: string[]) {
     "list_documents", "create_document", "set_page_html", "get_page_html",
     "create_quotation",
     "get_usage_stats",
+    "create_form",
   ]);
 
   // When core-only, intercept server.tool to filter
@@ -190,6 +191,7 @@ export function createMcpServer(groups?: string[]) {
     // Register all categories — the interceptor filters to CORE_ALLOWLIST
     registerCoreTools(server);
     registerDocTools(server);
+    registerSiteTools(server); // create_form is in CORE_ALLOWLIST
   } else {
     if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
     if (enabled.has("docs")) registerDocTools(server);
