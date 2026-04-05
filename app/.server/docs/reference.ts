@@ -22,11 +22,25 @@ import { EasybitsClient } from "@easybits.cloud/sdk";
 const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
 \`\`\`
 
-**MCP Server:**
+**MCP — Claude Code (un comando):**
 \`\`\`bash
-npx -y @easybits.cloud/mcp
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY
 \`\`\`
-Configure with \`EASYBITS_API_KEY\` env var or \`~/.easybitsrc\`.
+
+**MCP — Cursor / VS Code / Windsurf (Streamable HTTP):**
+\`\`\`json
+{
+  "mcpServers": {
+    "easybits": {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp",
+      "headers": { "Authorization": "Bearer eb_sk_live_YOUR_KEY" }
+    }
+  }
+}
+\`\`\`
+
+By default only 12 core tools load. Add \`--tools docs,slides,all\` for more. See [Tool Groups](#tool-groups).
 `,
 
   files: `## Files
