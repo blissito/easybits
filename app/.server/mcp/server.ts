@@ -157,6 +157,30 @@ export function createMcpServer(groups?: string[]) {
 
   // --- Register tool groups ---
   const enabled = new Set(groups?.length ? groups : ["core"]);
+
+  // --- Tool discovery (always available) ---
+  server.tool(
+    "list_tool_groups",
+    "List available tool groups that can be enabled. By default only 'core' tools are loaded (~37 tools). Use this to discover additional capabilities like document generation, presentations, websites, and brand kits.",
+    {},
+    async () => ({
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({
+          loaded: Array.from(enabled),
+          available: {
+            core: { tools: 37, description: "Files, databases, webhooks, sharing, images, AI keys, utilities" },
+            docs: { tools: 33, description: "Documents, AI generation, quotations, PDF export, deploy to web" },
+            slides: { tools: 18, description: "Presentations, slides, deploy, PDF export, style templates" },
+            sites: { tools: 8, description: "Static websites, file upload, deploy" },
+            brand: { tools: 8, description: "Brand kits, templates, themes" },
+            all: { tools: 104, description: "All tools" },
+          },
+          howToEnable: "Reconnect with --tools docs,slides (stdio) or ?tools=docs,slides (HTTP)",
+        }, null, 2),
+      }],
+    })
+  );
   if (enabled.has("all")) {
     registerCoreTools(server);
     registerDocTools(server);
