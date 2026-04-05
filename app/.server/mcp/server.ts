@@ -185,17 +185,28 @@ export function createMcpServer(groups?: string[]) {
     "list_form_submissions",                            // consultar leads
   ]);
 
-  // Determine which allowlist to use
-  const activeAllowlist = enabled.has("magnet") ? MAGNET_ALLOWLIST
-    : coreOnly ? CORE_ALLOWLIST
-    : null;
+  // Build combined allowlist from all requested groups
+  const groupAllowlists: Record<string, Set<string>> = {
+    core: CORE_ALLOWLIST,
+    magnet: MAGNET_ALLOWLIST,
+  };
+  // Merge allowlists for all requested groups (e.g. "core,magnet" = union)
+  const needsAllowlist = [...enabled].some(g => g in groupAllowlists) && !enabled.has("all");
+  let activeAllowlist: Set<string> | null = null;
+  if (needsAllowlist) {
+    activeAllowlist = new Set<string>();
+    for (const g of enabled) {
+      const list = groupAllowlists[g];
+      if (list) list.forEach(t => activeAllowlist!.add(t));
+    }
+  }
 
   // When using an allowlist, intercept server.tool to filter
   if (activeAllowlist) {
     const originalTool = server.tool.bind(server);
     (server as any).tool = (...args: any[]) => {
       const toolName = typeof args[0] === "string" ? args[0] : undefined;
-      if (toolName && !activeAllowlist.has(toolName)) return;
+      if (toolName && !activeAllowlist!.has(toolName)) return;
       return (originalTool as any)(...args);
     };
   }
@@ -206,7 +217,8 @@ export function createMcpServer(groups?: string[]) {
     registerSlideTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
-  } else if (enabled.has("magnet")) {
+  } else if (enabled.has("magnet") || coreOnly) {
+    // Both magnet and core need these categories — allowlist filters the specific tools
     registerCoreTools(server);
     registerDocTools(server);
     registerSiteTools(server);
