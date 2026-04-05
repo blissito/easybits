@@ -1125,6 +1125,79 @@ export async function deployWebsiteFile(
   return { file };
 }
 
+// --- Inject HTML into existing website file ---
+
+export async function injectWebsiteHtml(
+  ctx: AuthContext,
+  opts: {
+    websiteId: string;
+    fileName: string;
+    selector: string;
+    position: "replace" | "beforeend" | "afterbegin";
+    html: string;
+  }
+) {
+  requireScope(ctx, "WRITE");
+
+  const website = await db.website.findUnique({ where: { id: opts.websiteId } });
+  if (!website || website.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Website not found" }), {
+      status: 404, headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const name = `${website.prefix}${opts.fileName}`;
+  const file = await db.file.findFirst({
+    where: { ownerId: ctx.user.id, name, status: { not: "DELETED" } },
+  });
+  if (!file || !file.url) {
+    throw new Response(JSON.stringify({ error: `File "${opts.fileName}" not found in website` }), {
+      status: 404, headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Fetch current HTML
+  const res = await fetch(file.url);
+  if (!res.ok) {
+    throw new Response(JSON.stringify({ error: "Failed to fetch current file content" }), {
+      status: 500, headers: { "Content-Type": "application/json" },
+    });
+  }
+  const currentHtml = await res.text();
+
+  // Parse and inject
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM(currentHtml);
+  const el = dom.window.document.querySelector(opts.selector);
+  if (!el) {
+    throw new Response(
+      JSON.stringify({ error: `No element matches selector: ${opts.selector}` }),
+      { status: 404, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const template = dom.window.document.createElement("template");
+  template.innerHTML = opts.html;
+
+  if (opts.position === "replace") {
+    el.replaceWith(template.content);
+  } else if (opts.position === "beforeend") {
+    el.appendChild(template.content);
+  } else if (opts.position === "afterbegin") {
+    el.prepend(template.content);
+  }
+
+  const newHtml = dom.serialize();
+
+  // Re-deploy
+  return deployWebsiteFile(ctx, {
+    websiteId: opts.websiteId,
+    fileName: opts.fileName,
+    contentType: "text/html",
+    content: newHtml,
+  });
+}
+
 // --- List Deleted Files ---
 
 export async function listDeletedFiles(

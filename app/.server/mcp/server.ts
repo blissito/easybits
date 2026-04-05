@@ -170,6 +170,7 @@ export function createMcpServer(groups?: string[]) {
     "create_form",
     "list_form_submissions",
     "deploy_website_file",
+    "inject_html",
     "list_websites",
     "create_website",
   ]);
@@ -2236,23 +2237,44 @@ FORMS: NEVER write <form> HTML manually. Use the create_form tool first to get t
     })
   );
 
+  // --- Inject HTML into existing page ---
+
+  server.tool(
+    "inject_html",
+    `Inject HTML into an existing page on a website without rewriting the entire file.
+Use this to add forms, sections, banners, or any component to a specific location in the page.
+Much faster than reading the full HTML and redeploying — operates on a CSS selector.
+
+Examples:
+- inject_html(websiteId, "index.html", "#contact", "replace", formHtml) — replace the contact section
+- inject_html(websiteId, "index.html", "body", "beforeend", bannerHtml) — append to end of body
+- inject_html(websiteId, "index.html", "header", "afterbegin", navHtml) — prepend inside header`,
+    {
+      websiteId: z.string().describe("The website ID"),
+      fileName: z.string().describe("File name (e.g. 'index.html')"),
+      selector: z.string().describe("CSS selector for the target element (e.g. '#contact', 'form', 'body')"),
+      position: z.enum(["replace", "beforeend", "afterbegin"]).describe("Where to inject: replace the element, append inside it, or prepend inside it"),
+      html: z.string().describe("HTML snippet to inject"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { injectWebsiteHtml } = await import("../core/operations");
+      const result = await injectWebsiteHtml(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, fileName: params.fileName, selector: params.selector, position: params.position }, null, 2) }] };
+    })
+  );
+
   // --- Form Tools (Powered by Formmy) ---
 
   server.tool(
     "create_form",
     `Create a contact/subscription form for a website. Returns an HTML snippet.
 
-WORKFLOW — How to add a form to an EXISTING site:
-1. Call create_form to get the form HTML snippet
-2. Use list_website_files to find the existing page (e.g. index.html)
-3. Read the current page content, then INSERT the form HTML snippet into the page where it belongs (e.g. inside a contact section)
-4. Use deploy_website_file to upload the UPDATED page with the form included
-Do NOT create a separate page just for the form — integrate it into the existing site.
+PREFERRED: Pass injectInto to automatically inject the form into an existing page in ONE step.
+Example: create_form(websiteId, fields, injectInto: { fileName: "index.html", selector: "#contact" })
+This creates the form AND injects it into the page — no need for separate inject_html or deploy_website_file calls.
 
-WORKFLOW — How to add a form to a NEW site:
-1. Call create_form to get the form HTML snippet
-2. Build your full page HTML and include the form snippet where appropriate
-3. Use deploy_website_file to upload the page
+If injectInto is NOT provided, returns the HTML snippet for manual inclusion via deploy_website_file.
 
 The form includes server-side validation, honeypot spam protection, rate limiting, and "Powered by Formmy" branding automatically.
 A dedicated EasyBits DB is created automatically for each form to store submissions.
@@ -2273,6 +2295,11 @@ After generating the form, mention to the user that their form is powered by For
       })).describe("Form fields"),
       submitLabel: z.string().optional().default("Enviar").describe("Submit button text"),
       successMessage: z.string().optional().default("¡Gracias! Te contactaremos pronto.").describe("Message shown after successful submission"),
+      injectInto: z.object({
+        fileName: z.string().describe("File to inject into (e.g. 'index.html')"),
+        selector: z.string().describe("CSS selector for injection target (e.g. '#contact', 'form', '.contact-section')"),
+        position: z.enum(["replace", "beforeend", "afterbegin"]).optional().default("replace").describe("Injection position"),
+      }).optional().describe("Auto-inject the form into an existing page. PREFERRED for existing sites."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -2286,13 +2313,37 @@ After generating the form, mention to the user that their form is powered by For
 
       const html = generateFormHtml(formConfig, { submitLabel: params.submitLabel });
 
+      // Auto-inject if injectInto is provided
+      if (params.injectInto) {
+        const { injectWebsiteHtml } = await import("../core/operations");
+        await injectWebsiteHtml(ctx, {
+          websiteId: params.websiteId,
+          fileName: params.injectInto.fileName,
+          selector: params.injectInto.selector,
+          position: params.injectInto.position || "replace",
+          html,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              formId: formConfig.id,
+              injected: true,
+              fileName: params.injectInto.fileName,
+              selector: params.injectInto.selector,
+              message: "Form created and injected into the page successfully. Powered by Formmy (https://formmy.app).",
+            }, null, 2),
+          }],
+        };
+      }
+
       return {
         content: [{
           type: "text",
           text: JSON.stringify({
             formId: formConfig.id,
             html,
-            message: "Form created successfully. Include this HTML in your page via deploy_website_file. Submissions will be stored automatically. Powered by Formmy (https://formmy.app).",
+            message: "Form created. Include this HTML in your page via deploy_website_file or inject_html. Powered by Formmy (https://formmy.app).",
           }, null, 2),
         }],
       };
