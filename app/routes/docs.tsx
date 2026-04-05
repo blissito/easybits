@@ -186,14 +186,30 @@ export default function DocsPage() {
             </ol>
             <TabbedCode
               tabs={[
+                { label: "Claude Code", code: `claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY` },
                 { label: "curl", code: `curl -H "Authorization: Bearer eb_sk_live_YOUR_KEY" \\
   https://www.easybits.cloud/api/v2/files` },
                 { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
 
 const eb = new EasybitsClient({ apiKey: "eb_sk_live_YOUR_KEY" });
 const { items } = await eb.listFiles();` },
+                { label: "Streamable HTTP", code: `{
+  "mcpServers": {
+    "easybits": {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp",
+      "headers": {
+        "Authorization": "Bearer eb_sk_live_YOUR_KEY"
+      }
+    }
+  }
+}` },
               ]}
             />
+            <p className="text-gray-500 text-xs mt-3">
+              By default 12 core tools load. Add <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> for more.{" "}
+              <a href="#mcp-tools" className="underline">See tool groups</a>.
+            </p>
           </section>
 
           {/* Authentication */}
