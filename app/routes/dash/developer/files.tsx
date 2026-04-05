@@ -5,6 +5,8 @@ import { db } from "~/.server/db";
 import { deleteFile, restoreFile } from "~/.server/core/operations";
 import { getClientForFile, getPlatformDefaultClient } from "~/.server/storage";
 import type { AuthContext } from "~/.server/apiAuth";
+import { getUserPlan } from "~/lib/plans";
+import { StorageBar, getStorageStats } from "~/components/common/StorageBar";
 import type { Route } from "./+types/files";
 
 export const meta = () => [
@@ -67,7 +69,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const items = hasMore ? files.slice(0, limit) : files;
   const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-  return { items, nextCursor, trash };
+  const usedGB = await getStorageStats(user.id, db);
+  const planKey = getUserPlan(user);
+
+  return { items, nextCursor, trash, usedGB, planKey };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -198,11 +203,31 @@ function RestoreButton({ fileId }: { fileId: string }) {
 }
 
 export default function DevFilesPage() {
-  const { items, nextCursor, trash } = useLoaderData<typeof loader>();
+  const { items: initialItems, nextCursor: initialCursor, trash, usedGB, planKey } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const [tokenFor, setTokenFor] = useState<Pick<File, "id" | "name"> | null>(null);
-  const [previewFile, setPreviewFile] = useState<(typeof items)[number] | null>(null);
+  const [previewFile, setPreviewFile] = useState<(typeof initialItems)[number] | null>(null);
+  const [allItems, setAllItems] = useState(initialItems);
+  const [cursor, setCursor] = useState(initialCursor);
+  const loadMoreFetcher = useFetcher<typeof loader>();
+
+  // Reset when search/trash changes
+  useEffect(() => {
+    setAllItems(initialItems);
+    setCursor(initialCursor);
+  }, [initialItems]);
+
+  // Append fetched items
+  useEffect(() => {
+    if (loadMoreFetcher.data && loadMoreFetcher.state === "idle") {
+      const d = loadMoreFetcher.data;
+      setAllItems((prev) => [...prev, ...d.items]);
+      setCursor(d.nextCursor);
+    }
+  }, [loadMoreFetcher.data, loadMoreFetcher.state]);
+
+  type ItemType = (typeof initialItems)[number];
 
   useEffect(() => {
     const es = new EventSource("/api/sse/files");
@@ -231,6 +256,10 @@ export default function DevFilesPage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
+      <div className="mb-4">
+        <StorageBar usedGB={usedGB} planKey={planKey} />
+      </div>
+
       <div className="flex gap-2 mb-4">
         <input
           type="text"
@@ -282,7 +311,7 @@ export default function DevFilesPage() {
           </thead>
           <AnimatePresence mode="popLayout">
             <tbody>
-              {items.map((f, i) => (
+              {allItems.map((f, i) => (
                 <motion.tr
                   key={f.id}
                   layout
@@ -385,7 +414,7 @@ export default function DevFilesPage() {
                   </td>
                 </motion.tr>
               ))}
-              {items.length === 0 && (
+              {allItems.length === 0 && (
                 <motion.tr
                   key="empty"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -403,7 +432,7 @@ export default function DevFilesPage() {
       </motion.div>
 
       <AnimatePresence>
-        {nextCursor && (
+        {cursor && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -413,14 +442,15 @@ export default function DevFilesPage() {
             <BrutalButton
               mode="ghost"
               size="chip"
+              isLoading={loadMoreFetcher.state !== "idle"}
               onClick={() => {
                 const params = new URLSearchParams(searchParams);
-                params.set("cursor", nextCursor);
-                setSearchParams(params);
+                params.set("cursor", cursor);
+                loadMoreFetcher.load(`/dash/developer/files?${params.toString()}`);
               }}
               className="text-sm px-4 py-1.5"
             >
-              Load more
+              Cargar más
             </BrutalButton>
           </motion.div>
         )}

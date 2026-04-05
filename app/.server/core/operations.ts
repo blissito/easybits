@@ -167,7 +167,7 @@ export async function uploadFile(
       ownerId: ctx.user.id,
       access: opts.access || "private",
       url: "",
-      status: "PENDING",
+      status: "DONE",
       storageProviderId: provider?.id ?? null,
       ...(opts.source ? { source: opts.source } : {}),
       ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
