@@ -2144,7 +2144,7 @@ Call get_docs("document-design") for full design guide with validated patterns.`
 
   server.tool(
     "db_query",
-    "Execute a single SQL statement against a database. Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc. Use `args` for parameterized queries (? placeholders).",
+    "Execute a single SQL statement against a database. Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc. Use `args` for parameterized queries (? placeholders). TIP: To understand the schema first, run `SELECT name, sql FROM sqlite_master WHERE type IN ('table','view') ORDER BY name`. Then write SQL directly — no need for a separate natural language step.",
     {
       dbId: z.string().describe("The database ID"),
       sql: z.string().describe("SQL statement to execute"),
