@@ -169,7 +169,6 @@ export function createMcpServer(groups?: string[]) {
     "get_usage_stats",
     "create_form",
     "list_form_submissions",
-    "create_lead_magnet",
     "deploy_website_file",
     "inject_html",
     "list_websites",
@@ -178,13 +177,12 @@ export function createMcpServer(groups?: string[]) {
 
   // Magnet group: focused toolset for lead magnet creation
   const MAGNET_ALLOWLIST = new Set([
-    "create_lead_magnet",
-    "create_form", "list_form_submissions",
-    "create_document", "set_page_html", "get_page_html",
-    "deploy_website_file", "inject_html",
-    "create_website", "list_websites",
-    "upload_file", "get_file",
-    "get_usage_stats",
+    "create_lead_magnet",                              // orquestador todo-en-uno
+    "create_document", "set_page_html", "get_page_html", // crear el PDF/contenido
+    "create_website", "deploy_website_file",            // hosting de la landing
+    "create_form", "inject_html",                       // form + edición parcial
+    "upload_file", "get_file",                          // subir/obtener el PDF
+    "list_form_submissions",                            // consultar leads
   ]);
 
   // Determine which allowlist to use
