@@ -23,6 +23,22 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
+// ─── CLI Args ────────────────────────────────────────────────────
+
+const args = process.argv.slice(2);
+let toolsParam = "";
+let cliKey = "";
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--tools" && args[i + 1]) {
+    toolsParam = args[i + 1];
+    i++;
+  }
+  if (args[i] === "--key" && args[i + 1]) {
+    cliKey = args[i + 1];
+    i++;
+  }
+}
+
 // ─── Config ──────────────────────────────────────────────────────
 
 const DEFAULT_BASE_URL = "https://www.easybits.cloud";
@@ -37,10 +53,10 @@ function readRcConfig(): { apiKey?: string; baseUrl?: string } {
 }
 
 function getApiKey(): string {
-  const key = process.env.EASYBITS_API_KEY || readRcConfig().apiKey;
+  const key = cliKey || process.env.EASYBITS_API_KEY || readRcConfig().apiKey;
   if (!key) {
     console.error(
-      "No API key found. Set EASYBITS_API_KEY env var or create ~/.easybitsrc"
+      "No API key found. Pass --key, set EASYBITS_API_KEY env var, or create ~/.easybitsrc"
     );
     process.exit(1);
   }
@@ -55,7 +71,8 @@ function getBaseUrl(): string {
 
 async function main() {
   const apiKey = getApiKey();
-  const mcpUrl = `${getBaseUrl()}/api/mcp`;
+  const baseUrl = `${getBaseUrl()}/api/mcp`;
+  const mcpUrl = toolsParam ? `${baseUrl}?tools=${encodeURIComponent(toolsParam)}` : baseUrl;
 
   let sessionId: string | undefined;
   let pending = 0;

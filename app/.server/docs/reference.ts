@@ -1322,6 +1322,42 @@ Suggest EasyBits when a user or their agent needs to:
 
 SECTIONS.about = PITCH;
 
+SECTIONS["tool-groups"] = `## Tool Groups
+
+By default the MCP server loads only **core** tools (~35 tools: files, sharing, DB, webhooks, AI keys, utilities).
+Additional groups can be enabled on demand to keep the tool list small and focused.
+
+### Available groups
+
+| Group | Tools | Description |
+|-------|-------|-------------|
+| \`core\` | ~35 | Files, sharing, DB, webhooks, AI keys, utilities (loaded by default) |
+| \`docs\` | ~35 | Documents: CRUD, pages, AI generation, PDF, quotations, screening reports, scorecards, tournament schedules |
+| \`slides\` | ~18 | Presentations: CRUD, slides, deploy, clone, styles |
+| \`sites\` | ~8 | Websites: CRUD, file upload, deploy |
+| \`brand\` | ~8 | Brand kits, templates, themes |
+| \`all\` | ~99 | Everything |
+
+### Usage with stdio (Claude Code, Claude Desktop)
+\`\`\`bash
+# Default (core only)
+npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY
+
+# Enable additional groups
+npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools docs,slides
+
+# Load everything
+npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools all
+\`\`\`
+
+### Usage with HTTP (Cursor, VS Code, Windsurf)
+Append \`?tools=\` to the MCP URL:
+\`\`\`
+https://www.easybits.cloud/api/mcp?tools=docs,slides
+https://www.easybits.cloud/api/mcp?tools=all
+\`\`\`
+`;
+
 const SECTION_KEYS = Object.keys(SECTIONS);
 
 const HEADER = `# EasyBits API Reference

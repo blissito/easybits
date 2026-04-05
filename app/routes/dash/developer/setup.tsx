@@ -89,6 +89,10 @@ function McpSection() {
             <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
 {`claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY`}
             </CodeBlock>
+            <p className="text-xs text-gray-400 mt-2">
+              Agrega <code className="bg-gray-100 px-1 rounded text-gray-600">--tools docs,slides</code> para habilitar grupos adicionales de herramientas.{" "}
+              <Link to="/docs" className="underline">Ver grupos disponibles</Link>.
+            </p>
           </>
         )}
 

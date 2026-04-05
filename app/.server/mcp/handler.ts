@@ -13,7 +13,12 @@ export async function handleMcp(request: Request): Promise<Response> {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const server = createMcpServer();
+  // Parse tool groups from query string
+  const url = new URL(request.url);
+  const toolsParam = url.searchParams.get("tools");
+  const groups = toolsParam ? toolsParam.split(",").map(g => g.trim()) : undefined;
+
+  const server = createMcpServer(groups);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
   });

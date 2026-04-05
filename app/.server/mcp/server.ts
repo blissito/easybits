@@ -105,13 +105,13 @@ function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
   };
 }
 
-export function createMcpServer() {
+export function createMcpServer(groups?: string[]) {
   const server = new McpServer({
     name: "easybits",
     version: "1.0.0",
   });
 
-  // --- UI Resources (MCP Apps) ---
+  // --- UI Resources (MCP Apps) — always loaded ---
 
   registerAppResource(
     server,
@@ -155,8 +155,29 @@ export function createMcpServer() {
     })
   );
 
-  // --- Tools ---
+  // --- Register tool groups ---
+  const enabled = new Set(groups?.length ? groups : ["core"]);
+  if (enabled.has("all")) {
+    registerCoreTools(server);
+    registerDocTools(server);
+    registerSlideTools(server);
+    registerSiteTools(server);
+    registerBrandTools(server);
+  } else {
+    if (enabled.has("core")) registerCoreTools(server);
+    if (enabled.has("docs")) registerDocTools(server);
+    if (enabled.has("slides")) registerSlideTools(server);
+    if (enabled.has("sites")) registerSiteTools(server);
+    if (enabled.has("brand")) registerBrandTools(server);
+  }
 
+  return server;
+}
+
+
+// ─── Core Tools ─────────────────────────────────────────────────
+// Files, sharing, DB, webhooks, AI keys, utilities
+function registerCoreTools(server: McpServer) {
   registerAppTool(
     server,
     "list_files",
@@ -491,86 +512,6 @@ export function createMcpServer() {
     })
   );
 
-  // --- Website Tools ---
-
-  server.tool(
-    "list_websites",
-    "List your websites (id, name, slug, status, fileCount, totalSize, createdAt, url).",
-    {},
-    wrapHandler(async (_params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listWebsites(ctx);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    })
-  );
-
-  server.tool(
-    "create_website",
-    "Create a new website with a name. Generates a slug automatically. Returns `{ website }` with id, slug, prefix, url.",
-    {
-      name: z.string().describe("Name for the website"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createWebsite(ctx, { name: params.name });
-      return {
-        content: [{ type: "text", text: JSON.stringify({ website: result }, null, 2) }],
-      };
-    })
-  );
-
-  server.tool(
-    "get_website",
-    "Get a website by ID with stats. Returns website object with url.",
-    {
-      websiteId: z.string().describe("The website ID"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getWebsite(ctx, params.websiteId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    })
-  );
-
-  server.tool(
-    "update_website",
-    "Update a website's name or status. Stats (fileCount, totalSize) are recomputed automatically from the database.",
-    {
-      websiteId: z.string().describe("The website ID"),
-      name: z.string().optional().describe("New name"),
-      status: z.enum(["ACTIVE", "ERROR"]).optional().describe("New status"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await updateWebsite(ctx, params.websiteId, {
-        name: params.name,
-        status: params.status,
-      });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    })
-  );
-
-  server.tool(
-    "delete_website",
-    "Delete a website. Soft-deletes all associated files (recoverable for 7 days) and removes the website record.",
-    {
-      websiteId: z.string().describe("The website ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deleteWebsite(ctx, params.websiteId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    })
-  );
-
   // --- Webhook Tools ---
 
   server.tool(
@@ -643,357 +584,221 @@ export function createMcpServer() {
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
-
-  // --- Presentation Tools ---
+  // --- Database Tools ---
 
   server.tool(
-    "list_presentations",
-    "List your presentations (id, name, prompt, theme, status, websiteId, createdAt).",
+    "db_list",
+    "List your SQLite databases (id, name, namespace, description, createdAt).",
     {},
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listPresentations(ctx);
+      const result = await listDatabases(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "get_presentation",
-    "Get a presentation by ID with full slide data.",
+    "db_create",
+    "Create a new SQLite database. Name must be alphanumeric/dashes/underscores, max 64 chars. Max 5 databases per account.",
     {
-      presentationId: z.string().describe("The presentation ID"),
+      name: z.string().describe("Database name (alphanumeric, dashes, underscores)"),
+      description: z.string().optional().describe("Optional description"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getPresentation(ctx, params.presentationId);
+      const result = await createDatabase(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "create_presentation",
-    `Create a new presentation. Slides are optional — you can add them later via add_slide or update_presentation.
-
-If providing slide html, each slide MUST follow these rules:
-- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
-- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
-- Max 3 cards, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
-- Colors: ONLY semantic classes (bg-primary, text-on-surface, etc.) — never hex.
-- NO emoji, NO JavaScript, NO inline styles. Images: data-image-query="english keywords".
-- HTML must be well-formed (balanced tags).
-Call get_docs("presentation-design") for the full design guide with validated patterns and layout classes.`,
+    "db_get",
+    "Get a database by ID.",
     {
-      name: z.string().describe("Presentation name"),
-      prompt: z.string().describe("Description or prompt for the presentation"),
-      slides: z.array(z.object({
-        id: z.string().describe("Unique slide ID"),
-        order: z.number().describe("Slide order (0-based)"),
-        type: z.enum(["2d", "3d"]).optional().describe("Slide type (default: 2d)"),
-        html: z.string().optional().describe("HTML content of the slide"),
-      })).optional().describe("Array of slides"),
-      theme: z.string().optional().describe("Reveal.js theme (default: black). Options: black, white, league, beige, night, serif, simple, solarized, moon, dracula, sky, blood"),
-      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
-      transition: z.string().optional().describe("Slide transition (default: slide). Options: slide, fade, convex, concave, zoom, none"),
+      dbId: z.string().describe("The database ID"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createPresentation(ctx, params as any);
+      const result = await getDatabase(ctx, params.dbId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "update_presentation",
-    "Update a presentation's name, slides, theme, or prompt. Replaces ALL slides when slides[] is provided — for editing a single slide, use set_slide_html instead. Each slide: { id, order, html }. Slide HTML must follow layout rules — call get_docs('presentation-design') for the full guide.",
+    "db_delete",
+    "Permanently delete a database and all its data.",
     {
-      presentationId: z.string().describe("The presentation ID"),
-      name: z.string().optional().describe("New name"),
-      prompt: z.string().optional().describe("New prompt/description"),
-      slides: z.array(z.object({
-        id: z.string().describe("Unique slide ID"),
-        order: z.number().describe("Slide order (0-based)"),
-        type: z.enum(["2d", "3d"]).optional().describe("Slide type"),
-        html: z.string().optional().describe("HTML content of the slide"),
-      })).optional().describe("Replace all slides"),
-      theme: z.string().optional().describe("Reveal.js theme"),
-      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
-      transition: z.string().optional().describe("Slide transition. Options: slide, fade, convex, concave, zoom, none"),
+      dbId: z.string().describe("The database ID to delete"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { presentationId, ...opts } = params;
-      const result = await updatePresentation(ctx, presentationId, opts as any);
+      const result = await deleteDatabase(ctx, params.dbId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "delete_presentation",
-    "Delete a presentation permanently.",
+    "db_query",
+    "Execute a single SQL statement against a database. Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc. Use `args` for parameterized queries (? placeholders). TIP: To understand the schema first, run `SELECT name, sql FROM sqlite_master WHERE type IN ('table','view') ORDER BY name`. Then write SQL directly — no need for a separate natural language step.",
     {
-      presentationId: z.string().describe("The presentation ID to delete"),
+      dbId: z.string().describe("The database ID"),
+      sql: z.string().describe("SQL statement to execute"),
+      args: z.array(z.unknown()).optional().describe("Positional arguments for ? placeholders"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deletePresentation(ctx, params.presentationId);
+      const result = await queryDatabase(ctx, params.dbId, params.sql, params.args);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "deploy_presentation",
-    "Publish a presentation as a live website at slug.easybits.cloud — shareable link, no hosting needed. Returns the public URL. Requires at least one slide.",
+    "db_exec",
+    "Execute multiple SQL statements in a batch (max 50). Useful for migrations or multi-step operations.",
     {
-      presentationId: z.string().describe("The presentation ID to deploy"),
+      dbId: z.string().describe("The database ID"),
+      statements: z.array(z.object({
+        sql: z.string().describe("SQL statement"),
+        args: z.array(z.unknown()).optional().describe("Positional arguments"),
+      })).describe("Array of SQL statements (1-50)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deployPresentation(ctx, params.presentationId);
+      const result = await execDatabase(ctx, params.dbId, params.statements);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "unpublish_presentation",
-    "Unpublish a presentation, removing its website and reverting to draft status.",
+    "db_import",
+    "Bulk import rows into a table. Up to 10,000 rows per request. Values are auto-converted to strings (sqld requirement). Much faster than db_exec for large inserts.",
     {
-      presentationId: z.string().describe("The presentation ID to unpublish"),
+      dbId: z.string().describe("The database ID"),
+      table: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).describe("Target table name"),
+      columns: z.array(z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/)).min(1).describe("Column names"),
+      rows: z.array(z.array(z.unknown())).min(1).max(10000).describe("Array of row values (each row is an array matching columns order)"),
+      onConflict: z.enum(["ignore", "replace"]).optional().describe("Conflict handling: 'ignore' skips duplicates, 'replace' upserts"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await unpublishPresentation(ctx, params.presentationId);
+      const result = await importDatabase(ctx, params.dbId, params.table, params.columns, params.rows, params.onConflict);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
+  // --- Utility Tools ---
 
   server.tool(
-    "get_slide_screenshot",
-    "Take a screenshot of a single presentation slide. Returns a PNG image (960x540). Requires Chrome installed locally — designed for Claude Code MCP usage.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideIndex: z.number().optional().describe("Slide index (0-based, default 0)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
-      const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, params.slideIndex ?? 0);
-      return { content: [result] };
-    })
-  );
-
-  // --- Granular Slide CRUD ---
-
-  server.tool(
-    "get_slide_html",
-    "Get the HTML content of a single slide. Returns { slideId, order, html }. Use this to read a slide before editing it with set_slide_html.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideId: z.string().describe("The slide ID (from get_presentation slides[].id)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { getSlideHtml } = await import("../core/presentationOperations");
-      const result = await getSlideHtml(ctx, params.presentationId, params.slideId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "set_slide_html",
-    `Replace the ENTIRE HTML of a single slide. This is the primary tool for editing slides — use it when rewriting or changing a slide's content.
-
-SLIDE LAYOUT RULES (MANDATORY):
-- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
-- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
-- Max 3 cards in grids, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
-- Max 2 columns side by side. Tables: max 4 columns, text-xs.
-- Colors: ONLY semantic classes (bg-primary, text-on-surface, bg-surface-alt, etc.) — never hardcoded hex.
-- Contrast: dark bg → text-white or text-on-primary. Light bg → text-gray-900 or text-on-surface.
-- NO emoji — use data-icon-query="icon-name" for icons (auto-resolved to SVG).
-- NO JavaScript, NO inline styles (exception: style="width:XX%" for progress bars).
-- Images: <img data-image-query="english search keywords" class="..." /> for auto Pexels enrichment.
-- CRITICAL: HTML MUST be well-formed. Every <div> needs </div>. Unbalanced tags break the viewer.
-- Use the CSS layout classes: .card-grid, .timeline, .kpi-row, .vs-grid, .blockquote-card, .pill-row, .icon-list, .data-table, .progress-bar, .diagram, .centered, .columns+.col, .three-bg.
-Call get_docs("presentation-design") for the full design guide with validated patterns.`,
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideId: z.string().describe("The slide ID to update (from get_presentation slides[].id)"),
-      html: z.string().describe("New HTML content for the slide"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { setSlideHtml } = await import("../core/presentationOperations");
-      const result = await setSlideHtml(ctx, params.presentationId, params.slideId, params.html);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "add_slide",
-    `Add a new slide to a presentation. If html is omitted, adds a blank slide. Use afterSlideId to insert after a specific slide; omit to append at the end.
-
-If providing html, it MUST follow slide layout rules: root <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">, semantic colors only, max 3 cards/KPIs, max 5 bullets, no emoji, no JS, no inline styles. See set_slide_html description or call get_docs("presentation-design") for full rules.`,
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      html: z.string().optional().describe("HTML content for the new slide. Omit for a blank slide"),
-      afterSlideId: z.string().optional().describe("Insert after this slide ID. Omit to append at end"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { addSlide } = await import("../core/presentationOperations");
-      const result = await addSlide(ctx, params.presentationId, {
-        html: params.html,
-        afterSlideId: params.afterSlideId,
-      });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "delete_slide",
-    "Delete a single slide from a presentation. Remaining slides are automatically reindexed.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideId: z.string().describe("The slide ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { deleteSlide } = await import("../core/presentationOperations");
-      const result = await deleteSlide(ctx, params.presentationId, params.slideId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "reorder_slides",
-    "Reorder slides in a presentation. Pass the complete array of slide IDs in the desired order. Any slides not in the array are appended at the end.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideIds: z.array(z.string()).describe("Ordered array of slide IDs"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { reorderSlides } = await import("../core/presentationOperations");
-      const result = await reorderSlides(ctx, params.presentationId, params.slideIds);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "get_presentation_pdf",
-    "Export a presentation as a PDF file (one slide per page, 960×540px landscape). Returns base64-encoded PDF data. Requires Chrome installed locally — designed for Claude Code MCP usage.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { takePresentationPdf } = await import("../core/presentationScreenshot");
-      const pdf = await takePresentationPdf(ctx.user.id, params.presentationId);
-      if (!pdf) {
-        return { content: [{ type: "text", text: "Failed to generate PDF. Ensure the presentation has slides and Chrome is installed." }] };
-      }
-      return {
-        content: [{
-          type: "resource",
-          resource: {
-            uri: `easybits://presentation/${params.presentationId}/pdf`,
-            mimeType: "application/pdf",
-            blob: pdf.toString("base64"),
-          },
-        }],
-      };
-    })
-  );
-
-  // --- Presentation Clone & Styles ---
-
-  server.tool(
-    "clone_presentation",
-    "[EXPERIMENTAL] Clone or get inspired by a PDF to create a presentation. Upload a PDF first with upload_file, then pass the fileId. Mode 'clone' reproduces each page as HTML+Tailwind (best effort, quality varies). Mode 'inspire' extracts the design style and applies it to new content. Returns immediately — poll with get_presentation to see slides appear. Default model: gemini-2.5-pro.",
-    {
-      fileId: z.string().describe("EasyBits file ID of the uploaded PDF"),
-      mode: z.enum(["clone", "inspire"]).describe("'clone' = faithful reproduction, 'inspire' = extract style for new content"),
-      name: z.string().describe("Name for the new presentation"),
-      content: z.string().optional().describe("For 'inspire' mode: the topic/content for the new presentation"),
-      styleId: z.string().optional().describe("Reuse a previously saved style instead of extracting from the PDF"),
-      maxPages: z.number().optional().describe("Max pages to process (default 20)"),
-      model: z.string().optional().describe("AI model to use (default: gemini-2.5-flash)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { clonePresentationFromPdf } = await import("../core/presentationClone");
-      const result = await clonePresentationFromPdf(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "save_presentation_style",
-    "Extract and save the visual style from a presentation as a reusable 'Style LoRA'. Once saved, use the styleId with clone_presentation in 'inspire' mode to generate unlimited presentations with that style.",
-    {
-      presentationId: z.string().describe("The presentation ID to extract style from"),
-      name: z.string().describe("Name for the style (e.g. 'Udemy Corporate 2026')"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { getPresentation } = await import("../core/presentationOperations");
-      const { savePresentationStyle } = await import("../core/presentationStyles");
-      const { pdfToImages } = await import("../core/pdfToImages");
-
-      // Get presentation slides, render them as images for style extraction
-      const pres = await getPresentation(ctx, params.presentationId);
-      const slides = (pres.slides as any[]) || [];
-      if (slides.length === 0) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "Presentation has no slides" }) }] };
-      }
-
-      // Take screenshots of representative slides for style extraction
-      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
-      const indices = slides.length <= 4
-        ? slides.map((_: any, i: number) => i)
-        : [0, Math.floor(slides.length / 3), Math.floor(2 * slides.length / 3), slides.length - 1];
-
-      const pageImages: string[] = [];
-      for (const idx of indices) {
-        const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, idx);
-        if (result.type === "image") pageImages.push(result.data);
-      }
-
-      if (pageImages.length === 0) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "Could not capture slide screenshots" }) }] };
-      }
-
-      const style = await savePresentationStyle(ctx, { name: params.name, pageImages });
-      return { content: [{ type: "text", text: JSON.stringify(style, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "list_presentation_styles",
-    "List your saved presentation styles ('Style LoRAs'). Use a styleId with clone_presentation to generate presentations in that style.",
+    "get_usage_stats",
+    "Get account usage statistics: storage used/limit, file counts, AI generations used/remaining, plan info, and upgrade recommendations.",
     {},
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { listPresentationStyles } = await import("../core/presentationStyles");
-      const styles = await listPresentationStyles(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(styles, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "delete_presentation_style",
-    "Delete a saved presentation style.",
-    {
-      styleId: z.string().describe("The style ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { deletePresentationStyle } = await import("../core/presentationStyles");
-      const result = await deletePresentationStyle(ctx, params.styleId);
+      const result = await getUsageStats(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
+  server.tool(
+    "bulk_delete_files",
+    "Soft-delete multiple files at once (max 100). Returns count of deleted files.",
+    {
+      fileIds: z.array(z.string()).describe("Array of file IDs to delete (1-100)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await bulkDeleteFiles(ctx, params.fileIds);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "bulk_upload_files",
+    "Create multiple file records and get presigned upload URLs (max 20). Returns array of `{ file, putUrl }`.",
+    {
+      items: z.array(z.object({
+        fileName: z.string().describe("Name of the file"),
+        contentType: z.string().describe("MIME type"),
+        size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
+        access: z.enum(["public", "private"]).optional().describe("Access level"),
+        assetId: z.string().optional().describe("Associate with an asset"),
+        region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
+      })).describe("Array of files to upload (1-20)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await bulkUploadFiles(ctx, params.items);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "list_permissions",
+    "List sharing permissions for a file. Shows who has access and their permission levels.",
+    {
+      fileId: z.string().describe("The file ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listPermissions(ctx, params.fileId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "duplicate_file",
+    "Create a copy of an existing file (new storage object). Returns the new file record.",
+    {
+      fileId: z.string().describe("The file ID to duplicate"),
+      name: z.string().optional().describe("Name for the copy (defaults to 'Copy of ...')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await duplicateFile(ctx, params.fileId, params.name);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "revoke_share_token",
+    "Revoke (delete) a share token, invalidating its URL.",
+    {
+      tokenId: z.string().describe("The share token ID to revoke"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await revokeShareToken(ctx, params.tokenId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "revoke_permission",
+    "Revoke a file sharing permission by ID. You must own the file.",
+    {
+      permissionId: z.string().describe("The permission ID to revoke"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await revokePermission(ctx, params.permissionId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_docs",
+    "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
+    {
+      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, presentations, presentation-design, documents, document-design, account, sdk, errors, tool-groups"),
+    },
+    async (params) => {
+      const markdown = getDocsMarkdown(params.section);
+      return { content: [{ type: "text", text: markdown }] };
+    }
+  );
+}
+
+// ─── Document Tools ─────────────────────────────────────────────
+function registerDocTools(server: McpServer) {
   // --- Document Tools ---
 
   server.tool(
@@ -1905,7 +1710,500 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       return { content: [{ type: "text", text: JSON.stringify({ id: result.id, name: result.name }, null, 2) }] };
     })
   );
+}
 
+// ─── Slide/Presentation Tools ───────────────────────────────────
+function registerSlideTools(server: McpServer) {
+  // --- Presentation Tools ---
+
+  server.tool(
+    "list_presentations",
+    "List your presentations (id, name, prompt, theme, status, websiteId, createdAt).",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listPresentations(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_presentation",
+    "Get a presentation by ID with full slide data.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "create_presentation",
+    `Create a new presentation. Slides are optional — you can add them later via add_slide or update_presentation.
+
+If providing slide html, each slide MUST follow these rules:
+- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
+- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
+- Max 3 cards, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
+- Colors: ONLY semantic classes (bg-primary, text-on-surface, etc.) — never hex.
+- NO emoji, NO JavaScript, NO inline styles. Images: data-image-query="english keywords".
+- HTML must be well-formed (balanced tags).
+Call get_docs("presentation-design") for the full design guide with validated patterns and layout classes.`,
+    {
+      name: z.string().describe("Presentation name"),
+      prompt: z.string().describe("Description or prompt for the presentation"),
+      slides: z.array(z.object({
+        id: z.string().describe("Unique slide ID"),
+        order: z.number().describe("Slide order (0-based)"),
+        type: z.enum(["2d", "3d"]).optional().describe("Slide type (default: 2d)"),
+        html: z.string().optional().describe("HTML content of the slide"),
+      })).optional().describe("Array of slides"),
+      theme: z.string().optional().describe("Reveal.js theme (default: black). Options: black, white, league, beige, night, serif, simple, solarized, moon, dracula, sky, blood"),
+      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
+      transition: z.string().optional().describe("Slide transition (default: slide). Options: slide, fade, convex, concave, zoom, none"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createPresentation(ctx, params as any);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "update_presentation",
+    "Update a presentation's name, slides, theme, or prompt. Replaces ALL slides when slides[] is provided — for editing a single slide, use set_slide_html instead. Each slide: { id, order, html }. Slide HTML must follow layout rules — call get_docs('presentation-design') for the full guide.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      name: z.string().optional().describe("New name"),
+      prompt: z.string().optional().describe("New prompt/description"),
+      slides: z.array(z.object({
+        id: z.string().describe("Unique slide ID"),
+        order: z.number().describe("Slide order (0-based)"),
+        type: z.enum(["2d", "3d"]).optional().describe("Slide type"),
+        html: z.string().optional().describe("HTML content of the slide"),
+      })).optional().describe("Replace all slides"),
+      theme: z.string().optional().describe("Reveal.js theme"),
+      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
+      transition: z.string().optional().describe("Slide transition. Options: slide, fade, convex, concave, zoom, none"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { presentationId, ...opts } = params;
+      const result = await updatePresentation(ctx, presentationId, opts as any);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_presentation",
+    "Delete a presentation permanently.",
+    {
+      presentationId: z.string().describe("The presentation ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deletePresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "deploy_presentation",
+    "Publish a presentation as a live website at slug.easybits.cloud — shareable link, no hosting needed. Returns the public URL. Requires at least one slide.",
+    {
+      presentationId: z.string().describe("The presentation ID to deploy"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deployPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "unpublish_presentation",
+    "Unpublish a presentation, removing its website and reverting to draft status.",
+    {
+      presentationId: z.string().describe("The presentation ID to unpublish"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await unpublishPresentation(ctx, params.presentationId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_slide_screenshot",
+    "Take a screenshot of a single presentation slide. Returns a PNG image (960x540). Requires Chrome installed locally — designed for Claude Code MCP usage.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideIndex: z.number().optional().describe("Slide index (0-based, default 0)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
+      const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, params.slideIndex ?? 0);
+      return { content: [result] };
+    })
+  );
+
+  // --- Granular Slide CRUD ---
+
+  server.tool(
+    "get_slide_html",
+    "Get the HTML content of a single slide. Returns { slideId, order, html }. Use this to read a slide before editing it with set_slide_html.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideId: z.string().describe("The slide ID (from get_presentation slides[].id)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getSlideHtml } = await import("../core/presentationOperations");
+      const result = await getSlideHtml(ctx, params.presentationId, params.slideId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "set_slide_html",
+    `Replace the ENTIRE HTML of a single slide. This is the primary tool for editing slides — use it when rewriting or changing a slide's content.
+
+SLIDE LAYOUT RULES (MANDATORY):
+- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
+- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
+- Max 3 cards in grids, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
+- Max 2 columns side by side. Tables: max 4 columns, text-xs.
+- Colors: ONLY semantic classes (bg-primary, text-on-surface, bg-surface-alt, etc.) — never hardcoded hex.
+- Contrast: dark bg → text-white or text-on-primary. Light bg → text-gray-900 or text-on-surface.
+- NO emoji — use data-icon-query="icon-name" for icons (auto-resolved to SVG).
+- NO JavaScript, NO inline styles (exception: style="width:XX%" for progress bars).
+- Images: <img data-image-query="english search keywords" class="..." /> for auto Pexels enrichment.
+- CRITICAL: HTML MUST be well-formed. Every <div> needs </div>. Unbalanced tags break the viewer.
+- Use the CSS layout classes: .card-grid, .timeline, .kpi-row, .vs-grid, .blockquote-card, .pill-row, .icon-list, .data-table, .progress-bar, .diagram, .centered, .columns+.col, .three-bg.
+Call get_docs("presentation-design") for the full design guide with validated patterns.`,
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideId: z.string().describe("The slide ID to update (from get_presentation slides[].id)"),
+      html: z.string().describe("New HTML content for the slide"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { setSlideHtml } = await import("../core/presentationOperations");
+      const result = await setSlideHtml(ctx, params.presentationId, params.slideId, params.html);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "add_slide",
+    `Add a new slide to a presentation. If html is omitted, adds a blank slide. Use afterSlideId to insert after a specific slide; omit to append at the end.
+
+If providing html, it MUST follow slide layout rules: root <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">, semantic colors only, max 3 cards/KPIs, max 5 bullets, no emoji, no JS, no inline styles. See set_slide_html description or call get_docs("presentation-design") for full rules.`,
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      html: z.string().optional().describe("HTML content for the new slide. Omit for a blank slide"),
+      afterSlideId: z.string().optional().describe("Insert after this slide ID. Omit to append at end"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { addSlide } = await import("../core/presentationOperations");
+      const result = await addSlide(ctx, params.presentationId, {
+        html: params.html,
+        afterSlideId: params.afterSlideId,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_slide",
+    "Delete a single slide from a presentation. Remaining slides are automatically reindexed.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideId: z.string().describe("The slide ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deleteSlide } = await import("../core/presentationOperations");
+      const result = await deleteSlide(ctx, params.presentationId, params.slideId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "reorder_slides",
+    "Reorder slides in a presentation. Pass the complete array of slide IDs in the desired order. Any slides not in the array are appended at the end.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+      slideIds: z.array(z.string()).describe("Ordered array of slide IDs"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { reorderSlides } = await import("../core/presentationOperations");
+      const result = await reorderSlides(ctx, params.presentationId, params.slideIds);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_presentation_pdf",
+    "Export a presentation as a PDF file (one slide per page, 960×540px landscape). Returns base64-encoded PDF data. Requires Chrome installed locally — designed for Claude Code MCP usage.",
+    {
+      presentationId: z.string().describe("The presentation ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { takePresentationPdf } = await import("../core/presentationScreenshot");
+      const pdf = await takePresentationPdf(ctx.user.id, params.presentationId);
+      if (!pdf) {
+        return { content: [{ type: "text", text: "Failed to generate PDF. Ensure the presentation has slides and Chrome is installed." }] };
+      }
+      return {
+        content: [{
+          type: "resource",
+          resource: {
+            uri: `easybits://presentation/${params.presentationId}/pdf`,
+            mimeType: "application/pdf",
+            blob: pdf.toString("base64"),
+          },
+        }],
+      };
+    })
+  );
+
+  // --- Presentation Clone & Styles ---
+
+  server.tool(
+    "clone_presentation",
+    "[EXPERIMENTAL] Clone or get inspired by a PDF to create a presentation. Upload a PDF first with upload_file, then pass the fileId. Mode 'clone' reproduces each page as HTML+Tailwind (best effort, quality varies). Mode 'inspire' extracts the design style and applies it to new content. Returns immediately — poll with get_presentation to see slides appear. Default model: gemini-2.5-pro.",
+    {
+      fileId: z.string().describe("EasyBits file ID of the uploaded PDF"),
+      mode: z.enum(["clone", "inspire"]).describe("'clone' = faithful reproduction, 'inspire' = extract style for new content"),
+      name: z.string().describe("Name for the new presentation"),
+      content: z.string().optional().describe("For 'inspire' mode: the topic/content for the new presentation"),
+      styleId: z.string().optional().describe("Reuse a previously saved style instead of extracting from the PDF"),
+      maxPages: z.number().optional().describe("Max pages to process (default 20)"),
+      model: z.string().optional().describe("AI model to use (default: gemini-2.5-flash)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { clonePresentationFromPdf } = await import("../core/presentationClone");
+      const result = await clonePresentationFromPdf(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "save_presentation_style",
+    "Extract and save the visual style from a presentation as a reusable 'Style LoRA'. Once saved, use the styleId with clone_presentation in 'inspire' mode to generate unlimited presentations with that style.",
+    {
+      presentationId: z.string().describe("The presentation ID to extract style from"),
+      name: z.string().describe("Name for the style (e.g. 'Udemy Corporate 2026')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getPresentation } = await import("../core/presentationOperations");
+      const { savePresentationStyle } = await import("../core/presentationStyles");
+      const { pdfToImages } = await import("../core/pdfToImages");
+
+      // Get presentation slides, render them as images for style extraction
+      const pres = await getPresentation(ctx, params.presentationId);
+      const slides = (pres.slides as any[]) || [];
+      if (slides.length === 0) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "Presentation has no slides" }) }] };
+      }
+
+      // Take screenshots of representative slides for style extraction
+      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
+      const indices = slides.length <= 4
+        ? slides.map((_: any, i: number) => i)
+        : [0, Math.floor(slides.length / 3), Math.floor(2 * slides.length / 3), slides.length - 1];
+
+      const pageImages: string[] = [];
+      for (const idx of indices) {
+        const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, idx);
+        if (result.type === "image") pageImages.push(result.data);
+      }
+
+      if (pageImages.length === 0) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "Could not capture slide screenshots" }) }] };
+      }
+
+      const style = await savePresentationStyle(ctx, { name: params.name, pageImages });
+      return { content: [{ type: "text", text: JSON.stringify(style, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "list_presentation_styles",
+    "List your saved presentation styles ('Style LoRAs'). Use a styleId with clone_presentation to generate presentations in that style.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listPresentationStyles } = await import("../core/presentationStyles");
+      const styles = await listPresentationStyles(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(styles, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_presentation_style",
+    "Delete a saved presentation style.",
+    {
+      styleId: z.string().describe("The style ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deletePresentationStyle } = await import("../core/presentationStyles");
+      const result = await deletePresentationStyle(ctx, params.styleId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+}
+
+// ─── Website/Site Tools ─────────────────────────────────────────
+function registerSiteTools(server: McpServer) {
+  // --- Website Tools ---
+
+  server.tool(
+    "list_websites",
+    "List your websites (id, name, slug, status, fileCount, totalSize, createdAt, url).",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listWebsites(ctx);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
+    "create_website",
+    "Create a new website with a name. Generates a slug automatically. Returns `{ website }` with id, slug, prefix, url.",
+    {
+      name: z.string().describe("Name for the website"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createWebsite(ctx, { name: params.name });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ website: result }, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
+    "get_website",
+    "Get a website by ID with stats. Returns website object with url.",
+    {
+      websiteId: z.string().describe("The website ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getWebsite(ctx, params.websiteId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
+    "update_website",
+    "Update a website's name or status. Stats (fileCount, totalSize) are recomputed automatically from the database.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      name: z.string().optional().describe("New name"),
+      status: z.enum(["ACTIVE", "ERROR"]).optional().describe("New status"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await updateWebsite(ctx, params.websiteId, {
+        name: params.name,
+        status: params.status,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
+    "delete_website",
+    "Delete a website. Soft-deletes all associated files (recoverable for 7 days) and removes the website record.",
+    {
+      websiteId: z.string().describe("The website ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteWebsite(ctx, params.websiteId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    })
+  );
+  // --- Website File Upload Tool ---
+
+  server.tool(
+    "upload_website_file",
+    "Upload a file to a website via presigned URL. Returns a putUrl — you must PUT the content there, then call update_file(status: 'DONE'). Best for large/binary files (>1MB). For text files <1MB (HTML/CSS/JS), prefer deploy_website_file which does everything in one call.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'images/logo.png')"),
+      contentType: z.string().describe("MIME type (e.g. 'text/html', 'text/css', 'image/png')"),
+      size: z.number().describe("File size in bytes"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { uploadWebsiteFile } = await import("../core/operations");
+      const result = await uploadWebsiteFile(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, putUrl: result.putUrl }, null, 2) }] };
+    })
+  );
+
+  // --- Deploy Website File (single-call) ---
+
+  server.tool(
+    "deploy_website_file",
+    "Deploy a file to a website in a single call — no presigned URL or status update needed. Pass the file content directly (text or base64). Max 1MB. The file is immediately live at https://{slug}.easybits.cloud/{fileName}.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'script.js')"),
+      content: z.string().describe("File content as text (or base64 if encoding is 'base64')"),
+      contentType: z.string().optional().default("text/html").describe("MIME type (default: 'text/html')"),
+      encoding: z.enum(["text", "base64"]).optional().default("text").describe("Content encoding: 'text' (default) or 'base64' for binary"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deployWebsiteFile } = await import("../core/operations");
+      const result = await deployWebsiteFile(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, url: result.file.url }, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "list_website_files",
+    "List files belonging to a website. Returns `{ items, nextCursor }`.",
+    {
+      websiteId: z.string().describe("The website ID"),
+      limit: z.number().optional().describe("Max results (default 50)"),
+      cursor: z.string().optional().describe("Pagination cursor"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { websiteId, ...opts } = params;
+      const result = await listWebsiteFiles(ctx, websiteId, opts);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+}
+
+// ─── Brand Tools ────────────────────────────────────────────────
+function registerBrandTools(server: McpServer) {
   // --- Brand Kit Tools ---
 
   server.tool(
@@ -2006,7 +2304,6 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
     })
   );
-
   // --- Template Tools ---
 
   server.tool(
@@ -2037,7 +2334,6 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
-
   // --- Theme Tools ---
 
   server.tool(
@@ -2049,274 +2345,4 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       return { content: [{ type: "text", text: JSON.stringify(LANDING_THEMES, null, 2) }] };
     })
   );
-
-  // --- Website File Upload Tool ---
-
-  server.tool(
-    "upload_website_file",
-    "Upload a file to a website via presigned URL. Returns a putUrl — you must PUT the content there, then call update_file(status: 'DONE'). Best for large/binary files (>1MB). For text files <1MB (HTML/CSS/JS), prefer deploy_website_file which does everything in one call.",
-    {
-      websiteId: z.string().describe("The website ID"),
-      fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'images/logo.png')"),
-      contentType: z.string().describe("MIME type (e.g. 'text/html', 'text/css', 'image/png')"),
-      size: z.number().describe("File size in bytes"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { uploadWebsiteFile } = await import("../core/operations");
-      const result = await uploadWebsiteFile(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, putUrl: result.putUrl }, null, 2) }] };
-    })
-  );
-
-  // --- Deploy Website File (single-call) ---
-
-  server.tool(
-    "deploy_website_file",
-    "Deploy a file to a website in a single call — no presigned URL or status update needed. Pass the file content directly (text or base64). Max 1MB. The file is immediately live at https://{slug}.easybits.cloud/{fileName}.",
-    {
-      websiteId: z.string().describe("The website ID"),
-      fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'script.js')"),
-      content: z.string().describe("File content as text (or base64 if encoding is 'base64')"),
-      contentType: z.string().optional().default("text/html").describe("MIME type (default: 'text/html')"),
-      encoding: z.enum(["text", "base64"]).optional().default("text").describe("Content encoding: 'text' (default) or 'base64' for binary"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { deployWebsiteFile } = await import("../core/operations");
-      const result = await deployWebsiteFile(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify({ fileId: result.file.id, fileName: result.file.name, url: result.file.url }, null, 2) }] };
-    })
-  );
-
-  // --- Database Tools ---
-
-  server.tool(
-    "db_list",
-    "List your SQLite databases (id, name, namespace, description, createdAt).",
-    {},
-    wrapHandler(async (_params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listDatabases(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "db_create",
-    "Create a new SQLite database. Name must be alphanumeric/dashes/underscores, max 64 chars. Max 5 databases per account.",
-    {
-      name: z.string().describe("Database name (alphanumeric, dashes, underscores)"),
-      description: z.string().optional().describe("Optional description"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createDatabase(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "db_get",
-    "Get a database by ID.",
-    {
-      dbId: z.string().describe("The database ID"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getDatabase(ctx, params.dbId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "db_delete",
-    "Permanently delete a database and all its data.",
-    {
-      dbId: z.string().describe("The database ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deleteDatabase(ctx, params.dbId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "db_query",
-    "Execute a single SQL statement against a database. Supports SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc. Use `args` for parameterized queries (? placeholders). TIP: To understand the schema first, run `SELECT name, sql FROM sqlite_master WHERE type IN ('table','view') ORDER BY name`. Then write SQL directly — no need for a separate natural language step.",
-    {
-      dbId: z.string().describe("The database ID"),
-      sql: z.string().describe("SQL statement to execute"),
-      args: z.array(z.unknown()).optional().describe("Positional arguments for ? placeholders"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await queryDatabase(ctx, params.dbId, params.sql, params.args);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "db_exec",
-    "Execute multiple SQL statements in a batch (max 50). Useful for migrations or multi-step operations.",
-    {
-      dbId: z.string().describe("The database ID"),
-      statements: z.array(z.object({
-        sql: z.string().describe("SQL statement"),
-        args: z.array(z.unknown()).optional().describe("Positional arguments"),
-      })).describe("Array of SQL statements (1-50)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await execDatabase(ctx, params.dbId, params.statements);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "db_import",
-    "Bulk import rows into a table. Up to 10,000 rows per request. Values are auto-converted to strings (sqld requirement). Much faster than db_exec for large inserts.",
-    {
-      dbId: z.string().describe("The database ID"),
-      table: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).describe("Target table name"),
-      columns: z.array(z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/)).min(1).describe("Column names"),
-      rows: z.array(z.array(z.unknown())).min(1).max(10000).describe("Array of row values (each row is an array matching columns order)"),
-      onConflict: z.enum(["ignore", "replace"]).optional().describe("Conflict handling: 'ignore' skips duplicates, 'replace' upserts"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await importDatabase(ctx, params.dbId, params.table, params.columns, params.rows, params.onConflict);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  // --- Utility Tools ---
-
-  server.tool(
-    "get_usage_stats",
-    "Get account usage statistics: storage used/limit, file counts, AI generations used/remaining, plan info, and upgrade recommendations.",
-    {},
-    wrapHandler(async (_params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getUsageStats(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "bulk_delete_files",
-    "Soft-delete multiple files at once (max 100). Returns count of deleted files.",
-    {
-      fileIds: z.array(z.string()).describe("Array of file IDs to delete (1-100)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await bulkDeleteFiles(ctx, params.fileIds);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "bulk_upload_files",
-    "Create multiple file records and get presigned upload URLs (max 20). Returns array of `{ file, putUrl }`.",
-    {
-      items: z.array(z.object({
-        fileName: z.string().describe("Name of the file"),
-        contentType: z.string().describe("MIME type"),
-        size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
-        access: z.enum(["public", "private"]).optional().describe("Access level"),
-        assetId: z.string().optional().describe("Associate with an asset"),
-        region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
-      })).describe("Array of files to upload (1-20)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await bulkUploadFiles(ctx, params.items);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "list_permissions",
-    "List sharing permissions for a file. Shows who has access and their permission levels.",
-    {
-      fileId: z.string().describe("The file ID"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listPermissions(ctx, params.fileId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "duplicate_file",
-    "Create a copy of an existing file (new storage object). Returns the new file record.",
-    {
-      fileId: z.string().describe("The file ID to duplicate"),
-      name: z.string().optional().describe("Name for the copy (defaults to 'Copy of ...')"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await duplicateFile(ctx, params.fileId, params.name);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "list_website_files",
-    "List files belonging to a website. Returns `{ items, nextCursor }`.",
-    {
-      websiteId: z.string().describe("The website ID"),
-      limit: z.number().optional().describe("Max results (default 50)"),
-      cursor: z.string().optional().describe("Pagination cursor"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { websiteId, ...opts } = params;
-      const result = await listWebsiteFiles(ctx, websiteId, opts);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "revoke_share_token",
-    "Revoke (delete) a share token, invalidating its URL.",
-    {
-      tokenId: z.string().describe("The share token ID to revoke"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await revokeShareToken(ctx, params.tokenId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "revoke_permission",
-    "Revoke a file sharing permission by ID. You must own the file.",
-    {
-      permissionId: z.string().describe("The permission ID to revoke"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await revokePermission(ctx, params.permissionId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "get_docs",
-    "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
-    {
-      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, presentations, presentation-design, documents, document-design, account, sdk, errors"),
-    },
-    async (params) => {
-      const markdown = getDocsMarkdown(params.section);
-      return { content: [{ type: "text", text: markdown }] };
-    }
-  );
-
-  return server;
 }
