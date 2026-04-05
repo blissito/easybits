@@ -55,14 +55,47 @@ export default function SetupPage() {
   );
 }
 
+const mcpEditors = ["Claude Code", "Cursor", "VS Code + Copilot", "Windsurf", "OpenClaw", "NanoClaw", "stdio"] as const;
+type McpEditor = (typeof mcpEditors)[number];
+
 function McpSection() {
+  const [editor, setEditor] = useState<McpEditor>("Claude Code");
+
   return (
     <>
       <Card
-        title="Streamable HTTP (recomendado)"
-        description="Para Claude Code, Cursor, Windsurf y cualquier client MCP con soporte HTTP."
+        title="Conecta tu editor"
+        description={<>Elige tu editor y sigue las instrucciones. <Link to="/dash/developer" className="underline font-medium text-black hover:text-brand-500">Obtén tu API key aquí</Link>.</>}
       >
-        <CodeBlock language="json" title="mcp config" showLineNumbers={false}>
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {mcpEditors.map((e) => (
+            <button
+              key={e}
+              onClick={() => setEditor(e)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border-2 transition-all ${
+                editor === e
+                  ? "bg-black text-white border-black"
+                  : "bg-white text-black border-gray-300 hover:border-black"
+              }`}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+
+        {editor === "Claude Code" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">Un comando en tu terminal:</p>
+            <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
+{`claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY`}
+            </CodeBlock>
+          </>
+        )}
+
+        {editor === "Cursor" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">Agrega a <code className="bg-gray-100 px-1 rounded">.cursor/mcp.json</code> en tu proyecto:</p>
+            <CodeBlock language="json" title=".cursor/mcp.json" showLineNumbers={false}>
 {`{
   "mcpServers": {
     "easybits": {
@@ -74,14 +107,75 @@ function McpSection() {
     }
   }
 }`}
-        </CodeBlock>
-      </Card>
+            </CodeBlock>
+          </>
+        )}
 
-      <Card
-        title="Claude Desktop — stdio"
-        description="Si prefieres stdio, usa el paquete @easybits.cloud/mcp."
-      >
-        <CodeBlock language="json" title="claude_desktop_config.json" showLineNumbers={false}>
+        {editor === "VS Code + Copilot" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">Agrega a <code className="bg-gray-100 px-1 rounded">.vscode/mcp.json</code> en tu proyecto:</p>
+            <CodeBlock language="json" title=".vscode/mcp.json" showLineNumbers={false}>
+{`{
+  "mcpServers": {
+    "easybits": {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp",
+      "headers": {
+        "Authorization": "Bearer eb_sk_live_YOUR_KEY"
+      }
+    }
+  }
+}`}
+            </CodeBlock>
+          </>
+        )}
+
+        {editor === "Windsurf" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">Agrega en Windsurf Settings → MCP, o en <code className="bg-gray-100 px-1 rounded">~/.codeium/windsurf/mcp_config.json</code>:</p>
+            <CodeBlock language="json" title="mcp_config.json" showLineNumbers={false}>
+{`{
+  "mcpServers": {
+    "easybits": {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp",
+      "headers": {
+        "Authorization": "Bearer eb_sk_live_YOUR_KEY"
+      }
+    }
+  }
+}`}
+            </CodeBlock>
+          </>
+        )}
+
+        {editor === "NanoClaw" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">
+              Usa el{" "}
+              <a href="https://github.com/blissito/nanoclaw" target="_blank" rel="noopener noreferrer" className="underline font-medium text-black hover:text-brand-500">
+                fork con soporte EasyBits
+              </a>
+              . Agrega tu key en <code className="bg-gray-100 px-1 rounded">.env</code>:
+            </p>
+            <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
+{`# Agregar key
+ssh root@TU_IP "echo 'EASYBITS_API_KEY=eb_sk_live_YOUR_KEY' \\
+  >> /home/nanoclaw/app/.env"
+
+# Activar para un grupo
+ssh root@TU_IP "sqlite3 /home/nanoclaw/app/store/messages.db \\
+  \\"UPDATE registered_groups \\
+  SET container_config = '{\\\\\"mcpServers\\\\\":[\\\\\"easybits\\\\\"]}' \\
+  WHERE folder = 'main';\\""`}
+            </CodeBlock>
+          </>
+        )}
+
+        {editor === "OpenClaw" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">Agrega a tu archivo <code className="bg-gray-100 px-1 rounded">mcp.json</code> de OpenClaw:</p>
+            <CodeBlock language="json" title="mcp.json" showLineNumbers={false}>
 {`{
   "mcpServers": {
     "easybits": {
@@ -93,34 +187,37 @@ function McpSection() {
     }
   }
 }`}
-        </CodeBlock>
+            </CodeBlock>
+          </>
+        )}
+
+        {editor === "stdio" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">Para Claude Desktop u otros clientes que usan stdio:</p>
+            <CodeBlock language="json" title="claude_desktop_config.json" showLineNumbers={false}>
+{`{
+  "mcpServers": {
+    "easybits": {
+      "command": "npx",
+      "args": ["-y", "@easybits.cloud/mcp"],
+      "env": {
+        "EASYBITS_API_KEY": "eb_sk_live_YOUR_KEY"
+      }
+    }
+  }
+}`}
+            </CodeBlock>
+          </>
+        )}
       </Card>
 
       <Card
-        title="Tools disponibles"
-        description="Tu agente AI puede usar estas herramientas:"
+        title="30+ herramientas MCP"
+        description={<>Archivos, bases de datos, documentos, landings, presentaciones y más. <Link to="/docs#mcp-tools" className="underline font-medium text-black hover:text-brand-500">Ver lista completa en docs</Link></>}
       >
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { name: "list_files", desc: "Listar archivos" },
-            { name: "get_file", desc: "Obtener archivo + URL firmada" },
-            { name: "upload_file", desc: "Subir archivo nuevo" },
-            { name: "delete_file", desc: "Eliminar archivo" },
-            { name: "share_file", desc: "Compartir con otro usuario" },
-            { name: "search_files", desc: "Buscar con lenguaje natural" },
-            { name: "list_providers", desc: "Ver storage providers" },
-          ].map((t) => (
-            <div
-              key={t.name}
-              className="flex items-start gap-2 p-2 rounded-lg border-2 border-black bg-white"
-            >
-              <code className="text-xs font-mono bg-brand-aqua px-1.5 py-0.5 rounded border border-black shrink-0">
-                {t.name}
-              </code>
-              <span className="text-xs text-gray-600">{t.desc}</span>
-            </div>
-          ))}
-        </div>
+        <p className="text-xs text-gray-500">
+          Una vez conectado, tu agente puede subir archivos, crear bases de datos, generar documentos con AI, publicar websites y más — todo desde el chat.
+        </p>
       </Card>
     </>
   );
