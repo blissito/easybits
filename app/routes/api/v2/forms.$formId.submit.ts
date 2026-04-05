@@ -9,7 +9,9 @@ const formRateLimiter = new RateLimiter({
 
 function corsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") || "";
-  const allowed = /^https:\/\/[\w-]+\.easybits\.cloud$/.test(origin);
+  const allowed =
+    /^https:\/\/[\w-]+\.easybits\.cloud$/.test(origin) ||
+    /^https:\/\/[\w-]+\.t3\.storage\.dev$/.test(origin);
   return {
     "Access-Control-Allow-Origin": allowed ? origin : "",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
