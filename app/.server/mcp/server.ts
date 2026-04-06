@@ -170,9 +170,12 @@ export function createMcpServer(groups?: string[]) {
     "create_form",
     "list_form_submissions",
     "deploy_website_file",
+    "upload_website_file",
+    "list_website_files",
     "inject_html",
     "list_websites",
     "create_website",
+    "transform_image",
   ]);
 
   // Magnet group: focused toolset for lead magnet creation
