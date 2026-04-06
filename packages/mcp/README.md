@@ -175,6 +175,53 @@ This package is a **stdio-to-HTTP proxy**. It reads JSON-RPC messages from stdin
 - Node.js 18+
 - An EasyBits account with an API key
 
+## Agent Workflows
+
+EasyBits works great alongside other AI tools. Here are common patterns for agents that have access to both EasyBits and image generation tools (like fal.ai):
+
+### Image generation → upload → share
+
+```
+1. Generate image with your image tool (fal.ai, DALL-E, etc.)
+2. upload_file → get presigned URL → PUT the image bytes
+3. Share via generate_share_token or set access to "public"
+4. Send the URL to the user
+```
+
+### Image editing pipeline
+
+```
+1. User sends a photo → agent saves it locally
+2. Edit with fal.ai tools (bg-remove, upscale, restyle, remove-object, inpaint)
+3. upload_file the result to EasyBits for permanent storage
+4. Return the EasyBits URL (persistent, unlike fal.ai temp URLs)
+```
+
+### Document with generated images
+
+```
+1. Generate images/graphics with image tools
+2. upload_file each image to EasyBits
+3. create_document with HTML sections that reference the uploaded image URLs
+4. Share the document link
+```
+
+### Website with dynamic assets
+
+```
+1. Generate or edit images as needed
+2. upload_website_file for each asset
+3. set_page_html to build pages referencing those assets
+4. Deploy — user gets a live URL
+```
+
+### Why use EasyBits for agent-generated files?
+
+- **Persistent URLs** — fal.ai and other generation APIs return temporary URLs that expire. EasyBits URLs are permanent.
+- **Access control** — set files as private, public, or share with specific users via tokens.
+- **Organization** — search, tag, and manage all generated assets in one place.
+- **Webhooks** — trigger downstream workflows when files are created or updated.
+
 ## Links
 
 - [EasyBits](https://www.easybits.cloud)
