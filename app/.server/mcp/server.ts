@@ -166,6 +166,7 @@ export function createMcpServer(groups?: string[]) {
     "db_list", "db_create", "db_query",
     "list_documents", "create_document", "set_page_html", "get_page_html",
     "create_quotation",
+    "edit_quotation",
     "get_usage_stats",
     "create_form",
     "list_forms",
