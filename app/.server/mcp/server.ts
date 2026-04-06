@@ -185,8 +185,12 @@ export function createMcpServer(groups?: string[]) {
     "create_lead_magnet",                              // orquestador todo-en-uno
     "create_document", "set_page_html", "get_page_html", // crear el PDF/contenido
     "create_website", "deploy_website_file",            // hosting de la landing
+    "list_websites", "list_website_files",              // explorar websites y assets
+    "upload_website_file",                              // subir assets al website
     "create_form", "inject_html",                       // form + edición parcial
+    "list_forms",                                       // ver forms creados
     "upload_file", "get_file",                          // subir/obtener el PDF
+    "transform_image",                                  // manipular imágenes
     "list_form_submissions",                            // consultar leads
   ]);
 
