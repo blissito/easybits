@@ -535,25 +535,45 @@ function randomFrom(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export async function listWebsites(ctx: AuthContext) {
+export async function listWebsites(
+  ctx: AuthContext,
+  opts?: { limit?: number; offset?: number; search?: string }
+) {
   requireScope(ctx, "READ");
-  const websites = await db.website.findMany({
-    where: {
-      ownerId: ctx.user.id,
-      OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  return websites.map((w) => ({
-    id: w.id,
-    name: w.name,
-    slug: w.slug,
-    status: w.status,
-    fileCount: w.fileCount,
-    totalSize: w.totalSize,
-    createdAt: w.createdAt,
-    url: `https://${w.slug}.easybits.cloud`,
-  }));
+  const limit = Math.min(opts?.limit ?? 20, 100);
+  const offset = opts?.offset ?? 0;
+
+  const where: any = {
+    ownerId: ctx.user.id,
+    OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
+  };
+  if (opts?.search) {
+    where.name = { contains: opts.search, mode: "insensitive" };
+  }
+
+  const [websites, total] = await Promise.all([
+    db.website.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+    }),
+    db.website.count({ where }),
+  ]);
+
+  return {
+    total,
+    items: websites.map((w) => ({
+      id: w.id,
+      name: w.name,
+      slug: w.slug,
+      status: w.status,
+      fileCount: w.fileCount,
+      totalSize: w.totalSize,
+      createdAt: w.createdAt,
+      url: `https://${w.slug}.easybits.cloud`,
+    })),
+  };
 }
 
 export async function createWebsite(ctx: AuthContext, opts: { name: string }) {

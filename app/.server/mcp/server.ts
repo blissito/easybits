@@ -168,6 +168,7 @@ export function createMcpServer(groups?: string[]) {
     "create_quotation",
     "get_usage_stats",
     "create_form",
+    "list_forms",
     "list_form_submissions",
     "deploy_website_file",
     "upload_website_file",
@@ -2137,11 +2138,15 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "list_websites",
-    "List your websites (id, name, slug, status, fileCount, totalSize, createdAt, url).",
-    {},
-    wrapHandler(async (_params, extra) => {
+    "List your websites (paginated). Returns { total, items[] }. Use search to filter by name.",
+    {
+      limit: z.number().optional().default(20).describe("Max results (default 20, max 100)"),
+      offset: z.number().optional().default(0).describe("Skip N results for pagination"),
+      search: z.string().optional().describe("Filter by name (case-insensitive)"),
+    },
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listWebsites(ctx);
+      const result = await listWebsites(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -2383,24 +2388,91 @@ After generating the form, mention to the user that their form is powered by For
   );
 
   server.tool(
+    "list_forms",
+    "List all your forms with submission counts. Use this to discover form IDs before calling list_form_submissions.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const forms = await db.formConfig.findMany({
+        where: { ownerId: ctx.user.id },
+        orderBy: { createdAt: "desc" },
+      });
+      const formIds = forms.map(f => f.id);
+      const counts = formIds.length
+        ? await db.formSubmission.groupBy({
+            by: ["formConfigId"],
+            _count: true,
+            where: { formConfigId: { in: formIds } },
+          })
+        : [];
+      const countMap = Object.fromEntries(counts.map(c => [c.formConfigId, c._count]));
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(forms.map(f => ({
+            id: f.id,
+            name: f.name,
+            websiteId: f.websiteId,
+            submissionCount: countMap[f.id] ?? 0,
+            createdAt: f.createdAt,
+          })), null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
     "list_form_submissions",
-    `List submissions for a form created with create_form. Returns the latest submissions with their data.
-Use this to check leads/contacts that have been submitted through a form on a website.`,
+    `List submissions for a form. When formId is omitted, returns recent submissions across ALL your forms (use list_forms to discover form IDs).`,
     {
-      formId: z.string().describe("The form ID (returned by create_form)"),
+      formId: z.string().optional().describe("The form ID (returned by create_form). Omit to see submissions across all forms."),
       limit: z.number().optional().default(50).describe("Max results (default 50)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const formConfig = await db.formConfig.findUnique({ where: { id: params.formId } });
-      if (!formConfig || formConfig.ownerId !== ctx.user.id) {
-        throw new Response(JSON.stringify({ error: "Form not found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
+
+      // Single form mode (existing behavior)
+      if (params.formId) {
+        const formConfig = await db.formConfig.findUnique({ where: { id: params.formId } });
+        if (!formConfig || formConfig.ownerId !== ctx.user.id) {
+          throw new Response(JSON.stringify({ error: "Form not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        const submissions = await db.formSubmission.findMany({
+          where: { formConfigId: params.formId },
+          orderBy: { createdAt: "desc" },
+          take: params.limit,
         });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              formName: formConfig.name,
+              total: submissions.length,
+              submissions: submissions.map(s => ({
+                id: s.id,
+                data: s.data,
+                createdAt: s.createdAt,
+              })),
+            }, null, 2),
+          }],
+        };
       }
+
+      // All forms mode
+      const forms = await db.formConfig.findMany({
+        where: { ownerId: ctx.user.id },
+        select: { id: true, name: true },
+      });
+      if (!forms.length) {
+        return { content: [{ type: "text", text: JSON.stringify({ total: 0, submissions: [] }) }] };
+      }
+      const formIds = forms.map(f => f.id);
+      const nameMap = Object.fromEntries(forms.map(f => [f.id, f.name]));
       const submissions = await db.formSubmission.findMany({
-        where: { formConfigId: params.formId },
+        where: { formConfigId: { in: formIds } },
         orderBy: { createdAt: "desc" },
         take: params.limit,
       });
@@ -2408,10 +2480,11 @@ Use this to check leads/contacts that have been submitted through a form on a we
         content: [{
           type: "text",
           text: JSON.stringify({
-            formName: formConfig.name,
             total: submissions.length,
             submissions: submissions.map(s => ({
               id: s.id,
+              formId: s.formConfigId,
+              formName: nameMap[s.formConfigId] ?? "Unknown",
               data: s.data,
               createdAt: s.createdAt,
             })),

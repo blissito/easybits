@@ -5,8 +5,12 @@ import { createWebsite, listWebsites } from "~/.server/core/operations";
 // GET /api/v2/websites — list websites
 export async function loader({ request }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
-  const websites = await listWebsites(ctx);
-  return Response.json({ items: websites });
+  const url = new URL(request.url);
+  const limit = Number(url.searchParams.get("limit")) || undefined;
+  const offset = Number(url.searchParams.get("offset")) || undefined;
+  const search = url.searchParams.get("search") || undefined;
+  const result = await listWebsites(ctx, { limit, offset, search });
+  return Response.json(result);
 }
 
 // POST /api/v2/websites — create a website
