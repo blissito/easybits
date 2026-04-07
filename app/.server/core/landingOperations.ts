@@ -121,14 +121,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
   const storageKey = `${ctx.user.id}/${nanoid(6)}`;
   const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
-  const putUrl = await client.getPutUrl(storageKey);
-
-  const uploadRes = await fetch(putUrl, {
-    method: "PUT",
-    body: htmlBuffer,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
-  if (!uploadRes.ok) throwJson("Failed to upload HTML to storage", 500);
+  await client.putObject(storageKey, htmlBuffer, "text/html; charset=utf-8");
 
   // Upsert file record
   const fileName = `sites/${websiteId}/index.html`;
@@ -172,28 +165,22 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     const printBuffer = Buffer.from(finalPrintHtml, "utf-8");
     const printStorageKey = `${ctx.user.id}/${nanoid(6)}`;
     const printPublicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${printStorageKey}`;
-    const printPutUrl = await client.getPutUrl(printStorageKey);
-    const printUploadRes = await fetch(printPutUrl, {
-      method: "PUT",
-      body: printBuffer,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
+    await client.putObject(printStorageKey, printBuffer, "text/html; charset=utf-8");
+
+    // Upsert print.html file record
+    const printFileName = `sites/${websiteId}/print.html`;
+    const existingPrint = await db.file.findFirst({
+      where: { name: printFileName, ownerId: ctx.user.id, status: { not: "DELETED" } },
     });
-    if (printUploadRes.ok) {
-      // Upsert print.html file record
-      const printFileName = `sites/${websiteId}/print.html`;
-      const existingPrint = await db.file.findFirst({
-        where: { name: printFileName, ownerId: ctx.user.id, status: { not: "DELETED" } },
+    if (existingPrint) {
+      await db.file.update({
+        where: { id: existingPrint.id },
+        data: { storageKey: printStorageKey, size: printBuffer.length, status: "DONE", url: printPublicUrl },
       });
-      if (existingPrint) {
-        await db.file.update({
-          where: { id: existingPrint.id },
-          data: { storageKey: printStorageKey, size: printBuffer.length, status: "DONE", url: printPublicUrl },
-        });
-      } else {
-        await db.file.create({
-          data: { name: printFileName, storageKey: printStorageKey, slug: printStorageKey, size: printBuffer.length, contentType: "text/html", ownerId: ctx.user.id, access: "public", url: printPublicUrl, status: "DONE" },
-        });
-      }
+    } else {
+      await db.file.create({
+        data: { name: printFileName, storageKey: printStorageKey, slug: printStorageKey, size: printBuffer.length, contentType: "text/html", ownerId: ctx.user.id, access: "public", url: printPublicUrl, status: "DONE" },
+      });
     }
 
     // Generate PDF via Gotenberg (HTML→PDF via URL)

@@ -33,25 +33,40 @@ function validateObjectId(id: string): void {
   if (!/^[0-9a-fA-F]{24}$/.test(id)) throwJson("Document not found", 404);
 }
 
-export async function listDocuments(ctx: AuthContext) {
+export async function listDocuments(
+  ctx: AuthContext,
+  opts?: { limit?: number; offset?: number; search?: string }
+) {
   requireScope(ctx, "READ");
-  const items = await db.landing.findMany({
-    where: { ownerId: ctx.user.id, version: 4 },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      prompt: true,
-      theme: true,
-      status: true,
-      websiteId: true,
-      sections: true,
-      metadata: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  const limit = Math.min(opts?.limit ?? 20, 100);
+  const offset = opts?.offset ?? 0;
+  const where: any = { ownerId: ctx.user.id, version: 4 };
+  if (opts?.search) {
+    where.name = { contains: opts.search, mode: "insensitive" };
+  }
+  const [items, total] = await Promise.all([
+    db.landing.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+      select: {
+        id: true,
+        name: true,
+        prompt: true,
+        theme: true,
+        status: true,
+        websiteId: true,
+        sections: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    db.landing.count({ where }),
+  ]);
   return {
+    total,
     items: items.map((d) => ({
       id: d.id,
       name: d.name,

@@ -164,7 +164,7 @@ export function createMcpServer(groups?: string[]) {
   const CORE_ALLOWLIST = new Set([
     "list_files", "get_file", "upload_file",
     "db_list", "db_create", "db_query",
-    "list_documents", "create_document", "set_page_html", "get_page_html", "deploy_document",
+    "list_documents", "get_document", "create_document", "set_page_html", "get_page_html", "deploy_document",
     "create_quotation",
     "edit_quotation",
     "get_usage_stats",
@@ -875,11 +875,15 @@ function registerDocTools(server: McpServer) {
 
   server.tool(
     "list_documents",
-    "List all your documents. Returns id, name, status (DRAFT/PUBLISHED), pageCount, theme, and timestamps. Use get_document to fetch full page HTML.",
-    {},
-    wrapHandler(async (_params, extra) => {
+    "List your documents (paginated). Returns { total, items[] }. Use search to filter by name.",
+    {
+      limit: z.number().optional().default(20).describe("Max results (default 20, max 100)"),
+      offset: z.number().optional().default(0).describe("Skip N results for pagination"),
+      search: z.string().optional().describe("Filter by name (case-insensitive)"),
+    },
+    wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listDocuments(ctx);
+      const result = await listDocuments(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
