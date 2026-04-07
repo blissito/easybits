@@ -164,7 +164,7 @@ export function createMcpServer(groups?: string[]) {
   const CORE_ALLOWLIST = new Set([
     "list_files", "get_file", "upload_file",
     "db_list", "db_create", "db_query",
-    "list_documents", "create_document", "set_page_html", "get_page_html",
+    "list_documents", "create_document", "set_page_html", "get_page_html", "deploy_document",
     "create_quotation",
     "edit_quotation",
     "get_usage_stats",
