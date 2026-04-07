@@ -1,144 +1,78 @@
-import { GraphQLClient } from "graphql-request";
+const BASE_URL = "https://api.machines.dev/v1/apps/easybits/certificates";
 
-const endpoint = "https://api.fly.io/graphql";
-const APP_NAME = "easybits";
+function headers() {
+  return {
+    Authorization: `Bearer ${process.env.FLY_API_TOKEN}`,
+    "Content-Type": "application/json",
+  };
+}
 
 export async function removeHost(hostname: string) {
-  const query = `
-     mutation($appId: ID!, $hostname: String!) {
-        deleteCertificate(appId: $appId, hostname: $hostname) {
-            app {
-                name
-            }
-            certificate {
-                hostname
-                id
-            }
-        }
-    }
-  `;
-  const variables = { appId: APP_NAME, hostname };
-  let result;
   try {
-    result = await getClient().request(query, variables);
-    console.info("::CERT_DELETEION_SUCCESS::", hostname);
+    const res = await fetch(`${BASE_URL}/${hostname}`, {
+      method: "DELETE",
+      headers: headers(),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    console.info("::CERT_DELETION_SUCCESS::", hostname);
+    return { ok: true };
   } catch (e: unknown) {
     if (e instanceof Error)
       console.error("::ERROR_ON_CERT_DELETION::", e.message);
   }
-  return result;
 }
 
 export async function showHost(hostname: string) {
-  const query = `
-          query($appId: String!, $hostname: String!) {
-          app(name: $appId) {
-            certificate(hostname: $hostname) {
-              configured
-              acmeDnsConfigured
-              acmeAlpnConfigured
-              certificateAuthority
-              createdAt
-              dnsProvider
-              dnsValidationInstructions
-              dnsValidationHostname
-              dnsValidationTarget
-              hostname
-              id
-              source
-              clientStatus
-              issued {
-                nodes {
-                  type
-                  expiresAt
-                }
-              }
-            }
-          }
-        }
-  `;
-  const variables = { appId: APP_NAME, hostname };
-  let result;
   try {
-    result = await getClient().request(query, variables);
+    const res = await fetch(`${BASE_URL}/${hostname}`, { headers: headers() });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const cert = await res.json();
+    // Match legacy GraphQL shape expected by callers
+    return { app: { certificate: cert } };
   } catch (e: unknown) {
     if (e instanceof Error)
-      console.error("::ERROR_ON_CERT_CREATION::", e.message);
+      console.error("::ERROR_ON_CERT_SHOW::", e.message);
   }
-  return result;
 }
 
 export async function createHost(hostname: string) {
-  const query = `
-mutation($appId: ID!, $hostname: String!) {
-    addCertificate(appId: $appId, hostname: $hostname) {
-        certificate {
-            configured
-            acmeDnsConfigured
-            acmeAlpnConfigured
-            certificateAuthority
-            certificateRequestedAt
-            dnsProvider
-            dnsValidationInstructions
-            dnsValidationHostname
-            dnsValidationTarget
-            hostname
-            id
-            source
-            clientStatus
-        }
-    }
-}
-
-                    `;
-  const variables = { appId: APP_NAME, hostname };
-  let result;
   try {
-    result = await getClient().request(query, variables);
+    const res = await fetch(`${BASE_URL}/acme`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ hostname }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
     console.info("::CERT_CREATION_SUCCESS::", hostname);
+    return await res.json();
   } catch (e: unknown) {
     if (e instanceof Error)
       console.error("::ERROR_ON_CERT_CREATION::", e.message);
   }
-  return result;
 }
 
 export async function listHosts() {
-  const query = `
-                query($appName: String!) {
-                app(name: $appName) {
-                    certificates {
-                    nodes {
-                        createdAt
-                        hostname
-                        clientStatus
-                    }
-                    }
-                }
-                }
-                  `;
-  const variables = { appName: APP_NAME };
-  return await getClient().request(query, variables);
+  const res = await fetch(BASE_URL, { headers: headers() });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  const certs: any[] = await res.json();
+  // Match legacy GraphQL shape expected by callers
+  return {
+    app: {
+      certificates: {
+        nodes: certs.map((c) => ({
+          createdAt: c.created_at ?? c.createdAt ?? "",
+          hostname: c.hostname,
+          clientStatus: c.status ?? c.clientStatus ?? "",
+        })),
+      },
+    },
+  };
 }
 
 export async function getFlyAppData() {
-  const query = `
-        query($appName: String!) {
-            app(name: $appName) {
-                    id
-                    name
-                }
-            }`;
-  const variables = { appName: APP_NAME };
-  return await getClient().request(query, variables);
-}
-
-let FlyAPIClient: GraphQLClient;
-const getClient = () => {
-  FlyAPIClient ??= new GraphQLClient(endpoint, {
-    headers: {
-      authorization: "Bearer " + process.env.FLY_API_TOKEN,
-    },
+  const res = await fetch("https://api.machines.dev/v1/apps/easybits", {
+    headers: headers(),
   });
-  return FlyAPIClient;
-};
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return await res.json();
+}
