@@ -7,6 +7,46 @@ import { getUserPlan, PLANS, type PlanKey } from "~/lib/plans";
 
 const DB_LIMITS: Record<PlanKey, number> = { Byte: 1, Mega: 5, Tera: 20 };
 
+const LOG_TABLE = "_easybits_query_log";
+const CREATE_LOG_TABLE_SQL = `CREATE TABLE IF NOT EXISTS "${LOG_TABLE}" (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sql_text TEXT NOT NULL,
+  args TEXT,
+  source TEXT NOT NULL DEFAULT 'api',
+  rows_affected INTEGER DEFAULT 0,
+  duration_ms INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'ok',
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`;
+
+export type QuerySource = "ui" | "mcp" | "api" | "sdk";
+
+function logQuery(
+  namespace: string,
+  sqlText: string,
+  args: unknown[],
+  source: QuerySource,
+  durationMs: number,
+  rowsAffected: number,
+  status: "ok" | "error",
+  error?: string
+) {
+  if (sqlText.includes(LOG_TABLE)) return; // prevent recursion
+  sqldExec(namespace, [{
+    sql: `INSERT INTO "${LOG_TABLE}" (sql_text, args, source, rows_affected, duration_ms, status, error) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      sqlText.slice(0, 4000),
+      args.length ? JSON.stringify(args).slice(0, 2000) : null,
+      source,
+      rowsAffected,
+      Math.round(durationMs),
+      status,
+      error?.slice(0, 1000) || null,
+    ],
+  }]).catch(() => {}); // fire-and-forget
+}
+
 export async function listDatabases(ctx: AuthContext) {
   requireScope(ctx, "READ");
   const databases = await db.database.findMany({
@@ -78,6 +118,7 @@ export async function createDatabase(
   // Use the DB id as namespace (guaranteed unique)
   const namespace = database.id;
   await sqldCreateNamespace(namespace);
+  await sqldExec(namespace, [{ sql: CREATE_LOG_TABLE_SQL }]);
 
   const updated = await db.database.update({
     where: { id: database.id },
@@ -141,7 +182,8 @@ export async function queryDatabase(
   ctx: AuthContext,
   dbId: string,
   sql: string,
-  args: unknown[] = []
+  args: unknown[] = [],
+  source: QuerySource = "api"
 ) {
   requireScope(ctx, "WRITE");
   const database = await db.database.findUnique({ where: { id: dbId } });
@@ -151,13 +193,22 @@ export async function queryDatabase(
       headers: { "Content-Type": "application/json" },
     });
   }
-  return sqldQuery(database.namespace, sql, args);
+  const start = performance.now();
+  try {
+    const result = await sqldQuery(database.namespace, sql, args);
+    logQuery(database.namespace, sql, args, source, performance.now() - start, result.affected_row_count, "ok");
+    return result;
+  } catch (err) {
+    logQuery(database.namespace, sql, args, source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
+    throw err;
+  }
 }
 
 export async function execDatabase(
   ctx: AuthContext,
   dbId: string,
-  statements: Array<{ sql: string; args?: unknown[] }>
+  statements: Array<{ sql: string; args?: unknown[] }>,
+  source: QuerySource = "api"
 ) {
   requireScope(ctx, "WRITE");
 
@@ -175,8 +226,19 @@ export async function execDatabase(
       headers: { "Content-Type": "application/json" },
     });
   }
-  const results = await sqldExec(database.namespace, statements);
-  return { results };
+  const start = performance.now();
+  try {
+    const results = await sqldExec(database.namespace, statements);
+    const totalAffected = results.reduce((s, r) => s + (r.affected_row_count || 0), 0);
+    const durationMs = performance.now() - start;
+    const summary = statements.length === 1 ? statements[0].sql : `[batch: ${statements.length} statements]`;
+    logQuery(database.namespace, summary, [], source, durationMs, totalAffected, "ok");
+    return { results };
+  } catch (err) {
+    const summary = statements.length === 1 ? statements[0].sql : `[batch: ${statements.length} statements]`;
+    logQuery(database.namespace, summary, [], source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
+    throw err;
+  }
 }
 
 const IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -240,4 +302,49 @@ export async function importDatabase(
   );
 
   return { imported: totalAffected, total: rows.length };
+}
+
+export async function getQueryHistory(
+  ctx: AuthContext,
+  dbId: string,
+  opts: { limit?: number; offset?: number } = {}
+) {
+  requireScope(ctx, "READ");
+  const database = await db.database.findUnique({ where: { id: dbId } });
+  if (!database || database.userId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Database not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const limit = Math.min(opts.limit || 50, 200);
+  const offset = opts.offset || 0;
+
+  // Ensure log table exists (for DBs created before this feature)
+  await sqldExec(database.namespace, [{ sql: CREATE_LOG_TABLE_SQL }]).catch(() => {});
+
+  const result = await sqldQuery(
+    database.namespace,
+    `SELECT id, sql_text, args, source, rows_affected, duration_ms, status, error, created_at FROM "${LOG_TABLE}" ORDER BY id DESC LIMIT ? OFFSET ?`,
+    [limit, offset]
+  );
+  const countResult = await sqldQuery(
+    database.namespace,
+    `SELECT COUNT(*) as total FROM "${LOG_TABLE}"`,
+    []
+  );
+  return {
+    items: result.rows.map((r) => ({
+      id: r[0],
+      sql: r[1],
+      args: r[2],
+      source: r[3],
+      rowsAffected: r[4],
+      durationMs: r[5],
+      status: r[6],
+      error: r[7],
+      createdAt: r[8],
+    })),
+    total: (countResult.rows[0]?.[0] as number) || 0,
+  };
 }

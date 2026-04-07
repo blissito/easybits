@@ -20,13 +20,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   // Batch mode: { statements: [{ sql, args }, ...] }
   if (body.statements && Array.isArray(body.statements)) {
-    const result = await execDatabase(ctx, params.dbId!, body.statements);
+    const result = await execDatabase(ctx, params.dbId!, body.statements, "api");
     return Response.json(result);
   }
 
   // Single query: { sql, args }
   if (body.sql) {
-    const result = await queryDatabase(ctx, params.dbId!, body.sql, body.args || []);
+    const result = await queryDatabase(ctx, params.dbId!, body.sql, body.args || [], "api");
     return Response.json(result);
   }
 

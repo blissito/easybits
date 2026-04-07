@@ -719,7 +719,7 @@ function registerCoreTools(server: McpServer) {
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await queryDatabase(ctx, params.dbId, params.sql, params.args);
+      const result = await queryDatabase(ctx, params.dbId, params.sql, params.args, "mcp");
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
@@ -736,7 +736,7 @@ function registerCoreTools(server: McpServer) {
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await execDatabase(ctx, params.dbId, params.statements);
+      const result = await execDatabase(ctx, params.dbId, params.statements, "mcp");
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

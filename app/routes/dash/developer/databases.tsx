@@ -8,6 +8,7 @@ import {
   createDatabase,
   deleteDatabase,
   queryDatabase,
+  getQueryHistory,
 } from "~/.server/core/databaseOperations";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
@@ -161,11 +162,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return data({ queryError: "SQL query is required" }, { status: 400 });
     }
     try {
-      const result = await queryDatabase(ctx, dbId, sql);
+      const result = await queryDatabase(ctx, dbId, sql, [], "ui");
       return { queryResult: result, queryDbId: dbId };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
       return { queryError: message, queryDbId: dbId };
+    }
+  }
+
+  if (intent === "history") {
+    const dbId = formData.get("dbId") as string;
+    const offset = parseInt(formData.get("offset") as string) || 0;
+    try {
+      const result = await getQueryHistory(ctx, dbId, { limit: 50, offset });
+      return { history: result, historyDbId: dbId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load history";
+      return { historyError: message, historyDbId: dbId };
     }
   }
 
@@ -398,6 +411,18 @@ async function downloadXlsx(cols: string[], rows: unknown[][], filename: string)
 
 type SchemaTable = { name: string; columns: { name: string; type: string; pk: boolean }[] };
 
+type HistoryItem = {
+  id: number;
+  sql: string;
+  args: string | null;
+  source: string;
+  rowsAffected: number;
+  durationMs: number;
+  status: string;
+  error: string | null;
+  createdAt: string;
+};
+
 function DatabaseRow({
   db: dbItem,
   queryOpen,
@@ -414,8 +439,12 @@ function DatabaseRow({
   const generateFetcher = useFetcher<typeof action>();
   const schemaFetcher = useFetcher<typeof action>();
   const downloadFetcher = useFetcher<typeof action>();
+  const historyFetcher = useFetcher<typeof action>();
 
   const xlsxFetcher = useFetcher<typeof action>();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
 
   const handleDownload = () => {
     downloadFetcher.submit(
@@ -458,6 +487,29 @@ function DatabaseRow({
       })();
     }
   }, [xlsxFetcher.data]);
+  // Fetch history when panel opens
+  useEffect(() => {
+    if (historyOpen && historyFetcher.state === "idle") {
+      historyFetcher.submit(
+        { intent: "history", dbId: dbItem.id, offset: "0" },
+        { method: "post" }
+      );
+    }
+  }, [historyOpen]);
+
+  // Update history state when data arrives
+  useEffect(() => {
+    const hData = historyFetcher.data as Record<string, unknown> | null | undefined;
+    if (hData?.historyDbId === dbItem.id && hData?.history) {
+      const h = hData.history as { items: HistoryItem[]; total: number };
+      const offset = parseInt(
+        (historyFetcher.formData?.get("offset") as string) || "0"
+      );
+      setHistoryItems(offset === 0 ? h.items : [...historyItems, ...h.items]);
+      setHistoryTotal(h.total);
+    }
+  }, [historyFetcher.data]);
+
   const [sqlValue, setSqlValue] = useState("");
   const [nlPrompt, setNlPrompt] = useState("");
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
@@ -550,6 +602,13 @@ function DatabaseRow({
         <td className="px-4 py-3 flex gap-2 justify-end items-center">
           <BrutalButton size="chip" onClick={onToggleQuery}>
             {queryOpen ? "Close" : "Query"}
+          </BrutalButton>
+          <BrutalButton
+            size="chip"
+            onClick={() => { setHistoryOpen(!historyOpen); if (queryOpen) onToggleQuery(); }}
+            className={historyOpen ? "bg-brand-200" : ""}
+          >
+            {historyOpen ? "Close" : "History"}
           </BrutalButton>
           <BrutalButton size="chip" onClick={handleDownload} isLoading={downloadFetcher.state !== "idle"}>
             Download
@@ -768,6 +827,111 @@ function DatabaseRow({
                   </div>
                 )}
               </div>
+            )}
+          </td>
+        </tr>
+      )}
+      {historyOpen && (
+        <tr className="border-t border-gray-200">
+          <td colSpan={4} className="px-4 py-4 bg-gray-50">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-gray-500">
+                Query History
+                {historyTotal > 0 && <span className="ml-1 font-mono text-gray-400">({historyTotal})</span>}
+              </h4>
+              <button
+                type="button"
+                className="text-xs font-bold text-brand-500 hover:text-brand-700"
+                onClick={() => {
+                  historyFetcher.submit(
+                    { intent: "history", dbId: dbItem.id, offset: "0" },
+                    { method: "post" }
+                  );
+                  setHistoryItems([]);
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+            {historyFetcher.state !== "idle" && historyItems.length === 0 && (
+              <div className="text-xs text-gray-400 font-mono">Loading...</div>
+            )}
+            {historyItems.length === 0 && historyFetcher.state === "idle" && (
+              <div className="text-xs text-gray-400 text-center py-6">No queries recorded yet</div>
+            )}
+            {historyItems.length > 0 && (
+              <>
+                <div className="border-2 border-black rounded-xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                  <table className="w-full text-xs">
+                    <thead className="bg-black text-white">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-bold">SQL</th>
+                        <th className="text-left px-3 py-2 font-bold w-16">Source</th>
+                        <th className="text-left px-3 py-2 font-bold w-16">Time</th>
+                        <th className="text-left px-3 py-2 font-bold w-16">Rows</th>
+                        <th className="text-left px-3 py-2 font-bold w-14">Status</th>
+                        <th className="text-left px-3 py-2 font-bold w-32 hidden md:table-cell">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyItems.map((item) => (
+                        <tr
+                          key={item.id}
+                          className="border-t border-gray-200 hover:bg-brand-50 cursor-pointer"
+                          onClick={() => { setSqlValue(item.sql); setHistoryOpen(false); onToggleQuery(); }}
+                          title="Click to load this query"
+                        >
+                          <td className="px-3 py-1.5 font-mono max-w-[300px] truncate">
+                            {item.sql}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              item.source === "mcp" ? "bg-purple-100 text-purple-700" :
+                              item.source === "ui" ? "bg-blue-100 text-blue-700" :
+                              item.source === "sdk" ? "bg-green-100 text-green-700" :
+                              "bg-gray-100 text-gray-700"
+                            }`}>
+                              {item.source}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-gray-500">
+                            {item.durationMs}ms
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-gray-500">
+                            {item.rowsAffected}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {item.status === "ok" ? (
+                              <span className="text-green-600 font-bold">OK</span>
+                            ) : (
+                              <span className="text-red-600 font-bold" title={item.error || undefined}>ERR</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-gray-400 hidden md:table-cell">
+                            {new Date(item.createdAt + "Z").toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {historyItems.length < historyTotal && (
+                  <div className="mt-2 text-center">
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-brand-500 hover:text-brand-700"
+                      onClick={() => {
+                        historyFetcher.submit(
+                          { intent: "history", dbId: dbItem.id, offset: String(historyItems.length) },
+                          { method: "post" }
+                        );
+                      }}
+                    >
+                      {historyFetcher.state !== "idle" ? "Loading..." : `Load more (${historyTotal - historyItems.length} remaining)`}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </td>
         </tr>
