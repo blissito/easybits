@@ -164,7 +164,8 @@ export function createMcpServer(groups?: string[]) {
   const CORE_ALLOWLIST = new Set([
     "list_files", "get_file", "upload_file",
     "db_list", "db_create", "db_query",
-    "list_documents", "get_document", "create_document", "set_page_html", "get_page_html", "deploy_document",
+    "list_documents", "get_document", "create_document", "update_document", "delete_document",
+    "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
     "create_quotation",
     "edit_quotation",
     "get_usage_stats",
@@ -177,6 +178,7 @@ export function createMcpServer(groups?: string[]) {
     "inject_html",
     "list_websites",
     "create_website",
+    "delete_website",
     "transform_image",
   ]);
 
@@ -893,10 +895,11 @@ function registerDocTools(server: McpServer) {
     "Get a document with all its pages. Returns sections[] where each has { id, name, html, order }. Use section.id as pageId in set_page_html/get_page_html. WARNING: response can be very large for multi-page documents — use get_page_html if you only need one page.",
     {
       documentId: z.string().describe("The document ID"),
+      includeHtml: z.boolean().optional().default(true).describe("Include page HTML in response (default true). Set false for lightweight metadata-only listing."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getDocument(ctx, params.documentId);
+      const result = await getDocument(ctx, params.documentId, { includeHtml: params.includeHtml });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

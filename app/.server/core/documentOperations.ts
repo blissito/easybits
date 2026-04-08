@@ -81,12 +81,27 @@ export async function listDocuments(
   };
 }
 
-export async function getDocument(ctx: AuthContext, id: string) {
+export async function getDocument(
+  ctx: AuthContext,
+  id: string,
+  opts?: { includeHtml?: boolean }
+) {
   requireScope(ctx, "READ");
   validateObjectId(id);
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
+  if (opts?.includeHtml === false && Array.isArray(doc.sections)) {
+    return {
+      ...doc,
+      sections: (doc.sections as any[]).map((s: any) => ({
+        id: s.id,
+        order: s.order,
+        name: s.name,
+        type: s.type,
+      })),
+    };
+  }
   return doc;
 }
 

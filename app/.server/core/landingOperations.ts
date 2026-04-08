@@ -16,6 +16,7 @@ import type { LandingBlock } from "~/lib/landing2/blockTypes";
 import type { Section3 } from "~/lib/landing3/types";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
+import { enrichImages } from "../images/enrichImages";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 
 function throwJson(error: string, status: number): never {
@@ -33,6 +34,13 @@ export async function deployLanding(ctx: AuthContext, id: string) {
 
   const sections = (landing.sections as unknown as any[]) || [];
   if (sections.length === 0) throwJson("No sections to deploy", 400);
+
+  // Enrich data-image-query placeholders with Pexels photos before building HTML
+  for (const section of sections) {
+    if (section.html?.includes("data-image-query")) {
+      section.html = await enrichImages(section.html);
+    }
+  }
 
   const customColors = landing.customColors as { bg: string; accent: string; text: string } | null;
   const landingMeta = (landing.metadata as Record<string, unknown>) || {};
