@@ -1198,6 +1198,7 @@ Use this for quick PDF generation when you don't need the document stored in Eas
       total: z.number().describe("Grand total"),
       brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
       currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
+      paymentUrl: z.string().optional().describe("Payment link URL (e.g. MercadoPago checkout). Renders as a prominent clickable button in the PDF."),
       inline_pdf: z.boolean().optional().describe("Return PDF as base64 blob instead of URL. Default: false"),
     },
     wrapHandler(async (params, extra) => {

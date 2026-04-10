@@ -27,7 +27,7 @@ function hexToTypstRgb(hex: string): string {
   return `rgb("${h}")`;
 }
 
-export function buildTypstSource(data: QuotationData): string {
+export function buildTypstSource(data: QuotationData & { paymentUrl?: string }): string {
   const bc = data.brandColor || "#1a1a1a";
   const bcTypst = hexToTypstRgb(bc);
   const cur = data.currency || "MXN";
@@ -80,6 +80,21 @@ export function buildTypstSource(data: QuotationData): string {
   }
   totalRows.push(`table.hline(stroke: 1.5pt + ${bcTypst}),
     [#align(right)[#text(size: 12pt, weight: "bold")[Total]]], [#align(right)[#text(size: 12pt, weight: "bold", fill: ${bcTypst})[\\$${fmtNum(data.total)} ${esc(cur)}]]],`);
+
+  // Payment link — big, bold CTA
+  const paymentBlock = data.paymentUrl ? `
+  #v(16pt)
+  #block(fill: ${bcTypst}, radius: 8pt, width: 100%, inset: 20pt)[
+    #align(center)[
+      #text(fill: white, size: 10pt, weight: "medium", tracking: 0.5pt)[PAGO EN LÍNEA]
+      #v(6pt)
+      #link("${data.paymentUrl}")[
+        #text(fill: white, size: 18pt, weight: "bold")[Pagar \\$${fmtNum(data.total)} ${esc(cur)}]
+      ]
+      #v(6pt)
+      #text(fill: rgb("ffffff99"), size: 9pt)[Haz clic para pagar de forma segura vía MercadoPago]
+    ]
+  ]` : "";
 
   // Build notes
   const notesBlock = data.notes?.length ? `
@@ -174,6 +189,8 @@ export function buildTypstSource(data: QuotationData): string {
     ${totalRows.join("\n    ")}
   )
 ]
+
+${paymentBlock}
 
 #v(12pt)
 ${notesBlock}
