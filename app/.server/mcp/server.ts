@@ -182,6 +182,7 @@ export function createMcpServer(groups?: string[]) {
     "create_quotation",
     "edit_quotation",
     "fast_quotation",
+    "fast_pdf",
     "get_usage_stats",
     "create_form",
     "list_forms",
