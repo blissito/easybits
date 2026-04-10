@@ -1,5 +1,14 @@
 # syntax=docker/dockerfile:1
 
+# Download Typst binary (parallel stage, avoids runner network issues)
+FROM debian:bookworm-slim AS typst-dl
+RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN curl -fSL --retry 3 --retry-delay 2 -o /tmp/typst.tar.xz \
+      https://github.com/typst/typst/releases/download/v0.14.0/typst-x86_64-unknown-linux-musl.tar.xz \
+    && tar xJf /tmp/typst.tar.xz \
+    && mv typst-x86_64-unknown-linux-musl/typst /typst \
+    && /typst --version
+
 # Build stage
 FROM node:20-slim AS builder
 WORKDIR /app
@@ -29,15 +38,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-noto-cjk \
     fonts-noto-color-emoji \
-    curl xz-utils \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install Typst for fast PDF generation
-RUN curl -sL https://github.com/typst/typst/releases/download/v0.14.0/typst-x86_64-unknown-linux-musl.tar.xz | tar xJ \
-    && mv typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst \
-    && rm -rf typst-x86_64-unknown-linux-musl \
-    && typst --version
+# Install Typst binary (downloaded in builder stage to avoid runner network issues)
+COPY --from=typst-dl /typst /usr/local/bin/typst
 
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/node_modules ./node_modules
