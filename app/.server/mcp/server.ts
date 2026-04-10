@@ -1293,16 +1293,78 @@ TIPS FOR BEST RESULTS:
       style: z.enum(["corporate", "modern", "minimal", "bold"]).optional().describe("Typography style preset (default: corporate)"),
       headerFooter: z.boolean().optional().describe("Show header bar + page footer (default: true)"),
       sections: z.array(pdfSectionSchema).describe("Document content as typed sections"),
+      fileId: z.string().optional().describe("Pass an existing fast_pdf fileId to UPDATE it instead of creating new. The agent can find existing PDFs by searching files with metadata.type='fast_pdf'."),
     },
-    wrapHandler(async (params) => {
+    wrapHandler(async (params, extra) => {
       const { compileFastPdf } = await import("../core/typstPdf");
+      const { getPlatformDefaultClient } = await import("../storage");
+      const { nanoid } = await import("nanoid");
+      const ctx = (extra as any).authInfo;
+
       const start = Date.now();
-      const pdf = await compileFastPdf(params as any);
+      const { fileId, ...pdfData } = params;
+      const pdf = await compileFastPdf(pdfData as any);
       const elapsed = Date.now() - start;
+
+      // Persist: upload PDF + JSON to storage, create/update File records
+      const client = getPlatformDefaultClient({ prefix: "mcp/" });
+      const dataJson = JSON.stringify(pdfData, null, 2);
+      const dataBuffer = Buffer.from(dataJson, "utf-8");
+
+      let pdfFileId: string;
+      let dataFileId: string;
+
+      if (fileId) {
+        // UPDATE: find existing files and overwrite
+        const existingPdf = await db.file.findFirst({ where: { id: fileId, ownerId: ctx.user.id } });
+        if (!existingPdf) throw new Error(`File ${fileId} not found`);
+        const meta = existingPdf.metadata as any;
+        const existingData = meta?.dataFileId ? await db.file.findFirst({ where: { id: meta.dataFileId, ownerId: ctx.user.id } }) : null;
+
+        // Overwrite storage
+        await client.putObject(existingPdf.storageKey, pdf, "application/pdf");
+        await db.file.update({ where: { id: existingPdf.id }, data: { name: `${params.name}.pdf`, size: pdf.length, metadata: { ...meta, title: params.title, style: params.style || "corporate", updatedAt: new Date().toISOString() } } });
+
+        if (existingData) {
+          await client.putObject(existingData.storageKey, dataBuffer, "application/json");
+          await db.file.update({ where: { id: existingData.id }, data: { name: `${params.name}.json`, size: dataBuffer.length } });
+          dataFileId = existingData.id;
+        } else {
+          // Create data file if missing
+          const dataKey = `${ctx.user.id}/${nanoid(3)}`;
+          await client.putObject(dataKey, dataBuffer, "application/json");
+          const dataFile = await db.file.create({ data: { name: `${params.name}.json`, storageKey: dataKey, slug: dataKey, size: dataBuffer.length, contentType: "application/json", ownerId: ctx.user.id, access: "private", url: "", status: "DONE", source: "mcp", metadata: { type: "fast_pdf_data", title: params.title, pdfFileId: existingPdf.id } } });
+          dataFileId = dataFile.id;
+        }
+        pdfFileId = existingPdf.id;
+      } else {
+        // CREATE: new files
+        const pdfKey = `${ctx.user.id}/${nanoid(3)}`;
+        const dataKey = `${ctx.user.id}/${nanoid(3)}`;
+
+        await Promise.all([
+          client.putObject(pdfKey, pdf, "application/pdf"),
+          client.putObject(dataKey, dataBuffer, "application/json"),
+        ]);
+
+        const [pdfFile, dataFile] = await Promise.all([
+          db.file.create({ data: { name: `${params.name}.pdf`, storageKey: pdfKey, slug: pdfKey, size: pdf.length, contentType: "application/pdf", ownerId: ctx.user.id, access: "private", url: "", status: "DONE", source: "mcp" } }),
+          db.file.create({ data: { name: `${params.name}.json`, storageKey: dataKey, slug: dataKey, size: dataBuffer.length, contentType: "application/json", ownerId: ctx.user.id, access: "private", url: "", status: "DONE", source: "mcp" } }),
+        ]);
+
+        // Cross-link metadata after both exist
+        await Promise.all([
+          db.file.update({ where: { id: pdfFile.id }, data: { metadata: { type: "fast_pdf", title: params.title, style: params.style || "corporate", dataFileId: dataFile.id } } }),
+          db.file.update({ where: { id: dataFile.id }, data: { metadata: { type: "fast_pdf_data", title: params.title, pdfFileId: pdfFile.id } } }),
+        ]);
+
+        pdfFileId = pdfFile.id;
+        dataFileId = dataFile.id;
+      }
 
       return {
         content: [
-          { type: "text", text: JSON.stringify({ name: params.name, generatedIn: `${elapsed}ms`, engine: "typst", style: params.style || "corporate", pages: "auto" }, null, 2) },
+          { type: "text", text: JSON.stringify({ name: params.name, fileId: pdfFileId, dataFileId, generatedIn: `${elapsed}ms`, engine: "typst", style: params.style || "corporate", mode: fileId ? "updated" : "created" }, null, 2) },
           {
             type: "resource",
             resource: {
