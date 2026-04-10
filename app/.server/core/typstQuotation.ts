@@ -27,7 +27,7 @@ function hexToTypstRgb(hex: string): string {
   return `rgb("${h}")`;
 }
 
-export function buildTypstSource(data: QuotationData & { paymentUrl?: string }): string {
+export function buildTypstSource(data: QuotationData & { paymentUrl?: string; logoUrl?: string }): string {
   const bc = data.brandColor || "#1a1a1a";
   const bcTypst = hexToTypstRgb(bc);
   const cur = data.currency || "MXN";
@@ -158,8 +158,11 @@ export function buildTypstSource(data: QuotationData & { paymentUrl?: string }):
 #grid(
   columns: (1fr, auto),
   [
-    #text(size: 15pt, weight: "bold", fill: ${bcTypst})[${esc(data.company.name)}]
-    ${companyExtra.length ? "\n    " + companyExtra.join("\n    ") : ""}
+    ${data.logoUrl ? `#grid(columns: (auto, 1fr), gutter: 10pt, align(horizon)[#image("logo.png", height: 36pt)], [
+      #text(size: 15pt, weight: "bold", fill: ${bcTypst})[${esc(data.company.name)}]
+      ${companyExtra.length ? "\n      " + companyExtra.join("\n      ") : ""}
+    ])` : `#text(size: 15pt, weight: "bold", fill: ${bcTypst})[${esc(data.company.name)}]
+    ${companyExtra.length ? "\n    " + companyExtra.join("\n    ") : ""}`}
   ],
   align(right)[
     #text(size: 16pt, weight: "bold", fill: ${bcTypst})[COTIZACIÓN]
@@ -208,7 +211,7 @@ ${notesBlock}
 `;
 }
 
-export async function compileTypstPdf(typstSource: string, paymentUrl?: string): Promise<Buffer> {
+export async function compileTypstPdf(typstSource: string, opts?: { paymentUrl?: string; logoUrl?: string; logoBase64?: string }): Promise<Buffer> {
   await mkdir(TMP_DIR, { recursive: true });
   const id = randomUUID().slice(0, 8);
   const dir = join(TMP_DIR, id);
@@ -219,9 +222,17 @@ export async function compileTypstPdf(typstSource: string, paymentUrl?: string):
 
   try {
     // Generate QR code if payment URL provided
-    if (paymentUrl) {
+    if (opts?.paymentUrl) {
       const QRCode = (await import("qrcode")).default;
-      await QRCode.toFile(qrFile, paymentUrl, { width: 200, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
+      await QRCode.toFile(qrFile, opts.paymentUrl, { width: 200, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
+    }
+
+    // Write logo if provided (base64 or URL)
+    if (opts?.logoBase64) {
+      await writeFile(join(dir, "logo.png"), Buffer.from(opts.logoBase64, "base64"));
+    } else if (opts?.logoUrl) {
+      const res = await fetch(opts.logoUrl);
+      if (res.ok) await writeFile(join(dir, "logo.png"), Buffer.from(await res.arrayBuffer()));
     }
 
     await writeFile(typFile, typstSource, "utf-8");

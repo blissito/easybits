@@ -1198,17 +1198,20 @@ Use this for quick PDF generation when you don't need the document stored in Eas
       total: z.number().describe("Grand total"),
       brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
       currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
-      paymentUrl: z.string().optional().describe("Payment link URL (e.g. MercadoPago checkout). Renders as a prominent clickable button in the PDF."),
+      paymentUrl: z.string().optional().describe("Payment link URL (e.g. MercadoPago checkout). Renders as a prominent clickable button + QR code in the PDF."),
+      logoUrl: z.string().optional().describe("URL to company logo image (PNG/JPG). Renders next to company name in the header."),
+      logoBase64: z.string().optional().describe("Company logo as base64-encoded PNG/JPG. Alternative to logoUrl — pass the image directly without uploading."),
     },
     wrapHandler(async (params, extra) => {
-      const { name, paymentUrl, ...rest } = params;
+      const { name, paymentUrl, logoUrl, logoBase64, ...rest } = params;
       const { fixQuotationMath } = await import("~/lib/quotation/templates");
       const { buildTypstSource, compileTypstPdf } = await import("../core/typstQuotation");
 
       const data = fixQuotationMath(rest as any);
       const start = Date.now();
-      const typstSource = buildTypstSource({ ...data, paymentUrl });
-      const pdf = await compileTypstPdf(typstSource, paymentUrl);
+      const hasLogo = !!(logoUrl || logoBase64);
+      const typstSource = buildTypstSource({ ...data, paymentUrl, logoUrl: hasLogo ? "has-logo" : undefined });
+      const pdf = await compileTypstPdf(typstSource, { paymentUrl, logoUrl, logoBase64 });
       const elapsed = Date.now() - start;
 
       return {
