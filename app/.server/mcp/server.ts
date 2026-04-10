@@ -92,6 +92,19 @@ import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOper
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 
+async function autoDeployIfPublished(ctx: AuthContext, documentId: string): Promise<boolean> {
+  try {
+    const doc = await db.landing.findUnique({ where: { id: documentId }, select: { status: true } });
+    if (doc?.status === "PUBLISHED") {
+      await deployDocument(ctx, documentId);
+      return true;
+    }
+  } catch (e) {
+    console.error("[auto-deploy] failed for", documentId, e);
+  }
+  return false;
+}
+
 function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
   return async (params: T, extra: any) => {
     try {
@@ -168,6 +181,7 @@ export function createMcpServer(groups?: string[]) {
     "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
     "create_quotation",
     "edit_quotation",
+    "fast_quotation",
     "get_usage_stats",
     "create_form",
     "list_forms",
@@ -1164,6 +1178,58 @@ Auto-paginates: >8 items splits across pages. Totals appear on last page only.`,
     })
   );
 
+  server.tool(
+    "fast_quotation",
+    `Experimental: generates a quotation PDF using Typst (ultra-fast, ~50ms). Same structured data as create_quotation but does NOT save a document to the database — returns only the PDF.
+Use this for quick PDF generation when you don't need the document stored in EasyBits.`,
+    {
+      name: z.string().describe("PDF filename, e.g. 'Cotización ACME - Servicios IT'"),
+      company: companySchema.describe("Company info"),
+      client: clientSchema.describe("Client info"),
+      folio: z.string().optional().describe("Quotation number (e.g. 'COT-2026-055')"),
+      date: z.string().optional().describe("Date (ISO string or readable). Defaults to today."),
+      validity: z.string().optional().describe("Validity period (e.g. '15 días')"),
+      items: z.array(quotationItemSchema).describe("Line items"),
+      notes: z.array(z.string()).optional().describe("Notes and conditions"),
+      subtotal: z.number().describe("Subtotal before tax/discount"),
+      tax: z.number().optional().describe("Tax amount (e.g. IVA)"),
+      taxRate: z.number().optional().describe("Tax rate percentage (e.g. 16)"),
+      discount: z.number().optional().describe("Total discount amount"),
+      total: z.number().describe("Grand total"),
+      brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
+      currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
+      inline_pdf: z.boolean().optional().describe("Return PDF as base64 blob instead of URL. Default: false"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { name, inline_pdf, ...rest } = params;
+      const { fixQuotationMath } = await import("~/lib/quotation/templates");
+      const { buildTypstSource, compileTypstPdf } = await import("../core/typstQuotation");
+
+      const data = fixQuotationMath(rest as any);
+      const start = Date.now();
+      const typstSource = buildTypstSource(data);
+      const pdf = await compileTypstPdf(typstSource);
+      const elapsed = Date.now() - start;
+
+      const content: any[] = [{ type: "text", text: JSON.stringify({ name, generatedIn: `${elapsed}ms`, engine: "typst" }, null, 2) }];
+      if (inline_pdf) {
+        content.push({
+          type: "resource",
+          resource: {
+            uri: `easybits://fast-quotation/${name}`,
+            mimeType: "application/pdf",
+            blob: pdf.toString("base64"),
+          },
+        });
+      } else {
+        const { readUrl } = await uploadPdfToStorage(ctx.user.id, pdf, name);
+        content.push({ type: "text", text: JSON.stringify({ pdfUrl: readUrl }, null, 2) });
+      }
+      return { content };
+    })
+  );
+
   const listResultSchema = z.object({
     name: z.string().describe("List name (e.g. 'OFAC SDN', 'PEP México Federal', 'UIF Lista de Bloqueados', 'Interpol', 'EU Sanctions')"),
     searched: z.boolean().describe("Whether this list was searched"),
@@ -1395,6 +1461,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       html: z.string().optional().describe("HTML content for the new page. Omit for a blank page"),
       afterPageIndex: z.number().optional().describe("Insert after this 0-based page index. Omit to append at the end"),
       label: z.string().optional().describe("Page label/name (e.g. 'Cover', 'Chapter 1')"),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy if document is already published (default true). Set false when doing batch edits — call deploy_document manually after the last edit."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1403,7 +1470,8 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
         afterPageIndex: params.afterPageIndex,
         label: params.label,
       });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
     })
   );
 
@@ -1413,11 +1481,13 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page/section ID to delete (from get_document sections[].id)"),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy if document is already published (default true). Set false when doing batch edits."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deletePage(ctx, params.documentId, params.pageId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
     })
   );
 
@@ -1427,11 +1497,13 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     {
       documentId: z.string().describe("The document ID"),
       pageIds: z.array(z.string()).describe("Array of all page/section IDs in the desired order"),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy if document is already published (default true). Set false when doing batch edits."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await reorderPages(ctx, params.documentId, params.pageIds);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
     })
   );
 
@@ -1487,11 +1559,13 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID to update (from get_document sections)"),
       html: z.string().describe("New HTML content for the page"),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy if document is already published (default true). Set false when doing batch edits — call deploy_document manually after the last edit."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setPageHtml(ctx, params.documentId, params.pageId, params.html);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
     })
   );
 
@@ -1532,11 +1606,13 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       pageId: z.string().describe("The page ID containing the element"),
       cssSelector: z.string().describe("CSS selector to find the element to replace (e.g. '.hero', '#pricing', 'div:nth-child(3)')"),
       html: z.string().describe("New HTML to replace the matched element's outerHTML"),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy if document is already published (default true). Set false when doing batch edits."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setSectionHtmlBySelector(ctx, params.documentId, params.pageId, params.cssSelector, params.html);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
     })
   );
 
@@ -1548,11 +1624,13 @@ Call get_docs("document-design") for full design guide with validated patterns.`
       pageId: z.string().describe("The page ID containing the HTML to edit"),
       old_html: z.string().describe("The exact HTML substring to find and replace (must match current page HTML exactly)"),
       new_html: z.string().describe("The new HTML to replace it with"),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy if document is already published (default true). Set false when doing batch edits."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await replaceHtmlInPage(ctx, params.documentId, params.pageId, params.old_html, params.new_html);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
     })
   );
 

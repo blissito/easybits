@@ -29,8 +29,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-noto-cjk \
     fonts-noto-color-emoji \
+    curl xz-utils \
     && rm -rf /var/lib/apt/lists/*
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Install Typst for fast PDF generation
+RUN curl -sL https://github.com/typst/typst/releases/download/v0.14.0/typst-x86_64-unknown-linux-musl.tar.xz | tar xJ \
+    && mv typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst \
+    && rm -rf typst-x86_64-unknown-linux-musl \
+    && typst --version
 
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/node_modules ./node_modules
