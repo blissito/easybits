@@ -1239,6 +1239,82 @@ Use this for quick PDF generation when you don't need the document stored in Eas
     })
   );
 
+  // ── fast_pdf ──────────────────────────────────────────────────────────
+
+  const pdfSectionSchema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("heading"), level: z.union([z.literal(1), z.literal(2), z.literal(3)]), text: z.string() }),
+    z.object({ type: z.literal("paragraph"), text: z.string() }),
+    z.object({ type: z.literal("table"), headers: z.array(z.string()), rows: z.array(z.array(z.string())) }),
+    z.object({ type: z.literal("list"), items: z.array(z.string()), ordered: z.boolean().optional() }),
+    z.object({ type: z.literal("callout"), title: z.string().optional(), text: z.string(), variant: z.enum(["info", "warning", "success"]).optional() }),
+    z.object({ type: z.literal("two-column"), left: z.string(), right: z.string() }),
+    z.object({ type: z.literal("columns"), columns: z.array(z.string()).min(2).max(4).describe("2-4 text columns (paper/abstract style)"), gutter: z.string().optional().describe("Column gutter (e.g. '16pt')") }),
+    z.object({ type: z.literal("quote"), text: z.string(), attribution: z.string().optional() }),
+    z.object({ type: z.literal("divider") }),
+    z.object({ type: z.literal("stats"), items: z.array(z.object({ value: z.string(), label: z.string() })) }),
+    z.object({ type: z.literal("image"), url: z.string().optional(), base64: z.string().optional(), caption: z.string().optional(), width: z.string().optional() }),
+    z.object({ type: z.literal("typst"), code: z.string().describe("Raw Typst markup for custom layouts (FODA grids, hero images, numbered cards, dark pages, etc.). Use when no built-in section type fits.") }),
+  ]);
+
+  server.tool(
+    "fast_pdf",
+    `Generate an editorial-quality PDF using Typst (ultra-fast, ~100ms). Does NOT save to database — returns only the PDF.
+
+SECTION TYPES: heading, paragraph, table, list, callout, two-column, columns (2-4 cols), quote, divider, stats, image, typst (raw Typst for custom layouts).
+
+STYLE PRESETS: corporate (clean, underlined headings), modern (airy, large type contrast), minimal (serif, elegant), bold (color blocks, heavy type).
+
+EDITORIAL GUIDELINES (critical for quality):
+- HIERARCHY FIRST: Use heading (h1, h2, h3) + paragraph as the backbone. Most content should be clean text with clear titles — NOT cards or boxes. A professional document reads like a book, not a dashboard.
+- Cards/callouts/stats are ACCENTS, not the main structure. Use them sparingly: 1-2 per page max. If everything is a card, nothing stands out.
+- Prefer: h1 → paragraph → h2 → paragraph → table. Avoid: card → card → card → card.
+- Leave breathing room: a heading followed by a calm paragraph is more professional than dense boxes.
+- NO ORPHAN PAGES: Every page MUST have a title or heading with text content. Never leave a page with only an image or graphic — add a caption, context paragraph, or move the image to fit with surrounding content. If an image would overflow to its own page, reduce its size or place it earlier.
+
+TIPS FOR BEST RESULTS:
+- Use "typst" sections only for layouts that built-in types can't handle (FODA grids, hero images, dark pages). Most pages should use heading + paragraph + table/list.
+- For multi-page docs: put #pagebreak() INSIDE a typst section before the next page content, not as a separate section. Keep heading + content together to avoid blank pages.
+- For cover pages with custom design: set coverPage=false, headerFooter=false, and use a typst section with #set page(margin: 0pt) + #place() for full control. End with #pagebreak() + #set page(...) to reset for content pages.
+- Typst syntax: #set must be followed by a newline (not inline). Use #v() for vertical spacing. Escape $ as \\$.
+- Pack content densely — avoid half-empty pages. Combine related sections on the same page.`,
+    {
+      name: z.string().describe("PDF filename, e.g. 'Q1 Report - Acme Corp'"),
+      title: z.string().describe("Document title"),
+      subtitle: z.string().optional().describe("Subtitle or tagline"),
+      author: z.string().optional().describe("Author name"),
+      date: z.string().optional().describe("Date (ISO or readable). Defaults to today."),
+      brandColor: z.string().optional().describe("Primary brand color hex (e.g. '#7C5AE6'). Default: EasyBits purple"),
+      accentColor: z.string().optional().describe("Secondary accent color hex (e.g. '#2563eb'). Default: same as brandColor"),
+      logoUrl: z.string().optional().describe("URL to company logo (PNG/SVG)"),
+      logoBase64: z.string().optional().describe("Logo as base64-encoded PNG/SVG"),
+      coverPage: z.boolean().optional().describe("Generate a cover page (default: false)"),
+      pageSize: z.enum(["us-letter", "a4"]).optional().describe("Page size (default: us-letter)"),
+      style: z.enum(["corporate", "modern", "minimal", "bold"]).optional().describe("Typography style preset (default: corporate)"),
+      headerFooter: z.boolean().optional().describe("Show header bar + page footer (default: true)"),
+      sections: z.array(pdfSectionSchema).describe("Document content as typed sections"),
+    },
+    wrapHandler(async (params) => {
+      const { compileFastPdf } = await import("../core/typstPdf");
+      const start = Date.now();
+      const pdf = await compileFastPdf(params as any);
+      const elapsed = Date.now() - start;
+
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ name: params.name, generatedIn: `${elapsed}ms`, engine: "typst", style: params.style || "corporate", pages: "auto" }, null, 2) },
+          {
+            type: "resource",
+            resource: {
+              uri: `easybits://fast-pdf/${encodeURIComponent(params.name)}.pdf`,
+              mimeType: "application/pdf",
+              blob: pdf.toString("base64"),
+            },
+          },
+        ],
+      };
+    })
+  );
+
   const listResultSchema = z.object({
     name: z.string().describe("List name (e.g. 'OFAC SDN', 'PEP México Federal', 'UIF Lista de Bloqueados', 'Interpol', 'EU Sanctions')"),
     searched: z.boolean().describe("Whether this list was searched"),

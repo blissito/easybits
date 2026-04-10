@@ -1,31 +1,5 @@
-import { execFile } from "node:child_process";
-import { writeFile, readFile, unlink, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import type { QuotationData } from "~/lib/quotation/templates";
-
-const TMP_DIR = "/tmp/typst-quotations";
-
-function esc(s: string): string {
-  // Escape Typst special chars
-  return s.replace(/[\\#\[\]@*_`$<>]/g, (c) => `\\${c}`);
-}
-
-function fmtNum(n: number): string {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtDate(dateStr?: string): string {
-  if (!dateStr) return new Date().toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
-}
-
-function hexToTypstRgb(hex: string): string {
-  const h = hex.replace("#", "");
-  return `rgb("${h}")`;
-}
+import { esc, fmtNum, fmtDate, hexToTypstRgb, compileTypst } from "./typstCompiler";
 
 export function buildTypstSource(data: QuotationData & { paymentUrl?: string; logoUrl?: string; logoExt?: string }): string {
   const bc = data.brandColor || "#1a1a1a";
@@ -212,48 +186,27 @@ ${notesBlock}
 }
 
 export async function compileTypstPdf(typstSource: string, opts?: { paymentUrl?: string; logoUrl?: string; logoBase64?: string }): Promise<Buffer> {
-  await mkdir(TMP_DIR, { recursive: true });
-  const id = randomUUID().slice(0, 8);
-  const dir = join(TMP_DIR, id);
-  await mkdir(dir, { recursive: true });
-  const typFile = join(dir, "main.typ");
-  const pdfFile = join(dir, "main.pdf");
-  const qrFile = join(dir, "qr.png");
+  const assets: Array<{ name: string; data: Buffer }> = [];
 
-  try {
-    // Generate QR code if payment URL provided
-    if (opts?.paymentUrl) {
-      const QRCode = (await import("qrcode")).default;
-      await QRCode.toFile(qrFile, opts.paymentUrl, { width: 200, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
-    }
-
-    // Write logo if provided (base64 or URL) — auto-detect format
-    const writeLogo = async (buf: Buffer) => {
-      const isSvg = buf[0] === 0x3C || buf.toString("utf-8", 0, 5).trim().startsWith("<");
-      const ext = isSvg ? "svg" : "png";
-      await writeFile(join(dir, `logo.${ext}`), buf);
-      return ext;
-    };
-    let logoExt = "png";
-    if (opts?.logoBase64) {
-      logoExt = await writeLogo(Buffer.from(opts.logoBase64, "base64"));
-    } else if (opts?.logoUrl) {
-      const res = await fetch(opts.logoUrl);
-      if (res.ok) logoExt = await writeLogo(Buffer.from(await res.arrayBuffer()));
-    }
-
-    await writeFile(typFile, typstSource, "utf-8");
-
-    await new Promise<void>((resolve, reject) => {
-      execFile("typst", ["compile", typFile, pdfFile], { timeout: 10_000 }, (err, _stdout, stderr) => {
-        if (err) reject(new Error(`Typst compilation failed: ${stderr || err.message}`));
-        else resolve();
-      });
-    });
-
-    return await readFile(pdfFile);
-  } finally {
-    const { rm } = await import("node:fs/promises");
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  // Generate QR code if payment URL provided
+  if (opts?.paymentUrl) {
+    const QRCode = (await import("qrcode")).default;
+    const qrBuf = await QRCode.toBuffer(opts.paymentUrl, { width: 200, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
+    assets.push({ name: "qr.png", data: qrBuf });
   }
+
+  // Write logo if provided (base64 or URL) — auto-detect format
+  const detectAndPush = (buf: Buffer) => {
+    const isSvg = buf[0] === 0x3C || buf.toString("utf-8", 0, 5).trim().startsWith("<");
+    const ext = isSvg ? "svg" : "png";
+    assets.push({ name: `logo.${ext}`, data: buf });
+  };
+  if (opts?.logoBase64) {
+    detectAndPush(Buffer.from(opts.logoBase64, "base64"));
+  } else if (opts?.logoUrl) {
+    const res = await fetch(opts.logoUrl);
+    if (res.ok) detectAndPush(Buffer.from(await res.arrayBuffer()));
+  }
+
+  return compileTypst(typstSource, { assets });
 }
