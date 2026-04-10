@@ -1199,11 +1199,9 @@ Use this for quick PDF generation when you don't need the document stored in Eas
       brandColor: z.string().optional().describe("Brand color hex (e.g. '#2563eb'). Default: black"),
       currency: z.string().optional().describe("Currency code (e.g. 'MXN', 'USD'). Default: MXN"),
       paymentUrl: z.string().optional().describe("Payment link URL (e.g. MercadoPago checkout). Renders as a prominent clickable button in the PDF."),
-      inline_pdf: z.boolean().optional().describe("Return PDF as base64 blob instead of URL. Default: false"),
     },
     wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { name, inline_pdf, ...rest } = params;
+      const { name, ...rest } = params;
       const { fixQuotationMath } = await import("~/lib/quotation/templates");
       const { buildTypstSource, compileTypstPdf } = await import("../core/typstQuotation");
 
@@ -1213,21 +1211,19 @@ Use this for quick PDF generation when you don't need the document stored in Eas
       const pdf = await compileTypstPdf(typstSource);
       const elapsed = Date.now() - start;
 
-      const content: any[] = [{ type: "text", text: JSON.stringify({ name, generatedIn: `${elapsed}ms`, engine: "typst" }, null, 2) }];
-      if (inline_pdf) {
-        content.push({
-          type: "resource",
-          resource: {
-            uri: `easybits://fast-quotation/${name}`,
-            mimeType: "application/pdf",
-            blob: pdf.toString("base64"),
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ name, generatedIn: `${elapsed}ms`, engine: "typst" }, null, 2) },
+          {
+            type: "resource",
+            resource: {
+              uri: `easybits://fast-quotation/${encodeURIComponent(name)}.pdf`,
+              mimeType: "application/pdf",
+              blob: pdf.toString("base64"),
+            },
           },
-        });
-      } else {
-        const { readUrl } = await uploadPdfToStorage(ctx.user.id, pdf, name);
-        content.push({ type: "text", text: JSON.stringify({ pdfUrl: readUrl }, null, 2) });
-      }
-      return { content };
+        ],
+      };
     })
   );
 
