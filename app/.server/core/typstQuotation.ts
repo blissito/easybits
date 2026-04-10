@@ -27,7 +27,7 @@ function hexToTypstRgb(hex: string): string {
   return `rgb("${h}")`;
 }
 
-export function buildTypstSource(data: QuotationData & { paymentUrl?: string; logoUrl?: string }): string {
+export function buildTypstSource(data: QuotationData & { paymentUrl?: string; logoUrl?: string; logoExt?: string }): string {
   const bc = data.brandColor || "#1a1a1a";
   const bcTypst = hexToTypstRgb(bc);
   const cur = data.currency || "MXN";
@@ -158,7 +158,7 @@ export function buildTypstSource(data: QuotationData & { paymentUrl?: string; lo
 #grid(
   columns: (1fr, auto),
   [
-    ${data.logoUrl ? `#grid(columns: (auto, 1fr), gutter: 10pt, align(horizon)[#image("logo.png", height: 36pt)], [
+    ${data.logoUrl ? `#grid(columns: (auto, 1fr), gutter: 10pt, align(horizon)[#image("logo.${data.logoExt || "png"}", height: 36pt)], [
       #text(size: 15pt, weight: "bold", fill: ${bcTypst})[${esc(data.company.name)}]
       ${companyExtra.length ? "\n      " + companyExtra.join("\n      ") : ""}
     ])` : `#text(size: 15pt, weight: "bold", fill: ${bcTypst})[${esc(data.company.name)}]
@@ -227,12 +227,19 @@ export async function compileTypstPdf(typstSource: string, opts?: { paymentUrl?:
       await QRCode.toFile(qrFile, opts.paymentUrl, { width: 200, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
     }
 
-    // Write logo if provided (base64 or URL)
+    // Write logo if provided (base64 or URL) — auto-detect format
+    const writeLogo = async (buf: Buffer) => {
+      const isSvg = buf[0] === 0x3C || buf.toString("utf-8", 0, 5).trim().startsWith("<");
+      const ext = isSvg ? "svg" : "png";
+      await writeFile(join(dir, `logo.${ext}`), buf);
+      return ext;
+    };
+    let logoExt = "png";
     if (opts?.logoBase64) {
-      await writeFile(join(dir, "logo.png"), Buffer.from(opts.logoBase64, "base64"));
+      logoExt = await writeLogo(Buffer.from(opts.logoBase64, "base64"));
     } else if (opts?.logoUrl) {
       const res = await fetch(opts.logoUrl);
-      if (res.ok) await writeFile(join(dir, "logo.png"), Buffer.from(await res.arrayBuffer()));
+      if (res.ok) logoExt = await writeLogo(Buffer.from(await res.arrayBuffer()));
     }
 
     await writeFile(typFile, typstSource, "utf-8");

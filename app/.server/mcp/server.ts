@@ -1210,7 +1210,16 @@ Use this for quick PDF generation when you don't need the document stored in Eas
       const data = fixQuotationMath(rest as any);
       const start = Date.now();
       const hasLogo = !!(logoUrl || logoBase64);
-      const typstSource = buildTypstSource({ ...data, paymentUrl, logoUrl: hasLogo ? "has-logo" : undefined });
+      // Detect logo format from content
+      let logoExt = "png";
+      if (logoBase64) {
+        const buf = Buffer.from(logoBase64, "base64");
+        const isSvg = buf[0] === 0x3C || buf.toString("utf-8", 0, 5).trim().startsWith("<");
+        if (isSvg) logoExt = "svg";
+      } else if (logoUrl?.endsWith(".svg")) {
+        logoExt = "svg";
+      }
+      const typstSource = buildTypstSource({ ...data, paymentUrl, logoUrl: hasLogo ? "has-logo" : undefined, logoExt });
       const pdf = await compileTypstPdf(typstSource, { paymentUrl, logoUrl, logoBase64 });
       const elapsed = Date.now() - start;
 
