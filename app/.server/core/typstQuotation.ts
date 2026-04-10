@@ -81,19 +81,30 @@ export function buildTypstSource(data: QuotationData & { paymentUrl?: string }):
   totalRows.push(`table.hline(stroke: 1.5pt + ${bcTypst}),
     [#align(right)[#text(size: 12pt, weight: "bold")[Total]]], [#align(right)[#text(size: 12pt, weight: "bold", fill: ${bcTypst})[\\$${fmtNum(data.total)} ${esc(cur)}]]],`);
 
-  // Payment link — big, bold CTA
+  // Payment link — big CTA with QR code
   const paymentBlock = data.paymentUrl ? `
   #v(16pt)
   #block(fill: ${bcTypst}, radius: 8pt, width: 100%, inset: 20pt)[
-    #align(center)[
-      #text(fill: white, size: 10pt, weight: "medium", tracking: 0.5pt)[PAGO EN LÍNEA]
-      #v(6pt)
-      #link("${data.paymentUrl}")[
-        #text(fill: white, size: 18pt, weight: "bold")[Pagar \\$${fmtNum(data.total)} ${esc(cur)}]
-      ]
-      #v(6pt)
-      #text(fill: rgb("ffffff99"), size: 9pt)[Haz clic para pagar de forma segura vía MercadoPago]
-    ]
+    #grid(
+      columns: (1fr, auto),
+      gutter: 16pt,
+      align(horizon)[
+        #align(center)[
+          #text(fill: white, size: 10pt, weight: "medium", tracking: 0.5pt)[PAGO EN LÍNEA]
+          #v(6pt)
+          #link("${data.paymentUrl}")[
+            #text(fill: white, size: 18pt, weight: "bold")[Pagar \\$${fmtNum(data.total)} ${esc(cur)}]
+          ]
+          #v(6pt)
+          #text(fill: rgb("ffffff99"), size: 9pt)[Haz clic o escanea el código QR para pagar]
+        ]
+      ],
+      [
+        #block(fill: white, radius: 6pt, inset: 6pt)[
+          #image("qr.png", width: 90pt)
+        ]
+      ],
+    )
   ]` : "";
 
   // Build notes
@@ -197,13 +208,22 @@ ${notesBlock}
 `;
 }
 
-export async function compileTypstPdf(typstSource: string): Promise<Buffer> {
+export async function compileTypstPdf(typstSource: string, paymentUrl?: string): Promise<Buffer> {
   await mkdir(TMP_DIR, { recursive: true });
   const id = randomUUID().slice(0, 8);
-  const typFile = join(TMP_DIR, `${id}.typ`);
-  const pdfFile = join(TMP_DIR, `${id}.pdf`);
+  const dir = join(TMP_DIR, id);
+  await mkdir(dir, { recursive: true });
+  const typFile = join(dir, "main.typ");
+  const pdfFile = join(dir, "main.pdf");
+  const qrFile = join(dir, "qr.png");
 
   try {
+    // Generate QR code if payment URL provided
+    if (paymentUrl) {
+      const QRCode = (await import("qrcode")).default;
+      await QRCode.toFile(qrFile, paymentUrl, { width: 200, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
+    }
+
     await writeFile(typFile, typstSource, "utf-8");
 
     await new Promise<void>((resolve, reject) => {
@@ -215,7 +235,7 @@ export async function compileTypstPdf(typstSource: string): Promise<Buffer> {
 
     return await readFile(pdfFile);
   } finally {
-    await unlink(typFile).catch(() => {});
-    await unlink(pdfFile).catch(() => {});
+    const { rm } = await import("node:fs/promises");
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }

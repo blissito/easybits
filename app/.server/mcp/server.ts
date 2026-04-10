@@ -1201,14 +1201,14 @@ Use this for quick PDF generation when you don't need the document stored in Eas
       paymentUrl: z.string().optional().describe("Payment link URL (e.g. MercadoPago checkout). Renders as a prominent clickable button in the PDF."),
     },
     wrapHandler(async (params, extra) => {
-      const { name, ...rest } = params;
+      const { name, paymentUrl, ...rest } = params;
       const { fixQuotationMath } = await import("~/lib/quotation/templates");
       const { buildTypstSource, compileTypstPdf } = await import("../core/typstQuotation");
 
       const data = fixQuotationMath(rest as any);
       const start = Date.now();
-      const typstSource = buildTypstSource(data);
-      const pdf = await compileTypstPdf(typstSource);
+      const typstSource = buildTypstSource({ ...data, paymentUrl });
+      const pdf = await compileTypstPdf(typstSource, paymentUrl);
       const elapsed = Date.now() - start;
 
       return {
