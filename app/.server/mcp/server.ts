@@ -1266,24 +1266,51 @@ SECTION TYPES: heading, paragraph, table, list, callout, two-column, columns (2-
 
 STYLE PRESETS: corporate (clean, underlined headings), modern (airy, large type contrast), minimal (serif, elegant), bold (color blocks, heavy type).
 
-EDITORIAL GUIDELINES (critical for quality):
-- HIERARCHY FIRST: Use heading (h1, h2, h3) + paragraph as the backbone. Most content should be clean text with clear titles — NOT cards or boxes. A professional document reads like a book, not a dashboard.
-- Cards/callouts/stats are ACCENTS, not the main structure. Use them sparingly: 1-2 per page max. If everything is a card, nothing stands out.
-- Prefer: h1 → paragraph → h2 → paragraph → table. Avoid: card → card → card → card.
-- Leave breathing room: a heading followed by a calm paragraph is more professional than dense boxes.
-- NO ORPHAN PAGES: Every page MUST have a title or heading with text content. Never leave a page with only an image or graphic — add a caption, context paragraph, or move the image to fit with surrounding content. If an image would overflow to its own page, reduce its size or place it earlier.
+═══════════════════════════════════════════════════════════
+DENSITY & SPACE USAGE — THE #1 QUALITY RULE
+═══════════════════════════════════════════════════════════
 
-⚠️ TYPST SECTIONS — STRICT RULES (violations cause blank pages):
-- MAXIMUM 2 typst sections per document. Use built-in types (heading, paragraph, table, list, callout, stats, quote, image) for 90%+ of content.
-- NEVER use #page() or #pagebreak() inside typst sections — they create blank pages. Use the built-in coverPage=true option for covers.
+Body text renders at 10pt. A US Letter page fits ~45 lines of text (~650pt usable). You MUST fill each page to at least 70% capacity. A page with one callout and nothing else is a FAILURE.
+
+MANDATORY DENSITY RULES:
+- MINIMUM 3 content sections per page (heading + paragraph + table/list/callout). A heading alone does NOT count as a page.
+- NEVER let a callout, quote, or stats block be the only content on a page. Always pair them with surrounding paragraphs that give context before AND after.
+- Write SUBSTANTIVE paragraphs: 3-5 sentences minimum (40+ words). One-liner paragraphs waste space and look unprofessional. If you don't have enough to say, combine sections.
+- When a section ends mid-page with 40%+ space remaining, ADD the next section on the same page — do NOT leave whitespace.
+- If the last page has less than 30% content, move content up or add a closing paragraph/CTA.
+
+PAGE BUDGET: Before generating, estimate total content. A 6-page document needs ~270 lines of actual content. If you only have content for 4 pages, make it 4 pages — never pad with whitespace.
+
+═══════════════════════════════════════════════════════════
+EDITORIAL STRUCTURE
+═══════════════════════════════════════════════════════════
+
+HIERARCHY FIRST: Use heading (h1, h2, h3) + paragraph as the backbone. Most content should be clean text with clear titles — NOT cards or boxes. A professional document reads like a book, not a dashboard.
+
+GOLDEN PATTERN per page:
+  h2 heading → 1-2 paragraphs (3-5 sentences each) → table OR list OR stats → paragraph transition
+
+Cards/callouts/stats are ACCENTS, not the main structure. Use them sparingly: 1-2 per page max. If everything is a card, nothing stands out.
+
+LISTS — CRITICAL:
+- ALWAYS use the "list" section type for bullet points. NEVER put bullets (•, -, *) inside a "paragraph" section as inline text.
+- ❌ WRONG: paragraph with "• Item 1 • Item 2 • Item 3" inline
+- ✅ RIGHT: list section with items: ["Item 1", "Item 2", "Item 3"]
+- Each list item should be its own line. Lists with 4+ items should use the list type, not two-column.
+
+TWO-COLUMN for short paired content (2-3 bullets per side). For longer lists (4+ items per side), use two separate list sections with h3 headings instead.
+
+NO ORPHAN PAGES: Every page MUST have a title or heading with substantial text content. Never leave a page with only an image, callout, or graphic — add context paragraphs around it.
+
+═══════════════════════════════════════════════════════════
+TYPST SECTIONS — STRICT RULES (violations cause blank pages)
+═══════════════════════════════════════════════════════════
+
+- MAXIMUM 2 typst sections per document. Use built-in types for 90%+ of content.
+- NEVER use #page() or #pagebreak() inside typst sections — they create blank pages. Use coverPage=true for covers.
 - NEVER use a typst section just for styling (dark backgrounds, separators, spacers). Use divider, heading, or callout instead.
-- If you need a custom cover: use ONE typst section at the start with #page() + #pagebreak() + #set page() to reset. That's the only allowed #page() usage.
 - Every typst section MUST contain visible text content — never an empty page or background-only page.
-
-TIPS FOR BEST RESULTS:
-- Use "typst" sections only for layouts that built-in types truly can't handle (FODA grids, complex data visualizations). Most pages should use heading + paragraph + table/list.
-- Typst syntax: #set must be followed by a newline (not inline). Use #v() for vertical spacing. Escape $ as \\$.
-- Pack content densely — avoid half-empty pages. Combine related sections on the same page.`,
+- Typst syntax: #set must be followed by a newline (not inline). Use #v() for vertical spacing. Escape $ as \\$.`,
     {
       name: z.string().describe("PDF filename, e.g. 'Q1 Report - Acme Corp'"),
       title: z.string().describe("Document title"),
