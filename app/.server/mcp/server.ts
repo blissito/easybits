@@ -1272,10 +1272,15 @@ EDITORIAL GUIDELINES (critical for quality):
 - Leave breathing room: a heading followed by a calm paragraph is more professional than dense boxes.
 - NO ORPHAN PAGES: Every page MUST have a title or heading with text content. Never leave a page with only an image or graphic — add a caption, context paragraph, or move the image to fit with surrounding content. If an image would overflow to its own page, reduce its size or place it earlier.
 
+⚠️ TYPST SECTIONS — STRICT RULES (violations cause blank pages):
+- MAXIMUM 2 typst sections per document. Use built-in types (heading, paragraph, table, list, callout, stats, quote, image) for 90%+ of content.
+- NEVER use #page() or #pagebreak() inside typst sections — they create blank pages. Use the built-in coverPage=true option for covers.
+- NEVER use a typst section just for styling (dark backgrounds, separators, spacers). Use divider, heading, or callout instead.
+- If you need a custom cover: use ONE typst section at the start with #page() + #pagebreak() + #set page() to reset. That's the only allowed #page() usage.
+- Every typst section MUST contain visible text content — never an empty page or background-only page.
+
 TIPS FOR BEST RESULTS:
-- Use "typst" sections only for layouts that built-in types can't handle (FODA grids, hero images, dark pages). Most pages should use heading + paragraph + table/list.
-- For multi-page docs: put #pagebreak() INSIDE a typst section before the next page content, not as a separate section. Keep heading + content together to avoid blank pages.
-- For cover pages with custom design: set coverPage=false, headerFooter=false, and use a typst section with #set page(margin: 0pt) + #place() for full control. End with #pagebreak() + #set page(...) to reset for content pages.
+- Use "typst" sections only for layouts that built-in types truly can't handle (FODA grids, complex data visualizations). Most pages should use heading + paragraph + table/list.
 - Typst syntax: #set must be followed by a newline (not inline). Use #v() for vertical spacing. Escape $ as \\$.
 - Pack content densely — avoid half-empty pages. Combine related sections on the same page.`,
     {

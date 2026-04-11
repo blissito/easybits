@@ -447,8 +447,96 @@ export function buildFastPdfSource(data: FastPdfData): string {
 `
     : "";
 
+  // ── Static layout validator ──────────────────────────────────────────
+  // Estimate section heights in pt to detect orphan headings and sparse pages.
+  // Page usable height: us-letter = 11in - 0.7in top - 0.8in bottom = 9.5in ≈ 684pt
+  // A4 = 11.69in - 1.5in margins ≈ 733pt. We use a conservative estimate.
+  const pageHeight = paper === "a4" ? 700 : 650; // usable pt after margins/header/footer
+
+  function estimateHeight(s: SectionType): number {
+    switch (s.type) {
+      case "heading": return s.level === 1 ? 50 : s.level === 2 ? 38 : 30;
+      case "paragraph": {
+        const chars = s.text.length;
+        const linesApprox = Math.ceil(chars / 85); // ~85 chars per line at 10pt
+        return linesApprox * 14 + 8; // 14pt line height + spacing
+      }
+      case "table": return 30 + s.rows.length * 26; // header + rows
+      case "list": return s.items.length * 18 + 8;
+      case "callout": return 60 + Math.ceil(s.text.length / 80) * 14;
+      case "two-column": return Math.max(Math.ceil(s.left.length / 42) * 14, Math.ceil(s.right.length / 42) * 14) + 16;
+      case "columns": return Math.max(...s.columns.map(c => Math.ceil(c.length / 35) * 14)) + 16;
+      case "quote": return 40 + Math.ceil(s.text.length / 75) * 16;
+      case "divider": return 12;
+      case "stats": return 80;
+      case "image": return 200; // conservative default
+      case "typst": return Math.max(60, s.code.split("\n").length * 14);
+    }
+  }
+
+  // Merge heading with its content group to prevent orphaned/split sections.
+  // A "group" = heading + all sections until the next h1 heading or divider.
+  // If the group doesn't fit in remaining page space, push heading to next page.
+  let cursor = data.coverPage ? 0 : 80; // inline header ~80pt if no cover
+  const mergedSections: SectionType[] = [];
+  for (let i = 0; i < data.sections.length; i++) {
+    const s = data.sections[i];
+    const h = estimateHeight(s);
+    const remaining = pageHeight - (cursor % pageHeight);
+
+    if (s.type === "heading") {
+      // Calculate height of heading + its content group (up to next h1/divider, max 4 sections)
+      let groupHeight = h;
+      for (let j = i + 1; j < data.sections.length && j <= i + 4; j++) {
+        const next = data.sections[j];
+        if (next.type === "divider" || (next.type === "heading" && next.level === 1)) break;
+        groupHeight += estimateHeight(next);
+      }
+      // If group doesn't fit and we're past the first 20% of the page, push to next page
+      if (remaining < groupHeight && remaining < pageHeight * 0.80) {
+        mergedSections.push({ type: "typst", code: "#pagebreak()" });
+        cursor = h;
+      } else {
+        cursor += h;
+      }
+    } else {
+      cursor += h;
+    }
+
+    // Track page breaks
+    if (cursor >= pageHeight) {
+      cursor = cursor % pageHeight;
+    }
+
+    mergedSections.push(s);
+  }
+
+  // Replace sections with merged version for rendering
+  const sectionsToRender = mergedSections;
+
+  // Sanitize typst sections: strip standalone #pagebreak() and empty #page() calls
+  const sanitizedSections = sectionsToRender.map((s, idx) => {
+    if (s.type !== "typst") return s;
+    // Preserve pagebreaks inserted by the layout validator (exact match)
+    if (s.code.trim() === "#pagebreak()") return s;
+    let code = s.code;
+    // Remove standalone #pagebreak() lines from agent-provided typst (they create blank pages)
+    code = code.replace(/^\s*#pagebreak\(\)\s*$/gm, "");
+    // Remove empty #page(...)[] blocks (background-only pages with no content)
+    code = code.replace(/#page\([^)]*\)\s*\[\s*\]/g, "");
+    // If after cleanup the section is empty/whitespace-only, skip it
+    if (!code.trim()) return null;
+    return { ...s, code };
+  }).filter((s): s is SectionType => s !== null);
+
+  // Warn if too many typst sections (likely agent misuse)
+  const typstCount = sanitizedSections.filter(s => s.type === "typst").length;
+  if (typstCount > 4) {
+    console.warn(`[fast_pdf] ${typstCount} typst sections detected — agent likely overusing freeform. Built-in types preferred.`);
+  }
+
   // Render sections
-  const sectionBlocks = data.sections
+  const sectionBlocks = sanitizedSections
     .map((s) => {
       switch (s.type) {
         case "heading": return renderHeading(s);
