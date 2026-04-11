@@ -1199,6 +1199,7 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 |------|-------------|
 | \`create_quotation\` | Generate quotation/invoice PDF in one step |
 | \`edit_quotation\` | Edit existing quotation |
+| \`edit_fast_pdf\` | Edit existing fast_pdf (partial merge + recompile) |
 | \`create_screening_report\` | Create screening report |
 | \`edit_screening_report\` | Edit screening report |
 | \`create_geo_scorecard\` | Create geographic scorecard |

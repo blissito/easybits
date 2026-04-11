@@ -183,6 +183,7 @@ export function createMcpServer(groups?: string[]) {
     "edit_quotation",
     "fast_quotation",
     "fast_pdf",
+    "edit_fast_pdf",
     "get_usage_stats",
     "create_form",
     "list_forms",
@@ -1374,6 +1375,120 @@ TIPS FOR BEST RESULTS:
             type: "resource",
             resource: {
               uri: `easybits://fast-pdf/${encodeURIComponent(params.name)}.pdf`,
+              mimeType: "application/pdf",
+              blob: pdf.toString("base64"),
+            },
+          },
+        ],
+      };
+    })
+  );
+
+  // ── edit_fast_pdf ──────────────────────────────────────────────────────
+  server.tool(
+    "edit_fast_pdf",
+    `Edit an existing fast_pdf document. Reads the saved JSON data, merges your partial changes, recompiles the PDF via Typst.
+
+Pass only the fields you want to change — everything else stays as-is. For sections, you can:
+- Replace ALL sections by passing a full "sections" array
+- Patch individual sections by passing "sectionPatches" (index-based updates, inserts, deletes)
+
+sectionPatches examples:
+  [{"index": 0, "op": "replace", "section": {...}}]  — replace section at index 0
+  [{"index": 2, "op": "delete"}]                      — delete section at index 2
+  [{"index": 1, "op": "insert", "section": {...}}]    — insert new section BEFORE index 1
+  [{"index": -1, "op": "insert", "section": {...}}]   — append section at the end`,
+    {
+      fileId: z.string().describe("The fast_pdf file ID to edit"),
+      name: z.string().optional().describe("New filename (without .pdf)"),
+      title: z.string().optional().describe("New document title"),
+      subtitle: z.string().optional().describe("New subtitle"),
+      style: z.enum(["corporate", "modern", "minimal", "bold"]).optional().describe("Change typography style"),
+      headerFooter: z.boolean().optional().describe("Show/hide header bar + page footer"),
+      sections: z.array(pdfSectionSchema).optional().describe("Replace ALL sections with this array"),
+      sectionPatches: z.array(z.object({
+        index: z.number().describe("Section index to patch (-1 = append for insert)"),
+        op: z.enum(["replace", "delete", "insert"]),
+        section: pdfSectionSchema.optional().describe("New section data (required for replace/insert)"),
+      })).optional().describe("Patch individual sections by index instead of replacing all"),
+    },
+    wrapHandler(async (params, extra) => {
+      const { compileFastPdf } = await import("../core/typstPdf");
+      const { getPlatformDefaultClient } = await import("../storage");
+      const ctx = (extra as any).authInfo;
+
+      // Find existing PDF + its data file
+      const existingPdf = await db.file.findFirst({ where: { id: params.fileId, ownerId: ctx.user.id } });
+      if (!existingPdf) throw new Error(`File ${params.fileId} not found`);
+      const meta = existingPdf.metadata as any;
+      if (meta?.type !== "fast_pdf") throw new Error(`File ${params.fileId} is not a fast_pdf document`);
+
+      const dataFileId = meta?.dataFileId;
+      const existingData = dataFileId ? await db.file.findFirst({ where: { id: dataFileId, ownerId: ctx.user.id } }) : null;
+
+      // Read existing JSON data
+      const client = getPlatformDefaultClient({ prefix: "mcp/" });
+      let currentData: any = {};
+      if (existingData) {
+        const readUrl = await client.getReadUrl(existingData.storageKey, 60);
+        const res = await fetch(readUrl);
+        if (!res.ok) throw new Error(`Failed to read data file: ${res.status}`);
+        currentData = await res.json();
+      }
+
+      // Merge simple fields
+      const merged = { ...currentData };
+      if (params.name !== undefined) merged.name = params.name;
+      if (params.title !== undefined) merged.title = params.title;
+      if (params.subtitle !== undefined) merged.subtitle = params.subtitle;
+      if (params.style !== undefined) merged.style = params.style;
+      if (params.headerFooter !== undefined) merged.headerFooter = params.headerFooter;
+
+      // Merge sections
+      if (params.sections) {
+        merged.sections = params.sections;
+      } else if (params.sectionPatches && merged.sections) {
+        // Sort patches by index descending so deletes/inserts don't shift later indices
+        const patches = [...params.sectionPatches].sort((a, b) => b.index - a.index);
+        for (const patch of patches) {
+          if (patch.op === "delete") {
+            merged.sections.splice(patch.index, 1);
+          } else if (patch.op === "replace" && patch.section) {
+            merged.sections[patch.index] = patch.section;
+          } else if (patch.op === "insert" && patch.section) {
+            if (patch.index === -1) {
+              merged.sections.push(patch.section);
+            } else {
+              merged.sections.splice(patch.index, 0, patch.section);
+            }
+          }
+        }
+      }
+
+      const start = Date.now();
+      const pdf = await compileFastPdf(merged);
+      const elapsed = Date.now() - start;
+
+      // Persist updated PDF + JSON
+      const finalName = params.name || currentData.name || "document";
+      const dataJson = JSON.stringify(merged, null, 2);
+      const dataBuffer = Buffer.from(dataJson, "utf-8");
+
+      await client.putObject(existingPdf.storageKey, pdf, "application/pdf");
+      await db.file.update({ where: { id: existingPdf.id }, data: { name: `${finalName}.pdf`, size: pdf.length, metadata: { ...meta, title: merged.title, style: merged.style || "corporate", updatedAt: new Date().toISOString() } } });
+
+      if (existingData) {
+        await client.putObject(existingData.storageKey, dataBuffer, "application/json");
+        await db.file.update({ where: { id: existingData.id }, data: { name: `${finalName}.json`, size: dataBuffer.length } });
+      }
+
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ name: finalName, fileId: existingPdf.id, dataFileId: dataFileId || null, generatedIn: `${elapsed}ms`, engine: "typst", style: merged.style || "corporate", mode: "edited", sectionsCount: merged.sections?.length || 0 }, null, 2) },
+          {
+            type: "resource",
+            resource: {
+              uri: `easybits://fast-pdf/${encodeURIComponent(finalName)}.pdf`,
               mimeType: "application/pdf",
               blob: pdf.toString("base64"),
             },
