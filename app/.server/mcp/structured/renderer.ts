@@ -5,7 +5,15 @@
  * {{path}} interpolation and nodes can repeat with `each` or skip with `if`/`unless`.
  */
 import React from "react";
-import { Document, Page, View, Text, Image, Link, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Page, View, Text, Image, Link, Font, renderToBuffer } from "@react-pdf/renderer";
+
+// Register Twemoji as emoji source — Helvetica has no emoji glyphs and falls
+// back to .notdef boxes that overlap the next character. Registering once at
+// module load makes every {{interpolated}} emoji render as a PNG image.
+Font.registerEmojiSource({
+  format: "png",
+  url: "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.0.3/assets/72x72/",
+});
 import type { DslNode, DslPage, DslTree } from "./types";
 
 /** Walk a dotted path (supports "." for current item). Returns undefined if missing. */
