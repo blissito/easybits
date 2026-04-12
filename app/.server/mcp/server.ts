@@ -1285,7 +1285,9 @@ Use this for quick PDF generation when you don't need the document stored in Eas
 
   server.tool(
     "fast_pdf",
-    `Generate an editorial-quality PDF using Typst (ultra-fast, ~100ms). Does NOT save to database — returns only the PDF.
+    `[DEPRECATED — prefer structured_doc] Out of the core doc toolkit. Kept for backwards compatibility; migrate to structured_doc (templated) for most cases. Use fast_pdf only when you genuinely need free-form Typst markup that doesn't map to a template.
+
+Generate an editorial-quality PDF using Typst (ultra-fast, ~100ms). Does NOT save to database — returns only the PDF.
 
 SECTION TYPES: heading, paragraph, table, list, callout, two-column, columns (2-4 cols), quote, divider, stats, image, typst (raw Typst for custom layouts).
 
