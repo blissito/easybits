@@ -77,10 +77,10 @@ Actions:
 - list_templates: List available templates (yours + public). Returns [{id, name, description, dataSchema}].
 - get_template: { templateId } → { id, name, tree, dataSchema }. Inspect before creating a doc.
 - create_template: { name, description?, tree, dataSchema, isPublic? } → { templateId }. Create a reusable template. 'tree' is the JSON-DSL (see types.ts for node shape). Admin/setup action.
-- create_doc: { templateId, name, data } → { docId, pdfFileId, pdfUrl }. Validate data, render PDF, store.
+- create_doc: { templateId, name, data } → { docId, pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). The agent receives the rendered PDF immediately, no follow-up get_file needed.
 - get_doc: { docId } → { id, name, templateId, data }. Returns ONLY JSON — never HTML/PDF raw. Use this to read a doc for editing.
 - patch_doc: { docId, patch } → { id, data }. Shallow-merge patch into data. Does NOT re-render; call render_doc after.
-- render_doc: { docId } → { pdfFileId, pdfUrl }. Re-render PDF from current data.
+- render_doc: { docId } → { pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). Re-render from current data.
 
 The DSL supports: Text (with {{data.path}} interpolation), View (container with flexbox), Image, Link. Nodes can repeat with 'each: "items"' and condition with 'if: "path"'. See types.ts for the full schema.`,
     {
@@ -101,7 +101,20 @@ The DSL supports: Text (with {{data.path}} interpolation), View (container with 
         const ctx = extra.authInfo as AuthCtx;
         const userId = ctx.user.id;
         const out = await handleAction(params, userId);
-        return { content: [{ type: "text" as const, text: JSON.stringify(out, null, 2) }] };
+        // create_doc / render_doc attach the PDF Buffer as a resource so the
+        // agent receives the PDF inline without a follow-up get_file call.
+        const content: any[] = [{ type: "text" as const, text: JSON.stringify(out.json, null, 2) }];
+        if (out.pdf) {
+          content.push({
+            type: "resource" as const,
+            resource: {
+              uri: `easybits://structured-doc/${encodeURIComponent(out.pdf.name)}.pdf`,
+              mimeType: "application/pdf",
+              blob: out.pdf.buffer.toString("base64"),
+            },
+          });
+        }
+        return { content };
       } catch (err) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ error: String(err instanceof Error ? err.message : err) }, null, 2) }],
@@ -112,7 +125,9 @@ The DSL supports: Text (with {{data.path}} interpolation), View (container with 
   );
 }
 
-async function handleAction(params: any, userId: string): Promise<any> {
+type ActionResult = { json: any; pdf?: { buffer: Buffer; name: string } };
+
+async function handleAction(params: any, userId: string): Promise<ActionResult> {
   switch (params.action) {
     case "list_templates": {
       const rows = await db.mcpTemplate.findMany({
@@ -120,14 +135,14 @@ async function handleAction(params: any, userId: string): Promise<any> {
         orderBy: { updatedAt: "desc" },
         take: 100,
       });
-      return rows.map((r) => ({
+      return { json: rows.map((r) => ({
         id: r.id,
         name: r.name,
         description: r.description,
         dataSchema: r.dataSchema,
         isPublic: r.isPublic,
         owned: r.ownerId === userId,
-      }));
+      })) };
     }
 
     case "get_template": {
@@ -136,7 +151,7 @@ async function handleAction(params: any, userId: string): Promise<any> {
         where: { id: params.templateId, OR: [{ ownerId: userId }, { isPublic: true }] },
       });
       if (!t) throw new Error("Template not found");
-      return { id: t.id, name: t.name, description: t.description, tree: t.tree, dataSchema: t.dataSchema };
+      return { json: { id: t.id, name: t.name, description: t.description, tree: t.tree, dataSchema: t.dataSchema } };
     }
 
     case "create_template": {
@@ -156,7 +171,7 @@ async function handleAction(params: any, userId: string): Promise<any> {
           isPublic: !!params.isPublic,
         },
       });
-      return { templateId: t.id };
+      return { json: { templateId: t.id } };
     }
 
     case "create_doc": {
@@ -184,9 +199,8 @@ async function handleAction(params: any, userId: string): Promise<any> {
       await db.mcpStructuredDoc.update({ where: { id: doc.id }, data: { lastPdfFileId: pdfFileId } });
 
       return {
-        docId: doc.id,
-        pdfFileId,
-        renderedIn: `${Date.now() - start}ms`,
+        json: { docId: doc.id, pdfFileId, bytes: pdf.length, renderedIn: `${Date.now() - start}ms` },
+        pdf: { buffer: pdf, name: params.name },
       };
     }
 
@@ -194,7 +208,7 @@ async function handleAction(params: any, userId: string): Promise<any> {
       if (!params.docId) throw new Error("docId required");
       const d = await db.mcpStructuredDoc.findFirst({ where: { id: params.docId, ownerId: userId } });
       if (!d) throw new Error("Doc not found");
-      return { id: d.id, name: d.name, templateId: d.templateId, data: d.data };
+      return { json: { id: d.id, name: d.name, templateId: d.templateId, data: d.data } };
     }
 
     case "patch_doc": {
@@ -203,7 +217,7 @@ async function handleAction(params: any, userId: string): Promise<any> {
       if (!d) throw new Error("Doc not found");
       const merged = mergePatch(d.data, params.patch);
       const updated = await db.mcpStructuredDoc.update({ where: { id: d.id }, data: { data: merged } });
-      return { id: updated.id, data: updated.data };
+      return { json: { id: updated.id, data: updated.data } };
     }
 
     case "render_doc": {
@@ -215,7 +229,10 @@ async function handleAction(params: any, userId: string): Promise<any> {
       const pdf = await renderDslToPdf(tree, d.data as any);
       const pdfFileId = await uploadPdf(userId, d.name, pdf, d.id);
       await db.mcpStructuredDoc.update({ where: { id: d.id }, data: { lastPdfFileId: pdfFileId } });
-      return { docId: d.id, pdfFileId, renderedIn: `${Date.now() - start}ms` };
+      return {
+        json: { docId: d.id, pdfFileId, bytes: pdf.length, renderedIn: `${Date.now() - start}ms` },
+        pdf: { buffer: pdf, name: d.name },
+      };
     }
 
     default:
