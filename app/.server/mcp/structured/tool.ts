@@ -15,15 +15,18 @@ import { nanoid } from "nanoid";
 import { db } from "../../db";
 import { getPlatformDefaultClient } from "../../storage";
 import { dslTreeSchema } from "./types";
-import { renderDslToPdf } from "./renderer";
+import { renderDslToPdf, collectTreePlaceholders } from "./renderer";
 
 type AuthCtx = { user: { id: string } };
 
 const actionSchema = z.enum([
   "list_templates",
   "get_template",
+  "get_template_schema",
   "create_template",
+  "delete_template",
   "create_doc",
+  "list_docs",
   "get_doc",
   "patch_doc",
   "edit_doc",
@@ -94,9 +97,12 @@ Pattern: TEMPLATE (curated, shared library, JSON tree of {type, style, children}
 
 Actions:
 - list_templates: List available templates (yours + public). Returns [{id, name, description, dataSchema}].
-- get_template: { templateId } → { id, name, tree, dataSchema }. Inspect before creating a doc.
+- get_template: { templateId } → { id, name, tree, dataSchema }. Verbose: includes full tree. Prefer get_template_schema when you only need the schema.
+- get_template_schema: { templateId } → { id, name, description, dataSchema }. Lightweight variant that skips tree — use this when you just need the field list to build the data object.
 - create_template: { name, description?, tree, dataSchema, isPublic? } → { templateId }. Create a reusable template. 'tree' is the JSON-DSL (see types.ts for node shape). Admin/setup action.
-- create_doc: { templateId, name, data } → { docId, pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). The agent receives the rendered PDF immediately, no follow-up get_file needed.
+- delete_template: { templateId } → { deleted }. Delete a template you own. Refuses if any doc still references it.
+- create_doc: { templateId, name, data } → { docId, pdfFileId, bytes, renderedIn, warnings? } + PDF inline as resource (base64). The agent receives the rendered PDF immediately, no follow-up get_file needed. If data keys don't match the template's placeholders, 'warnings' lists unbound placeholders and unused data keys (non-blocking — doc still renders).
+- list_docs: { cursor?, limit?, templateId?, query? } → { docs: [{ docId, name, templateId, createdAt, data_preview }], nextCursor }. Paginated list of your docs, newest first. 'query' is a case-insensitive substring match on name; 'templateId' filters to one template; 'cursor' is the last doc id from the previous page.
 - get_doc: { docId } → { id, name, templateId, data } + cached PDF inline as resource (if previously rendered). Use this to read a doc for editing. The JSON is the source of truth — the PDF is a convenience so you can show the current state without a re-render.
 - patch_doc: { docId, patch } → { id, data }. Shallow-merge patch into data. Does NOT re-render; use when batching several edits.
 - edit_doc: { docId, patch } → { docId, data, pdfFileId, bytes, renderedIn } + updated PDF inline. **Preferred for WhatsApp / single-turn edits** — patches data AND re-renders in one call, overwriting the previous PDF (no file accumulation).
@@ -115,6 +121,9 @@ The DSL supports: Text (with {{data.path}} interpolation), View (container with 
       data: z.record(z.string(), z.unknown()).optional().describe("Data object for create_doc"),
       patch: z.record(z.string(), z.unknown()).optional().describe("Partial data object for patch_doc"),
       isPublic: z.boolean().optional(),
+      cursor: z.string().optional().describe("Pagination cursor for list_docs"),
+      limit: z.number().int().positive().max(100).optional().describe("Page size for list_docs (default 50)"),
+      query: z.string().optional().describe("Case-insensitive substring match on name, for list_docs"),
     },
     async (params: any, extra: any) => {
       try {
@@ -174,6 +183,18 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       return { json: { id: t.id, name: t.name, description: t.description, tree: t.tree, dataSchema: t.dataSchema } };
     }
 
+    case "get_template_schema": {
+      // Lightweight variant of get_template — skips the verbose `tree` when the
+      // agent only needs dataSchema to build the data payload (90% of calls).
+      if (!params.templateId) throw new Error("templateId required");
+      const t = await db.mcpTemplate.findFirst({
+        where: { id: params.templateId, OR: [{ ownerId: userId }, { isPublic: true }] },
+        select: { id: true, name: true, description: true, dataSchema: true, isPublic: true, ownerId: true },
+      });
+      if (!t) throw new Error("Template not found");
+      return { json: { id: t.id, name: t.name, description: t.description, dataSchema: t.dataSchema, isPublic: t.isPublic, owned: t.ownerId === userId } };
+    }
+
     case "create_template": {
       if (!params.name || !params.tree || !params.dataSchema) {
         throw new Error("name, tree, dataSchema required");
@@ -194,6 +215,24 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       return { json: { templateId: t.id } };
     }
 
+    case "delete_template": {
+      // Refuse to delete if docs reference this template — prevents dangling
+      // foreign keys. User can delete those docs first or keep the template.
+      if (!params.templateId) throw new Error("templateId required");
+      const t = await db.mcpTemplate.findFirst({ where: { id: params.templateId, ownerId: userId } });
+      if (!t) throw new Error("Template not found or not owned by you");
+      const dependents = await db.mcpStructuredDoc.findMany({
+        where: { templateId: t.id },
+        select: { id: true, name: true },
+        take: 20,
+      });
+      if (dependents.length > 0) {
+        throw new Error(`Template has ${dependents.length} doc(s) referencing it: ${dependents.map((d) => `${d.id} (${d.name})`).join(", ")}. Delete those first.`);
+      }
+      await db.mcpTemplate.delete({ where: { id: t.id } });
+      return { json: { deleted: t.id } };
+    }
+
     case "create_doc": {
       if (!params.templateId || !params.name || !params.data) {
         throw new Error("templateId, name, data required");
@@ -203,6 +242,22 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       });
       if (!t) throw new Error("Template not found");
       const tree = dslTreeSchema.parse(t.tree);
+
+      // Validation: compare tree placeholders vs data keys in BOTH directions so
+      // the agent notices schema mismatches instead of silently shipping a broken
+      // PDF. Warnings are advisory — the doc still renders.
+      const warnings: string[] = [];
+      const treePlaceholders = collectTreePlaceholders(tree as any);
+      const dataKeys = new Set(Object.keys(params.data ?? {}));
+      for (const p of treePlaceholders) {
+        const v = (params.data as any)?.[p];
+        if (v === undefined || v === null || v === "") {
+          warnings.push(`Placeholder {{${p}}} is unbound (missing or empty in data)`);
+        }
+      }
+      for (const k of dataKeys) {
+        if (!treePlaceholders.has(k)) warnings.push(`Unused data key: ${k}`);
+      }
 
       const doc = await db.mcpStructuredDoc.create({
         data: {
@@ -219,8 +274,49 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       await db.mcpStructuredDoc.update({ where: { id: doc.id }, data: { lastPdfFileId: pdfFileId } });
 
       return {
-        json: { docId: doc.id, pdfFileId, bytes: pdf.length, renderedIn: `${Date.now() - start}ms` },
+        json: {
+          docId: doc.id,
+          pdfFileId,
+          bytes: pdf.length,
+          renderedIn: `${Date.now() - start}ms`,
+          ...(warnings.length > 0 && { warnings }),
+        },
         pdf: { buffer: pdf, name: params.name },
+      };
+    }
+
+    case "list_docs": {
+      const limit = params.limit ?? 50;
+      const where: any = { ownerId: userId };
+      if (params.templateId) where.templateId = params.templateId;
+      if (params.query) where.name = { contains: params.query, mode: "insensitive" };
+      // Cursor is the previous page's last doc id (keyset pagination).
+      const rows = await db.mcpStructuredDoc.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit + 1, // fetch one extra to compute nextCursor
+        ...(params.cursor && { cursor: { id: params.cursor }, skip: 1 }),
+        select: { id: true, name: true, templateId: true, createdAt: true, data: true },
+      });
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      return {
+        json: {
+          docs: page.map((r) => {
+            // Short preview of data: first 2-3 keys stringified, capped at 80 chars.
+            const data = (r.data ?? {}) as Record<string, any>;
+            const keys = Object.keys(data).slice(0, 3);
+            const preview = keys.map((k) => `${k}=${String(data[k]).slice(0, 24)}`).join(", ");
+            return {
+              docId: r.id,
+              name: r.name,
+              templateId: r.templateId,
+              createdAt: r.createdAt,
+              data_preview: preview.length > 80 ? preview.slice(0, 77) + "..." : preview,
+            };
+          }),
+          nextCursor: hasMore ? page[page.length - 1].id : null,
+        },
       };
     }
 

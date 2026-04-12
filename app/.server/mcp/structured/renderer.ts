@@ -83,6 +83,37 @@ function renderPage(page: DslPage, ctx: any, defaultStyle: any, key: string): Re
   );
 }
 
+/**
+ * Walk a DSL tree and collect every top-level `{{key}}` placeholder referenced
+ * in `content` / `src` string fields. Used by `create_doc` validation to flag
+ * unbound placeholders and dead data keys before the agent silently ships a
+ * broken PDF.
+ *
+ * Only returns the FIRST segment of dotted paths (e.g. `{{cliente.nombre}}` →
+ * `cliente`) because the data object is validated at top-level.
+ */
+export function collectTreePlaceholders(tree: DslTree): Set<string> {
+  const found = new Set<string>();
+  const re = /\{\{\s*([^}]+?)\s*\}\}/g;
+  const addFromString = (s: string) => {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) !== null) {
+      const path = m[1].trim();
+      if (!path || path === "." || path === "item") continue;
+      const first = path.startsWith("item.") ? path.slice(5).split(".")[0] : path.split(".")[0];
+      if (first) found.add(first);
+    }
+  };
+  const visit = (node: any) => {
+    if (!node || typeof node !== "object") return;
+    if (typeof node.content === "string") addFromString(node.content);
+    if (typeof node.src === "string") addFromString(node.src);
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  for (const page of tree.pages) (page.children ?? []).forEach(visit);
+  return found;
+}
+
 export async function renderDslToPdf(tree: DslTree, data: Record<string, any>): Promise<Buffer> {
   const doc = React.createElement(
     Document,
