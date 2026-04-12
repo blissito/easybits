@@ -78,7 +78,7 @@ Actions:
 - get_template: { templateId } → { id, name, tree, dataSchema }. Inspect before creating a doc.
 - create_template: { name, description?, tree, dataSchema, isPublic? } → { templateId }. Create a reusable template. 'tree' is the JSON-DSL (see types.ts for node shape). Admin/setup action.
 - create_doc: { templateId, name, data } → { docId, pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). The agent receives the rendered PDF immediately, no follow-up get_file needed.
-- get_doc: { docId } → { id, name, templateId, data }. Returns ONLY JSON — never HTML/PDF raw. Use this to read a doc for editing.
+- get_doc: { docId } → { id, name, templateId, data } + cached PDF inline as resource (if previously rendered). Use this to read a doc for editing. The JSON is the source of truth — the PDF is a convenience so you can show the current state without a re-render.
 - patch_doc: { docId, patch } → { id, data }. Shallow-merge patch into data. Does NOT re-render; call render_doc after.
 - render_doc: { docId } → { pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). Re-render from current data.
 
@@ -208,7 +208,27 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       if (!params.docId) throw new Error("docId required");
       const d = await db.mcpStructuredDoc.findFirst({ where: { id: params.docId, ownerId: userId } });
       if (!d) throw new Error("Doc not found");
-      return { json: { id: d.id, name: d.name, templateId: d.templateId, data: d.data } };
+      const json: any = { id: d.id, name: d.name, templateId: d.templateId, data: d.data };
+      // Attach cached PDF if available — avoids forcing a re-render just to
+      // view the doc. Fetch via signed URL (same pattern the rest of the app uses).
+      if (d.lastPdfFileId) {
+        try {
+          const file = await db.file.findFirst({ where: { id: d.lastPdfFileId, ownerId: userId } });
+          if (file) {
+            const client = getPlatformDefaultClient({ prefix: "mcp/" });
+            const url = await client.getReadUrl(file.storageKey, 300);
+            const res = await fetch(url);
+            if (res.ok) {
+              const buffer = Buffer.from(await res.arrayBuffer());
+              return { json: { ...json, pdfFileId: file.id, bytes: buffer.length }, pdf: { buffer, name: d.name } };
+            }
+          }
+        } catch (e) {
+          // Non-fatal: still return JSON. Log and continue.
+          console.warn("[structured_doc] get_doc: failed to fetch cached PDF", e);
+        }
+      }
+      return { json };
     }
 
     case "patch_doc": {
