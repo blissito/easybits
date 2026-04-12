@@ -26,6 +26,7 @@ const actionSchema = z.enum([
   "create_doc",
   "get_doc",
   "patch_doc",
+  "edit_doc",
   "render_doc",
 ]);
 
@@ -44,8 +45,26 @@ function mergePatch(target: any, patch: any): any {
   return out;
 }
 
-async function uploadPdf(ownerId: string, name: string, pdf: Buffer, docId: string): Promise<string> {
+/**
+ * Persist a rendered PDF. If the doc already has a `lastPdfFileId`, overwrite
+ * that File's storage and row in-place — WhatsApp flow edits the same doc many
+ * times and we don't want to leak one File per render. Creates a new File only
+ * on the first render.
+ */
+async function upsertPdf(ownerId: string, name: string, pdf: Buffer, docId: string, existingFileId: string | null): Promise<string> {
   const client = getPlatformDefaultClient({ prefix: "mcp/" });
+  if (existingFileId) {
+    const existing = await db.file.findFirst({ where: { id: existingFileId, ownerId } });
+    if (existing) {
+      await client.putObject(existing.storageKey, pdf, "application/pdf");
+      await db.file.update({
+        where: { id: existing.id },
+        data: { name: `${name}.pdf`, size: pdf.length, updatedAt: new Date() },
+      });
+      return existing.id;
+    }
+    // Fall through and create fresh if the linked file vanished.
+  }
   const key = `${ownerId}/${nanoid(3)}`;
   await client.putObject(key, pdf, "application/pdf");
   const file = await db.file.create({
@@ -79,8 +98,9 @@ Actions:
 - create_template: { name, description?, tree, dataSchema, isPublic? } → { templateId }. Create a reusable template. 'tree' is the JSON-DSL (see types.ts for node shape). Admin/setup action.
 - create_doc: { templateId, name, data } → { docId, pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). The agent receives the rendered PDF immediately, no follow-up get_file needed.
 - get_doc: { docId } → { id, name, templateId, data } + cached PDF inline as resource (if previously rendered). Use this to read a doc for editing. The JSON is the source of truth — the PDF is a convenience so you can show the current state without a re-render.
-- patch_doc: { docId, patch } → { id, data }. Shallow-merge patch into data. Does NOT re-render; call render_doc after.
-- render_doc: { docId } → { pdfFileId, bytes, renderedIn } + PDF inline as resource (base64). Re-render from current data.
+- patch_doc: { docId, patch } → { id, data }. Shallow-merge patch into data. Does NOT re-render; use when batching several edits.
+- edit_doc: { docId, patch } → { docId, data, pdfFileId, bytes, renderedIn } + updated PDF inline. **Preferred for WhatsApp / single-turn edits** — patches data AND re-renders in one call, overwriting the previous PDF (no file accumulation).
+- render_doc: { docId } → { pdfFileId, bytes, renderedIn } + PDF inline as resource. Re-render from current data without patching. Overwrites the previous PDF.
 
 The DSL supports: Text (with {{data.path}} interpolation), View (container with flexbox), Image, Link. Nodes can repeat with 'each: "items"' and condition with 'if: "path"'. See types.ts for the full schema.`,
     {
@@ -195,12 +215,30 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
 
       const start = Date.now();
       const pdf = await renderDslToPdf(tree, params.data);
-      const pdfFileId = await uploadPdf(userId, params.name, pdf, doc.id);
+      const pdfFileId = await upsertPdf(userId, params.name, pdf, doc.id, null);
       await db.mcpStructuredDoc.update({ where: { id: doc.id }, data: { lastPdfFileId: pdfFileId } });
 
       return {
         json: { docId: doc.id, pdfFileId, bytes: pdf.length, renderedIn: `${Date.now() - start}ms` },
         pdf: { buffer: pdf, name: params.name },
+      };
+    }
+
+    case "edit_doc": {
+      // Atomic patch + render for WhatsApp-style single-turn edits. Overwrites
+      // the same PDF file in-place so the doc keeps a single storage slot.
+      if (!params.docId || !params.patch) throw new Error("docId and patch required");
+      const d = await db.mcpStructuredDoc.findFirst({ where: { id: params.docId, ownerId: userId }, include: { template: true } });
+      if (!d) throw new Error("Doc not found");
+      const merged = mergePatch(d.data, params.patch);
+      const tree = dslTreeSchema.parse(d.template.tree);
+      const start = Date.now();
+      const pdf = await renderDslToPdf(tree, merged as any);
+      const pdfFileId = await upsertPdf(userId, d.name, pdf, d.id, d.lastPdfFileId);
+      await db.mcpStructuredDoc.update({ where: { id: d.id }, data: { data: merged, lastPdfFileId: pdfFileId } });
+      return {
+        json: { docId: d.id, data: merged, pdfFileId, bytes: pdf.length, renderedIn: `${Date.now() - start}ms` },
+        pdf: { buffer: pdf, name: d.name },
       };
     }
 
@@ -247,7 +285,7 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       const tree = dslTreeSchema.parse(d.template.tree);
       const start = Date.now();
       const pdf = await renderDslToPdf(tree, d.data as any);
-      const pdfFileId = await uploadPdf(userId, d.name, pdf, d.id);
+      const pdfFileId = await upsertPdf(userId, d.name, pdf, d.id, d.lastPdfFileId);
       await db.mcpStructuredDoc.update({ where: { id: d.id }, data: { lastPdfFileId: pdfFileId } });
       return {
         json: { docId: d.id, pdfFileId, bytes: pdf.length, renderedIn: `${Date.now() - start}ms` },
