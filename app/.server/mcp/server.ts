@@ -9,9 +9,10 @@ import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 
 // Legacy doc tools (create_document, fast_pdf, fast_quotation, edit_fast_pdf,
-// create_quotation, edit_quotation) are hidden from the MCP when running the
-// `structured_doc` experiment. Set EXPOSE_LEGACY_DOC_TOOLS=true to restore them.
-const EXPOSE_LEGACY_DOC_TOOLS = process.env.EXPOSE_LEGACY_DOC_TOOLS !== "false";
+// create_quotation, edit_quotation) are hidden by default so the agent does
+// not get confused during the structured_doc experiment. Set
+// EXPOSE_LEGACY_DOC_TOOLS=true to restore them.
+const EXPOSE_LEGACY_DOC_TOOLS = process.env.EXPOSE_LEGACY_DOC_TOOLS === "true";
 const LEGACY_DOC_TOOLS = new Set([
   "create_document", "update_document", "delete_document",
   "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
