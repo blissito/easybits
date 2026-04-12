@@ -202,6 +202,8 @@ model User {
   aiGenerationsBonus   Int?       @default(0)
   brandKits            BrandKit[]
   formConfigs          FormConfig[]
+  mcpTemplates         McpTemplate[]
+  mcpStructuredDocs    McpStructuredDoc[]
 }
 
 enum FileStatus {
@@ -274,6 +276,49 @@ model File {
   @@index([status])
   @@index([ownerId, status])
   @@index([deletedAt])
+}
+
+/// Template for structured_doc MCP tool. Stored as JSON-DSL (not code) — a tree
+/// of {type, style, children, content, each, if} nodes that the renderer maps
+/// to @react-pdf/renderer components. Templates are owned by a user; `isPublic`
+/// templates are visible to all users via list_templates.
+model McpTemplate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  /// JSON-DSL tree { type: "Document", pages: [...] }
+  tree        Json
+  /// JSON Schema describing the shape of `data` expected by this template
+  dataSchema  Json
+  ownerId     String   @db.ObjectId
+  owner       User     @relation(fields: [ownerId], references: [id])
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  documents   McpStructuredDoc[]
+
+  @@index([ownerId])
+  @@index([isPublic])
+}
+
+/// Document instance created from a McpTemplate. Stores only `data` (JSON) —
+/// the LLM reads/writes just this JSON, never the rendered PDF/HTML.
+model McpStructuredDoc {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  templateId String      @db.ObjectId
+  template   McpTemplate @relation(fields: [templateId], references: [id])
+  data       Json
+  ownerId    String      @db.ObjectId
+  owner      User        @relation(fields: [ownerId], references: [id])
+  /// Cached last-rendered PDF fileId (via existing File model) — optional.
+  lastPdfFileId String?  @db.ObjectId
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([ownerId])
+  @@index([templateId])
 }
 
 model Client {

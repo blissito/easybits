@@ -39,6 +39,7 @@
     "@modelcontextprotocol/ext-apps": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@prisma/client": "^6.19.2",
+    "@react-pdf/renderer": "^4.4.1",
     "@react-router/dev": "^7.7.0",
     "@react-router/express": "^7.13.1",
     "@react-router/node": "^7.1.1",

@@ -6,6 +6,20 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
+import { registerStructuredDocTool } from "./structured/tool";
+
+// Legacy doc tools (create_document, fast_pdf, fast_quotation, edit_fast_pdf,
+// create_quotation, edit_quotation) are hidden from the MCP when running the
+// `structured_doc` experiment. Set EXPOSE_LEGACY_DOC_TOOLS=true to restore them.
+const EXPOSE_LEGACY_DOC_TOOLS = process.env.EXPOSE_LEGACY_DOC_TOOLS !== "false";
+const LEGACY_DOC_TOOLS = new Set([
+  "create_document", "update_document", "delete_document",
+  "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
+  "list_documents", "get_document",
+  "create_quotation", "edit_quotation",
+  "fast_quotation", "fast_pdf", "edit_fast_pdf",
+  "create_document_from_cfdi",
+]);
 import {
   listFiles,
   getFile,
@@ -184,6 +198,7 @@ export function createMcpServer(groups?: string[]) {
     "fast_quotation",
     "fast_pdf",
     "edit_fast_pdf",
+    "structured_doc",
     "get_usage_stats",
     "create_form",
     "list_forms",
@@ -228,12 +243,17 @@ export function createMcpServer(groups?: string[]) {
     }
   }
 
-  // When using an allowlist, intercept server.tool to filter
-  if (activeAllowlist) {
+  // Intercept server.tool once to apply both the legacy-tools gate and the
+  // allowlist filter. Both filters are skip-on-match: if either says "no", the
+  // tool is never registered with the MCP server.
+  {
     const originalTool = server.tool.bind(server);
     (server as any).tool = (...args: any[]) => {
       const toolName = typeof args[0] === "string" ? args[0] : undefined;
-      if (toolName && !activeAllowlist!.has(toolName)) return;
+      if (toolName) {
+        if (!EXPOSE_LEGACY_DOC_TOOLS && LEGACY_DOC_TOOLS.has(toolName)) return;
+        if (activeAllowlist && !activeAllowlist.has(toolName)) return;
+      }
       return (originalTool as any)(...args);
     };
   }
@@ -889,6 +909,10 @@ function registerCoreTools(server: McpServer) {
 
 // ─── Document Tools ─────────────────────────────────────────────
 function registerDocTools(server: McpServer) {
+  // --- Structured Doc (experimental, JSON-DSL + React PDF) ---
+  // Registered first so it's the most prominent doc tool visible to agents.
+  registerStructuredDocTool(server);
+
   // --- Document Tools ---
 
   server.tool(
