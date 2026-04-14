@@ -20,10 +20,16 @@ export type AuthContext = {
 export async function authenticateRequest(
   request: Request
 ): Promise<AuthContext | null> {
-  // 1. Try Bearer token (API key)
+  // 1. Try Bearer token (API key) — header or ?token= query param
   const authHeader = request.headers.get("Authorization");
+  let raw: string | null = null;
   if (authHeader?.startsWith("Bearer ")) {
-    const raw = authHeader.slice(7);
+    raw = authHeader.slice(7);
+  } else {
+    const url = new URL(request.url);
+    raw = url.searchParams.get("token");
+  }
+  if (raw) {
     const apiKey = await validateApiKey(raw);
     if (!apiKey) return null;
     const user = await db.user.findUnique({ where: { id: apiKey.userId } });
