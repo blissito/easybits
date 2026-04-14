@@ -344,7 +344,7 @@ export async function generateImage(
         source: "mcp",
       },
     });
-    files.push(newFile);
+    files.push({ ...newFile, b64: data.data[i].b64_json });
   }
 
   fileEvents.emit("file:changed", ctx.user.id);

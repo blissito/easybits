@@ -573,7 +573,7 @@ function registerCoreTools(server: McpServer) {
 
   server.tool(
     "generate_image",
-    "Generate one or more images from a text prompt using OpenAI gpt-image-1. The generated PNG(s) are saved to the user's EasyBits storage and returned as file records. Returns `{ files, model, prompt, size, quality }`.",
+    "Generate one or more images from a text prompt using OpenAI gpt-image-1. The generated PNG(s) are saved to the user's EasyBits storage AND returned inline so the client (e.g. Claude.ai) can preview them in the chat. Response includes image content items plus a text block with file IDs/URLs.",
     {
       prompt: z.string().describe("Text description of the image to generate"),
       size: z.enum(["1024x1024", "1024x1536", "1536x1024", "auto"]).default("1024x1024").describe("Output image dimensions"),
@@ -585,8 +585,20 @@ function registerCoreTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { generateImage } = await import("../core/imageOperations");
       const result = await generateImage(ctx, params);
+      const { files, ...meta } = result;
+      const cleanFiles = files.map(({ b64, ...f }: any) => f);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [
+          ...files.map((f: any) => ({
+            type: "image" as const,
+            data: f.b64 as string,
+            mimeType: "image/png",
+          })),
+          {
+            type: "text" as const,
+            text: JSON.stringify({ files: cleanFiles, ...meta }, null, 2),
+          },
+        ],
       };
     })
   );
