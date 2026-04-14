@@ -212,6 +212,7 @@ export function createMcpServer(groups?: string[]) {
     "create_website",
     "delete_website",
     "transform_image",
+    "generate_image",
   ]);
 
   // Magnet group: focused toolset for lead magnet creation
@@ -564,6 +565,26 @@ function registerCoreTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { transformImage } = await import("../core/imageOperations");
       const result = await transformImage(ctx, params);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
+    "generate_image",
+    "Generate one or more images from a text prompt using OpenAI gpt-image-1. The generated PNG(s) are saved to the user's EasyBits storage and returned as file records. Returns `{ files, model, prompt, size, quality }`.",
+    {
+      prompt: z.string().describe("Text description of the image to generate"),
+      size: z.enum(["1024x1024", "1024x1536", "1536x1024", "auto"]).default("1024x1024").describe("Output image dimensions"),
+      quality: z.enum(["low", "medium", "high", "auto"]).default("auto").describe("Generation quality (higher = more expensive)"),
+      n: z.number().int().min(1).max(4).default(1).describe("Number of images to generate (1-4)"),
+      name: z.string().optional().describe("Optional base name for the saved file(s). Defaults to a slug of the prompt."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { generateImage } = await import("../core/imageOperations");
+      const result = await generateImage(ctx, params);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

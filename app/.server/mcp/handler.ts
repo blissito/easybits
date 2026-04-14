@@ -18,6 +18,16 @@ export async function handleMcp(request: Request): Promise<Response> {
   const toolsParam = url.searchParams.get("tools");
   const groups = toolsParam ? toolsParam.split(",").map(g => g.trim()) : undefined;
 
+  // Per-connection provider keys (passed as query params in the connector URL
+  // or as request headers). These are NOT stored — they live only on the
+  // AuthContext for the duration of this request.
+  const openaiKey =
+    url.searchParams.get("openai_key") ||
+    request.headers.get("x-openai-key") ||
+    undefined;
+
+  const ctxWithKeys = { ...ctx, providerKeys: { openai: openaiKey } };
+
   const server = createMcpServer(groups);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
@@ -26,6 +36,6 @@ export async function handleMcp(request: Request): Promise<Response> {
   await server.connect(transport);
 
   return transport.handleRequest(request, {
-    authInfo: ctx as any,
+    authInfo: ctxWithKeys as any,
   });
 }

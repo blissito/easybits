@@ -7,6 +7,14 @@ export type AuthContext = {
   user: User;
   apiKey?: ApiKey;
   scopes: ApiKeyScope[];
+  /**
+   * Per-request provider keys supplied by the caller (e.g. via MCP connector
+   * URL query params or request headers). Not persisted — only valid for the
+   * duration of the current request.
+   */
+  providerKeys?: {
+    openai?: string;
+  };
 };
 
 export async function authenticateRequest(
