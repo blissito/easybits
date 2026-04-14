@@ -577,7 +577,7 @@ function registerCoreTools(server: McpServer) {
     {
       prompt: z.string().describe("Text description of the image to generate"),
       size: z.enum(["1024x1024", "1024x1536", "1536x1024", "auto"]).default("1024x1024").describe("Output image dimensions"),
-      quality: z.enum(["low", "medium", "high", "auto"]).default("auto").describe("Generation quality (higher = more expensive)"),
+      quality: z.enum(["low", "medium", "high", "auto"]).default("low").describe("Generation quality. Default 'low' for fast response (avoids tool timeouts in web clients). Use 'high' only when the user explicitly asks for a high-quality image."),
       n: z.number().int().min(1).max(4).default(1).describe("Number of images to generate (1-4)"),
       name: z.string().optional().describe("Optional base name for the saved file(s). Defaults to a slug of the prompt."),
     },
