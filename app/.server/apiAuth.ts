@@ -30,6 +30,14 @@ export async function authenticateRequest(
     raw = url.searchParams.get("token");
   }
   if (raw) {
+    // Try OAuth JWT first. If the token is not a valid OAuth JWT, silently
+    // fall through to API-key validation so existing agents keep working.
+    const { tryVerifyOAuthJwt } = await import("./oauth");
+    const jwtUser = await tryVerifyOAuthJwt(raw);
+    if (jwtUser) {
+      return { user: jwtUser, scopes: ["ADMIN"] };
+    }
+
     const apiKey = await validateApiKey(raw);
     if (!apiKey) return null;
     const user = await db.user.findUnique({ where: { id: apiKey.userId } });

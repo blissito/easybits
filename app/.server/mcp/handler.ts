@@ -10,7 +10,16 @@ export async function handleMcp(request: Request): Promise<Response> {
 
   const ctx = await authenticateRequest(request);
   if (!ctx) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const base = process.env.BASE_URL || "https://www.easybits.cloud";
+    return Response.json(
+      { error: "Unauthorized" },
+      {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+        },
+      }
+    );
   }
 
   // Parse tool groups from query string

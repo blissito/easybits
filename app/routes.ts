@@ -247,6 +247,13 @@ export default [
   // Static site proxy
   route("s/:slug/*", "routes/s.$slug.$.tsx"),
 
+  // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
+  route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),
+  route("/.well-known/oauth-authorization-server", "routes/api/wellknown/oauth-authorization-server.ts"),
+  route("/oauth/register", "routes/api/oauth/register.ts"),
+  route("/oauth/authorize", "routes/api/oauth/authorize.ts"),
+  route("/oauth/token", "routes/api/oauth/token.ts"),
+
   route("/.well-known/*", "components/common/NoContent.tsx"),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),

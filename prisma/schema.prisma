@@ -204,6 +204,33 @@ model User {
   formConfigs          FormConfig[]
   mcpTemplates         McpTemplate[]
   mcpStructuredDocs    McpStructuredDoc[]
+  oauthAuthCodes       OAuthAuthCode[]
+}
+
+model OAuthClient {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  clientId          String   @unique
+  clientSecretHash  String
+  clientName        String
+  redirectUris      String[]
+  createdAt         DateTime @default(now())
+  authCodes         OAuthAuthCode[]
+}
+
+model OAuthAuthCode {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  codeHash            String   @unique
+  clientId            String
+  client              OAuthClient @relation(fields: [clientId], references: [clientId])
+  userId              String   @db.ObjectId
+  user                User     @relation(fields: [userId], references: [id])
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String
+  scope               String?
+  expiresAt           DateTime
+  used                Boolean  @default(false)
+  createdAt           DateTime @default(now())
 }
 
 enum FileStatus {
