@@ -584,9 +584,33 @@ function registerCoreTools(server: McpServer) {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { generateImage } = await import("../core/imageOperations");
+      const { generateShareToken } = await import("../core/operations");
       const result = await generateImage(ctx, params);
       const { files, ...meta } = result;
-      const cleanFiles = files.map(({ b64, ...f }: any) => f);
+
+      // Generate a short-lived public URL for each image so the client can
+      // render it via markdown (works even when the client does not support
+      // MCP image content blocks).
+      const withUrls = await Promise.all(
+        files.map(async ({ b64, ...f }: any) => {
+          try {
+            const { url } = await generateShareToken(ctx, {
+              fileId: f.id,
+              expiresIn: 3600,
+              source: "mcp",
+            });
+            return { ...f, previewUrl: url };
+          } catch {
+            return f;
+          }
+        })
+      );
+
+      const markdown = withUrls
+        .map((f) => (f.previewUrl ? `![${f.name}](${f.previewUrl})` : ""))
+        .filter(Boolean)
+        .join("\n\n");
+
       return {
         content: [
           ...files.map((f: any) => ({
@@ -596,7 +620,9 @@ function registerCoreTools(server: McpServer) {
           })),
           {
             type: "text" as const,
-            text: JSON.stringify({ files: cleanFiles, ...meta }, null, 2),
+            text:
+              (markdown ? markdown + "\n\n" : "") +
+              JSON.stringify({ files: withUrls, ...meta }, null, 2),
           },
         ],
       };
