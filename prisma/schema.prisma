@@ -450,6 +450,7 @@ model Website {
   totalSize      Float         @default(0)
   customDomainId String?       @db.ObjectId
   customDomain   CustomDomain? @relation(fields: [customDomainId], references: [id])
+  subdomainEnabled Boolean     @default(false)
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

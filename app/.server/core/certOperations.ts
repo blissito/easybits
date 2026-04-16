@@ -28,13 +28,21 @@ interface CertAuditResult {
 async function getValidHostnames(): Promise<Set<string>> {
   const valid = new Set(PROTECTED_HOSTNAMES);
 
-  // Active websites → slug.easybits.cloud
+  // Active websites with subdomain masking enabled → slug.easybits.cloud
+  // (Websites without masking are served path-based; no cert needed.)
   const websites = await db.website.findMany({
     where: { status: "ACTIVE" },
-    select: { slug: true, customDomainId: true, customDomain: { select: { domain: true } } },
+    select: {
+      slug: true,
+      subdomainEnabled: true,
+      customDomainId: true,
+      customDomain: { select: { domain: true } },
+    },
   });
   for (const w of websites) {
-    valid.add(`${w.slug}.easybits.cloud`);
+    if (w.subdomainEnabled) {
+      valid.add(`${w.slug}.easybits.cloud`);
+    }
     if (w.customDomain) {
       valid.add(`${w.slug}.${w.customDomain.domain}`);
     }

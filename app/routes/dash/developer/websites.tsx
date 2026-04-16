@@ -38,6 +38,34 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
+  if (intent === "enable-subdomain" || intent === "disable-subdomain") {
+    const websiteId = String(formData.get("websiteId"));
+    const website = await db.website.findUnique({ where: { id: websiteId } });
+    if (!website || website.ownerId !== user.id) {
+      return data({ error: "No encontrado" }, { status: 404 });
+    }
+    const enable = intent === "enable-subdomain";
+    const hostname = `${website.slug}.easybits.cloud`;
+    try {
+      if (process.env.FLY_API_TOKEN) {
+        if (enable) {
+          const { createHost } = await import("~/lib/fly_certs/certs_getters");
+          await createHost(hostname);
+        } else {
+          const { removeHost } = await import("~/lib/fly_certs/certs_getters");
+          await removeHost(hostname);
+        }
+      }
+    } catch (err) {
+      console.error(`[websites] cert toggle failed for ${hostname}:`, err);
+    }
+    await db.website.update({
+      where: { id: websiteId },
+      data: { subdomainEnabled: enable },
+    });
+    return data({ ok: true });
+  }
+
   if (intent === "delete") {
     const websiteId = String(formData.get("websiteId"));
     const website = await db.website.findUnique({ where: { id: websiteId } });
@@ -71,7 +99,12 @@ export default function WebsitesPage() {
   const deleteFetcher = useFetcher();
   const revalidator = useRevalidator();
 
-  const siteUrl = (slug: string) => `https://${slug}.easybits.cloud`;
+  const siteUrl = (slug: string, subdomainEnabled: boolean) =>
+    subdomainEnabled
+      ? `https://${slug}.easybits.cloud`
+      : `https://easybits.cloud/s/${slug}/`;
+  const siteHost = (slug: string, subdomainEnabled: boolean) =>
+    subdomainEnabled ? `${slug}.easybits.cloud` : `easybits.cloud/s/${slug}`;
 
   return (
     <motion.div
@@ -108,14 +141,14 @@ export default function WebsitesPage() {
               <div className="flex items-center gap-3 bg-lime border-2 border-black rounded-xl p-3 text-sm shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                 <span className="font-bold">{newSite.name}</span>
                 <a
-                  href={siteUrl(newSite.slug)}
+                  href={siteUrl(newSite.slug, false)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline"
                 >
-                  {newSite.slug}.easybits.cloud
+                  {siteHost(newSite.slug, false)}
                 </a>
-                <Copy text={siteUrl(newSite.slug)} mode="ghost" className="static p-0" />
+                <Copy text={siteUrl(newSite.slug, false)} mode="ghost" className="static p-0" />
               </div>
             </motion.div>
           )}
@@ -159,15 +192,15 @@ export default function WebsitesPage() {
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <span className="relative inline-flex items-center gap-1">
                             <a
-                              href={siteUrl(site.slug)}
+                              href={siteUrl(site.slug, site.subdomainEnabled)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="underline"
                             >
-                              {site.slug}.easybits.cloud
+                              {siteHost(site.slug, site.subdomainEnabled)}
                             </a>
                             <Copy
-                              text={siteUrl(site.slug)}
+                              text={siteUrl(site.slug, site.subdomainEnabled)}
                               mode="ghost"
                               className="static p-0"
                             />
@@ -182,7 +215,8 @@ export default function WebsitesPage() {
                       </div>
                       <SiteMenu
                         siteId={site.id}
-                        siteUrl={siteUrl(site.slug)}
+                        siteUrl={siteUrl(site.slug, site.subdomainEnabled)}
+                        subdomainEnabled={site.subdomainEnabled}
                         isDeleting={isDeleting}
                         deleteFetcher={deleteFetcher}
                         onRedeploy={() =>
@@ -225,16 +259,19 @@ export default function WebsitesPage() {
 function SiteMenu({
   siteId,
   siteUrl,
+  subdomainEnabled,
   isDeleting,
   deleteFetcher,
   onRedeploy,
 }: {
   siteId: string;
   siteUrl: string;
+  subdomainEnabled: boolean;
   isDeleting: boolean;
   deleteFetcher: ReturnType<typeof useFetcher>;
   onRedeploy: () => void;
 }) {
+  const subdomainFetcher = useFetcher();
   const [open, setOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -284,6 +321,29 @@ function SiteMenu({
             }}
           >
             Re-deploy
+          </button>
+          <button
+            type="button"
+            disabled={subdomainFetcher.state !== "idle"}
+            className="w-full text-left px-4 py-2.5 text-sm font-bold hover:bg-brand-100 transition-colors border-t-2 border-black"
+            onClick={() => {
+              setOpen(false);
+              subdomainFetcher.submit(
+                {
+                  intent: subdomainEnabled
+                    ? "disable-subdomain"
+                    : "enable-subdomain",
+                  websiteId: siteId,
+                },
+                { method: "post" }
+              );
+            }}
+          >
+            {subdomainFetcher.state !== "idle"
+              ? "Procesando..."
+              : subdomainEnabled
+              ? "Quitar subdominio"
+              : "Activar subdominio"}
           </button>
           <div>
             <button

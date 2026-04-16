@@ -563,16 +563,23 @@ export async function listWebsites(
 
   return {
     total,
-    items: websites.map((w) => ({
-      id: w.id,
-      name: w.name,
-      slug: w.slug,
-      status: w.status,
-      fileCount: w.fileCount,
-      totalSize: w.totalSize,
-      createdAt: w.createdAt,
-      url: `https://${w.slug}.easybits.cloud`,
-    })),
+    items: websites.map((w) => {
+      const subdomainUrl = w.subdomainEnabled
+        ? `https://${w.slug}.easybits.cloud`
+        : null;
+      return {
+        id: w.id,
+        name: w.name,
+        slug: w.slug,
+        status: w.status,
+        fileCount: w.fileCount,
+        totalSize: w.totalSize,
+        createdAt: w.createdAt,
+        url: subdomainUrl ?? `https://easybits.cloud/s/${w.slug}`,
+        subdomainUrl,
+        subdomainEnabled: w.subdomainEnabled,
+      };
+    }),
   };
 }
 
@@ -609,25 +616,16 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     data: { prefix: `sites/${website.id}/` },
   });
 
-  // Create SSL cert for the subdomain (non-blocking — Fly retries automatically)
-  const hostname = `${updated.slug}.easybits.cloud`;
-  try {
-    if (!process.env.FLY_API_TOKEN) {
-      console.warn(`[createWebsite] FLY_API_TOKEN missing — skipping cert for ${hostname}`);
-    } else {
-      const result = await createHost(hostname);
-      console.info(`[createWebsite] cert created for ${hostname}:`, JSON.stringify(result));
-    }
-  } catch (err) {
-    console.error(`[createWebsite] Failed to create cert for ${hostname}:`, err);
-  }
-
+  // Path-based serving by default — no SSL cert emitted.
+  // Subdomain masking is opt-in from the dashboard (see enableSubdomainMasking).
   const result = {
     id: updated.id,
     name: updated.name,
     slug: updated.slug,
     prefix: updated.prefix,
-    url: `https://${updated.slug}.easybits.cloud`,
+    url: `https://easybits.cloud/s/${updated.slug}`,
+    subdomainUrl: null as string | null,
+    subdomainEnabled: false,
   };
   dispatchWebhooks(ctx.user.id, "website.created", result);
   return result;
@@ -642,6 +640,9 @@ export async function getWebsite(ctx: AuthContext, websiteId: string) {
       headers: { "Content-Type": "application/json" },
     });
   }
+  const subdomainUrl = website.subdomainEnabled
+    ? `https://${website.slug}.easybits.cloud`
+    : null;
   return {
     id: website.id,
     name: website.name,
@@ -651,7 +652,11 @@ export async function getWebsite(ctx: AuthContext, websiteId: string) {
     totalSize: website.totalSize,
     prefix: website.prefix,
     createdAt: website.createdAt,
-    url: `https://${website.slug}.easybits.cloud`,
+    // For back-compat, sites with subdomain enabled keep url=subdomain (was the only URL before).
+    // New path-based-only sites get url=path.
+    url: subdomainUrl ?? `https://easybits.cloud/s/${website.slug}`,
+    subdomainUrl,
+    subdomainEnabled: website.subdomainEnabled,
   };
 }
 

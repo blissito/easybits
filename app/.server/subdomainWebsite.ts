@@ -41,7 +41,11 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
   }
 
   const website = await db.website.findFirst({
-    where: { slug: subdomain, status: { not: "DELETED" } },
+    where: {
+      slug: subdomain,
+      subdomainEnabled: true,
+      status: { not: "DELETED" },
+    },
     select: { id: true, ownerId: true },
   });
 

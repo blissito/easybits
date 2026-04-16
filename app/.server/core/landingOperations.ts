@@ -340,24 +340,24 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     data: { status: "PUBLISHED", websiteId },
   });
 
-  // SSL cert for easybits.cloud
-  const hostname = `${slug}.easybits.cloud`;
-  try {
-    if (process.env.FLY_API_TOKEN) {
-      await createHost(hostname);
-    }
-  } catch (err) {
-    console.error(
-      `[deployLanding] cert creation failed for ${hostname}:`,
-      err
-    );
-  }
-
-  // Also create cert for custom domain if linked
+  // SSL cert for slug.easybits.cloud only if the Website opted into subdomain masking.
   const website = await db.website.findUnique({
     where: { id: websiteId },
     include: { customDomain: true },
   });
+  if (website?.subdomainEnabled) {
+    const hostname = `${slug}.easybits.cloud`;
+    try {
+      if (process.env.FLY_API_TOKEN) {
+        await createHost(hostname);
+      }
+    } catch (err) {
+      console.error(
+        `[deployLanding] cert creation failed for ${hostname}:`,
+        err
+      );
+    }
+  }
   let customUrl: string | undefined;
   if (website?.customDomain?.verified) {
     const customHostname = `${slug}.${website.customDomain.domain}`;
@@ -373,7 +373,10 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   }
 
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  const url = `${proto}://${hostname}`;
+  const host = process.env.NODE_ENV === "production" ? "easybits.cloud" : "localhost:3000";
+  const url = website?.subdomainEnabled
+    ? `${proto}://${slug}.easybits.cloud`
+    : `${proto}://${host}/s/${slug}/`;
   return { url, websiteId, slug, customUrl, pdfUrl };
 }
 

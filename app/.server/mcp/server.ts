@@ -3081,7 +3081,11 @@ ${formHtml}
         content: landingHtml,
       });
 
-      const landingUrl = `https://${websiteSlug}.easybits.cloud`;
+      // Use path-based URL by default; subdomain only if the website opted in.
+      const _ws = await db.website.findUnique({ where: { id: websiteId } });
+      const landingUrl = _ws?.subdomainEnabled
+        ? `https://${websiteSlug}.easybits.cloud`
+        : `https://easybits.cloud/s/${websiteSlug}/`;
 
       return {
         content: [{

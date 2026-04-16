@@ -217,18 +217,23 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
     data: { status: "PUBLISHED", websiteId },
   });
 
-  // Ensure SSL cert exists (idempotent — Fly deduplicates)
-  const hostname = `${slug}.easybits.cloud`;
-  try {
-    if (process.env.FLY_API_TOKEN) {
-      await createHost(hostname);
-    }
-  } catch (err) {
-    console.error(`[deployPresentation] cert creation failed for ${hostname}:`, err);
-  }
-
+  // SSL cert only if the underlying Website opted into subdomain masking.
+  // Otherwise, served via path-based route (no cert needed).
+  const website = await db.website.findUnique({ where: { id: websiteId } });
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  const url = `${proto}://${hostname}`;
+  if (website?.subdomainEnabled) {
+    const hostname = `${slug}.easybits.cloud`;
+    try {
+      if (process.env.FLY_API_TOKEN) {
+        await createHost(hostname);
+      }
+    } catch (err) {
+      console.error(`[deployPresentation] cert creation failed for ${hostname}:`, err);
+    }
+  }
+  const url = website?.subdomainEnabled
+    ? `${proto}://${slug}.easybits.cloud`
+    : `${proto}://${process.env.NODE_ENV === "production" ? "easybits.cloud" : "localhost:3000"}/s/${slug}/`;
   return { url, cdnUrl: publicUrl, websiteId, slug };
 }
 
