@@ -54,8 +54,13 @@ export async function createHost(hostname: string) {
 export async function listHosts() {
   const res = await fetch(BASE_URL, { headers: headers() });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  const certs: any[] = await res.json();
-  // Match legacy GraphQL shape expected by callers
+  const raw = await res.json();
+  // Fly has changed shapes historically — accept raw array or { certificates: [...] }
+  const certs: any[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.certificates)
+    ? raw.certificates
+    : [];
   return {
     app: {
       certificates: {
