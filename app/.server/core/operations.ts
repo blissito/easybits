@@ -1147,6 +1147,21 @@ export async function deployWebsiteFile(
     });
   }
 
+  // Refresh the website's file stats so the dashboard reflects reality.
+  const stats = await db.file.aggregate({
+    where: {
+      name: { startsWith: website.prefix },
+      ownerId: ctx.user.id,
+      status: "DONE",
+    },
+    _count: true,
+    _sum: { size: true },
+  });
+  await db.website.update({
+    where: { id: website.id },
+    data: { fileCount: stats._count, totalSize: stats._sum.size ?? 0 },
+  });
+
   return { file };
 }
 
