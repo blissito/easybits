@@ -10,8 +10,9 @@ const db = new PrismaClient();
 
 async function main() {
   const before = await db.website.count();
+  // Use unfiltered updateMany — MongoDB docs may not have the field at all
+  // (Prisma @default only applies to new records, not existing docs).
   const result = await db.website.updateMany({
-    where: { subdomainEnabled: false },
     data: { subdomainEnabled: true },
   });
   console.log(
