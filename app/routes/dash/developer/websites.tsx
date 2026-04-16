@@ -102,9 +102,9 @@ export default function WebsitesPage() {
   const siteUrl = (slug: string, subdomainEnabled: boolean) =>
     subdomainEnabled
       ? `https://${slug}.easybits.cloud`
-      : `https://easybits.cloud/s/${slug}/`;
+      : `https://www.easybits.cloud/s/${slug}/`;
   const siteHost = (slug: string, subdomainEnabled: boolean) =>
-    subdomainEnabled ? `${slug}.easybits.cloud` : `easybits.cloud/s/${slug}`;
+    subdomainEnabled ? `${slug}.easybits.cloud` : `www.easybits.cloud/s/${slug}`;
 
   return (
     <motion.div
