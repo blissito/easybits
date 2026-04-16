@@ -575,7 +575,7 @@ export async function listWebsites(
         fileCount: w.fileCount,
         totalSize: w.totalSize,
         createdAt: w.createdAt,
-        url: subdomainUrl ?? `https://easybits.cloud/s/${w.slug}`,
+        url: subdomainUrl ?? `https://www.easybits.cloud/s/${w.slug}`,
         subdomainUrl,
         subdomainEnabled: w.subdomainEnabled,
       };
@@ -623,7 +623,7 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     name: updated.name,
     slug: updated.slug,
     prefix: updated.prefix,
-    url: `https://easybits.cloud/s/${updated.slug}`,
+    url: `https://www.easybits.cloud/s/${updated.slug}`,
     subdomainUrl: null as string | null,
     subdomainEnabled: false,
   };
@@ -654,7 +654,7 @@ export async function getWebsite(ctx: AuthContext, websiteId: string) {
     createdAt: website.createdAt,
     // For back-compat, sites with subdomain enabled keep url=subdomain (was the only URL before).
     // New path-based-only sites get url=path.
-    url: subdomainUrl ?? `https://easybits.cloud/s/${website.slug}`,
+    url: subdomainUrl ?? `https://www.easybits.cloud/s/${website.slug}`,
     subdomainUrl,
     subdomainEnabled: website.subdomainEnabled,
   };

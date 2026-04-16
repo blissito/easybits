@@ -473,7 +473,7 @@ Available Reveal.js themes: \`black\` (default), \`white\`, \`league\`, \`beige\
 1. \`createPresentation({ name, prompt })\` — create presentation
 2. \`add_slide({ presentationId, html })\` — add slides following presentation-design rules
 3. \`set_slide_html({ presentationId, slideId, html })\` — edit individual slides
-4. \`deployPresentation(id)\` — publish → get live URL at \`easybits.cloud/s/{slug}/\`
+4. \`deployPresentation(id)\` — publish → get live URL at \`www.easybits.cloud/s/{slug}/\`
 5. \`get_presentation_pdf({ presentationId })\` — export as PDF
 6. \`unpublishPresentation(id)\` — take down when done
 `,
@@ -711,7 +711,7 @@ When creating documents from the dashboard, 4 design directions are generated fi
 3. \`create_document({ name, prompt })\` — create a document
 4. \`generate_document({ documentId, prompt, direction })\` — AI generates all pages
 5. \`refine_document_section({ documentId, sectionId, instruction })\` — tweak individual pages
-6. \`deploy_document({ documentId })\` — publish → live URL at \`easybits.cloud/s/{slug}/\`
+6. \`deploy_document({ documentId })\` — publish → live URL at \`www.easybits.cloud/s/{slug}/\`
 7. \`unpublish_document({ documentId })\` — take down when done
 
 ### HTML Authoring Guide (for agents writing document HTML)
@@ -1119,7 +1119,7 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 2. \`add_slide({ presentationId, html })\` — add slides one by one following this guide
 3. \`get_slide_html({ presentationId, slideId })\` — read a slide's HTML
 4. \`set_slide_html({ presentationId, slideId, html })\` — edit a slide's HTML
-5. \`deploy_presentation({ presentationId })\` — publish to easybits.cloud/s/{slug}/
+5. \`deploy_presentation({ presentationId })\` — publish to www.easybits.cloud/s/{slug}/
 6. \`get_presentation_pdf({ presentationId })\` — export as PDF
 `,
 
@@ -1182,7 +1182,7 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 | \`replace_html\` | Find and replace HTML content |
 | \`get_page_screenshot\` | Capture page as PNG |
 | \`get_document_pdf\` | Export document as PDF |
-| \`deploy_document\` | Publish to easybits.cloud/s/{slug}/ |
+| \`deploy_document\` | Publish to www.easybits.cloud/s/{slug}/ |
 | \`unpublish_document\` | Take down a published document |
 
 ### Document AI Generation (5 tools)
@@ -1224,7 +1224,7 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 | \`set_slide_html\` | Update slide HTML |
 | \`get_slide_screenshot\` | Capture slide as PNG |
 | \`get_presentation_pdf\` | Export as PDF |
-| \`deploy_presentation\` | Publish to easybits.cloud/s/{slug}/ |
+| \`deploy_presentation\` | Publish to www.easybits.cloud/s/{slug}/ |
 | \`unpublish_presentation\` | Take down |
 | \`save_presentation_style\` | Save style as reusable template |
 | \`list_presentation_styles\` | List saved styles |

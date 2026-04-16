@@ -55,7 +55,9 @@ export async function loader({ params }: Route.LoaderArgs) {
       });
       if (file) {
         // SPA fallback — serve index.html with no-cache
-        const readUrl = await client.getReadUrl(file.storageKey);
+        const readUrl = file.access === "public" && file.url
+          ? file.url
+          : await client.getReadUrl(file.storageKey);
         const upstream = await fetch(readUrl);
         return new Response(upstream.body, {
           headers: {
@@ -68,7 +70,9 @@ export async function loader({ params }: Route.LoaderArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  const readUrl = await client.getReadUrl(file.storageKey);
+  const readUrl = file.access === "public" && file.url
+    ? file.url
+    : await client.getReadUrl(file.storageKey);
   const upstream = await fetch(readUrl);
 
   const contentType = getContentType(splat);
