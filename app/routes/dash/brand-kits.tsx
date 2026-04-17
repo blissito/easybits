@@ -8,6 +8,7 @@ import {
   createBrandKit,
   updateBrandKit,
   deleteBrandKit,
+  extractFromUrl,
 } from "~/.server/core/brandKitOperations";
 import type { Route } from "./+types/brand-kits";
 
@@ -45,9 +46,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const colors = JSON.parse(String(formData.get("colors") || "{}"));
     const fontsRaw = formData.get("fonts");
     const fonts = fontsRaw ? JSON.parse(String(fontsRaw)) : undefined;
+    const logoUrl = String(formData.get("logoUrl") || "") || undefined;
+    const mood = String(formData.get("mood") || "") || undefined;
     const isDefault = formData.get("isDefault") === "true";
-    await updateBrandKit(id, user.id, { name, colors, fonts, isDefault });
+    await updateBrandKit(id, user.id, { name, colors, fonts, logoUrl, mood, isDefault });
     return { ok: true };
+  }
+
+  if (intent === "extract-from-url") {
+    const url = String(formData.get("url") || "").trim();
+    if (!url) return data({ error: "URL requerida" });
+    const setDefault = formData.get("isDefault") === "true";
+    try {
+      const kit = await extractFromUrl(user.id, { url, isDefault: setDefault });
+      return { ok: true, extractedKit: kit };
+    } catch (err: any) {
+      return data({ error: err?.message || "No se pudo extraer la marca del sitio" });
+    }
   }
 
   if (intent === "delete") {
@@ -83,6 +98,7 @@ interface BrandKitForm {
   colors: typeof DEFAULT_COLORS & { extras?: ExtraColor[] };
   fonts: { heading: string; body: string };
   mood: string;
+  logoUrl: string;
 }
 
 const EMPTY_FORM: BrandKitForm = {
@@ -90,16 +106,22 @@ const EMPTY_FORM: BrandKitForm = {
   colors: { ...DEFAULT_COLORS },
   fonts: { heading: "Inter", body: "Inter" },
   mood: "",
+  logoUrl: "",
 };
 
 const MOODS = ["dark", "light", "warm", "cool", "vibrant"];
 
 export default function BrandKitsPage() {
   const { kits } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<{ ok?: boolean; error?: string; extractedKit?: any }>();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<BrandKitForm>({ ...EMPTY_FORM });
+  const [showExtract, setShowExtract] = useState(false);
+  const [extractUrl, setExtractUrl] = useState("");
+  const [extractAsDefault, setExtractAsDefault] = useState(true);
+  const isExtracting =
+    fetcher.state !== "idle" && fetcher.formData?.get("intent") === "extract-from-url";
 
   function openCreate() {
     setEditId(null);
@@ -115,6 +137,7 @@ export default function BrandKitsPage() {
       colors: { primary: c.primary, secondary: c.secondary, accent: c.accent, surface: c.surface, extras: c.extras || [] },
       fonts: (kit.fonts as any) || { heading: "Inter", body: "Inter" },
       mood: kit.mood || "",
+      logoUrl: kit.logoUrl || "",
     });
     setShowForm(true);
   }
@@ -128,9 +151,26 @@ export default function BrandKitsPage() {
     fd.set("colors", JSON.stringify(form.colors));
     fd.set("fonts", JSON.stringify(form.fonts));
     fd.set("mood", form.mood);
+    fd.set("logoUrl", form.logoUrl);
     fetcher.submit(fd, { method: "POST" });
     setShowForm(false);
     setEditId(null);
+  }
+
+  function handleExtract(e: React.FormEvent) {
+    e.preventDefault();
+    if (!extractUrl.trim()) return;
+    const fd = new FormData();
+    fd.set("intent", "extract-from-url");
+    fd.set("url", extractUrl.trim());
+    fd.set("isDefault", extractAsDefault ? "true" : "false");
+    fetcher.submit(fd, { method: "POST" });
+  }
+
+  // Close extract modal on success.
+  if (showExtract && fetcher.state === "idle" && fetcher.data?.ok && fetcher.data?.extractedKit) {
+    setShowExtract(false);
+    setExtractUrl("");
   }
 
   return (
@@ -140,10 +180,69 @@ export default function BrandKitsPage() {
           Brand Kits
         </h1>
         <div className="flex-1" />
+        <BrutalButton type="button" mode="ghost" onClick={() => setShowExtract(true)} size="chip">
+          ✨ Extraer de URL
+        </BrutalButton>
         <BrutalButton type="button" onClick={openCreate} size="chip">
           + Nuevo Kit
         </BrutalButton>
       </div>
+
+      {/* Extract-from-URL modal */}
+      {showExtract && (
+        <div className="mb-6 border-2 border-black rounded-xl bg-white p-4 shadow-[4px_4px_0_#000]">
+          <form onSubmit={handleExtract} className="space-y-3">
+            <div>
+              <label className="block text-sm font-bold mb-1">
+                URL del sitio web
+              </label>
+              <input
+                type="url"
+                required
+                autoFocus
+                value={extractUrl}
+                onChange={(e) => setExtractUrl(e.target.value)}
+                placeholder="https://ejemplo.com"
+                disabled={isExtracting}
+                className="w-full px-3 py-2 border-2 border-black rounded-xl bg-white disabled:opacity-60"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Capturamos la página, detectamos colores con IA y extraemos el logo automáticamente.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={extractAsDefault}
+                onChange={(e) => setExtractAsDefault(e.target.checked)}
+                disabled={isExtracting}
+                className="w-4 h-4"
+              />
+              Marcar como kit por defecto
+            </label>
+            {fetcher.data?.error && (
+              <p className="text-xs font-bold text-red-600">{fetcher.data.error}</p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <BrutalButton
+                type="button"
+                mode="ghost"
+                size="chip"
+                disabled={isExtracting}
+                onClick={() => {
+                  setShowExtract(false);
+                  setExtractUrl("");
+                }}
+              >
+                Cancelar
+              </BrutalButton>
+              <BrutalButton type="submit" size="chip" disabled={isExtracting}>
+                {isExtracting ? "Extrayendo…" : "Extraer"}
+              </BrutalButton>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Form modal */}
       {showForm && (
@@ -281,6 +380,29 @@ export default function BrandKitsPage() {
             </div>
 
             <div>
+              <label className="block text-sm font-bold mb-1">Logo (URL)</label>
+              <div className="flex items-center gap-3">
+                {form.logoUrl && (
+                  <img
+                    src={form.logoUrl}
+                    alt="logo preview"
+                    className="w-12 h-12 object-contain border-2 border-black rounded-lg bg-white shrink-0"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
+                <input
+                  type="url"
+                  value={form.logoUrl}
+                  onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
+                  placeholder="https://.../logo.png"
+                  className="flex-1 px-3 py-2 border-2 border-black rounded-xl bg-white"
+                />
+              </div>
+            </div>
+
+            <div>
               <label className="block text-sm font-bold mb-1">Mood</label>
               <div className="flex gap-2 flex-wrap">
                 {MOODS.map((m) => (
@@ -341,6 +463,16 @@ export default function BrandKitsPage() {
               className="border-2 border-black rounded-xl bg-white p-4 shadow-[4px_4px_0_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all"
             >
               <div className="flex items-center gap-2 mb-3">
+                {kit.logoUrl && (
+                  <img
+                    src={kit.logoUrl}
+                    alt={`${kit.name} logo`}
+                    className="w-10 h-10 object-contain border-2 border-black rounded-lg bg-white shrink-0"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
                 <h3 className="font-black text-sm flex-1 truncate">{kit.name}</h3>
                 {kit.isDefault && (
                   <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full border border-brand-200">
