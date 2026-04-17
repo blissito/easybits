@@ -451,6 +451,8 @@ model Website {
   customDomainId String?       @db.ObjectId
   customDomain   CustomDomain? @relation(fields: [customDomainId], references: [id])
   subdomainEnabled Boolean     @default(false)
+  /** Ad-hoc per-site metadata: ogImageUrl (cached screenshot), description, etc. */
+  metadata       Json?
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

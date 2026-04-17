@@ -51,9 +51,12 @@ function injectMetaTags(
   return html.replace(/<head([^>]*)>/i, `<head$1>\n  ${meta}`);
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function loader({ params, request }: Route.LoaderArgs) {
   const { slug } = params;
   const splat = params["*"] || "index.html";
+  // When our own OG screenshotter is loading this page to take a picture, we
+  // don't want to recursively trigger another screenshot job.
+  const isOgBot = new URL(request.url).searchParams.has("__og");
 
   const website = await db.website.findFirst({ where: { slug } });
   if (!website || website.status === "DELETED") {
@@ -126,14 +129,32 @@ export async function loader({ params }: Route.LoaderArgs) {
 
   // Inject social preview meta tags into HTML responses so WhatsApp/Twitter
   // unfurls show a rich preview. Assets (CSS/JS/images) pass through as stream.
-  if (contentType.startsWith("text/html")) {
+  if (contentType.startsWith("text/html") && !isOgBot) {
     const html = await upstream.text();
-    const { getDefaultBrandKit } = await import("~/.server/core/brandKitOperations");
-    const kit = await getDefaultBrandKit(website.ownerId).catch(() => null);
+
+    // Pick the best og:image available:
+    // 1) cached screenshot from a prior background job on Website.metadata
+    // 2) otherwise, fire-and-forget a screenshot job and use the owner's
+    //    default brand kit logo for THIS request. Next hit uses the real shot.
+    const meta = (website.metadata as Record<string, unknown> | null) ?? {};
+    let ogImage = typeof meta.ogImageUrl === "string" ? (meta.ogImageUrl as string) : undefined;
+    if (!ogImage) {
+      const { getDefaultBrandKit } = await import("~/.server/core/brandKitOperations");
+      const kit = await getDefaultBrandKit(website.ownerId).catch(() => null);
+      ogImage = kit?.logoUrl ?? undefined;
+      // Trigger screenshot generation in background (runs only for the root
+      // HTML entry, not on every sub-asset request).
+      if (splat === "index.html") {
+        import("~/.server/core/websiteOgScreenshot")
+          .then((m) => m.generateWebsiteOg(website.id))
+          .catch(() => {});
+      }
+    }
+
     const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
     const title = titleMatch?.[1]?.trim() || website.name || "Documento";
     const canonical = `https://www.easybits.cloud/s/${website.slug}${splat === "index.html" ? "" : "/" + splat}`;
-    const patched = injectMetaTags(html, { title, url: canonical, logoUrl: kit?.logoUrl });
+    const patched = injectMetaTags(html, { title, url: canonical, logoUrl: ogImage });
     return new Response(patched, {
       headers: {
         "Content-Type": contentType,
