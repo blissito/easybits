@@ -1157,10 +1157,26 @@ export async function deployWebsiteFile(
     _count: true,
     _sum: { size: true },
   });
-  await db.website.update({
-    where: { id: website.id },
-    data: { fileCount: stats._count, totalSize: stats._sum.size ?? 0 },
-  });
+  const updateData: any = { fileCount: stats._count, totalSize: stats._sum.size ?? 0 };
+
+  // If the deployed file is an HTML page, the cached og:image is now stale.
+  // Clear the pointer and regenerate in the background so the next share
+  // picks up the new content.
+  const isHtml = /\.html?$/i.test(opts.fileName) || opts.contentType.startsWith("text/html");
+  if (isHtml) {
+    const meta = (website.metadata as Record<string, unknown>) || {};
+    if (meta.ogImageUrl) {
+      const { ogImageUrl: _drop, ogGeneratedAt: _drop2, ...rest } = meta as any;
+      updateData.metadata = rest;
+    }
+  }
+  await db.website.update({ where: { id: website.id }, data: updateData });
+
+  if (isHtml) {
+    import("./websiteOgScreenshot")
+      .then((m) => m.generateWebsiteOg(website.id))
+      .catch(() => {});
+  }
 
   return { file };
 }
