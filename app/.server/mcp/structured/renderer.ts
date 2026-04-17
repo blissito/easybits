@@ -45,7 +45,7 @@ export interface RenderCtx {
 }
 
 const COLOR_TOKENS = new Set([
-  "primary", "secondary", "accent", "surface",
+  "primary", "secondary", "accent", "surface", "surface-alt",
   "on-primary", "on-secondary", "on-accent", "on-surface", "on-surface-muted",
 ]);
 const FONT_TOKENS = new Set(["heading", "body"]);
@@ -94,6 +94,9 @@ function buildColorMap(kit: RenderBrandKit | null | undefined): Record<string, s
     map["on-surface"] = onSurface;
     // Muted: 45% toward the opposite extreme from on-surface.
     map["on-surface-muted"] = mix(onSurface, onSurface === "#ffffff" ? false : true, 0.45);
+    // surface-alt: surface shifted ~5% toward the opposite extreme — a subtle
+    // tile background for cards/sections on top of surface.
+    map["surface-alt"] = mix(c.surface, onSurface === "#ffffff" ? true : false, 0.06);
   }
   // Named extras (e.g. { name: "success", hex: "#22c55e" })
   for (const extra of c.extras ?? []) {
