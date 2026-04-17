@@ -39,6 +39,7 @@ export interface QuotationData {
   taxRate?: number;
   discount?: number;
   total: number;
+  /** @deprecated brandColor is ignored — colors come from the user's brand kit via customColors. Kept for BC. */
   brandColor?: string;
   currency?: string;
 }
@@ -74,102 +75,104 @@ export function fixQuotationMath(data: QuotationData): QuotationData {
 }
 
 function headerHtml(data: QuotationData): string {
-  const bc = data.brandColor || "#1a1a1a";
   const date = data.date ? fmtDate(data.date) : fmtDate(new Date().toISOString());
-  return `<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
+  return `<div class="flex justify-between items-start mb-5">
     <div>
-      <h1 style="font-size:20px; font-weight:800; margin:0 0 2px 0; color:${escapeHtml(bc)};">${escapeHtml(data.company.name)}</h1>
-      ${data.company.rfc ? `<p style="font-size:11px; color:#666; margin:0;">RFC: ${escapeHtml(data.company.rfc)}</p>` : ""}
-      ${data.company.address ? `<p style="font-size:11px; color:#666; margin:2px 0 0 0;">${escapeHtml(data.company.address)}</p>` : ""}
-      ${data.company.phone ? `<p style="font-size:11px; color:#666; margin:2px 0 0 0;">Tel: ${escapeHtml(data.company.phone)}</p>` : ""}
-      ${data.company.email ? `<p style="font-size:11px; color:#666; margin:2px 0 0 0;">${escapeHtml(data.company.email)}</p>` : ""}
+      <h1 class="text-xl font-extrabold m-0 mb-0.5 text-primary">${escapeHtml(data.company.name)}</h1>
+      ${data.company.rfc ? `<p class="text-xs text-on-surface-muted m-0">RFC: ${escapeHtml(data.company.rfc)}</p>` : ""}
+      ${data.company.address ? `<p class="text-xs text-on-surface-muted m-0 mt-0.5">${escapeHtml(data.company.address)}</p>` : ""}
+      ${data.company.phone ? `<p class="text-xs text-on-surface-muted m-0 mt-0.5">Tel: ${escapeHtml(data.company.phone)}</p>` : ""}
+      ${data.company.email ? `<p class="text-xs text-on-surface-muted m-0 mt-0.5">${escapeHtml(data.company.email)}</p>` : ""}
     </div>
-    <div style="text-align:right;">
-      <h2 style="font-size:22px; font-weight:800; margin:0; color:${escapeHtml(bc)};">COTIZACIÓN</h2>
-      ${data.folio ? `<p style="font-size:14px; font-weight:700; margin:4px 0 0 0; color:${escapeHtml(bc)};">${escapeHtml(data.folio)}</p>` : ""}
-      <p style="font-size:12px; color:#555; margin:4px 0 0 0;">${date}</p>
-      ${data.validity ? `<p style="font-size:11px; color:#888; margin:2px 0 0 0;">Vigencia: ${escapeHtml(data.validity)}</p>` : ""}
+    <div class="text-right">
+      <h2 class="text-2xl font-extrabold m-0 text-primary">COTIZACIÓN</h2>
+      ${data.folio ? `<p class="text-sm font-bold m-0 mt-1 text-primary">${escapeHtml(data.folio)}</p>` : ""}
+      <p class="text-xs text-on-surface-muted m-0 mt-1">${date}</p>
+      ${data.validity ? `<p class="text-xs text-on-surface-muted m-0 mt-0.5">Vigencia: ${escapeHtml(data.validity)}</p>` : ""}
     </div>
   </div>`;
 }
 
 function clientHtml(data: QuotationData): string {
   const c = data.client;
-  return `<div style="background:#f8f8f8; border-radius:8px; padding:14px 16px; margin-bottom:20px;">
-    <p style="font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#999; margin:0 0 6px 0;">CLIENTE</p>
-    <p style="font-weight:600; font-size:14px; margin:0 0 2px 0;">${escapeHtml(c.name)}</p>
-    ${c.company ? `<p style="font-size:12px; color:#555; margin:0 0 2px 0;">${escapeHtml(c.company)}</p>` : ""}
-    ${c.email ? `<p style="font-size:12px; color:#555; margin:0 0 2px 0;">${escapeHtml(c.email)}</p>` : ""}
-    ${c.phone ? `<p style="font-size:12px; color:#555; margin:0 0 2px 0;">Tel: ${escapeHtml(c.phone)}</p>` : ""}
-    ${c.address ? `<p style="font-size:12px; color:#555; margin:0;">${escapeHtml(c.address)}</p>` : ""}
+  return `<div class="bg-surface-alt rounded-lg px-4 py-3.5 mb-5">
+    <p class="font-bold text-[10px] uppercase tracking-wider text-on-surface-muted m-0 mb-1.5">CLIENTE</p>
+    <p class="font-semibold text-sm m-0 mb-0.5 text-on-surface">${escapeHtml(c.name)}</p>
+    ${c.company ? `<p class="text-xs text-on-surface-muted m-0 mb-0.5">${escapeHtml(c.company)}</p>` : ""}
+    ${c.email ? `<p class="text-xs text-on-surface-muted m-0 mb-0.5">${escapeHtml(c.email)}</p>` : ""}
+    ${c.phone ? `<p class="text-xs text-on-surface-muted m-0 mb-0.5">Tel: ${escapeHtml(c.phone)}</p>` : ""}
+    ${c.address ? `<p class="text-xs text-on-surface-muted m-0">${escapeHtml(c.address)}</p>` : ""}
   </div>`;
 }
 
 function itemsTableHtml(items: QuotationItem[], data: QuotationData): string {
-  const bc = data.brandColor || "#1a1a1a";
   const hasCode = items.some((i) => i.code);
   const hasDiscount = items.some((i) => i.discount);
-  const cur = data.currency || "MXN";
+
+  const th = (align: string, label: string) =>
+    `<th class="px-2.5 py-2 text-${align} text-[10px] uppercase tracking-wider">${label}</th>`;
 
   const headerCols = [
-    ...(hasCode ? [`<th style="padding:8px 10px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Código</th>`] : []),
-    `<th style="padding:8px 10px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Descripción</th>`,
-    `<th style="padding:8px 10px; text-align:center; font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Cant.</th>`,
-    `<th style="padding:8px 10px; text-align:right; font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">P. Unit.</th>`,
-    ...(hasDiscount ? [`<th style="padding:8px 10px; text-align:right; font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Desc.</th>`] : []),
-    `<th style="padding:8px 10px; text-align:right; font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Total</th>`,
+    ...(hasCode ? [th("left", "Código")] : []),
+    th("left", "Descripción"),
+    th("center", "Cant."),
+    th("right", "P. Unit."),
+    ...(hasDiscount ? [th("right", "Desc.")] : []),
+    th("right", "Total"),
   ];
 
+  const td = (align: string, content: string) =>
+    `<td class="px-2.5 py-[7px] border-b border-on-surface-muted/15 text-xs text-${align} text-on-surface">${content}</td>`;
+
   const rows = items.map((item, i) => {
-    const bg = i % 2 === 1 ? " background:#fafafa;" : "";
-    return `<tr style="${bg}">
-      ${hasCode ? `<td style="padding:7px 10px; border-bottom:1px solid #eee; font-size:12px;">${escapeHtml(item.code || "")}</td>` : ""}
-      <td style="padding:7px 10px; border-bottom:1px solid #eee; font-size:12px;">${escapeHtml(item.description)}</td>
-      <td style="padding:7px 10px; border-bottom:1px solid #eee; font-size:12px; text-align:center;">${item.quantity}${item.unit ? ` ${escapeHtml(item.unit)}` : ""}</td>
-      <td style="padding:7px 10px; border-bottom:1px solid #eee; font-size:12px; text-align:right;">$${fmt(item.unitPrice)}</td>
-      ${hasDiscount ? `<td style="padding:7px 10px; border-bottom:1px solid #eee; font-size:12px; text-align:right;">${item.discount ? `$${fmt(item.discount)}` : "—"}</td>` : ""}
-      <td style="padding:7px 10px; border-bottom:1px solid #eee; font-size:12px; text-align:right;">$${fmt(item.total)}</td>
+    const bg = i % 2 === 1 ? " bg-surface-alt/50" : "";
+    return `<tr class="${bg.trim()}">
+      ${hasCode ? td("left", escapeHtml(item.code || "")) : ""}
+      ${td("left", escapeHtml(item.description))}
+      ${td("center", `${item.quantity}${item.unit ? ` ${escapeHtml(item.unit)}` : ""}`)}
+      ${td("right", `$${fmt(item.unitPrice)}`)}
+      ${hasDiscount ? td("right", item.discount ? `$${fmt(item.discount)}` : "—") : ""}
+      ${td("right", `$${fmt(item.total)}`)}
     </tr>`;
   });
 
-  return `<table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
+  return `<table class="w-full border-collapse mb-4">
     <thead>
-      <tr style="background:${escapeHtml(bc)}; color:white;">${headerCols.join("")}</tr>
+      <tr class="bg-primary text-on-primary">${headerCols.join("")}</tr>
     </thead>
     <tbody>${rows.join("")}</tbody>
   </table>`;
 }
 
 function totalsHtml(data: QuotationData): string {
-  const bc = data.brandColor || "#1a1a1a";
   const cur = data.currency || "MXN";
   const rows: string[] = [];
-  rows.push(`<tr><td style="text-align:right; padding:3px 10px; font-size:12px;">Subtotal</td><td style="text-align:right; padding:3px 10px; font-size:12px; font-weight:600;">$${fmt(data.subtotal)}</td></tr>`);
+  rows.push(`<tr><td class="text-right px-2.5 py-[3px] text-xs text-on-surface">Subtotal</td><td class="text-right px-2.5 py-[3px] text-xs font-semibold text-on-surface">$${fmt(data.subtotal)}</td></tr>`);
   if (data.discount) {
-    rows.push(`<tr><td style="text-align:right; padding:3px 10px; font-size:12px;">Descuento</td><td style="text-align:right; padding:3px 10px; font-size:12px;">-$${fmt(data.discount)}</td></tr>`);
+    rows.push(`<tr><td class="text-right px-2.5 py-[3px] text-xs text-on-surface">Descuento</td><td class="text-right px-2.5 py-[3px] text-xs text-on-surface">-$${fmt(data.discount)}</td></tr>`);
   }
   if (data.tax != null) {
     const label = data.taxRate ? `IVA (${data.taxRate}%)` : "IVA";
-    rows.push(`<tr><td style="text-align:right; padding:3px 10px; font-size:12px;">${label}</td><td style="text-align:right; padding:3px 10px; font-size:12px;">$${fmt(data.tax)}</td></tr>`);
+    rows.push(`<tr><td class="text-right px-2.5 py-[3px] text-xs text-on-surface">${label}</td><td class="text-right px-2.5 py-[3px] text-xs text-on-surface">$${fmt(data.tax)}</td></tr>`);
   }
-  rows.push(`<tr><td style="text-align:right; padding:6px 10px; font-size:16px; font-weight:800; border-top:2px solid ${escapeHtml(bc)};">Total</td><td style="text-align:right; padding:6px 10px; font-size:16px; font-weight:800; border-top:2px solid ${escapeHtml(bc)}; color:${escapeHtml(bc)};">$${fmt(data.total)} ${escapeHtml(cur)}</td></tr>`);
+  rows.push(`<tr><td class="text-right px-2.5 py-1.5 text-base font-extrabold border-t-2 border-primary text-on-surface">Total</td><td class="text-right px-2.5 py-1.5 text-base font-extrabold border-t-2 border-primary text-primary">$${fmt(data.total)} ${escapeHtml(cur)}</td></tr>`);
 
-  return `<div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
-    <table style="min-width:260px;">${rows.join("")}</table>
+  return `<div class="flex justify-end mb-4">
+    <table class="min-w-[260px]">${rows.join("")}</table>
   </div>`;
 }
 
 function notesHtml(notes: string[]): string {
   if (!notes.length) return "";
-  const items = notes.map((n) => `<li style="margin-bottom:4px;">${escapeHtml(n)}</li>`).join("");
-  return `<div style="background:#f8f8f8; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
-    <p style="font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#999; margin:0 0 8px 0;">NOTAS Y CONDICIONES</p>
-    <ul style="margin:0; padding-left:18px; font-size:12px; color:#555;">${items}</ul>
+  const items = notes.map((n) => `<li class="mb-1">${escapeHtml(n)}</li>`).join("");
+  return `<div class="bg-surface-alt rounded-lg px-4 py-3.5 mb-4">
+    <p class="font-bold text-[10px] uppercase tracking-wider text-on-surface-muted m-0 mb-2">NOTAS Y CONDICIONES</p>
+    <ul class="m-0 pl-[18px] text-xs text-on-surface-muted">${items}</ul>
   </div>`;
 }
 
 function footerHtml(data: QuotationData, pageNum: number, totalPages: number): string {
-  return `<div style="flex-shrink:0; border-top:1px solid #ddd; padding-top:8px; display:flex; justify-content:space-between; font-size:10px; color:#999; margin-top:auto;">
+  return `<div class="shrink-0 border-t border-on-surface-muted/20 pt-2 flex justify-between text-[10px] text-on-surface-muted mt-auto">
     <span>${data.company.address ? escapeHtml(data.company.address) : escapeHtml(data.company.name)}</span>
     <span>Página ${pageNum} de ${totalPages}</span>
   </div>`;
@@ -197,7 +200,7 @@ export function buildQuotationHTML(data: QuotationData): string[] {
     }
     content += footerHtml(data, p + 1, totalPages);
 
-    pages.push(letterPage(content, { brandColor: data.brandColor }));
+    pages.push(letterPage(content));
   }
 
   return pages;
