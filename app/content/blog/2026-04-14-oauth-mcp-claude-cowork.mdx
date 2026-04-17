@@ -1,0 +1,204 @@
+---
+title: "OAuth 2.1 + DCR para MCP: cómo conectamos EasyBits a Claude Cowork sin API keys"
+description: "El nuevo flujo de OAuth dinámico que permite a Claude.ai y Cowork conectarse a EasyBits con un solo click. RFC 8414, 9728, 7591 y PKCE S256 explicados desde el código real."
+date: "2026-04-14"
+author: "EasyBits Team"
+tags: ["MCP", "OAuth", "Claude", "Cowork", "arquitectura"]
+featuredImage: "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=800&auto=format"
+published: true
+---
+
+# OAuth 2.1 + DCR para MCP: cómo conectamos EasyBits a Claude Cowork sin API keys
+
+Hasta hace unas semanas, conectar un agente a EasyBits implicaba el ritual clásico: entrar al dashboard, generar una API key, copiarla, pegarla en un JSON de configuración, reiniciar el cliente. Funciona, pero no escala cuando el cliente es un producto web como **Claude.ai** o **Cowork**, donde el usuario no tiene terminal ni archivos de configuración.
+
+Los "custom connectors" de Claude hablan solo un idioma de autenticación: **OAuth 2.1 con Dynamic Client Registration**. Si tu servidor MCP no lo habla, el botón "Connect" no tiene nada a quién pedirle permiso.
+
+Este post explica cómo implementamos ese flujo en EasyBits sin romper nada de lo que ya teníamos.
+
+## El problema: dos mundos de autenticación
+
+El MCP remoto tiene dos tipos de clientes:
+
+1. **Agentes con acceso a disco** (Claude Desktop, Claude Code, Cursor). Leen tu API key de un archivo local o una variable de entorno. Bearer token, fin de la historia.
+2. **Clientes web** (Claude.ai, Cowork). No tienen disco. El usuario pega una URL en un formulario y espera que "funcione". Necesitan un flujo OAuth completo: descubrir endpoints, registrarse, obtener un token.
+
+El segundo mundo no puede usar una API key copiada a mano — no hay dónde pegarla. Y aunque se pudiera, exponer la key al navegador rompe el modelo de seguridad.
+
+La solución tenía que ser **aditiva**: conservar el Bearer para los agentes que ya lo usan, y al mismo tiempo hablar OAuth para los que lo exigen.
+
+## Los 4 RFCs que entran en juego
+
+MCP no inventa su propio OAuth — reutiliza tres estándares:
+
+| RFC | Qué hace | Endpoint |
+|-----|----------|----------|
+| **8414** | Advertiza dónde está el servidor de autorización | `/.well-known/oauth-authorization-server` |
+| **9728** | Dice al cliente que un recurso está protegido y a qué AS pedir tokens | `/.well-known/oauth-protected-resource` |
+| **7591** | Permite que un cliente se registre solo, sin trámite previo | `/oauth/register` |
+| **PKCE S256** | Reemplaza el `client_secret` para clientes públicos (apps web sin backend seguro) | — |
+
+Y dos endpoints clásicos de OAuth:
+
+- `/oauth/authorize` — donde el usuario da consentimiento
+- `/oauth/token` — donde se canjea el código por un access token
+
+## El flujo, paso a paso
+
+Así se ve una conexión de Claude Cowork a EasyBits desde el momento en que el usuario pega la URL:
+
+```
+1. Usuario pega https://www.easybits.cloud/api/mcp en Cowork
+2. Claude → GET /api/mcp (sin token)
+3. EasyBits → 401 + WWW-Authenticate con pointer al AS
+4. Claude → GET /.well-known/oauth-protected-resource
+5. Claude → GET /.well-known/oauth-authorization-server
+6. Claude → POST /oauth/register con redirect_uri
+                ← { client_id, client_secret }
+7. Claude abre /oauth/authorize?client_id=...&code_challenge=... en el browser
+8. Si no hay sesión → /login?next=<authorize_url>
+9. Usuario hace login → vuelve a /oauth/authorize → se genera code
+10. Redirect a Claude con ?code=...
+11. Claude → POST /oauth/token con code + code_verifier
+                ← { access_token: "eyJ...", expires_in: 3600 }
+12. Claude → POST /api/mcp con Bearer eyJ...
+                ← tools y resources disponibles
+```
+
+Doce pasos de handshake, pero para el usuario son **tres clicks**: pegar URL, login, autorizar.
+
+## Descubrimiento: cómo el cliente encuentra el AS
+
+Todo arranca con una request sin token. El handler MCP responde con `WWW-Authenticate`, que es el equivalente HTTP de decir "tengo candado, aquí tienes el número del cerrajero":
+
+```http
+WWW-Authenticate: Bearer resource_metadata="https://www.easybits.cloud/.well-known/oauth-protected-resource"
+```
+
+El cliente sigue el pointer y llega a un JSON plano (RFC 9728):
+
+```json
+{
+  "resource": "https://www.easybits.cloud/api/mcp",
+  "authorization_servers": ["https://www.easybits.cloud"]
+}
+```
+
+Y de ahí al metadata del AS (RFC 8414):
+
+```json
+{
+  "issuer": "https://www.easybits.cloud",
+  "authorization_endpoint": ".../oauth/authorize",
+  "token_endpoint": ".../oauth/token",
+  "registration_endpoint": ".../oauth/register",
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["client_secret_post", "none"]
+}
+```
+
+En este punto, Claude ya sabe todo lo que necesita para hablar con EasyBits sin que ningún humano haya pegado nada.
+
+## Dynamic Client Registration: el cliente se inscribe solo
+
+El RFC 7591 es la pieza menos obvia pero la más importante para MCP. En OAuth clásico, antes de nada tienes que **registrar tu app** con el provider: abrir un portal, llenar un form, guardar un `client_id`. Eso es imposible cuando el cliente es un producto como Cowork que se conecta a miles de servidores MCP diferentes.
+
+DCR resuelve esto dejando que el cliente se registre por POST:
+
+```http
+POST /oauth/register
+Content-Type: application/json
+
+{
+  "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
+  "client_name": "Claude"
+}
+```
+
+Nuestro handler genera `client_id` y `client_secret` al vuelo, los persiste en MongoDB (el secret se guarda hasheado con SHA-256) y los devuelve. Sin intervención humana, sin panel de admin.
+
+## PKCE: OAuth seguro sin secret
+
+Los clientes "públicos" (SPA, app móvil, cliente MCP) no pueden guardar un `client_secret` de forma segura — cualquiera puede abrir DevTools y verlo. PKCE lo reemplaza con un desafío criptográfico de un solo uso:
+
+1. El cliente genera un `code_verifier` aleatorio (44+ bytes).
+2. Calcula `code_challenge = BASE64URL(SHA256(code_verifier))`.
+3. Manda solo el challenge a `/oauth/authorize`.
+4. Al canjear el código en `/oauth/token`, manda el verifier original.
+5. El server verifica que `SHA256(verifier) === challenge`.
+
+Si alguien intercepta el code en la redirección, no le sirve de nada sin el verifier — que nunca viajó por la red.
+
+La implementación en EasyBits es 3 líneas:
+
+```typescript
+export function verifyPkceS256(verifier: string, challenge: string): boolean {
+  return base64UrlSha256(verifier) === challenge;
+}
+```
+
+## Access tokens: JWT firmado en vez de DB lookup
+
+Cuando el canje tiene éxito, emitimos un JWT firmado con HS256:
+
+```typescript
+jwt.sign(
+  { sub: userId, scope, typ: "oauth" },
+  SECRET,
+  { issuer: ISSUER, audience: "easybits-mcp", expiresIn: 3600 }
+);
+```
+
+El MCP handler verifica el token sin tocar la base de datos en el camino crítico — solo hace un `findUnique` al `User` una vez validada la firma. Los tokens duran 1 hora y no hay refresh token a propósito: si Claude pierde el token, vuelve a hacer el authorize (el usuario ya tiene sesión, es un solo click).
+
+## El detalle que lo hace aditivo
+
+El punto más delicado del diseño: **no romper lo existente**. Miles de requests por día entran con `Authorization: Bearer eb_sk_live_...` (API keys). El nuevo path de OAuth emite tokens que empiezan con `eyJ...` (JWT). ¿Cómo distinguirlos sin frankeinstein?
+
+La respuesta está en `apiAuth.ts`: intentamos verificar como JWT primero, y **si falla silenciosamente**, caemos al validador de API keys:
+
+```typescript
+const oauthUser = await tryVerifyOAuthJwt(token);
+if (oauthUser) return oauthUser;
+// Not an OAuth JWT — try as an API key
+return validateApiKey(token);
+```
+
+`tryVerifyOAuthJwt` está diseñado para **nunca lanzar**: si el token no es un JWT válido, retorna `null` y seguimos al siguiente validador. El costo para clientes con API key es una verificación JWT fallida (~microsegundos) antes del lookup real.
+
+Cero cambios para los clientes existentes. Cero feature flag. Cero deploy coordinado.
+
+## Lo que no hicimos (y por qué)
+
+- **Refresh tokens.** Agregan complejidad (rotación, revocación, storage). Con TTL de 1 hora y auto-approve si hay sesión, el reauthorize es invisible.
+- **Pantalla de consentimiento custom.** Cuando el usuario llega a `/oauth/authorize` viene del botón "Connect" en Cowork — el consentimiento ya es explícito. Auto-aprobamos y redirigimos.
+- **Scopes granulares.** Por ahora un solo scope (`mcp`) que da acceso al handler MCP completo. Si MCP evoluciona con scopes por tool-group, los agregamos.
+- **Token introspection endpoint (RFC 7662).** Solo tiene sentido si los tokens los consumen servicios externos. Aquí solo los consume nuestro MCP handler que ya tiene la key de firma.
+
+## ¿Por qué esto importa?
+
+Claude Cowork es el primer cliente MCP **para equipos** — no para un developer solo en su terminal. Conectar EasyBits a Cowork significa que cualquier miembro del equipo puede, desde el browser, acceder a los archivos, sitios, documentos y presentaciones del workspace sin que nadie tenga que pasar API keys en Slack.
+
+Y el mismo flujo sirve para el próximo cliente que aparezca. OAuth 2.1 + DCR es el nuevo *lingua franca* de integración remota. Que ya lo hablemos es parte de que EasyBits sea **agentic-first** de verdad, no solo en marketing.
+
+## Cómo conectar Cowork a tu cuenta
+
+1. Abre Cowork → **Settings → Connectors → Add custom connector**.
+2. Pega `https://www.easybits.cloud/api/mcp` en el campo URL.
+3. Clic en **Connect**.
+4. Cowork te manda a login de EasyBits (si no tienes sesión).
+5. Autoriza. Listo.
+
+Después de eso, el agente de Cowork tiene acceso a las **12 tools core** por default: listar archivos, crear documentos, generar presentaciones, consultar estadísticas. Para habilitar grupos adicionales (docs, slides, sites, brand, all) agrega `?tools=all` al final de la URL:
+
+```
+https://www.easybits.cloud/api/mcp?tools=all
+```
+
+Documentación completa en [/docs](/docs).
+
+<Callout type="tip" title="¿Prefieres API key?">
+El flujo Bearer sigue funcionando exactamente igual. Si tu cliente es Claude Desktop, Claude Code, Cursor o cualquier agente local, usa tu API key como siempre — ese path nunca va a cambiar.
+</Callout>
+
+¿Preguntas? Escríbenos en [GitHub](https://github.com/easybits-cloud/easybits) o en el chat de soporte.

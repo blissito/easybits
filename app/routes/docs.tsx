@@ -15,6 +15,7 @@ export const meta = () => [
 const SECTIONS = [
   { id: "quickstart", label: "Quick Start" },
   { id: "auth", label: "Authentication" },
+  { id: "cowork", label: "Claude Cowork" },
   { id: "sdk", label: "SDK" },
   { id: "files", label: "Files" },
   { id: "bulk", label: "Bulk Operations" },
@@ -236,6 +237,94 @@ const eb = await createClientFromEnv();` },
             <div className="mt-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
               <strong>Scopes:</strong> API keys can have READ, WRITE, DELETE, or ADMIN scopes.
               Operations require the appropriate scope.
+            </div>
+            <div className="mt-4 bg-indigo-50 border-2 border-indigo-300 rounded-xl p-4 text-sm">
+              <strong>Web clients (Claude.ai / Cowork):</strong> use OAuth 2.1 + Dynamic Client Registration instead of an API key. <a href="#cowork" className="underline font-medium">See the Claude Cowork section →</a>
+            </div>
+          </section>
+
+          {/* Cowork / OAuth */}
+          <section id="cowork" className="mb-16">
+            <h2 className="text-2xl font-bold mb-2">Claude Cowork (OAuth)</h2>
+            <p className="text-gray-500 mb-4 text-sm">For Claude.ai, Cowork, and other web-based MCP clients that can't store API keys.</p>
+            <p className="text-gray-600 mb-4 text-sm">
+              EasyBits implements <strong>OAuth 2.1</strong> with <strong>Dynamic Client Registration</strong> (RFC 7591) and <strong>PKCE S256</strong>. Web MCP clients discover, register, and authenticate automatically — no API key copying, no JSON configs.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3">Connect in 4 steps</h3>
+            <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6 text-sm">
+              <li>In Cowork, open <strong>Settings → Connectors → Add custom connector</strong></li>
+              <li>Paste the MCP URL: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">https://www.easybits.cloud/api/mcp</code></li>
+              <li>Click <strong>Connect</strong> — you'll be redirected to EasyBits to log in</li>
+              <li>Authorize the connector. You're done — the agent has access to your workspace</li>
+            </ol>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              <strong>Tip:</strong> append <code className="bg-gray-100 px-1 rounded">?tools=all</code> to the URL to expose all 100+ tools instead of the 12-tool core group. See <a href="#tool-groups" className="underline">Tool Groups</a> for other options.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">How it works</h3>
+            <p className="text-gray-600 mb-3 text-sm">
+              EasyBits exposes the standard OAuth discovery endpoints so any spec-compliant MCP client connects without manual setup:
+            </p>
+
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2">Endpoint</th>
+                    <th className="text-left px-4 py-2">Spec</th>
+                    <th className="text-left px-4 py-2">Purpose</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["/.well-known/oauth-protected-resource", "RFC 9728", "Tells clients which Authorization Server protects /api/mcp"],
+                    ["/.well-known/oauth-authorization-server", "RFC 8414", "Advertises authorize, token, and registration endpoints"],
+                    ["/oauth/register", "RFC 7591", "Dynamic Client Registration — client_id + secret issued on POST"],
+                    ["/oauth/authorize", "OAuth 2.1", "User consent + code issuance (PKCE S256 required)"],
+                    ["/oauth/token", "OAuth 2.1", "Exchanges code + verifier for a 1-hour JWT access token"],
+                  ].map(([endpoint, spec, desc]) => (
+                    <tr key={endpoint} className="border-t border-gray-200">
+                      <td className="px-4 py-2 font-mono text-xs">{endpoint}</td>
+                      <td className="px-4 py-2 text-xs text-gray-500">{spec}</td>
+                      <td className="px-4 py-2 text-gray-600 text-xs">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Handshake flow</h3>
+            <CodeExample
+              title="Flow"
+              code={`1. Client → GET /api/mcp (no token)
+2. EasyBits → 401 + WWW-Authenticate (pointer to AS metadata)
+3. Client → GET /.well-known/oauth-protected-resource
+4. Client → GET /.well-known/oauth-authorization-server
+5. Client → POST /oauth/register { redirect_uris, client_name }
+                ← { client_id, client_secret }
+6. Browser opens /oauth/authorize?client_id=...&code_challenge=... (S256)
+7. User logs in (if no session) → code issued → redirect back to client
+8. Client → POST /oauth/token with code + code_verifier
+                ← { access_token (JWT), expires_in: 3600 }
+9. Client → POST /api/mcp with Authorization: Bearer <access_token>`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Notes</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 mb-6">
+              <li>Access tokens are <strong>HS256 JWTs</strong>, valid for 1 hour. No refresh token — reauthorize is a single click when you already have a session.</li>
+              <li><strong>Auto-approval</strong>: once logged in, the authorize screen redirects back immediately. The user already expressed consent by initiating the flow from the connector.</li>
+              <li><strong>Additive</strong>: API key Bearer auth keeps working unchanged. The handler tries JWT verification first and silently falls through to API key validation.</li>
+              <li><strong>PKCE S256 is mandatory</strong>. Plain and no-PKCE flows are rejected.</li>
+              <li>Scope: a single <code className="bg-gray-100 px-1 rounded">mcp</code> scope — the authorized session has full access to the MCP handler.</li>
+            </ul>
+
+            <div className="text-sm text-gray-500">
+              Deep dive in the{" "}
+              <Link to="/blog/oauth-mcp-claude-cowork" className="font-medium underline hover:no-underline">
+                OAuth 2.1 + DCR blog post
+              </Link>.
             </div>
           </section>
 

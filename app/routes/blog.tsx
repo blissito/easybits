@@ -10,6 +10,22 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "oauth-mcp-claude-cowork",
+    filePath: "app/content/blog/2026-04-14-oauth-mcp-claude-cowork.mdx",
+    title: "OAuth 2.1 + DCR para MCP: cómo conectamos EasyBits a Claude Cowork sin API keys",
+    description:
+      "El nuevo flujo de OAuth dinámico que permite a Claude.ai y Cowork conectarse a EasyBits con un solo click. RFC 8414, 9728, 7591 y PKCE S256 explicados desde el código real.",
+    date: "2026-04-14",
+    author: "EasyBits Team",
+    tags: ["MCP", "OAuth", "Claude", "Cowork", "arquitectura"],
+    featuredImage:
+      "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=800&auto=format",
+    readingTime: 9,
+    excerpt:
+      "Web MCP clients como Cowork no pueden copiar API keys. Así implementamos OAuth 2.1 con Dynamic Client Registration sin romper el flujo Bearer existente.",
+    published: true,
+  },
+  {
     slug: "nuevos-planes-easybits-storage-para-agentes",
     filePath: "app/content/blog/2026-04-04-nuevos-planes-easybits-storage-para-agentes.mdx",
     title: "Nuevos planes EasyBits: storage agentic desde $299 MXN",
