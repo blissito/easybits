@@ -215,16 +215,70 @@ export async function extractFromUrl(
           if (!u) return null;
           try { return new URL(u, document.baseURI).href; } catch { return null; }
         };
-        // Priority: apple-touch-icon → og:image → img with "logo" in attrs → favicon.
-        const apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+        const hasLogo = (el: Element | null | undefined): boolean => {
+          if (!el) return false;
+          const attrs = [
+            (el as HTMLElement).className?.toString() || "",
+            el.id || "",
+            (el as HTMLImageElement).alt || "",
+            (el as HTMLImageElement).src || "",
+            el.getAttribute("aria-label") || "",
+            el.getAttribute("title") || "",
+          ].join(" ");
+          return /logo|brand/i.test(attrs);
+        };
+
+        // 1) <img> in header/nav whose own attrs OR any ancestor (up 4 levels) say "logo"/"brand".
+        const scoped = Array.from(
+          document.querySelectorAll<HTMLImageElement>("header img, nav img, [role='banner'] img")
+        );
+        for (const img of scoped) {
+          if (!img.src) continue;
+          let el: Element | null = img;
+          for (let i = 0; i < 5 && el; i++) {
+            if (hasLogo(el)) return abs(img.src);
+            el = el.parentElement;
+          }
+        }
+
+        // 2) <img> inside a home link (<a href="/"> or href to site root).
+        const homeAnchors = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href='/'], a[href='./'], a[href='']"));
+        const origin = location.origin;
+        document.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
+          try {
+            const h = new URL(a.href);
+            if (h.origin === origin && (h.pathname === "/" || h.pathname === "")) homeAnchors.push(a);
+          } catch {}
+        });
+        for (const a of homeAnchors) {
+          const img = a.querySelector<HTMLImageElement>("img");
+          if (img?.src) return abs(img.src);
+        }
+
+        // 3) apple-touch-icon (usually a square brand mark).
+        const apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]');
         if (apple?.href) return abs(apple.href);
+
+        // 4) Highest-resolution favicon (prefer PNG > SVG > ICO, prefer bigger sizes).
+        const icons = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'));
+        if (icons.length) {
+          const scored = icons
+            .map((l) => {
+              const sizes = l.getAttribute("sizes") || "";
+              const m = sizes.match(/(\d+)x\d+/);
+              const size = m ? parseInt(m[1], 10) : 0;
+              const type = l.getAttribute("type") || "";
+              const typeScore = /png/i.test(type) ? 2 : /svg/i.test(type) ? 3 : 1;
+              return { href: l.href, score: size * 10 + typeScore };
+            })
+            .sort((a, b) => b.score - a.score);
+          if (scored[0]?.href) return abs(scored[0].href);
+        }
+
+        // 5) og:image — last resort; often the hero image, not the logo.
         const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]');
         if (og?.content) return abs(og.content);
-        const imgs = Array.from(document.querySelectorAll<HTMLImageElement>("header img, nav img, img"));
-        const logoImg = imgs.find((i) => /logo/i.test(i.alt || "") || /logo/i.test(i.src || ""));
-        if (logoImg?.src) return abs(logoImg.src);
-        const icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
-        if (icon?.href) return abs(icon.href);
+
         return null;
       }).catch(() => null);
 
