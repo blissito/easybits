@@ -51,6 +51,21 @@ function injectMetaTags(
   return html.replace(/<head([^>]*)>/i, `<head$1>\n  ${meta}`);
 }
 
+/**
+ * Inject a <base href> so relative assets (`<img src="logo.png">`) resolve
+ * against the website root even when the page URL has no trailing slash.
+ * Without this, `/s/<slug>` (no slash) resolves `logo.png` → `/s/logo.png` (404)
+ * instead of `/s/<slug>/logo.png`.
+ */
+function injectBaseTag(html: string, baseHref: string): string {
+  if (/<base\s/i.test(html)) return html;
+  const tag = `<base href="${escapeAttr(baseHref)}">`;
+  if (/<head([^>]*)>/i.test(html)) {
+    return html.replace(/<head([^>]*)>/i, `<head$1>\n  ${tag}`);
+  }
+  return html;
+}
+
 export async function loader({ params, request }: Route.LoaderArgs) {
   const { slug } = params;
   const splat = params["*"] || "index.html";
@@ -101,12 +116,15 @@ export async function loader({ params, request }: Route.LoaderArgs) {
         },
       });
       if (file) {
-        // SPA fallback — serve index.html with no-cache
+        // SPA fallback — serve index.html with no-cache.
+        // Inject <base> so relative assets resolve against the site root.
         const readUrl = file.access === "public" && file.url
           ? file.url
           : await client.getReadUrl(file.storageKey);
         const upstream = await fetch(readUrl);
-        return new Response(upstream.body, {
+        const html = await upstream.text();
+        const patched = injectBaseTag(html, `/s/${website.slug}/`);
+        return new Response(patched, {
           headers: {
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -154,7 +172,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
     const title = titleMatch?.[1]?.trim() || website.name || "Documento";
     const canonical = `https://www.easybits.cloud/s/${website.slug}${splat === "index.html" ? "" : "/" + splat}`;
-    const patched = injectMetaTags(html, { title, url: canonical, logoUrl: ogImage });
+    // Only inject <base> when serving the site root — nested pages under
+    // subfolders already resolve relative assets correctly from their path.
+    const isRootIndex = splat === "index.html";
+    const withBase = isRootIndex
+      ? injectBaseTag(html, `/s/${website.slug}/`)
+      : html;
+    const patched = injectMetaTags(withBase, { title, url: canonical, logoUrl: ogImage });
     return new Response(patched, {
       headers: {
         "Content-Type": contentType,
