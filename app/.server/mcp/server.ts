@@ -213,6 +213,7 @@ export function createMcpServer(groups?: string[]) {
     "delete_website",
     "transform_image",
     "generate_image",
+    "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
   ]);
 
   // Magnet group: focused toolset for lead magnet creation
@@ -227,6 +228,7 @@ export function createMcpServer(groups?: string[]) {
     "upload_file", "get_file",                          // subir/obtener el PDF
     "transform_image",                                  // manipular imágenes
     "list_form_submissions",                            // consultar leads
+    "get_default_brand_kit", "list_brand_kits",         // brand-aware magnets
   ]);
 
   // Build combined allowlist from all requested groups
@@ -271,10 +273,12 @@ export function createMcpServer(groups?: string[]) {
     registerCoreTools(server);
     registerDocTools(server);
     registerSiteTools(server);
+    registerBrandTools(server);
   } else if (coreOnly) {
     registerCoreTools(server);
     registerDocTools(server);
     registerSiteTools(server);
+    registerBrandTools(server);
   } else {
     if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
     if (enabled.has("docs")) registerDocTools(server);
@@ -1006,7 +1010,7 @@ function registerDocTools(server: McpServer) {
 
   server.tool(
     "create_document",
-    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints. TO CLONE A PDF: (1) upload_file the PDF, (2) pdf_to_images to get page images, (3) generate HTML per page using vision + get_docs('document-design') rules, (4) create_document with sections. TIP: For quotations, estimates, invoices, or remission notes use create_quotation instead — it's a single-step tool that creates, paginates, and optionally deploys in one call.",
+    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints. BRAND KIT: if the user has a default brand kit (see get_default_brand_kit), its colors/fonts/logo are auto-applied — write HTML with Tailwind semantic classes (bg-primary, bg-surface, text-on-surface, text-accent, font-heading, font-body) instead of hardcoding hex. Pass brandKitId to use a specific kit. TO CLONE A PDF: (1) upload_file the PDF, (2) pdf_to_images to get page images, (3) generate HTML per page using vision + get_docs('document-design') rules, (4) create_document with sections. TIP: For quotations, estimates, invoices, or remission notes use create_quotation instead — it's a single-step tool that creates, paginates, and optionally deploys in one call.",
     {
       name: z.string().describe("Document name"),
       prompt: z.string().optional().describe("Description or prompt for the document"),
@@ -3120,6 +3124,21 @@ function registerBrandTools(server: McpServer) {
   );
 
   server.tool(
+    "get_default_brand_kit",
+    "Get the user's default brand kit (colors, fonts, logo). Returns null if none is set. This kit is auto-applied when creating documents/quotations without an explicit brandKitId.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getDefaultBrandKit } = await import("../core/brandKitOperations");
+      const kit = await getDefaultBrandKit(ctx.user.id);
+      if (!kit) {
+        return { content: [{ type: "text", text: JSON.stringify({ kit: null, hint: "No default brand kit set. Create one with create_brand_kit or extract_brand_kit_from_url." }, null, 2) }] };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
+    })
+  );
+
+  server.tool(
     "create_brand_kit",
     "Create a brand kit with colors, fonts, and logo for consistent document styling.",
     {
@@ -3202,6 +3221,22 @@ function registerBrandTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { extractFromDocument } = await import("../core/brandKitOperations");
       const kit = await extractFromDocument(params.documentId, ctx.user.id, params.name);
+      return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "extract_brand_kit_from_url",
+    "Extract a brand kit from a public website URL. Captures a screenshot, uses vision AI to detect colors/fonts/mood, and scrapes the logo. Creates a new brand kit you can reuse. Great for onboarding — point this at the user's own site to bootstrap their default kit.",
+    {
+      url: z.string().url().describe("Public website URL (e.g. https://example.com)"),
+      name: z.string().optional().describe("Name for the brand kit (defaults to hostname)"),
+      isDefault: z.boolean().optional().describe("Set this kit as the user's default"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { extractFromUrl } = await import("../core/brandKitOperations");
+      const kit = await extractFromUrl(ctx.user.id, params);
       return { content: [{ type: "text", text: JSON.stringify(kit, null, 2) }] };
     })
   );

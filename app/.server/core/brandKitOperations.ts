@@ -1,4 +1,7 @@
 import { db } from "../db";
+import { withPage } from "./browserPool";
+import { getAiModel, resolveModelLocal } from "../aiModels";
+import { streamText } from "ai";
 
 interface BrandKitColors {
   primary: string;
@@ -109,6 +112,22 @@ export async function getBrandKit(id: string, userId: string) {
   return kit;
 }
 
+export async function getDefaultBrandKit(userId: string) {
+  return db.brandKit.findFirst({
+    where: { ownerId: userId, isDefault: true },
+  });
+}
+
+/**
+ * Returns the brand kit for the given id (validated ownership) or the user's default.
+ * Returns null if neither is available. Used by document/landing operations to
+ * auto-apply the user's default brand kit when no id is explicitly passed.
+ */
+export async function resolveBrandKit(userId: string, brandKitId?: string) {
+  if (brandKitId) return getBrandKit(brandKitId, userId);
+  return getDefaultBrandKit(userId);
+}
+
 export async function extractFromDocument(
   landingId: string,
   userId: string,
@@ -139,4 +158,112 @@ export async function extractFromDocument(
   const mood = (direction?.mood as string) || undefined;
 
   return createBrandKit(userId, { name, colors, fonts, logoUrl, mood });
+}
+
+const EXTRACT_URL_PROMPT = `You are a brand analyst. Given a screenshot of a website's homepage, extract its visual identity.
+
+Return ONLY a JSON object with this exact shape — no markdown, no prose:
+{
+  "colors": {
+    "primary": "#hex",     // dominant brand color (logo, main CTA, headers)
+    "secondary": "#hex",   // supporting color (secondary CTAs, accents)
+    "accent": "#hex",      // highlight/pop color (badges, links, emphasis)
+    "surface": "#hex"      // background color (body bg, card bg)
+  },
+  "fonts": {
+    "heading": "Font Name",
+    "body": "Font Name"
+  },
+  "mood": "professional" | "playful" | "elegant" | "bold" | "minimal" | "warm" | "vibrant" | "dark"
+}
+
+Rules:
+- Use 6-digit lowercase hex.
+- If the site is predominantly dark, surface should be the dark color, not white.
+- If unsure of fonts, guess from visual characteristics (serif/sans-serif, geometric/humanist) and pick a common web font (Inter, Poppins, Lora, Playfair Display, Roboto, etc.).
+- primary/secondary/accent must be visually distinct — do not repeat the same hex.`;
+
+export async function extractFromUrl(
+  userId: string,
+  opts: {
+    url: string;
+    name?: string;
+    isDefault?: boolean;
+  }
+) {
+  let url: URL;
+  try {
+    url = new URL(opts.url);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if (!/^https?:$/.test(url.protocol)) throw new Error("Only http/https URLs are supported");
+
+  // 1) Capture screenshot + scrape logo candidates.
+  const { screenshot, logoUrl } = await withPage(
+    async (page) => {
+      await page.goto(url.href, { waitUntil: "networkidle", timeout: 20000 }).catch(async () => {
+        await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 15000 });
+      });
+      // Small delay for lazy assets.
+      await page.waitForTimeout(800).catch(() => {});
+
+      const buf = await page.screenshot({ type: "png", fullPage: false });
+
+      const logo = await page.evaluate(() => {
+        const abs = (u: string | null | undefined) => {
+          if (!u) return null;
+          try { return new URL(u, document.baseURI).href; } catch { return null; }
+        };
+        // Priority: apple-touch-icon → og:image → img with "logo" in attrs → favicon.
+        const apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+        if (apple?.href) return abs(apple.href);
+        const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]');
+        if (og?.content) return abs(og.content);
+        const imgs = Array.from(document.querySelectorAll<HTMLImageElement>("header img, nav img, img"));
+        const logoImg = imgs.find((i) => /logo/i.test(i.alt || "") || /logo/i.test(i.src || ""));
+        if (logoImg?.src) return abs(logoImg.src);
+        const icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+        if (icon?.href) return abs(icon.href);
+        return null;
+      }).catch(() => null);
+
+      return { screenshot: buf, logoUrl: logo as string | null };
+    },
+    { viewport: { width: 1440, height: 900 } }
+  );
+
+  // 2) Ask a vision model for the palette + fonts + mood.
+  const modelId = await getAiModel("docDirections");
+  const model = resolveModelLocal(modelId);
+  const result = streamText({
+    model,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", image: screenshot },
+        { type: "text", text: EXTRACT_URL_PROMPT },
+      ],
+    }],
+  });
+  const raw = await result.text;
+  let parsed: { colors: BrandKitColors; fonts?: BrandKitFonts; mood?: string };
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("no json");
+    parsed = JSON.parse(match[0]);
+  } catch {
+    throw new Error("Could not parse brand extraction — try again or create the kit manually");
+  }
+
+  const name = (opts.name && opts.name.trim()) || url.hostname.replace(/^www\./, "");
+
+  return createBrandKit(userId, {
+    name,
+    colors: parsed.colors,
+    fonts: parsed.fonts,
+    logoUrl: logoUrl || undefined,
+    mood: parsed.mood,
+    isDefault: opts.isDefault,
+  });
 }

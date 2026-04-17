@@ -123,10 +123,12 @@ export async function createDocument(
   const metadata: Record<string, unknown> = {};
   if (opts.theme) metadata.theme = opts.theme;
 
-  // Brand kit → customColors + metadata.brandKitId
-  if (opts.brandKitId) {
-    const { getBrandKit } = await import("./brandKitOperations");
-    const kit = await getBrandKit(opts.brandKitId, ctx.user.id);
+  // Brand kit → customColors + metadata.brandKitId.
+  // Fallback: if no brandKitId and no customColors, auto-apply user's default kit.
+  const kit = opts.customColors
+    ? null
+    : await (await import("./brandKitOperations")).resolveBrandKit(ctx.user.id, opts.brandKitId);
+  if (kit) {
     metadata.brandKitId = kit.id;
     if (!opts.customColors) {
       const c = kit.colors as any;
@@ -576,14 +578,17 @@ export async function generateDocumentAI(
   const genLimit = await checkAiGenerationLimit(ctx.user.id);
   if (!genLimit.allowed) throwJson(`Generation limit reached (${genLimit.limit}/month). Upgrade or buy a pack at https://www.easybits.cloud/planes`, 429);
 
-  // Resolve brand kit → direction + logo
+  // Resolve brand kit → direction + logo.
+  // Fallback: if no brandKitId and no explicit direction, auto-apply user's default kit.
   let direction = opts.direction;
   let logoUrl = opts.logoUrl;
-  if (opts.brandKitId && !direction) {
-    const { getBrandKit, brandKitToDirection } = await import("./brandKitOperations");
-    const kit = await getBrandKit(opts.brandKitId, ctx.user.id);
-    direction = brandKitToDirection(kit);
-    if (!logoUrl && kit.logoUrl) logoUrl = kit.logoUrl;
+  if (!direction) {
+    const { resolveBrandKit, brandKitToDirection } = await import("./brandKitOperations");
+    const kit = await resolveBrandKit(ctx.user.id, opts.brandKitId);
+    if (kit) {
+      direction = brandKitToDirection(kit);
+      if (!logoUrl && kit.logoUrl) logoUrl = kit.logoUrl;
+    }
   }
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
@@ -987,10 +992,24 @@ export async function createQuotation(
     throw new Error("Either structured data or HTML pages are required");
   }
 
-  const metadata = {
+  // Auto-apply user's default kit if no brandKitId and no customColors.
+  const kit = opts.customColors
+    ? null
+    : await (await import("./brandKitOperations")).resolveBrandKit(ctx.user.id, opts.brandKitId);
+  const kitColors = kit ? (kit.colors as any) : null;
+  const metadata: Record<string, unknown> = {
     ...(opts.theme && { theme: opts.theme }),
-    ...(opts.customColors && { customColors: opts.customColors }),
-    ...(opts.brandKitId && { brandKitId: opts.brandKitId }),
+    ...(opts.customColors
+      ? { customColors: opts.customColors }
+      : kitColors && {
+          customColors: {
+            primary: kitColors.primary,
+            secondary: kitColors.secondary,
+            accent: kitColors.accent,
+            surface: kitColors.surface,
+          },
+        }),
+    ...(kit && { brandKitId: kit.id }),
   };
 
   const doc = await db.landing.create({
@@ -999,7 +1018,7 @@ export async function createQuotation(
       prompt: opts.name,
       sections: buildSections(pages, "Cotización") as any,
       version: 4,
-      theme: opts.theme || "corporate",
+      theme: opts.customColors || kitColors ? "custom" : (opts.theme || "corporate"),
       metadata: metadata as any,
       ownerId: ctx.user.id,
     },
