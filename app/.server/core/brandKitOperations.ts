@@ -199,18 +199,23 @@ export async function extractFromUrl(
   }
   if (!/^https?:$/.test(url.protocol)) throw new Error("Only http/https URLs are supported");
 
-  // 1) Capture screenshot + scrape logo candidates.
-  const { screenshot, logoUrl } = await withPage(
+  // 1) Capture screenshot + scrape logo candidate (url, inline SVG, or bbox to crop).
+  type LogoCandidate =
+    | { kind: "url"; value: string }
+    | { kind: "svg"; value: string }
+    | { kind: "crop"; box: { x: number; y: number; w: number; h: number } }
+    | null;
+
+  const { screenshot, candidate } = await withPage(
     async (page) => {
       await page.goto(url.href, { waitUntil: "networkidle", timeout: 20000 }).catch(async () => {
         await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 15000 });
       });
-      // Small delay for lazy assets.
       await page.waitForTimeout(800).catch(() => {});
 
       const buf = await page.screenshot({ type: "png", fullPage: false });
 
-      const logo = await page.evaluate(() => {
+      const cand: LogoCandidate = await page.evaluate(() => {
         const abs = (u: string | null | undefined) => {
           if (!u) return null;
           try { return new URL(u, document.baseURI).href; } catch { return null; }
@@ -228,38 +233,75 @@ export async function extractFromUrl(
           return /logo|brand/i.test(attrs);
         };
 
-        // 1) <img> in header/nav whose own attrs OR any ancestor (up 4 levels) say "logo"/"brand".
+        // Collect home-link anchors (logo is usually inside <a href="/">).
+        const homeAnchors = new Set<HTMLAnchorElement>();
+        const origin = location.origin;
+        document.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
+          try {
+            const h = new URL(a.href);
+            if (h.origin === origin && (h.pathname === "/" || h.pathname === "")) homeAnchors.add(a);
+          } catch {}
+        });
+
+        // 1) <img> in header/nav where self or any ancestor (up 5) mentions logo/brand.
         const scoped = Array.from(
           document.querySelectorAll<HTMLImageElement>("header img, nav img, [role='banner'] img")
         );
         for (const img of scoped) {
           if (!img.src) continue;
           let el: Element | null = img;
-          for (let i = 0; i < 5 && el; i++) {
-            if (hasLogo(el)) return abs(img.src);
+          for (let i = 0; i < 6 && el; i++) {
+            if (hasLogo(el)) return { kind: "url" as const, value: abs(img.src)! };
             el = el.parentElement;
           }
         }
 
-        // 2) <img> inside a home link (<a href="/"> or href to site root).
-        const homeAnchors = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href='/'], a[href='./'], a[href='']"));
-        const origin = location.origin;
-        document.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
-          try {
-            const h = new URL(a.href);
-            if (h.origin === origin && (h.pathname === "/" || h.pathname === "")) homeAnchors.push(a);
-          } catch {}
-        });
+        // 2) <img> inside a home anchor.
         for (const a of homeAnchors) {
           const img = a.querySelector<HTMLImageElement>("img");
-          if (img?.src) return abs(img.src);
+          if (img?.src) return { kind: "url" as const, value: abs(img.src)! };
         }
 
-        // 3) apple-touch-icon (usually a square brand mark).
-        const apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]');
-        if (apple?.href) return abs(apple.href);
+        // 3) Inline <svg> inside a home anchor or a "logo"/"brand" container. Return its outerHTML.
+        const svgCandidates: SVGSVGElement[] = [];
+        for (const a of homeAnchors) {
+          const s = a.querySelector<SVGSVGElement>("svg");
+          if (s) svgCandidates.push(s);
+        }
+        document
+          .querySelectorAll<SVGSVGElement>("header svg, nav svg, [role='banner'] svg")
+          .forEach((s) => {
+            let el: Element | null = s;
+            for (let i = 0; i < 6 && el; i++) {
+              if (hasLogo(el)) { svgCandidates.push(s); return; }
+              el = el.parentElement;
+            }
+          });
+        if (svgCandidates.length) {
+          const svg = svgCandidates[0];
+          const serialized = new XMLSerializer().serializeToString(svg);
+          const withNs = /xmlns=/.test(serialized)
+            ? serialized
+            : serialized.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+          return { kind: "svg" as const, value: withNs };
+        }
 
-        // 4) Highest-resolution favicon (prefer PNG > SVG > ICO, prefer bigger sizes).
+        // 4) Anything visible inside a home anchor — return its bounding box to crop from the screenshot.
+        for (const a of homeAnchors) {
+          const rect = a.getBoundingClientRect();
+          if (rect.width > 20 && rect.height > 12 && rect.width < 600 && rect.height < 200 && rect.top < 200) {
+            return {
+              kind: "crop" as const,
+              box: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), w: rect.width, h: rect.height },
+            };
+          }
+        }
+
+        // 5) apple-touch-icon.
+        const apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]');
+        if (apple?.href) return { kind: "url" as const, value: abs(apple.href)! };
+
+        // 6) Highest-res favicon.
         const icons = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'));
         if (icons.length) {
           const scored = icons
@@ -272,22 +314,60 @@ export async function extractFromUrl(
               return { href: l.href, score: size * 10 + typeScore };
             })
             .sort((a, b) => b.score - a.score);
-          if (scored[0]?.href) return abs(scored[0].href);
+          if (scored[0]?.href) return { kind: "url" as const, value: abs(scored[0].href)! };
         }
 
-        // 5) og:image — last resort; often the hero image, not the logo.
-        const og = document.querySelector<HTMLMetaElement>('meta[property="og:image"]');
-        if (og?.content) return abs(og.content);
-
         return null;
-      }).catch(() => null);
+      }).catch(() => null as LogoCandidate);
 
-      return { screenshot: buf, logoUrl: logo as string | null };
+      return { screenshot: buf, candidate: cand as LogoCandidate };
     },
     { viewport: { width: 1440, height: 900 } }
   );
 
-  // 2) Ask a vision model for the palette + fonts + mood.
+  // 2) Normalize the candidate to a data URL (fetch url / serialize svg / crop screenshot), then upload to Tigris.
+  const { uploadLogoToStorage } = await import("./documentOperations");
+  let logoUrl: string | undefined;
+  try {
+    let dataUrl: string | null = null;
+    if (candidate?.kind === "url") {
+      const res = await fetch(candidate.value);
+      if (res.ok) {
+        const ct = (res.headers.get("content-type") || "image/png").split(";")[0].trim();
+        const buf = Buffer.from(await res.arrayBuffer());
+        dataUrl = `data:${ct};base64,${buf.toString("base64")}`;
+      }
+    } else if (candidate?.kind === "svg") {
+      const svg = candidate.value;
+      dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`;
+    } else if (candidate?.kind === "crop") {
+      const sharp = (await import("sharp")).default;
+      const { box } = candidate;
+      const cropped = await sharp(screenshot)
+        .extract({
+          left: Math.round(box.x),
+          top: Math.round(box.y),
+          width: Math.max(1, Math.round(box.w)),
+          height: Math.max(1, Math.round(box.h)),
+        })
+        .png()
+        .toBuffer();
+      dataUrl = `data:image/png;base64,${cropped.toString("base64")}`;
+    } else {
+      // Fallback: crop the top-left region of the screenshot (common logo placement).
+      const sharp = (await import("sharp")).default;
+      const cropped = await sharp(screenshot)
+        .extract({ left: 0, top: 0, width: 500, height: 140 })
+        .png()
+        .toBuffer();
+      dataUrl = `data:image/png;base64,${cropped.toString("base64")}`;
+    }
+    if (dataUrl) logoUrl = await uploadLogoToStorage(dataUrl, userId);
+  } catch {
+    // Best-effort; leave logoUrl undefined if upload fails.
+  }
+
+  // 3) Ask a vision model for the palette + fonts + mood.
   const modelId = await getAiModel("docDirections");
   const model = resolveModelLocal(modelId);
   const result = streamText({
