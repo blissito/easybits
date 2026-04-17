@@ -45,7 +45,8 @@ export interface RenderCtx {
 }
 
 const COLOR_TOKENS = new Set([
-  "primary", "secondary", "accent", "surface", "surface-alt",
+  "primary", "primary-dark", "primary-light",
+  "secondary", "accent", "surface", "surface-alt",
   "on-primary", "on-secondary", "on-accent", "on-surface", "on-surface-muted",
 ]);
 const FONT_TOKENS = new Set(["heading", "body"]);
@@ -82,7 +83,14 @@ function buildColorMap(kit: RenderBrandKit | null | undefined): Record<string, s
   const map: Record<string, string> = {};
   if (!kit?.colors) return map;
   const c = kit.colors;
-  if (c.primary) map["primary"] = c.primary;
+  if (c.primary) {
+    map["primary"] = c.primary;
+    // Darker version for full-bleed backgrounds with brand color — grabs
+    // the template-designed "navy/corporate weight" without caring whether
+    // the kit's primary is already dark or eye-searingly light.
+    map["primary-dark"] = mix(c.primary, false, 0.25);
+    map["primary-light"] = mix(c.primary, true, 0.25);
+  }
   if (c.secondary) map["secondary"] = c.secondary;
   if (c.accent) map["accent"] = c.accent;
   if (c.surface) map["surface"] = c.surface;

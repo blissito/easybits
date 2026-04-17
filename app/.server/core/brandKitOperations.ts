@@ -169,7 +169,25 @@ export async function extractFromDocument(
   return createBrandKit(userId, { name, colors, fonts, logoUrl, mood });
 }
 
-const EXTRACT_URL_PROMPT = `You are a brand analyst. Given a screenshot of a website's homepage, extract its visual identity.
+/**
+ * Build the classification prompt using actual DOM-computed colors and fonts
+ * as ground truth. The vision model only CLASSIFIES them (primary vs accent
+ * vs surface) using the screenshot as visual context — it never invents hex
+ * values. This avoids the "generic purple" hallucination that happens when
+ * we ask a vision model to pick colors out of a pixel blob.
+ */
+function buildExtractPrompt(domColors: string[], domFonts: string[]): string {
+  const colorList = domColors.length ? domColors.join(", ") : "(none extracted — fall back to what you see)";
+  const fontList = domFonts.length ? domFonts.join(", ") : "(none extracted — infer from the screenshot)";
+  return `You are a brand analyst. You've been given a screenshot of a website's homepage AND a deterministic list of colors and fonts scraped directly from its computed CSS.
+
+Computed colors from the DOM (ranked by prominence):
+${colorList}
+
+Computed fonts from the DOM:
+${fontList}
+
+Your job is to CLASSIFY these — not invent new values. Pick the most brand-representative ones for each slot, using the screenshot to judge visual prominence (logos, CTAs, main sections).
 
 Return ONLY a JSON object with this exact shape — no markdown, no prose:
 {
@@ -186,11 +204,13 @@ Return ONLY a JSON object with this exact shape — no markdown, no prose:
   "mood": "professional" | "playful" | "elegant" | "bold" | "minimal" | "warm" | "vibrant" | "dark"
 }
 
-Rules:
+Strict rules:
+- Every hex MUST come from the computed colors list above, unless the list is empty (then fall back to what you see in the screenshot).
+- Every font MUST come from the computed fonts list above, unless the list is empty (then infer a plausible Google Font from the screenshot).
 - Use 6-digit lowercase hex.
-- If the site is predominantly dark, surface should be the dark color, not white.
-- If unsure of fonts, guess from visual characteristics (serif/sans-serif, geometric/humanist) and pick a common web font (Inter, Poppins, Lora, Playfair Display, Roboto, etc.).
-- primary/secondary/accent must be visually distinct — do not repeat the same hex.`;
+- primary, secondary, accent should be visually distinct — avoid picking the same hex for three slots. If the palette is limited, it's OK to repeat accent as secondary.
+- surface is usually a near-white or near-black from the list. If none of the listed colors matches a plausible page background, use "#ffffff" (site looks light) or "#0a0a0a" (site looks dark) based on the screenshot.`;
+}
 
 export async function extractFromUrl(
   userId: string,
@@ -215,7 +235,7 @@ export async function extractFromUrl(
     | { kind: "crop"; box: { x: number; y: number; w: number; h: number } }
     | null;
 
-  const { screenshot, candidate } = await withPage(
+  const { screenshot, candidate, domColors, domFonts } = await withPage(
     async (page) => {
       await page.goto(url.href, { waitUntil: "networkidle", timeout: 20000 }).catch(async () => {
         await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 15000 });
@@ -223,6 +243,102 @@ export async function extractFromUrl(
       await page.waitForTimeout(800).catch(() => {});
 
       const buf = await page.screenshot({ type: "png", fullPage: false });
+
+      // Scrape deterministic brand signals from the DOM: computed colors of
+      // key elements + CSS variables + fonts. Passed as ground truth to the
+      // vision model so it classifies, doesn't invent.
+      const brandSignals = await page.evaluate(() => {
+        const toHex = (v: string): string | null => {
+          if (!v) return null;
+          const trimmed = v.trim();
+          if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
+          if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
+            const h = trimmed.slice(1);
+            return "#" + h.split("").map((c) => c + c).join("").toLowerCase();
+          }
+          const m = trimmed.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+          if (!m) return null;
+          const a = m[4] ? parseFloat(m[4]) : 1;
+          if (a < 0.5) return null;
+          const r = parseInt(m[1], 10);
+          const g = parseInt(m[2], 10);
+          const b = parseInt(m[3], 10);
+          if ([r, g, b].some((n) => isNaN(n))) return null;
+          return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+        };
+
+        // Frequency map — colors that appear on more key elements score higher.
+        const freq = new Map<string, number>();
+        const bump = (hex: string | null, weight = 1) => {
+          if (!hex) return;
+          if (hex === "#ffffff" || hex === "#000000") return; // neutrals, excluded
+          freq.set(hex, (freq.get(hex) ?? 0) + weight);
+        };
+
+        // 1) CSS variables on :root — highest weight (explicit brand tokens).
+        try {
+          const rootStyle = getComputedStyle(document.documentElement);
+          for (let i = 0; i < rootStyle.length; i++) {
+            const prop = rootStyle[i];
+            if (prop.startsWith("--")) {
+              const h = toHex(rootStyle.getPropertyValue(prop));
+              if (h) bump(h, 3);
+            }
+          }
+        } catch {}
+
+        // 2) Computed styles on key brand elements.
+        const weighted: Array<[string, number]> = [
+          ["header", 3], ["nav", 3], ["[role='banner']", 3],
+          ["button", 2], ["[class*='btn']", 2], ["[class*='button']", 2], ["[class*='cta']", 2],
+          ["[class*='primary']", 3], ["[class*='accent']", 2], ["[class*='brand']", 3],
+          ["a", 1], ["h1", 2], ["h2", 1],
+          ["body", 2],
+        ];
+        for (const [sel, weight] of weighted) {
+          let nodes: NodeListOf<Element>;
+          try { nodes = document.querySelectorAll(sel); } catch { continue; }
+          nodes.forEach((el) => {
+            const s = getComputedStyle(el);
+            for (const prop of ["color", "backgroundColor", "borderColor", "outlineColor"]) {
+              bump(toHex(s.getPropertyValue(prop)), weight);
+            }
+          });
+        }
+
+        // 3) Page background for surface — include white/black here since
+        // surface often is near-white or near-black.
+        const bodyBg = toHex(getComputedStyle(document.body).backgroundColor);
+
+        // Sort by frequency desc, take top 15.
+        const sortedColors = Array.from(freq.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 15)
+          .map(([hex]) => hex);
+
+        // 4) Font families — first non-generic on each tier.
+        const fontsSet = new Set<string>();
+        const firstFamily = (val: string): string | null => {
+          if (!val) return null;
+          const raw = val.split(",")[0].trim().replace(/^["']|["']$/g, "");
+          if (!raw) return null;
+          if (/^(sans-serif|serif|monospace|system-ui|cursive|inherit|-apple-system|BlinkMacSystemFont)$/i.test(raw)) return null;
+          return raw;
+        };
+        for (const sel of ["h1", "h2", "h3", "body", "p", "button", "a"]) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const f = firstFamily(getComputedStyle(el).fontFamily);
+            if (f) fontsSet.add(f);
+          }
+        }
+
+        return {
+          colors: sortedColors,
+          fonts: Array.from(fontsSet).slice(0, 5),
+          bodyBg: bodyBg && (bodyBg === "#ffffff" || bodyBg === "#000000" || freq.has(bodyBg)) ? bodyBg : null,
+        };
+      }).catch(() => ({ colors: [] as string[], fonts: [] as string[], bodyBg: null as string | null }));
 
       const cand: LogoCandidate = await page.evaluate(() => {
         const abs = (u: string | null | undefined) => {
@@ -329,7 +445,18 @@ export async function extractFromUrl(
         return null;
       }).catch(() => null as LogoCandidate);
 
-      return { screenshot: buf, candidate: cand as LogoCandidate };
+      // If the scraped body background is near-white or near-black, include it
+      // in the color list so the model can pick it as surface.
+      const allColors = brandSignals.bodyBg
+        ? Array.from(new Set<string>([...brandSignals.colors, brandSignals.bodyBg]))
+        : brandSignals.colors;
+
+      return {
+        screenshot: buf,
+        candidate: cand as LogoCandidate,
+        domColors: allColors,
+        domFonts: brandSignals.fonts,
+      };
     },
     { viewport: { width: 1440, height: 900 } }
   );
@@ -376,16 +503,17 @@ export async function extractFromUrl(
     // Best-effort; leave logoUrl undefined if upload fails.
   }
 
-  // 3) Ask a vision model for the palette + fonts + mood.
+  // 3) Ask a vision model to classify the DOM-scraped signals against the screenshot.
   const modelId = await getAiModel("docDirections");
   const model = resolveModelLocal(modelId);
+  const prompt = buildExtractPrompt(domColors, domFonts);
   const result = streamText({
     model,
     messages: [{
       role: "user",
       content: [
         { type: "image", image: screenshot },
-        { type: "text", text: EXTRACT_URL_PROMPT },
+        { type: "text", text: prompt },
       ],
     }],
   });
@@ -397,6 +525,39 @@ export async function extractFromUrl(
     parsed = JSON.parse(match[0]);
   } catch {
     throw new Error("Could not parse brand extraction — try again or create the kit manually");
+  }
+
+  // Defensive: if the model picked a color NOT in our list, fall back to the
+  // closest one we actually scraped. The goal is zero hallucination.
+  if (domColors.length) {
+    const allowed = new Set(domColors.map((c) => c.toLowerCase()));
+    const pickNearest = (v: string) => {
+      const hex = v.toLowerCase();
+      if (allowed.has(hex)) return hex;
+      // Simple nearest: RGB euclidean distance.
+      const toRgb = (h: string) => {
+        const s = h.replace("#", "");
+        return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+      };
+      const target = toRgb(hex);
+      let best = domColors[0];
+      let bestD = Infinity;
+      for (const c of domColors) {
+        const [r, g, b] = toRgb(c);
+        const d = (r - target[0]) ** 2 + (g - target[1]) ** 2 + (b - target[2]) ** 2;
+        if (d < bestD) { bestD = d; best = c; }
+      }
+      return best;
+    };
+    parsed.colors.primary = pickNearest(parsed.colors.primary);
+    parsed.colors.secondary = pickNearest(parsed.colors.secondary);
+    parsed.colors.accent = pickNearest(parsed.colors.accent);
+    // surface can legitimately be #ffffff / #000000 even if not in DOM list
+    if (parsed.colors.surface && parsed.colors.surface !== "#ffffff" && parsed.colors.surface !== "#0a0a0a" && parsed.colors.surface !== "#000000") {
+      if (!allowed.has(parsed.colors.surface.toLowerCase())) {
+        parsed.colors.surface = pickNearest(parsed.colors.surface);
+      }
+    }
   }
 
   const name = (opts.name && opts.name.trim()) || url.hostname.replace(/^www\./, "");
