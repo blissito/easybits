@@ -23,6 +23,12 @@ export async function listBrandKits(userId: string) {
   });
 }
 
+async function persistLogoIfNeeded(logoUrl: string | undefined, userId: string) {
+  if (!logoUrl || !logoUrl.startsWith("data:")) return logoUrl;
+  const { uploadLogoToStorage } = await import("./documentOperations");
+  return uploadLogoToStorage(logoUrl, userId);
+}
+
 export async function createBrandKit(
   userId: string,
   data: {
@@ -40,12 +46,13 @@ export async function createBrandKit(
       data: { isDefault: false },
     });
   }
+  const logoUrl = await persistLogoIfNeeded(data.logoUrl, userId);
   return db.brandKit.create({
     data: {
       name: data.name,
       colors: data.colors as any,
       fonts: data.fonts as any,
-      logoUrl: data.logoUrl,
+      logoUrl,
       mood: data.mood,
       isDefault: data.isDefault ?? false,
       ownerId: userId,
@@ -75,7 +82,9 @@ export async function updateBrandKit(
     });
   }
 
-  return db.brandKit.update({ where: { id }, data: data as any });
+  const patch: Record<string, unknown> = { ...data };
+  if (data.logoUrl !== undefined) patch.logoUrl = await persistLogoIfNeeded(data.logoUrl, userId);
+  return db.brandKit.update({ where: { id }, data: patch as any });
 }
 
 export async function deleteBrandKit(id: string, userId: string) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLoaderData, useFetcher } from "react-router";
 import { data } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -111,7 +111,161 @@ const EMPTY_FORM: BrandKitForm = {
 
 const MOODS = ["dark", "light", "warm", "cool", "vibrant"];
 
+// Curated Google Fonts for branding (sans / serif / display / mono).
+const GOOGLE_FONTS = [
+  "Inter", "Poppins", "DM Sans", "Space Grotesk", "Manrope",
+  "Plus Jakarta Sans", "Nunito", "Outfit", "Lexend", "Work Sans",
+  "Rubik", "Montserrat", "Raleway", "Quicksand", "Figtree",
+  "Sora", "Karla", "Archivo", "Geist",
+  "Playfair Display", "Lora", "Merriweather", "EB Garamond",
+  "Crimson Pro", "Cormorant Garamond", "PT Serif", "Bitter", "Fraunces",
+  "Bricolage Grotesque", "Bebas Neue", "Abril Fatface",
+  "JetBrains Mono", "Fira Code", "Space Mono", "IBM Plex Mono",
+];
+
+function useGoogleFontsLink() {
+  useEffect(() => {
+    const id = "brand-kit-google-fonts";
+    if (document.getElementById(id)) return;
+    const families = GOOGLE_FONTS.map((f) => `family=${encodeURIComponent(f)}:wght@400;700`).join("&");
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+    document.head.appendChild(link);
+  }, []);
+}
+
+function FontCombo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (!q) return GOOGLE_FONTS;
+    return GOOGLE_FONTS.filter((f) => f.toLowerCase().includes(q));
+  }, [value]);
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+  return (
+    <div ref={ref} className="relative">
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Inter"
+        style={{ fontFamily: value ? `"${value}", sans-serif` : undefined }}
+        className="w-full px-3 py-2 border-2 border-black rounded-xl bg-white"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 max-h-64 overflow-auto border-2 border-black rounded-xl bg-white shadow-[4px_4px_0_#000]">
+          {filtered.slice(0, 60).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); onChange(f); setOpen(false); }}
+              style={{ fontFamily: `"${f}", sans-serif` }}
+              className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LogoPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onFile(file: File) {
+    setError(null);
+    if (!file.type.startsWith("image/")) { setError("Solo imágenes"); return; }
+    if (file.size > 2 * 1024 * 1024) { setError("Máximo 2MB"); return; }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    onChange(dataUrl);
+  }
+
+  return (
+    <div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) onFile(f);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`flex items-center gap-3 border-2 ${dragging ? "border-brand-500 bg-brand-50" : value ? "border-black" : "border-dashed border-gray-400"} rounded-xl p-3 cursor-pointer hover:border-black transition-colors`}
+      >
+        {value ? (
+          <img
+            src={value}
+            alt="logo"
+            className="w-14 h-14 object-contain border-2 border-black rounded-lg bg-white shrink-0"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : (
+          <div className="w-14 h-14 grid place-items-center border-2 border-dashed border-gray-400 rounded-lg text-[10px] font-bold text-gray-400 shrink-0">
+            LOGO
+          </div>
+        )}
+        <div className="flex-1 text-sm">
+          <p className="font-bold">{value ? "Cambiar logo" : "Subir archivo o arrastrar aquí"}</p>
+          <p className="text-gray-500 text-xs">PNG, SVG, JPG · máx 2MB</p>
+        </div>
+        {value && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            className="text-xs font-bold text-red-500 hover:text-red-700"
+          >
+            Quitar
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onFile(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      <details className="mt-2">
+        <summary className="text-xs text-gray-500 cursor-pointer select-none">o pegar una URL</summary>
+        <input
+          type="url"
+          value={value.startsWith("data:") ? "" : value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://.../logo.png"
+          className="w-full mt-1 px-3 py-2 border-2 border-black rounded-xl bg-white text-sm"
+        />
+      </details>
+      {error && <p className="text-xs font-bold text-red-600 mt-1">{error}</p>}
+    </div>
+  );
+}
+
 export default function BrandKitsPage() {
+  useGoogleFontsLink();
   const { kits } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ ok?: boolean; error?: string; extractedKit?: any }>();
   const [showForm, setShowForm] = useState(false);
@@ -349,57 +503,28 @@ export default function BrandKitsPage() {
                 <label className="block text-sm font-bold mb-1">
                   Fuente encabezados
                 </label>
-                <input
+                <FontCombo
                   value={form.fonts.heading}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      fonts: { ...form.fonts, heading: e.target.value },
-                    })
-                  }
-                  placeholder="Space Grotesk"
-                  className="w-full px-3 py-2 border-2 border-black rounded-xl bg-white"
+                  onChange={(v) => setForm({ ...form, fonts: { ...form.fonts, heading: v } })}
                 />
               </div>
               <div>
                 <label className="block text-sm font-bold mb-1">
                   Fuente cuerpo
                 </label>
-                <input
+                <FontCombo
                   value={form.fonts.body}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      fonts: { ...form.fonts, body: e.target.value },
-                    })
-                  }
-                  placeholder="Inter"
-                  className="w-full px-3 py-2 border-2 border-black rounded-xl bg-white"
+                  onChange={(v) => setForm({ ...form, fonts: { ...form.fonts, body: v } })}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-bold mb-1">Logo (URL)</label>
-              <div className="flex items-center gap-3">
-                {form.logoUrl && (
-                  <img
-                    src={form.logoUrl}
-                    alt="logo preview"
-                    className="w-12 h-12 object-contain border-2 border-black rounded-lg bg-white shrink-0"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                )}
-                <input
-                  type="url"
-                  value={form.logoUrl}
-                  onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-                  placeholder="https://.../logo.png"
-                  className="flex-1 px-3 py-2 border-2 border-black rounded-xl bg-white"
-                />
-              </div>
+              <label className="block text-sm font-bold mb-1">Logo</label>
+              <LogoPicker
+                value={form.logoUrl}
+                onChange={(v) => setForm({ ...form, logoUrl: v })}
+              />
             </div>
 
             <div>
