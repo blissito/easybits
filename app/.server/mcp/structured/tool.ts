@@ -16,6 +16,7 @@ import { db } from "../../db";
 import { getPlatformDefaultClient } from "../../storage";
 import { dslTreeSchema } from "./types";
 import { renderDslToPdf, collectTreePlaceholders } from "./renderer";
+import { resolveBrandKit } from "../../core/brandKitOperations";
 
 type AuthCtx = { user: { id: string } };
 
@@ -108,7 +109,15 @@ Actions:
 - edit_doc: { docId, patch } → { docId, data, pdfFileId, bytes, renderedIn } + updated PDF inline. **Preferred for WhatsApp / single-turn edits** — patches data AND re-renders in one call, overwriting the previous PDF (no file accumulation).
 - render_doc: { docId } → { pdfFileId, bytes, renderedIn } + PDF inline as resource. Re-render from current data without patching. Overwrites the previous PDF.
 
-The DSL supports: Text (with {{data.path}} interpolation), View (container with flexbox), Image, Link. Nodes can repeat with 'each: "items"' and condition with 'if: "path"'. See types.ts for the full schema.`,
+The DSL supports: Text (with {{data.path}} interpolation), View (container with flexbox), Image, Link. Nodes can repeat with 'each: "items"' and condition with 'if: "path"'. See types.ts for the full schema.
+
+Brand kit awareness (auto-applied):
+- The user's default brand kit auto-applies to every render unless 'brandKitId' overrides.
+- Templates can use SEMANTIC TOKENS in styles and the renderer swaps them for the kit's values:
+  - Color tokens (in style.color / backgroundColor / borderColor): "primary", "secondary", "accent", "surface", "on-primary", "on-secondary", "on-accent", "on-surface", "on-surface-muted". Named extras from the kit (e.g. "success") also resolve.
+  - Font tokens (in style.fontFamily): "heading", "body".
+- The logo is injected as '{{__logo}}' — use it on an Image node: { type: "Image", src: "{{__logo}}" }. Empty-logo case is handled (the Image node is skipped).
+- Templates that hardcode hex ("#1a1a1a") or a font family ("Helvetica") keep working unchanged.`,
     {
       action: actionSchema,
       // Optional fields — which ones apply depends on the action.
@@ -124,6 +133,7 @@ The DSL supports: Text (with {{data.path}} interpolation), View (container with 
       cursor: z.string().optional().describe("Pagination cursor for list_docs"),
       limit: z.number().int().positive().max(100).optional().describe("Page size for list_docs (default 50)"),
       query: z.string().optional().describe("Case-insensitive substring match on name, for list_docs"),
+      brandKitId: z.string().optional().describe("Brand kit ID for create_doc/edit_doc/render_doc. Omit to auto-apply the user's default kit."),
     },
     async (params: any, extra: any) => {
       try {
@@ -269,7 +279,8 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       });
 
       const start = Date.now();
-      const pdf = await renderDslToPdf(tree, params.data);
+      const brandKit = await resolveBrandKit(userId, params.brandKitId);
+      const pdf = await renderDslToPdf(tree, params.data, { brandKit: brandKit as any });
       const pdfFileId = await upsertPdf(userId, params.name, pdf, doc.id, null);
       await db.mcpStructuredDoc.update({ where: { id: doc.id }, data: { lastPdfFileId: pdfFileId } });
 
@@ -329,7 +340,8 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       const merged = mergePatch(d.data, params.patch);
       const tree = dslTreeSchema.parse(d.template.tree);
       const start = Date.now();
-      const pdf = await renderDslToPdf(tree, merged as any);
+      const brandKit = await resolveBrandKit(userId, params.brandKitId);
+      const pdf = await renderDslToPdf(tree, merged as any, { brandKit: brandKit as any });
       const pdfFileId = await upsertPdf(userId, d.name, pdf, d.id, d.lastPdfFileId);
       await db.mcpStructuredDoc.update({ where: { id: d.id }, data: { data: merged, lastPdfFileId: pdfFileId } });
       return {
@@ -380,7 +392,8 @@ async function handleAction(params: any, userId: string): Promise<ActionResult> 
       if (!d) throw new Error("Doc not found");
       const tree = dslTreeSchema.parse(d.template.tree);
       const start = Date.now();
-      const pdf = await renderDslToPdf(tree, d.data as any);
+      const brandKit = await resolveBrandKit(userId, params.brandKitId);
+      const pdf = await renderDslToPdf(tree, d.data as any, { brandKit: brandKit as any });
       const pdfFileId = await upsertPdf(userId, d.name, pdf, d.id, d.lastPdfFileId);
       await db.mcpStructuredDoc.update({ where: { id: d.id }, data: { lastPdfFileId: pdfFileId } });
       return {
