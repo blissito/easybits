@@ -214,6 +214,7 @@ export function createMcpServer(groups?: string[]) {
     "transform_image",
     "generate_image",
     "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
+    "create_brand_kit", "update_brand_kit", "delete_brand_kit",
   ]);
 
   // Magnet group: focused toolset for lead magnet creation
