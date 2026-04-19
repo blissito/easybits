@@ -13,6 +13,7 @@ const tabs = [
   { to: "/dash/developer/databases", label: "Databases" },
   { to: "/dash/developer/domains", label: "Dominios" },
   { to: "/dash/developer/setup", label: "Setup" },
+  { to: "/dash/developer/mcp", label: "Claude.ai" },
 ];
 
 export default function DeveloperLayout() {

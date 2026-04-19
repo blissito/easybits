@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
+import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
 
 // Legacy doc tools (create_document, fast_pdf, fast_quotation, edit_fast_pdf,
 // create_quotation, edit_quotation) are hidden by default so the agent does
@@ -188,62 +189,15 @@ export function createMcpServer(groups?: string[]) {
   const enabled = new Set(groups?.length ? groups : ["core"]);
   const coreOnly = enabled.has("core") && enabled.size === 1;
 
-  // Essential tools loaded when only "core" is requested (~18 tools)
-  const CORE_ALLOWLIST = new Set([
-    "list_files", "get_file", "upload_file",
-    "db_list", "db_create", "db_query",
-    "list_documents", "get_document", "create_document", "update_document", "delete_document",
-    "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
-    "create_quotation",
-    "edit_quotation",
-    "fast_quotation",
-    "fast_pdf",
-    "edit_fast_pdf",
-    "structured_doc",
-    "get_usage_stats",
-    "create_form",
-    "list_forms",
-    "list_form_submissions",
-    "deploy_website_file",
-    "upload_website_file",
-    "list_website_files",
-    "inject_html",
-    "list_websites",
-    "create_website",
-    "delete_website",
-    "transform_image",
-    "generate_image",
-    "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
-    "create_brand_kit", "update_brand_kit", "delete_brand_kit",
-  ]);
-
-  // Magnet group: focused toolset for lead magnet creation
-  const MAGNET_ALLOWLIST = new Set([
-    "create_lead_magnet",                              // orquestador todo-en-uno
-    "create_document", "set_page_html", "get_page_html", // crear el PDF/contenido
-    "create_website", "deploy_website_file",            // hosting de la landing
-    "list_websites", "list_website_files",              // explorar websites y assets
-    "upload_website_file",                              // subir assets al website
-    "create_form", "inject_html",                       // form + edición parcial
-    "list_forms",                                       // ver forms creados
-    "upload_file", "get_file",                          // subir/obtener el PDF
-    "transform_image",                                  // manipular imágenes
-    "list_form_submissions",                            // consultar leads
-    "get_default_brand_kit", "list_brand_kits",         // brand-aware magnets
-  ]);
-
-  // Build combined allowlist from all requested groups
-  const groupAllowlists: Record<string, Set<string>> = {
-    core: CORE_ALLOWLIST,
-    magnet: MAGNET_ALLOWLIST,
-  };
-  // Merge allowlists for all requested groups (e.g. "core,magnet" = union)
-  const needsAllowlist = [...enabled].some(g => g in groupAllowlists) && !enabled.has("all");
+  // Merge allowlists for all requested groups (e.g. "core,design" = union).
+  // Allowlists live in ./toolGroups.ts so the dashboard UI can import the same
+  // source of truth (labels, descriptions, tool counts).
+  const needsAllowlist = [...enabled].some(g => g in GROUP_ALLOWLISTS) && !enabled.has("all");
   let activeAllowlist: Set<string> | null = null;
   if (needsAllowlist) {
     activeAllowlist = new Set<string>();
     for (const g of enabled) {
-      const list = groupAllowlists[g];
+      const list = GROUP_ALLOWLISTS[g as ToolGroupKey];
       if (list) list.forEach(t => activeAllowlist!.add(t));
     }
   }
@@ -269,13 +223,15 @@ export function createMcpServer(groups?: string[]) {
     registerSlideTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
-  } else if (enabled.has("magnet") || coreOnly) {
-    // Both magnet and core need these categories — allowlist filters the specific tools
+  } else if (enabled.has("design")) {
+    // Design = Canva-like: docs + slides + brand + image tools from core.
+    // Allowlist below filters to the curated subset.
     registerCoreTools(server);
     registerDocTools(server);
-    registerSiteTools(server);
+    registerSlideTools(server);
     registerBrandTools(server);
-  } else if (coreOnly) {
+  } else if (enabled.has("magnet") || coreOnly) {
+    // Both magnet and core need these categories — allowlist filters the specific tools
     registerCoreTools(server);
     registerDocTools(server);
     registerSiteTools(server);

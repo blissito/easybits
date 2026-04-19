@@ -1,0 +1,110 @@
+---
+title: "EasyBits dentro de Claude.ai: tu 'Canva' para Claude Design"
+description: "Conecta EasyBits a Claude.ai en 30 segundos vía OAuth y genera documentos, presentaciones y brand kits desde cualquier chat. El connector curado con el toolset Design."
+date: "2026-04-19"
+author: "EasyBits Team"
+tags: ["MCP", "Claude", "Claude Design", "OAuth", "integración"]
+featuredImage: "https://images.unsplash.com/photo-1634986666676-ec8fd927c23d?w=800&auto=format"
+published: true
+---
+
+# EasyBits dentro de Claude.ai: tu 'Canva' para Claude Design
+
+Hace dos días **Anthropic lanzó Claude Design** — un producto nuevo de Anthropic Labs para crear slides, prototipos, one-pagers y material de marketing con Claude Opus 4.7. Vive en [claude.ai/design](https://claude.ai/design) y está en research preview para Pro/Max/Team/Enterprise.
+
+Nosotros lo vimos y pensamos algo simple: **EasyBits no compite con Claude Design. EasyBits se usa *dentro* de Claude Design**, como Canva se usa dentro de muchas otras apps. Tú diseñas en Claude, y EasyBits te da el asset persistente (PDF descargable + URL pública) sin que salgas del chat.
+
+## Cómo se ve en la práctica
+
+Dentro de Claude.ai, con EasyBits conectado, tú escribes:
+
+> "Crea un carousel LinkedIn de 6 slides sobre cómo escribir hooks virales. Usa mi brand kit."
+
+Claude llama directamente a las tools MCP de EasyBits:
+
+1. `get_default_brand_kit` — toma tu paleta, tipografía y logo.
+2. `create_document` — genera las 6 páginas con HTML + Tailwind.
+3. `deploy_document` — deploya en `tu-slug.easybits.cloud` con certificado SSL.
+4. Te devuelve la URL pública + el PDF descargable listo para subir a LinkedIn.
+
+Sin salir del chat. Sin generar una API key. Sin copiar archivos.
+
+## Instalación en 30 segundos
+
+**1. Ve a tu dashboard de EasyBits** → pestaña **Claude.ai** (nueva).
+
+Ahí vas a ver un selector con todos los toolsets disponibles:
+
+- **Design (recomendado)** — Canva-like. 24 tools de creación visual: documentos, presentaciones, brand kits, imágenes. Sin DB, sin forms, sin webhooks.
+- **Core** — el toolset generalista. 40 tools para agentes que hacen de todo.
+- **Docs / Slides / Sites / Brand** — granulares, úsalos si quieres solo una categoría.
+- **Lead Magnet** — toolset especializado para crear PDF + landing + form como lead magnet.
+- **All tools** — todo (~50+). Para agentes avanzados.
+
+Eliges los que quieras (puedes combinarlos) y el dashboard arma la URL:
+
+```
+https://www.easybits.cloud/api/mcp?tools=design
+```
+
+**2. Copia la URL.**
+
+**3. En Claude.ai:**
+
+- Settings → Connectors → **Add custom connector**
+- Pega la URL
+- Click en autorizar → OAuth flow de EasyBits → aceptar
+- Listo. El connector queda activo.
+
+No hay API keys que guardar. No hay config JSON que editar. OAuth 2.1 + Dynamic Client Registration hace todo el handshake automático. Si quieres el detalle técnico, lo explicamos en [este post sobre cómo implementamos OAuth para MCP](/blog/2026-04-14-oauth-mcp-claude-cowork).
+
+## ¿Por qué tool groups y no todo de una?
+
+Porque **menos tools = mejor precisión del agente**.
+
+Cuando Claude.ai se conecta a un servidor MCP, descubre todas las tools disponibles y decide cuál llamar según el prompt. Si le expones 50 tools donde 40 son irrelevantes para el caso de uso, el agente gasta tokens leyéndolas y a veces elige la equivocada.
+
+El toolset **Design** está curado exactamente para el caso de uso visual:
+
+```ts
+// Creación
+create_document, update_document, delete_document,
+create_presentation, update_presentation, delete_presentation,
+set_page_html, get_page_html, add_page, delete_page, reorder_pages,
+
+// Deploy
+deploy_document, deploy_presentation, unpublish_presentation,
+
+// Imágenes
+generate_image, transform_image,
+
+// Brand kits
+list_brand_kits, get_default_brand_kit, extract_brand_kit_from_url,
+create_brand_kit, update_brand_kit, delete_brand_kit,
+
+// File I/O para retrievar el resultado
+list_files, get_file, upload_file,
+structured_doc,
+```
+
+Ni una sola tool de base de datos, webhooks o formularios. Porque cuando Claude está ayudándote a diseñar un carousel, no necesita saber que EasyBits también puede correr queries SQL.
+
+## Qué sigue
+
+Estamos trabajando en:
+
+- **Formato carousel LinkedIn** (1080×1350) nativo en `create_document` con prompts específicos de narrativa de carousel (hook → body → CTA).
+- **Instagram posts** (1:1 y 4:5), **stories** (9:16), **YouTube thumbnails** (1280×720).
+- **Templates library** para presentaciones y documentos — elegir un look y generar con IA encima.
+- **Más tool groups**: `video`, `social-kit`, etc. conforme vayamos agregando formatos.
+
+El registry de tool groups está diseñado para crecer. Cada vez que salga un toolset nuevo, aparece en tu dashboard automáticamente — sin que tengas que actualizar nada en Claude.ai.
+
+## Pruébalo ahora
+
+1. [Entra al dashboard](https://www.easybits.cloud/dash/developer/mcp).
+2. Copia la URL con el toolset Design.
+3. Pégalo en Claude.ai.
+4. Pídele un documento.
+
+Si tu cliente MCP no soporta OAuth todavía (Claude Code, Cursor, Windsurf), [usa el setup por API key](/dash/developer/setup) — funcionan los dos en paralelo.

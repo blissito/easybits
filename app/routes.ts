@@ -112,6 +112,7 @@ export default [
           route("files", "routes/dash/developer/files.tsx"),
           route("providers", "routes/dash/developer/providers.tsx"),
           route("setup", "routes/dash/developer/setup.tsx"),
+          route("mcp", "routes/dash/developer/mcp.tsx"),
           route("websites", "routes/dash/developer/websites.tsx"),
           route("webhooks", "routes/dash/developer/webhooks.tsx"),
           route("databases", "routes/dash/developer/databases.tsx"),
