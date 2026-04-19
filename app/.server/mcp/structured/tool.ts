@@ -109,7 +109,26 @@ Actions:
 - edit_doc: { docId, patch } → { docId, data, pdfFileId, bytes, renderedIn } + updated PDF inline. **Preferred for WhatsApp / single-turn edits** — patches data AND re-renders in one call, overwriting the previous PDF (no file accumulation).
 - render_doc: { docId } → { pdfFileId, bytes, renderedIn } + PDF inline as resource. Re-render from current data without patching. Overwrites the previous PDF.
 
-The DSL supports: Text (with {{data.path}} interpolation), View (container with flexbox), Image, Link. Nodes can repeat with 'each: "items"' and condition with 'if: "path"'. See types.ts for the full schema.
+The DSL supports: Text (with {{path}} interpolation), View (container with flexbox), Image, Link. Nodes can repeat with 'each: "items"' and condition with 'if: "path"'. Placeholders use the data key directly: {{customerName}} (NOT {{data.customerName}}).
+
+Minimal 'tree' shape (pass as JSON OBJECT, not string — but strings are auto-parsed):
+{
+  "pages": [
+    {
+      "size": "LETTER",
+      "orientation": "portrait",
+      "style": { "padding": 40 },
+      "children": [
+        { "type": "Text", "content": "Hello {{name}}", "style": { "fontSize": 18 } },
+        { "type": "View", "style": { "marginTop": 12 }, "children": [
+          { "type": "Text", "content": "Total: {{total}}" }
+        ]}
+      ]
+    }
+  ]
+}
+
+Notes on shape: root is { pages: [...] } (no outer Document wrapper). Each page has { size, orientation, style, children } with NO 'type' field. Text nodes use 'content' (NOT 'children'). Views use 'children'.
 
 Brand kit awareness (auto-applied):
 - The user's default brand kit auto-applies to every render unless 'brandKitId' overrides.
@@ -166,7 +185,23 @@ Brand kit awareness (auto-applied):
 
 type ActionResult = { json: any; pdf?: { buffer: Buffer; name: string } };
 
+/** Some MCP clients (notably claude.ai web) serialize complex object params as
+ *  JSON strings when the schema is `z.unknown()` / `z.record()`. Coerce back to
+ *  objects up-front so the agent doesn't have to re-submit on the retry. */
+function coerceJsonParams(params: any): void {
+  for (const k of ["tree", "data", "patch", "dataSchema"]) {
+    if (typeof params[k] === "string") {
+      try {
+        params[k] = JSON.parse(params[k]);
+      } catch {
+        throw new Error(`Param '${k}' is a string but not valid JSON. Pass it as a JSON object.`);
+      }
+    }
+  }
+}
+
 async function handleAction(params: any, userId: string): Promise<ActionResult> {
+  coerceJsonParams(params);
   switch (params.action) {
     case "list_templates": {
       const rows = await db.mcpTemplate.findMany({
