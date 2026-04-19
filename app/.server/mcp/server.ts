@@ -8,6 +8,7 @@ import { z } from "zod";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
+import { importHtml } from "./tools/importHtml";
 
 // Legacy doc tools (create_document, fast_pdf, fast_quotation, edit_fast_pdf,
 // create_quotation, edit_quotation) are hidden by default so the agent does
@@ -985,6 +986,29 @@ function registerDocTools(server: McpServer) {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await createDocument(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "import_html",
+    "Import raw HTML from any source (Claude Design, Gamma, Tome, scraped pages, etc.) into EasyBits. Always saves the raw HTML to the user's file library, then creates an editable Document (Landing v4) with the HTML as one section. Color normalization: by default, arbitrary hex values (bg-[#...], style=\"color:#...\") are remapped to semantic Tailwind tokens (bg-primary, text-on-surface, bg-surface, text-accent) so the user's theme paints the design on theme swap. Pass `format` to set exact page dimensions (required for LinkedIn carousels 1080x1080/1080x1350, etc.); PDF export uses those dimensions pixel-perfect via Playwright. Returns `{ fileId, documentId, editorUrl, format }`.",
+    {
+      html: z.string().describe("HTML content to import (full <html> document or a fragment). Max 2MB."),
+      name: z.string().optional().describe("Name for the document and the raw HTML file. Default: 'Imported design'"),
+      destination: z.enum(["document"]).optional().describe("Where to create the editable artifact. MVP: 'document' only."),
+      format: z.object({
+        preset: z.enum(["1080x1080", "1080x1350", "letter", "slide-16-9"]).optional().describe("Preset dimensions. '1080x1080' = LinkedIn square, '1080x1350' = LinkedIn portrait, '16-9' slide = 1920x1080, 'letter' = default letter."),
+        width: z.number().optional().describe("Custom width in px (ignored if preset is set). Range 100-10000."),
+        height: z.number().optional().describe("Custom height in px (ignored if preset is set). Range 100-10000."),
+      }).optional().describe("Exact page dimensions. Omit for default letter."),
+      brandKitId: z.string().optional().describe("Brand kit ID to apply to the document. Omit to use the user's default brand kit."),
+      normalizeColors: z.boolean().optional().describe("If true (default), rewrite hex values to semantic classes so themes apply. Pass false to keep the original hex values verbatim."),
+      sourceUrl: z.string().optional().describe("Optional source URL for traceability (e.g. the original Claude Design URL)."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await importHtml(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

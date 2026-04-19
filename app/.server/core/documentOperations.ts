@@ -114,6 +114,9 @@ export async function createDocument(
     theme?: string;
     customColors?: Record<string, string>;
     brandKitId?: string;
+    format?: { width: number; height: number };
+    sourceFileId?: string;
+    sourceUrl?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -122,6 +125,9 @@ export async function createDocument(
 
   const metadata: Record<string, unknown> = {};
   if (opts.theme) metadata.theme = opts.theme;
+  if (opts.format) metadata.format = opts.format;
+  if (opts.sourceFileId) metadata.sourceFileId = opts.sourceFileId;
+  if (opts.sourceUrl) metadata.sourceUrl = opts.sourceUrl;
 
   // Brand kit → customColors + metadata.brandKitId.
   // Fallback: if no brandKitId and no customColors, auto-apply user's default kit.

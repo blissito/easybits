@@ -94,12 +94,20 @@ export async function takeDocumentPdf(
     tailwindConfig = docThemeCss.tailwindConfig;
   }
 
-  const html = buildDocumentPrintHtml(sections, { themeCss, tailwindConfig, title: doc.name || "Document" });
+  const format = metadata?.format as { width: number; height: number } | undefined;
+  const html = buildDocumentPrintHtml(sections, { themeCss, tailwindConfig, title: doc.name || "Document", format });
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
   try {
     return await withPage(async (page) => {
       await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
+      if (format?.width && format?.height) {
+        return await page.pdf({
+          width: `${format.width}px`,
+          height: `${format.height}px`,
+          printBackground: true,
+        });
+      }
       // Detect landscape sections (w-[11in] h-[8.5in])
       const isLandscape = contentSections.some((s) => s.html?.includes('w-[11in]'));
       return await page.pdf({ format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) });

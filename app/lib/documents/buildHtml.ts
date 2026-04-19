@@ -353,12 +353,20 @@ export function buildDocumentPrintHtml(
     themeCss?: string;
     tailwindConfig?: string;
     title?: string;
+    format?: { width: number; height: number };
   }
 ): string {
   const sorted = [...sections]
     .filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__")
     .sort((a, b) => a.order - b.order);
   const title = options?.title || "Documento";
+  const format = options?.format;
+  const pageCss = format
+    ? `@page { size: ${format.width}px ${format.height}px; margin: 0; }`
+    : `@page { size: letter; margin: 0; }`;
+  const sectionSizeCss = format
+    ? `.page-section { width: ${format.width}px; height: ${format.height}px; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }`
+    : `.page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }`;
 
   // Extract GrapesJS CSS
   const cssSection = sections.find((s) => s.id === "__grapes_css__");
@@ -382,11 +390,11 @@ export function buildDocumentPrintHtml(
   ${options?.tailwindConfig ? `<script>tailwind.config = ${options.tailwindConfig}<\/script>` : ""}
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    @page { size: letter; margin: 0; }
+    ${pageCss}
     ${options?.themeCss || DEFAULT_THEME_CSS}
     ${grapesCss}
     body { font-family: 'Inter', sans-serif; margin: 0; color: var(--color-on-surface, #111); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+    ${sectionSizeCss}
     .page-section:last-child { page-break-after: auto; break-after: auto; }
   </style>
 </head>
