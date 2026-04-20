@@ -1,8 +1,22 @@
 /**
  * @easybits.cloud/mcp — Stdio-to-HTTP proxy for Easybits MCP
  *
- * Reads JSON-RPC messages from stdin, forwards them to the Easybits
- * Streamable HTTP endpoint (/api/mcp), and writes responses to stdout.
+ * THIS PACKAGE IS A TRANSPORT, NOT A TOOL REGISTRY.
+ *
+ * It reads JSON-RPC messages from stdin and forwards them to the Easybits
+ * Streamable HTTP endpoint at https://www.easybits.cloud/api/mcp (backed by
+ * `app/.server/mcp/server.ts` in the main repo). All tool definitions,
+ * handlers, and auth live on the server — this proxy does not contain any
+ * tool logic.
+ *
+ * Do NOT add tool implementations here. To ship a new tool:
+ *   1. Add it in `app/.server/mcp/server.ts` (+ handler in `app/.server/mcp/tools/`)
+ *   2. Register it in the appropriate group in `app/.server/mcp/toolGroups.ts`
+ *   3. Deploy the main app to Fly. The published proxy picks it up automatically.
+ *
+ * Republish this package ONLY when the proxy itself changes (transport, auth,
+ * CLI flags, RC file handling). Bumping the proxy version is not required to
+ * ship new tools.
  *
  * Usage:
  *   EASYBITS_API_KEY=eb_sk_live_... npx @easybits.cloud/mcp

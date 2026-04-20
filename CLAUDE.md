@@ -41,6 +41,13 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - Dockerfile uses layer caching (deps cached separately from source)
 - Runtime packages MUST be in `dependencies` (not `devDependencies`) — `npm prune --omit=dev` runs in Docker
 
+## MCP architecture (ÚNICA fuente de verdad)
+- **Server (fuente única)**: `app/.server/mcp/server.ts` — todas las tools, handlers en `app/.server/mcp/tools/`, grupos en `app/.server/mcp/toolGroups.ts`. Expuesto vía `/api/mcp` (Streamable-HTTP).
+- **Proxy npm**: `packages/mcp/` → `@easybits.cloud/mcp` en npm. **NO contiene tools** — solo reenvía stdio JSON-RPC al endpoint HTTP. 210 líneas, transporte puro.
+- **Flujo de tool nueva**: añadir en `server.ts` + handler → registrar en `toolGroups.ts` → deploy a Fly. El proxy la recoge automáticamente sin republicar.
+- **Republicar `@easybits.cloud/mcp` solo si cambia el proxy** (transport, auth, CLI flags, RC file). Bump de versión NO es necesario para nuevas tools.
+- **Debug "no aparece mi tool"**: (1) ¿deployó Fly? `curl -X POST https://www.easybits.cloud/api/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`. (2) ¿Está en el group allowlist que el cliente usa (design/core/all)? (3) ¿El cliente tiene el conector configurado? (4) **Cache de sesión**: los clientes MCP piden `tools/list` al arrancar la sesión y no la refrescan. Tras un deploy hay que reiniciar Claude Code / abrir chat nuevo en Claude.ai para que aparezcan las tools nuevas.
+
 ## Admin Access
 - `ADMIN_EMAILS` env var: comma-separated superuser emails
 - `Admin` role in DB: managed from the admin panel itself

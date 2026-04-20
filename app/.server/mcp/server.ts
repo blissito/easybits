@@ -1,3 +1,20 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// MCP server — ÚNICA fuente de verdad de las tools de EasyBits.
+//
+// Sirve el endpoint Streamable-HTTP en /api/mcp (ver app/routes/api/mcp.ts).
+// El paquete npm `@easybits.cloud/mcp` (packages/mcp/) NO duplica tools:
+// es un proxy stdio→HTTP que reenvía todo JSON-RPC a este servidor.
+//
+// Consecuencias:
+//  • Añadir o cambiar una tool aquí la expone automáticamente a todos los
+//    clientes (Claude Desktop/Code via npx, claude.ai connector, Cursor, etc.)
+//    después del siguiente deploy a Fly.
+//  • NO hay que republicar @easybits.cloud/mcp cuando cambian tools —
+//    solo se republica si cambia la lógica del proxy (transport, auth, CLI).
+//  • Si una tool nueva no aparece en un cliente: verificar (1) deploy a Fly,
+//    (2) que esté en el toolGroup correcto en toolGroups.ts, (3) que el
+//    cliente tenga el conector configurado.
+// ─────────────────────────────────────────────────────────────────────────────
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   registerAppTool,
@@ -992,9 +1009,10 @@ function registerDocTools(server: McpServer) {
 
   server.tool(
     "import_html",
-    "Import raw HTML from any source (Claude Design, Gamma, Tome, scraped pages, etc.) into EasyBits. Always saves the raw HTML to the user's file library, then creates an editable Document (Landing v4) with the HTML as one section. Color normalization: by default, arbitrary hex values (bg-[#...], style=\"color:#...\") are remapped to semantic Tailwind tokens (bg-primary, text-on-surface, bg-surface, text-accent) so the user's theme paints the design on theme swap. Pass `format` to set exact page dimensions (required for LinkedIn carousels 1080x1080/1080x1350, etc.); PDF export uses those dimensions pixel-perfect via Playwright. Returns `{ fileId, documentId, editorUrl, format }`.",
+    "Import HTML from any source (Claude Design, Gamma, Tome, scraped pages, reveal.js, Swiper carousels, etc.) into EasyBits. Pass EITHER `url` (a public http/https page — we fetch it server-side) OR `html` (raw markup). Prefer `url` when you have one — skips round-tripping the markup. Always saves the raw HTML to the user's file library, then creates an editable Document (Landing v4). AUTO-SPLIT: the server parses the HTML and, if it detects multiple slides/pages (via `[data-slide]`, `[data-page]`, `[aria-roledescription=\"carousel\"] > *`, `.slide`, `.page`, `.carousel-item`, top-level `<section>`/`<article>`, etc.), creates one document page per slide — you do NOT need to split yourself. AUTO-FORMAT: the server also reads declared page dimensions from the source (`@page size`, inline `width/height`, Tailwind `w-[Npx] h-[Npx]`, `aspect-video`, `aspect-square`) and uses them, so LinkedIn carousels (1080×1080, 1080×1350) and 16:9 slide decks keep their native size without you passing `format`. Pass `format` only to OVERRIDE detection. Color normalization (default ON) remaps hex values to semantic Tailwind tokens so the user's theme paints the design on theme swap. Returns `{ fileId, documentId, editorUrl, format, pagesDetected, formatDetected }`.",
     {
-      html: z.string().describe("HTML content to import (full <html> document or a fragment). Max 2MB."),
+      url: z.string().url().optional().describe("Public http/https URL of the HTML to import (Claude Design share link, published Gamma/Tome page, any public page). Server fetches it with a 10s timeout and 2MB cap. Private IPs, localhost, and non-http(s) schemes are rejected. Pass this INSTEAD OF `html` when you have a URL — no need to load the markup into the conversation."),
+      html: z.string().optional().describe("Raw HTML content (full <html> document or a fragment). Max 2MB. Use when you don't have a public URL (e.g. you generated the markup locally). If both `url` and `html` are provided, `html` wins."),
       name: z.string().optional().describe("Name for the document and the raw HTML file. Default: 'Imported design'"),
       destination: z.enum(["document"]).optional().describe("Where to create the editable artifact. MVP: 'document' only."),
       format: z.object({
