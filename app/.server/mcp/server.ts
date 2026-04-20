@@ -315,13 +315,20 @@ function registerCoreTools(server: McpServer) {
     server,
     "upload_file",
     {
-      description: "Create a file record and get a presigned upload URL. Returns `{ file, putUrl }`. Upload bytes via PUT to `putUrl`. The file is created with status DONE immediately.",
+      description: `Create a generic user file record and get a presigned upload URL. Returns \`{ file, putUrl }\`. Upload bytes via PUT to \`putUrl\`. The file is created with status DONE immediately.
+
+IMPORTANT — choose the right upload tool:
+- If the asset will be embedded in a published website/landing (<img>, <video>, <a href>, background-image, etc.), DO NOT use upload_file. Use \`upload_website_file\` (needs websiteId) or \`deploy_website_file\` (text/base64 <1MB) — both default to public and return a URL safe to embed.
+- Only use upload_file for private user storage (uploads users manage from the dashboard, agent scratch files, source material).
+- If you must use upload_file for something that will be embedded publicly, you MUST pass \`access: "public"\`. The default is \`"private"\`, which produces a URL that returns 403 when loaded from a browser. Always prefer the website-scoped tools.
+
+Never embed the raw \`putUrl\` — embed the file's canonical \`url\` (or fetch it via \`get_file\` after upload).`,
       inputSchema: {
         fileName: z.string().describe("Name of the file"),
         contentType: z.string().regex(/^[\w\-]+\/[\w\-\.\+]+$/).describe("MIME type"),
         size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
         assetId: z.string().optional().describe("Associate with an asset"),
-        access: z.enum(["public", "private"]).optional().describe("Access level"),
+        access: z.enum(["public", "private"]).optional().describe("'public' = readable by anyone with the URL (required for website embeds). 'private' = only accessible via signed URL or authenticated API. DEFAULT: 'private'. Pass 'public' explicitly whenever the file will appear in published HTML."),
         region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
       },
       _meta: { ui: { resourceUri: "ui://easybits/file-upload" } },
@@ -862,13 +869,13 @@ function registerCoreTools(server: McpServer) {
 
   server.tool(
     "bulk_upload_files",
-    "Create multiple file records and get presigned upload URLs (max 20). Returns array of `{ file, putUrl }`.",
+    "Create multiple file records and get presigned upload URLs (max 20). Returns array of `{ file, putUrl }`. Same access rules as upload_file: default is 'private'. If any of these files will be embedded in a public website, either pass `access: 'public'` per item OR use `upload_website_file`/`deploy_website_file` instead.",
     {
       items: z.array(z.object({
         fileName: z.string().describe("Name of the file"),
         contentType: z.string().describe("MIME type"),
         size: z.number().min(1).max(5_368_709_120).describe("File size in bytes"),
-        access: z.enum(["public", "private"]).optional().describe("Access level"),
+        access: z.enum(["public", "private"]).optional().describe("'public' = readable by anyone with the URL (required for website embeds). 'private' = signed/authenticated access only. DEFAULT: 'private'."),
         assetId: z.string().optional().describe("Associate with an asset"),
         region: z.enum(["LATAM", "US", "EU"]).optional().describe("Storage region preference"),
       })).describe("Array of files to upload (1-20)"),
@@ -2708,7 +2715,7 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "upload_website_file",
-    "Upload a file to a website via presigned URL. Returns a putUrl — you must PUT the content there, then call update_file(status: 'DONE'). Best for large/binary files (>1MB). For text files <1MB (HTML/CSS/JS), prefer deploy_website_file which does everything in one call.",
+    "Upload a file to a website via presigned URL. Returns `{ file, putUrl }` — PUT the bytes to `putUrl`, then call `update_file(status: 'DONE')`. Files uploaded here are PUBLIC by default and safe to embed in published HTML. Best for binary/large files (>1MB) like images/video/PDFs. For text files <1MB (HTML/CSS/JS) prefer `deploy_website_file` which does everything in one call. PREFER THIS over `upload_file` for any asset that will appear in a published website.",
     {
       websiteId: z.string().describe("The website ID"),
       fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'images/logo.png')"),
