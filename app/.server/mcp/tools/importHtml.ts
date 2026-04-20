@@ -34,6 +34,31 @@ const PRESETS = {
 
 type PresetKey = keyof typeof PRESETS;
 
+/**
+ * Infer the artifact intent from detected page dimensions so the editor
+ * can show format-appropriate export CTAs (e.g. "Exportar imágenes" for
+ * LinkedIn/IG carousels). Undefined format → "document".
+ */
+function detectIntent(
+  format?: { width: number; height: number },
+): "social" | "presentation" | "document" {
+  if (!format) return "document";
+  const { width, height } = format;
+  if (!width || !height) return "document";
+  const ratio = width / height;
+  // Square (1:1) — IG/LI carrusel
+  if (ratio >= 0.95 && ratio <= 1.05) return "social";
+  // Portrait 4:5 (0.8) — LI carrusel / IG feed portrait
+  if (ratio >= 0.78 && ratio <= 0.82) return "social";
+  // Portrait 9:16 (0.5625) — Reels/Stories
+  if (ratio >= 0.55 && ratio <= 0.58) return "social";
+  // Landscape 16:9 (1.777) — presentation deck
+  if (ratio >= 1.7 && ratio <= 1.85) return "presentation";
+  // Landscape 4:3 (1.333) — classic deck
+  if (ratio >= 1.3 && ratio <= 1.36) return "presentation";
+  return "document";
+}
+
 export interface ImportHtmlInput {
   html?: string;
   url?: string;
@@ -380,17 +405,35 @@ export async function importHtml(ctx: AuthContext, input: ImportHtmlInput) {
   // 3. Color normalization pipeline (runs per page so each section stays self-contained).
   const normalize = input.normalizeColors !== false;
   let totalReplacements = 0;
-  const roleMap: Record<string, string | undefined> = {};
+  // roleMap aggregates semantic role → hex across all pages.
+  // First page to define a role wins (stable, since earlier pages set the design's tone).
+  const roleMap: { surface?: string; onSurface?: string; primary?: string; accent?: string } = {};
   const processedPages = rawPages.map((pageHtml) => {
     if (!normalize) return pageHtml;
     const r = normalizeHexColors(pageHtml);
     totalReplacements += r.replacements;
-    for (const [hex, role] of Object.entries(r.roleMap)) {
-      if (role && !roleMap[hex]) roleMap[hex] = role;
+    for (const [role, hex] of Object.entries(r.roleMap) as Array<[keyof typeof roleMap, string | undefined]>) {
+      if (hex && !roleMap[role]) roleMap[role] = hex;
     }
     return sanitizeSemanticColors(r.html);
   });
   const colorNormResult = normalize ? { replacements: totalReplacements, roleMap } : null;
+
+  // Derive CustomColors from the roleMap so the imported doc boots in its source palette
+  // instead of falling back to the user's default brand kit (which was wiping imports).
+  // Only apply when we actually detected a primary — otherwise the design is neutral
+  // enough that the default kit is a reasonable call.
+  let customColors: Record<string, string> | undefined;
+  if (roleMap.primary) {
+    customColors = {
+      primary: roleMap.primary,
+      secondary: roleMap.accent || roleMap.primary,
+    };
+    if (roleMap.accent) customColors.accent = roleMap.accent;
+    if (roleMap.surface) customColors.surface = roleMap.surface;
+  }
+
+  const intent = detectIntent(format);
 
   if (destination === "document") {
     const sections = processedPages.map((pageHtml, i) => ({
@@ -408,6 +451,8 @@ export async function importHtml(ctx: AuthContext, input: ImportHtmlInput) {
       format,
       sourceFileId: fileId,
       sourceUrl,
+      customColors,
+      intent,
     });
 
     return {

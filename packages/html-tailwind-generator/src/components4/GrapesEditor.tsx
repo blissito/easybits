@@ -182,27 +182,39 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         if (!wrapper) return;
         const comps = wrapper.components().models || [];
         const contentComps = comps.filter((c: any) => (c.get("tagName") || "").toLowerCase() !== "style");
-        for (let i = 0; i < contentComps.length; i++) {
-          if (contentComps[i].getAttributes()["data-section-id"] === sectionId) {
-            ed.select(contentComps[i]);
-            const el = contentComps[i].getEl();
-            if (el) {
-              if (i === 0) {
-                const doc = ed.Canvas.getDocument();
-                doc?.documentElement?.scrollTo({ top: 0, behavior: "smooth" });
-              } else {
-                el.scrollIntoView({ behavior: "smooth", block: "center" });
-              }
-            }
-            return;
-          }
+
+        // Find target component by data-section-id
+        const target = contentComps.find((c: any) => c.getAttributes()["data-section-id"] === sectionId);
+        if (target) {
+          ed.select(target);
         }
-        const doc = ed.Canvas.getDocument();
-        if (doc) {
-          const el = doc.querySelector(`[data-section-id="${sectionId}"]`);
-          if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+        const targetEl = target?.getEl() as HTMLElement | undefined
+          ?? (ed.Canvas.getDocument()?.querySelector(`[data-section-id="${sectionId}"]`) as HTMLElement | null)
+          ?? undefined;
+        if (!targetEl) {
+          console.warn("[scrollToSection] Section not found:", sectionId, "Available attrs:", comps.map((c: any) => c.getAttributes()["data-section-id"]));
+          return;
         }
-        console.warn("[scrollToSection] Section not found:", sectionId, "Available attrs:", comps.map((c: any) => c.getAttributes()["data-section-id"]));
+
+        // GrapesJS canvas: the iframe sits inside a scrollable wrapper. Scrolling
+        // the iframe body (scrollIntoView inside the iframe) often does nothing
+        // because the overflow lives on the parent. Compute the element offset
+        // relative to the iframe body and scroll the parent container directly.
+        const frameEl = (ed.Canvas as any).getFrameEl?.() as HTMLIFrameElement | null;
+        const scrollContainer = frameEl?.parentElement?.parentElement ?? frameEl?.parentElement ?? null;
+        if (scrollContainer && frameEl) {
+          const iframeRectTop = frameEl.getBoundingClientRect().top;
+          const containerRectTop = scrollContainer.getBoundingClientRect().top;
+          const elementTopInIframe = targetEl.getBoundingClientRect().top;
+          // Element position relative to the scroll container's scroll origin
+          const targetScroll =
+            scrollContainer.scrollTop + (iframeRectTop - containerRectTop) + elementTopInIframe - 24;
+          scrollContainer.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+          return;
+        }
+
+        // Fallback: try to scroll the iframe body (older GrapesJS layouts)
+        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
       },
       replaceComponent: (componentId: string, newHtml: string) => {
         const ed = editorRef.current;

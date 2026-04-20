@@ -117,6 +117,7 @@ export async function createDocument(
     format?: { width: number; height: number };
     sourceFileId?: string;
     sourceUrl?: string;
+    intent?: "social" | "presentation" | "document";
   }
 ) {
   requireScope(ctx, "WRITE");
@@ -128,6 +129,7 @@ export async function createDocument(
   if (opts.format) metadata.format = opts.format;
   if (opts.sourceFileId) metadata.sourceFileId = opts.sourceFileId;
   if (opts.sourceUrl) metadata.sourceUrl = opts.sourceUrl;
+  if (opts.intent) metadata.intent = opts.intent;
 
   // Brand kit → customColors + metadata.brandKitId.
   // Fallback: if no brandKitId and no customColors, auto-apply user's default kit.

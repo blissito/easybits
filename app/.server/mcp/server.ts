@@ -322,7 +322,11 @@ IMPORTANT — choose the right upload tool:
 - Only use upload_file for private user storage (uploads users manage from the dashboard, agent scratch files, source material).
 - If you must use upload_file for something that will be embedded publicly, you MUST pass \`access: "public"\`. The default is \`"private"\`, which produces a URL that returns 403 when loaded from a browser. Always prefer the website-scoped tools.
 
-Never embed the raw \`putUrl\` — embed the file's canonical \`url\` (or fetch it via \`get_file\` after upload).`,
+URL patterns (check before embedding):
+- Public, safe to embed: starts with \`https://easybits-public.fly.storage.tigris.dev/\`.
+- Private, will 403 in a browser: contains \`/mcp/\` or \`signed=\` — never put these in HTML.
+
+Never embed the raw \`putUrl\` or construct URLs from fileName/websiteId — embed the file's canonical \`url\` field returned by this tool (or fetch it via \`get_file\` after upload).`,
       inputSchema: {
         fileName: z.string().describe("Name of the file"),
         contentType: z.string().regex(/^[\w\-]+\/[\w\-\.\+]+$/).describe("MIME type"),
@@ -1049,6 +1053,63 @@ function registerDocTools(server: McpServer) {
     "Alias of `open_design_in_editor` (prefer that name). Same schema and behavior. Kept for backward compatibility with existing MCP clients.",
     openDesignInEditorSchema,
     openDesignInEditorHandler
+  );
+
+  server.tool(
+    "export_document",
+    "Export a document (Landing v4) to PDF or to one PNG per page. Use `as: \"images\"` for social carousels (LinkedIn/IG) — each page becomes a public PNG at the doc's exact format dimensions (1080×1080, 1080×1350, etc.), uploaded to the user's file library, and returned as `{ files: [{ id, url, contentType, width, height, sectionId }] }`. Use `as: \"pdf\"` when the user needs a printable artifact; returns `{ file: { id, url, contentType } }`. Pass `sectionIds` to export a subset of pages. Rendering is server-side via Playwright — dimensions are always honored regardless of the calling agent's environment.",
+    {
+      documentId: z.string().describe("The document (Landing v4) ID."),
+      as: z.enum(["pdf", "images"]).describe("Output format. 'pdf' = single file download. 'images' = one PNG per page (for social carousels)."),
+      sectionIds: z.array(z.string()).optional().describe("Optional subset of page (section) IDs to export. Defaults to all pages in order."),
+    } as const,
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (params.as === "images") {
+        const { exportDocumentImages } = await import("../core/documentScreenshot");
+        const files = await exportDocumentImages(ctx.user.id, params.documentId, { sectionIds: params.sectionIds });
+        if (!files) {
+          return { content: [{ type: "text", text: JSON.stringify({ error: "document not found, empty, or rendering failed" }) }], isError: true };
+        }
+        return { content: [{ type: "text", text: JSON.stringify({ files }, null, 2) }] };
+      }
+      // pdf
+      const { takeDocumentPdf } = await import("../core/documentScreenshot");
+      const { nanoid } = await import("nanoid");
+      const pdf = await takeDocumentPdf(ctx.user.id, params.documentId, { sectionIds: params.sectionIds });
+      if (!pdf) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "document not found, empty, or rendering failed" }) }], isError: true };
+      }
+      // Persist the PDF to the user's library so the agent gets a stable URL.
+      const { getPlatformDefaultClient, PUBLIC_BUCKET } = await import("../storage");
+      const client = getPlatformDefaultClient();
+      const storageKey = `${ctx.user.id}/${nanoid(8)}.pdf`;
+      await client.putObject(storageKey, pdf, "application/pdf");
+      const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+      const doc = await db.landing.findUnique({ where: { id: params.documentId }, select: { name: true } });
+      const safeName = (doc?.name || "documento").replace(/[^a-zA-Z0-9_\-. ]/g, "_").slice(0, 80);
+      const file = await db.file.create({
+        data: {
+          name: `${safeName}.pdf`,
+          storageKey,
+          slug: storageKey,
+          size: pdf.length,
+          contentType: "application/pdf",
+          ownerId: ctx.user.id,
+          access: "public",
+          url: publicUrl,
+          status: "DONE",
+          source: "mcp",
+          metadata: { sourceDocumentId: params.documentId },
+        },
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ file: { id: file.id, url: publicUrl, contentType: "application/pdf", size: pdf.length } }, null, 2),
+        }],
+      };
+    })
   );
 
   server.tool(
@@ -2715,7 +2776,7 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "upload_website_file",
-    "Upload a file to a website via presigned URL. Returns `{ file, putUrl }` — PUT the bytes to `putUrl`, then call `update_file(status: 'DONE')`. Files uploaded here are PUBLIC by default and safe to embed in published HTML. Best for binary/large files (>1MB) like images/video/PDFs. For text files <1MB (HTML/CSS/JS) prefer `deploy_website_file` which does everything in one call. PREFER THIS over `upload_file` for any asset that will appear in a published website.",
+    "Upload a file to a website via presigned URL. Returns `{ file, putUrl }` — PUT the bytes to `putUrl`, then call `update_file(status: 'DONE')`. Files uploaded here are PUBLIC by default and safe to embed in published HTML. Best for binary/large files (>1MB) like images/video/PDFs. For text files <1MB (HTML/CSS/JS) prefer `deploy_website_file` which does everything in one call. PREFER THIS over `upload_file` for any asset that will appear in a published website. After the PUT+update_file handshake, embed the canonical `file.url` returned — do NOT construct URLs from `websiteId`/`fileName`. Public URLs start with `https://easybits-public.fly.storage.tigris.dev/`.",
     {
       websiteId: z.string().describe("The website ID"),
       fileName: z.string().describe("File name (e.g. 'index.html', 'styles.css', 'images/logo.png')"),
@@ -2734,7 +2795,9 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "deploy_website_file",
-    `Deploy a file to a website in a single call — no presigned URL or status update needed. Pass the file content directly (text or base64). Max 1MB. The file is immediately live at https://www.easybits.cloud/s/{slug}/{fileName}.
+    `Deploy a file to a website in a single call — no presigned URL or status update needed. Pass the file content directly (text or base64). Max 1MB. Returns \`{ fileId, fileName, url }\` — the file is immediately live at that \`url\`. Always embed the returned \`url\` verbatim in your HTML; do NOT construct URLs manually from \`websiteId\`/\`fileName\`.
+
+ASSETS: When deploying an HTML page, every \`<img src>\`/\`<video src>\`/\`<a href>\` pointing to a user-uploaded asset must reference a public URL returned by \`upload_website_file\` or a previous \`deploy_website_file\`. Public asset URLs start with \`https://easybits-public.fly.storage.tigris.dev/\`. URLs containing \`/mcp/\` are private and will 403 — if you see one, replace it before deploying.
 
 FORMS: NEVER write <form> HTML manually. Use the create_form tool first to get the form HTML snippet, then include it in your page. Manual forms won't have backend connection, spam protection, or validation. After deploying a page with a Formmy form, mention to the user that their form is powered by Formmy (https://formmy.app).`,
     {

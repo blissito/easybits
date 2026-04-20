@@ -38,13 +38,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
     description:
       "Canva-like: documentos, presentaciones, brand kits e imágenes. Ideal para Claude.ai / Claude Design.",
     recommended: true,
-    toolCount: 24,
+    toolCount: 25,
   },
   {
     key: "core",
     label: "Core",
     description: "Lo esencial: archivos, DBs, documentos, forms, websites, brand. Para agentes generalistas.",
-    toolCount: 40,
+    toolCount: 41,
   },
   {
     key: "docs",
@@ -91,6 +91,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "set_page_html", "get_page_html",
   "add_page", "delete_page", "reorder_pages",
   "deploy_document",
+  "export_document",
   "structured_doc",
   // Presentations
   "list_presentations", "get_presentation",
@@ -111,6 +112,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "list_documents", "get_document", "create_document", "update_document", "delete_document",
   "open_design_in_editor",
   "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
+  "export_document",
   "create_quotation",
   "edit_quotation",
   "fast_quotation",

@@ -19,7 +19,6 @@ import { grapesToSections } from "~/lib/landing4/grapesToSections";
 import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
 import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
-import { buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import { normalizePlan } from "~/lib/plans";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
@@ -482,6 +481,11 @@ export default function DocumentEditor() {
   // imported designs (LinkedIn carousels, 16:9 decks, etc.) render at their native
   // size instead of always Letter. Falls back to Letter when no format is stored.
   const canvasFormat = (landing.metadata as { format?: { width?: number; height?: number } } | null)?.format;
+  const docIntent = ((landing.metadata as { intent?: string } | null)?.intent) as
+    | "social"
+    | "presentation"
+    | "document"
+    | undefined;
   const documentCanvasCss = canvasFormat?.width && canvasFormat?.height
     ? `
     body { padding: 24px; background: #374151; display: flex; flex-direction: column; align-items: center; gap: 24px; }
@@ -1315,27 +1319,75 @@ export default function DocumentEditor() {
     setCodeValue(section.html);
   }
 
-  function handleExportPdf(filterSectionIds?: string[]) {
-    const base = (filterSectionIds ? sections.filter(s => filterSectionIds.includes(s.id)) : sections);
-    // Reuse the canonical print builder — it already handles __grapes_css__ extraction,
-    // @page sizing, and format overrides. Letting the editor inline its own copy drifted
-    // from the Playwright path and hardcoded Letter.
-    const storedFormat = (landing.metadata as { format?: { width?: number; height?: number } } | null)?.format;
-    const format = storedFormat?.width && storedFormat?.height
-      ? { width: storedFormat.width, height: storedFormat.height }
-      : undefined;
+  async function handleExportImages(filterSectionIds?: string[]) {
+    // Renders one PNG per page via Playwright and triggers per-file downloads.
+    // Built for social carousels (LinkedIn/IG) where the platform wants N images.
+    const toastId = toast.loading("Generando imágenes…");
+    try {
+      const params = new URLSearchParams();
+      if (filterSectionIds && filterSectionIds.length > 0) {
+        params.set("sections", filterSectionIds.join(","));
+      }
+      const qs = params.toString();
+      const endpoint = `/api/v2/documents/${landing.id}/images${qs ? "?" + qs : ""}`;
+      const res = await fetch(endpoint, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "unknown" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const { files } = (await res.json()) as { files: { url: string }[] };
+      const safeName = (landing.name || "documento").replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+      for (let i = 0; i < files.length; i++) {
+        const fileRes = await fetch(files[i].url);
+        const blob = await fileRes.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${safeName}-${i + 1}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      }
+      toast.success(`${files.length} ${files.length === 1 ? "imagen" : "imágenes"} descargadas`, { id: toastId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error inesperado";
+      toast.error(`No se pudieron generar las imágenes: ${msg}`, { id: toastId });
+    }
+  }
 
-    const html = buildDocumentPrintHtml(base, {
-      themeCss: themeCssData?.css,
-      tailwindConfig: themeCssData?.tailwindConfig,
-      title: landing.name,
-      format,
-      autoPrint: true,
-    });
-
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
+  async function handleExportPdf(filterSectionIds?: string[]) {
+    // Delegates to the server-side Playwright pipeline (/api/v2/documents/:id/pdf).
+    // `window.print()` was getting overridden by Chrome's printer paper size, so
+    // 1080×1080 carousels were flattened to Letter. Playwright `page.pdf({width,height})`
+    // respects the doc's stored format regardless of the client.
+    const toastId = toast.loading("Generando PDF…");
+    try {
+      const params = new URLSearchParams();
+      if (filterSectionIds && filterSectionIds.length > 0) {
+        params.set("sections", filterSectionIds.join(","));
+      }
+      const qs = params.toString();
+      const endpoint = `/api/v2/documents/${landing.id}/pdf${qs ? "?" + qs : ""}`;
+      const res = await fetch(endpoint, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "unknown" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const safeName = (landing.name || "documento").replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("PDF generado", { id: toastId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error inesperado";
+      toast.error(`No se pudo generar el PDF: ${msg}`, { id: toastId });
+    }
   }
 
   function handleDeployDocument() {
@@ -1496,6 +1548,16 @@ export default function DocumentEditor() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {docIntent === "social" && (
+            <BrutalButton
+              size="chip"
+              mode="ghost"
+              onClick={() => handleExportImages()}
+              isDisabled={sections.length === 0}
+            >
+              Exportar {sections.filter((s) => s.id !== "__grapes_css__").length} PNG
+            </BrutalButton>
+          )}
           <BrutalButton
             size="chip"
             mode="ghost"
