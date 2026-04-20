@@ -219,6 +219,8 @@ export function buildDocumentHtml(
       .print-page {
         width: ${pageW}px; height: ${pageH}px;
         overflow: hidden;
+        position: relative;
+        box-sizing: border-box;
         page-break-after: always; break-after: page;
         page-break-inside: avoid; break-inside: avoid;
       }
@@ -371,9 +373,12 @@ export function buildDocumentPrintHtml(
   const pageCss = format
     ? `@page { size: ${format.width}px ${format.height}px; margin: 0; }`
     : `@page { size: letter; margin: 0; }`;
+  // `position: relative` is load-bearing: imported slide decks rely heavily on
+  // absolute positioning for cover layouts. Without it, children anchor to the
+  // viewport and only the first slide's header renders (rest is clipped/offset).
   const sectionSizeCss = format
-    ? `.page-section { width: ${format.width}px; height: ${format.height}px; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }`
-    : `.page-section { width: 8.5in; height: 11in; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }`;
+    ? `.page-section { width: ${format.width}px; height: ${format.height}px; overflow: hidden; position: relative; box-sizing: border-box; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }`
+    : `.page-section { width: 8.5in; height: 11in; overflow: hidden; position: relative; box-sizing: border-box; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }`;
 
   // Extract GrapesJS CSS
   const cssSection = sections.find((s) => s.id === "__grapes_css__");
