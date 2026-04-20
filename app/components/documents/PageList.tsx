@@ -59,9 +59,10 @@ ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/scr
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', sans-serif; width: ${pageW}px; height: ${pageH}px; overflow: hidden; }
+.eb-capture-page { position: relative; width: ${pageW}px; height: ${pageH}px; overflow: hidden; }
 ${themeCssData?.css || ""}
 </style>
-</head><body>${sectionHtml}</body></html>`;
+</head><body><div class="eb-capture-page">${sectionHtml}</div></body></html>`;
 }
 
 const THUMB_W = 200;

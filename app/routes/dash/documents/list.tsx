@@ -216,7 +216,7 @@ export default function DocumentsList() {
   );
 }
 
-function buildThumbHtml(html: string, themeCssData: { css: string; tailwindConfig: string }, widthPx: number): string {
+function buildThumbHtml(html: string, themeCssData: { css: string; tailwindConfig: string }, widthPx: number, heightPx: number): string {
   return `<!DOCTYPE html><html><head>
 <meta charset="UTF-8">
 <script src="https://cdn.tailwindcss.com"><\/script>
@@ -224,10 +224,11 @@ ${themeCssData.tailwindConfig ? `<script>tailwind.config = ${themeCssData.tailwi
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; width: ${widthPx}px; overflow: hidden; }
+body { font-family: 'Inter', sans-serif; width: ${widthPx}px; height: ${heightPx}px; overflow: hidden; }
+.eb-thumb-page { position: relative; width: ${widthPx}px; height: ${heightPx}px; overflow: hidden; }
 ${themeCssData.css || ""}
 </style>
-</head><body>${html}</body></html>`;
+</head><body><div class="eb-thumb-page">${html}</div></body></html>`;
 }
 
 function DocThumb({ html, theme, customColors, format }: { html: string; theme: string; customColors?: CustomColors; format?: { width: number; height: number } }) {
@@ -245,7 +246,7 @@ function DocThumb({ html, theme, customColors, format }: { html: string; theme: 
   const widthPx = format?.width ?? 816;
   const heightPx = format?.height ?? 1056;
   const aspect = `${widthPx} / ${heightPx}`;
-  const srcDoc = buildThumbHtml(html, themeCssData, widthPx);
+  const srcDoc = buildThumbHtml(html, themeCssData, widthPx, heightPx);
 
   return (
     <div
