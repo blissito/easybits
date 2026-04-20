@@ -211,13 +211,20 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         const wrapper = ed.DomComponents.getWrapper();
         if (!wrapper) return;
         const comps = wrapper.components().models || [];
-        const contentComps = comps.filter((c: any) => (c.get("tagName") || "").toLowerCase() !== "style");
+        // Skip head-like tags that importers (splitIntoPages) prepend per page:
+        // <link>, <style>, <script>, <meta>, <title>, <base>. Without this filter,
+        // `contentComps[N]` can land on a zero-height <link> instead of the target
+        // <section>, which makes every click scroll to the same place.
+        const HEAD_TAGS = new Set(["style", "script", "link", "meta", "title", "base"]);
+        const contentComps = comps.filter((c: any) => {
+          const tag = (c.get("tagName") || "").toLowerCase();
+          return tag && !HEAD_TAGS.has(tag);
+        });
         const target = contentComps[index];
         if (!target) return;
         ed.select(target);
         const el = target.getEl() as HTMLElement | undefined;
         if (index === 0) {
-          // First page — scroll the iframe doc to the top so the header is visible.
           ed.Canvas.getDocument()?.documentElement?.scrollTo({ top: 0, behavior: "smooth" });
           return;
         }
