@@ -135,7 +135,10 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - AI models: ALL Gemini — configured in DB `AppConfig` key `ai-models` + code defaults in `app/.server/aiModels.ts`
 - Themes: reuses landings3 semantic color system (`buildSingleThemeCss`)
 - Logo: data URL uploaded to Tigris CDN, passed to AI as `<img src>` instruction
-- Export: PDF via `window.print()` with `@page` letter size
+- Export PDF: server-side Playwright via `/api/v2/documents/:id/pdf` (`takeDocumentPdf` in `app/.server/core/documentScreenshot.ts`). Respects `metadata.format` regardless of user's printer. Supports `?sections=id1,id2` subset.
+- Export PNG (social carousels): server-side Playwright via `/api/v2/documents/:id/images` (`exportDocumentImages`). One public PNG per page, uploaded to Tigris. Editor shows "Exportar N PNG" button only when `metadata.intent === "social"`.
+- `metadata.intent`: auto-detected from format ratio on import — `"social"` (1:1, 4:5, 9:16), `"presentation"` (16:9, 4:3), `"document"` (letter/fallback). Drives editor CTAs.
+- `metadata.customColors`: derived from source palette on import via `normalizeHexColors` roleMap. Forces `theme: "custom"` in `createDocument`. Before Apr 2026 this was discarded and imports fell back to the user's brand kit.
 - PageList: `app/components/documents/PageList.tsx` — thumbnails via scaled-down iframes, drag-and-drop reorder, version navigation, image drop zones
 
 ### Document Editor Limitations (GrapesJS)
