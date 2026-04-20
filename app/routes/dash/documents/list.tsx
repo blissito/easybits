@@ -87,6 +87,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     const meta = (d.metadata || {}) as Record<string, unknown>;
     const theme = (meta.theme as string) || "minimal";
     const customColors = meta.customColors as CustomColors | undefined;
+    const rawFormat = meta.format as { width?: number; height?: number } | undefined;
+    const format = rawFormat?.width && rawFormat?.height
+      ? { width: rawFormat.width, height: rawFormat.height }
+      : undefined;
     return {
       id: d._id.$oid,
       name: d.name,
@@ -96,6 +100,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       coverHtml: d.coverHtml,
       theme,
       customColors: theme === "custom" ? customColors : undefined,
+      format,
       createdAt: d.createdAt.$date,
       updatedAt: d.updatedAt?.$date ?? d.createdAt.$date,
     };
@@ -165,7 +170,7 @@ export default function DocumentsList() {
                   className="group block border-2 border-black rounded-2xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all duration-200 overflow-hidden max-w-[280px] sm:max-w-none mx-auto sm:mx-0"
                 >
                   {item.coverHtml ? (
-                    <DocThumb html={item.coverHtml} theme={item.theme} customColors={item.customColors} />
+                    <DocThumb html={item.coverHtml} theme={item.theme} customColors={item.customColors} format={item.format} />
                   ) : (
                     <div className="h-3 w-full bg-gradient-to-r from-orange-400 to-red-500" />
                   )}
@@ -211,7 +216,7 @@ export default function DocumentsList() {
   );
 }
 
-function buildThumbHtml(html: string, themeCssData: { css: string; tailwindConfig: string }): string {
+function buildThumbHtml(html: string, themeCssData: { css: string; tailwindConfig: string }, widthPx: number): string {
   return `<!DOCTYPE html><html><head>
 <meta charset="UTF-8">
 <script src="https://cdn.tailwindcss.com"><\/script>
@@ -219,13 +224,13 @@ ${themeCssData.tailwindConfig ? `<script>tailwind.config = ${themeCssData.tailwi
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; width: 8.5in; overflow: hidden; }
+body { font-family: 'Inter', sans-serif; width: ${widthPx}px; overflow: hidden; }
 ${themeCssData.css || ""}
 </style>
 </head><body>${html}</body></html>`;
 }
 
-function DocThumb({ html, theme, customColors }: { html: string; theme: string; customColors?: CustomColors }) {
+function DocThumb({ html, theme, customColors, format }: { html: string; theme: string; customColors?: CustomColors; format?: { width: number; height: number } }) {
   const themeCssData = (() => {
     if (theme === "custom" && customColors) {
       const t = buildCustomTheme(customColors);
@@ -236,19 +241,23 @@ function DocThumb({ html, theme, customColors }: { html: string; theme: string; 
     return buildSingleThemeCss(theme);
   })();
 
-  const srcDoc = buildThumbHtml(html, themeCssData);
+  // Default Letter at 96dpi; honor stored dimensions for non-letter docs (LinkedIn carousels, 16:9 decks, etc.).
+  const widthPx = format?.width ?? 816;
+  const heightPx = format?.height ?? 1056;
+  const aspect = `${widthPx} / ${heightPx}`;
+  const srcDoc = buildThumbHtml(html, themeCssData, widthPx);
 
   return (
     <div
       className="w-full bg-white relative overflow-hidden"
-      style={{ aspectRatio: "8.5 / 11" }}
+      style={{ aspectRatio: aspect }}
     >
       <iframe
         srcDoc={srcDoc}
         className="absolute top-0 left-0 border-none pointer-events-none"
         style={{
-          width: "8.5in",
-          height: "11in",
+          width: `${widthPx}px`,
+          height: `${heightPx}px`,
           transform: "scale(var(--thumb-scale))",
           transformOrigin: "top left",
         }}
@@ -257,7 +266,7 @@ function DocThumb({ html, theme, customColors }: { html: string; theme: string; 
           const parent = el.parentElement;
           if (!parent) return;
           const ro = new ResizeObserver(([entry]) => {
-            const scale = entry.contentRect.width / (8.5 * 96);
+            const scale = entry.contentRect.width / widthPx;
             el.style.setProperty("--thumb-scale", String(scale));
           });
           ro.observe(parent);

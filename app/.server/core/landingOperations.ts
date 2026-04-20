@@ -70,11 +70,16 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           themeCss = docThemeCss.css;
           tailwindConfig = docThemeCss.tailwindConfig;
         }
+        const docFormat = landingMeta.format as { width?: number; height?: number } | undefined;
+        const format = docFormat?.width && docFormat?.height
+          ? { width: docFormat.width, height: docFormat.height }
+          : undefined;
         // Build print HTML (flat vertical for PDF generation)
         printHtml = buildDocumentPrintHtml(sections as Section3[], {
           themeCss,
           tailwindConfig,
           title: landing.name,
+          format,
         });
         // Build flipbook viewer (pdfUrl will be set after upload)
         return buildDocumentHtml(sections as Section3[], {
@@ -83,6 +88,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
           tailwindConfig,
           title: landing.name,
           description: landing.prompt || undefined,
+          format,
         });
       })()
     : landing.version === 5

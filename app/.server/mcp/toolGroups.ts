@@ -87,7 +87,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   // Documents
   "list_documents", "get_document",
   "create_document", "update_document", "delete_document",
-  "import_html",
+  "open_design_in_editor",
   "set_page_html", "get_page_html",
   "add_page", "delete_page", "reorder_pages",
   "deploy_document",
@@ -109,7 +109,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "list_files", "get_file", "upload_file",
   "db_list", "db_create", "db_query",
   "list_documents", "get_document", "create_document", "update_document", "delete_document",
-  "import_html",
+  "open_design_in_editor",
   "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
   "create_quotation",
   "edit_quotation",

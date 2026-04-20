@@ -40,6 +40,8 @@ interface PageListProps {
   brandKits?: BrandKit[];
   onSaveBrandKit?: (name: string) => void;
   onApplyBrandKit?: (kit: BrandKit) => void;
+  /** Page dimensions in CSS pixels. Defaults to Letter (816×1056) when absent. */
+  format?: { width: number; height: number };
 }
 
 /** Section3 with optional version history */
@@ -48,7 +50,7 @@ export interface Section3WithVersions extends Section3 {
 }
 
 /** Build HTML for the off-screen capture iframe */
-function buildCaptureHtml(sectionHtml: string, themeCssData?: { css: string; tailwindConfig: string }): string {
+function buildCaptureHtml(sectionHtml: string, themeCssData?: { css: string; tailwindConfig: string }, pageW = 816, pageH = 1056): string {
   return `<!DOCTYPE html><html><head>
 <meta charset="UTF-8">
 <script src="https://cdn.tailwindcss.com"><\/script>
@@ -56,14 +58,13 @@ ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/scr
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; width: 8.5in; height: 11in; overflow: hidden; }
+body { font-family: 'Inter', sans-serif; width: ${pageW}px; height: ${pageH}px; overflow: hidden; }
 ${themeCssData?.css || ""}
 </style>
 </head><body>${sectionHtml}</body></html>`;
 }
 
 const THUMB_W = 200;
-const THUMB_H = Math.round(THUMB_W * (11 / 8.5));
 
 /**
  * Captures static thumbnail images from sections using a single off-screen iframe.
@@ -71,8 +72,12 @@ const THUMB_H = Math.round(THUMB_W * (11 / 8.5));
  */
 function useThumbnailCapture(
   sections: Section3[],
-  themeCssData?: { css: string; tailwindConfig: string }
+  themeCssData?: { css: string; tailwindConfig: string },
+  format?: { width: number; height: number }
 ) {
+  const pageW = format?.width ?? 816;
+  const pageH = format?.height ?? 1056;
+  const thumbH = Math.round(THUMB_W * (pageH / pageW));
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const queueRef = useRef<{ id: string; html: string }[]>([]);
@@ -89,13 +94,13 @@ function useThumbnailCapture(
     // Create iframe on demand
     if (!iframeRef.current) {
       const iframe = document.createElement("iframe");
-      iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:816px;height:1056px;opacity:0;pointer-events:none;border:none;";
+      iframe.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${pageW}px;height:${pageH}px;opacity:0;pointer-events:none;border:none;`;
       document.body.appendChild(iframe);
       iframeRef.current = iframe;
     }
 
     const iframe = iframeRef.current;
-    const html = buildCaptureHtml(item.html, themeCssData);
+    const html = buildCaptureHtml(item.html, themeCssData, pageW, pageH);
 
     const onLoad = () => {
       iframe.removeEventListener("load", onLoad);
@@ -106,19 +111,19 @@ function useThumbnailCapture(
           if (!doc?.body) throw new Error("no doc");
           const canvas = document.createElement("canvas");
           canvas.width = THUMB_W * 2; // 2x for retina
-          canvas.height = THUMB_H * 2;
+          canvas.height = thumbH * 2;
           const ctx = canvas.getContext("2d")!;
           ctx.scale(2, 2);
 
           // Use svg foreignObject to render HTML to canvas
-          const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${THUMB_W}" height="${THUMB_H}">
-            <foreignObject width="816" height="1056" transform="scale(${THUMB_W / 816})">
+          const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${THUMB_W}" height="${thumbH}">
+            <foreignObject width="${pageW}" height="${pageH}" transform="scale(${THUMB_W / pageW})">
               ${new XMLSerializer().serializeToString(doc.documentElement)}
             </foreignObject>
           </svg>`;
           const img = new Image();
           img.onload = () => {
-            ctx.drawImage(img, 0, 0, THUMB_W, THUMB_H);
+            ctx.drawImage(img, 0, 0, THUMB_W, thumbH);
             const dataUrl = canvas.toDataURL("image/png");
             setThumbs((prev) => ({ ...prev, [item.id]: dataUrl }));
             busyRef.current = false;
@@ -218,11 +223,15 @@ export function PageList({
   brandKits,
   onSaveBrandKit,
   onApplyBrandKit,
+  format,
 }: PageListProps) {
   const sorted = [...sections]
     .filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__")
     .sort((a, b) => a.order - b.order);
-  const thumbs = useThumbnailCapture(sections, themeCssData);
+  const thumbs = useThumbnailCapture(sections, themeCssData, format);
+  const thumbAspect = format
+    ? `${format.width} / ${format.height}`
+    : "8.5 / 11";
   const dragRef = useRef<number | null>(null);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [fileDragOver, setFileDragOver] = useState<number | null>(null);
@@ -581,7 +590,7 @@ export function PageList({
               <div className="relative">
                 <div
                   className="w-full bg-white rounded-t-lg border border-gray-200 relative overflow-hidden"
-                  style={{ aspectRatio: "8.5 / 11", zIndex: 1 }}
+                  style={{ aspectRatio: thumbAspect, zIndex: 1 }}
                 >
                   {thumbs[section.id] ? (
                     <img

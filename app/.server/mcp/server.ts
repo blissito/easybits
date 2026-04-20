@@ -25,7 +25,7 @@ import { z } from "zod";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
-import { importHtml } from "./tools/importHtml";
+import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 
 // Legacy doc tools (create_document, fast_pdf, fast_quotation, edit_fast_pdf,
 // create_quotation, edit_quotation) are hidden by default so the agent does
@@ -1007,28 +1007,41 @@ function registerDocTools(server: McpServer) {
     })
   );
 
+  const openDesignInEditorSchema = {
+    url: z.string().url().optional().describe("Public http/https URL of the design HTML (Claude Design share link, published Gamma/Tome page, any public page). Server fetches it with a 10s timeout and 2MB cap. Private IPs, localhost, and non-http(s) schemes are rejected. Pass this INSTEAD OF `html` when you have a URL — no need to load the markup into the conversation."),
+    html: z.string().optional().describe("Raw HTML content (full <html> document or a fragment). Max 2MB. Use when you don't have a public URL (e.g. you generated the markup locally). If both `url` and `html` are provided, `html` wins."),
+    name: z.string().optional().describe("Name for the document and the raw HTML file. Default: 'Imported design'"),
+    destination: z.enum(["document"]).optional().describe("Where to create the editable artifact. MVP: 'document' only."),
+    format: z.object({
+      preset: z.enum(["1080x1080", "1080x1350", "letter", "slide-16-9"]).optional().describe("Preset dimensions. '1080x1080' = LinkedIn square, '1080x1350' = LinkedIn portrait, 'slide-16-9' = 1920x1080, 'letter' = default letter."),
+      width: z.number().optional().describe("Custom width in px (ignored if preset is set). Range 100-10000."),
+      height: z.number().optional().describe("Custom height in px (ignored if preset is set). Range 100-10000."),
+    }).optional().describe("Override page dimensions. Omit to let the server auto-detect from the source HTML (@page size, inline width/height, Tailwind arbitrary sizes, aspect classes)."),
+    brandKitId: z.string().optional().describe("Brand kit ID to apply to the document. Omit to use the user's default brand kit."),
+    normalizeColors: z.boolean().optional().describe("If true (default), rewrite hex values to semantic Tailwind classes so themes apply. Pass false to keep the original hex values verbatim."),
+    sourceUrl: z.string().optional().describe("Optional source URL for traceability (e.g. the original Claude Design URL)."),
+  } as const;
+
+  const openDesignInEditorHandler = wrapHandler(async (params, extra) => {
+    const ctx = extra.authInfo as unknown as AuthContext;
+    const result = await importHtml(ctx, params as ImportHtmlInput);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  });
+
+  server.tool(
+    "open_design_in_editor",
+    "Open a design in the EasyBits editor — the direct path from a generated design (Claude Design, Gamma, Tome, reveal.js deck, Swiper carousel, any scraped page) to an editable document the user can keep working on. Pass EITHER `url` (public http/https — server fetches it; preferred, avoids round-tripping the markup) OR `html` (raw markup, max 2MB). The server: (1) saves the raw source to the user's file library for traceability, (2) AUTO-SPLITS multi-slide designs into one editable page per slide by detecting `[data-slide]`, `[data-page]`, `[aria-roledescription=\"carousel\"] > *`, `.reveal .slides > section`, `.slide`, `.page`, `.carousel-item`, or top-level `<section>`/`<article>` — you do NOT split yourself, (3) AUTO-DETECTS page dimensions (`@page size`, inline `width`/`height`, Tailwind `w-[Npx] h-[Npx]`, `aspect-video`, `aspect-square`) so LinkedIn carousels (1080×1080, 1080×1350) and 16:9 decks render at their native size — pass `format` only to override, (4) normalizes hex colors to semantic Tailwind tokens (`bg-primary`, `text-on-surface`, etc.) so theme swaps paint the whole design. Returns `{ fileId, documentId, editorUrl, format, pagesDetected, formatDetected }` — `editorUrl` is the URL where the user can keep editing.",
+    openDesignInEditorSchema,
+    openDesignInEditorHandler
+  );
+
+  // Legacy alias — kept so existing MCP sessions calling `import_html` keep working.
+  // Prefer `open_design_in_editor` in new integrations.
   server.tool(
     "import_html",
-    "Import HTML from any source (Claude Design, Gamma, Tome, scraped pages, reveal.js, Swiper carousels, etc.) into EasyBits. Pass EITHER `url` (a public http/https page — we fetch it server-side) OR `html` (raw markup). Prefer `url` when you have one — skips round-tripping the markup. Always saves the raw HTML to the user's file library, then creates an editable Document (Landing v4). AUTO-SPLIT: the server parses the HTML and, if it detects multiple slides/pages (via `[data-slide]`, `[data-page]`, `[aria-roledescription=\"carousel\"] > *`, `.slide`, `.page`, `.carousel-item`, top-level `<section>`/`<article>`, etc.), creates one document page per slide — you do NOT need to split yourself. AUTO-FORMAT: the server also reads declared page dimensions from the source (`@page size`, inline `width/height`, Tailwind `w-[Npx] h-[Npx]`, `aspect-video`, `aspect-square`) and uses them, so LinkedIn carousels (1080×1080, 1080×1350) and 16:9 slide decks keep their native size without you passing `format`. Pass `format` only to OVERRIDE detection. Color normalization (default ON) remaps hex values to semantic Tailwind tokens so the user's theme paints the design on theme swap. Returns `{ fileId, documentId, editorUrl, format, pagesDetected, formatDetected }`.",
-    {
-      url: z.string().url().optional().describe("Public http/https URL of the HTML to import (Claude Design share link, published Gamma/Tome page, any public page). Server fetches it with a 10s timeout and 2MB cap. Private IPs, localhost, and non-http(s) schemes are rejected. Pass this INSTEAD OF `html` when you have a URL — no need to load the markup into the conversation."),
-      html: z.string().optional().describe("Raw HTML content (full <html> document or a fragment). Max 2MB. Use when you don't have a public URL (e.g. you generated the markup locally). If both `url` and `html` are provided, `html` wins."),
-      name: z.string().optional().describe("Name for the document and the raw HTML file. Default: 'Imported design'"),
-      destination: z.enum(["document"]).optional().describe("Where to create the editable artifact. MVP: 'document' only."),
-      format: z.object({
-        preset: z.enum(["1080x1080", "1080x1350", "letter", "slide-16-9"]).optional().describe("Preset dimensions. '1080x1080' = LinkedIn square, '1080x1350' = LinkedIn portrait, '16-9' slide = 1920x1080, 'letter' = default letter."),
-        width: z.number().optional().describe("Custom width in px (ignored if preset is set). Range 100-10000."),
-        height: z.number().optional().describe("Custom height in px (ignored if preset is set). Range 100-10000."),
-      }).optional().describe("Exact page dimensions. Omit for default letter."),
-      brandKitId: z.string().optional().describe("Brand kit ID to apply to the document. Omit to use the user's default brand kit."),
-      normalizeColors: z.boolean().optional().describe("If true (default), rewrite hex values to semantic classes so themes apply. Pass false to keep the original hex values verbatim."),
-      sourceUrl: z.string().optional().describe("Optional source URL for traceability (e.g. the original Claude Design URL)."),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await importHtml(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
+    "Alias of `open_design_in_editor` (prefer that name). Same schema and behavior. Kept for backward compatibility with existing MCP clients.",
+    openDesignInEditorSchema,
+    openDesignInEditorHandler
   );
 
   server.tool(

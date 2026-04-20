@@ -19,6 +19,7 @@ import { grapesToSections } from "~/lib/landing4/grapesToSections";
 import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
 import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
+import { buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import { normalizePlan } from "~/lib/plans";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
@@ -476,8 +477,17 @@ export default function DocumentEditor() {
     return () => source.close();
   }, [landing.id, isGenerating, revalidator]);
 
-  // Document-specific CSS for GrapesJS canvas iframe
-  const documentCanvasCss = `
+  // Document-specific CSS for GrapesJS canvas iframe.
+  // Reads `metadata.format` ({ width, height } in CSS pixels) from the landing so
+  // imported designs (LinkedIn carousels, 16:9 decks, etc.) render at their native
+  // size instead of always Letter. Falls back to Letter when no format is stored.
+  const canvasFormat = (landing.metadata as { format?: { width?: number; height?: number } } | null)?.format;
+  const documentCanvasCss = canvasFormat?.width && canvasFormat?.height
+    ? `
+    body { padding: 24px; background: #374151; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    section, [data-section-id] { width: ${canvasFormat.width}px; min-height: ${canvasFormat.height}px; max-height: ${canvasFormat.height}px; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0; box-sizing: border-box; }
+  `
+    : `
     body { padding: 24px; background: #374151; display: flex; flex-direction: column; align-items: center; gap: 24px; }
     section, [data-section-id] { width: 8.5in; min-height: 11in; max-height: 11in; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }
   `;
@@ -1306,101 +1316,22 @@ export default function DocumentEditor() {
   }
 
   function handleExportPdf(filterSectionIds?: string[]) {
-    // Build full HTML with Paged.js and open in new window for window.print()
-    const base = (filterSectionIds ? sections.filter(s => filterSectionIds.includes(s.id)) : sections)
-      .filter(s => s.id !== "__grapes_css__" && s.label !== "__css__");
-    const sorted = [...base].sort((a, b) => a.order - b.order);
+    const base = (filterSectionIds ? sections.filter(s => filterSectionIds.includes(s.id)) : sections);
+    // Reuse the canonical print builder — it already handles __grapes_css__ extraction,
+    // @page sizing, and format overrides. Letting the editor inline its own copy drifted
+    // from the Playwright path and hardcoded Letter.
+    const storedFormat = (landing.metadata as { format?: { width?: number; height?: number } } | null)?.format;
+    const format = storedFormat?.width && storedFormat?.height
+      ? { width: storedFormat.width, height: storedFormat.height }
+      : undefined;
 
-    // Extract GrapesJS CSS to include in print styles
-    const grapesCssSection = sections.find(s => s.id === "__grapes_css__");
-    let grapesCss = "";
-    if (grapesCssSection) {
-      const match = grapesCssSection.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-      grapesCss = match?.[1] || "";
-    }
-
-    const sectionsHtml = sorted
-      .map((s) => `<div class="page-section">${s.html}</div>`)
-      .join("\n");
-
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>${landing.name}</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    @page { size: letter; margin: 0; }
-    ${themeCssData?.css || ""}
-    ${grapesCss}
-    body { font-family: 'Inter', sans-serif; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page-section {
-      width: 8.5in;
-      min-height: 11in;
-      height: 11in;
-      overflow: hidden;
-      position: relative;
-      page-break-after: always;
-      break-after: page;
-      page-break-inside: avoid;
-      break-inside: avoid;
-      box-sizing: border-box;
-    }
-    .page-section:last-child { page-break-after: auto; break-after: auto; }
-    @media print {
-      .page-section { page-break-after: always !important; break-after: page !important; }
-      .page-section:last-child { page-break-after: auto !important; break-after: auto !important; }
-    }
-  </style>
-</head>
-<body>
-${sectionsHtml}
-<script>
-  // Tailwind CDN injects a <style> into <head> when done processing.
-  // Watch for it, then wait for all images, then print.
-  (function() {
-    var printed = false;
-    function doPrint() {
-      if (printed) return;
-      printed = true;
-      // Wait for all images to load before printing
-      var imgs = Array.from(document.images);
-      var pending = imgs.filter(function(img) { return !img.complete; });
-      if (pending.length === 0) { window.print(); return; }
-      var loaded = 0;
-      function check() { if (++loaded >= pending.length) window.print(); }
-      pending.forEach(function(img) {
-        img.addEventListener('load', check);
-        img.addEventListener('error', check);
-      });
-      // Safety: don't wait more than 5s for images
-      setTimeout(function() { window.print(); }, 5000);
-    }
-
-    // MutationObserver on <head>: Tailwind CDN adds/updates a <style> tag
-    var observer = new MutationObserver(function(mutations) {
-      for (var i = 0; i < mutations.length; i++) {
-        var nodes = mutations[i].addedNodes;
-        for (var j = 0; j < nodes.length; j++) {
-          if (nodes[j].tagName === 'STYLE') {
-            // Tailwind style injected — debounce briefly then print
-            observer.disconnect();
-            setTimeout(doPrint, 300);
-            return;
-          }
-        }
-      }
+    const html = buildDocumentPrintHtml(base, {
+      themeCss: themeCssData?.css,
+      tailwindConfig: themeCssData?.tailwindConfig,
+      title: landing.name,
+      format,
+      autoPrint: true,
     });
-    observer.observe(document.head, { childList: true });
-
-    // Fallback: if Tailwind CDN already ran or never fires, print after 4s
-    setTimeout(function() { observer.disconnect(); doPrint(); }, 4000);
-  })();
-<\/script>
-</body>
-</html>`;
 
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -1454,6 +1385,7 @@ ${sectionsHtml}
         onAdd={() => { setInsertAtIndex(null); setRegenTargetId(null); setShowAddPrompt(true); }}
         onInsertAt={(afterIdx) => { setInsertAtIndex(afterIdx); setRegenTargetId(null); setShowAddPrompt(true); }}
         onDropImage={handleDropImage}
+        format={canvasFormat?.width && canvasFormat?.height ? { width: canvasFormat.width, height: canvasFormat.height } : undefined}
         theme={currentTheme}
         onThemeChange={(t: string) => handleThemeChange(t)}
         customColors={(currentCustomColors ?? undefined) as CustomColors | undefined}

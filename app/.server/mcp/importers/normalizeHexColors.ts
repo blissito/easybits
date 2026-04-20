@@ -77,6 +77,125 @@ const ARBITRARY_RE = /\b(bg|text|border|ring|from|to|via|outline|divide|placehol
 // Inline style hex in color / background-color / background / border-color properties
 const INLINE_STYLE_RE = /(background(?:-color)?|color|border(?:-color)?|fill|stroke)\s*:\s*(#[0-9a-fA-F]{3,8})/gi;
 
+// <style> blocks — for the CSS-class-rule extraction pass.
+const STYLE_BLOCK_RE = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+
+// A selector is "simple" if it's a single class or a comma-separated list of classes
+// with no pseudo, descendant, attribute, or compound specifiers.
+const SIMPLE_CLASS_RE = /^\s*(\.[a-zA-Z_][\w-]*(?:\s*,\s*\.[a-zA-Z_][\w-]*)*)\s*$/;
+
+const COLOR_PROPS = new Set([
+  "color",
+  "background",
+  "background-color",
+  "border-color",
+  "fill",
+  "stroke",
+]);
+
+function propToRole(prop: string): Role {
+  const p = prop.toLowerCase();
+  if (p === "color") return "text";
+  if (p.startsWith("background") || p === "fill") return "bg";
+  return "border";
+}
+
+// Split a declaration body by top-level `;`, respecting parentheses so `rgb(1, 2, 3)` stays whole.
+function splitDeclarations(body: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of body) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === ";" && depth === 0) {
+      out.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) out.push(current);
+  return out;
+}
+
+/**
+ * Walk top-level rules in a CSS string. Calls `visitSimple(classNames, declarations)`
+ * for each rule whose selector is a simple class list, and `visitOther(raw)` for
+ * at-rules / complex-selector rules the caller should preserve verbatim. Comments
+ * and whitespace are passed through `visitOther` unchanged.
+ */
+function walkCssTopLevel(
+  css: string,
+  visitSimple: (classNames: string[], selector: string, body: string) => { keptBody: string },
+  visitOther: (raw: string) => void,
+): string {
+  let out = "";
+  let i = 0;
+  while (i < css.length) {
+    // Whitespace → pass through.
+    if (/\s/.test(css[i])) { out += css[i]; i++; continue; }
+    // CSS comment → pass through.
+    if (css[i] === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      const stop = end === -1 ? css.length : end + 2;
+      out += css.slice(i, stop);
+      i = stop;
+      continue;
+    }
+
+    const braceStart = css.indexOf("{", i);
+    if (braceStart === -1) {
+      out += css.slice(i);
+      break;
+    }
+
+    // Track matching brace for the rule's body (handles nested rules inside @media).
+    let depth = 1;
+    let j = braceStart + 1;
+    while (j < css.length && depth > 0) {
+      if (css[j] === "{") depth++;
+      else if (css[j] === "}") depth--;
+      if (depth === 0) break;
+      j++;
+    }
+    const bodyEnd = j;
+    const rawSelector = css.slice(i, braceStart);
+    const selectorTrim = rawSelector.trim();
+    const body = css.slice(braceStart + 1, bodyEnd);
+    const raw = css.slice(i, bodyEnd + 1);
+
+    if (selectorTrim.startsWith("@")) {
+      visitOther(raw);
+      out += raw;
+      i = bodyEnd + 1;
+      continue;
+    }
+
+    const m = selectorTrim.match(SIMPLE_CLASS_RE);
+    if (!m) {
+      visitOther(raw);
+      out += raw;
+      i = bodyEnd + 1;
+      continue;
+    }
+
+    const classNames = m[1].split(",").map(s => s.trim().replace(/^\./, ""));
+    const { keptBody } = visitSimple(classNames, rawSelector, body);
+    if (keptBody.trim()) {
+      out += rawSelector + "{" + keptBody + "}";
+    }
+    // else: rule collapsed, drop it entirely.
+    i = bodyEnd + 1;
+  }
+  return out;
+}
+
+function extractHexFromValue(value: string): string | null {
+  const m = value.trim().match(/^(#[0-9a-fA-F]{3,8})(\s+!important)?$/);
+  return m ? m[1] : null;
+}
+
 function collectUsages(html: string): HexUsage[] {
   const counts = new Map<string, HexUsage>(); // key = `${role}|${hex}`
 
@@ -106,6 +225,27 @@ function collectUsages(html: string): HexUsage[] {
       prop.startsWith("background") ? "bg" :
       "border";
     bump(role, m[2]);
+  }
+
+  // <style> class-rule declarations
+  for (const m of html.matchAll(STYLE_BLOCK_RE)) {
+    const cssText = m[1];
+    walkCssTopLevel(
+      cssText,
+      (_classNames, _selector, body) => {
+        for (const decl of splitDeclarations(body)) {
+          const colonIdx = decl.indexOf(":");
+          if (colonIdx === -1) continue;
+          const prop = decl.slice(0, colonIdx).trim().toLowerCase();
+          if (!COLOR_PROPS.has(prop)) continue;
+          const hex = extractHexFromValue(decl.slice(colonIdx + 1));
+          if (!hex) continue;
+          bump(propToRole(prop), hex);
+        }
+        return { keptBody: body };
+      },
+      () => {},
+    );
   }
 
   return Array.from(counts.values());
@@ -197,6 +337,80 @@ export interface NormalizeResult {
   replacements: number;
 }
 
+/**
+ * Rewrite simple class-selector CSS rules in `<style>` blocks: strip hex color
+ * declarations and append equivalent Tailwind classes to every element carrying
+ * the class. Complex selectors, pseudo-classes, at-rules, and non-color
+ * declarations are left untouched.
+ *
+ * Unmapped hexes (no role match) fall back to Tailwind arbitrary values
+ * (`text-[#abcdef]`) so the output stays 100% class-driven.
+ */
+function rewriteStyleBlocks(html: string, roleMap: RoleMap): { html: string; replacements: number } {
+  let replacements = 0;
+  // className → Set of Tailwind classes to append.
+  const additions = new Map<string, Set<string>>();
+
+  const out = html.replace(STYLE_BLOCK_RE, (fullTag, cssText) => {
+    const newCss = walkCssTopLevel(
+      cssText,
+      (classNames, _selector, body) => {
+        const kept: string[] = [];
+        for (const decl of splitDeclarations(body)) {
+          const colonIdx = decl.indexOf(":");
+          if (colonIdx === -1) { kept.push(decl); continue; }
+          const prop = decl.slice(0, colonIdx).trim().toLowerCase();
+          const valueRaw = decl.slice(colonIdx + 1);
+          if (!COLOR_PROPS.has(prop)) { kept.push(decl); continue; }
+          const hex = extractHexFromValue(valueRaw);
+          if (!hex) { kept.push(decl); continue; }
+          // Convert to Tailwind class (semantic if mapped, arbitrary otherwise).
+          const role = propToRole(prop);
+          const semantic = hexToSemantic(hex, roleMap);
+          const tw = semantic
+            ? roleToSemantic(role, semantic)
+            : `${role}-[${normalizeHex(hex)}]`;
+          for (const cn of classNames) {
+            if (!additions.has(cn)) additions.set(cn, new Set());
+            additions.get(cn)!.add(tw);
+          }
+          replacements += 1;
+          // Decl is dropped from the rule.
+        }
+        return { keptBody: kept.join(";") };
+      },
+      () => {},
+    );
+
+    // Strip the tag if the block ends up empty (whitespace only).
+    if (!newCss.trim()) return "";
+    // Preserve the original <style ...> opening so attributes survive.
+    return fullTag.replace(/<style([^>]*)>[\s\S]*?<\/style>/i, `<style$1>${newCss}</style>`);
+  });
+
+  if (additions.size === 0) return { html: out, replacements };
+
+  // Append classes to every matching element. Whole-word class match.
+  const classAttrRe = /\bclass\s*=\s*("([^"]*)"|'([^']*)')/g;
+  const finalHtml = out.replace(classAttrRe, (full: string, _q: string, dq: string | undefined, sq: string | undefined) => {
+    const current = dq ?? sq ?? "";
+    const present = new Set<string>(current.split(/\s+/).filter(Boolean));
+    const toAdd: string[] = [];
+    for (const className of present) {
+      const extras = additions.get(className);
+      if (!extras) continue;
+      for (const extra of extras) {
+        if (!present.has(extra)) toAdd.push(extra);
+      }
+    }
+    if (toAdd.length === 0) return full;
+    const merged = [...present, ...toAdd].join(" ");
+    return `class="${merged}"`;
+  });
+
+  return { html: finalHtml, replacements };
+}
+
 export function normalizeHexColors(html: string): NormalizeResult {
   const usages = collectUsages(html);
   if (usages.length === 0) {
@@ -206,6 +420,11 @@ export function normalizeHexColors(html: string): NormalizeResult {
   const roleMap = assignRoles(usages);
   let out = html;
   let replacements = 0;
+
+  // 0. Rewrite simple class rules in <style> blocks → inject Tailwind classes on elements.
+  const styleResult = rewriteStyleBlocks(out, roleMap);
+  out = styleResult.html;
+  replacements += styleResult.replacements;
 
   // 1. Rewrite Tailwind arbitrary values
   out = out.replace(ARBITRARY_RE, (match, prefix: string, hexBody: string) => {

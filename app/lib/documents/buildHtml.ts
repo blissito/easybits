@@ -63,6 +63,7 @@ export function buildDocumentHtml(
     description?: string;
     url?: string;
     ogImage?: string;
+    format?: { width: number; height: number };
   }
 ): string {
   const sorted = [...sections]
@@ -70,6 +71,10 @@ export function buildDocumentHtml(
     .sort((a, b) => a.order - b.order);
   const title = options?.title || "Documento";
   const totalPages = sorted.length;
+  const format = options?.format;
+  // Default letter at 96dpi; override with stored dimensions for carousels / slide decks.
+  const pageW = format?.width ?? 816;
+  const pageH = format?.height ?? 1056;
 
   // Extract GrapesJS CSS from the special __grapes_css__ section
   const cssSection = sections.find((s) => s.id === "__grapes_css__");
@@ -200,19 +205,19 @@ export function buildDocumentHtml(
       overflow: hidden;
     }
     .page-inner {
-      width: 816px;
-      height: 1056px;
+      width: ${pageW}px;
+      height: ${pageH}px;
       transform-origin: top left;
       overflow: hidden;
     }
     /* Print: show pages vertically, hide toolbar */
-    @page { size: letter; margin: 0; }
+    @page { size: ${format ? `${pageW}px ${pageH}px` : "letter"}; margin: 0; }
     @media print {
       .doc-toolbar, .page-nav, .flipbook-container { display: none !important; }
       body { background: white; }
       .print-pages { display: block !important; }
       .print-page {
-        width: 8.5in; height: 11in;
+        width: ${pageW}px; height: ${pageH}px;
         overflow: hidden;
         page-break-after: always; break-after: page;
         page-break-inside: avoid; break-inside: avoid;
@@ -354,6 +359,8 @@ export function buildDocumentPrintHtml(
     tailwindConfig?: string;
     title?: string;
     format?: { width: number; height: number };
+    /** If true, injects a client-side script that waits for Tailwind CDN + images, then calls window.print(). Use this for the editor's "Imprimir" flow — Playwright-based renderers should leave it off. */
+    autoPrint?: boolean;
   }
 ): string {
   const sorted = [...sections]
@@ -400,6 +407,39 @@ export function buildDocumentPrintHtml(
 </head>
 <body>
 ${sectionsHtml}
+${options?.autoPrint ? `<script>
+(function() {
+  var printed = false;
+  function doPrint() {
+    if (printed) return;
+    printed = true;
+    var imgs = Array.from(document.images);
+    var pending = imgs.filter(function(img) { return !img.complete; });
+    if (pending.length === 0) { window.print(); return; }
+    var loaded = 0;
+    function check() { if (++loaded >= pending.length) window.print(); }
+    pending.forEach(function(img) {
+      img.addEventListener('load', check);
+      img.addEventListener('error', check);
+    });
+    setTimeout(function() { window.print(); }, 5000);
+  }
+  var observer = new MutationObserver(function(mutations) {
+    for (var i = 0; i < mutations.length; i++) {
+      var nodes = mutations[i].addedNodes;
+      for (var j = 0; j < nodes.length; j++) {
+        if (nodes[j].tagName === 'STYLE') {
+          observer.disconnect();
+          setTimeout(doPrint, 300);
+          return;
+        }
+      }
+    }
+  });
+  observer.observe(document.head, { childList: true });
+  setTimeout(function() { observer.disconnect(); doPrint(); }, 4000);
+})();
+<\/script>` : ''}
 </body>
 </html>`;
 }
