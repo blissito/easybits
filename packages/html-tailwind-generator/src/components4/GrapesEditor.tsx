@@ -213,12 +213,15 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         const comps = wrapper.components().models || [];
         const contentComps = comps.filter((c: any) => (c.get("tagName") || "").toLowerCase() !== "style");
         const target = contentComps[index];
-        if (!target) {
-          console.warn("[scrollToIndex] No component at index", index, "— have", contentComps.length, "content components");
+        if (!target) return;
+        ed.select(target);
+        const el = target.getEl() as HTMLElement | undefined;
+        if (index === 0) {
+          // First page — scroll the iframe doc to the top so the header is visible.
+          ed.Canvas.getDocument()?.documentElement?.scrollTo({ top: 0, behavior: "smooth" });
           return;
         }
-        ed.select(target);
-        (ed.Canvas as any).scrollTo?.(target, { behavior: "smooth", block: "start", force: true });
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
       },
       replaceComponent: (componentId: string, newHtml: string) => {
         const ed = editorRef.current;
