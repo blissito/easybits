@@ -1412,7 +1412,16 @@ export default function DocumentEditor() {
           if (isGenerating) {
             streamingRef.current?.scrollToSection(id);
           } else {
-            editorRef.current?.scrollToSection(id);
+            // Use scrollToIndex: robust even when GrapesJS strips data-section-id from
+            // the component model during HTML parse. Both sidebar thumbnails and GrapesJS
+            // wrapper children are ordered the same way, so position maps 1:1.
+            const contentSecs = sections
+              .filter((s) => s.id !== "__grapes_css__")
+              .sort((a, b) => a.order - b.order);
+            const idx = contentSecs.findIndex((s) => s.id === id);
+            if (idx >= 0) {
+              editorRef.current?.scrollToIndex(idx);
+            }
           }
           if (isMobile) setShowMobilePages(false);
         }}

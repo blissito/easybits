@@ -53,8 +53,10 @@ export interface GrapesEditorHandle {
   togglePreview: () => boolean;
   /** Toggle sw-visibility (component border guides), returns new state */
   toggleSwVisibility: () => boolean;
-  /** Scroll the canvas iframe to a section by data-section-id */
+  /** Scroll the canvas iframe to a section by data-section-id. Falls back to iframe DOM query if the component model lost the attribute. */
   scrollToSection: (sectionId: string) => void;
+  /** Scroll the canvas to the N-th content section (skips __grapes_css__ style). Index-based is robust even when GrapesJS strips data-* attributes during parse. */
+  scrollToIndex: (index: number) => void;
   /** Set canvas zoom level (percentage, e.g. 50 = 50%) */
   setZoom: (value: number) => void;
   /** Get current canvas zoom level */
@@ -181,18 +183,41 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         const wrapper = ed.DomComponents.getWrapper();
         if (!wrapper) return;
         const comps = wrapper.components().models || [];
+
+        // (a) Try the GrapesJS model. This is the fast path when attributes were preserved.
         const target = comps.find((c: any) => c.getAttributes()["data-section-id"] === sectionId);
+        if (target) {
+          ed.select(target);
+          (ed.Canvas as any).scrollTo?.(target, { behavior: "smooth", block: "start", force: true });
+          return;
+        }
+
+        // (b) GrapesJS sometimes discards custom `data-*` attributes from the model
+        // while keeping them on the rendered DOM. Scroll via the iframe element directly —
+        // Canvas.scrollTo accepts an HTMLElement too.
+        const doc = ed.Canvas.getDocument();
+        const el = doc?.querySelector(`[data-section-id="${sectionId}"]`) as HTMLElement | null;
+        if (el) {
+          (ed.Canvas as any).scrollTo?.(el, { behavior: "smooth", block: "start", force: true });
+          return;
+        }
+
+        console.warn("[scrollToSection] Section not found:", sectionId, "Model attrs:", comps.map((c: any) => c.getAttributes()["data-section-id"]), "DOM has [data-section-id]?", !!doc?.querySelector("[data-section-id]"));
+      },
+
+      scrollToIndex: (index: number) => {
+        const ed = editorRef.current;
+        if (!ed) return;
+        const wrapper = ed.DomComponents.getWrapper();
+        if (!wrapper) return;
+        const comps = wrapper.components().models || [];
+        const contentComps = comps.filter((c: any) => (c.get("tagName") || "").toLowerCase() !== "style");
+        const target = contentComps[index];
         if (!target) {
-          console.warn("[scrollToSection] Section not found:", sectionId, "Available attrs:", comps.map((c: any) => c.getAttributes()["data-section-id"]));
+          console.warn("[scrollToIndex] No component at index", index, "— have", contentComps.length, "content components");
           return;
         }
         ed.select(target);
-        // GrapesJS canonical scroll API — internally resolves the component view,
-        // checks viewport, and scrolls the right container (iframe or its wrapper).
-        // `force: true` is necessary because our 1080×1080 slides are often taller
-        // than the visible canvas, so multiple slides count as "partially in viewport"
-        // and the default scrollIntoView skips the scroll. `block: "start"` aligns
-        // the clicked page to the top so the user sees it clean.
         (ed.Canvas as any).scrollTo?.(target, { behavior: "smooth", block: "start", force: true });
       },
       replaceComponent: (componentId: string, newHtml: string) => {
