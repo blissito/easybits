@@ -124,12 +124,22 @@ const VOID_TAGS = new Set([
   "embed", "source", "track", "wbr",
 ]);
 
-/** Parse a class string and determine the effective bg family (ignoring state variants like hover:). */
+/** Parse a class string and determine the effective bg family (ignoring state variants like hover:).
+ *  Returns null for low-opacity tints (< 50%) — those are overlays that pass the ancestor bg through,
+ *  so the text color should be decided against the real ancestor, not the tint.
+ */
 function detectBgFamily(classStr: string): BgFamily {
   const tokens = classStr.split(/\s+/).filter((c) => c && !c.includes(":"));
   // Last-wins: if an element has multiple bg classes, the rightmost one should reflect intent.
   let found: BgFamily = null;
   for (const t of tokens) {
+    // Extract opacity suffix if present (e.g. "/10", "/50") and ignore anything below 50 —
+    // those look through to the ancestor bg and should NOT be treated as a solid background.
+    const opMatch = t.match(/\/(\d{1,3})$/);
+    if (opMatch) {
+      const op = parseInt(opMatch[1], 10);
+      if (op < 50) continue;
+    }
     if (/^bg-primary(?:-light|-dark)?(?:\/\d+)?$/.test(t)) found = "primary";
     else if (/^bg-secondary(?:\/\d+)?$/.test(t)) found = "secondary";
     else if (/^bg-accent(?:\/\d+)?$/.test(t)) found = "accent";
