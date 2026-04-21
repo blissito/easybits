@@ -233,7 +233,7 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   }
   const url = website?.subdomainEnabled
     ? `${proto}://${slug}.easybits.cloud`
-    : `${proto}://${process.env.NODE_ENV === "production" ? "easybits.cloud" : "localhost:3000"}/s/${slug}/`;
+    : `${proto}://${process.env.NODE_ENV === "production" ? "www.easybits.cloud" : "localhost:3000"}/s/${slug}/`;
   return { url, cdnUrl: publicUrl, websiteId, slug };
 }
 

@@ -3079,7 +3079,7 @@ The landing is a professional, responsive page with a gradient background, previ
     {
       name: z.string().describe("Lead magnet name (e.g. 'Guía de Cerámica', 'Checklist SEO')"),
       description: z.string().describe("Marketing copy for the landing — what the user gets and why"),
-      deliveryUrl: z.string().describe("URL to redirect after form submission (e.g. published document URL like https://easybits.cloud/s/slug/)"),
+      deliveryUrl: z.string().describe("URL to redirect after form submission (e.g. published document URL like https://www.easybits.cloud/s/slug/)"),
       previewImageUrl: z.string().optional().describe("Image URL for the landing teaser (e.g. cover page screenshot)"),
       websiteId: z.string().optional().describe("Existing website ID, or a new one is created"),
       fields: z.array(z.object({
@@ -3180,7 +3180,7 @@ ${formHtml}
       const _ws = await db.website.findUnique({ where: { id: websiteId } });
       const landingUrl = _ws?.subdomainEnabled
         ? `https://${websiteSlug}.easybits.cloud`
-        : `https://easybits.cloud/s/${websiteSlug}/`;
+        : `https://www.easybits.cloud/s/${websiteSlug}/`;
 
       return {
         content: [{

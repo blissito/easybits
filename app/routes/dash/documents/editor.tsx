@@ -221,7 +221,10 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     });
     if (website) {
       const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-      websiteUrl = `${proto}://${website.slug}.easybits.cloud`;
+      const host = process.env.NODE_ENV === "production" ? "www.easybits.cloud" : "localhost:3000";
+      websiteUrl = website.subdomainEnabled
+        ? `${proto}://${website.slug}.easybits.cloud`
+        : `${proto}://${host}/s/${website.slug}/`;
     }
   }
 

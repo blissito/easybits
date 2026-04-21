@@ -379,7 +379,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   }
 
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  const host = process.env.NODE_ENV === "production" ? "easybits.cloud" : "localhost:3000";
+  const host = process.env.NODE_ENV === "production" ? "www.easybits.cloud" : "localhost:3000";
   const url = website?.subdomainEnabled
     ? `${proto}://${slug}.easybits.cloud`
     : `${proto}://${host}/s/${slug}/`;
