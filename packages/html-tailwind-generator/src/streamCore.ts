@@ -268,10 +268,63 @@ export interface StreamGenerateOptions {
   onImageUpdate?: (sectionId: string, html: string) => void;
   /** Called with raw text buffer for real-time partial streaming */
   onRawChunk?: (buffer: string, completedCount: number) => void;
+  /**
+   * Called with the HTML of the section currently being streamed, BEFORE it's
+   * fully parsed. Fires as characters arrive so consumers can render a live
+   * preview of the section being built. The index is the 0-based position of
+   * this section in the final output (equal to the number of already-completed
+   * sections at the time of this call).
+   *
+   * Note: the partial HTML will contain unclosed tags while streaming — the
+   * browser's parser handles this gracefully when injected via innerHTML.
+   */
+  onPartialSection?: (index: number, partialHtml: string) => void;
   /** Called when generation is complete */
   onDone?: (sections: Section3[]) => void;
   /** Called on error */
   onError?: (error: Error) => void;
+}
+
+/**
+ * Extract the HTML value of the in-progress section from the NDJSON buffer.
+ * Returns null if no `"html"` key has started yet. Gracefully handles the
+ * common streaming case where the value is mid-write with incomplete escape
+ * sequences at the end.
+ */
+function extractPartialHtml(buffer: string): string | null {
+  const keyMatch = buffer.match(/"html"\s*:\s*"/);
+  if (!keyMatch || keyMatch.index === undefined) return null;
+  const start = keyMatch.index + keyMatch[0].length;
+  // Walk forward to find unescaped closing " (or end of buffer if still streaming)
+  let end = buffer.length;
+  let i = start;
+  while (i < buffer.length) {
+    const ch = buffer[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    if (ch === '"') {
+      end = i;
+      break;
+    }
+    i++;
+  }
+  let raw = buffer.slice(start, end);
+  // Drop a trailing lone backslash (incomplete escape)
+  if (raw.endsWith("\\") && !raw.endsWith("\\\\")) raw = raw.slice(0, -1);
+  try {
+    return JSON.parse('"' + raw + '"');
+  } catch {
+    // Manual unescape as fallback
+    return raw
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\")
+      .replace(/\\\//g, "/");
+  }
 }
 
 /**
@@ -418,6 +471,9 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
     );
   }
 
+  const { onPartialSection } = options;
+  let lastPartialHtml = "";
+
   try {
     let chunkCount = 0;
     for await (const chunk of result.textStream) {
@@ -429,10 +485,21 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
       for (const obj of objects) {
         chunkCount = 0;
         processObject(obj);
+        lastPartialHtml = ""; // reset so next section starts fresh
       }
 
       if (onRawChunk && chunkCount % 5 === 0 && buffer.length > 20) {
         onRawChunk(buffer, allSections.length);
+      }
+
+      // Emit partial HTML every ~3 chunks so consumers can render the section
+      // being built in real time without flooding the main thread.
+      if (onPartialSection && chunkCount % 3 === 0) {
+        const partial = extractPartialHtml(buffer);
+        if (partial && partial !== lastPartialHtml) {
+          lastPartialHtml = partial;
+          onPartialSection(allSections.length, partial);
+        }
       }
     }
 

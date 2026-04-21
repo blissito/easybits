@@ -149,6 +149,16 @@ export interface GenerateOptions {
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   onSection?: (section: Section3) => void;
   onImageUpdate?: (sectionId: string, html: string) => void;
+  /**
+   * Called with the HTML of the section currently being streamed, BEFORE it's
+   * fully parsed. Fires roughly every ~3 chunks so consumers can show a live
+   * element-by-element preview of the section being built. `index` is the
+   * 0-based position of this section (= number of already-completed sections).
+   *
+   * The partial HTML may contain unclosed tags — the browser's innerHTML
+   * parser closes them automatically when you inject it into a DOM node.
+   */
+  onPartialSection?: (index: number, partialHtml: string) => void;
   onDone?: (sections: Section3[]) => void;
   onError?: (error: Error) => void;
   /** Theme colors to inject into the AI prompt (deprecated — use themeName) */
