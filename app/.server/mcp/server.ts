@@ -27,15 +27,13 @@ import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 
-// Legacy doc tools (create_document, fast_pdf, fast_quotation, edit_fast_pdf,
-// create_quotation, edit_quotation) are hidden by default so the agent does
-// not get confused during the structured_doc experiment. Set
-// EXPOSE_LEGACY_DOC_TOOLS=true to restore them.
+// Legacy quotation/fast-pdf tools are hidden by default so the agent does not
+// get confused during the structured_doc experiment. Document v4 tools
+// (create_document, set_page_html, add_page, deploy_document, etc.) stay
+// visible — they are the current editing path. Set EXPOSE_LEGACY_DOC_TOOLS=true
+// to restore the fast/quotation ones.
 const EXPOSE_LEGACY_DOC_TOOLS = process.env.EXPOSE_LEGACY_DOC_TOOLS === "true";
 const LEGACY_DOC_TOOLS = new Set([
-  "create_document", "update_document", "delete_document",
-  "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
-  "list_documents", "get_document",
   "create_quotation", "edit_quotation",
   "fast_quotation", "fast_pdf", "edit_fast_pdf",
   "create_document_from_cfdi",
