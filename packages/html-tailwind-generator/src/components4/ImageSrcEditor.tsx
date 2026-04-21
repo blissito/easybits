@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { Editor } from "grapesjs";
 
 interface Props {
@@ -44,6 +44,7 @@ export default function ImageSrcEditor({ editor }: Props) {
   const apply = useCallback((next: { src?: string; alt?: string }) => {
     if (!selectedComponent) return;
     selectedComponent.addAttributes?.(next);
+    if (next.src !== undefined) selectedComponent.set?.("src", next.src);
     const el = selectedComponent.getEl?.();
     if (el) {
       if (next.src !== undefined) el.setAttribute("src", next.src);
@@ -61,13 +62,19 @@ export default function ImageSrcEditor({ editor }: Props) {
     apply({ alt });
   }, [apply, alt]);
 
+  const prevCidRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!editor) return;
 
     const onSelected = (component: any) => {
+      const cid: string | null = component?.cid ?? component?.getId?.() ?? null;
+      const isSame = cid !== null && cid === prevCidRef.current;
+      prevCidRef.current = cid;
       setSelectedComponent(component);
       const img = isImageComponent(component);
       setIsImg(img);
+      if (isSame) return;
       if (img) {
         setSrc(readSrc(component));
         setAlt(readAlt(component));
@@ -78,6 +85,7 @@ export default function ImageSrcEditor({ editor }: Props) {
       }
     };
     const onDeselected = () => {
+      prevCidRef.current = null;
       setSelectedComponent(null);
       setIsImg(false);
       setSrc("");

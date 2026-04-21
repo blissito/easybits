@@ -599,7 +599,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
         [
           "component:update", "component:add", "component:remove",
           "component:drag:end", "component:input", "canvas:drop",
-          "block:drag:stop", "undo", "redo",
+          "block:drag:stop", "undo", "redo", "sidebar:change",
         ].forEach((evt) => editor.on(evt, notify));
 
         // Collapse all block categories except CTA
