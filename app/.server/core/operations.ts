@@ -593,23 +593,32 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
     });
   }
 
+  // Slug must be globally unique (schema enforces per-owner uniqueness only,
+  // but public URLs are `/s/{slug}/` — two owners sharing a slug would collide
+  // at the public route). Pre-check across all non-deleted websites. Deleted
+  // sites' slugs are free to reuse since the loader filters them out.
   let website;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const MAX_ATTEMPTS = 10;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const slug = [randomFrom(NOUNS), randomFrom(PARTICIPLES_PRESENT)].join("-");
+    const taken = await db.website.findFirst({
+      where: { slug, status: { not: "DELETED" } },
+      select: { id: true },
+    });
+    if (taken) continue;
     try {
       website = await db.website.create({
         data: { name, slug, ownerId: ctx.user.id, prefix: "" },
       });
       break;
     } catch (err: unknown) {
-      // Unique constraint violation — retry with different slug
       const isPrismaUnique =
         err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002";
-      if (!isPrismaUnique || attempt === 2) throw err;
+      if (!isPrismaUnique || attempt === MAX_ATTEMPTS - 1) throw err;
     }
   }
 
-  if (!website) throw new Error("Failed to create website");
+  if (!website) throw new Error("No se pudo generar un slug único para el website");
 
   const updated = await db.website.update({
     where: { id: website.id },
