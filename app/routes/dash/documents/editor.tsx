@@ -419,6 +419,8 @@ export default function DocumentEditor() {
   );
   const [liveUrl, setLiveUrl] = useState(websiteUrl);
   const [livePdfUrl, setLivePdfUrl] = useState<string | undefined>();
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingImages, setIsExportingImages] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showMobilePages, setShowMobilePages] = useState(false);
@@ -1322,6 +1324,8 @@ export default function DocumentEditor() {
   async function handleExportImages(filterSectionIds?: string[]) {
     // Renders one PNG per page via Playwright and triggers per-file downloads.
     // Built for social carousels (LinkedIn/IG) where the platform wants N images.
+    if (isExportingImages) return;
+    setIsExportingImages(true);
     const toastId = toast.loading("Generando imágenes…");
     try {
       const params = new URLSearchParams();
@@ -1352,6 +1356,8 @@ export default function DocumentEditor() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error inesperado";
       toast.error(`No se pudieron generar las imágenes: ${msg}`, { id: toastId });
+    } finally {
+      setIsExportingImages(false);
     }
   }
 
@@ -1360,6 +1366,8 @@ export default function DocumentEditor() {
     // `window.print()` was getting overridden by Chrome's printer paper size, so
     // 1080×1080 carousels were flattened to Letter. Playwright `page.pdf({width,height})`
     // respects the doc's stored format regardless of the client.
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
     const toastId = toast.loading("Generando PDF…");
     try {
       const params = new URLSearchParams();
@@ -1387,6 +1395,8 @@ export default function DocumentEditor() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error inesperado";
       toast.error(`No se pudo generar el PDF: ${msg}`, { id: toastId });
+    } finally {
+      setIsExportingPdf(false);
     }
   }
 
@@ -1562,7 +1572,8 @@ export default function DocumentEditor() {
               size="chip"
               mode="ghost"
               onClick={() => handleExportImages()}
-              isDisabled={sections.length === 0}
+              isLoading={isExportingImages}
+              isDisabled={sections.length === 0 || isExportingImages}
             >
               Exportar {sections.filter((s) => s.id !== "__grapes_css__").length} PNG
             </BrutalButton>
@@ -1571,7 +1582,8 @@ export default function DocumentEditor() {
             size="chip"
             mode="ghost"
             onClick={() => handleExportPdf()}
-            isDisabled={sections.length === 0}
+            isLoading={isExportingPdf}
+            isDisabled={sections.length === 0 || isExportingPdf}
           >
             Exportar PDF
           </BrutalButton>
@@ -1708,7 +1720,9 @@ export default function DocumentEditor() {
                   },
                 },
                 {
-                  label: contextMenu.sectionIds.length === 1
+                  label: isExportingPdf
+                    ? "Generando PDF…"
+                    : contextMenu.sectionIds.length === 1
                     ? "Exportar página a PDF"
                     : `Exportar ${contextMenu.sectionIds.length} páginas a PDF`,
                   icon: (
@@ -1716,6 +1730,7 @@ export default function DocumentEditor() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   ),
+                  disabled: isExportingPdf,
                   onClick: () => {
                     const ids = contextMenu.sectionIds;
                     setContextMenu(null);
