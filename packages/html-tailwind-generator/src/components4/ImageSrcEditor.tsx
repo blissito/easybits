@@ -129,9 +129,10 @@ export default function ImageSrcEditor({ editor }: Props) {
         <button
           onClick={applySrc}
           disabled={!urlValid}
-          className="px-2.5 py-1.5 text-[10px] font-bold rounded bg-brand-500 hover:bg-brand-600 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Aplicar URL"
+          className="w-7 h-7 flex items-center justify-center rounded bg-brand-500 hover:bg-brand-600 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Aplicar
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
         </button>
       </div>
       {src && !urlValid && (
@@ -153,9 +154,10 @@ export default function ImageSrcEditor({ editor }: Props) {
         />
         <button
           onClick={applyAlt}
-          className="px-2.5 py-1.5 text-[10px] font-bold rounded bg-gray-700 hover:bg-gray-600 transition-colors shrink-0"
+          title="Aplicar alt"
+          className="w-7 h-7 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 transition-colors shrink-0"
         >
-          Aplicar
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
         </button>
       </div>
     </div>
