@@ -3,6 +3,7 @@ import type { Editor } from "grapesjs";
 import { LANDING_BLOCKS } from "./blocks";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES } from "../themes";
 import TailwindClassEditor from "./TailwindClassEditor";
+import ImageSrcEditor from "./ImageSrcEditor";
 import { GRAPES_DARK_CSS } from "./grapesDarkCss";
 
 /** Inject GrapesJS dark theme CSS once at runtime */
@@ -708,6 +709,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             className={`flex-1 overflow-auto ${activePanel === "layers" ? "" : "hidden"}`}
           />
           <div className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}>
+            {ready && <ImageSrcEditor editor={editorRef.current} />}
             {ready && <TailwindClassEditor
               editor={editorRef.current}
               themeVersion={themeVersion}
