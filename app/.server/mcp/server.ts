@@ -241,25 +241,34 @@ export function createMcpServer(groups?: string[]) {
     registerSlideTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
+    registerVideoTools(server);
   } else if (enabled.has("design")) {
-    // Design = Canva-like: docs + slides + brand + image tools from core.
+    // Design = Canva-like: docs + slides + brand + image tools from core + video.
     // Allowlist below filters to the curated subset.
     registerCoreTools(server);
     registerDocTools(server);
     registerSlideTools(server);
     registerBrandTools(server);
+    registerVideoTools(server);
   } else if (enabled.has("magnet") || coreOnly) {
     // Both magnet and core need these categories — allowlist filters the specific tools
     registerCoreTools(server);
     registerDocTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
+    if (coreOnly) registerVideoTools(server);
   } else {
     if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
     if (enabled.has("docs")) registerDocTools(server);
     if (enabled.has("slides")) registerSlideTools(server);
     if (enabled.has("sites")) registerSiteTools(server);
     if (enabled.has("brand")) registerBrandTools(server);
+    if (enabled.has("video")) {
+      // Video group also needs file tools (get_file/list_files/upload_file)
+      // so callers can retrieve the finished mp4. Allowlist filters the rest.
+      registerCoreTools(server);
+      registerVideoTools(server);
+    }
   }
 
   return server;
@@ -3361,6 +3370,158 @@ function registerBrandTools(server: McpServer) {
     wrapHandler(async () => {
       const { LANDING_THEMES } = await import("@easybits.cloud/html-tailwind-generator");
       return { content: [{ type: "text", text: JSON.stringify(LANDING_THEMES, null, 2) }] };
+    })
+  );
+
+  // Video + Character tools live in their own register function (below) so
+  // the "video" toolset group can load them without all of registerBrandTools.
+}
+
+function registerVideoTools(server: McpServer) {
+  server.tool(
+    "character_remember",
+    "Save a reusable character (person, pet, mascot) from 1–3 reference photos. The character's slug can be used later in `video_create` to keep the same face/look across multiple generations. Call this once when the user first introduces someone they'll want to see repeatedly. Returns { id, name, slug } — the slug is what Ghosty should remember.",
+    {
+      name: z.string().describe("Human-friendly name (e.g. 'Sofía', 'Luna mi gata', 'Don Beto')"),
+      photos: z.array(z.string().url()).min(1).max(3).describe("1–3 HTTPS URLs of reference photos. 2+ recommended for stronger identity."),
+      description: z.string().optional().describe("Optional short description (appearance, style). Helps the AI when animating in new scenes."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { createCharacter } = await import("../core/characterOperations");
+      const character = await createCharacter(ctx.user.id, {
+        name: params.name,
+        referenceImageUrls: params.photos,
+        description: params.description,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ok: true,
+            character,
+            hint: `Saved. Use \`character: "${character.slug}"\` in video_create to animate them in new scenes.`,
+          }, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "character_list",
+    "List the user's saved characters (reusable identities for video generation). Call this when the user references someone by name and you need to know if they've been saved before.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listCharacters } = await import("../core/characterOperations");
+      const characters = await listCharacters(ctx.user.id);
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(
+            characters.map((c) => ({
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              description: c.description,
+              photoCount: c.referenceImageUrls.length,
+            })),
+            null,
+            2,
+          ),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "character_delete",
+    "Delete a saved character. Only removes the Character record — the reference photos (if stored as Files) stay in the user's library.",
+    {
+      character: z.string().describe("Character id or slug"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { resolveCharacter, deleteCharacter } = await import("../core/characterOperations");
+      const char = await resolveCharacter(ctx.user.id, params.character, true);
+      await deleteCharacter(char!.id, ctx.user.id);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true }, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "video_create",
+    "Generate a short video (2–10s) from a prompt. Automatically orchestrates: (1) cinematic prompt enhancement, (2) still generation — with character references if `character` is provided, (3) animation via Gen-4.5. Returns the final mp4 as a File in the user's library.\n\nHow to use:\n- For a new subject: pass `prompt` alone, or `prompt` + `referenceImage` (photo URL from user).\n- For a RECURRING subject already saved: pass `prompt` + `character` (slug or id from character_list). This preserves the same face across generations — do NOT describe the character again in the prompt, just mention actions/scenes.\n- WhatsApp / social: use `ratio: '720:1280'` (vertical). Landing hero: `'1280:720'`. Square post: `'960:960'`.\n\nThis tool runs synchronously (60–180s). The returned `fileId` can be passed to `get_file` for the playable URL.",
+    {
+      prompt: z.string().describe("What the user wants to see. One sentence is fine — the tool enhances it internally. Do NOT repeat the character's physical description when `character` is provided."),
+      character: z.string().optional().describe("Character id or slug (from character_list). Use when the user wants a recurring subject to appear with the same face."),
+      referenceImage: z.string().url().optional().describe("HTTPS URL of a first-frame photo. Use when the user attached a photo and does NOT have a saved character. Ignored if `character` is set."),
+      ratio: z.enum(["1280:720", "720:1280", "960:960", "1104:832", "832:1104", "1584:672"]).optional().describe("Output aspect ratio. Default 1280:720 (landscape). Use 720:1280 for vertical / social."),
+      duration: z.number().int().min(2).max(10).optional().describe("Clip length in seconds. Default 5. Cost scales with duration."),
+      model: z.enum(["gen4.5", "gen4_turbo"]).optional().describe("Quality vs speed. Default gen4.5 (cinematic). gen4_turbo is ~3× cheaper/faster for previews."),
+      seed: z.number().int().optional().describe("Seed for reproducibility. Omit for random. Use the same seed to produce similar variants."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { createVideo } = await import("../core/videoOperations");
+      const result = await createVideo(ctx, {
+        prompt: params.prompt,
+        character: params.character,
+        referenceImageUrl: params.referenceImage,
+        ratio: params.ratio,
+        duration: params.duration,
+        model: params.model,
+        seed: params.seed,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ok: true,
+            videoGenerationId: result.videoGenerationId,
+            videoFileId: result.videoFileId,
+            stillFileId: result.stillFileId,
+            enhancedPrompt: result.enhancedPrompt,
+            character: result.character,
+            hint: `Ready. The video is stored as a File in the user's library (fileId: ${result.videoFileId}). Use get_file to fetch a share URL.`,
+          }, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "list_videos",
+    "List the user's video generations (latest first). Returns status, prompt, and file ids for each.",
+    {
+      limit: z.number().int().min(1).max(100).optional().describe("Max rows to return. Default 20."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listVideoGenerations } = await import("../core/videoOperations");
+      const rows = await listVideoGenerations(ctx.user.id, params.limit ?? 20);
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(
+            rows.map((r) => ({
+              id: r.id,
+              prompt: r.prompt,
+              status: r.status,
+              videoFileId: r.videoFileId,
+              stillFileId: r.stillFileId,
+              character: r.character ? { id: r.character.id, name: r.character.name, slug: r.character.slug } : null,
+              model: r.model,
+              ratio: r.aspectRatio,
+              duration: r.duration,
+              createdAt: r.createdAt,
+              failReason: r.failReason,
+            })),
+            null,
+            2,
+          ),
+        }],
+      };
     })
   );
 }

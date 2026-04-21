@@ -1,8 +1,8 @@
 import { db } from "./db";
 import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
 
-export type GenerationType = "generate" | "refine" | "variant" | "directions" | "enhance";
-export type GenerationProduct = "document" | "landing" | "presentation";
+export type GenerationType = "generate" | "refine" | "variant" | "directions" | "enhance" | "still" | "animate";
+export type GenerationProduct = "document" | "landing" | "presentation" | "video";
 
 /**
  * Check if a user has remaining AI generations for the current month.

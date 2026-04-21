@@ -18,6 +18,7 @@ export type ToolGroupKey =
   | "sites"
   | "brand"
   | "magnet"
+  | "video"
   | "all";
 
 export interface ToolGroup {
@@ -73,6 +74,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     toolCount: 14,
   },
   {
+    key: "video",
+    label: "Video",
+    description: "Video con IA (Runway Gen-4.5) + personajes recurrentes. Ghosty decide: recuerda a quién y genera clips con el mismo personaje en escenas distintas. Ideal para WhatsApp.",
+    toolCount: 6,
+  },
+  {
     key: "all",
     label: "All tools",
     description: "Todas las tools disponibles (~50+). Ideal para agentes avanzados.",
@@ -99,6 +106,9 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "deploy_presentation", "unpublish_presentation",
   // Images
   "generate_image", "transform_image",
+  // Video
+  "video_create", "list_videos",
+  "character_remember", "character_list", "character_delete",
   // Brand
   "list_brand_kits", "get_default_brand_kit", "extract_brand_kit_from_url",
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
@@ -132,8 +142,22 @@ export const CORE_ALLOWLIST = new Set<string>([
   "delete_website",
   "transform_image",
   "generate_image",
+  "video_create", "list_videos",
+  "character_remember", "character_list", "character_delete",
   "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
+]);
+
+/** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */
+export const VIDEO_ALLOWLIST = new Set<string>([
+  "video_create",
+  "list_videos",
+  "character_remember",
+  "character_list",
+  "character_delete",
+  "get_file",
+  "list_files",
+  "upload_file",
 ]);
 
 export const MAGNET_ALLOWLIST = new Set<string>([
@@ -158,4 +182,5 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   core: CORE_ALLOWLIST,
   design: DESIGN_ALLOWLIST,
   magnet: MAGNET_ALLOWLIST,
+  video: VIDEO_ALLOWLIST,
 };

@@ -205,6 +205,8 @@ model User {
   mcpTemplates         McpTemplate[]
   mcpStructuredDocs    McpStructuredDoc[]
   oauthAuthCodes       OAuthAuthCode[]
+  characters           Character[]
+  videoGenerations     VideoGeneration[]
 }
 
 model OAuthClient {
@@ -684,6 +686,72 @@ model AppConfig {
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+/// Reusable character identity for video generation.
+/// Holds 1–3 reference images that feed Runway's gen4_image `referenceImages`
+/// with a `@slug` tag, enabling the same face/look across scenes.
+model Character {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId             String   @db.ObjectId
+  owner               User     @relation(fields: [ownerId], references: [id])
+  name                String
+  /// Unique per-owner slug, sanitized for use as Runway @tag (lowercase, no spaces)
+  slug                String
+  /// Public URLs of the reference images (1–3). Must be HTTPS, ≥512px side.
+  referenceImageUrls  String[]
+  /// Optional linked File ids for quota tracking and UI previews
+  referenceFileIds    String[] @db.ObjectId
+  description         String?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  videoGenerations    VideoGeneration[]
+
+  @@unique([ownerId, slug])
+  @@index([ownerId])
+}
+
+/// One video generation task lifecycle. Coordinates multi-step Runway pipeline
+/// (prompt enhance → still gen → image_to_video → upload to Tigris).
+model VideoGeneration {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId         String   @db.ObjectId
+  owner           User     @relation(fields: [ownerId], references: [id])
+
+  prompt          String
+  /// Prompt after Haiku enhancement (camera, lighting, shot type)
+  enhancedPrompt  String?
+
+  characterId     String?    @db.ObjectId
+  character       Character? @relation(fields: [characterId], references: [id])
+
+  /// "pending" | "enhancing" | "generating_still" | "animating" | "uploading" | "completed" | "failed"
+  status          String   @default("pending")
+  /// Runway task ids for each step (text_to_image, image_to_video)
+  runwayTaskIds   String[]
+
+  /// File id of the generated still (persisted even if animation fails)
+  stillFileId     String?  @db.ObjectId
+  /// File id of the final mp4
+  videoFileId     String?  @db.ObjectId
+
+  model           String   @default("gen4.5")
+  aspectRatio     String   @default("1280:720")
+  duration        Int      @default(5)
+  seed            Int?
+  /// Inline reference image URL when no character is used
+  referenceImageUrl String?
+
+  costMxn         Float?
+  failReason      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([ownerId, status])
+  @@index([createdAt])
 }
 
 model FormConfig {
