@@ -4,16 +4,17 @@ import { LANDING_BLOCKS } from "./blocks";
 import { buildSingleThemeCss, buildCustomTheme, LANDING_THEMES } from "../themes";
 import TailwindClassEditor from "./TailwindClassEditor";
 import ImageSrcEditor from "./ImageSrcEditor";
-import { GRAPES_DARK_CSS } from "./grapesDarkCss";
+import { getGrapesCss, type EditorVariant } from "./grapesDarkCss";
 
-/** Inject GrapesJS dark theme CSS once at runtime */
-let darkCssInjected = false;
-function injectDarkCss() {
-  if (darkCssInjected || typeof document === "undefined") return;
-  darkCssInjected = true;
+/** Inject GrapesJS theme CSS once per variant at runtime */
+const injectedVariants = new Set<EditorVariant>();
+function injectDarkCss(variant: EditorVariant) {
+  if (typeof document === "undefined") return;
+  if (injectedVariants.has(variant)) return;
+  injectedVariants.add(variant);
   const style = document.createElement("style");
-  style.setAttribute("data-grapes-dark", "");
-  style.textContent = GRAPES_DARK_CSS;
+  style.setAttribute("data-grapes-css", variant);
+  style.textContent = getGrapesCss(variant);
   document.head.appendChild(style);
 }
 
@@ -97,21 +98,41 @@ interface Props {
   blocks?: { id: string; label: string; category: string; content: string | object; media?: string }[];
   /** Called when the most visible section changes due to canvas scroll */
   onVisibleSectionChange?: (sectionId: string) => void;
+  /**
+   * Editor UI variant. Default `"classic"` preserves the original EasyBits look
+   * (dark sidebar `w-80`, hierarchical block grid, black canvas). Set to
+   * `"denik"` for the Denik look (sidebar `w-60 #11151A` with pill tabs, flat
+   * block list with 24×24 icon boxes, white canvas with 32px margin, label
+   * "+ Sección" on the blocks tab).
+   */
+  editorVariant?: EditorVariant;
 }
 
-const PANEL_TABS = [
-  { id: "blocks", label: "Bloques", icon: "⊞" },
-  { id: "layers", label: "Capas", icon: "☰" },
-  { id: "styles", label: "Estilos", icon: "◑" },
-  { id: "themes", label: "Temas", icon: "◈" },
-] as const;
+export type PanelId = "blocks" | "layers" | "styles" | "themes";
 
-export type PanelId = (typeof PANEL_TABS)[number]["id"];
+interface PanelTab { id: PanelId; label: string; icon: string }
+
+function getPanelTabs(variant: EditorVariant): readonly PanelTab[] {
+  if (variant === "denik") {
+    return [
+      { id: "blocks", label: "+ Sección", icon: "⊞" },
+      { id: "layers", label: "Capas", icon: "◇" },
+      { id: "styles", label: "Estilos", icon: "◑" },
+      { id: "themes", label: "Temas", icon: "◈" },
+    ] as const;
+  }
+  return [
+    { id: "blocks", label: "Bloques", icon: "⊞" },
+    { id: "layers", label: "Capas", icon: "☰" },
+    { id: "styles", label: "Estilos", icon: "◑" },
+    { id: "themes", label: "Temas", icon: "◈" },
+  ] as const;
+}
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks, onVisibleSectionChange }, ref) => {
-    // Inject dark CSS on first render
-    useEffect(() => { injectDarkCss(); }, []);
+  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks, onVisibleSectionChange, editorVariant = "classic" }, ref) => {
+    // Inject theme CSS on first render (per-variant)
+    useEffect(() => { injectDarkCss(editorVariant); }, [editorVariant]);
 
     // Strip non-string entries (e.g. extras array from brand kits)
     const customColors = flattenColors(rawCustomColors);
@@ -134,7 +155,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     const customColorsRef = useRef(customColors);
     customColorsRef.current = customColors;
     const [activeBrandKitId, setActiveBrandKitId] = useState<string | null>(initialBrandKitId || null);
-    const visibleTabs = PANEL_TABS.filter((t) => !hiddenTabs.includes(t.id));
+    const visibleTabs = getPanelTabs(editorVariant).filter((t) => !hiddenTabs.includes(t.id));
     const [activePanel, setActivePanel] = useState<PanelId>(() =>
       visibleTabs.find((t) => t.id === "styles")?.id ?? visibleTabs[0]?.id ?? "styles"
     );
@@ -398,9 +419,9 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
           },
         });
 
-        // ─── Switch to Styles tab on selection ───
+        // ─── Switch to Styles tab on selection (only if not hidden) ───
         editor.on("component:selected", () => {
-          setActivePanel("styles");
+          if (!hiddenTabs.includes("styles")) setActivePanel("styles");
         });
         editor.on("component:deselected", () => {
           // Stay on current panel
@@ -680,21 +701,40 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
 
     const sidebarBorder = panelSide === "right" ? "border-l" : "border-r";
 
+    const sidebarContainerClass = editorVariant === "denik"
+      ? `w-60 shrink-0 flex flex-col bg-[#11151A] ${sidebarBorder} border-gray-700 overflow-hidden`
+      : `w-80 shrink-0 flex flex-col bg-black ${sidebarBorder} border-gray-700 overflow-hidden`;
+    const tabsRowClass = editorVariant === "denik"
+      ? "flex gap-0 px-3 py-3"
+      : "flex border-b border-gray-700";
+    const tabButtonClass = (isActive: boolean) => {
+      if (editorVariant === "denik") {
+        return `px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 rounded-full ${
+          isActive ? "bg-[#2A2B31] text-white" : "text-gray-400 hover:text-gray-200"
+        }`;
+      }
+      return `flex-1 py-2.5 text-xs font-bold transition-colors ${
+        isActive
+          ? "bg-gray-800 text-white border-b-2 border-brand-500"
+          : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
+      }`;
+    };
+
     const sidebar = (
-        <div className={`w-80 shrink-0 flex flex-col bg-black ${sidebarBorder} border-gray-700 overflow-hidden`}>
-          <div className="flex border-b border-gray-700">
+        <div className={sidebarContainerClass}>
+          <div className={tabsRowClass}>
             {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActivePanel(tab.id)}
-                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
-                  activePanel === tab.id
-                    ? "bg-gray-800 text-white border-b-2 border-brand-500"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
-                }`}
+                className={tabButtonClass(activePanel === tab.id)}
                 title={tab.label}
               >
-                <span className="block text-base mb-0.5">{tab.icon}</span>
+                {editorVariant === "denik" ? (
+                  <span className="text-sm">{tab.icon}</span>
+                ) : (
+                  <span className="block text-base mb-0.5">{tab.icon}</span>
+                )}
                 {tab.label}
               </button>
             ))}
@@ -708,7 +748,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             ref={layersRef}
             className={`flex-1 overflow-auto ${activePanel === "layers" ? "" : "hidden"}`}
           />
-          <div className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}>
+          {!hiddenTabs.includes("styles") && <div className={`flex-1 overflow-auto ${activePanel === "styles" ? "" : "hidden"}`}>
             {ready && <ImageSrcEditor editor={editorRef.current} />}
             {ready && <TailwindClassEditor
               editor={editorRef.current}
@@ -719,8 +759,8 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 return t?.colors || {};
               })()}
             />}
-          </div>
-          <div className={`flex-1 overflow-auto p-3 ${activePanel === "themes" ? "" : "hidden"}`}>
+          </div>}
+          {!hiddenTabs.includes("themes") && <div className={`flex-1 overflow-auto p-3 ${activePanel === "themes" ? "" : "hidden"}`}>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3">Temas</p>
             <div className="grid grid-cols-2 gap-2">
               {LANDING_THEMES.map((t) => {
@@ -860,11 +900,14 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
                 })()}
               </>
             )}
-          </div>
+          </div>}
         </div>
     );
 
-    const canvas = <div ref={editorContainerRef} className="flex-1 h-full bg-black" />;
+    const canvasClass = editorVariant === "denik"
+      ? "flex-1 h-full bg-white relative"
+      : "flex-1 h-full bg-black";
+    const canvas = <div ref={editorContainerRef} className={canvasClass} />;
 
     return (
       <div className="flex h-full w-full relative">
