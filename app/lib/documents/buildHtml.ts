@@ -106,7 +106,7 @@ export function buildDocumentHtml(
 
   const branding =
     options?.showBranding !== false
-      ? `<div style="text-align:center;padding:16px 0 8px;font-size:11px;color:#666;">
+      ? `<div class="doc-branding" style="text-align:center;padding:16px 0 8px;font-size:11px;color:#666;">
           Creado con <a href="https://www.easybits.cloud" style="color:#9870ED;text-decoration:none;font-weight:600;">EasyBits</a>
         </div>`
       : "";
@@ -213,7 +213,8 @@ export function buildDocumentHtml(
     /* Print: show pages vertically, hide toolbar */
     @page { size: ${format ? `${pageW}px ${pageH}px` : "letter"}; margin: 0; }
     @media print {
-      .doc-toolbar, .page-nav, .flipbook-container { display: none !important; }
+      html, body { height: auto !important; display: block !important; margin: 0 !important; padding: 0 !important; }
+      .doc-toolbar, .page-nav, .flipbook-container, .doc-branding, #page-hint, .side-nav { display: none !important; }
       body { background: white; }
       .print-pages { display: block !important; }
       .print-page {
