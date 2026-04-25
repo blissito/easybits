@@ -491,7 +491,7 @@ MCP: \`db_list\`
 ### Create database
 \`POST /databases\`
 Body: \`{ name: string, description?: string }\`
-Name must be alphanumeric/dashes/underscores, max 64 chars. Limit: 5 databases per account.
+Name must be alphanumeric/dashes/underscores, max 64 chars. Limit depends on plan (Byte: 3, Mega: 10, Tera: 20).
 Returns: Database object.
 SDK: \`eb.createDatabase({ name, description? })\`
 MCP: \`db_create({ name, description? })\`
@@ -544,7 +544,7 @@ MCP: \`db_import({ dbId, table, columns, rows, onConflict? })\`
 - \`database.deleted\` — database deleted
 
 ### Limits
-- Max 5 databases per account
+- Max databases per plan: Byte 3, Mega 10, Tera 20
 - Name: alphanumeric, dashes, underscores, max 64 chars
 - Batch: max 20 statements per request
 `,

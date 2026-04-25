@@ -766,7 +766,7 @@ Never embed the raw \`putUrl\` or construct URLs from fileName/websiteId — emb
 
   server.tool(
     "db_create",
-    "Create a new SQLite database. Name must be alphanumeric/dashes/underscores, max 64 chars. Max 5 databases per account.",
+    "Create a new SQLite database. Name must be alphanumeric/dashes/underscores, max 64 chars. Max databases depends on plan (Byte: 3, Mega: 10, Tera: 20).",
     {
       name: z.string().describe("Database name (alphanumeric, dashes, underscores)"),
       description: z.string().optional().describe("Optional description"),
