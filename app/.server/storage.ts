@@ -227,6 +227,26 @@ export function getReadClientForPlatformFile(file: { storageProviderId?: string 
   return getPlatformDefaultClient({ prefix: isMcpFile ? "mcp/" : "" });
 }
 
+/**
+ * Client for writing PUBLIC platform assets (PDFs, screenshots, OG images,
+ * deployed website files). Bucket policy on PUBLIC_BUCKET only exposes the
+ * root prefix — anything under `mcp/` returns 403 even though the bucket name
+ * says "public". Always use this helper for assets meant to be embedded in
+ * HTML or fetched directly by browsers.
+ */
+export function getPlatformPublicClient(): StorageClient {
+  return getPlatformDefaultClient({ bucket: PUBLIC_BUCKET, prefix: "" });
+}
+
+/**
+ * Build the canonical browser-fetchable URL for an object stored via
+ * `getPlatformPublicClient`. Do NOT prepend `mcp/` — that path is unreadable
+ * publicly. Pair this with `getPlatformPublicClient().putObject(key, ...)`.
+ */
+export function buildPublicAssetUrl(storageKey: string): string {
+  return `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${storageKey}`;
+}
+
 export async function resolveProvider(
   userId: string,
   opts?: { access?: "public" | "private"; region?: StorageRegion }

@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
+import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import { createWebsite } from "./operations";
 import { buildRevealHtml, type Slide, getPalette } from "~/lib/buildRevealHtml";
 import { buildPresentationHtml } from "~/lib/presentation/buildHtml";
@@ -157,9 +157,9 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
   }
 
   // Upload index.html via presigned URL
-  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const client = getPlatformPublicClient();
   const storageKey = `${ctx.user.id}/${nanoid(6)}`;
-  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+  const publicUrl = buildPublicAssetUrl(storageKey);
   const putUrl = await client.getPutUrl(storageKey);
 
   const uploadRes = await fetch(putUrl, {

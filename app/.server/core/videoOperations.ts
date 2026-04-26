@@ -20,9 +20,10 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import {
   getPlatformDefaultClient,
+  getPlatformPublicClient,
+  buildPublicAssetUrl,
   resolveProvider,
   createStorageClient,
-  PUBLIC_BUCKET,
 } from "../storage";
 import { fileEvents } from "./fileEvents";
 import { checkAiGenerationLimit, incrementAiGeneration, logAiUsage } from "../aiGenerationLimit";
@@ -150,7 +151,7 @@ async function uploadToTigris(
   const storageKey = `${userId}/${nanoid(6)}-${filename}`;
 
   if (isPublic) {
-    const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+    const client = getPlatformPublicClient();
     const putUrl = await client.getPutUrl(storageKey, { timeout: 180 });
     const putRes = await fetch(putUrl, {
       method: "PUT",
@@ -158,7 +159,7 @@ async function uploadToTigris(
       headers: { "Content-Type": contentType },
     });
     if (!putRes.ok) throw new Error(`Failed to upload to Tigris: ${putRes.status}`);
-    const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+    const publicUrl = buildPublicAssetUrl(storageKey);
     const file = await db.file.create({
       data: {
         name: filename,

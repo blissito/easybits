@@ -10,7 +10,7 @@
  * hitting Playwright or Tigris.
  */
 import { db } from "../db";
-import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
+import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import { withPage } from "./browserPool";
 import { nanoid } from "nanoid";
 
@@ -45,7 +45,7 @@ export async function generateWebsiteOg(websiteId: string): Promise<string | nul
 
   const storageKey = `og/${websiteId}-${nanoid(4)}.png`;
   try {
-    const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+    const client = getPlatformPublicClient();
     const putUrl = await client.getPutUrl(storageKey);
     const uploadRes = await fetch(putUrl, {
       method: "PUT",
@@ -56,7 +56,7 @@ export async function generateWebsiteOg(websiteId: string): Promise<string | nul
       console.error("[websiteOg] upload failed:", uploadRes.status);
       return null;
     }
-    const imageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${storageKey}`;
+    const imageUrl = buildPublicAssetUrl(storageKey);
 
     // Persist on Website.metadata so the loader doesn't regenerate next time.
     const meta = (website.metadata as Record<string, unknown>) || {};

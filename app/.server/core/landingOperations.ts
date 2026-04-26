@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
+import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
@@ -133,9 +133,9 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   }
 
   // Upload index.html
-  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const client = getPlatformPublicClient();
   const storageKey = `${ctx.user.id}/${nanoid(6)}`;
-  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+  const publicUrl = buildPublicAssetUrl(storageKey);
   await client.putObject(storageKey, htmlBuffer, "text/html; charset=utf-8");
 
   // Upsert file record
@@ -179,7 +179,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
   if (finalPrintHtml) {
     const printBuffer = Buffer.from(finalPrintHtml, "utf-8");
     const printStorageKey = `${ctx.user.id}/${nanoid(6)}`;
-    const printPublicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${printStorageKey}`;
+    const printPublicUrl = buildPublicAssetUrl(printStorageKey);
     await client.putObject(printStorageKey, printBuffer, "text/html; charset=utf-8");
 
     // Upsert print.html file record
@@ -236,7 +236,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
 
     if (pdfBuffer) {
       const pdfStorageKey = `${ctx.user.id}/${nanoid(6)}`;
-      const pdfPublicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${pdfStorageKey}`;
+      const pdfPublicUrl = buildPublicAssetUrl(pdfStorageKey);
       try {
         const pdfPutUrl = await client.getPutUrl(pdfStorageKey);
         const pdfUploadRes = await fetch(pdfPutUrl, {
@@ -327,7 +327,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
             headers: { "Content-Type": "image/png" },
           });
           if (!ogUploadRes.ok) return;
-          const ogImageUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${ogStorageKey}`;
+          const ogImageUrl = buildPublicAssetUrl(ogStorageKey);
 
           // Re-build HTML with og:image
           const { buildDocumentHtml: rebuildDoc } = await import("~/lib/documents/buildHtml");

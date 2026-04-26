@@ -6,7 +6,7 @@ import type { Section3 } from "~/lib/landing3/types";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import { withPage } from "./browserPool";
-import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
+import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 
 export async function takeDocumentScreenshot(
   userId: string,
@@ -228,7 +228,7 @@ export async function exportDocumentImages(
 
   const format = (metadata?.format as { width: number; height: number } | undefined)
     ?? { width: 816, height: 1056 };
-  const client = getPlatformDefaultClient();
+  const client = getPlatformPublicClient();
   const safeName = (doc.name || "document").replace(/[^a-zA-Z0-9_\-. ]/g, "_").slice(0, 80);
 
   const results: { id: string; url: string; contentType: string; width: number; height: number; sectionId: string }[] = [];
@@ -252,7 +252,7 @@ export async function exportDocumentImages(
         // Upload PNG to Tigris as a public file
         const storageKey = `${userId}/${nanoid(8)}.png`;
         await client.putObject(storageKey, buffer, "image/png");
-        const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+        const publicUrl = buildPublicAssetUrl(storageKey);
         const file = await db.file.create({
           data: {
             name: `${safeName}-page-${i + 1}.png`,

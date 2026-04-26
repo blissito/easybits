@@ -6,6 +6,8 @@ import {
   resolveProvider,
   createStorageClient,
   getPlatformDefaultClient,
+  getPlatformPublicClient,
+  buildPublicAssetUrl,
   copyObjectAcrossBuckets,
   deleteObjectFromBucket,
   PRIVATE_BUCKET,
@@ -379,17 +381,22 @@ export async function updateFile(
     });
     }
 
-    const s3Key = `mcp/${file.storageKey}`;
+    // Public files live at the bucket root (browser-readable). Private files
+    // live under the `mcp/` namespace. Source key depends on where the file
+    // currently lives — derived from its url for already-public files.
+    const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
+    const srcKey = file.access === "public" && !isLegacyMcpUrl
+      ? file.storageKey
+      : `mcp/${file.storageKey}`;
+    const dstKey = opts.access === "public" ? file.storageKey : `mcp/${file.storageKey}`;
 
     const fromBucket = file.access === "private" ? PRIVATE_BUCKET : PUBLIC_BUCKET;
     const toBucket = opts.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
 
-    await copyObjectAcrossBuckets({ fromBucket, toBucket, key: s3Key });
+    await copyObjectAcrossBuckets({ fromBucket, toBucket, key: srcKey, destKey: dstKey });
 
     updates.access = opts.access;
-    updates.url = opts.access === "public"
-      ? `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${s3Key}`
-      : "";
+    updates.url = opts.access === "public" ? buildPublicAssetUrl(dstKey) : "";
 
     // Update DB first; if it fails, clean up the copy
     try {
@@ -398,13 +405,13 @@ export async function updateFile(
         data: updates,
       });
       // DB succeeded — safe to delete from source bucket
-      await deleteObjectFromBucket({ bucket: fromBucket, key: s3Key }).catch(() => {});
+      await deleteObjectFromBucket({ bucket: fromBucket, key: srcKey }).catch(() => {});
       fileEvents.emit("file:changed", ctx.user.id);
       dispatchWebhooks(ctx.user.id, "file.updated", { id: updated.id, name: updated.name, access: updated.access });
       return updated;
     } catch (err) {
       // Rollback: delete the copy we just made
-      await deleteObjectFromBucket({ bucket: toBucket, key: s3Key }).catch(() => {});
+      await deleteObjectFromBucket({ bucket: toBucket, key: dstKey }).catch(() => {});
       throw err;
     }
   }
@@ -911,8 +918,19 @@ export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: 
   const client = await getClientForFile(file.storageProviderId, ctx.user.id);
 
   const bucket = file.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
-  const srcKey = file.storageProviderId ? file.storageKey : `mcp/${file.storageKey}`;
-  const dstKey = file.storageProviderId ? newStorageKey : `mcp/${newStorageKey}`;
+  // Same prefix rules as toggleFileAccess: public objects live at the bucket
+  // root (browser-readable), private objects under `mcp/`.
+  const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
+  const srcKey = file.storageProviderId
+    ? file.storageKey
+    : file.access === "public" && !isLegacyMcpUrl
+      ? file.storageKey
+      : `mcp/${file.storageKey}`;
+  const dstKey = file.storageProviderId
+    ? newStorageKey
+    : file.access === "public"
+      ? newStorageKey
+      : `mcp/${newStorageKey}`;
 
   await copyObjectAcrossBuckets({ fromBucket: bucket, toBucket: bucket, key: srcKey, destKey: dstKey });
 
@@ -925,7 +943,7 @@ export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: 
       contentType: file.contentType,
       ownerId: ctx.user.id,
       access: file.access,
-      url: file.access === "public" ? `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${dstKey}` : "",
+      url: file.access === "public" ? buildPublicAssetUrl(dstKey) : "",
       status: "DONE",
       storageProviderId: file.storageProviderId,
       metadata: file.metadata,
@@ -1051,9 +1069,9 @@ export async function uploadWebsiteFile(
   }
 
   const storageKey = `${ctx.user.id}/${nanoid(6)}`;
-  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const client = getPlatformPublicClient();
   const putUrl = await client.getPutUrl(storageKey);
-  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+  const publicUrl = buildPublicAssetUrl(storageKey);
 
   const name = `${website.prefix}${opts.fileName}`;
 
@@ -1121,9 +1139,9 @@ export async function deployWebsiteFile(
   }
 
   const storageKey = `${ctx.user.id}/${nanoid(6)}`;
-  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const client = getPlatformPublicClient();
   await client.putObject(storageKey, body, opts.contentType);
-  const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+  const publicUrl = buildPublicAssetUrl(storageKey);
 
   const name = `${website.prefix}${opts.fileName}`;
 

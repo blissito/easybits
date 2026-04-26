@@ -1088,11 +1088,11 @@ function registerDocTools(server: McpServer) {
         return { content: [{ type: "text", text: JSON.stringify({ error: "document not found, empty, or rendering failed" }) }], isError: true };
       }
       // Persist the PDF to the user's library so the agent gets a stable URL.
-      const { getPlatformDefaultClient, PUBLIC_BUCKET } = await import("../storage");
-      const client = getPlatformDefaultClient();
+      const { getPlatformPublicClient, buildPublicAssetUrl } = await import("../storage");
+      const client = getPlatformPublicClient();
       const storageKey = `${ctx.user.id}/${nanoid(8)}.pdf`;
       await client.putObject(storageKey, pdf, "application/pdf");
-      const publicUrl = `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${storageKey}`;
+      const publicUrl = buildPublicAssetUrl(storageKey);
       const doc = await db.landing.findUnique({ where: { id: params.documentId }, select: { name: true } });
       const safeName = (doc?.name || "documento").replace(/[^a-zA-Z0-9_\-. ]/g, "_").slice(0, 80);
       const file = await db.file.create({

@@ -11,7 +11,7 @@ import { enrichImages, findImageSlots, generateSvg } from "@easybits.cloud/html-
 import { sanitizeSemanticColors } from "../sanitizeColors";
 import { docEvents } from "./docEvents";
 import type { Section3 } from "~/lib/landing3/types";
-import { getPlatformDefaultClient, PUBLIC_BUCKET } from "../storage";
+import { getPlatformDefaultClient, getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 
 /** Upload a PDF buffer to storage and return a presigned read URL (1h) */
 export async function uploadPdfToStorage(userId: string, pdf: Buffer, docName: string) {
@@ -556,10 +556,10 @@ export async function uploadLogoToStorage(dataUrl: string, userId: string): Prom
   const buffer = Buffer.from(match[2], "base64");
   const ext = match[1].includes("png") ? "png" : match[1].includes("svg") ? "svg" : "webp";
   const key = `logos/${userId}/${crypto.randomUUID()}.${ext}`;
-  const client = getPlatformDefaultClient({ bucket: PUBLIC_BUCKET });
+  const client = getPlatformPublicClient();
   const putUrl = await client.getPutUrl(key, { timeout: 60 });
   await fetch(putUrl, { method: "PUT", body: buffer, headers: { "Content-Type": match[1] } });
-  return `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/mcp/${key}`;
+  return buildPublicAssetUrl(key);
 }
 
 export async function generateDocumentAI(
