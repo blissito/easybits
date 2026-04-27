@@ -35,7 +35,7 @@ export const meta = () =>
     description:
       "Configura tu agente IA personalizado en 2 minutos. Voz, WhatsApp, imágenes, memoria, video, cotizaciones y más. Cotización al instante.",
     image:
-      "https://easybits-public.fly.storage.tigris.dev/699f35cbc8ad86037eda62b1/DM1_zm",
+      "https://easybits-public.fly.storage.tigris.dev/699f35cbc8ad86037eda62b1/wPv1V-",
   });
 
 const CAP_COUNT = CAPABILITIES.length;
