@@ -66,7 +66,9 @@ export const CapabilityCard = ({
           {capability.description}
         </p>
         <p className="text-sm font-mono text-black/60">
-          + {formatMxn(capability.basePriceMxn)} / mes si lo incluyes
+          {capability.basePriceMxn === 0
+            ? "Incluido sin costo extra"
+            : `+ ${formatMxn(capability.basePriceMxn)} / mes si lo incluyes`}
         </p>
       </motion.div>
 

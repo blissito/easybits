@@ -129,20 +129,20 @@ export const CAPABILITIES: Capability[] = [
   },
   {
     id: "site",
-    label: "Sitio web + Landing",
-    shortLabel: "Sitio web",
+    label: "Landings ilimitadas",
+    shortLabel: "Landings",
     emoji: "🌐",
-    question: "¿Necesitas un sitio web o landing publicada?",
+    question: "¿Quieres publicar landings y sitios sin límite?",
     description:
-      "Landing personalizada con dominio propio y SSL. Editor visual para iterar después.",
+      "No te damos una landing — te damos miles. Una por campaña, producto, cliente o evento. Incluido cuando armamos tu agente, sin costo extra.",
     vendor: "EasyBits",
-    basePriceMxn: 900,
+    basePriceMxn: 0,
     bgClass: "bg-lime",
     isAddon: false,
     includes: [
-      "Landing publicada con dominio propio",
-      "SSL incluido",
-      "Editor visual para iterar después",
+      "Miles de landings con dominio propio",
+      "El agente las arma y publica en minutos",
+      "Solo limitadas por tu storage",
     ],
   },
   {
@@ -170,7 +170,7 @@ export const CAPABILITIES: Capability[] = [
     emoji: "🧾",
     question: "¿Quieres que el agente cotice a tus clientes en automático?",
     description:
-      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento.",
+      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento al cliente hasta que responde.",
     vendor: "EasyBits",
     basePriceMxn: 2800,
     bgClass: "bg-brand-yellow",
@@ -179,6 +179,24 @@ export const CAPABILITIES: Capability[] = [
       "Cotizaciones con tu inventario y precios",
       "Folio, IVA y branding incluido",
       "Seguimiento automático al cliente",
+    ],
+  },
+  {
+    id: "payments",
+    label: "Cobro con Mercado Pago",
+    shortLabel: "Cobro",
+    emoji: "💳",
+    question: "¿Quieres cobrar a tus clientes en línea con Mercado Pago?",
+    description:
+      "El agente genera link de pago de Mercado Pago. Tu cliente paga con tarjeta, OXXO, transferencia o saldo MP. Tú recibes el dinero sin perseguir cobros.",
+    vendor: "Mercado Pago",
+    basePriceMxn: 1800,
+    bgClass: "bg-sky",
+    isAddon: false,
+    includes: [
+      "Link de pago Mercado Pago generado por el agente",
+      "Cobra con tarjeta, OXXO, SPEI o saldo MP",
+      "Notificación automática cuando el cliente paga",
     ],
   },
   {

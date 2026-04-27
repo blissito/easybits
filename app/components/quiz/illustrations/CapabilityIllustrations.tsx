@@ -424,6 +424,82 @@ export const QuotesIllustration = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* ---------- 5.8 Payments (credit card + peso + checkmark) ---------- */
+export const PaymentsIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Credit card */}
+    <rect
+      x="28"
+      y="44"
+      width="84"
+      height="56"
+      rx="6"
+      fill="#75BAF9"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Magnetic stripe */}
+    <rect x="28" y="54" width="84" height="10" fill="#1A1A1A" />
+    {/* Chip */}
+    <rect
+      x="36"
+      y="72"
+      width="14"
+      height="11"
+      rx="2"
+      fill="#ECD66E"
+      stroke={STROKE}
+      strokeWidth="2"
+    />
+    {/* Card number dots */}
+    <circle cx="62" cy="84" r="1.6" fill={STROKE} />
+    <circle cx="68" cy="84" r="1.6" fill={STROKE} />
+    <circle cx="74" cy="84" r="1.6" fill={STROKE} />
+    <circle cx="80" cy="84" r="1.6" fill={STROKE} />
+    <circle cx="90" cy="84" r="1.6" fill={STROKE} />
+    <circle cx="96" cy="84" r="1.6" fill={STROKE} />
+    <circle cx="102" cy="84" r="1.6" fill={STROKE} />
+    {/* Bottom line */}
+    <line x1="36" y1="93" x2="56" y2="93" stroke={STROKE} strokeWidth="2" />
+    {/* Floating peso badge with check (top-right) */}
+    <circle
+      cx="106"
+      cy="34"
+      r="14"
+      fill="#96B894"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    <text
+      x="106"
+      y="38"
+      fontSize="13"
+      fontWeight="bold"
+      textAnchor="middle"
+      fill={STROKE}
+    >
+      $
+    </text>
+    {/* Sparkle accent */}
+    <path
+      d="M30,110 L33,116 L39,118 L33,120 L30,126 L27,120 L21,118 L27,116 Z"
+      fill="#FFAFA3"
+      stroke={STROKE}
+      strokeWidth="2"
+    />
+  </svg>
+);
+
 /* ---------- 6. Video (clapperboard) ---------- */
 export const VideoIllustration = (props: SVGProps<SVGSVGElement>) => (
   <svg {...BASE} {...props}>
@@ -543,6 +619,7 @@ export const ILLUSTRATION_BY_ID: Record<
   site: SiteIllustration,
   documents: DocumentsIllustration,
   quotes: QuotesIllustration,
+  payments: PaymentsIllustration,
   video: VideoIllustration,
   research: ResearchIllustration,
 };

@@ -105,7 +105,7 @@ export const PriceSummary = ({
                   </span>
                 </span>
                 <span className="font-mono font-bold tabular-nums whitespace-nowrap">
-                  {formatMxn(line.priceMxn)}
+                  {line.priceMxn === 0 ? "Incluido" : formatMxn(line.priceMxn)}
                 </span>
               </div>
               <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
