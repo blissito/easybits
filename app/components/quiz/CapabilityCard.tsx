@@ -25,6 +25,7 @@ export const CapabilityCard = ({
         className={cn(
           "rounded-3xl border-[3px] border-black px-6 py-8 md:px-10 md:py-10 w-full",
           "shadow-[6px_6px_0_0_rgba(0,0,0,1)]",
+          "min-h-[440px] md:min-h-[460px] flex flex-col",
           capability.bgClass
         )}
       >

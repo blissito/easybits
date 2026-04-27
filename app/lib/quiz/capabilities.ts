@@ -9,9 +9,14 @@ export type Capability = {
   basePriceMxn: number;
   bgClass: string;
   isAddon: boolean;
+  includes: string[];
 };
 
 export const ORCHESTRATION_FEE_MXN = 3000;
+
+// Custom integrations: not a regular capability — handled as a separate step.
+// Estimated placeholder, refined in the discovery call.
+export const CUSTOM_INTEGRATIONS_MXN = 3000;
 
 export const CAPABILITIES: Capability[] = [
   {
@@ -26,6 +31,11 @@ export const CAPABILITIES: Capability[] = [
     basePriceMxn: 3000,
     bgClass: "bg-brand-grass",
     isAddon: false,
+    includes: [
+      "Voces naturales en español MX",
+      "Audios y notas de voz en WhatsApp",
+      "Transcripción de audios entrantes",
+    ],
   },
   {
     id: "images",
@@ -39,6 +49,11 @@ export const CAPABILITIES: Capability[] = [
     basePriceMxn: 1200,
     bgClass: "bg-brand-pink",
     isAddon: false,
+    includes: [
+      "Imágenes para producto y redes sociales",
+      "Variaciones rápidas de un brief",
+      "Edición y transformaciones básicas",
+    ],
   },
   {
     id: "whatsapp",
@@ -52,6 +67,11 @@ export const CAPABILITIES: Capability[] = [
     basePriceMxn: 1700,
     bgClass: "bg-brand-yellow",
     isAddon: false,
+    includes: [
+      "Conexión a WhatsApp Business",
+      "Setup técnico y onboarding del número",
+      "Conversaciones 1:1 y soporte multi-grupo",
+    ],
   },
   {
     id: "memory",
@@ -65,19 +85,65 @@ export const CAPABILITIES: Capability[] = [
     basePriceMxn: 1000,
     bgClass: "bg-brand-aqua",
     isAddon: false,
+    includes: [
+      "Base de datos SQLite por cliente",
+      "Storage S3 para archivos del negocio",
+      "Recuerda contexto entre conversaciones",
+    ],
   },
   {
     id: "site",
-    label: "Sitio + Formularios",
+    label: "Sitio web + Landing",
     shortLabel: "Sitio web",
     emoji: "🌐",
-    question: "¿Publica una landing y captura leads automáticamente?",
+    question: "¿Necesitas un sitio web o landing publicada?",
     description:
-      "Landing personalizada, formularios conectados a DB, dominio y SSL incluidos.",
+      "Landing personalizada con dominio propio y SSL. Editor visual para iterar después.",
     vendor: "EasyBits",
     basePriceMxn: 900,
     bgClass: "bg-lime",
     isAddon: false,
+    includes: [
+      "Landing publicada con dominio propio",
+      "SSL incluido",
+      "Editor visual para iterar después",
+    ],
+  },
+  {
+    id: "documents",
+    label: "Documentos PDF",
+    shortLabel: "Documentos",
+    emoji: "📄",
+    question: "¿Tu agente genera documentos PDF (contratos, fichas, materiales)?",
+    description:
+      "Contratos, fichas técnicas, propuestas, manuales — generados por el agente con tu branding.",
+    vendor: "EasyBits",
+    basePriceMxn: 1400,
+    bgClass: "bg-brand-aqua",
+    isAddon: false,
+    includes: [
+      "Plantillas PDF con tu branding",
+      "Generación bajo demanda por el agente",
+      "Versionado y archivo automático",
+    ],
+  },
+  {
+    id: "quotes",
+    label: "Cotizaciones automáticas",
+    shortLabel: "Cotizaciones",
+    emoji: "🧾",
+    question: "¿Quieres que el agente cotice a tus clientes en automático?",
+    description:
+      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento.",
+    vendor: "EasyBits",
+    basePriceMxn: 2800,
+    bgClass: "bg-brand-yellow",
+    isAddon: false,
+    includes: [
+      "Cotizaciones con tu inventario y precios",
+      "Folio, IVA y branding incluido",
+      "Seguimiento automático al cliente",
+    ],
   },
   {
     id: "video",
@@ -91,6 +157,11 @@ export const CAPABILITIES: Capability[] = [
     basePriceMxn: 2700,
     bgClass: "bg-rose",
     isAddon: true,
+    includes: [
+      "Video corto generado (Runway Gen-3)",
+      "Reels y demos para redes",
+      "Renders por demanda",
+    ],
   },
   {
     id: "research",
@@ -99,11 +170,16 @@ export const CAPABILITIES: Capability[] = [
     emoji: "🔎",
     question: "¿Investiga competencia, monitorea precios o scrapea web?",
     description:
-      "Búsqueda profunda, scraping respetuoso, monitoreo de precios. Add-on opcional.",
+      "Búsqueda profunda, scraping respetuoso, monitoreo de precios. La perla del bundle.",
     vendor: "Brightdata",
     basePriceMxn: 6100,
     bgClass: "bg-sky",
     isAddon: true,
+    includes: [
+      "Scraping vía Brightdata residencial",
+      "Monitoreo de precios de competencia",
+      "Resúmenes y alertas configurables",
+    ],
   },
 ];
 

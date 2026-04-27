@@ -8,6 +8,7 @@ import { computeQuote } from "~/lib/quiz/pricing";
 type QuizCheckoutPayload = {
   selections: string[];
   totalMxn: number;
+  customIntegrations: { description: string } | null;
   lead: {
     name: string;
     email: string;
@@ -30,7 +31,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return data({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { selections, lead } = payload;
+  const { selections, lead, customIntegrations } = payload;
   if (!Array.isArray(selections) || selections.length === 0) {
     return data({ error: "no_selections" }, { status: 400 });
   }
@@ -44,13 +45,21 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return data({ error: "invalid_selections" }, { status: 400 });
   }
 
-  const quote = computeQuote(cleanSelections);
+  const hasCustomIntegrations = !!customIntegrations;
+  const integrationsDesc = customIntegrations?.description?.slice(0, 280) || "";
 
-  const itemsLabel = quote.breakdown
-    .map((b) => b.capability.shortLabel)
-    .join(" + ");
+  const quote = computeQuote(cleanSelections, hasCustomIntegrations);
+
+  const itemsLabel = [
+    ...quote.breakdown.map((b) => b.capability.shortLabel),
+    ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
+  ].join(" + ");
   const productName = `Agente AI EasyBits — ${itemsLabel}`;
-  const productDescription = `Suscripción mensual. Incluye orquestación + soporte humano (${ORCHESTRATION_FEE_MXN} MXN) + ${quote.selectionsCount} capacidades seleccionadas.`;
+  const productDescription = `Suscripción mensual. Orquestación + soporte humano (${ORCHESTRATION_FEE_MXN} MXN) + ${quote.selectionsCount} capacidades${
+    hasCustomIntegrations
+      ? " + integraciones custom (estimado preliminar, se ajusta tras llamada)"
+      : ""
+  }.`;
 
   try {
     const session = await getStripe().checkout.sessions.create({
@@ -59,6 +68,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
       metadata: {
         type: "quiz_agent_subscription",
         selections: cleanSelections.join(","),
+        custom_integrations: hasCustomIntegrations ? "yes" : "no",
+        custom_integrations_desc: integrationsDesc,
         total_mxn: String(quote.totalMxn),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
