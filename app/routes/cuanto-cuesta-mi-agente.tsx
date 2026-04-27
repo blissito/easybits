@@ -7,6 +7,7 @@ import { QuizStep, StepIndicator } from "~/components/quiz/QuizStep";
 import { CapabilityCard } from "~/components/quiz/CapabilityCard";
 import { PriceSummary } from "~/components/quiz/PriceSummary";
 import { LeadForm, type LeadData } from "~/components/quiz/LeadForm";
+import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
 import { computeQuote, formatMxn } from "~/lib/quiz/pricing";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -144,43 +145,47 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         <AnimatePresence mode="wait">
           {isHero && (
             <QuizStep stepKey="hero">
-              <div className="text-center max-w-3xl mx-auto py-12 md:py-20">
-                <motion.h1
-                  initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.6 }}
-                  className="text-5xl md:text-7xl font-black text-black leading-[0.95] mb-6"
-                >
-                  ¿Qué puede hacer un agente AI por tu negocio?
-                </motion.h1>
-                <motion.p
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.15 }}
-                  className="text-lg md:text-2xl text-black/80 mb-10"
-                >
-                  Configúralo en 2 minutos. Te decimos exactamente cuánto
-                  cuesta y empezamos esta semana.
-                </motion.p>
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                  className="flex justify-center"
-                >
-                  <BrutalButton onClick={() => setStep(1)}>
-                    Configurar mi agente →
-                  </BrutalButton>
-                </motion.div>
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                  className="text-sm text-black/60 mt-8 font-mono"
-                >
-                  {CAP_COUNT} capacidades · pago mensual MXN · cancela cuando
-                  quieras
-                </motion.p>
+              <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center py-8 md:py-16">
+                <div className="text-left order-2 md:order-1">
+                  <motion.h1
+                    initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    transition={{ duration: 0.6 }}
+                    className="text-5xl md:text-6xl lg:text-7xl font-black text-black leading-[0.95] mb-6"
+                  >
+                    ¿Qué puede hacer un agente AI por tu negocio?
+                  </motion.h1>
+                  <motion.p
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.15 }}
+                    className="text-lg md:text-xl text-black/80 mb-8"
+                  >
+                    Configúralo en 2 minutos. Te decimos exactamente cuánto
+                    cuesta y empezamos esta semana.
+                  </motion.p>
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.3 }}
+                  >
+                    <BrutalButton onClick={() => setStep(1)}>
+                      Configurar mi agente →
+                    </BrutalButton>
+                  </motion.div>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                    className="text-sm text-black/60 mt-6 font-mono"
+                  >
+                    {CAP_COUNT} capacidades · pago mensual MXN · cancela
+                    cuando quieras
+                  </motion.p>
+                </div>
+                <div className="order-1 md:order-2 max-w-md md:max-w-none mx-auto w-full">
+                  <HeroIllustration />
+                </div>
               </div>
             </QuizStep>
           )}
