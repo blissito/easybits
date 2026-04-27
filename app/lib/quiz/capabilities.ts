@@ -152,15 +152,15 @@ export const CAPABILITIES: Capability[] = [
     emoji: "🌐",
     question: "¿Quieres publicar landings y sitios sin límite?",
     description:
-      "No te damos una landing — te damos miles. Una por campaña, producto, cliente o evento. Incluido cuando armamos tu agente, sin costo extra.",
+      "No te damos una landing — te damos miles. Una por campaña, producto, cliente o evento. Con formularios que capturan leads en automático. Incluido cuando armamos tu agente, sin costo extra.",
     vendor: "EasyBits",
     basePriceMxn: 0,
     bgClass: "bg-lime",
     isAddon: false,
     includes: [
       "Miles de landings con dominio propio",
-      "El agente las arma y publica en minutos",
-      "Solo limitadas por tu storage",
+      "Formularios + captura de leads automática",
+      "Editor visual + SSL + el agente las arma y publica",
     ],
   },
   {
