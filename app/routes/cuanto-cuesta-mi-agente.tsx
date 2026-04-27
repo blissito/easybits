@@ -139,7 +139,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     const integrationsLine = integrations.hasIntegrations
       ? `\nIntegraciones custom: ${integrations.description || "sí"}`
       : "";
-    const msg = `Hola, soy ${lead.name}. Aquí mi cotización de EasyBits (${formatMxn(quote.totalMxn)}/mes) — vengo a presentarla para pedir el 20% de descuento permanente.\n\n${summary}${integrationsLine}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}`;
+    const msg = `Hola, soy ${lead.name}. Quiero obtener mi 20% de descuento permanente — aquí mi cotización de EasyBits.\n\nTotal: ${formatMxn(quote.totalMxn)} MXN/mes (precio lista, antes del descuento)\n\nCapacidades:\n${summary}${integrationsLine}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
