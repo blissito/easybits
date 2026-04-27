@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AuthNav } from "~/components/login/auth-nav";
-import { Footer } from "~/components/common/Footer";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { QuizStep, StepIndicator } from "~/components/quiz/QuizStep";
 import { CapabilityCard } from "~/components/quiz/CapabilityCard";
@@ -140,11 +139,47 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     const integrationsLine = integrations.hasIntegrations
       ? `\nIntegraciones custom: ${integrations.description || "sí"}`
       : "";
-    const msg = `Hola, soy ${lead.name}. Hice el quiz de EasyBits y mi cotización fue ${formatMxn(quote.totalMxn)}/mes con:\n${summary}${integrationsLine}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}\nQuiero hablar antes de pagar.`;
+    const msg = `Hola, soy ${lead.name}. Aquí mi cotización de EasyBits (${formatMxn(quote.totalMxn)}/mes) — vengo a presentarla para pedir el 20% de descuento permanente.\n\n${summary}${integrationsLine}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
     );
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!lead) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/v2/quiz-cotizacion-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selections: Array.from(selections),
+          customIntegrations: integrations.hasIntegrations
+            ? { description: integrations.description }
+            : null,
+          lead,
+        }),
+      });
+      if (!res.ok) throw new Error(`pdf failed: ${res.status}`);
+      const blob = await res.blob();
+      const folio = res.headers.get("X-Quiz-Folio") || "cotizacion";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `EasyBits-Cotizacion-${folio}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setSubmitError(
+        "No pudimos generar tu PDF. Pídelo por WhatsApp y te lo mandamos."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const isHero = step === 0;
@@ -158,12 +193,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       <AuthNav user={user} />
       <main className="flex-1 flex flex-col px-8 md:px-20 lg:px-32 py-24 md:py-40 max-w-5xl mx-auto w-full">
         {!isHero && (
-          <div className="mb-6 flex justify-between items-center gap-4">
+          <div className="mb-6 relative flex justify-center items-center">
             <StepIndicator current={step} total={TOTAL_PROGRESS_STEPS} />
             {!isSummaryStep && step > 1 && (
               <button
                 onClick={() => setStep((s) => Math.max(0, s - 1))}
-                className="text-sm font-bold text-black/60 hover:text-black underline-offset-4 hover:underline py-2 px-3 -my-2 -mx-3"
+                className="absolute right-0 top-1/2 -translate-y-1/2 text-sm font-bold text-black/60 hover:text-black underline-offset-4 hover:underline py-2 px-3"
               >
                 ← atrás
               </button>
@@ -286,7 +321,35 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       : undefined
                   }
                 />
-                <div className="mt-10 flex flex-col md:flex-row gap-4 justify-center items-center">
+
+                {/* Discount banner — the key sales lever */}
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4, duration: 0.4 }}
+                  className="mt-8 max-w-xl mx-auto rounded-2xl border-[3px] border-black bg-brand-yellow p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] text-center"
+                >
+                  <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] font-black text-black/70 mb-2">
+                    ★ Descuento permanente ★
+                  </p>
+                  <p className="text-base md:text-lg font-black text-black leading-tight">
+                    Descarga tu cotización y preséntala para recibir
+                    <br className="hidden md:block" />{" "}
+                    <span className="underline decoration-4 underline-offset-2">
+                      20% de descuento permanente
+                    </span>{" "}
+                    al contratar.
+                  </p>
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={submitting}
+                    className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? "Generando…" : "↓ Descargar cotización (PDF)"}
+                  </button>
+                </motion.div>
+
+                <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
                   <BrutalButton
                     onClick={handleCheckout}
                     isLoading={submitting}
@@ -294,7 +357,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     Pagar y empezar →
                   </BrutalButton>
                   <BrutalButton mode="ghost" onClick={handleWhatsApp}>
-                    Hablar antes por WhatsApp
+                    Presenta tu cotización por WhatsApp
                   </BrutalButton>
                 </div>
                 {submitError && (
@@ -311,7 +374,6 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           </AnimatePresence>
         </div>
       </main>
-      <Footer />
     </section>
   );
 }

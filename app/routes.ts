@@ -225,6 +225,7 @@ export default [
     route("brand-kits/:id", "routes/api/v2/brand-kit.ts"),
     route("forms/:formId/submit", "routes/api/v2/forms.$formId.submit.ts"),
     route("quiz-checkout", "routes/api/v2/quiz-checkout.tsx"),
+    route("quiz-cotizacion-pdf", "routes/api/v2/quiz-cotizacion-pdf.tsx"),
   ]),
   // v1
   ...prefix("api/v1", [

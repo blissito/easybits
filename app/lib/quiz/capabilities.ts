@@ -142,7 +142,7 @@ export const CAPABILITIES: Capability[] = [
     includes: [
       "Base de datos persistente por cliente",
       "Storage S3 ilimitado (sujeto a tu plan)",
-      "Recuerda contexto entre conversaciones",
+      "Memoria Redis-compatible (alta velocidad)",
     ],
   },
   {
