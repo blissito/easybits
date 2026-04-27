@@ -15,13 +15,23 @@ type IntegrationsStepProps = {
   onAnswer: (answer: IntegrationsAnswer) => void;
 };
 
+// MX-focused suggestions, prioritized by relevance for SMB/agency/freelance.
 const SUGGESTED = [
+  "Kommo",
   "HubSpot",
   "Mercado Libre",
+  "Tienda Nube",
   "Shopify",
-  "Inventario propio",
+  "CFDI / SAT",
+  "CONTPAQi",
+  "Aspel",
+  "Conekta",
+  "Clip",
+  "Stripe",
+  "Calendly",
   "Google Calendar",
-  "Contabilidad (CONTPAQi/Aspel)",
+  "Notion",
+  "Inventario propio",
 ];
 
 export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
@@ -182,24 +192,31 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
                   onKeyDown={handleKeyDown}
                 />
 
-                {/* Suggestions when no items yet */}
-                {items.length === 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <span className="text-xs text-black/55 mr-1 mt-1">
-                      Sugerencias:
-                    </span>
-                    {SUGGESTED.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => addItem(s)}
-                        className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors"
-                      >
-                        + {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Suggestions — always visible, filtered to hide already-added */}
+                {(() => {
+                  const lower = new Set(items.map((it) => it.toLowerCase()));
+                  const remaining = SUGGESTED.filter(
+                    (s) => !lower.has(s.toLowerCase())
+                  );
+                  if (remaining.length === 0) return null;
+                  return (
+                    <div className="mt-3 flex flex-wrap gap-1.5 items-start">
+                      <span className="text-xs text-black/55 mr-1 mt-1.5">
+                        Sugerencias:
+                      </span>
+                      {remaining.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => addItem(s)}
+                          className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors"
+                        >
+                          + {s}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           )}
