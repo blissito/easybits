@@ -11,7 +11,7 @@ export type Capability = {
   isAddon: boolean;
 };
 
-export const ORCHESTRATION_FEE_MXN = 1500;
+export const ORCHESTRATION_FEE_MXN = 3000;
 
 export const CAPABILITIES: Capability[] = [
   {
@@ -23,7 +23,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Audios de WhatsApp, llamadas, podcasts. Voces naturales en español MX vía ElevenLabs.",
     vendor: "ElevenLabs",
-    basePriceMxn: 1200,
+    basePriceMxn: 3000,
     bgClass: "bg-brand-grass",
     isAddon: false,
   },
@@ -36,7 +36,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Productos, banners para redes, mockups, ilustraciones bajo demanda.",
     vendor: "Fal / OpenAI",
-    basePriceMxn: 800,
+    basePriceMxn: 1200,
     bgClass: "bg-brand-pink",
     isAddon: false,
   },
@@ -49,7 +49,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Conexión a WhatsApp Business vía Baileys. Setup técnico y onboarding incluidos.",
     vendor: "Baileys",
-    basePriceMxn: 1000,
+    basePriceMxn: 1700,
     bgClass: "bg-brand-yellow",
     isAddon: false,
   },
@@ -62,7 +62,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "DB persistente + storage S3. Conversaciones, PDFs, fotos, contratos al alcance del agente.",
     vendor: "EasyBits",
-    basePriceMxn: 600,
+    basePriceMxn: 1000,
     bgClass: "bg-brand-aqua",
     isAddon: false,
   },
@@ -75,7 +75,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Landing personalizada, formularios conectados a DB, dominio y SSL incluidos.",
     vendor: "EasyBits",
-    basePriceMxn: 500,
+    basePriceMxn: 900,
     bgClass: "bg-lime",
     isAddon: false,
   },
@@ -88,7 +88,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Reels, demos, anuncios cortos. Add-on opcional, consumo alto.",
     vendor: "Runway",
-    basePriceMxn: 1500,
+    basePriceMxn: 2700,
     bgClass: "bg-rose",
     isAddon: true,
   },
@@ -101,7 +101,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Búsqueda profunda, scraping respetuoso, monitoreo de precios. Add-on opcional.",
     vendor: "Brightdata",
-    basePriceMxn: 1500,
+    basePriceMxn: 6100,
     bgClass: "bg-sky",
     isAddon: true,
   },

@@ -125,9 +125,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const isSummaryStep = step === CAP_COUNT + 2;
 
   return (
-    <section className="min-h-screen bg-brand-grass">
+    <section className="min-h-screen bg-brand-grass flex flex-col">
       <AuthNav user={user} />
-      <main className="px-4 md:px-8 py-8 md:py-16 max-w-5xl mx-auto">
+      <main className="flex-1 flex flex-col px-4 md:px-8 py-8 md:py-12 max-w-5xl mx-auto w-full">
         {!isHero && (
           <div className="mb-8 flex justify-between items-center gap-4">
             <StepIndicator current={step} total={TOTAL_STEPS - 1} />
@@ -142,6 +142,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           </div>
         )}
 
+        <div className="flex-1 flex flex-col justify-center min-h-[560px] md:min-h-[640px]">
         <AnimatePresence mode="wait">
           {isHero && (
             <QuizStep stepKey="hero">
@@ -248,6 +249,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             </QuizStep>
           )}
         </AnimatePresence>
+        </div>
       </main>
       <Footer />
     </section>
