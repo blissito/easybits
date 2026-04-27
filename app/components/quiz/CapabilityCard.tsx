@@ -72,23 +72,35 @@ export const CapabilityCard = ({
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
-        <BrutalButton
-          mode="ghost"
-          onClick={() => onAnswer(false)}
-          containerClassName="h-16 md:h-20 w-full"
-          className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
-        >
-          No, gracias
-        </BrutalButton>
-        <BrutalButton
-          onClick={() => onAnswer(true)}
-          containerClassName="h-16 md:h-20 w-full"
-          className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
-        >
-          Sí, incluir
-        </BrutalButton>
-      </div>
+      {capability.basePriceMxn === 0 ? (
+        <div className="w-full max-w-md">
+          <BrutalButton
+            onClick={() => onAnswer(true)}
+            containerClassName="h-16 md:h-20 w-full"
+            className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
+          >
+            Sí, incluir
+          </BrutalButton>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
+          <BrutalButton
+            mode="ghost"
+            onClick={() => onAnswer(false)}
+            containerClassName="h-16 md:h-20 w-full"
+            className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
+          >
+            No, gracias
+          </BrutalButton>
+          <BrutalButton
+            onClick={() => onAnswer(true)}
+            containerClassName="h-16 md:h-20 w-full"
+            className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
+          >
+            Sí, incluir
+          </BrutalButton>
+        </div>
+      )}
     </div>
   );
 };
