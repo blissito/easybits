@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -7,6 +7,7 @@ import { formatMxn } from "~/lib/quiz/pricing";
 
 export type IntegrationsAnswer = {
   hasIntegrations: boolean;
+  items: string[];
   description: string;
 };
 
@@ -14,15 +15,58 @@ type IntegrationsStepProps = {
   onAnswer: (answer: IntegrationsAnswer) => void;
 };
 
+const SUGGESTED = [
+  "HubSpot",
+  "Mercado Libre",
+  "Shopify",
+  "Inventario propio",
+  "Google Calendar",
+  "Contabilidad (CONTPAQi/Aspel)",
+];
+
 export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
   const [opted, setOpted] = useState<boolean | null>(null);
-  const [description, setDescription] = useState("");
+  const [items, setItems] = useState<string[]>([]);
+  const [current, setCurrent] = useState("");
+
+  const addItem = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    if (items.some((it) => it.toLowerCase() === trimmed.toLowerCase())) {
+      setCurrent("");
+      return;
+    }
+    setItems((prev) => [...prev, trimmed]);
+    setCurrent("");
+  };
+
+  const removeItem = (idx: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addItem(current);
+    } else if (e.key === "Backspace" && current === "" && items.length > 0) {
+      removeItem(items.length - 1);
+    }
+  };
 
   const handleSubmit = () => {
     if (opted === null) return;
+    // If user typed something and didn't add it, add on submit.
+    const finalItems =
+      opted &&
+      current.trim() &&
+      !items.some((it) => it.toLowerCase() === current.trim().toLowerCase())
+        ? [...items, current.trim()]
+        : items;
+
     onAnswer({
       hasIntegrations: opted,
-      description: opted ? description.trim() : "",
+      items: opted ? finalItems : [],
+      description: opted ? finalItems.join(" · ") : "",
     });
   };
 
@@ -98,18 +142,64 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
               className="overflow-hidden"
             >
               <div className="pt-4">
+                {/* Chips of added items */}
+                {items.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <AnimatePresence initial={false}>
+                      {items.map((it, idx) => (
+                        <motion.span
+                          key={`${it}-${idx}`}
+                          initial={{ opacity: 0, scale: 0.6 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.6 }}
+                          transition={{ duration: 0.15 }}
+                          className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-brand-yellow border-[2.5px] border-black rounded-full text-sm font-bold shadow-[2px_2px_0_0_rgba(0,0,0,1)]"
+                        >
+                          <span>{it}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(idx)}
+                            aria-label={`Quitar ${it}`}
+                            className="w-5 h-5 rounded-full bg-black text-white text-xs font-black flex items-center justify-center hover:bg-black/80"
+                          >
+                            ×
+                          </button>
+                        </motion.span>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+
                 <Input
-                  name="integrations_description"
-                  label="¿Qué quieres conectar? (en una línea está bien)"
-                  placeholder="Ej: mi CRM en HubSpot, sistema de inventario propio, Mercado Libre…"
+                  name="integrations_item"
+                  label={`¿Qué quieres conectar? (Enter o coma para agregar más${items.length > 0 ? ` · ${items.length} agregada${items.length === 1 ? "" : "s"}` : ""})`}
+                  placeholder="Ej: HubSpot CRM, Mercado Libre, Google Calendar…"
                   type="text"
-                  value={description}
+                  value={current}
                   onChange={(e) =>
-                    setDescription(
-                      (e.target as HTMLInputElement).value
-                    )
+                    setCurrent((e.target as HTMLInputElement).value)
                   }
+                  onKeyDown={handleKeyDown}
                 />
+
+                {/* Suggestions when no items yet */}
+                {items.length === 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <span className="text-xs text-black/55 mr-1 mt-1">
+                      Sugerencias:
+                    </span>
+                    {SUGGESTED.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => addItem(s)}
+                        className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors"
+                      >
+                        + {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -121,10 +211,7 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
         </p>
       </motion.div>
 
-      <BrutalButton
-        onClick={handleSubmit}
-        isDisabled={opted === null}
-      >
+      <BrutalButton onClick={handleSubmit} isDisabled={opted === null}>
         Continuar →
       </BrutalButton>
     </div>

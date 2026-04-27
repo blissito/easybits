@@ -50,6 +50,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [selections, setSelections] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<IntegrationsAnswer>({
     hasIntegrations: false,
+    items: [],
     description: "",
   });
   const [lead, setLead] = useState<LeadData | null>(null);
