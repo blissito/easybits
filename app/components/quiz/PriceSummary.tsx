@@ -12,6 +12,9 @@ import { formatMxn } from "~/lib/quiz/pricing";
 type PriceSummaryProps = {
   quote: Quote;
   customIntegrationsDescription?: string;
+  onDownloadPdf?: () => void;
+  isDownloadingPdf?: boolean;
+  disableDownload?: boolean;
 };
 
 const DISCOUNT_PCT = 20;
@@ -19,6 +22,9 @@ const DISCOUNT_PCT = 20;
 export const PriceSummary = ({
   quote,
   customIntegrationsDescription,
+  onDownloadPdf,
+  isDownloadingPdf = false,
+  disableDownload = false,
 }: PriceSummaryProps) => {
   const discountedTotal = Math.round(
     quote.totalMxn * (1 - DISCOUNT_PCT / 100)
@@ -96,6 +102,39 @@ export const PriceSummary = ({
           cotización
         </p>
       </div>
+
+      {/* Discount + Download banner — positioned right under the price */}
+      {onDownloadPdf && (
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={
+            reduced ? { duration: 0 } : { delay: 0.5, duration: 0.4 }
+          }
+          className="mb-8 rounded-2xl border-[3px] border-black bg-brand-yellow p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] text-center"
+        >
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] font-black text-black/70 mb-2">
+            ★ Descuento permanente ★
+          </p>
+          <p className="text-base md:text-lg font-black text-black leading-tight">
+            Descarga tu cotización y preséntala para recibir
+            <br className="hidden md:block" />{" "}
+            <span className="underline decoration-4 underline-offset-2">
+              {DISCOUNT_PCT}% de descuento permanente
+            </span>{" "}
+            al contratar.
+          </p>
+          <button
+            onClick={onDownloadPdf}
+            disabled={disableDownload || isDownloadingPdf}
+            className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isDownloadingPdf
+              ? "Generando…"
+              : "↓ Descargar cotización (PDF)"}
+          </button>
+        </motion.div>
+      )}
 
       <div className="rounded-2xl border-[3px] border-black bg-white p-6 shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
         <h4 className="text-sm uppercase tracking-widest font-bold text-black mb-4">

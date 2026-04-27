@@ -321,36 +321,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       ? integrations.description
                       : undefined
                   }
+                  onDownloadPdf={handleDownloadPdf}
+                  isDownloadingPdf={downloadingPdf}
+                  disableDownload={submitting}
                 />
-
-                {/* Discount banner — the key sales lever */}
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, duration: 0.4 }}
-                  className="mt-8 max-w-xl mx-auto rounded-2xl border-[3px] border-black bg-brand-yellow p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] text-center"
-                >
-                  <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] font-black text-black/70 mb-2">
-                    ★ Descuento permanente ★
-                  </p>
-                  <p className="text-base md:text-lg font-black text-black leading-tight">
-                    Descarga tu cotización y preséntala para recibir
-                    <br className="hidden md:block" />{" "}
-                    <span className="underline decoration-4 underline-offset-2">
-                      20% de descuento permanente
-                    </span>{" "}
-                    al contratar.
-                  </p>
-                  <button
-                    onClick={handleDownloadPdf}
-                    disabled={submitting || downloadingPdf}
-                    className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {downloadingPdf
-                      ? "Generando…"
-                      : "↓ Descargar cotización (PDF)"}
-                  </button>
-                </motion.div>
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
                   <BrutalButton

@@ -34,11 +34,17 @@ const escapeHtml = (s: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const DISCOUNT_PCT = 20;
+
 const buildHtml = (payload: Payload, folio: string): string => {
   const { lead, customIntegrations } = payload;
   const validIds = new Set(CAPABILITIES.map((c) => c.id));
   const cleanSelections = payload.selections.filter((s) => validIds.has(s));
   const quote = computeQuote(cleanSelections, !!customIntegrations);
+  const discountedTotal = Math.round(
+    quote.totalMxn * (1 - DISCOUNT_PCT / 100)
+  );
+  const savingMxn = quote.totalMxn - discountedTotal;
 
   const today = new Intl.DateTimeFormat("es-MX", {
     day: "numeric",
@@ -112,10 +118,14 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 .cap-price { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-weight: 900; font-size: 13px; white-space: nowrap; }
 .cap-price.free { font-style: italic; color: rgba(0,0,0,0.7); }
 
-.total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 4px 8px; border-top: 3px solid #000; font-weight: 900; margin-top: 8px; }
-.total-row .label { font-size: 14px; }
-.total-row .amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 24px; }
-.disclaimer { font-size: 10px; color: rgba(0,0,0,0.5); padding: 0 4px; margin-top: 4px; }
+.total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 4px 4px; border-top: 3px solid #000; font-weight: 900; margin-top: 8px; }
+.total-row .label { font-size: 13px; }
+.total-row .amount-original { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 14px; color: rgba(0,0,0,0.4); text-decoration: line-through; font-weight: bold; }
+.total-final-row { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px 8px; }
+.total-final-row .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 900; color: #9870ED; }
+.total-final-row .amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 28px; font-weight: 900; color: #9870ED; }
+.savings { font-size: 11px; color: rgba(0,0,0,0.65); padding: 0 4px; margin-top: 2px; font-weight: bold; }
+.disclaimer { font-size: 10px; color: rgba(0,0,0,0.5); padding: 0 4px; margin-top: 6px; }
 
 .discount-banner { margin-top: 28px; padding: 22px 26px; border: 3px solid #000; border-radius: 16px; background: #ECD66E; box-shadow: 5px 5px 0 0 #000; text-align: center; page-break-inside: avoid; }
 .discount-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 10px; }
@@ -153,9 +163,14 @@ ${capRows}
 ${customRow}
 
 <div class="total-row">
-  <div class="label">Total mensual</div>
-  <div class="amount">${formatMxn(quote.totalMxn)}</div>
+  <div class="label">Total lista (sin descuento)</div>
+  <div class="amount-original">${formatMxn(quote.totalMxn)} MXN</div>
 </div>
+<div class="total-final-row">
+  <div class="label">Total con tu descuento</div>
+  <div class="amount">${formatMxn(discountedTotal)} MXN/mes</div>
+</div>
+<div class="savings">Ahorras ${formatMxn(savingMxn)} MXN cada mes al presentar esta cotización · ${DISCOUNT_PCT}% off permanente</div>
 <div class="disclaimer">Precios en MXN, no incluyen IVA. Suscripción mensual, cancela cuando quieras.${customIntegrations ? " * Integraciones custom: estimado preliminar, ajustable tras revisar tus APIs en la llamada." : ""}</div>
 
 <div class="discount-banner">
