@@ -94,15 +94,46 @@ export const HeroIllustration = ({ className }: HeroIllustrationProps) => {
       <rect x="148" y="318" width="32" height="22" rx="6" fill="#1A1A1A" stroke="#000" strokeWidth="3" />
       <rect x="220" y="318" width="32" height="22" rx="6" fill="#1A1A1A" stroke="#000" strokeWidth="3" />
 
-      {/* Floating chat bubble (top right) */}
-      <path
-        d="M286,108 L348,108 Q356,108 356,116 L356,138 Q356,146 348,146 L322,146 L314,156 L316,146 L286,146 Q278,146 278,138 L278,116 Q278,108 286,108 Z"
-        fill="#ECD66E"
-        stroke="#000"
-        strokeWidth="3"
-      />
-      <line x1="290" y1="120" x2="346" y2="120" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="290" y1="132" x2="330" y2="132" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
+      {/* WhatsApp logo (top right, recognizable green bubble with handset) */}
+      <g transform="translate(284, 78)">
+        {/* WhatsApp green bubble with iconic drop tail at bottom-left */}
+        <path
+          d="M44,4
+             Q82,4 82,42
+             Q82,76 50,80
+             L18,90
+             L26,68
+             Q6,60 6,42
+             Q6,4 44,4 Z"
+          fill="#25D366"
+          stroke="#000"
+          strokeWidth="3"
+          strokeLinejoin="round"
+        />
+        {/* WhatsApp phone handset — white, brutalist outlined */}
+        <path
+          d="M32,30
+             Q28,30 28,34
+             L28,38
+             Q28,58 48,66
+             L52,68
+             Q58,70 60,66
+             L62,62
+             Q64,58 60,56
+             L54,54
+             Q50,54 48,58
+             Q42,54 38,48
+             Q42,46 42,42
+             L42,36
+             Q42,30 38,30
+             L34,30
+             Q32,30 32,30 Z"
+          fill="#FFFFFF"
+          stroke="#000"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+        />
+      </g>
 
       {/* Floating sparkle (left) */}
       <path
