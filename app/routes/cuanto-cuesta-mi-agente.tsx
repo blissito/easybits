@@ -54,6 +54,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   });
   const [lead, setLead] = useState<LeadData | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const quote = useMemo(
@@ -148,7 +149,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
 
   const handleDownloadPdf = async () => {
     if (!lead) return;
-    setSubmitting(true);
+    setDownloadingPdf(true);
     setSubmitError(null);
     try {
       const res = await fetch("/api/v2/quiz-cotizacion-pdf", {
@@ -178,7 +179,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         "No pudimos generar tu PDF. Pídelo por WhatsApp y te lo mandamos."
       );
     } finally {
-      setSubmitting(false);
+      setDownloadingPdf(false);
     }
   };
 
@@ -342,10 +343,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   </p>
                   <button
                     onClick={handleDownloadPdf}
-                    disabled={submitting}
+                    disabled={submitting || downloadingPdf}
                     className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Generando…" : "↓ Descargar cotización (PDF)"}
+                    {downloadingPdf
+                      ? "Generando…"
+                      : "↓ Descargar cotización (PDF)"}
                   </button>
                 </motion.div>
 
@@ -353,10 +356,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   <BrutalButton
                     onClick={handleCheckout}
                     isLoading={submitting}
+                    isDisabled={downloadingPdf}
                   >
                     Pagar y empezar →
                   </BrutalButton>
-                  <BrutalButton mode="ghost" onClick={handleWhatsApp}>
+                  <BrutalButton
+                    mode="ghost"
+                    onClick={handleWhatsApp}
+                    isDisabled={submitting || downloadingPdf}
+                  >
                     Presenta tu cotización por WhatsApp
                   </BrutalButton>
                 </div>
