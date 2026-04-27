@@ -117,7 +117,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           selections: Array.from(selections),
           totalMxn: quote.totalMxn,
           customIntegrations: integrations.hasIntegrations
-            ? { description: integrations.description }
+            ? {
+                description: integrations.description,
+                items: integrations.items,
+              }
             : null,
           lead,
         }),
@@ -139,7 +142,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       .map((b) => `• ${b.capability.shortLabel}`)
       .join("\n");
     const integrationsLine = integrations.hasIntegrations
-      ? `\nIntegraciones custom: ${integrations.description || "sí"}`
+      ? integrations.items.length > 0
+        ? `\nIntegraciones custom:\n${integrations.items.map((it) => `  - ${it}`).join("\n")}`
+        : `\nIntegraciones custom: sí (a definir)`
       : "";
     const msg = `Hola, soy ${lead.name}. Quiero obtener mi 20% de descuento permanente — aquí mi cotización de EasyBits.\n\nTotal: ${formatMxn(quote.totalMxn)} MXN/mes (precio lista, antes del descuento)\n\nCapacidades:\n${summary}${integrationsLine}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}`;
     window.open(
@@ -159,7 +164,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         body: JSON.stringify({
           selections: Array.from(selections),
           customIntegrations: integrations.hasIntegrations
-            ? { description: integrations.description }
+            ? {
+                description: integrations.description,
+                items: integrations.items,
+              }
             : null,
           lead,
         }),

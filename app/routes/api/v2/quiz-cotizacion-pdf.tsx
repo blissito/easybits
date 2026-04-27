@@ -14,7 +14,7 @@ type LeadInfo = {
 
 type Payload = {
   selections: string[];
-  customIntegrations: { description: string } | null;
+  customIntegrations: { description: string; items?: string[] } | null;
   lead: LeadInfo;
 };
 
@@ -76,12 +76,29 @@ const buildHtml = (payload: Payload, folio: string): string => {
     })
     .join("");
 
+  const customItems =
+    customIntegrations?.items && customIntegrations.items.length > 0
+      ? customIntegrations.items
+      : customIntegrations?.description
+        ? customIntegrations.description.split(" · ").filter(Boolean)
+        : [];
+
+  const itemsChips =
+    customItems.length > 0
+      ? `<div class="custom-chips">${customItems
+          .map(
+            (it) => `<span class="custom-chip">${escapeHtml(it)}</span>`
+          )
+          .join("")}</div>`
+      : "";
+
   const customRow = customIntegrations
     ? `
     <div class="cap-row">
       <div class="cap-info">
         <div class="cap-name">Integraciones custom <span class="cap-vendor" style="color:#AA4958">*</span></div>
-        <div class="cap-incl">${customIntegrations.description ? `"${escapeHtml(customIntegrations.description)}" · ` : ""}estimado preliminar, se ajusta tras revisar APIs</div>
+        ${itemsChips}
+        <div class="cap-incl" style="margin-top:${customItems.length > 0 ? "6px" : "0"}">estimado preliminar, se ajusta tras revisar APIs en la llamada</div>
       </div>
       <div class="cap-price">${formatMxn(quote.customIntegrationsMxn)}</div>
     </div>`
@@ -115,6 +132,8 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 .cap-name { font-size: 13px; font-weight: 800; }
 .cap-vendor { color: rgba(0,0,0,0.5); font-weight: 500; font-size: 11px; }
 .cap-incl { font-size: 10.5px; color: rgba(0,0,0,0.6); margin-top: 3px; line-height: 1.3; }
+.custom-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.custom-chip { display: inline-block; padding: 2px 8px; background: #ECD66E; border: 1.5px solid #000; border-radius: 999px; font-size: 10px; font-weight: 700; color: #000; }
 .cap-price { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-weight: 900; font-size: 13px; white-space: nowrap; }
 .cap-price.free { font-style: italic; color: rgba(0,0,0,0.7); }
 
