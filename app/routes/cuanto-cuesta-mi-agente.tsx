@@ -112,7 +112,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     const summary = quote.breakdown
       .map((b) => `• ${b.capability.shortLabel}`)
       .join("\n");
-    const msg = `Hola, soy ${lead.name}. Hice el quiz de EasyBits y mi cotización fue ${formatMxn(quote.totalMxn)}/mes con:\n${summary}\n\nNegocio: ${lead.business || "—"}\nQuiero hablar antes de pagar.`;
+    const msg = `Hola, soy ${lead.name}. Hice el quiz de EasyBits y mi cotización fue ${formatMxn(quote.totalMxn)}/mes con:\n${summary}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}\nQuiero hablar antes de pagar.`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -225,19 +225,14 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           {isSummaryStep && (
             <QuizStep stepKey="summary">
               <PriceSummary quote={quote} />
-              <div className="mt-10 flex flex-col md:flex-row gap-4 justify-center max-w-xl mx-auto">
+              <div className="mt-10 flex flex-col md:flex-row gap-4 justify-center items-center">
                 <BrutalButton
                   onClick={handleCheckout}
                   isLoading={submitting}
-                  containerClassName="flex-1"
                 >
                   Pagar y empezar →
                 </BrutalButton>
-                <BrutalButton
-                  mode="ghost"
-                  onClick={handleWhatsApp}
-                  containerClassName="flex-1"
-                >
+                <BrutalButton mode="ghost" onClick={handleWhatsApp}>
                   Hablar antes por WhatsApp
                 </BrutalButton>
               </div>

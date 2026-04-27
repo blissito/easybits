@@ -12,6 +12,7 @@ type QuizCheckoutPayload = {
     name: string;
     email: string;
     whatsapp: string;
+    website?: string;
     business?: string;
     description?: string;
   } | null;
@@ -61,6 +62,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         total_mxn: String(quote.totalMxn),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
+        lead_website: lead.website || "",
         lead_business: lead.business || "",
       },
       line_items: [
