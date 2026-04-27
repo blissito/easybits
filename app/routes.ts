@@ -23,6 +23,7 @@ export default [
   route("/onboarding", "routes/onboarding/onboarding.tsx"),
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
+  route("/cuanto-cuesta-mi-agente", "routes/cuanto-cuesta-mi-agente.tsx"),
   route("/developers", "routes/developers.tsx"),
   route("/mcp", "routes/mcp-page.tsx"),
   route("/mcp/apps", "routes/mcp-apps.tsx"),
@@ -223,6 +224,7 @@ export default [
     route("brand-kits", "routes/api/v2/brand-kits.ts"),
     route("brand-kits/:id", "routes/api/v2/brand-kit.ts"),
     route("forms/:formId/submit", "routes/api/v2/forms.$formId.submit.ts"),
+    route("quiz-checkout", "routes/api/v2/quiz-checkout.tsx"),
   ]),
   // v1
   ...prefix("api/v1", [
