@@ -110,6 +110,24 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "gworkspace",
+    label: "Google Workspace",
+    shortLabel: "Workspace",
+    emoji: "📧",
+    question: "¿Quieres que el agente trabaje con tu Google Workspace?",
+    description:
+      "Tu agente trabaja con Gmail, Calendar, Meet, Drive, Docs, Sheets, Forms, Slides y Tasks. Tu Workspace, su oficina.",
+    vendor: "Google",
+    basePriceMxn: 2400,
+    bgClass: "bg-brand-aqua",
+    isAddon: false,
+    includes: [
+      "Gmail + Calendar: lee, manda emails y agenda citas",
+      "Drive + Docs + Sheets: busca y edita archivos",
+      "Meet + Forms + Slides + Tasks: el paquete completo",
+    ],
+  },
+  {
     id: "memory",
     label: "Memoria + Storage",
     shortLabel: "Memoria",

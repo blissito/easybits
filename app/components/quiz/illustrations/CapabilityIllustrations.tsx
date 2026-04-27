@@ -257,6 +257,135 @@ export const SlackTeamsIllustration = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* ---------- 3.7 Google Workspace (2x2 grid of app tiles) ---------- */
+export const GworkspaceIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Workspace card frame */}
+    <rect
+      x="32"
+      y="34"
+      width="76"
+      height="76"
+      rx="6"
+      fill="#F3F0F5"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Gmail tile (top-left) — white with red M */}
+    <rect
+      x="38"
+      y="40"
+      width="30"
+      height="26"
+      rx="4"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="2.5"
+    />
+    <path
+      d="M40,46 L40,62 L42,62 L42,50 L52,60 L62,50 L62,62 L64,62 L64,46 L52,58 Z"
+      fill="#AA4958"
+      stroke={STROKE}
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+    {/* Calendar tile (top-right) — blue with 31 */}
+    <rect
+      x="72"
+      y="40"
+      width="30"
+      height="26"
+      rx="4"
+      fill="#75BAF9"
+      stroke={STROKE}
+      strokeWidth="2.5"
+    />
+    <rect
+      x="76"
+      y="46"
+      width="22"
+      height="16"
+      rx="2"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="1.5"
+    />
+    <line x1="76" y1="50" x2="98" y2="50" stroke={STROKE} strokeWidth="1.5" />
+    <text
+      x="87"
+      y="60"
+      fontSize="8"
+      fontWeight="bold"
+      textAnchor="middle"
+      fill={STROKE}
+    >
+      31
+    </text>
+    {/* Drive tile (bottom-left) — yellow triangle */}
+    <rect
+      x="38"
+      y="76"
+      width="30"
+      height="26"
+      rx="4"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="2.5"
+    />
+    <polygon
+      points="53,80 65,98 41,98"
+      fill="#ECD66E"
+      stroke={STROKE}
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+    {/* Sheets tile (bottom-right) — green grid */}
+    <rect
+      x="72"
+      y="76"
+      width="30"
+      height="26"
+      rx="4"
+      fill="#96B894"
+      stroke={STROKE}
+      strokeWidth="2.5"
+    />
+    <line x1="72" y1="84" x2="102" y2="84" stroke={STROKE} strokeWidth="1.5" />
+    <line x1="72" y1="92" x2="102" y2="92" stroke={STROKE} strokeWidth="1.5" />
+    <line x1="82" y1="76" x2="82" y2="102" stroke={STROKE} strokeWidth="1.5" />
+    <line x1="92" y1="76" x2="92" y2="102" stroke={STROKE} strokeWidth="1.5" />
+    {/* Floating "G" badge (top-right of card) */}
+    <circle
+      cx="108"
+      cy="36"
+      r="9"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="2.5"
+    />
+    <text
+      x="108"
+      y="40"
+      fontSize="11"
+      fontWeight="bold"
+      textAnchor="middle"
+      fill="#AA4958"
+    >
+      G
+    </text>
+  </svg>
+);
+
 /* ---------- 4. Memory (stacked DB disks + spark) ---------- */
 export const MemoryIllustration = (props: SVGProps<SVGSVGElement>) => (
   <svg {...BASE} {...props}>
@@ -615,6 +744,7 @@ export const ILLUSTRATION_BY_ID: Record<
   whatsapp: WhatsAppIllustration,
   webchat: WebchatIllustration,
   slackteams: SlackTeamsIllustration,
+  gworkspace: GworkspaceIllustration,
   memory: MemoryIllustration,
   site: SiteIllustration,
   documents: DocumentsIllustration,
