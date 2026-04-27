@@ -54,7 +54,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     ...quote.breakdown.map((b) => b.capability.shortLabel),
     ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
   ].join(" + ");
-  const productName = `Agente AI EasyBits — ${itemsLabel}`;
+  const productName = `Agente IA EasyBits — ${itemsLabel}`;
   const productDescription = `Suscripción mensual. Orquestación + soporte humano (${ORCHESTRATION_FEE_MXN} MXN) + ${quote.selectionsCount} capacidades${
     hasCustomIntegrations
       ? " + integraciones custom (estimado preliminar, se ajusta tras llamada)"

@@ -23,134 +23,99 @@ export const HeroIllustration = ({ className }: HeroIllustrationProps) => {
     >
       {/* White organic blob background */}
       <path
-        d="M80,260 Q40,200 80,140 Q120,80 200,80 Q280,80 320,130 Q360,180 340,250 Q320,320 240,340 Q160,360 110,330 Q70,310 80,260 Z"
+        d="M70,250 Q30,190 80,130 Q130,70 210,80 Q290,90 330,150 Q370,210 340,280 Q310,340 230,340 Q150,340 100,320 Q60,300 70,250 Z"
         fill="#FFFFFF"
         stroke="#000"
         strokeWidth="3"
       />
 
-      {/* Connecting line bottom-right (decorative pill loop) */}
+      {/* Antenna */}
+      <line x1="200" y1="120" x2="200" y2="92" stroke="#000" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="200" cy="86" r="9" fill="#FFAFA3" stroke="#000" strokeWidth="3" />
+      {/* Sparks from antenna */}
+      <line x1="178" y1="74" x2="170" y2="66" stroke="#9870ED" strokeWidth="3" strokeLinecap="round" />
+      <line x1="222" y1="74" x2="230" y2="66" stroke="#9870ED" strokeWidth="3" strokeLinecap="round" />
+      <line x1="200" y1="64" x2="200" y2="54" stroke="#9870ED" strokeWidth="3" strokeLinecap="round" />
+
+      {/* Head */}
+      <rect
+        x="138"
+        y="120"
+        width="124"
+        height="92"
+        rx="16"
+        fill="#96B894"
+        stroke="#000"
+        strokeWidth="3"
+      />
+      {/* Eyes — big round, brutalist friendly */}
+      <circle cx="170" cy="160" r="18" fill="#FFFFFF" stroke="#000" strokeWidth="3" />
+      <circle cx="230" cy="160" r="18" fill="#FFFFFF" stroke="#000" strokeWidth="3" />
+      <circle cx="174" cy="162" r="8" fill="#000" />
+      <circle cx="234" cy="162" r="8" fill="#000" />
+      {/* Eye glints */}
+      <circle cx="172" cy="158" r="2.5" fill="#FFFFFF" />
+      <circle cx="232" cy="158" r="2.5" fill="#FFFFFF" />
+      {/* Mouth — speaker grille */}
+      <rect x="180" y="188" width="40" height="8" rx="3" fill="#1A1A1A" stroke="#000" strokeWidth="2" />
+      <line x1="190" y1="190" x2="190" y2="194" stroke="#FFFFFF" strokeWidth="1.2" />
+      <line x1="200" y1="190" x2="200" y2="194" stroke="#FFFFFF" strokeWidth="1.2" />
+      <line x1="210" y1="190" x2="210" y2="194" stroke="#FFFFFF" strokeWidth="1.2" />
+
+      {/* Body */}
+      <rect
+        x="120"
+        y="218"
+        width="160"
+        height="100"
+        rx="14"
+        fill="#BAD9D8"
+        stroke="#000"
+        strokeWidth="3"
+      />
+      {/* Chest screen — happy face inside */}
+      <rect x="160" y="234" width="80" height="44" rx="6" fill="#FFFFFF" stroke="#000" strokeWidth="2.5" />
+      <circle cx="180" cy="252" r="3" fill="#000" />
+      <circle cx="220" cy="252" r="3" fill="#000" />
+      <path d="M178,262 Q200,272 222,262" stroke="#000" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      {/* Status buttons */}
+      <circle cx="138" cy="298" r="5" fill="#FFAFA3" stroke="#000" strokeWidth="2" />
+      <circle cx="156" cy="298" r="5" fill="#ECD66E" stroke="#000" strokeWidth="2" />
+      <circle cx="174" cy="298" r="5" fill="#96B894" stroke="#000" strokeWidth="2" />
+
+      {/* Left arm */}
+      <rect x="86" y="240" width="42" height="16" rx="8" fill="#96B894" stroke="#000" strokeWidth="3" />
+      <circle cx="80" cy="248" r="12" fill="#ECD66E" stroke="#000" strokeWidth="3" />
+      {/* Right arm holding chat bubble */}
+      <rect x="270" y="240" width="42" height="16" rx="8" fill="#96B894" stroke="#000" strokeWidth="3" />
+      <circle cx="318" cy="248" r="12" fill="#ECD66E" stroke="#000" strokeWidth="3" />
+
+      {/* Feet */}
+      <rect x="148" y="318" width="32" height="22" rx="6" fill="#1A1A1A" stroke="#000" strokeWidth="3" />
+      <rect x="220" y="318" width="32" height="22" rx="6" fill="#1A1A1A" stroke="#000" strokeWidth="3" />
+
+      {/* Floating chat bubble (top right) */}
       <path
-        d="M170,330 Q190,360 230,355 Q270,350 270,320 Q270,300 250,300 Q230,300 230,320"
-        fill="none"
+        d="M286,108 L348,108 Q356,108 356,116 L356,138 Q356,146 348,146 L322,146 L314,156 L316,146 L286,146 Q278,146 278,138 L278,116 Q278,108 286,108 Z"
+        fill="#ECD66E"
+        stroke="#000"
+        strokeWidth="3"
+      />
+      <line x1="290" y1="120" x2="346" y2="120" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="290" y1="132" x2="330" y2="132" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
+
+      {/* Floating sparkle (left) */}
+      <path
+        d="M58,154 L62,164 L72,168 L62,172 L58,182 L54,172 L44,168 L54,164 Z"
+        fill="#FFAFA3"
         stroke="#000"
         strokeWidth="2.5"
-        strokeLinecap="round"
       />
-      <circle cx="170" cy="330" r="4" fill="#000" />
-      <circle cx="230" cy="320" r="4" fill="#000" />
-
-      {/* Smartphone (right side, isometric tilt) */}
-      <g transform="translate(240,90) rotate(8)">
-        <rect
-          x="0"
-          y="0"
-          width="110"
-          height="180"
-          rx="18"
-          fill="#FFFFFF"
-          stroke="#000"
-          strokeWidth="3"
-        />
-        {/* Notch */}
-        <rect x="42" y="10" width="26" height="6" rx="3" fill="#000" />
-        {/* App tiles 2x2 */}
-        <rect
-          x="14"
-          y="34"
-          width="36"
-          height="36"
-          rx="8"
-          fill="#96B894"
-          stroke="#000"
-          strokeWidth="2.5"
-        />
-        <rect
-          x="60"
-          y="34"
-          width="36"
-          height="36"
-          rx="8"
-          fill="#FFAFA3"
-          stroke="#000"
-          strokeWidth="2.5"
-        />
-        <rect
-          x="14"
-          y="80"
-          width="36"
-          height="36"
-          rx="8"
-          fill="#BAD9D8"
-          stroke="#000"
-          strokeWidth="2.5"
-        />
-        <rect
-          x="60"
-          y="80"
-          width="36"
-          height="36"
-          rx="8"
-          fill="#ECD66E"
-          stroke="#000"
-          strokeWidth="2.5"
-        />
-        {/* Bottom indicator bar */}
-        <rect x="40" y="158" width="30" height="4" rx="2" fill="#000" />
-      </g>
-
-      {/* Cloud cluster (center) */}
-      <g>
-        <circle cx="160" cy="170" r="42" fill="#FFFFFF" stroke="#000" strokeWidth="3" />
-        <circle cx="200" cy="150" r="32" fill="#FFFFFF" stroke="#000" strokeWidth="3" />
-        <circle cx="225" cy="180" r="26" fill="#FFFFFF" stroke="#000" strokeWidth="3" />
-        <circle cx="135" cy="195" r="24" fill="#FFFFFF" stroke="#000" strokeWidth="3" />
-        {/* Cloud shading hint */}
-        <circle cx="160" cy="170" r="42" fill="#BAD9D8" opacity="0.35" />
-        <circle cx="200" cy="150" r="32" fill="#BAD9D8" opacity="0.35" />
-      </g>
-
-      {/* Connecting line top phone → cloud */}
-      <path
-        d="M250,150 Q220,160 200,160"
-        fill="none"
-        stroke="#000"
-        strokeWidth="2.5"
-        strokeDasharray="4 4"
-      />
-      <circle cx="250" cy="150" r="3.5" fill="#9870ED" />
-
-      {/* Magnifying glass (bottom-center) */}
-      <g transform="translate(150,225)">
-        <circle
-          cx="0"
-          cy="0"
-          r="32"
-          fill="#FFAFA3"
-          fillOpacity="0.55"
-          stroke="#000"
-          strokeWidth="3"
-        />
-        {/* inner highlight */}
-        <circle cx="-6" cy="-8" r="10" fill="#FFFFFF" opacity="0.8" />
-        {/* handle */}
-        <rect
-          x="22"
-          y="22"
-          width="38"
-          height="12"
-          rx="6"
-          transform="rotate(35 22 22)"
-          fill="#1A1A1A"
-          stroke="#000"
-          strokeWidth="2.5"
-        />
-      </g>
 
       {/* Floating accent dots */}
-      <circle cx="100" cy="120" r="4" fill="#9870ED" />
-      <circle cx="320" cy="280" r="5" fill="#96B894" stroke="#000" strokeWidth="2" />
-      <circle cx="80" cy="220" r="3" fill="#000" />
+      <circle cx="68" cy="316" r="5" fill="#9870ED" stroke="#000" strokeWidth="2" />
+      <circle cx="350" cy="200" r="4" fill="#000" />
+      <circle cx="44" cy="92" r="4" fill="#9870ED" stroke="#000" strokeWidth="2" />
     </motion.svg>
   );
 };

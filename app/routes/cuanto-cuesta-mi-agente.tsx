@@ -31,9 +31,9 @@ export const clientLoader = async () => {
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "¿Cuánto cuesta mi agente AI? | EasyBits",
+    title: "¿Cuánto cuesta mi agente IA? | EasyBits",
     description:
-      "Configura tu agente AI personalizado en 2 minutos. Voz, WhatsApp, imágenes, memoria, video, cotizaciones y más. Cotización al instante.",
+      "Configura tu agente IA personalizado en 2 minutos. Voz, WhatsApp, imágenes, memoria, video, cotizaciones y más. Cotización al instante.",
     image:
       "https://easybits-public.fly.storage.tigris.dev/699f35cbc8ad86037eda62b1/DM1_zm",
   });
@@ -156,7 +156,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   return (
     <section className="min-h-screen bg-brand-grass flex flex-col pb-[env(safe-area-inset-bottom)]">
       <AuthNav user={user} />
-      <main className="flex-1 flex flex-col px-4 md:px-8 py-8 md:py-12 max-w-5xl mx-auto w-full">
+      <main className="flex-1 flex flex-col px-8 md:px-20 lg:px-32 py-24 md:py-40 max-w-5xl mx-auto w-full">
         {!isHero && (
           <div className="mb-6 flex justify-between items-center gap-4">
             <StepIndicator current={step} total={TOTAL_PROGRESS_STEPS} />
@@ -176,7 +176,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           <AnimatePresence mode="wait">
             {isHero && (
               <QuizStep stepKey="hero">
-                <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center py-4 md:py-8">
+                <div className="grid md:grid-cols-[3fr_2fr] gap-8 md:gap-12 items-center py-4 md:py-8">
                   <div className="text-left order-2 md:order-1">
                     <motion.p
                       initial={{ opacity: 0, y: 12 }}
@@ -184,15 +184,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6 }}
                       className="text-xs md:text-sm uppercase tracking-[0.2em] font-bold text-black/70 mb-4"
                     >
-                      El guardián mitológico que acompaña al campeón
+                      Guía interactiva de agentes IA
                     </motion.p>
                     <motion.h1
                       initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                       transition={{ duration: 0.6, delay: 0.1 }}
-                      className="text-4xl md:text-6xl lg:text-7xl font-black text-black leading-[0.95] mb-6"
+                      className="text-4xl md:text-5xl lg:text-6xl font-black text-black leading-[0.95] mb-6"
                     >
-                      ¿Qué puede hacer un agente AI por tu negocio?
+                      ¿Qué puede hacer un agente IA por tu negocio?
                     </motion.h1>
                     <motion.p
                       initial={{ opacity: 0, y: 16 }}

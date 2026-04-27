@@ -32,7 +32,7 @@ export const CAPABILITIES: Capability[] = [
     bgClass: "bg-brand-grass",
     isAddon: false,
     includes: [
-      "Voces mexicanas que pasan por humanas, no AI",
+      "Voces mexicanas que pasan por humanas, no IA",
       "Audios y notas de voz en WhatsApp",
       "Transcripción de audios entrantes",
     ],
@@ -186,7 +186,7 @@ export const CAPABILITIES: Capability[] = [
     label: "Generación de video",
     shortLabel: "Video",
     emoji: "🎬",
-    question: "¿Necesitas videos cortos generados por AI?",
+    question: "¿Necesitas videos cortos generados por IA?",
     description:
       "Reels, demos, anuncios cortos. Add-on opcional, consumo alto.",
     vendor: "Runway",
