@@ -212,7 +212,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   try {
     const pdfBuffer = await withPage(async (page) => {
-      await page.setContent(html, { waitUntil: "networkidle" });
+      // HTML is fully inline (no external assets) — domcontentloaded is enough
+      // and skips ~500ms wait that 'networkidle' adds.
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
       return await page.pdf({
         format: "Letter",
         printBackground: true,

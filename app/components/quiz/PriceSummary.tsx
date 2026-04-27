@@ -129,10 +129,20 @@ export const PriceSummary = ({
             disabled={disableDownload || isDownloadingPdf}
             className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isDownloadingPdf
-              ? "Generando…"
-              : "↓ Descargar cotización (PDF)"}
+            {isDownloadingPdf ? (
+              <>
+                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Generando tu cotización…</span>
+              </>
+            ) : (
+              "↓ Descargar cotización (PDF)"
+            )}
           </button>
+          {isDownloadingPdf && (
+            <p className="text-[10px] text-black/55 mt-2 font-mono">
+              Tarda 2-4 segundos
+            </p>
+          )}
         </motion.div>
       )}
 
