@@ -14,8 +14,7 @@ import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/cuanto-cuesta-mi-agente";
 
 const WHATSAPP_NUMBER = "527712412825";
-// TODO: reemplazar con formId real (creado vía MCP create_form). Mientras es null, el lead form avanza pero no persiste.
-const QUIZ_FORM_ID = "TODO_FORM_ID";
+const QUIZ_FORM_ID = "69efaea1fa87b78d893a311e";
 
 export const clientLoader = async () => {
   try {
@@ -64,16 +63,17 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     setSubmitError(null);
     setLead(data);
     try {
-      if (QUIZ_FORM_ID && QUIZ_FORM_ID !== "TODO_FORM_ID") {
-        await fetch(`/api/v2/forms/${QUIZ_FORM_ID}/submit`, {
+      if (QUIZ_FORM_ID) {
+        const res = await fetch(`/api/v2/forms/${QUIZ_FORM_ID}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...data,
             selections: JSON.stringify(Array.from(selections)),
-            total_mxn: quote.totalMxn,
+            total_mxn: String(quote.totalMxn),
           }),
         });
+        if (!res.ok) throw new Error(`form submit failed: ${res.status}`);
       }
       setStep((s) => s + 1);
     } catch (err) {
