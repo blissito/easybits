@@ -1,21 +1,21 @@
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { cn } from "~/utils/cn";
 
 type HeroIllustrationProps = {
   className?: string;
 };
 
-/**
- * Hero illustration — isometric brutalist scene matching EasyBits brand:
- * fluffy clouds, a device tile-grid, magnifier with thin connecting lines.
- * All strokes 2-3px black, fills in pastel brand tones.
- */
 export const HeroIllustration = ({ className }: HeroIllustrationProps) => {
+  const reduced = useReducedMotion();
   return (
     <motion.svg
-      initial={{ opacity: 0, scale: 0.92, rotate: -2 }}
+      initial={reduced ? false : { opacity: 0, scale: 0.92, rotate: -2 }}
       animate={{ opacity: 1, scale: 1, rotate: 0 }}
-      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : { duration: 0.7, ease: [0.22, 1, 0.36, 1] }
+      }
       viewBox="0 0 400 400"
       xmlns="http://www.w3.org/2000/svg"
       className={cn("w-full h-auto select-none", className)}

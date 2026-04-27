@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { cn } from "~/utils/cn";
 import type { Capability } from "~/lib/quiz/capabilities";
@@ -15,17 +15,22 @@ export const CapabilityCard = ({
   onAnswer,
 }: CapabilityCardProps) => {
   const Illustration = ILLUSTRATION_BY_ID[capability.id];
+  const reduced = useReducedMotion();
 
   return (
-    <div className="flex flex-col items-center gap-8 max-w-2xl mx-auto w-full">
+    <div className="flex flex-col items-center gap-6 md:gap-8 max-w-2xl mx-auto w-full">
       <motion.div
-        initial={{ scale: 0.85, rotate: -4 }}
+        initial={reduced ? false : { scale: 0.85, rotate: -4 }}
         animate={{ scale: 1, rotate: 0 }}
-        transition={{ type: "spring", stiffness: 220, damping: 16 }}
+        transition={
+          reduced
+            ? { duration: 0 }
+            : { type: "spring", stiffness: 220, damping: 16 }
+        }
         className={cn(
-          "rounded-3xl border-[3px] border-black px-6 py-8 md:px-10 md:py-10 w-full",
+          "rounded-3xl border-[3px] border-black px-6 py-7 md:px-10 md:py-10 w-full",
           "shadow-[6px_6px_0_0_rgba(0,0,0,1)]",
-          "min-h-[440px] md:min-h-[460px] flex flex-col",
+          "min-h-[400px] md:min-h-[460px] flex flex-col",
           capability.bgClass
         )}
       >
@@ -65,11 +70,20 @@ export const CapabilityCard = ({
         </p>
       </motion.div>
 
-      <div className="flex gap-4 w-full justify-center">
-        <BrutalButton mode="ghost" onClick={() => onAnswer(false)}>
+      <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
+        <BrutalButton
+          mode="ghost"
+          onClick={() => onAnswer(false)}
+          containerClassName="h-16 md:h-20 w-full"
+          className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
+        >
           No, gracias
         </BrutalButton>
-        <BrutalButton onClick={() => onAnswer(true)}>
+        <BrutalButton
+          onClick={() => onAnswer(true)}
+          containerClassName="h-16 md:h-20 w-full"
+          className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
+        >
           Sí, incluir
         </BrutalButton>
       </div>

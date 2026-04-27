@@ -26,13 +26,13 @@ export const CAPABILITIES: Capability[] = [
     emoji: "🎙",
     question: "¿Quieres que tu agente hable y entienda voz?",
     description:
-      "Audios de WhatsApp, llamadas, podcasts. Voces naturales en español MX vía ElevenLabs.",
+      "Las mejores voces mexicanas del mercado. Audios de WhatsApp, mensajes de voz, podcasts.",
     vendor: "ElevenLabs",
     basePriceMxn: 3000,
     bgClass: "bg-brand-grass",
     isAddon: false,
     includes: [
-      "Voces naturales en español MX",
+      "Voces mexicanas que pasan por humanas, no AI",
       "Audios y notas de voz en WhatsApp",
       "Transcripción de audios entrantes",
     ],
@@ -62,15 +62,15 @@ export const CAPABILITIES: Capability[] = [
     emoji: "💬",
     question: "¿Tu agente atiende clientes por WhatsApp?",
     description:
-      "Conexión a WhatsApp Business vía Baileys. Setup técnico y onboarding incluidos.",
-    vendor: "Baileys",
+      "El agente tiene su propio número de WhatsApp. Atiende 1:1 a tus clientes o vive dentro de tus grupos.",
+    vendor: "WhatsApp Business",
     basePriceMxn: 1700,
     bgClass: "bg-brand-yellow",
     isAddon: false,
     includes: [
-      "Conexión a WhatsApp Business",
-      "Setup técnico y onboarding del número",
-      "Conversaciones 1:1 y soporte multi-grupo",
+      "Número WhatsApp propio para el agente",
+      "Conversaciones 1:1 con clientes",
+      "Soporte para grupos de WhatsApp",
     ],
   },
   {

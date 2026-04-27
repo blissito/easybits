@@ -1,4 +1,10 @@
-import { motion, useMotionValue, useTransform, animate } from "motion/react";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  animate,
+  useReducedMotion,
+} from "motion/react";
 import { useEffect, useState } from "react";
 import type { Quote } from "~/lib/quiz/pricing";
 import { formatMxn } from "~/lib/quiz/pricing";
@@ -15,8 +21,14 @@ export const PriceSummary = ({
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
   const [display, setDisplay] = useState(0);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
+    if (reduced) {
+      setDisplay(quote.totalMxn);
+      count.set(quote.totalMxn);
+      return;
+    }
     const controls = animate(count, quote.totalMxn, {
       duration: 0.9,
       ease: [0.22, 1, 0.36, 1],
@@ -26,7 +38,7 @@ export const PriceSummary = ({
       controls.stop();
       unsub();
     };
-  }, [quote.totalMxn]);
+  }, [quote.totalMxn, reduced]);
 
   return (
     <div className="w-full max-w-xl mx-auto">

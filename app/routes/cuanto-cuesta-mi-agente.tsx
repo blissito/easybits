@@ -154,7 +154,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const isSummaryStep = step === STEP_SUMMARY;
 
   return (
-    <section className="min-h-screen bg-brand-grass flex flex-col">
+    <section className="min-h-screen bg-brand-grass flex flex-col pb-[env(safe-area-inset-bottom)]">
       <AuthNav user={user} />
       <main className="flex-1 flex flex-col px-4 md:px-8 py-8 md:py-12 max-w-5xl mx-auto w-full">
         {!isHero && (
@@ -163,7 +163,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             {!isSummaryStep && step > 1 && (
               <button
                 onClick={() => setStep((s) => Math.max(0, s - 1))}
-                className="text-sm font-bold text-black/60 hover:text-black underline-offset-4 hover:underline"
+                className="text-sm font-bold text-black/60 hover:text-black underline-offset-4 hover:underline py-2 px-3 -my-2 -mx-3"
               >
                 ← atrás
               </button>
@@ -172,17 +172,25 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         )}
 
         {/* Stable canvas — content pinned to top so layout doesn't shift */}
-        <div className="flex-1 flex flex-col items-stretch min-h-[680px] md:min-h-[760px]">
+        <div className="flex-1 flex flex-col items-stretch min-h-[calc(100svh-220px)] md:min-h-[760px]">
           <AnimatePresence mode="wait">
             {isHero && (
               <QuizStep stepKey="hero">
                 <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center py-4 md:py-8">
                   <div className="text-left order-2 md:order-1">
+                    <motion.p
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6 }}
+                      className="text-xs md:text-sm uppercase tracking-[0.2em] font-bold text-black/70 mb-4"
+                    >
+                      El guardián mitológico que acompaña al campeón
+                    </motion.p>
                     <motion.h1
                       initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                      transition={{ duration: 0.6 }}
-                      className="text-5xl md:text-6xl lg:text-7xl font-black text-black leading-[0.95] mb-6"
+                      transition={{ duration: 0.6, delay: 0.1 }}
+                      className="text-4xl md:text-6xl lg:text-7xl font-black text-black leading-[0.95] mb-6"
                     >
                       ¿Qué puede hacer un agente AI por tu negocio?
                     </motion.h1>
@@ -214,7 +222,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       cuando quieras
                     </motion.p>
                   </div>
-                  <div className="order-1 md:order-2 max-w-md md:max-w-none mx-auto w-full">
+                  <div className="order-1 md:order-2 max-w-[260px] md:max-w-none mx-auto w-full">
                     <HeroIllustration />
                   </div>
                 </div>
