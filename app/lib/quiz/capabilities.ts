@@ -164,6 +164,24 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "domain",
+    label: "Tu propio dominio",
+    shortLabel: "Dominio",
+    emoji: "🌍",
+    question: "¿Vas a usar tu propio dominio (negocio.com)?",
+    description:
+      "Conectamos tus landings y portales al dominio que ya tienes. SSL automático, configuración DNS guiada, branding consistente.",
+    vendor: "EasyBits",
+    basePriceMxn: 900,
+    bgClass: "bg-brand-aqua",
+    isAddon: false,
+    includes: [
+      "SSL automático con renovación incluida",
+      "DNS guiado paso a paso",
+      "Tus landings en tunegocio.com (no .easybits.cloud)",
+    ],
+  },
+  {
     id: "documents",
     label: "Documentos PDF",
     shortLabel: "Documentos",

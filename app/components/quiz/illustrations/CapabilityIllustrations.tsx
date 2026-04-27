@@ -470,6 +470,91 @@ export const SiteIllustration = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* ---------- 5.4 Custom domain (URL bar + globe + SSL lock) ---------- */
+export const DomainIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* URL address bar */}
+    <rect
+      x="32"
+      y="36"
+      width="76"
+      height="20"
+      rx="10"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="2.5"
+    />
+    {/* Lock (SSL) icon */}
+    <rect
+      x="38"
+      y="42"
+      width="8"
+      height="8"
+      rx="1.5"
+      fill="#96B894"
+      stroke={STROKE}
+      strokeWidth="1.5"
+    />
+    <path
+      d="M40,42 L40,40 Q40,38 42,38 Q44,38 44,40 L44,42"
+      stroke={STROKE}
+      strokeWidth="1.5"
+      fill="none"
+    />
+    {/* URL text dots */}
+    <line x1="50" y1="46" x2="58" y2="46" stroke={STROKE} strokeWidth="2" strokeLinecap="round" />
+    <text x="62" y="49" fontSize="7" fontWeight="bold" fill={STROKE}>
+      .
+    </text>
+    <line x1="68" y1="46" x2="84" y2="46" stroke={STROKE} strokeWidth="2" strokeLinecap="round" />
+    <text x="88" y="49" fontSize="7" fontWeight="bold" fill="#9870ED">
+      .com
+    </text>
+    {/* Globe */}
+    <circle
+      cx="70"
+      cy="92"
+      r="28"
+      fill="#75BAF9"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Continents hint */}
+    <path
+      d="M52,82 Q56,76 64,80 Q70,84 78,80 Q86,76 88,84"
+      stroke={STROKE}
+      strokeWidth="2"
+      fill="none"
+      strokeLinecap="round"
+    />
+    <path
+      d="M48,96 Q56,92 62,96 Q70,100 80,96 Q88,92 92,98"
+      stroke={STROKE}
+      strokeWidth="2"
+      fill="none"
+      strokeLinecap="round"
+    />
+    {/* Equator */}
+    <ellipse cx="70" cy="92" rx="28" ry="9" fill="none" stroke={STROKE} strokeWidth="2" strokeDasharray="3 3" />
+    {/* Meridian */}
+    <line x1="70" y1="64" x2="70" y2="120" stroke={STROKE} strokeWidth="2" />
+    {/* Connection line URL→globe */}
+    <line x1="70" y1="56" x2="70" y2="64" stroke={STROKE} strokeWidth="2" strokeDasharray="2 2" />
+    {/* Floating accent dot */}
+    <circle cx="106" cy="106" r="4" fill="#FFAFA3" stroke={STROKE} strokeWidth="2" />
+  </svg>
+);
+
 /* ---------- 5.5 Documents (stacked PDF pages + seal) ---------- */
 export const DocumentsIllustration = (props: SVGProps<SVGSVGElement>) => (
   <svg {...BASE} {...props}>
@@ -747,6 +832,7 @@ export const ILLUSTRATION_BY_ID: Record<
   gworkspace: GworkspaceIllustration,
   memory: MemoryIllustration,
   site: SiteIllustration,
+  domain: DomainIllustration,
   documents: DocumentsIllustration,
   quotes: QuotesIllustration,
   payments: PaymentsIllustration,
