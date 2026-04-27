@@ -74,6 +74,42 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "webchat",
+    label: "Web chat en tu sitio",
+    shortLabel: "Web chat",
+    emoji: "💻",
+    question: "¿Quieres un chat embebido en tu sitio para visitantes?",
+    description:
+      "Widget de chat en tu landing que atiende a quien visite el sitio. Captura leads en caliente.",
+    vendor: "EasyBits",
+    basePriceMxn: 1200,
+    bgClass: "bg-lime",
+    isAddon: false,
+    includes: [
+      "Widget de chat embebido en tu sitio",
+      "Atiende visitantes en tiempo real",
+      "Captura de leads conectada al CRM",
+    ],
+  },
+  {
+    id: "slackteams",
+    label: "Slack o Teams (canal interno)",
+    shortLabel: "Slack/Teams",
+    emoji: "👥",
+    question: "¿Tu equipo usa Slack o Teams y quiere preguntarle al agente ahí?",
+    description:
+      "El agente vive en tu workspace de Slack o Microsoft Teams. Tu equipo le pregunta sin salir de su tool.",
+    vendor: "Slack / Teams",
+    basePriceMxn: 1500,
+    bgClass: "bg-brand-pink",
+    isAddon: false,
+    includes: [
+      "Bot en tu workspace de Slack o Teams",
+      "Mentions, threads y DMs respondidos",
+      "Acceso al contexto de tu negocio",
+    ],
+  },
+  {
     id: "memory",
     label: "Memoria + Storage",
     shortLabel: "Memoria",

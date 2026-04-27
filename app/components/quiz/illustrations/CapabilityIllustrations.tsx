@@ -163,6 +163,100 @@ export const WhatsAppIllustration = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* ---------- 3.5 Web chat (browser + chat widget) ---------- */
+export const WebchatIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Browser window (background) */}
+    <rect
+      x="32"
+      y="34"
+      width="74"
+      height="56"
+      rx="6"
+      fill="#C8F9AB"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    <line x1="32" y1="46" x2="106" y2="46" stroke={STROKE} strokeWidth="2.5" />
+    <circle cx="40" cy="40" r="2" fill={STROKE} />
+    <circle cx="48" cy="40" r="2" fill={STROKE} />
+    {/* Page content lines */}
+    <line x1="40" y1="56" x2="80" y2="56" stroke={STROKE} strokeWidth="2" />
+    <line x1="40" y1="64" x2="92" y2="64" stroke={STROKE} strokeWidth="2" />
+    <line x1="40" y1="72" x2="74" y2="72" stroke={STROKE} strokeWidth="2" />
+    {/* Chat widget bubble (popup) */}
+    <path
+      d="M68,82 L114,82 Q120,82 120,88 L120,108 Q120,114 114,114 L88,114 L80,122 L82,114 L68,114 Q62,114 62,108 L62,88 Q62,82 68,82 Z"
+      fill="#FFAFA3"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Smiley inside widget */}
+    <circle cx="78" cy="96" r="2" fill={STROKE} />
+    <circle cx="92" cy="96" r="2" fill={STROKE} />
+    <path
+      d="M76,102 Q85,108 94,102"
+      stroke={STROKE}
+      strokeWidth="2"
+      fill="none"
+    />
+    {/* Decorative chat dots floating */}
+    <circle cx="34" cy="106" r="3" fill="#9870ED" stroke={STROKE} strokeWidth="2" />
+    <circle cx="110" cy="34" r="3" fill="#ECD66E" stroke={STROKE} strokeWidth="2" />
+  </svg>
+);
+
+/* ---------- 3.6 Slack/Teams (overlapping speech bubbles + hash) ---------- */
+export const SlackTeamsIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Back speech bubble */}
+    <path
+      d="M30,42 L82,42 Q90,42 90,50 L90,72 Q90,80 82,80 L52,80 L42,90 L46,80 L30,80 Q22,80 22,72 L22,50 Q22,42 30,42 Z"
+      fill="#FFAFA3"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Hash # inside back bubble */}
+    <line x1="38" y1="52" x2="38" y2="72" stroke={STROKE} strokeWidth="3" strokeLinecap="round" />
+    <line x1="48" y1="52" x2="48" y2="72" stroke={STROKE} strokeWidth="3" strokeLinecap="round" />
+    <line x1="32" y1="58" x2="54" y2="58" stroke={STROKE} strokeWidth="3" strokeLinecap="round" />
+    <line x1="32" y1="66" x2="54" y2="66" stroke={STROKE} strokeWidth="3" strokeLinecap="round" />
+    {/* Front speech bubble (overlapping) */}
+    <path
+      d="M58,68 L114,68 Q122,68 122,76 L122,98 Q122,106 114,106 L84,106 L74,116 L78,106 L58,106 Q50,106 50,98 L50,76 Q50,68 58,68 Z"
+      fill="#ECD66E"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Reply lines inside front bubble */}
+    <line x1="60" y1="80" x2="110" y2="80" stroke={STROKE} strokeWidth="2.5" strokeLinecap="round" />
+    <line x1="60" y1="90" x2="100" y2="90" stroke={STROKE} strokeWidth="2.5" strokeLinecap="round" />
+    {/* Avatar dots */}
+    <circle cx="106" cy="44" r="6" fill="#9870ED" stroke={STROKE} strokeWidth="2.5" />
+    <circle cx="118" cy="50" r="4" fill="#96B894" stroke={STROKE} strokeWidth="2" />
+  </svg>
+);
+
 /* ---------- 4. Memory (stacked DB disks + spark) ---------- */
 export const MemoryIllustration = (props: SVGProps<SVGSVGElement>) => (
   <svg {...BASE} {...props}>
@@ -244,6 +338,89 @@ export const SiteIllustration = (props: SVGProps<SVGSVGElement>) => (
     <rect x="42" y="74" width="40" height="10" rx="3" fill="#FFFFFF" stroke={STROKE} strokeWidth="2.5" />
     {/* Submit button */}
     <rect x="42" y="88" width="32" height="10" rx="5" fill="#9870ED" stroke={STROKE} strokeWidth="2.5" />
+  </svg>
+);
+
+/* ---------- 5.5 Documents (stacked PDF pages + seal) ---------- */
+export const DocumentsIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Back page (peeking) */}
+    <rect
+      x="46"
+      y="32"
+      width="56"
+      height="76"
+      rx="4"
+      fill="#BAD9D8"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Front page */}
+    <path
+      d="M36,40 L78,40 L92,54 L92,114 Q92,118 88,118 L36,118 Q32,118 32,114 L32,44 Q32,40 36,40 Z"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    <path d="M78,40 L78,54 L92,54" fill="none" stroke={STROKE} strokeWidth="3" />
+    {/* Header band (branded) */}
+    <rect x="40" y="56" width="36" height="6" rx="2" fill="#ECD66E" stroke={STROKE} strokeWidth="2" />
+    {/* Body lines */}
+    <line x1="40" y1="72" x2="84" y2="72" stroke={STROKE} strokeWidth="2.5" />
+    <line x1="40" y1="80" x2="78" y2="80" stroke={STROKE} strokeWidth="2.5" />
+    <line x1="40" y1="88" x2="84" y2="88" stroke={STROKE} strokeWidth="2.5" />
+    <line x1="40" y1="96" x2="72" y2="96" stroke={STROKE} strokeWidth="2.5" />
+    {/* Branding seal */}
+    <circle cx="78" cy="106" r="7" fill="#FFAFA3" stroke={STROKE} strokeWidth="2.5" />
+    <path d="M75,106 L77,108 L81,103" stroke={STROKE} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+/* ---------- 5.7 Quotes (invoice with items + total) ---------- */
+export const QuotesIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Receipt/invoice page */}
+    <path
+      d="M38,32 L102,32 Q106,32 106,36 L106,116 L96,110 L86,116 L76,110 L66,116 L56,110 L46,116 L38,110 L34,116 L34,36 Q34,32 38,32 Z"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* "Cotización" header bar */}
+    <rect x="42" y="40" width="56" height="8" rx="2" fill="#ECD66E" stroke={STROKE} strokeWidth="2" />
+    {/* Item rows */}
+    <line x1="42" y1="58" x2="68" y2="58" stroke={STROKE} strokeWidth="2.5" />
+    <text x="92" y="61" fontSize="8" fontWeight="bold" textAnchor="end" fill={STROKE}>$1,200</text>
+    <line x1="42" y1="70" x2="62" y2="70" stroke={STROKE} strokeWidth="2.5" />
+    <text x="92" y="73" fontSize="8" fontWeight="bold" textAnchor="end" fill={STROKE}>$800</text>
+    <line x1="42" y1="82" x2="72" y2="82" stroke={STROKE} strokeWidth="2.5" />
+    <text x="92" y="85" fontSize="8" fontWeight="bold" textAnchor="end" fill={STROKE}>$2,500</text>
+    {/* Divider */}
+    <line x1="42" y1="92" x2="98" y2="92" stroke={STROKE} strokeWidth="2" strokeDasharray="2 2" />
+    {/* Total row */}
+    <rect x="42" y="96" width="56" height="10" rx="2" fill="#96B894" stroke={STROKE} strokeWidth="2.5" />
+    <text x="46" y="103.5" fontSize="7" fontWeight="bold" fill={STROKE}>TOTAL</text>
+    <text x="94" y="103.5" fontSize="7" fontWeight="bold" textAnchor="end" fill={STROKE}>$4,500</text>
   </svg>
 );
 
@@ -360,8 +537,12 @@ export const ILLUSTRATION_BY_ID: Record<
   voice: VoiceIllustration,
   images: ImagesIllustration,
   whatsapp: WhatsAppIllustration,
+  webchat: WebchatIllustration,
+  slackteams: SlackTeamsIllustration,
   memory: MemoryIllustration,
   site: SiteIllustration,
+  documents: DocumentsIllustration,
+  quotes: QuotesIllustration,
   video: VideoIllustration,
   research: ResearchIllustration,
 };
