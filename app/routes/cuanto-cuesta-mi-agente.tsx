@@ -30,6 +30,8 @@ export const meta = () =>
     title: "¿Cuánto cuesta mi agente AI? | EasyBits",
     description:
       "Configura tu agente AI personalizado en 2 minutos. Voz, WhatsApp, imágenes, memoria, video y más. Cotización al instante.",
+    image:
+      "https://easybits-public.fly.storage.tigris.dev/699f35cbc8ad86037eda62b1/DM1_zm",
   });
 
 const CAP_COUNT = CAPABILITIES.length;
