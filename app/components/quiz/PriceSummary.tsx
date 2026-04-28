@@ -8,6 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import type { Quote } from "~/lib/quiz/pricing";
 import { formatMxn } from "~/lib/quiz/pricing";
+import type { Capability } from "~/lib/quiz/capabilities";
 
 type PriceSummaryProps = {
   quote: Quote;
@@ -15,6 +16,10 @@ type PriceSummaryProps = {
   onDownloadPdf?: () => void;
   isDownloadingPdf?: boolean;
   disableDownload?: boolean;
+  availableToAdd?: Capability[];
+  onAddCapability?: (capId: string) => void;
+  onRemoveCapability?: (capId: string) => void;
+  onRemoveCustomIntegrations?: () => void;
 };
 
 const DISCOUNT_PCT = 20;
@@ -25,6 +30,10 @@ export const PriceSummary = ({
   onDownloadPdf,
   isDownloadingPdf = false,
   disableDownload = false,
+  availableToAdd = [],
+  onAddCapability,
+  onRemoveCapability,
+  onRemoveCustomIntegrations,
 }: PriceSummaryProps) => {
   const discountedTotal = Math.round(
     quote.totalMxn * (1 - DISCOUNT_PCT / 100)
@@ -52,6 +61,9 @@ export const PriceSummary = ({
       unsub();
     };
   }, [discountedTotal, reduced]);
+
+  const removable = !!onRemoveCapability;
+  const canAdd = !!onAddCapability && availableToAdd.length > 0;
 
   return (
     <div className="w-full max-w-xl mx-auto">
@@ -151,9 +163,14 @@ export const PriceSummary = ({
       <div className="rounded-2xl border-[3px] border-black bg-white p-6 shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
         <h4 className="text-sm uppercase tracking-widest font-bold text-black mb-4">
           Desglose mensual
+          {removable && (
+            <span className="ml-2 text-[10px] font-normal text-black/45 normal-case tracking-normal">
+              · puedes editar
+            </span>
+          )}
         </h4>
         <ul className="flex flex-col gap-3">
-          {/* Orchestration line */}
+          {/* Orchestration line — NOT removable, base of the bundle */}
           <motion.li
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
@@ -181,20 +198,38 @@ export const PriceSummary = ({
               key={line.capability.id}
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ delay: 0.1 + i * 0.04 }}
-              className="border-b border-black/10 pb-3"
+              className="border-b border-black/10 pb-3 group"
             >
               <div className="flex justify-between items-baseline gap-3">
-                <span className="text-sm font-bold text-black flex items-center gap-2">
+                <span className="text-sm font-bold text-black flex items-center gap-2 flex-wrap">
                   <span aria-hidden>{line.capability.emoji}</span>
                   <span>{line.capability.shortLabel}</span>
                   <span className="text-black/40 text-xs font-normal">
                     ({line.capability.vendor})
                   </span>
                 </span>
-                <span className="font-mono font-bold tabular-nums whitespace-nowrap">
-                  {line.priceMxn === 0 ? "Incluido" : formatMxn(line.priceMxn)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold tabular-nums whitespace-nowrap">
+                    {line.priceMxn === 0
+                      ? "Incluido"
+                      : formatMxn(line.priceMxn)}
+                  </span>
+                  {removable && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onRemoveCapability!(line.capability.id)
+                      }
+                      aria-label={`Quitar ${line.capability.shortLabel}`}
+                      title={`Quitar ${line.capability.shortLabel}`}
+                      className="w-5 h-5 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-xs font-black flex items-center justify-center transition-colors"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
               <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
                 {line.capability.includes.map((it) => (
@@ -204,7 +239,7 @@ export const PriceSummary = ({
             </motion.li>
           ))}
 
-          {/* Custom integrations (optional) */}
+          {/* Custom integrations (optional, removable) */}
           {quote.hasCustomIntegrations && (
             <motion.li
               initial={{ opacity: 0, x: -12 }}
@@ -220,9 +255,22 @@ export const PriceSummary = ({
                     <span className="text-brand-red ml-0.5">*</span>
                   </span>
                 </span>
-                <span className="font-mono font-bold tabular-nums whitespace-nowrap">
-                  {formatMxn(quote.customIntegrationsMxn)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold tabular-nums whitespace-nowrap">
+                    {formatMxn(quote.customIntegrationsMxn)}
+                  </span>
+                  {onRemoveCustomIntegrations && (
+                    <button
+                      type="button"
+                      onClick={onRemoveCustomIntegrations}
+                      aria-label="Quitar integraciones custom"
+                      title="Quitar integraciones custom"
+                      className="w-5 h-5 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-xs font-black flex items-center justify-center transition-colors"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
               {customIntegrationsDescription && (
                 <p className="mt-1.5 text-xs text-black/70 italic">
@@ -234,6 +282,33 @@ export const PriceSummary = ({
                 se ajusta tras revisar tus APIs en la llamada
               </p>
             </motion.li>
+          )}
+
+          {/* Add capabilities pills — only renders if there are unselected caps */}
+          {canAdd && (
+            <li className="pb-3 border-b border-black/10">
+              <p className="text-xs text-black/55 mb-2 font-bold uppercase tracking-wider">
+                + Agregar más capacidades
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {availableToAdd.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onAddCapability!(c.id)}
+                    className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors flex items-center gap-1"
+                  >
+                    <span aria-hidden>{c.emoji}</span>
+                    <span>{c.shortLabel}</span>
+                    <span className="opacity-60 font-mono">
+                      {c.basePriceMxn === 0
+                        ? "free"
+                        : `+$${c.basePriceMxn.toLocaleString("en-US")}`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </li>
           )}
 
           {/* Total */}

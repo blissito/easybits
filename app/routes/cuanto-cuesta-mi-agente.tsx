@@ -359,6 +359,26 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   onDownloadPdf={handleDownloadPdf}
                   isDownloadingPdf={downloadingPdf}
                   disableDownload={submitting}
+                  availableToAdd={CAPABILITIES.filter(
+                    (c) => !selections.has(c.id)
+                  )}
+                  onAddCapability={(id) =>
+                    setSelections((prev) => new Set(prev).add(id))
+                  }
+                  onRemoveCapability={(id) =>
+                    setSelections((prev) => {
+                      const next = new Set(prev);
+                      next.delete(id);
+                      return next;
+                    })
+                  }
+                  onRemoveCustomIntegrations={() =>
+                    setIntegrations({
+                      hasIntegrations: false,
+                      items: [],
+                      description: "",
+                    })
+                  }
                 />
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
