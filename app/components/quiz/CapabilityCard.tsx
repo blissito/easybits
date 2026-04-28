@@ -4,6 +4,7 @@ import { cn } from "~/utils/cn";
 import type { Capability } from "~/lib/quiz/capabilities";
 import { formatMxn } from "~/lib/quiz/pricing";
 import { ILLUSTRATION_BY_ID } from "~/components/quiz/illustrations/CapabilityIllustrations";
+import { playYes, playNo } from "~/lib/quiz/sounds";
 
 type CapabilityCardProps = {
   capability: Capability;
@@ -75,7 +76,10 @@ export const CapabilityCard = ({
       {capability.basePriceMxn === 0 ? (
         <div className="w-full max-w-md">
           <BrutalButton
-            onClick={() => onAnswer(true)}
+            onClick={() => {
+              playYes();
+              onAnswer(true);
+            }}
             containerClassName="h-16 md:h-20 w-full"
             className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
           >
@@ -86,14 +90,20 @@ export const CapabilityCard = ({
         <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
           <BrutalButton
             mode="ghost"
-            onClick={() => onAnswer(false)}
+            onClick={() => {
+              playNo();
+              onAnswer(false);
+            }}
             containerClassName="h-16 md:h-20 w-full"
             className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
           >
             No, gracias
           </BrutalButton>
           <BrutalButton
-            onClick={() => onAnswer(true)}
+            onClick={() => {
+              playYes();
+              onAnswer(true);
+            }}
             containerClassName="h-16 md:h-20 w-full"
             className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
           >

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AuthNav } from "~/components/login/auth-nav";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -13,6 +13,7 @@ import {
 import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
 import { computeQuote, formatMxn } from "~/lib/quiz/pricing";
+import { playReveal } from "~/lib/quiz/sounds";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/cuanto-cuesta-mi-agente";
 
@@ -197,6 +198,31 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const isIntegrationsStep = step === STEP_INTEGRATIONS;
   const isLeadStep = step === STEP_LEAD;
   const isSummaryStep = step === STEP_SUMMARY;
+
+  // Confetti + reveal sound when the summary first appears
+  const [celebratedSummary, setCelebratedSummary] = useState(false);
+  useEffect(() => {
+    if (!isSummaryStep || celebratedSummary) return;
+    setCelebratedSummary(true);
+    playReveal();
+    import("js-confetti")
+      .then(({ default: JSConfetti }) => {
+        const confetti = new JSConfetti();
+        confetti.addConfetti({
+          confettiColors: [
+            "#ECD66E",
+            "#FFAFA3",
+            "#C8F9AB",
+            "#9870ED",
+            "#75BAF9",
+            "#F4B7EC",
+            "#FFFFFF",
+          ],
+          confettiNumber: 240,
+        });
+      })
+      .catch(() => {});
+  }, [isSummaryStep, celebratedSummary]);
 
   return (
     <section className="min-h-screen bg-brand-grass flex flex-col pb-[env(safe-area-inset-bottom)]">
