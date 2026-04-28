@@ -20,6 +20,7 @@ type PriceSummaryProps = {
   onAddCapability?: (capId: string) => void;
   onRemoveCapability?: (capId: string) => void;
   onRemoveCustomIntegrations?: () => void;
+  siteAnalysisCaptured?: boolean;
 };
 
 const DISCOUNT_PCT = 20;
@@ -34,6 +35,7 @@ export const PriceSummary = ({
   onAddCapability,
   onRemoveCapability,
   onRemoveCustomIntegrations,
+  siteAnalysisCaptured = false,
 }: PriceSummaryProps) => {
   const discountedTotal = Math.round(
     quote.totalMxn * (1 - DISCOUNT_PCT / 100)
@@ -286,6 +288,40 @@ export const PriceSummary = ({
               </p>
             </motion.li>
           )}
+
+          {/* Site analysis — free perk, always visible */}
+          <motion.li
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.12 + quote.breakdown.length * 0.04 }}
+            className="border-b border-black/10 pb-3"
+          >
+            <div className="flex justify-between items-baseline gap-3">
+              <span className="text-sm font-bold text-black flex items-center gap-2 flex-wrap">
+                <span aria-hidden>🔍</span>
+                <span>Análisis de sitio gratis</span>
+                <span className="text-black/40 text-xs font-normal">
+                  (EasyBits)
+                </span>
+              </span>
+              <span className="font-mono font-bold tabular-nums whitespace-nowrap">
+                Incluido
+              </span>
+            </div>
+            <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
+              <li>
+                Revisamos tu sitio antes de la llamada de 24h
+              </li>
+              <li>
+                Llegamos con propuestas concretas, no preguntas genéricas
+              </li>
+              <li>
+                {siteAnalysisCaptured
+                  ? "✓ URL agregada — listo para tu llamada"
+                  : "Agrega tu URL abajo para activarlo"}
+              </li>
+            </ul>
+          </motion.li>
 
           {/* Add capabilities pills — only renders if there are unselected caps */}
           {canAdd && (

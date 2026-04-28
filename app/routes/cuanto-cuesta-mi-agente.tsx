@@ -449,17 +449,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       description: "",
                     })
                   }
+                  siteAnalysisCaptured={!!lead?.website}
                 />
-
-                {lead && !lead.website && (
-                  <WebsiteEnrich
-                    email={lead.email}
-                    formId={QUIZ_FORM_ID}
-                    onEnriched={(website) =>
-                      setLead((prev) => (prev ? { ...prev, website } : prev))
-                    }
-                  />
-                )}
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
                   <BrutalButton
@@ -497,6 +488,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   <p className="text-center text-red-600 mt-4 font-bold">
                     {submitError}
                   </p>
+                )}
+                {lead && !lead.website && (
+                  <WebsiteEnrich
+                    email={lead.email}
+                    formId={QUIZ_FORM_ID}
+                    onEnriched={(website) =>
+                      setLead((prev) => (prev ? { ...prev, website } : prev))
+                    }
+                  />
                 )}
                 <p className="text-center text-xs text-black/50 mt-6 font-mono">
                   Después del pago te contactamos en 24h para terminar el setup

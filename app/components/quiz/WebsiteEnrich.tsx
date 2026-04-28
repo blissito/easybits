@@ -78,10 +78,10 @@ export const WebsiteEnrich = ({
       className="mt-8 max-w-xl mx-auto bg-white/70 border-2 border-black rounded-2xl px-6 py-5"
     >
       <p className="text-xs uppercase tracking-widest font-bold text-black/60 mb-1">
-        Bonus opcional
+        🔍 Activa tu análisis de sitio gratis
       </p>
       <p className="text-base md:text-lg font-bold text-black mb-3">
-        ¿Quieres que llegue tu cotización con un análisis de tu sitio?
+        Pega tu URL — llegamos a la llamada con propuestas concretas.
       </p>
       <div className="flex flex-col md:flex-row gap-3">
         <Input
