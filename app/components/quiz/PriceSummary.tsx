@@ -179,16 +179,19 @@ export const PriceSummary = ({
           >
             <div className="flex justify-between items-baseline gap-3">
               <span className="text-sm font-bold text-black">
-                Orquestación + soporte humano
+                Orquestación + personalización con tu marca
               </span>
               <span className="font-mono font-bold tabular-nums whitespace-nowrap">
                 {formatMxn(quote.orchestrationFeeMxn)}
               </span>
             </div>
             <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
-              <li>Setup inicial y configuración de vendors</li>
-              <li>Soporte humano cuando algo falla</li>
-              <li>Monitoreo y mantenimiento</li>
+              <li>
+                <strong className="text-black">Tu marca de pies a cabeza</strong>:
+                logo, colores, tono y voz del agente
+              </li>
+              <li>Setup técnico y configuración de vendors</li>
+              <li>Soporte humano + monitoreo continuo</li>
             </ul>
           </motion.li>
 

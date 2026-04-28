@@ -55,8 +55,8 @@ const buildHtml = (payload: Payload, folio: string): string => {
   const orchRow = `
     <div class="cap-row">
       <div class="cap-info">
-        <div class="cap-name">Orquestación + soporte humano</div>
-        <div class="cap-incl">Setup inicial · soporte humano · monitoreo y mantenimiento</div>
+        <div class="cap-name">Orquestación + personalización con tu marca</div>
+        <div class="cap-incl"><strong>Tu marca de pies a cabeza</strong> (logo, colores, tono, voz) · setup técnico · soporte humano + monitoreo continuo</div>
       </div>
       <div class="cap-price">${formatMxn(quote.orchestrationFeeMxn)}</div>
     </div>`;
