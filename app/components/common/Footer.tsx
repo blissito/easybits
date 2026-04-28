@@ -14,7 +14,7 @@ export const Footer = () => {
         <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto"></div>
       </div>
       <div className="border-y-[1px] border-y-white/20 h-20 md:h-40 w-full  ">
-        <Link to="/login">
+        <Link to="/cuanto-cuesta-mi-agente">
           <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto px-4 md:px-[5%] xl:px-0">
             <motion.button
               initial={{ borderRadius: "0px" }}
@@ -22,9 +22,9 @@ export const Footer = () => {
               whileTap={{ borderRadius: "199px" }}
               transition={{ type: "tween" }}
               className="bg-brand-500 w-full h-full  text-3xl md:text-5xl lg:text-[80px] font-medium "
-              id="EmpezarGratisHome"
+              id="CotizaTuAgenteHome"
             >
-              ¡Empezar gratis!
+              Cotiza tu agente
             </motion.button>
           </div>
         </Link>
@@ -48,14 +48,14 @@ export const Footer = () => {
               {" "}
               <img src="/home/demo.svg" className="w-12 md:w-16" alt="demo" />
               <div className="text-left flex flex-col gap-0">
-                <p className="mb-0 text-lg md:text-2xl">Agendar demo</p>
+                <p className="mb-0 text-lg md:text-2xl">Hablar con humano</p>
                 <span className="text-white/60  text-sm font-light underline">
-                  Ver disponibilidad
+                  Agendar 15 min con Brenda
                 </span>
               </div>{" "}
             </motion.div>
           </a>
-          <Link to="/funcionalidades" className=" w-[50%]">
+          <Link to="/cuanto-cuesta-mi-agente" className=" w-[50%]">
             <motion.div
               initial={{ borderRadius: "0px", borderColor: "#333333" }}
               whileHover={{ borderRadius: "199px", borderColor: "white" }}
@@ -66,12 +66,12 @@ export const Footer = () => {
               <img
                 src="/home/plans.svg"
                 className="w-12 md:w-16"
-                alt="planes"
+                alt="capacidades"
               />
               <div className="text-left flex flex-col gap-0">
-                <p className="mb-0 text-lg md:text-2xl">Escoge tu plan</p>
+                <p className="mb-0 text-lg md:text-2xl">Cotiza tu agente</p>
                 <span className="text-white/60  text-sm font-light underline">
-                  Comparar disponibilidad
+                  14 capacidades en 2 minutos
                 </span>
               </div>
             </motion.div>
