@@ -221,7 +221,7 @@ export const PriceSummary = ({
                       ? "Incluido"
                       : formatMxn(line.priceMxn)}
                   </span>
-                  {removable && (
+                  {removable && line.priceMxn > 0 && (
                     <button
                       type="button"
                       onClick={() =>
