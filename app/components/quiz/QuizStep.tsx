@@ -29,12 +29,21 @@ type StepIndicatorProps = {
 };
 
 export const StepIndicator = ({ current, total }: StepIndicatorProps) => {
+  const pct = Math.min(100, Math.max(0, (current / total) * 100));
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm font-mono text-black/60">
+    <div className="flex items-center gap-2 md:gap-3 min-w-0">
+      <span className="text-xs md:text-sm font-mono text-black/60 whitespace-nowrap">
         {String(current).padStart(2, "0")} / {String(total).padStart(2, "0")}
       </span>
-      <div className="flex gap-1">
+      {/* Mobile: continuous progress bar — fits any total step count */}
+      <div className="md:hidden h-1.5 w-24 bg-black/15 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-black transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {/* Desktop: discrete dashes per step */}
+      <div className="hidden md:flex gap-1">
         {Array.from({ length: total }).map((_, i) => (
           <span
             key={i}
