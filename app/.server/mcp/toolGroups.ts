@@ -100,6 +100,8 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "deploy_document",
   "export_document",
   "structured_doc",
+  "create_tournament_schedule",
+  "edit_tournament_schedule",
   // Presentations
   "list_presentations", "get_presentation",
   "create_presentation", "update_presentation", "delete_presentation",
@@ -129,6 +131,8 @@ export const CORE_ALLOWLIST = new Set<string>([
   "fast_pdf",
   "edit_fast_pdf",
   "structured_doc",
+  "create_tournament_schedule",
+  "edit_tournament_schedule",
   "get_usage_stats",
   "create_form",
   "list_forms",
