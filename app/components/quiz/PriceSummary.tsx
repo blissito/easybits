@@ -91,11 +91,13 @@ export const PriceSummary = ({
           </span>
         </div>
 
-        <p className="text-sm text-black/60 mt-3">
+        <p className="text-sm text-black/60 mt-3 max-w-md mx-auto leading-snug">
           {quote.selectionsCount}{" "}
           {quote.selectionsCount === 1 ? "capacidad" : "capacidades"}
-          {quote.hasCustomIntegrations && " · integraciones custom"} ·
-          orquestación
+          {quote.hasCustomIntegrations && " · integraciones custom"}
+          <span className="block mt-1 text-xs italic text-black/55">
+            mucho menos que un salario y con más retorno de inversión
+          </span>
         </p>
         <p className="text-xs text-black/55 mt-1.5 font-mono">
           Ahorras {formatMxn(savingMxn)} MXN cada mes — al presentar tu
