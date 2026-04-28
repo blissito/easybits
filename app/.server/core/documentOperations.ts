@@ -33,6 +33,52 @@ function validateObjectId(id: string): void {
   if (!/^[0-9a-fA-F]{24}$/.test(id)) throwJson("Document not found", 404);
 }
 
+/**
+ * Build the public share URL for a deployed website. Mirrors the logic at the
+ * end of `deployLanding` so MCP responses give agents a URL they can hit
+ * without having to deploy again.
+ */
+export function buildShareUrl(slug: string, subdomainEnabled: boolean): string {
+  const proto = process.env.NODE_ENV === "production" ? "https" : "http";
+  const host = process.env.NODE_ENV === "production" ? "www.easybits.cloud" : "localhost:3000";
+  return subdomainEnabled
+    ? `${proto}://${slug}.easybits.cloud`
+    : `${proto}://${host}/s/${slug}/`;
+}
+
+/**
+ * Look up the public share info (slug + shareUrl + pdfUrl) for a document, or
+ * return null if it has no live website. Resolves the case where the doc has a
+ * `websiteId` but the website is soft-deleted — treats that as not deployed.
+ * pdfUrl is read from the `sites/<id>/document.pdf` file record (set by
+ * deployLanding for v4 documents) and is null when no PDF was generated.
+ */
+async function getShareInfo(
+  websiteId: string | null,
+  ownerId: string
+): Promise<{ slug: string; shareUrl: string; pdfUrl: string | null; subdomainEnabled: boolean } | null> {
+  if (!websiteId) return null;
+  const website = await db.website.findUnique({
+    where: { id: websiteId },
+    select: { slug: true, status: true, subdomainEnabled: true },
+  });
+  if (!website || website.status === "DELETED") return null;
+  const pdfFile = await db.file.findFirst({
+    where: {
+      name: `sites/${websiteId}/document.pdf`,
+      ownerId,
+      status: { not: "DELETED" },
+    },
+    select: { url: true },
+  });
+  return {
+    slug: website.slug,
+    shareUrl: buildShareUrl(website.slug, website.subdomainEnabled),
+    pdfUrl: pdfFile?.url ?? null,
+    subdomainEnabled: website.subdomainEnabled,
+  };
+}
+
 export async function listDocuments(
   ctx: AuthContext,
   opts?: { limit?: number; offset?: number; search?: string }
@@ -65,19 +111,53 @@ export async function listDocuments(
     }),
     db.landing.count({ where }),
   ]);
+
+  // Resolve share info in a single batched query — avoids N+1 round-trips.
+  const websiteIds = items.map((d) => d.websiteId).filter((x): x is string => !!x);
+  const [websites, pdfFiles] = websiteIds.length
+    ? await Promise.all([
+        db.website.findMany({
+          where: { id: { in: websiteIds } },
+          select: { id: true, slug: true, status: true, subdomainEnabled: true },
+        }),
+        db.file.findMany({
+          where: {
+            ownerId: ctx.user.id,
+            status: { not: "DELETED" },
+            name: { in: websiteIds.map((id) => `sites/${id}/document.pdf`) },
+          },
+          select: { name: true, url: true },
+        }),
+      ])
+    : [[], []];
+  const websiteMap = new Map(websites.map((w) => [w.id, w]));
+  const pdfUrlByWebsiteId = new Map(
+    pdfFiles.map((f) => {
+      const m = f.name.match(/^sites\/([^/]+)\/document\.pdf$/);
+      return [m?.[1] ?? "", f.url] as [string, string | null];
+    })
+  );
+
   return {
     total,
-    items: items.map((d) => ({
-      id: d.id,
-      name: d.name,
-      prompt: d.prompt,
-      theme: (d.metadata as any)?.theme || d.theme,
-      status: d.status,
-      websiteId: d.websiteId,
-      pageCount: Array.isArray(d.sections) ? d.sections.length : 0,
-      createdAt: d.createdAt,
-      updatedAt: d.updatedAt,
-    })),
+    items: items.map((d) => {
+      const w = d.websiteId ? websiteMap.get(d.websiteId) : null;
+      const isLive = w && w.status !== "DELETED";
+      return {
+        id: d.id,
+        name: d.name,
+        prompt: d.prompt,
+        theme: (d.metadata as any)?.theme || d.theme,
+        status: d.status,
+        websiteId: d.websiteId,
+        slug: isLive ? w!.slug : null,
+        shareUrl: isLive ? buildShareUrl(w!.slug, w!.subdomainEnabled) : null,
+        pdfUrl: isLive ? pdfUrlByWebsiteId.get(d.websiteId!) ?? null : null,
+        pageCount: Array.isArray(d.sections) ? d.sections.length : 0,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      };
+    }),
   };
 }
 
@@ -91,9 +171,18 @@ export async function getDocument(
   const doc = await db.landing.findUnique({ where: { id } });
   if (!doc || doc.ownerId !== ctx.user.id || doc.version !== 4)
     throwJson("Document not found", 404);
+
+  const share = await getShareInfo(doc.websiteId, ctx.user.id);
+  const shareFields = {
+    slug: share?.slug ?? null,
+    shareUrl: share?.shareUrl ?? null,
+    pdfUrl: share?.pdfUrl ?? null,
+  };
+
   if (opts?.includeHtml === false && Array.isArray(doc.sections)) {
     return {
       ...doc,
+      ...shareFields,
       sections: (doc.sections as any[]).map((s: any) => ({
         id: s.id,
         order: s.order,
@@ -102,7 +191,7 @@ export async function getDocument(
       })),
     };
   }
-  return doc;
+  return { ...doc, ...shareFields };
 }
 
 export async function createDocument(

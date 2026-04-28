@@ -124,17 +124,27 @@ import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOper
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 
-async function autoDeployIfPublished(ctx: AuthContext, documentId: string): Promise<boolean> {
+type AutoDeployInfo =
+  | { autoDeployed: true; url: string; slug: string; pdfUrl?: string; customUrl?: string }
+  | { autoDeployed: false };
+
+async function autoDeployIfPublished(ctx: AuthContext, documentId: string): Promise<AutoDeployInfo> {
   try {
     const doc = await db.landing.findUnique({ where: { id: documentId }, select: { status: true } });
     if (doc?.status === "PUBLISHED") {
-      await deployDocument(ctx, documentId);
-      return true;
+      const result = await deployDocument(ctx, documentId);
+      return {
+        autoDeployed: true,
+        url: result.url,
+        slug: result.slug,
+        pdfUrl: result.pdfUrl,
+        customUrl: result.customUrl,
+      };
     }
   } catch (e) {
     console.error("[auto-deploy] failed for", documentId, e);
   }
-  return false;
+  return { autoDeployed: false };
 }
 
 function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
@@ -1941,8 +1951,8 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
         afterPageIndex: params.afterPageIndex,
         label: params.label,
       });
-      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
+      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
@@ -1957,8 +1967,8 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deletePage(ctx, params.documentId, params.pageId);
-      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
+      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
@@ -1973,8 +1983,8 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await reorderPages(ctx, params.documentId, params.pageIds);
-      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
+      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
@@ -2035,8 +2045,8 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setPageHtml(ctx, params.documentId, params.pageId, params.html);
-      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
+      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
@@ -2082,8 +2092,8 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setSectionHtmlBySelector(ctx, params.documentId, params.pageId, params.cssSelector, params.html);
-      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
+      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
@@ -2100,8 +2110,8 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await replaceHtmlInPage(ctx, params.documentId, params.pageId, params.old_html, params.new_html);
-      const autoDeployed = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : false;
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, autoDeployed }, null, 2) }] };
+      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
