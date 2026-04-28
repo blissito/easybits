@@ -20,7 +20,7 @@ import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/cuanto-cuesta-mi-agente";
 
-const WHATSAPP_NUMBER = "527712412825";
+const WHATSAPP_NUMBER = "527757609276";
 const QUIZ_FORM_ID = "69efd203ad74435521a74b34";
 
 export const clientLoader = async () => {
@@ -150,10 +150,6 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   };
 
   const handleWhatsApp = () => {
-    if (!lead) {
-      setStep(STEP_LEAD);
-      return;
-    }
     const summary = quote.breakdown
       .map((b) => `• ${b.capability.shortLabel}`)
       .join("\n");
@@ -162,7 +158,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         ? `\nIntegraciones custom:\n${integrations.items.map((it) => `  - ${it}`).join("\n")}`
         : `\nIntegraciones custom: sí (a definir)`
       : "";
-    const msg = `Hola, soy ${lead.name}. Quiero obtener mi 20% de descuento permanente — aquí mi cotización de EasyBits.\n\nTotal: ${formatMxn(quote.totalMxn)} MXN/mes (precio lista, antes del descuento)\n\nCapacidades:\n${summary}${integrationsLine}\n\nNegocio: ${lead.business || "—"}\nSitio: ${lead.website || "—"}`;
+    const greeting = lead
+      ? `Hola, soy ${lead.name}.`
+      : "Hola, vi tu landing.";
+    const businessLine = lead?.business ? `\nNegocio: ${lead.business}` : "";
+    const siteLine = lead?.website ? `\nSitio: ${lead.website}` : "";
+    const msg = `${greeting} Quiero obtener mi 20% de descuento permanente — aquí mi cotización de EasyBits.\n\nTotal: ${formatMxn(quote.totalMxn)} MXN/mes (precio lista, antes del descuento)\n\nCapacidades:\n${summary}${integrationsLine}${businessLine}${siteLine}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
