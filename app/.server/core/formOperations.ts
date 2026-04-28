@@ -247,6 +247,69 @@ export async function handleFormSubmission(
   return result;
 }
 
+/**
+ * Enrich the most recent submission for a given email with extra fields.
+ * Used to capture optional fields (e.g. website) after the user already
+ * completed the lead form, without creating duplicate rows.
+ *
+ * Updates both the Mongo `formSubmission.data` field and the user's libSQL
+ * row when configured. Only matches submissions from the last hour.
+ */
+export async function enrichRecentFormSubmission(
+  formId: string,
+  email: string,
+  patch: Record<string, string>
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const formConfig = await db.formConfig.findUnique({ where: { id: formId } });
+  if (!formConfig) return { ok: false, reason: "form-not-found" };
+
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentBatch = await db.formSubmission.findMany({
+    where: {
+      formConfigId: formId,
+      createdAt: { gte: oneHourAgo },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  const recent = recentBatch.find((s) => {
+    const d = s.data as Record<string, unknown>;
+    return typeof d?.email === "string" && d.email === email;
+  });
+
+  if (!recent) return { ok: false, reason: "no-recent-submission" };
+
+  const merged = { ...(recent.data as Record<string, string>), ...patch };
+  await db.formSubmission.update({
+    where: { id: recent.id },
+    data: { data: merged },
+  });
+
+  if (formConfig.dbId && formConfig.tableName) {
+    try {
+      const database = await db.database.findUnique({
+        where: { id: formConfig.dbId },
+      });
+      if (database) {
+        const setClause = Object.keys(patch)
+          .map((k) => `"${k}" = ?`)
+          .join(", ");
+        const values = [...Object.values(patch), email];
+        await sqldQuery(
+          database.namespace,
+          `UPDATE "${formConfig.tableName}" SET ${setClause} WHERE id = (SELECT id FROM "${formConfig.tableName}" WHERE "email" = ? ORDER BY id DESC LIMIT 1)`,
+          values
+        );
+      }
+    } catch (err) {
+      console.error("Form DB enrich failed:", err);
+    }
+  }
+
+  return { ok: true };
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

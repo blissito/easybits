@@ -7,6 +7,7 @@ import { QuizStep, StepIndicator } from "~/components/quiz/QuizStep";
 import { CapabilityCard } from "~/components/quiz/CapabilityCard";
 import { PriceSummary } from "~/components/quiz/PriceSummary";
 import { LeadForm, type LeadData } from "~/components/quiz/LeadForm";
+import { WebsiteEnrich } from "~/components/quiz/WebsiteEnrich";
 import {
   IntegrationsStep,
   type IntegrationsAnswer,
@@ -449,6 +450,16 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     })
                   }
                 />
+
+                {lead && !lead.website && (
+                  <WebsiteEnrich
+                    email={lead.email}
+                    formId={QUIZ_FORM_ID}
+                    onEnriched={(website) =>
+                      setLead((prev) => (prev ? { ...prev, website } : prev))
+                    }
+                  />
+                )}
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
                   <BrutalButton
