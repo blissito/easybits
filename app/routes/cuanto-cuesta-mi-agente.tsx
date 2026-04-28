@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { AuthNav } from "~/components/login/auth-nav";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -14,6 +15,7 @@ import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustrati
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
 import { computeQuote, formatMxn } from "~/lib/quiz/pricing";
 import { playReveal } from "~/lib/quiz/sounds";
+import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/cuanto-cuesta-mi-agente";
 
@@ -45,8 +47,12 @@ const STEP_LEAD = CAP_COUNT + 2;
 const STEP_SUMMARY = CAP_COUNT + 3;
 const TOTAL_PROGRESS_STEPS = STEP_SUMMARY; // displayed total (excludes hero)
 
+const VALID_CAP_IDS = new Set(CAPABILITIES.map((c) => c.id));
+
 export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const user = loaderData?.user ?? null;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showToast = useBrutalToast();
   const [step, setStep] = useState(0);
   const [selections, setSelections] = useState<Set<string>>(new Set());
   const [integrations, setIntegrations] = useState<IntegrationsAnswer>({
@@ -58,6 +64,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [submitting, setSubmitting] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   const quote = useMemo(
     () => computeQuote(Array.from(selections), integrations.hasIntegrations),
@@ -108,6 +115,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   };
 
   const handleCheckout = async () => {
+    if (!lead) {
+      setStep(STEP_LEAD);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -138,7 +149,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   };
 
   const handleWhatsApp = () => {
-    if (!lead) return;
+    if (!lead) {
+      setStep(STEP_LEAD);
+      return;
+    }
     const summary = quote.breakdown
       .map((b) => `• ${b.capability.shortLabel}`)
       .join("\n");
@@ -155,7 +169,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   };
 
   const handleDownloadPdf = async () => {
-    if (!lead) return;
+    if (!lead) {
+      setStep(STEP_LEAD);
+      return;
+    }
     setDownloadingPdf(true);
     setSubmitError(null);
     try {
@@ -193,11 +210,63 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     }
   };
 
+  const handleReset = () => {
+    setSelections(new Set());
+    setIntegrations({ hasIntegrations: false, items: [], description: "" });
+    setLead(null);
+    setSubmitError(null);
+    setSearchParams({}, { replace: true });
+    setStep(0);
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      showToast("Link copiado — ya puedes compartir tu cotización");
+    } catch {
+      setSubmitError("No pudimos copiar el link. Cópialo manualmente desde la barra del navegador.");
+    }
+  };
+
   const isHero = step === 0;
   const isCapStep = step >= 1 && step <= CAP_COUNT;
   const isIntegrationsStep = step === STEP_INTEGRATIONS;
   const isLeadStep = step === STEP_LEAD;
   const isSummaryStep = step === STEP_SUMMARY;
+
+  // Hydrate state from URL (?s=voice,images&i=1) on first mount.
+  useEffect(() => {
+    if (hydrated) return;
+    const sParam = searchParams.get("s");
+    if (sParam) {
+      const ids = sParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter((id) => VALID_CAP_IDS.has(id));
+      if (ids.length > 0) {
+        setSelections(new Set(ids));
+        if (searchParams.get("i") === "1") {
+          setIntegrations((prev) => ({ ...prev, hasIntegrations: true }));
+        }
+        setStep(STEP_SUMMARY);
+      }
+    }
+    setHydrated(true);
+  }, [hydrated, searchParams]);
+
+  // Sync URL when state changes while user is on the summary view.
+  useEffect(() => {
+    if (!hydrated || !isSummaryStep) return;
+    const next = new URLSearchParams();
+    if (selections.size > 0) {
+      next.set("s", Array.from(selections).join(","));
+    }
+    if (integrations.hasIntegrations) {
+      next.set("i", "1");
+    }
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, isSummaryStep, selections, integrations.hasIntegrations]);
 
   // Confetti + reveal sound when the summary first appears
   const [celebratedSummary, setCelebratedSummary] = useState(false);
@@ -396,6 +465,22 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   >
                     Presenta tu cotización por WhatsApp
                   </BrutalButton>
+                </div>
+                <div className="mt-4 flex flex-col md:flex-row gap-2 md:gap-6 justify-center items-center">
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="text-sm font-bold text-black/70 hover:text-black underline-offset-4 hover:underline py-2 px-3"
+                  >
+                    📋 Copiar link de esta cotización
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="text-sm font-bold text-black/70 hover:text-black underline-offset-4 hover:underline py-2 px-3"
+                  >
+                    ↻ Reiniciar cotización
+                  </button>
                 </div>
                 {submitError && (
                   <p className="text-center text-red-600 mt-4 font-bold">
