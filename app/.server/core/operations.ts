@@ -155,9 +155,19 @@ export async function uploadFile(
   const storageKey = opts.assetId
     ? `${ctx.user.id}/${opts.assetId}/${nanoid(3)}`
     : `${ctx.user.id}/${nanoid(3)}`;
-  const client = provider ? createStorageClient(provider) : getPlatformDefaultClient();
+
+  // Public platform uploads must land in PUBLIC_BUCKET at root prefix —
+  // the `mcp/` prefix is unreadable by the public bucket policy and would
+  // 403 when embedded. Custom providers handle their own ACL.
+  const isPublicPlatform = !provider && opts.access === "public";
+  const client = provider
+    ? createStorageClient(provider)
+    : isPublicPlatform
+      ? getPlatformPublicClient()
+      : getPlatformDefaultClient();
 
   const putUrl = await client.getPutUrl(storageKey);
+  const url = isPublicPlatform ? buildPublicAssetUrl(storageKey) : "";
 
   const file = await db.file.create({
     data: {
@@ -168,7 +178,7 @@ export async function uploadFile(
       contentType: opts.contentType,
       ownerId: ctx.user.id,
       access: opts.access || "private",
-      url: "",
+      url,
       status: "DONE",
       storageProviderId: provider?.id ?? null,
       ...(opts.source ? { source: opts.source } : {}),

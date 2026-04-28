@@ -325,15 +325,14 @@ function registerCoreTools(server: McpServer) {
       description: `Create a generic user file record and get a presigned upload URL. Returns \`{ file, putUrl }\`. Upload bytes via PUT to \`putUrl\`. The file is created with status DONE immediately.
 
 IMPORTANT — choose the right upload tool:
-- If the asset will be embedded in a published website/landing (<img>, <video>, <a href>, background-image, etc.), DO NOT use upload_file. Use \`upload_website_file\` (needs websiteId) or \`deploy_website_file\` (text/base64 <1MB) — both default to public and return a URL safe to embed.
-- Only use upload_file for private user storage (uploads users manage from the dashboard, agent scratch files, source material).
-- If you must use upload_file for something that will be embedded publicly, you MUST pass \`access: "public"\`. The default is \`"private"\`, which produces a URL that returns 403 when loaded from a browser. Always prefer the website-scoped tools.
+- If the asset will be embedded in a published website/landing (<img>, <video>, <a href>, background-image, etc.), prefer \`upload_website_file\` (needs websiteId) or \`deploy_website_file\` (text/base64 <1MB) — both default to public.
+- Use upload_file for private user storage (dashboard uploads, agent scratch files, source material) OR for public assets that don't belong to a specific website.
+- If you need to embed the result publicly, you MUST pass \`access: "public"\`. The default is \`"private"\`, which is NOT browser-readable.
 
-URL patterns (check before embedding):
-- Public, safe to embed: starts with \`https://easybits-public.fly.storage.tigris.dev/\`.
-- Private, will 403 in a browser: contains \`/mcp/\` or \`signed=\` — never put these in HTML.
-
-Never embed the raw \`putUrl\` or construct URLs from fileName/websiteId — embed the file's canonical \`url\` field returned by this tool (or fetch it via \`get_file\` after upload).`,
+How to embed safely (the only reliable rule):
+- Embed \`file.url\` LITERAL from the response. Do NOT construct URLs from \`storageKey\`, \`fileName\`, \`putUrl\`, or any documented host pattern — bucket and prefix routing depend on access level and provider, and a guessed URL will 403.
+- If \`file.url === ""\`, the file is private. There is no embeddable URL — re-upload with \`access: "public"\` or call \`update_file({ access: "public" })\` to flip it (which copies the object to the public bucket and repopulates \`file.url\`).
+- Never embed \`putUrl\` (it's a write-only signed URL). Never embed a URL containing \`/mcp/\` or \`signed=\` (always private).`,
       inputSchema: {
         fileName: z.string().describe("Name of the file"),
         contentType: z.string().regex(/^[\w\-]+\/[\w\-\.\+]+$/).describe("MIME type"),

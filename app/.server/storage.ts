@@ -222,8 +222,17 @@ export async function getClientForFile(storageProviderId?: string | null, userId
  * Returns the correct storage client for reading a platform file,
  * handling the mcp/ vs root prefix distinction.
  */
-export function getReadClientForPlatformFile(file: { storageProviderId?: string | null; url?: string | null }): StorageClient {
-  const isMcpFile = !file.url || (file.url && file.url.includes("/mcp/"));
+export function getReadClientForPlatformFile(file: { storageProviderId?: string | null; url?: string | null; access?: string | null }): StorageClient {
+  // Public files live in PUBLIC_BUCKET at root prefix.
+  const isPublicBucketFile =
+    file.access === "public" ||
+    (!!file.url && file.url.includes(`${PUBLIC_BUCKET}.fly.storage.tigris.dev`));
+  if (isPublicBucketFile) {
+    return getPlatformDefaultClient({ bucket: PUBLIC_BUCKET, prefix: "" });
+  }
+  // Private files live in PRIVATE_BUCKET. Legacy + MCP uploads use the `mcp/`
+  // prefix; anything else lives at root.
+  const isMcpFile = !file.url || file.url.includes("/mcp/");
   return getPlatformDefaultClient({ prefix: isMcpFile ? "mcp/" : "" });
 }
 
