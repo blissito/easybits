@@ -216,6 +216,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     setIntegrations({ hasIntegrations: false, items: [], description: "" });
     setLead(null);
     setSubmitError(null);
+    setCelebratedSummary(false);
     setSearchParams({}, { replace: true });
     setStep(0);
   };
