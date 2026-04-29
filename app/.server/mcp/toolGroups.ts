@@ -39,7 +39,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     description:
       "Canva-like: documentos, presentaciones, brand kits e imágenes. Ideal para Claude.ai / Claude Design.",
     recommended: true,
-    toolCount: 25,
+    toolCount: 60,
   },
   {
     key: "core",
@@ -91,23 +91,54 @@ export const TOOL_GROUPS: ToolGroup[] = [
  * Exposes visual creation + deploy + brand, hides DB/forms/webhooks.
  */
 export const DESIGN_ALLOWLIST = new Set<string>([
-  // Documents
+  // Documents — CRUD
   "list_documents", "get_document",
   "create_document", "update_document", "delete_document",
+  "clone_document",
   "open_design_in_editor",
+  // Documents — pages
   "set_page_html", "get_page_html",
   "add_page", "delete_page", "reorder_pages",
-  "deploy_document",
+  "get_page_screenshot",
+  // Documents — sections (granular edits)
+  "get_section_html", "set_section_html",
+  "replace_html",
+  // Documents — AI mutation
+  "refine_document_section",
+  "regenerate_document_page",
+  "enhance_document_prompt",
+  // Documents — deploy / export
+  "deploy_document", "unpublish_document",
   "export_document",
+  "get_document_pdf",
+  // Documents — special-purpose
   "structured_doc",
   "create_tournament_schedule",
   "edit_tournament_schedule",
-  // Presentations
+  // Templates (Canva Autofill equivalent)
+  "fill_template",
+  "get_template_slots",
+  // Import / discovery
+  "import_html",
+  "search_files",
+  "list_themes",
+  // Presentations — CRUD
   "list_presentations", "get_presentation",
   "create_presentation", "update_presentation", "delete_presentation",
+  "clone_presentation",
+  // Presentations — slides
+  "add_slide", "delete_slide", "reorder_slides",
+  "set_slide_html", "get_slide_html",
+  "get_slide_screenshot",
+  // Presentations — styles (clone-style feature)
+  "list_presentation_styles", "save_presentation_style", "delete_presentation_style",
+  // Presentations — deploy / export
   "deploy_presentation", "unpublish_presentation",
+  "get_presentation_pdf",
   // Images
   "generate_image", "transform_image",
+  "optimize_image",
+  "pdf_to_images",
   // Video
   "video_create", "list_videos",
   "character_remember", "character_list", "character_delete",
