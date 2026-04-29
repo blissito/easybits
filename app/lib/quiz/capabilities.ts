@@ -1,3 +1,12 @@
+export type CapabilityCap = {
+  // Cantidad incluida en la mensualidad. e.g. "500" para imágenes, "150,000" caracteres para voz.
+  included: string;
+  // Unidad. e.g. "imágenes/mes", "caracteres/mes", "segundos/mes", "páginas/mes".
+  unit: string;
+  // Precio del exceso, ya formateado. e.g. "$8 MXN c/u", "$0.08 MXN/char".
+  overage: string;
+};
+
 export type Capability = {
   id: string;
   label: string;
@@ -10,13 +19,25 @@ export type Capability = {
   bgClass: string;
   isAddon: boolean;
   includes: string[];
+  // Solo capabilities con consumo variable real (voz, imágenes, video, scraping).
+  cap?: CapabilityCap;
 };
 
+// Setup único — anclaje del modelo directo. Equivalente a $8,000 USD a ~17 MXN/USD.
+// No reembolsable, se cobra 100% antes de tocar nada, mensualidad arranca día 31.
+export const SETUP_FEE_USD = 8000;
+export const SETUP_FEE_MXN = 136000;
+
+// Mensualidad base — soporte humano + monitoreo continuo. Setup técnico y branding
+// ahora viven en el SETUP_FEE_MXN, no aquí.
 export const ORCHESTRATION_FEE_MXN = 3000;
 
-// Custom integrations: not a regular capability — handled as a separate step.
-// Estimated placeholder, refined in the discovery call.
-export const CUSTOM_INTEGRATIONS_MXN = 3000;
+// Integraciones custom: precio MÍNIMO ("desde"), se cotiza tras discovery.
+// El discovery es no reembolsable y se acredita al desarrollo si avanza en 30 días.
+export const CUSTOM_INTEGRATIONS_FROM_MXN = 3000;
+export const CUSTOM_INTEGRATIONS_DISCOVERY_MXN = 1500;
+// Alias retrocompatible — algunos componentes/PDF pueden seguir importando este nombre.
+export const CUSTOM_INTEGRATIONS_MXN = CUSTOM_INTEGRATIONS_FROM_MXN;
 
 export const CAPABILITIES: Capability[] = [
   {
@@ -36,6 +57,11 @@ export const CAPABILITIES: Capability[] = [
       "Audios y notas de voz en WhatsApp",
       "Transcripción de audios entrantes",
     ],
+    cap: {
+      included: "150,000",
+      unit: "caracteres/mes",
+      overage: "$0.08 MXN por carácter excedido",
+    },
   },
   {
     id: "images",
@@ -54,6 +80,11 @@ export const CAPABILITIES: Capability[] = [
       "Variaciones rápidas de un brief",
       "Edición y transformaciones básicas",
     ],
+    cap: {
+      included: "500",
+      unit: "imágenes/mes",
+      overage: "$8 MXN por imagen excedida",
+    },
   },
   {
     id: "whatsapp",
@@ -252,6 +283,11 @@ export const CAPABILITIES: Capability[] = [
       "Reels y demos para redes",
       "Renders por demanda",
     ],
+    cap: {
+      included: "60",
+      unit: "segundos/mes",
+      overage: "$200 MXN por segundo excedido",
+    },
   },
   {
     id: "research",
@@ -270,6 +306,11 @@ export const CAPABILITIES: Capability[] = [
       "Monitoreo de precios de competencia",
       "Resúmenes y alertas configurables",
     ],
+    cap: {
+      included: "15,000",
+      unit: "páginas/mes",
+      overage: "$1.50 MXN por página excedida",
+    },
   },
 ];
 

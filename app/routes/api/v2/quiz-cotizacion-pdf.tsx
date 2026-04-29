@@ -1,7 +1,7 @@
 import type { Route } from "./+types/quiz-cotizacion-pdf";
 import { withPage } from "~/.server/core/browserPool";
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
-import { computeQuote, formatMxn } from "~/lib/quiz/pricing";
+import { computeQuote, formatMxn, formatUsd } from "~/lib/quiz/pricing";
 
 type LeadInfo = {
   name: string;
@@ -41,10 +41,10 @@ const buildHtml = (payload: Payload, folio: string): string => {
   const validIds = new Set(CAPABILITIES.map((c) => c.id));
   const cleanSelections = payload.selections.filter((s) => validIds.has(s));
   const quote = computeQuote(cleanSelections, !!customIntegrations);
-  const discountedTotal = Math.round(
-    quote.totalMxn * (1 - DISCOUNT_PCT / 100)
+  const discountedMonthly = Math.round(
+    quote.monthlyTotalMxn * (1 - DISCOUNT_PCT / 100)
   );
-  const savingMxn = quote.totalMxn - discountedTotal;
+  const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
 
   const today = new Intl.DateTimeFormat("es-MX", {
     day: "numeric",
@@ -55,8 +55,8 @@ const buildHtml = (payload: Payload, folio: string): string => {
   const orchRow = `
     <div class="cap-row">
       <div class="cap-info">
-        <div class="cap-name">Orquestación + personalización con tu marca</div>
-        <div class="cap-incl"><strong>Tu marca de pies a cabeza</strong> (logo, colores, tono, voz) · setup técnico · soporte humano + monitoreo continuo</div>
+        <div class="cap-name">Soporte humano + monitoreo continuo</div>
+        <div class="cap-incl">Atención humana mes a mes (ventana definida) · monitoreo de uso, errores y alertas · ajustes menores incluidos</div>
       </div>
       <div class="cap-price">${formatMxn(quote.orchestrationFeeMxn)}</div>
     </div>`;
@@ -65,11 +65,15 @@ const buildHtml = (payload: Payload, folio: string): string => {
     .map((line) => {
       const c = line.capability;
       const isFree = line.priceMxn === 0;
+      const capRow = c.cap
+        ? `<div class="cap-meta"><strong>Incluye ${escapeHtml(c.cap.included)} ${escapeHtml(c.cap.unit)}</strong> · exceso: ${escapeHtml(c.cap.overage)}</div>`
+        : "";
       return `
     <div class="cap-row">
       <div class="cap-info">
         <div class="cap-name">${escapeHtml(c.shortLabel)} <span class="cap-vendor">(${escapeHtml(c.vendor)})</span></div>
         <div class="cap-incl">${c.includes.map((i) => escapeHtml(i)).join(" · ")}</div>
+        ${capRow}
       </div>
       <div class="cap-price ${isFree ? "free" : ""}">${isFree ? "Incluido" : formatMxn(line.priceMxn)}</div>
     </div>`;
@@ -92,16 +96,27 @@ const buildHtml = (payload: Payload, folio: string): string => {
           .join("")}</div>`
       : "";
 
-  const customRow = customIntegrations
+  const customSection = customIntegrations
     ? `
-    <div class="cap-row">
-      <div class="cap-info">
-        <div class="cap-name">Integraciones custom <span class="cap-vendor" style="color:#AA4958">*</span></div>
-        ${itemsChips}
-        <div class="cap-incl" style="margin-top:${customItems.length > 0 ? "6px" : "0"}">estimado preliminar, se ajusta tras revisar APIs en la llamada</div>
+  <div class="custom-section">
+    <div class="section-title" style="margin-top:0">Integraciones custom (one-time, fuera del mensual)</div>
+    ${itemsChips}
+    <div class="custom-grid">
+      <div class="custom-card">
+        <div class="custom-label">Discovery (paid)</div>
+        <div class="custom-amount">${formatMxn(quote.customIntegrationsDiscoveryMxn)}</div>
+        <div class="custom-note">Llamada 60 min + documento de scope. <strong>No reembolsable</strong>, acreditable al desarrollo si avanzas en 30 días.</div>
       </div>
-      <div class="cap-price">${formatMxn(quote.customIntegrationsMxn)}</div>
-    </div>`
+      <div class="custom-card">
+        <div class="custom-label">Desarrollo</div>
+        <div class="custom-amount">desde ${formatMxn(quote.customIntegrationsFromMxn)}</div>
+        <div class="custom-note">Cotización formal post-discovery. Sin discovery firmado, no hay desarrollo.</div>
+      </div>
+    </div>
+    <div class="custom-tiers">
+      <strong>Tiers:</strong> simple (1 endpoint REST) desde $3,000 · media (multi-endpoint, OAuth) desde $8,000 · compleja (SAP/ERP, sync) desde $20,000
+    </div>
+  </div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -111,47 +126,69 @@ const buildHtml = (payload: Payload, folio: string): string => {
 <title>Cotización EasyBits — ${folio}</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; background: #FFF; padding: 32px 32px 24px; line-height: 1.4; }
-.header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 3px solid #000; margin-bottom: 24px; }
-.brand { font-size: 30px; font-weight: 900; letter-spacing: -0.5px; }
+body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #000; background: #FFF; padding: 28px 32px 24px; line-height: 1.4; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 3px solid #000; margin-bottom: 20px; }
+.brand { font-size: 28px; font-weight: 900; letter-spacing: -0.5px; }
 .brand-sub { font-size: 11px; color: rgba(0,0,0,0.6); margin-top: 4px; text-transform: uppercase; letter-spacing: 1.5px; }
 .meta { text-align: right; }
 .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; color: rgba(0,0,0,0.6); }
-.meta-folio { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-weight: bold; font-size: 16px; margin: 4px 0; }
-.meta-date { font-size: 12px; color: rgba(0,0,0,0.7); }
+.meta-folio { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-weight: bold; font-size: 15px; margin: 4px 0; }
+.meta-date { font-size: 11px; color: rgba(0,0,0,0.7); }
 
-.lead-block { background: #F3F0F5; border: 2px solid #000; border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; }
+.lead-block { background: #F3F0F5; border: 2px solid #000; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; }
 .lead-block .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; color: rgba(0,0,0,0.6); margin-bottom: 4px; }
-.lead-block .name { font-size: 18px; font-weight: 900; margin-bottom: 2px; }
-.lead-block .biz { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.lead-block .name { font-size: 17px; font-weight: 900; margin-bottom: 2px; }
+.lead-block .biz { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
 .lead-block .contact { font-size: 11px; color: rgba(0,0,0,0.65); }
 
-.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: 900; margin-bottom: 12px; padding-left: 4px; }
-.cap-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 10px 4px; border-bottom: 1px solid rgba(0,0,0,0.12); page-break-inside: avoid; }
+/* SETUP one-time block — anchor of the model */
+.setup-block { background: #000; color: #FFF; border: 3px solid #000; border-radius: 14px; padding: 18px 22px; margin-bottom: 18px; box-shadow: 5px 5px 0 0 rgba(0,0,0,1); page-break-inside: avoid; }
+.setup-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 2.5px; font-weight: 900; color: #ECD66E; margin-bottom: 6px; }
+.setup-amount-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.setup-amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 32px; font-weight: 900; }
+.setup-currency { font-size: 12px; font-weight: 700; opacity: 0.6; }
+.setup-mxn { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 11px; opacity: 0.5; }
+.setup-list { font-size: 11px; line-height: 1.55; padding-left: 18px; opacity: 0.9; }
+.setup-list li { margin-bottom: 2px; }
+.setup-disclaimer { font-size: 10px; opacity: 0.5; margin-top: 10px; line-height: 1.4; }
+
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; font-weight: 900; margin: 14px 0 10px; padding-left: 4px; }
+.cap-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 9px 4px; border-bottom: 1px solid rgba(0,0,0,0.12); page-break-inside: avoid; }
 .cap-info { flex: 1; }
 .cap-name { font-size: 13px; font-weight: 800; }
 .cap-vendor { color: rgba(0,0,0,0.5); font-weight: 500; font-size: 11px; }
 .cap-incl { font-size: 10.5px; color: rgba(0,0,0,0.6); margin-top: 3px; line-height: 1.3; }
-.custom-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.custom-chip { display: inline-block; padding: 2px 8px; background: #ECD66E; border: 1.5px solid #000; border-radius: 999px; font-size: 10px; font-weight: 700; color: #000; }
+.cap-meta { font-size: 10px; color: rgba(0,0,0,0.75); margin-top: 4px; padding: 4px 8px; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.12); border-radius: 4px; line-height: 1.3; }
+.cap-meta strong { color: #000; }
 .cap-price { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-weight: 900; font-size: 13px; white-space: nowrap; }
 .cap-price.free { font-style: italic; color: rgba(0,0,0,0.7); }
 
-.total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 4px 4px; border-top: 3px solid #000; font-weight: 900; margin-top: 8px; }
+.total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 4px 4px; border-top: 3px solid #000; font-weight: 900; margin-top: 6px; }
 .total-row .label { font-size: 13px; }
-.total-row .amount-original { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 14px; color: rgba(0,0,0,0.4); text-decoration: line-through; font-weight: bold; }
-.total-final-row { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px 8px; }
+.total-row .amount-original { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 13px; color: rgba(0,0,0,0.4); text-decoration: line-through; font-weight: bold; }
+.total-final-row { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px 6px; }
 .total-final-row .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 900; color: #9870ED; }
-.total-final-row .amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 28px; font-weight: 900; color: #9870ED; }
+.total-final-row .amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 26px; font-weight: 900; color: #9870ED; }
 .savings { font-size: 11px; color: rgba(0,0,0,0.65); padding: 0 4px; margin-top: 2px; font-weight: bold; }
 .disclaimer { font-size: 10px; color: rgba(0,0,0,0.5); padding: 0 4px; margin-top: 6px; }
 
-.discount-banner { margin-top: 28px; padding: 22px 26px; border: 3px solid #000; border-radius: 16px; background: #ECD66E; box-shadow: 5px 5px 0 0 #000; text-align: center; page-break-inside: avoid; }
-.discount-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 10px; }
-.discount-headline { font-size: 20px; font-weight: 900; line-height: 1.15; max-width: 480px; margin: 0 auto 8px; }
-.discount-subline { font-size: 11px; color: rgba(0,0,0,0.7); margin-top: 8px; }
+.custom-section { margin-top: 18px; padding: 14px 16px; border: 2px solid #000; border-radius: 10px; background: #FAFAFA; page-break-inside: avoid; }
+.custom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.custom-card { padding: 10px 12px; border: 2px solid #000; border-radius: 8px; background: #FFF; }
+.custom-card:first-child { background: rgba(236, 214, 110, 0.3); }
+.custom-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 4px; }
+.custom-amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 15px; font-weight: 900; margin-bottom: 4px; }
+.custom-note { font-size: 9.5px; color: rgba(0,0,0,0.7); line-height: 1.35; }
+.custom-tiers { margin-top: 8px; font-size: 9.5px; color: rgba(0,0,0,0.65); line-height: 1.4; }
+.custom-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.custom-chip { display: inline-block; padding: 2px 8px; background: #ECD66E; border: 1.5px solid #000; border-radius: 999px; font-size: 10px; font-weight: 700; color: #000; }
 
-.footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: rgba(0,0,0,0.6); }
+.discount-banner { margin-top: 22px; padding: 18px 22px; border: 3px solid #000; border-radius: 14px; background: #ECD66E; box-shadow: 5px 5px 0 0 #000; text-align: center; page-break-inside: avoid; }
+.discount-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 8px; }
+.discount-headline { font-size: 17px; font-weight: 900; line-height: 1.2; max-width: 480px; margin: 0 auto 6px; }
+.discount-subline { font-size: 11px; color: rgba(0,0,0,0.7); margin-top: 6px; }
+
+.footer { margin-top: 22px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.15); display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: rgba(0,0,0,0.6); }
 .footer .url { font-weight: bold; color: #000; }
 </style>
 </head>
@@ -176,26 +213,44 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
   <div class="contact">${escapeHtml(lead.email)} · ${escapeHtml(lead.whatsapp)}${lead.website ? ` · ${escapeHtml(lead.website)}` : ""}</div>
 </div>
 
-<div class="section-title">Tu agente IA incluye</div>
+<div class="setup-block">
+  <div class="setup-tag">★ Setup único · pago una sola vez ★</div>
+  <div class="setup-amount-row">
+    <div class="setup-amount">${formatUsd(quote.setupOneTimeUsd)}</div>
+    <div class="setup-currency">USD</div>
+    <div class="setup-mxn">≈ ${formatMxn(quote.setupOneTimeMxn)} MXN</div>
+  </div>
+  <ul class="setup-list">
+    <li><strong>Tu marca de pies a cabeza</strong>: logo, colores, tono y voz del agente</li>
+    <li>Setup técnico, vendors y MCPs configurados</li>
+    <li>CLAUDE.md custom de tu negocio</li>
+    <li><strong>Pair WA primeros 30 días</strong> (ventana 9-18h MX, respuesta &lt; 2h)</li>
+    <li>2 integraciones simples incluidas</li>
+  </ul>
+  <div class="setup-disclaimer">100% por adelantado · no reembolsable · mensualidad arranca día 31. Cancelar la mensualidad no reembolsa el setup.</div>
+</div>
+
+<div class="section-title">Mensualidad recurrente</div>
 ${orchRow}
 ${capRows}
-${customRow}
 
 <div class="total-row">
-  <div class="label">Total lista (sin descuento)</div>
-  <div class="amount-original">${formatMxn(quote.totalMxn)} MXN</div>
+  <div class="label">Total mensual (lista)</div>
+  <div class="amount-original">${formatMxn(quote.monthlyTotalMxn)} MXN</div>
 </div>
 <div class="total-final-row">
-  <div class="label">Total con tu descuento</div>
-  <div class="amount">${formatMxn(discountedTotal)} MXN/mes</div>
+  <div class="label">Total mensual con tu descuento</div>
+  <div class="amount">${formatMxn(discountedMonthly)} MXN/mes</div>
 </div>
-<div class="savings">Ahorras ${formatMxn(savingMxn)} MXN cada mes al presentar esta cotización · ${DISCOUNT_PCT}% off permanente</div>
-<div class="disclaimer">Precios en MXN, no incluyen IVA. Suscripción mensual, cancela cuando quieras.${customIntegrations ? " * Integraciones custom: estimado preliminar, ajustable tras revisar tus APIs en la llamada." : ""}</div>
+<div class="savings">Ahorras ${formatMxn(monthlySaving)} MXN cada mes al presentar esta cotización · ${DISCOUNT_PCT}% off permanente en mensualidad</div>
+<div class="disclaimer">Precios en MXN, no incluyen IVA. Mensualidad recurrente, cancela cuando quieras (el setup nunca se reembolsa). Caps de uso visibles por capability — el exceso se factura aparte.</div>
+
+${customSection}
 
 <div class="discount-banner">
   <div class="discount-tag">★ Descuento permanente ★</div>
-  <div class="discount-headline">Presenta esta cotización para recibir 20% DE DESCUENTO PERMANENTE</div>
-  <div class="discount-subline">Aplicable al momento de contratar · Folio ${folio}</div>
+  <div class="discount-headline">Presenta esta cotización para recibir 20% OFF PERMANENTE en mensualidad</div>
+  <div class="discount-subline">Aplicable al contratar · Folio ${folio} · El descuento no aplica al setup único</div>
 </div>
 
 <div class="footer">

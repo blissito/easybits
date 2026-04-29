@@ -7,7 +7,9 @@ import { computeQuote } from "~/lib/quiz/pricing";
 
 type QuizCheckoutPayload = {
   selections: string[];
-  totalMxn: number;
+  // Mensualidad recurrente (sin descuento). Setup ($8K USD) NO se cobra aquí —
+  // se gestiona por WhatsApp tras discovery call.
+  monthlyTotalMxn: number;
   customIntegrations: { description: string } | null;
   lead: {
     name: string;
@@ -55,11 +57,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
   ].join(" + ");
   const productName = `Agente IA EasyBits — ${itemsLabel}`;
-  const productDescription = `Suscripción mensual. Orquestación + soporte humano (${ORCHESTRATION_FEE_MXN} MXN) + ${quote.selectionsCount} capacidades${
+  const productDescription = `Mensualidad recurrente: soporte humano + monitoreo (${ORCHESTRATION_FEE_MXN} MXN) + ${quote.selectionsCount} capacidades. NOTA: setup único de $8,000 USD se gestiona por WhatsApp tras discovery call — no incluido en este pago${
     hasCustomIntegrations
-      ? " + integraciones custom (estimado preliminar, se ajusta tras llamada)"
-      : ""
-  }.`;
+      ? ". Integraciones custom: discovery + desarrollo cotizado aparte."
+      : "."
+  }`;
 
   try {
     const session = await getStripe().checkout.sessions.create({
@@ -70,7 +72,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
         selections: cleanSelections.join(","),
         custom_integrations: hasCustomIntegrations ? "yes" : "no",
         custom_integrations_desc: integrationsDesc,
-        total_mxn: String(quote.totalMxn),
+        monthly_mxn: String(quote.monthlyTotalMxn),
+        setup_pending_usd: String(quote.setupOneTimeUsd),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
         lead_website: lead.website || "",
@@ -85,7 +88,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
               name: productName,
               description: productDescription,
             },
-            unit_amount: quote.totalMxn * 100,
+            unit_amount: quote.monthlyTotalMxn * 100,
           },
           quantity: 1,
         },

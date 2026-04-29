@@ -7,7 +7,7 @@ import {
 } from "motion/react";
 import { useEffect, useState } from "react";
 import type { Quote } from "~/lib/quiz/pricing";
-import { formatMxn } from "~/lib/quiz/pricing";
+import { formatMxn, formatUsd } from "~/lib/quiz/pricing";
 import type { Capability } from "~/lib/quiz/capabilities";
 
 type PriceSummaryProps = {
@@ -37,10 +37,11 @@ export const PriceSummary = ({
   onRemoveCustomIntegrations,
   siteAnalysisCaptured = false,
 }: PriceSummaryProps) => {
-  const discountedTotal = Math.round(
-    quote.totalMxn * (1 - DISCOUNT_PCT / 100)
+  // El descuento aplica SOLO al mensual, no al setup. El setup es ancla.
+  const discountedMonthly = Math.round(
+    quote.monthlyTotalMxn * (1 - DISCOUNT_PCT / 100)
   );
-  const savingMxn = quote.totalMxn - discountedTotal;
+  const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
 
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
@@ -49,11 +50,11 @@ export const PriceSummary = ({
 
   useEffect(() => {
     if (reduced) {
-      setDisplay(discountedTotal);
-      count.set(discountedTotal);
+      setDisplay(discountedMonthly);
+      count.set(discountedMonthly);
       return;
     }
-    const controls = animate(count, discountedTotal, {
+    const controls = animate(count, discountedMonthly, {
       duration: 0.9,
       ease: [0.22, 1, 0.36, 1],
     });
@@ -62,7 +63,7 @@ export const PriceSummary = ({
       controls.stop();
       unsub();
     };
-  }, [discountedTotal, reduced]);
+  }, [discountedMonthly, reduced]);
 
   const removable = !!onRemoveCapability;
   const canAdd = !!onAddCapability && availableToAdd.length > 0;
@@ -86,16 +87,16 @@ export const PriceSummary = ({
           className="inline-block mb-3 bg-brand-yellow border-[3px] border-black px-4 py-1.5 rounded-lg shadow-[3px_3px_0_0_rgba(0,0,0,1)]"
         >
           <span className="text-xs md:text-sm font-black tracking-[0.2em] uppercase text-black">
-            ★ {DISCOUNT_PCT}% Descuento permanente ★
+            ★ {DISCOUNT_PCT}% Descuento permanente en mensualidad ★
           </span>
         </motion.div>
 
-        {/* Original total — struck through, smaller */}
+        {/* Original monthly — struck through, smaller */}
         <div className="text-xl md:text-2xl font-bold text-black/40 tabular-nums line-through mt-1">
-          {formatMxn(quote.totalMxn)} MXN
+          {formatMxn(quote.monthlyTotalMxn)} MXN / mes
         </div>
 
-        {/* Discounted total — BIG in brand accent purple */}
+        {/* Discounted monthly — BIG in brand accent purple */}
         <div className="flex items-baseline justify-center gap-2 mt-1">
           <span className="text-6xl md:text-7xl font-black text-brand-500 tabular-nums">
             {formatMxn(display)}
@@ -114,12 +115,52 @@ export const PriceSummary = ({
           </span>
         </p>
         <p className="text-xs text-black/55 mt-1.5 font-mono">
-          Ahorras {formatMxn(savingMxn)} MXN cada mes — al presentar tu
+          Ahorras {formatMxn(monthlySaving)} MXN cada mes — al presentar tu
           cotización
         </p>
       </div>
 
-      {/* Discount + Download banner — positioned right under the price */}
+      {/* SETUP ÚNICO — anclaje del modelo, NO reembolsable */}
+      <motion.div
+        initial={reduced ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reduced ? { duration: 0 } : { delay: 0.4, duration: 0.4 }}
+        className="mb-6 rounded-2xl border-[3px] border-black bg-black text-white p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)]"
+      >
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.25em] font-black text-brand-yellow mb-1">
+              Setup único · Pago una sola vez
+            </p>
+            <p className="text-3xl md:text-4xl font-black tabular-nums">
+              {formatUsd(quote.setupOneTimeUsd)}{" "}
+              <span className="text-sm font-bold text-white/60">USD</span>
+            </p>
+            <p className="text-xs text-white/50 font-mono mt-1">
+              ≈ {formatMxn(quote.setupOneTimeMxn)} MXN
+            </p>
+          </div>
+        </div>
+        <ul className="text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
+          <li>
+            <strong className="text-white">Tu marca de pies a cabeza</strong>:
+            logo, colores, tono y voz del agente
+          </li>
+          <li>Setup técnico, vendors y MCPs configurados</li>
+          <li>CLAUDE.md custom de tu negocio</li>
+          <li>
+            <strong className="text-white">Pair WA primeros 30 días</strong>{" "}
+            (ventana 9-18h MX, respuesta &lt; 2h)
+          </li>
+          <li>2 integraciones simples incluidas</li>
+        </ul>
+        <p className="text-[10px] text-white/45 mt-3 leading-snug">
+          100% por adelantado · no reembolsable · mensualidad arranca día 31.
+          Cancelar la mensualidad no reembolsa el setup.
+        </p>
+      </motion.div>
+
+      {/* Discount + Download banner — positioned right under setup */}
       {onDownloadPdf && (
         <motion.div
           initial={reduced ? false : { opacity: 0, y: 12 }}
@@ -136,7 +177,7 @@ export const PriceSummary = ({
             Descarga tu cotización y preséntala para recibir
             <br className="hidden md:block" />{" "}
             <span className="underline decoration-4 underline-offset-2">
-              {DISCOUNT_PCT}% de descuento permanente
+              {DISCOUNT_PCT}% off permanente en mensualidad
             </span>{" "}
             al contratar.
           </p>
@@ -181,19 +222,16 @@ export const PriceSummary = ({
           >
             <div className="flex justify-between items-baseline gap-3">
               <span className="text-sm font-bold text-black">
-                Orquestación + personalización con tu marca
+                Soporte humano + monitoreo continuo
               </span>
               <span className="font-mono font-bold tabular-nums whitespace-nowrap">
                 {formatMxn(quote.orchestrationFeeMxn)}
               </span>
             </div>
             <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
-              <li>
-                <strong className="text-black">Tu marca de pies a cabeza</strong>:
-                logo, colores, tono y voz del agente
-              </li>
-              <li>Setup técnico y configuración de vendors</li>
-              <li>Soporte humano + monitoreo continuo</li>
+              <li>Atención humana mes a mes (ventana definida)</li>
+              <li>Monitoreo de uso, errores y alertas</li>
+              <li>Ajustes menores incluidos sin costo extra</li>
             </ul>
           </motion.li>
 
@@ -241,53 +279,21 @@ export const PriceSummary = ({
                   <li key={it}>{it}</li>
                 ))}
               </ul>
+              {/* Cap de uso visible para capabilities con consumo variable */}
+              {line.capability.cap && (
+                <div className="mt-2 text-[11px] bg-black/5 border border-black/15 rounded-md px-2.5 py-1.5 leading-snug">
+                  <strong className="text-black">
+                    Incluye {line.capability.cap.included}{" "}
+                    {line.capability.cap.unit}
+                  </strong>
+                  <span className="text-black/65">
+                    {" "}
+                    · exceso: {line.capability.cap.overage}
+                  </span>
+                </div>
+              )}
             </motion.li>
           ))}
-
-          {/* Custom integrations (optional, removable) */}
-          {quote.hasCustomIntegrations && (
-            <motion.li
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 + quote.breakdown.length * 0.04 }}
-              className="border-b border-black/10 pb-3"
-            >
-              <div className="flex justify-between items-baseline gap-3">
-                <span className="text-sm font-bold text-black flex items-center gap-2">
-                  <span aria-hidden>🔌</span>
-                  <span>
-                    Integraciones custom
-                    <span className="text-brand-red ml-0.5">*</span>
-                  </span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold tabular-nums whitespace-nowrap">
-                    {formatMxn(quote.customIntegrationsMxn)}
-                  </span>
-                  {onRemoveCustomIntegrations && (
-                    <button
-                      type="button"
-                      onClick={onRemoveCustomIntegrations}
-                      aria-label="Quitar integraciones custom"
-                      title="Quitar integraciones custom"
-                      className="w-5 h-5 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-xs font-black flex items-center justify-center transition-colors"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-              {customIntegrationsDescription && (
-                <p className="mt-1.5 text-xs text-black/70 italic">
-                  “{customIntegrationsDescription}”
-                </p>
-              )}
-              <p className="mt-1.5 text-xs text-black/60">
-                <span className="text-brand-red">*</span> estimado preliminar —
-                se ajusta tras revisar tus APIs en la llamada
-              </p>
-            </motion.li>
-          )}
 
           {/* Site analysis — free perk, always visible */}
           <motion.li
@@ -309,12 +315,8 @@ export const PriceSummary = ({
               </span>
             </div>
             <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
-              <li>
-                Revisamos tu sitio antes de la llamada de 24h
-              </li>
-              <li>
-                Llegamos con propuestas concretas, no preguntas genéricas
-              </li>
+              <li>Revisamos tu sitio antes de la llamada de 24h</li>
+              <li>Llegamos con propuestas concretas, no preguntas genéricas</li>
               <li>
                 {siteAnalysisCaptured
                   ? "✓ URL agregada — listo para tu llamada"
@@ -350,7 +352,7 @@ export const PriceSummary = ({
             </li>
           )}
 
-          {/* Total */}
+          {/* Total mensual */}
           <motion.li
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -359,18 +361,89 @@ export const PriceSummary = ({
             }}
             className="flex justify-between items-baseline pt-1"
           >
-            <span className="text-base font-black">Total mensual</span>
+            <span className="text-base font-black">Total mensual (lista)</span>
             <span className="font-mono font-black text-base tabular-nums">
-              {formatMxn(quote.totalMxn)}
+              {formatMxn(quote.monthlyTotalMxn)}
             </span>
           </motion.li>
         </ul>
 
         <p className="mt-4 pt-3 border-t border-black/10 text-xs text-black/50">
-          Precios en MXN, no incluyen IVA. Suscripción mensual, cancela cuando
-          quieras.
+          Precios en MXN, no incluyen IVA. Mensualidad recurrente, cancela
+          cuando quieras (el setup nunca se reembolsa).
         </p>
       </div>
+
+      {/* Custom integrations — sección aparte, NO en el mensual */}
+      {quote.hasCustomIntegrations && (
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={
+            reduced ? { duration: 0 } : { delay: 0.6, duration: 0.4 }
+          }
+          className="mt-6 rounded-2xl border-[3px] border-black bg-white p-6 shadow-[4px_4px_0_0_rgba(0,0,0,1)]"
+        >
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <h4 className="text-sm uppercase tracking-widest font-black text-black flex items-center gap-2">
+              <span aria-hidden>🔌</span>
+              Integraciones custom
+            </h4>
+            {onRemoveCustomIntegrations && (
+              <button
+                type="button"
+                onClick={onRemoveCustomIntegrations}
+                aria-label="Quitar integraciones custom"
+                title="Quitar integraciones custom"
+                className="w-6 h-6 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-xs font-black flex items-center justify-center transition-colors"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {customIntegrationsDescription && (
+            <p className="text-xs text-black/70 italic mb-3">
+              "{customIntegrationsDescription}"
+            </p>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-lg border-2 border-black bg-brand-yellow/30 p-3">
+              <p className="text-[10px] uppercase tracking-widest font-black text-black/70 mb-1">
+                Discovery (paid)
+              </p>
+              <p className="font-mono font-black text-lg tabular-nums">
+                {formatMxn(quote.customIntegrationsDiscoveryMxn)}
+              </p>
+              <p className="text-[10px] text-black/65 mt-1 leading-snug">
+                Llamada 60 min + documento de scope.{" "}
+                <strong>No reembolsable</strong>, acreditable al desarrollo si
+                avanzas en 30 días.
+              </p>
+            </div>
+            <div className="rounded-lg border-2 border-black bg-white p-3">
+              <p className="text-[10px] uppercase tracking-widest font-black text-black/70 mb-1">
+                Desarrollo
+              </p>
+              <p className="font-mono font-black text-lg tabular-nums">
+                desde {formatMxn(quote.customIntegrationsFromMxn)}
+              </p>
+              <p className="text-[10px] text-black/65 mt-1 leading-snug">
+                Cotización formal post-discovery según complejidad. Sin
+                discovery firmado, no hay desarrollo.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 text-[10px] text-black/55 leading-snug">
+            <strong className="text-black">Tiers de complejidad:</strong>{" "}
+            simple (1 endpoint REST, auth básico) desde $3,000 · media
+            (multi-endpoint, OAuth, mapping) desde $8,000 · compleja (SAP/ERP,
+            sync continuo) desde $20,000
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };

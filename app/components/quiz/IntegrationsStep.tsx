@@ -2,7 +2,10 @@ import { useState, type KeyboardEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { CUSTOM_INTEGRATIONS_MXN } from "~/lib/quiz/capabilities";
+import {
+  CUSTOM_INTEGRATIONS_DISCOVERY_MXN,
+  CUSTOM_INTEGRATIONS_FROM_MXN,
+} from "~/lib/quiz/capabilities";
 import { formatMxn } from "~/lib/quiz/pricing";
 
 export type IntegrationsAnswer = {
@@ -137,7 +140,8 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
               Sí, tengo cosas que conectar
             </span>
             <span className="block text-xs text-black/60 mt-1">
-              + {formatMxn(CUSTOM_INTEGRATIONS_MXN)} estimado preliminar*
+              Discovery {formatMxn(CUSTOM_INTEGRATIONS_DISCOVERY_MXN)} +
+              desarrollo desde {formatMxn(CUSTOM_INTEGRATIONS_FROM_MXN)}*
             </span>
           </button>
         </div>
@@ -223,8 +227,9 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
         </AnimatePresence>
 
         <p className="text-xs text-black/50 mt-auto pt-4">
-          * El precio estimado se ajusta tras revisar tus APIs en la llamada.
-          Una integración puede ir de 1 a 30 endpoints.
+          * Discovery (no reembolsable, acreditable al desarrollo si avanzas en
+          30 días) + cotización formal por complejidad: simple desde $3,000,
+          media desde $8,000, compleja (SAP/ERP) desde $20,000.
         </p>
       </motion.div>
 

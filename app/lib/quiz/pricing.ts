@@ -1,7 +1,10 @@
 import {
   CAPABILITIES,
-  CUSTOM_INTEGRATIONS_MXN,
+  CUSTOM_INTEGRATIONS_DISCOVERY_MXN,
+  CUSTOM_INTEGRATIONS_FROM_MXN,
   ORCHESTRATION_FEE_MXN,
+  SETUP_FEE_MXN,
+  SETUP_FEE_USD,
   type Capability,
 } from "./capabilities";
 
@@ -11,10 +14,16 @@ export type QuoteLine = {
 };
 
 export type Quote = {
-  totalMxn: number;
+  // Setup único, no reembolsable, anclaje del modelo directo.
+  setupOneTimeMxn: number;
+  setupOneTimeUsd: number;
+  // Recurrente mensual = orquestación + capabilities seleccionadas.
+  monthlyTotalMxn: number;
   orchestrationFeeMxn: number;
   capsTotalMxn: number;
-  customIntegrationsMxn: number;
+  // Integraciones custom: "desde" + discovery (ambos one-time, fuera del mensual).
+  customIntegrationsFromMxn: number;
+  customIntegrationsDiscoveryMxn: number;
   hasCustomIntegrations: boolean;
   breakdown: QuoteLine[];
   selectionsCount: number;
@@ -31,16 +40,21 @@ export const computeQuote = (
   }));
 
   const capsTotalMxn = breakdown.reduce((acc, b) => acc + b.priceMxn, 0);
-  const customIntegrationsMxn = hasCustomIntegrations
-    ? CUSTOM_INTEGRATIONS_MXN
-    : 0;
+  const monthlyTotalMxn = ORCHESTRATION_FEE_MXN + capsTotalMxn;
 
   return {
+    setupOneTimeMxn: SETUP_FEE_MXN,
+    setupOneTimeUsd: SETUP_FEE_USD,
+    monthlyTotalMxn,
     orchestrationFeeMxn: ORCHESTRATION_FEE_MXN,
     capsTotalMxn,
-    customIntegrationsMxn,
+    customIntegrationsFromMxn: hasCustomIntegrations
+      ? CUSTOM_INTEGRATIONS_FROM_MXN
+      : 0,
+    customIntegrationsDiscoveryMxn: hasCustomIntegrations
+      ? CUSTOM_INTEGRATIONS_DISCOVERY_MXN
+      : 0,
     hasCustomIntegrations,
-    totalMxn: ORCHESTRATION_FEE_MXN + capsTotalMxn + customIntegrationsMxn,
     breakdown,
     selectionsCount: breakdown.length,
   };
@@ -50,6 +64,14 @@ export const formatMxn = (amount: number): string =>
   new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: "MXN",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+
+export const formatUsd = (amount: number): string =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

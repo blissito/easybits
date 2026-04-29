@@ -14,7 +14,7 @@ import {
 } from "~/components/quiz/IntegrationsStep";
 import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
-import { computeQuote, formatMxn } from "~/lib/quiz/pricing";
+import { computeQuote, formatMxn, formatUsd } from "~/lib/quiz/pricing";
 import { playReveal } from "~/lib/quiz/sounds";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -102,7 +102,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             integrations: integrations.hasIntegrations
               ? integrations.description || "yes (sin descripción)"
               : "no",
-            total_mxn: String(quote.totalMxn),
+            monthly_mxn: String(quote.monthlyTotalMxn),
+            setup_usd: String(quote.setupOneTimeUsd),
           }),
         });
         if (!res.ok) throw new Error(`form submit failed: ${res.status}`);
@@ -128,7 +129,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selections: Array.from(selections),
-          totalMxn: quote.totalMxn,
+          monthlyTotalMxn: quote.monthlyTotalMxn,
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -163,7 +164,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       : "Hola, vi tu landing.";
     const businessLine = lead?.business ? `\nNegocio: ${lead.business}` : "";
     const siteLine = lead?.website ? `\nSitio: ${lead.website}` : "";
-    const msg = `${greeting} Quiero obtener mi 20% de descuento permanente — aquí mi cotización de EasyBits.\n\nTotal: ${formatMxn(quote.totalMxn)} MXN/mes (precio lista, antes del descuento)\n\nCapacidades:\n${summary}${integrationsLine}${businessLine}${siteLine}`;
+    const setupLine = `Setup único: ${formatUsd(quote.setupOneTimeUsd)} USD (≈ ${formatMxn(quote.setupOneTimeMxn)} MXN)`;
+    const monthlyLine = `Mensualidad: ${formatMxn(quote.monthlyTotalMxn)} MXN/mes (lista, antes del 20% off)`;
+    const integrationsExtra = integrations.hasIntegrations
+      ? `\nIntegraciones custom: discovery ${formatMxn(quote.customIntegrationsDiscoveryMxn)} + desarrollo desde ${formatMxn(quote.customIntegrationsFromMxn)}`
+      : "";
+    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${monthlyLine}${integrationsExtra}\n\nCapacidades:\n${summary}${integrationsLine}${businessLine}${siteLine}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -343,8 +349,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6, delay: 0.15 }}
                       className="text-lg md:text-xl text-black/80 mb-8"
                     >
-                      Configúralo en 2 minutos. Te decimos exactamente cuánto
-                      cuesta y empezamos esta semana.
+                      Configúralo en 2 minutos. Te decimos cuánto es el setup
+                      único y la mensualidad. Discovery call gratis al final.
                     </motion.p>
                     <motion.div
                       initial={{ opacity: 0, y: 12 }}
@@ -361,8 +367,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ delay: 0.6 }}
                       className="text-sm text-black/60 mt-6 font-mono"
                     >
-                      {CAP_COUNT} capacidades · pago mensual MXN · cancela
-                      cuando quieras
+                      {CAP_COUNT} capacidades · setup único $8K USD ·
+                      mensualidad MXN
                     </motion.p>
                   </div>
                   <div className="order-1 md:order-2 max-w-[260px] md:max-w-none mx-auto w-full">
@@ -389,7 +395,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       : "opacity-100 text-black/60"
                   }`}
                 >
-                  acumulado: {formatMxn(quote.totalMxn)} / mes
+                  acumulado: {formatMxn(quote.monthlyTotalMxn)} / mes
                 </p>
               </QuizStep>
             )}
@@ -398,7 +404,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
               <QuizStep stepKey="integrations">
                 <IntegrationsStep onAnswer={handleIntegrations} />
                 <p className="text-center text-sm font-mono text-black/60 mt-6 tabular-nums">
-                  acumulado: {formatMxn(quote.totalMxn)} / mes
+                  acumulado: {formatMxn(quote.monthlyTotalMxn)} / mes
                 </p>
               </QuizStep>
             )}
@@ -407,7 +413,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
               <QuizStep stepKey="lead">
                 <div className="mb-6">
                   <p className="text-center text-sm font-mono text-black/60 tabular-nums">
-                    Estimación parcial: {formatMxn(quote.totalMxn)} / mes
+                    Estimación parcial: {formatMxn(quote.monthlyTotalMxn)} / mes
                   </p>
                 </div>
                 <LeadForm onSubmit={handleLeadSubmit} isLoading={submitting} />
@@ -456,18 +462,18 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
                   <BrutalButton
+                    onClick={handleWhatsApp}
+                    isDisabled={submitting || downloadingPdf}
+                  >
+                    Agendar discovery por WhatsApp →
+                  </BrutalButton>
+                  <BrutalButton
+                    mode="ghost"
                     onClick={handleCheckout}
                     isLoading={submitting}
                     isDisabled={downloadingPdf}
                   >
-                    Pagar y empezar →
-                  </BrutalButton>
-                  <BrutalButton
-                    mode="ghost"
-                    onClick={handleWhatsApp}
-                    isDisabled={submitting || downloadingPdf}
-                  >
-                    Presenta tu cotización por WhatsApp
+                    Pagar mensualidad (setup aparte)
                   </BrutalButton>
                 </div>
                 <div className="mt-4 flex flex-col md:flex-row gap-2 md:gap-6 justify-center items-center">
@@ -501,8 +507,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   />
                 )}
                 <p className="text-center text-xs text-black/50 mt-6 font-mono">
-                  Después del pago te contactamos en 24h para terminar el setup
-                  de WhatsApp y APIs.
+                  Discovery call de 45 min gratis · Setup ($8K USD) se cobra
+                  tras la llamada · Mensualidad arranca día 31 del setup
                 </p>
               </QuizStep>
             )}
