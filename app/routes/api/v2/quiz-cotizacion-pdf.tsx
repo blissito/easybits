@@ -1,12 +1,12 @@
 import type { Route } from "./+types/quiz-cotizacion-pdf";
 import { withPage } from "~/.server/core/browserPool";
-import { CAPABILITIES } from "~/lib/quiz/capabilities";
 import { FIT_GUARANTEE_DAYS } from "~/lib/quiz/capabilities";
 import {
   computeDiscountedMonthly,
   computeQuote,
   formatMxn,
   formatUsd,
+  parseSelections,
   QUOTE_DISCOUNT_PCT,
 } from "~/lib/quiz/pricing";
 
@@ -20,7 +20,8 @@ type LeadInfo = {
 };
 
 type Payload = {
-  selections: string[];
+  // Formato "voice:pro,images,whatsapp"
+  selections: string;
   customIntegrations: { description: string; items?: string[] } | null;
   lead: LeadInfo;
 };
@@ -43,9 +44,8 @@ const escapeHtml = (s: string): string =>
 
 const buildHtml = (payload: Payload, folio: string): string => {
   const { lead, customIntegrations } = payload;
-  const validIds = new Set(CAPABILITIES.map((c) => c.id));
-  const cleanSelections = payload.selections.filter((s) => validIds.has(s));
-  const quote = computeQuote(cleanSelections, !!customIntegrations);
+  const selectionsMap = parseSelections(payload.selections || "");
+  const quote = computeQuote(selectionsMap, !!customIntegrations);
   const discountedMonthly = computeDiscountedMonthly(quote.monthlyTotalMxn);
   const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
 
@@ -68,13 +68,16 @@ const buildHtml = (payload: Payload, folio: string): string => {
     .map((line) => {
       const c = line.capability;
       const isFree = line.priceMxn === 0;
-      const capRow = c.cap
-        ? `<div class="cap-meta"><strong>Incluye ${escapeHtml(c.cap.included)} ${escapeHtml(c.cap.unit)}</strong> · exceso: ${escapeHtml(c.cap.overage)}</div>`
+      const capRow = line.cap
+        ? `<div class="cap-meta"><strong>Incluye ${escapeHtml(line.cap.included)} ${escapeHtml(line.cap.unit)}</strong> · exceso: ${escapeHtml(line.cap.overage)}</div>`
+        : "";
+      const tierBadge = line.tierLabel
+        ? ` <span class="tier-badge">${escapeHtml(line.tierLabel)}</span>`
         : "";
       return `
     <div class="cap-row">
       <div class="cap-info">
-        <div class="cap-name">${escapeHtml(c.shortLabel)} <span class="cap-vendor">(${escapeHtml(c.vendor)})</span></div>
+        <div class="cap-name">${escapeHtml(c.shortLabel)}${tierBadge} <span class="cap-vendor">(${escapeHtml(c.vendor)})</span></div>
         <div class="cap-incl">${c.includes.map((i) => escapeHtml(i)).join(" · ")}</div>
         ${capRow}
       </div>
@@ -146,6 +149,7 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 .cap-info { flex: 1; }
 .cap-name { font-size: 13px; font-weight: 800; }
 .cap-vendor { color: rgba(0,0,0,0.5); font-weight: 500; font-size: 11px; }
+.tier-badge { display: inline-block; padding: 1px 6px; background: #000; color: #FFF; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-radius: 3px; vertical-align: middle; margin-left: 2px; }
 .cap-incl { font-size: 10.5px; color: rgba(0,0,0,0.6); margin-top: 3px; line-height: 1.3; }
 .cap-meta { font-size: 10px; color: rgba(0,0,0,0.75); margin-top: 4px; padding: 4px 8px; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.12); border-radius: 4px; line-height: 1.3; }
 .cap-meta strong { color: #000; }
@@ -268,7 +272,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   if (!payload.lead?.email) {
     return new Response("Missing lead", { status: 400 });
   }
-  if (!Array.isArray(payload.selections) || payload.selections.length === 0) {
+  if (typeof payload.selections !== "string" || !payload.selections.trim()) {
     return new Response("No selections", { status: 400 });
   }
 

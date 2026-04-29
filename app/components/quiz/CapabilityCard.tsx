@@ -2,13 +2,15 @@ import { motion, useReducedMotion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { cn } from "~/utils/cn";
 import type { Capability } from "~/lib/quiz/capabilities";
+import { DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
 import { formatMxn } from "~/lib/quiz/pricing";
 import { ILLUSTRATION_BY_ID } from "~/components/quiz/illustrations/CapabilityIllustrations";
 import { playYes, playNo } from "~/lib/quiz/sounds";
 
 type CapabilityCardProps = {
   capability: Capability;
-  onAnswer: (include: boolean) => void;
+  // Llamado con tierId si selecciona, o null si decide no incluir.
+  onAnswer: (tierId: string | null) => void;
 };
 
 export const CapabilityCard = ({
@@ -17,6 +19,7 @@ export const CapabilityCard = ({
 }: CapabilityCardProps) => {
   const Illustration = ILLUSTRATION_BY_ID[capability.id];
   const reduced = useReducedMotion();
+  const hasTiers = !!capability.tiers && capability.tiers.length > 0;
 
   return (
     <div className="flex flex-col items-center gap-6 md:gap-8 max-w-2xl mx-auto w-full">
@@ -66,19 +69,69 @@ export const CapabilityCard = ({
         <p className="text-base md:text-lg text-black/80 mb-2">
           {capability.description}
         </p>
-        <p className="text-sm font-mono text-black/60">
-          {capability.basePriceMxn === 0
-            ? "Incluido sin costo extra"
-            : `+ ${formatMxn(capability.basePriceMxn)} / mes si lo incluyes`}
-        </p>
+        {!hasTiers && (
+          <p className="text-sm font-mono text-black/60">
+            {capability.basePriceMxn === 0
+              ? "Incluido sin costo extra"
+              : `+ ${formatMxn(capability.basePriceMxn)} / mes si lo incluyes`}
+          </p>
+        )}
       </motion.div>
 
-      {capability.basePriceMxn === 0 ? (
+      {/* Tiered: Básico / Pro stacked + skip */}
+      {hasTiers ? (
+        <div className="w-full max-w-xl flex flex-col gap-3">
+          {capability.tiers!.map((tier, idx) => (
+            <button
+              key={tier.id}
+              type="button"
+              onClick={() => {
+                playYes();
+                onAnswer(tier.id);
+              }}
+              className={cn(
+                "rounded-2xl border-[3px] border-black px-5 py-4 text-left transition-all",
+                "shadow-[4px_4px_0_0_rgba(0,0,0,1)]",
+                "hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_rgba(0,0,0,1)]",
+                "active:translate-x-0 active:translate-y-0 active:shadow-[2px_2px_0_0_rgba(0,0,0,1)]",
+                // Tier 0 = blanco (anchor), 1 = yellow (pro/recommended), 2 = pink (scale)
+                idx === 0
+                  ? "bg-white"
+                  : idx === 1
+                    ? "bg-brand-yellow"
+                    : "bg-brand-pink"
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-lg md:text-xl font-black text-black">
+                  {tier.label}
+                </span>
+                <span className="font-mono font-black text-base md:text-lg tabular-nums text-black">
+                  {formatMxn(tier.priceMxn)} / mes
+                </span>
+              </div>
+              <p className="text-xs md:text-sm text-black/70 mt-1 font-mono">
+                {tier.cap.included} {tier.cap.unit}
+              </p>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              playNo();
+              onAnswer(null);
+            }}
+            className="text-sm font-mono text-black/55 hover:text-black underline underline-offset-4 decoration-black/30 hover:decoration-black px-3 py-2 transition-colors self-center mt-1"
+          >
+            No incluir
+          </button>
+        </div>
+      ) : capability.basePriceMxn === 0 ? (
         <div className="w-full max-w-md flex flex-col items-center gap-3">
           <BrutalButton
             onClick={() => {
               playYes();
-              onAnswer(true);
+              onAnswer(DEFAULT_TIER_ID);
             }}
             containerClassName="h-16 md:h-20 w-full"
             className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
@@ -89,7 +142,7 @@ export const CapabilityCard = ({
             type="button"
             onClick={() => {
               playNo();
-              onAnswer(false);
+              onAnswer(null);
             }}
             className="text-sm font-mono text-black/55 hover:text-black underline underline-offset-4 decoration-black/30 hover:decoration-black px-3 py-1 transition-colors"
           >
@@ -102,7 +155,7 @@ export const CapabilityCard = ({
             mode="ghost"
             onClick={() => {
               playNo();
-              onAnswer(false);
+              onAnswer(null);
             }}
             containerClassName="h-16 md:h-20 w-full"
             className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
@@ -112,7 +165,7 @@ export const CapabilityCard = ({
           <BrutalButton
             onClick={() => {
               playYes();
-              onAnswer(true);
+              onAnswer(DEFAULT_TIER_ID);
             }}
             containerClassName="h-16 md:h-20 w-full"
             className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"

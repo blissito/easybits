@@ -3,7 +3,6 @@ import type { Route } from "./+types/quiz-checkout";
 import { getStripe } from "~/.server/stripe";
 import { config } from "~/.server/config";
 import {
-  CAPABILITIES,
   FIT_GUARANTEE_DAYS,
   ORCHESTRATION_FEE_MXN,
   SETUP_FEE_MXN,
@@ -11,13 +10,14 @@ import {
 import {
   computeDiscountedMonthly,
   computeQuote,
+  parseSelections,
   QUOTE_DISCOUNT_PCT,
+  serializeSelections,
 } from "~/lib/quiz/pricing";
 
 type QuizCheckoutPayload = {
-  selections: string[];
-  // Mensualidad recurrente (sin descuento). Setup ($8K USD) NO se cobra aquí —
-  // se gestiona por WhatsApp tras discovery call.
+  // Formato "voice:pro,images,whatsapp" — string serializado por serializeSelections.
+  selections: string;
   monthlyTotalMxn: number;
   customIntegrations: { description: string } | null;
   lead: {
@@ -42,28 +42,31 @@ export const action = async ({ request }: Route.ActionArgs) => {
     return data({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { selections, lead, customIntegrations } = payload;
-  if (!Array.isArray(selections) || selections.length === 0) {
+  const { selections: selectionsStr, lead, customIntegrations } = payload;
+  if (typeof selectionsStr !== "string" || !selectionsStr.trim()) {
     return data({ error: "no_selections" }, { status: 400 });
   }
   if (!lead?.email) {
     return data({ error: "missing_lead" }, { status: 400 });
   }
 
-  const validIds = new Set(CAPABILITIES.map((c) => c.id));
-  const cleanSelections = selections.filter((s) => validIds.has(s));
-  if (cleanSelections.length === 0) {
+  const selectionsMap = parseSelections(selectionsStr);
+  if (selectionsMap.size === 0) {
     return data({ error: "invalid_selections" }, { status: 400 });
   }
 
   const hasCustomIntegrations = !!customIntegrations;
   const integrationsDesc = customIntegrations?.description?.slice(0, 280) || "";
 
-  const quote = computeQuote(cleanSelections, hasCustomIntegrations);
+  const quote = computeQuote(selectionsMap, hasCustomIntegrations);
   const discountedMonthlyMxn = computeDiscountedMonthly(quote.monthlyTotalMxn);
 
   const itemsLabel = [
-    ...quote.breakdown.map((b) => b.capability.shortLabel),
+    ...quote.breakdown.map((b) =>
+      b.tierLabel
+        ? `${b.capability.shortLabel} (${b.tierLabel})`
+        : b.capability.shortLabel
+    ),
     ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
   ].join(" + ");
   const monthlyName = `Mensualidad agente IA — ${itemsLabel}`;
@@ -81,7 +84,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       customer_email: lead.email,
       metadata: {
         type: "quiz_agent_full_combo",
-        selections: cleanSelections.join(","),
+        selections: serializeSelections(selectionsMap),
         custom_integrations: hasCustomIntegrations ? "yes" : "no",
         custom_integrations_desc: integrationsDesc,
         monthly_list_mxn: String(quote.monthlyTotalMxn),

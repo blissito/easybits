@@ -243,6 +243,11 @@ export const PriceSummary = ({
                 <span className="text-sm font-bold text-black flex items-center gap-2 flex-wrap">
                   <span aria-hidden>{line.capability.emoji}</span>
                   <span>{line.capability.shortLabel}</span>
+                  {line.tierLabel && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 bg-black text-white text-[9px] font-black uppercase tracking-wider rounded">
+                      {line.tierLabel}
+                    </span>
+                  )}
                   <span className="text-black/40 text-xs font-normal">
                     ({line.capability.vendor})
                   </span>
@@ -273,16 +278,15 @@ export const PriceSummary = ({
                   <li key={it}>{it}</li>
                 ))}
               </ul>
-              {/* Cap de uso visible para capabilities con consumo variable */}
-              {line.capability.cap && (
+              {/* Cap del tier seleccionado (o del capability si es binaria con consumo variable) */}
+              {line.cap && (
                 <div className="mt-2 text-[11px] bg-black/5 border border-black/15 rounded-md px-2.5 py-1.5 leading-snug">
                   <strong className="text-black">
-                    Incluye {line.capability.cap.included}{" "}
-                    {line.capability.cap.unit}
+                    Incluye {line.cap.included} {line.cap.unit}
                   </strong>
                   <span className="text-black/65">
                     {" "}
-                    · exceso: {line.capability.cap.overage}
+                    · exceso: {line.cap.overage}
                   </span>
                 </div>
               )}
@@ -326,22 +330,28 @@ export const PriceSummary = ({
                 + Agregar más capacidades
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {availableToAdd.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => onAddCapability!(c.id)}
-                    className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors flex items-center gap-1"
-                  >
-                    <span aria-hidden>{c.emoji}</span>
-                    <span>{c.shortLabel}</span>
-                    <span className="opacity-60 font-mono">
-                      {c.basePriceMxn === 0
-                        ? "free"
-                        : `+$${c.basePriceMxn.toLocaleString("en-US")}`}
-                    </span>
-                  </button>
-                ))}
+                {availableToAdd.map((c) => {
+                  const hasTiers = c.tiers && c.tiers.length > 0;
+                  const startPrice = hasTiers ? c.tiers![0].priceMxn : c.basePriceMxn;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onAddCapability!(c.id)}
+                      className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors flex items-center gap-1"
+                    >
+                      <span aria-hidden>{c.emoji}</span>
+                      <span>{c.shortLabel}</span>
+                      <span className="opacity-60 font-mono">
+                        {startPrice === 0
+                          ? "free"
+                          : hasTiers
+                            ? `desde $${startPrice.toLocaleString("en-US")}`
+                            : `+$${startPrice.toLocaleString("en-US")}`}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </li>
           )}

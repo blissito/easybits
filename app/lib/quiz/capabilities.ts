@@ -7,6 +7,19 @@ export type CapabilityCap = {
   overage: string;
 };
 
+// Tier opcional por capability con consumo variable. Si existe, el card muestra
+// 2 opciones (Básico / Pro) en vez de yes/no. Cada tier tiene su propio precio
+// y cap. Sin tiers = capability binaria, usa basePriceMxn.
+export type Tier = {
+  id: string; // "basic" | "pro"
+  label: string;
+  priceMxn: number;
+  cap: CapabilityCap;
+};
+
+// Tier id por defecto cuando una capability binaria está incluida.
+export const DEFAULT_TIER_ID = "default";
+
 export type Capability = {
   id: string;
   label: string;
@@ -21,6 +34,8 @@ export type Capability = {
   includes: string[];
   // Solo capabilities con consumo variable real (voz, imágenes, video, scraping).
   cap?: CapabilityCap;
+  // 2 tiers (Básico / Pro). Cuando existe, el card pregunta tier en vez de yes/no.
+  tiers?: Tier[];
 };
 
 // Setup único — anclaje del modelo directo. ~$7,000 USD a ~17 MXN/USD.
@@ -65,6 +80,38 @@ export const CAPABILITIES: Capability[] = [
       unit: "caracteres/mes",
       overage: "$0.08 MXN por carácter excedido",
     },
+    tiers: [
+      {
+        id: "basic",
+        label: "Básico",
+        priceMxn: 3000,
+        cap: {
+          included: "10,000",
+          unit: "caracteres/mes",
+          overage: "$0.08 MXN por carácter excedido",
+        },
+      },
+      {
+        id: "pro",
+        label: "Pro",
+        priceMxn: 5500,
+        cap: {
+          included: "50,000",
+          unit: "caracteres/mes",
+          overage: "$0.06 MXN por carácter excedido",
+        },
+      },
+      {
+        id: "scale",
+        label: "Scale",
+        priceMxn: 9000,
+        cap: {
+          included: "200,000",
+          unit: "caracteres/mes",
+          overage: "$0.05 MXN por carácter excedido",
+        },
+      },
+    ],
   },
   {
     id: "images",
@@ -88,6 +135,38 @@ export const CAPABILITIES: Capability[] = [
       unit: "imágenes/mes",
       overage: "$8 MXN por imagen excedida",
     },
+    tiers: [
+      {
+        id: "basic",
+        label: "Básico",
+        priceMxn: 1200,
+        cap: {
+          included: "100",
+          unit: "imágenes/mes",
+          overage: "$8 MXN por imagen excedida",
+        },
+      },
+      {
+        id: "pro",
+        label: "Pro",
+        priceMxn: 2500,
+        cap: {
+          included: "500",
+          unit: "imágenes/mes",
+          overage: "$6 MXN por imagen excedida",
+        },
+      },
+      {
+        id: "scale",
+        label: "Scale",
+        priceMxn: 5000,
+        cap: {
+          included: "2,000",
+          unit: "imágenes/mes",
+          overage: "$5 MXN por imagen excedida",
+        },
+      },
+    ],
   },
   {
     id: "whatsapp",
@@ -291,6 +370,38 @@ export const CAPABILITIES: Capability[] = [
       unit: "segundos/mes",
       overage: "$200 MXN por segundo excedido",
     },
+    tiers: [
+      {
+        id: "basic",
+        label: "Básico",
+        priceMxn: 2700,
+        cap: {
+          included: "15",
+          unit: "segundos/mes",
+          overage: "$200 MXN por segundo excedido",
+        },
+      },
+      {
+        id: "pro",
+        label: "Pro",
+        priceMxn: 4800,
+        cap: {
+          included: "60",
+          unit: "segundos/mes",
+          overage: "$160 MXN por segundo excedido",
+        },
+      },
+      {
+        id: "scale",
+        label: "Scale",
+        priceMxn: 9000,
+        cap: {
+          included: "200",
+          unit: "segundos/mes",
+          overage: "$120 MXN por segundo excedido",
+        },
+      },
+    ],
   },
   {
     id: "research",
@@ -314,6 +425,38 @@ export const CAPABILITIES: Capability[] = [
       unit: "páginas/mes",
       overage: "$1.50 MXN por página excedida",
     },
+    tiers: [
+      {
+        id: "basic",
+        label: "Básico",
+        priceMxn: 6100,
+        cap: {
+          included: "2,000",
+          unit: "páginas/mes",
+          overage: "$1.50 MXN por página excedida",
+        },
+      },
+      {
+        id: "pro",
+        label: "Pro",
+        priceMxn: 10000,
+        cap: {
+          included: "10,000",
+          unit: "páginas/mes",
+          overage: "$1.20 MXN por página excedida",
+        },
+      },
+      {
+        id: "scale",
+        label: "Scale",
+        priceMxn: 18000,
+        cap: {
+          included: "50,000",
+          unit: "páginas/mes",
+          overage: "$0.90 MXN por página excedida",
+        },
+      },
+    ],
   },
 ];
 

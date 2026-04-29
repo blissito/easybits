@@ -2,26 +2,34 @@ import {
   CAPABILITIES,
   CUSTOM_INTEGRATIONS_DISCOVERY_MXN,
   CUSTOM_INTEGRATIONS_FROM_MXN,
+  DEFAULT_TIER_ID,
   ORCHESTRATION_FEE_MXN,
   SETUP_FEE_MXN,
   SETUP_FEE_USD,
   type Capability,
+  type CapabilityCap,
+  type Tier,
 } from "./capabilities";
+
+// Selecciones del usuario: capabilityId → tierId.
+// Para capabilities binarias el tierId es DEFAULT_TIER_ID.
+// Para capabilities con tiers, tierId es "basic" | "pro" | etc.
+export type Selections = Map<string, string>;
 
 export type QuoteLine = {
   capability: Capability;
   priceMxn: number;
+  tierId: string;
+  tierLabel?: string; // solo presente si la capability tiene tiers
+  cap?: CapabilityCap; // cap aplicable (del tier seleccionado, o del capability si no tiene tiers)
 };
 
 export type Quote = {
-  // Setup único, no reembolsable, anclaje del modelo directo.
   setupOneTimeMxn: number;
   setupOneTimeUsd: number;
-  // Recurrente mensual = orquestación + capabilities seleccionadas.
   monthlyTotalMxn: number;
   orchestrationFeeMxn: number;
   capsTotalMxn: number;
-  // Integraciones custom: "desde" + discovery (ambos one-time, fuera del mensual).
   customIntegrationsFromMxn: number;
   customIntegrationsDiscoveryMxn: number;
   hasCustomIntegrations: boolean;
@@ -29,15 +37,44 @@ export type Quote = {
   selectionsCount: number;
 };
 
+// Resuelve el tier seleccionado de un capability. Si no tiene tiers, devuelve null.
+const resolveTier = (
+  capability: Capability,
+  tierId: string
+): Tier | null => {
+  if (!capability.tiers) return null;
+  return capability.tiers.find((t) => t.id === tierId) ?? capability.tiers[0];
+};
+
 export const computeQuote = (
-  selectedIds: string[],
+  selections: Selections,
   hasCustomIntegrations = false
 ): Quote => {
-  const ids = new Set(selectedIds);
-  const breakdown = CAPABILITIES.filter((c) => ids.has(c.id)).map((c) => ({
-    capability: c,
-    priceMxn: c.basePriceMxn,
-  }));
+  const breakdown: QuoteLine[] = [];
+
+  for (const cap of CAPABILITIES) {
+    const tierId = selections.get(cap.id);
+    if (!tierId) continue;
+
+    const tier = resolveTier(cap, tierId);
+    if (tier) {
+      breakdown.push({
+        capability: cap,
+        priceMxn: tier.priceMxn,
+        tierId: tier.id,
+        tierLabel: tier.label,
+        cap: tier.cap,
+      });
+    } else {
+      // Capability binaria: usa basePriceMxn y cap directo
+      breakdown.push({
+        capability: cap,
+        priceMxn: cap.basePriceMxn,
+        tierId: DEFAULT_TIER_ID,
+        cap: cap.cap,
+      });
+    }
+  }
 
   const capsTotalMxn = breakdown.reduce((acc, b) => acc + b.priceMxn, 0);
   const monthlyTotalMxn = ORCHESTRATION_FEE_MXN + capsTotalMxn;
@@ -58,6 +95,27 @@ export const computeQuote = (
     breakdown,
     selectionsCount: breakdown.length,
   };
+};
+
+// Serializa selecciones para URL: "voice:pro,images,whatsapp,memory".
+// Capabilities binarias (tierId === DEFAULT_TIER_ID) van sin sufijo.
+export const serializeSelections = (selections: Selections): string =>
+  Array.from(selections.entries())
+    .map(([capId, tierId]) =>
+      tierId === DEFAULT_TIER_ID ? capId : `${capId}:${tierId}`
+    )
+    .join(",");
+
+// Parsea selecciones desde URL.
+export const parseSelections = (str: string): Selections => {
+  const result: Selections = new Map();
+  const validIds = new Set(CAPABILITIES.map((c) => c.id));
+  for (const entry of str.split(",")) {
+    const [capId, tierId] = entry.trim().split(":");
+    if (!capId || !validIds.has(capId)) continue;
+    result.set(capId, tierId || DEFAULT_TIER_ID);
+  }
+  return result;
 };
 
 export const formatMxn = (amount: number): string =>

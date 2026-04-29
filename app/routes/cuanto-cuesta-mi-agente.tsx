@@ -13,8 +13,15 @@ import {
   type IntegrationsAnswer,
 } from "~/components/quiz/IntegrationsStep";
 import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
-import { CAPABILITIES } from "~/lib/quiz/capabilities";
-import { computeQuote, formatMxn, formatUsd } from "~/lib/quiz/pricing";
+import { CAPABILITIES, DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
+import {
+  computeQuote,
+  formatMxn,
+  formatUsd,
+  parseSelections,
+  serializeSelections,
+  type Selections,
+} from "~/lib/quiz/pricing";
 import { playReveal } from "~/lib/quiz/sounds";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -48,14 +55,12 @@ const STEP_LEAD = CAP_COUNT + 2;
 const STEP_SUMMARY = CAP_COUNT + 3;
 const TOTAL_PROGRESS_STEPS = STEP_SUMMARY; // displayed total (excludes hero)
 
-const VALID_CAP_IDS = new Set(CAPABILITIES.map((c) => c.id));
-
 export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const user = loaderData?.user ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
   const showToast = useBrutalToast();
   const [step, setStep] = useState(0);
-  const [selections, setSelections] = useState<Set<string>>(new Set());
+  const [selections, setSelections] = useState<Selections>(new Map());
   const [integrations, setIntegrations] = useState<IntegrationsAnswer>({
     hasIntegrations: false,
     items: [],
@@ -68,14 +73,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [hydrated, setHydrated] = useState(false);
 
   const quote = useMemo(
-    () => computeQuote(Array.from(selections), integrations.hasIntegrations),
+    () => computeQuote(selections, integrations.hasIntegrations),
     [selections, integrations.hasIntegrations]
   );
 
-  const handleAnswer = (capId: string, include: boolean) => {
+  // tierId === null → no incluir; cualquier string → incluir con ese tier.
+  const handleAnswer = (capId: string, tierId: string | null) => {
     setSelections((prev) => {
-      const next = new Set(prev);
-      if (include) next.add(capId);
+      const next = new Map(prev);
+      if (tierId) next.set(capId, tierId);
       else next.delete(capId);
       return next;
     });
@@ -98,7 +104,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...data,
-            selections: JSON.stringify(Array.from(selections)),
+            selections: serializeSelections(selections),
             integrations: integrations.hasIntegrations
               ? integrations.description || "yes (sin descripción)"
               : "no",
@@ -128,7 +134,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          selections: Array.from(selections),
+          selections: serializeSelections(selections),
           monthlyTotalMxn: quote.monthlyTotalMxn,
           customIntegrations: integrations.hasIntegrations
             ? {
@@ -185,7 +191,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          selections: Array.from(selections),
+          selections: serializeSelections(selections),
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -216,7 +222,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   };
 
   const handleReset = () => {
-    setSelections(new Set());
+    setSelections(new Map());
     setIntegrations({ hasIntegrations: false, items: [], description: "" });
     setLead(null);
     setSubmitError(null);
@@ -240,17 +246,14 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const isLeadStep = step === STEP_LEAD;
   const isSummaryStep = step === STEP_SUMMARY;
 
-  // Hydrate state from URL (?s=voice,images&i=1) on first mount.
+  // Hydrate state from URL (?s=voice:pro,images,whatsapp&i=1) on first mount.
   useEffect(() => {
     if (hydrated) return;
     const sParam = searchParams.get("s");
     if (sParam) {
-      const ids = sParam
-        .split(",")
-        .map((s) => s.trim())
-        .filter((id) => VALID_CAP_IDS.has(id));
-      if (ids.length > 0) {
-        setSelections(new Set(ids));
+      const parsed = parseSelections(sParam);
+      if (parsed.size > 0) {
+        setSelections(parsed);
         if (searchParams.get("i") === "1") {
           setIntegrations((prev) => ({ ...prev, hasIntegrations: true }));
         }
@@ -265,7 +268,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     if (!hydrated || !isSummaryStep) return;
     const next = new URLSearchParams();
     if (selections.size > 0) {
-      next.set("s", Array.from(selections).join(","));
+      next.set("s", serializeSelections(selections));
     }
     if (integrations.hasIntegrations) {
       next.set("i", "1");
@@ -381,8 +384,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
               <QuizStep stepKey={`cap-${step}`}>
                 <CapabilityCard
                   capability={CAPABILITIES[step - 1]}
-                  onAnswer={(include) =>
-                    handleAnswer(CAPABILITIES[step - 1].id, include)
+                  onAnswer={(tierId) =>
+                    handleAnswer(CAPABILITIES[step - 1].id, tierId)
                   }
                 />
                 {/* Always render to avoid layout shift; invisible until first selection */}
@@ -440,11 +443,21 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     (c) => !selections.has(c.id)
                   )}
                   onAddCapability={(id) =>
-                    setSelections((prev) => new Set(prev).add(id))
+                    setSelections((prev) => {
+                      const next = new Map(prev);
+                      // Si tiene tiers, default al primero ("basic"). Si no, DEFAULT_TIER_ID.
+                      const cap = CAPABILITIES.find((c) => c.id === id);
+                      const tierId =
+                        cap?.tiers && cap.tiers.length > 0
+                          ? cap.tiers[0].id
+                          : DEFAULT_TIER_ID;
+                      next.set(id, tierId);
+                      return next;
+                    })
                   }
                   onRemoveCapability={(id) =>
                     setSelections((prev) => {
-                      const next = new Set(prev);
+                      const next = new Map(prev);
                       next.delete(id);
                       return next;
                     })
