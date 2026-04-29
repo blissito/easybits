@@ -1,6 +1,5 @@
 import type { Route } from "./+types/quiz-cotizacion-pdf";
 import { withPage } from "~/.server/core/browserPool";
-import { FIT_GUARANTEE_DAYS } from "~/lib/quiz/capabilities";
 import {
   computeDiscountedMonthly,
   computeQuote,
@@ -219,7 +218,7 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
     <li>Setup técnico + MCPs + tu marca</li>
     <li>2 integraciones simples</li>
   </ul>
-  <div class="setup-disclaimer">✓ ${FIT_GUARANTEE_DAYS} días de fit guarantee · refund 100% si no encajamos · después, no reembolsable. Setup + primera mensualidad se cobran juntos vía Stripe.</div>
+  <div class="setup-disclaimer">✓ Hablamos por WhatsApp antes de cobrar · si no encajamos, no hay deal · setup no reembolsable una vez iniciado el armado. Setup + primera mensualidad se cobran juntos vía Stripe.</div>
 </div>
 
 <div class="section-title">Mensualidad recurrente</div>

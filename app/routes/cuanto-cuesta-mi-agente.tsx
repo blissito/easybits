@@ -545,6 +545,13 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   <ol className="text-sm text-black/75 space-y-1.5 leading-snug list-decimal list-inside">
                     <li>
                       <strong className="text-black">
+                        Hablamos primero por WhatsApp
+                      </strong>
+                      : validamos que encajamos antes de cobrar. Si no, no hay
+                      deal.
+                    </li>
+                    <li>
+                      <strong className="text-black">
                         Pagas setup + primer mes
                       </strong>{" "}
                       en un solo cargo (Stripe). Cargo único + suscripción
@@ -558,16 +565,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     </li>
                     <li>
                       <strong className="text-black">
-                        7 días de fit guarantee
-                      </strong>
-                      : si descubrimos que no encajamos, refund 100% del setup.
-                    </li>
-                    <li>
-                      <strong className="text-black">
                         Mensualidad sigue automática
                       </strong>{" "}
-                      — cancelas cuando quieras (el setup nunca se reembolsa
-                      después de los 7 días).
+                      — cancelas cuando quieras (el setup no se reembolsa una
+                      vez iniciado el armado).
                     </li>
                   </ol>
                 </div>

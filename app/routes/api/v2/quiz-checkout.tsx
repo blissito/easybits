@@ -2,10 +2,7 @@ import { data } from "react-router";
 import type { Route } from "./+types/quiz-checkout";
 import { getStripe } from "~/.server/stripe";
 import { config } from "~/.server/config";
-import {
-  FIT_GUARANTEE_DAYS,
-  ORCHESTRATION_FEE_MXN,
-} from "~/lib/quiz/capabilities";
+import { ORCHESTRATION_FEE_MXN } from "~/lib/quiz/capabilities";
 import {
   computeDiscountedMonthly,
   computeQuote,
@@ -75,7 +72,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       : "."
   }`;
   const setupName = "Setup único — armado del agente";
-  const setupDescription = `Pago una sola vez. Incluye: 30 días pair WA con dos seniors, setup técnico + MCPs + tu marca, 2 integraciones simples. ${FIT_GUARANTEE_DAYS} días de fit guarantee — refund 100% si no encajamos.`;
+  const setupDescription = `Pago una sola vez. Incluye: 30 días pair WA con dos seniors, setup técnico + MCPs + tu marca, 2 integraciones simples. Validamos fit por WhatsApp antes del cobro: si no encajamos, no hay deal.`;
 
   try {
     const session = await getStripe().checkout.sessions.create({
@@ -90,7 +87,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
         monthly_charged_mxn: String(discountedMonthlyMxn),
         discount_pct: String(QUOTE_DISCOUNT_PCT),
         setup_mxn: String(quote.setupOneTimeMxn),
-        fit_guarantee_days: String(FIT_GUARANTEE_DAYS),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
         lead_website: lead.website || "",

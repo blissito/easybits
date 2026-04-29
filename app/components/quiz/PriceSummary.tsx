@@ -14,7 +14,6 @@ import {
   QUOTE_DISCOUNT_PCT,
 } from "~/lib/quiz/pricing";
 import type { Capability } from "~/lib/quiz/capabilities";
-import { FIT_GUARANTEE_DAYS } from "~/lib/quiz/capabilities";
 
 type PriceSummaryProps = {
   quote: Quote;
@@ -150,10 +149,10 @@ export const PriceSummary = ({
         </ul>
         <div className="mt-3 pt-3 border-t border-white/15 text-[11px] leading-snug">
           <p className="text-brand-yellow font-bold">
-            ✓ {FIT_GUARANTEE_DAYS} días de fit guarantee
+            ✓ Hablamos por WhatsApp antes de cobrar
           </p>
           <p className="text-white/65 mt-0.5">
-            Refund 100% si no encajamos. Después, no reembolsable.
+            Validamos que encajamos. Si no, no hay deal.
           </p>
         </div>
       </motion.div>
