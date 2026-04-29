@@ -28,15 +28,10 @@ type ToneOpts = {
   gain?: number;
 };
 
-const playTone = ({
-  freq,
-  duration,
-  type = "sine",
-  delay = 0,
-  gain = 0.08,
-}: ToneOpts) => {
-  const ctx = getCtx();
-  if (!ctx) return;
+const scheduleTone = (
+  ctx: AudioContext,
+  { freq, duration, type = "sine", delay = 0, gain = 0.08 }: ToneOpts
+) => {
   try {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -44,13 +39,31 @@ const playTone = ({
     osc.type = type;
     osc.connect(g);
     g.connect(ctx.destination);
-    const startAt = ctx.currentTime + delay;
+    // Min 5ms forward — evita que la nota se programe en el pasado cuando
+    // el AudioContext acaba de despertarse del estado suspended.
+    const startAt = ctx.currentTime + Math.max(delay, 0.005);
     g.gain.setValueAtTime(gain, startAt);
     g.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
     osc.start(startAt);
     osc.stop(startAt + duration);
   } catch {
     /* swallow — best-effort UI sound */
+  }
+};
+
+const playTone = (opts: ToneOpts) => {
+  const ctx = getCtx();
+  if (!ctx) return;
+  // Si el contexto está suspended (autoplay policy o mobile aggressive
+  // suspension), esperamos al resume antes de programar la nota — si no,
+  // se pierde silenciosamente.
+  if (ctx.state === "suspended") {
+    ctx
+      .resume()
+      .then(() => scheduleTone(ctx, opts))
+      .catch(() => {});
+  } else {
+    scheduleTone(ctx, opts);
   }
 };
 
