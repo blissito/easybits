@@ -40,11 +40,22 @@ export type Capability = {
   tiers?: Tier[];
 };
 
-// Setup único — anclaje del modelo directo. ~$7,000 USD a ~17 MXN/USD.
+// Setup único — escala según cuántas capacidades selecciona el cliente.
+// Más capacidades = más vendors a configurar = más trabajo de armado.
+// $120K MXN es el techo (~$7K USD), aplica al cliente full bundle.
 // Se cobra junto con la primera mensualidad vía Stripe (line item one-time).
 // Fit guarantee: refund 100% si no encajamos en los primeros 7 días.
+export const SETUP_TIERS_MXN = {
+  minimal: 35000, // 0-2 capacidades — un solo caso de uso
+  basic: 50000, // 3-5 capacidades — SMB con flow concreto
+  pro: 80000, // 6-8 capacidades — multi-canal, varias herramientas
+  full: 120000, // 9+ capacidades — agente full
+} as const;
+
+// Constantes legacy (techo del rango). Se mantienen para referencia / fallback.
+export const SETUP_FEE_MXN = SETUP_TIERS_MXN.full;
 export const SETUP_FEE_USD = 7000;
-export const SETUP_FEE_MXN = 120000;
+
 // Días de fit guarantee — refund 100% del setup. Después, no reembolsable.
 export const FIT_GUARANTEE_DAYS = 7;
 

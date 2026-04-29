@@ -5,7 +5,6 @@ import { config } from "~/.server/config";
 import {
   FIT_GUARANTEE_DAYS,
   ORCHESTRATION_FEE_MXN,
-  SETUP_FEE_MXN,
 } from "~/lib/quiz/capabilities";
 import {
   computeDiscountedMonthly,
@@ -90,7 +89,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         monthly_list_mxn: String(quote.monthlyTotalMxn),
         monthly_charged_mxn: String(discountedMonthlyMxn),
         discount_pct: String(QUOTE_DISCOUNT_PCT),
-        setup_mxn: String(SETUP_FEE_MXN),
+        setup_mxn: String(quote.setupOneTimeMxn),
         fit_guarantee_days: String(FIT_GUARANTEE_DAYS),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
@@ -112,15 +111,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
           quantity: 1,
         },
         {
-          // Setup único — se carga en la PRIMERA factura junto con el primer mes.
-          // Stripe permite mezclar one-time + recurring en mode: "subscription".
+          // Setup único (escalado según selecciones) — se carga en la PRIMERA
+          // factura junto con el primer mes. Stripe permite mezclar one-time +
+          // recurring en mode: "subscription".
           price_data: {
             currency: "mxn",
             product_data: {
               name: setupName,
               description: setupDescription,
             },
-            unit_amount: SETUP_FEE_MXN * 100,
+            unit_amount: quote.setupOneTimeMxn * 100,
           },
           quantity: 1,
         },

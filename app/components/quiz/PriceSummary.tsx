@@ -136,8 +136,12 @@ export const PriceSummary = ({
           {formatMxn(quote.setupOneTimeMxn)}{" "}
           <span className="text-sm font-bold text-white/60">MXN</span>
         </p>
-        <p className="text-xs text-white/50 font-mono mt-1 mb-3">
+        <p className="text-xs text-white/50 font-mono mt-1">
           ≈ {formatUsd(quote.setupOneTimeUsd)} USD
+        </p>
+        <p className="text-[10px] text-white/55 mt-1 mb-3 leading-snug">
+          Escala según scope: $35K (mínimo) → $50K → $80K → $120K (full).
+          Más capacidades, más vendors a configurar.
         </p>
         <ul className="text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
           <li>30 días pair WA con dos seniors</li>

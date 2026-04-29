@@ -4,12 +4,27 @@ import {
   CUSTOM_INTEGRATIONS_FROM_MXN,
   DEFAULT_TIER_ID,
   ORCHESTRATION_FEE_MXN,
-  SETUP_FEE_MXN,
-  SETUP_FEE_USD,
+  SETUP_TIERS_MXN,
   type Capability,
   type CapabilityCap,
   type Tier,
 } from "./capabilities";
+
+// Setup escala según cuántas capacidades se seleccionan.
+// Usar tu propia función para mapear count → MXN. Esto se llama desde
+// computeQuote y desde Stripe checkout para validar que el monto cobrado
+// coincida con la cotización del cliente.
+export const computeSetupMxn = (selectionsCount: number): number => {
+  if (selectionsCount <= 2) return SETUP_TIERS_MXN.minimal;
+  if (selectionsCount <= 5) return SETUP_TIERS_MXN.basic;
+  if (selectionsCount <= 8) return SETUP_TIERS_MXN.pro;
+  return SETUP_TIERS_MXN.full;
+};
+
+// Conversión MXN → USD aproximada para mostrar referencia. ~17 MXN/USD.
+const MXN_TO_USD_RATE = 17;
+const setupUsdFromMxn = (mxn: number): number =>
+  Math.round(mxn / MXN_TO_USD_RATE / 100) * 100;
 
 // Selecciones del usuario: capabilityId → tierId.
 // Para capabilities binarias el tierId es DEFAULT_TIER_ID.
@@ -80,10 +95,11 @@ export const computeQuote = (
 
   const capsTotalMxn = breakdown.reduce((acc, b) => acc + b.priceMxn, 0);
   const monthlyTotalMxn = ORCHESTRATION_FEE_MXN + capsTotalMxn;
+  const setupOneTimeMxn = computeSetupMxn(breakdown.length);
 
   return {
-    setupOneTimeMxn: SETUP_FEE_MXN,
-    setupOneTimeUsd: SETUP_FEE_USD,
+    setupOneTimeMxn,
+    setupOneTimeUsd: setupUsdFromMxn(setupOneTimeMxn),
     monthlyTotalMxn,
     orchestrationFeeMxn: ORCHESTRATION_FEE_MXN,
     capsTotalMxn,
