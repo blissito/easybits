@@ -483,18 +483,18 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
                   <BrutalButton
-                    onClick={handleWhatsApp}
-                    isDisabled={submitting || downloadingPdf}
-                  >
-                    Agendar discovery por WhatsApp →
-                  </BrutalButton>
-                  <BrutalButton
-                    mode="ghost"
                     onClick={handleCheckout}
                     isLoading={submitting}
                     isDisabled={downloadingPdf}
                   >
-                    Pagar mensualidad (setup aparte)
+                    Pagar setup + arrancar →
+                  </BrutalButton>
+                  <BrutalButton
+                    mode="ghost"
+                    onClick={handleWhatsApp}
+                    isDisabled={submitting || downloadingPdf}
+                  >
+                    Hablar primero por WhatsApp
                   </BrutalButton>
                 </div>
                 <div className="mt-4 flex flex-col md:flex-row gap-2 md:gap-6 justify-center items-center">
@@ -529,18 +529,46 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                 )}
                 <div className="mt-8 mx-auto max-w-md rounded-xl border-[2.5px] border-black bg-white px-5 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,1)]">
                   <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/60 mb-1.5">
-                    ✦ Por qué somos directos
+                    ✦ Quiénes te van a atender
                   </p>
                   <p className="text-sm text-black leading-snug">
-                    Somos un equipo pequeño. Nos comprometemos con cada cliente
-                    y los tomamos muy en serio — por eso atendemos pocos a la
-                    vez, sin diluir la atención.
+                    Dos hackers que cuidan a sus clientes. No tenemos call
+                    center ni juniors. Si te tomamos, te atendemos nosotros.
                   </p>
                 </div>
-                <p className="text-center text-xs text-black/50 mt-6 font-mono">
-                  Discovery call de 45 min gratis · Setup ($8K USD) se cobra
-                  tras la llamada · Mensualidad arranca día 31 del setup
-                </p>
+                <div className="mt-6 mx-auto max-w-lg">
+                  <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/60 mb-2 text-center">
+                    Cómo arrancamos
+                  </p>
+                  <ol className="text-sm text-black/75 space-y-1.5 leading-snug list-decimal list-inside">
+                    <li>
+                      <strong className="text-black">
+                        Pagas setup + primer mes
+                      </strong>{" "}
+                      en un solo cargo (Stripe). Cargo único + suscripción
+                      mensual quedan armados.
+                    </li>
+                    <li>
+                      <strong className="text-black">
+                        Arrancamos en 24h
+                      </strong>{" "}
+                      con pair WA los primeros 30 días — ventana 9-18h MX.
+                    </li>
+                    <li>
+                      <strong className="text-black">
+                        7 días de fit guarantee
+                      </strong>
+                      : si descubrimos que no encajamos, refund 100% del setup.
+                    </li>
+                    <li>
+                      <strong className="text-black">
+                        Mensualidad sigue automática
+                      </strong>{" "}
+                      — cancelas cuando quieras (el setup nunca se reembolsa
+                      después de los 7 días).
+                    </li>
+                  </ol>
+                </div>
               </QuizStep>
             )}
           </AnimatePresence>
