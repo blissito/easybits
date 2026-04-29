@@ -819,6 +819,84 @@ export const ResearchIllustration = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* ---------- Canva (canvas + brand kit swatches) ---------- */
+export const CanvaIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Design canvas */}
+    <rect
+      x="34"
+      y="36"
+      width="72"
+      height="56"
+      rx="6"
+      fill="#FFAFA3"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Heading band */}
+    <rect x="42" y="46" width="32" height="6" rx="2" fill="#FFFFFF" stroke={STROKE} strokeWidth="2" />
+    {/* Body lines */}
+    <line x1="42" y1="60" x2="98" y2="60" stroke={STROKE} strokeWidth="2.5" />
+    <line x1="42" y1="68" x2="86" y2="68" stroke={STROKE} strokeWidth="2.5" />
+    {/* Decorative circle */}
+    <circle cx="92" cy="80" r="6" fill="#ECD66E" stroke={STROKE} strokeWidth="2.5" />
+    {/* Brand kit swatches */}
+    <rect x="36" y="100" width="14" height="14" rx="3" fill="#FFAFA3" stroke={STROKE} strokeWidth="2.5" />
+    <rect x="54" y="100" width="14" height="14" rx="3" fill="#9870ED" stroke={STROKE} strokeWidth="2.5" />
+    <rect x="72" y="100" width="14" height="14" rx="3" fill="#ECD66E" stroke={STROKE} strokeWidth="2.5" />
+    <rect x="90" y="100" width="14" height="14" rx="3" fill="#BAD9D8" stroke={STROKE} strokeWidth="2.5" />
+    {/* Accent dot */}
+    <circle cx="106" cy="34" r="4" fill="#9870ED" stroke={STROKE} strokeWidth="2" />
+  </svg>
+);
+
+/* ---------- Figma (design frame + geometric components) ---------- */
+export const FigmaIllustration = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE} {...props}>
+    <rect
+      x="20"
+      y="22"
+      width="100"
+      height="100"
+      rx="22"
+      fill="#FFFFFF"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Frame */}
+    <rect
+      x="30"
+      y="34"
+      width="80"
+      height="76"
+      rx="6"
+      fill="#BAD9D8"
+      stroke={STROKE}
+      strokeWidth="3"
+    />
+    {/* Frame label tab */}
+    <rect x="30" y="34" width="34" height="10" rx="3" fill="#FFFFFF" stroke={STROKE} strokeWidth="2.5" />
+    {/* Square component */}
+    <rect x="42" y="56" width="20" height="20" rx="3" fill="#FFAFA3" stroke={STROKE} strokeWidth="2.5" />
+    {/* Circle component */}
+    <circle cx="86" cy="66" r="10" fill="#ECD66E" stroke={STROKE} strokeWidth="2.5" />
+    {/* Pill component */}
+    <rect x="42" y="84" width="56" height="14" rx="7" fill="#9870ED" stroke={STROKE} strokeWidth="2.5" />
+    {/* Accent dot */}
+    <circle cx="106" cy="34" r="4" fill="#9870ED" stroke={STROKE} strokeWidth="2" />
+  </svg>
+);
+
 /* ---------- Map by capability id ---------- */
 export const ILLUSTRATION_BY_ID: Record<
   string,
@@ -830,6 +908,8 @@ export const ILLUSTRATION_BY_ID: Record<
   webchat: WebchatIllustration,
   slackteams: SlackTeamsIllustration,
   gworkspace: GworkspaceIllustration,
+  canva: CanvaIllustration,
+  figma: FigmaIllustration,
   memory: MemoryIllustration,
   site: SiteIllustration,
   domain: DomainIllustration,

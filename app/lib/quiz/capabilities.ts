@@ -258,6 +258,42 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "canva",
+    label: "Canva (diseño con tu brand kit)",
+    shortLabel: "Canva",
+    emoji: "🪄",
+    question: "¿Quieres que el agente diseñe en Canva con tus templates?",
+    description:
+      "El agente entra a tu cuenta de Canva, usa tus templates y brand kit, arma posts, presentaciones y materiales — y exporta listo para mandar.",
+    vendor: "Canva",
+    basePriceMxn: 1500,
+    bgClass: "bg-rose",
+    isAddon: false,
+    includes: [
+      "Conexión OAuth con tu cuenta de Canva",
+      "Usa tus templates y brand kit existentes",
+      "Genera posts y presentaciones, exporta a PDF/PNG",
+    ],
+  },
+  {
+    id: "figma",
+    label: "Figma (handoff y assets)",
+    shortLabel: "Figma",
+    emoji: "🧩",
+    question: "¿Tu agente trabaja con archivos de Figma de tu equipo?",
+    description:
+      "Lee archivos de Figma, extrae componentes, copy, specs y exporta frames como imágenes. Útil para handoff dev, librerías de marca y auditorías.",
+    vendor: "Figma",
+    basePriceMxn: 1500,
+    bgClass: "bg-brand-red",
+    isAddon: false,
+    includes: [
+      "Lee archivos y componentes de Figma",
+      "Extrae copy, specs y design tokens",
+      "Exporta frames como PNG/SVG bajo demanda",
+    ],
+  },
+  {
     id: "memory",
     label: "Memoria + Storage",
     shortLabel: "Memoria",
