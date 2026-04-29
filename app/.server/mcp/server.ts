@@ -26,6 +26,7 @@ import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
+import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 
 // Legacy quotation/fast-pdf tools are hidden by default so the agent does not
 // get confused during the structured_doc experiment. Document v4 tools
@@ -1012,7 +1013,7 @@ function registerDocTools(server: McpServer) {
 
   server.tool(
     "create_document",
-    "Create a new document. Pages (sections) are optional — you can add them later via update_document. Each section has: { id, order, html, type?, name? }. If providing section html, each page MUST follow letter-page layout rules — call get_docs(\"document-design\") for constraints. BRAND KIT: if the user has a default brand kit (see get_default_brand_kit), its colors/fonts/logo are auto-applied — write HTML with Tailwind semantic classes (bg-primary, bg-surface, text-on-surface, text-accent, font-heading, font-body) instead of hardcoding hex. Pass brandKitId to use a specific kit. TO CLONE A PDF: (1) upload_file the PDF, (2) pdf_to_images to get page images, (3) generate HTML per page using vision + get_docs('document-design') rules, (4) create_document with sections. TIP: For quotations, estimates, invoices, or remission notes use create_quotation instead — it's a single-step tool that creates, paginates, and optionally deploys in one call.",
+    "Create a new document. Pages (sections) are optional — add them later via update_document. Each section: { id, order, html, type?, name? }. If providing section html, follow page layout rules — call get_docs(\"document-design\"). SOCIAL FORMATS: pass `format.preset` for IG/LinkedIn carousels and Stories. Available presets: ig-feed (1080×1350, 4:5), ig-story / wsp-status / tiktok (1080×1920, 9:16), ig-square / fb-square (1080×1080, 1:1), li-feed (1080×1350), slide-16-9 (1920×1080), letter (default). Or pass custom width+height (100-10000px). Sets metadata.intent automatically (social/presentation/document). When generating HTML for non-letter formats, design content edge-to-edge to fill the entire frame — no letter-style margins/padding. BRAND KIT: if the user has a default brand kit, its colors/fonts/logo are auto-applied — write HTML with Tailwind semantic classes (bg-primary, bg-surface, text-on-surface, text-accent, font-heading, font-body) instead of hardcoding hex. Pass brandKitId to use a specific kit. TO CLONE A PDF: (1) upload_file the PDF, (2) pdf_to_images, (3) generate HTML per page using vision, (4) create_document with sections. TIP: For quotations/invoices use create_quotation — single-step tool.",
     {
       name: z.string().describe("Document name"),
       prompt: z.string().optional().describe("Description or prompt for the document"),
@@ -1026,10 +1027,17 @@ function registerDocTools(server: McpServer) {
       theme: z.string().optional().describe("Theme name (e.g. minimal, corporate, elegant)"),
       customColors: z.record(z.string()).optional().describe("Custom color overrides (primary, secondary, accent, surface)"),
       brandKitId: z.string().optional().describe("Brand kit ID — auto-applies colors/fonts from the kit"),
+      format: z.object({
+        preset: z.enum(SOCIAL_PRESET_KEYS as [string, ...string[]]).optional().describe("Format preset. ig-feed=1080×1350 (IG/LI feed 4:5), ig-story/wsp-status/tiktok=1080×1920 (9:16 Stories/Reels), ig-square/fb-square=1080×1080 (1:1), li-feed=1080×1350, slide-16-9=1920×1080, letter=default."),
+        width: z.number().min(100).max(10000).optional().describe("Custom width in px. Ignored if preset is set. Range 100-10000."),
+        height: z.number().min(100).max(10000).optional().describe("Custom height in px. Ignored if preset is set. Range 100-10000."),
+      }).optional().describe("Page dimensions for social formats. Auto-sets metadata.intent (social/presentation/document) from aspect ratio. Omit for letter (default)."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createDocument(ctx, params);
+      const { format: rawFormat, ...rest } = params;
+      const { format, intent } = resolveSocialFormat(rawFormat as any);
+      const result = await createDocument(ctx, { ...rest, format, intent });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

@@ -21,54 +21,21 @@ import { db } from "../../db";
 import { getPlatformDefaultClient } from "../../storage";
 import { createDocument } from "../../core/documentOperations";
 import { normalizeHexColors } from "../importers/normalizeHexColors";
+import {
+  detectIntent,
+  resolveFormat as resolveSocialFormat,
+  type FormatInput,
+} from "../../core/socialPresets";
 
 const MAX_HTML_BYTES = 2_000_000;
 const FETCH_TIMEOUT_MS = 10_000;
-
-const PRESETS = {
-  "1080x1080": { width: 1080, height: 1080 },
-  "1080x1350": { width: 1080, height: 1350 },
-  "letter": undefined, // stick to default Letter path (no custom format)
-  "slide-16-9": { width: 1920, height: 1080 },
-} as const;
-
-type PresetKey = keyof typeof PRESETS;
-
-/**
- * Infer the artifact intent from detected page dimensions so the editor
- * can show format-appropriate export CTAs (e.g. "Exportar imágenes" for
- * LinkedIn/IG carousels). Undefined format → "document".
- */
-function detectIntent(
-  format?: { width: number; height: number },
-): "social" | "presentation" | "document" {
-  if (!format) return "document";
-  const { width, height } = format;
-  if (!width || !height) return "document";
-  const ratio = width / height;
-  // Square (1:1) — IG/LI carrusel
-  if (ratio >= 0.95 && ratio <= 1.05) return "social";
-  // Portrait 4:5 (0.8) — LI carrusel / IG feed portrait
-  if (ratio >= 0.78 && ratio <= 0.82) return "social";
-  // Portrait 9:16 (0.5625) — Reels/Stories
-  if (ratio >= 0.55 && ratio <= 0.58) return "social";
-  // Landscape 16:9 (1.777) — presentation deck
-  if (ratio >= 1.7 && ratio <= 1.85) return "presentation";
-  // Landscape 4:3 (1.333) — classic deck
-  if (ratio >= 1.3 && ratio <= 1.36) return "presentation";
-  return "document";
-}
 
 export interface ImportHtmlInput {
   html?: string;
   url?: string;
   name?: string;
   destination?: "document";
-  format?: {
-    preset?: PresetKey;
-    width?: number;
-    height?: number;
-  };
+  format?: FormatInput;
   brandKitId?: string;
   normalizeColors?: boolean;
   sourceUrl?: string;
@@ -317,18 +284,7 @@ function splitIntoPages(html: string): { pages: string[]; format: { width: numbe
 }
 
 function resolveFormat(input?: ImportHtmlInput["format"]): { width: number; height: number } | undefined {
-  if (!input) return undefined;
-  if (input.preset && input.preset !== "letter") {
-    return PRESETS[input.preset];
-  }
-  if (input.preset === "letter") return undefined;
-  if (typeof input.width === "number" && typeof input.height === "number") {
-    if (input.width < 100 || input.width > 10000 || input.height < 100 || input.height > 10000) {
-      return undefined;
-    }
-    return { width: input.width, height: input.height };
-  }
-  return undefined;
+  return resolveSocialFormat(input).format;
 }
 
 function siteBaseUrl(): string {
