@@ -368,12 +368,28 @@ export const PriceSummary = ({
             transition={{
               delay: 0.15 + quote.breakdown.length * 0.04 + 0.1,
             }}
-            className="flex justify-between items-baseline pt-1"
+            className="pt-1 space-y-1.5"
           >
-            <span className="text-base font-black">Total mensual (lista)</span>
-            <span className="font-mono font-black text-base tabular-nums">
-              {formatMxn(quote.monthlyTotalMxn)}
-            </span>
+            <div className="flex justify-between items-baseline text-black/55">
+              <span className="text-sm font-bold">
+                Total mensual (lista)
+              </span>
+              <span className="font-mono font-bold text-sm tabular-nums line-through">
+                {formatMxn(quote.monthlyTotalMxn)}
+              </span>
+            </div>
+            <div className="flex justify-between items-baseline">
+              <span className="text-base font-black text-brand-500">
+                Con {QUOTE_DISCOUNT_PCT}% off permanente
+              </span>
+              <span className="font-mono font-black text-lg tabular-nums text-brand-500">
+                {formatMxn(discountedMonthly)}
+              </span>
+            </div>
+            <p className="text-[10px] text-black/55 font-mono">
+              Ahorras {formatMxn(monthlySaving)} cada mes al presentar tu
+              cotización
+            </p>
           </motion.li>
         </ul>
 
