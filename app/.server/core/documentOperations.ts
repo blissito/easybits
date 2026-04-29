@@ -856,6 +856,71 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 - bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
 - bg-secondary, text-secondary, bg-accent, text-accent`;
 
+/**
+ * Customize the base system prompt for the page format the doc was created with.
+ *
+ *   - `letter` (no docFormat) → unchanged, uses the original letter-based prompt.
+ *   - `web` (legacy isWeb flag) → swap letter strings for web-optimized values.
+ *   - Custom dims (`docFormat={width,height}`) → swap section sizing to pixels and
+ *     add a FULL-BLEED block when the intent is "social" (Stories/feed/square).
+ *   - 16:9 presentations → swap to slide-style instructions.
+ *
+ * The base prompts (`VARIANT_SYSTEM_PROMPT`, `REFINE_SYSTEM_PROMPT`) are written
+ * for letter — this function adapts them in place rather than duplicating prompts.
+ */
+export function buildSystemPrompt(
+  basePrompt: string,
+  docFormat: { width: number; height: number } | undefined,
+  docIntent: "social" | "presentation" | "document" | undefined,
+  isWeb: boolean,
+): string {
+  if (isWeb && !docFormat) {
+    return basePrompt
+      .replace(/letter-sized \(8\.5" × 11"\)/g, "web-optimized (1280px wide, flexible height)")
+      .replace(/w-\[8\.5in\] h-\[11in\]/g, "w-[1280px] min-h-[800px]")
+      .replace(/EXACTLY 11in tall — content MUST fit, never exceed/g, "flexible height — content determines the height, use min-h-[800px]")
+      .replace(/7" × 9\.5" effective area with 0\.75" margins/g, "comfortable padding for web reading");
+  }
+
+  if (!docFormat) return basePrompt;
+
+  const { width, height } = docFormat;
+  const dims = `${width}×${height}px`;
+  const sectionClass = `w-[${width}px] h-[${height}px]`;
+
+  let prompt = basePrompt
+    .replace(/letter-sized \(8\.5" × 11"\)/g, `social/marketing format (${dims})`)
+    .replace(/w-\[8\.5in\] h-\[11in\]/g, sectionClass)
+    .replace(/EXACTLY 11in tall — content MUST fit, never exceed/g, `EXACTLY ${height}px tall — content MUST fit the entire frame, never exceed`)
+    .replace(/7" × 9\.5" effective area with 0\.75" margins/g, `the entire ${dims} frame — design FULL-BLEED, no letter margins`);
+
+  if (docIntent === "social") {
+    prompt += `
+
+FULL-BLEED FORMAT — ${dims}:
+- This is a social media artifact (IG/LinkedIn/Stories), NOT a letter document
+- Design EDGE-TO-EDGE: the <section> must fill the entire ${dims} frame visually
+- Use a full-bleed background (bg-primary, bg-gradient-to-br, bg-surface, etc.) covering 100% of the section
+- NO letter-style 0.75in margins. Use generous internal padding (px-12, py-16) but the colored background reaches all four edges
+- Typography: dramatic scale (text-6xl/text-7xl for headlines), generous breathing room
+- Single focal hierarchy: hero title + supporting text, optional small chips/icons row at bottom
+- Centered or asymmetric composition — but visually "filled" so it works as a standalone post
+- For 9:16 vertical (Stories/Reels): stack content vertically with strong visual rhythm; safe zones at top/bottom
+- For 1:1 square: balanced composition, the eye should land on the headline first
+- For 4:5 portrait (IG feed): hero up top, supporting blocks below`;
+  } else if (docIntent === "presentation") {
+    prompt += `
+
+PRESENTATION SLIDE — ${dims} (16:9):
+- Design as a single slide, not a document page
+- Centered hero composition, minimal chrome, large-scale typography
+- Use the entire ${dims} frame — no letter margins
+- One main idea per slide`;
+  }
+
+  return prompt;
+}
+
 const REFINE_SYSTEM_PROMPT = `You are a professional document designer. You refine HTML content for letter-sized (8.5" × 11") document pages.
 
 CRITICAL PRIORITY RULES — SURGICAL EDITS:
@@ -923,15 +988,15 @@ async function _refineInternal(
 - Colors: primary=${colors.primary || "N/A"}, accent=${colors.accent || "N/A"}, surface=${colors.surface || "N/A"}`;
   }
 
+  // Read format/intent from doc metadata so social/presentation docs get
+  // format-aware prompts (1080×1920 Stories, 1080×1350 IG feed, etc.)
+  // instead of letter-based ones. Falls back to letter when absent.
+  const meta = (doc.metadata || {}) as Record<string, unknown>;
+  const docFormat = meta.format as { width: number; height: number } | undefined;
+  const docIntent = meta.intent as "social" | "presentation" | "document" | undefined;
   const isWeb = opts.pageFormat === "web";
-  let systemPrompt = isVariant ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
-  if (isWeb) {
-    systemPrompt = systemPrompt
-      .replace(/letter-sized \(8\.5" × 11"\)/g, "web-optimized (1280px wide, flexible height)")
-      .replace(/w-\[8\.5in\] h-\[11in\]/g, "w-[1280px] min-h-[800px]")
-      .replace(/EXACTLY 11in tall — content MUST fit, never exceed/g, "flexible height — content determines the height, use min-h-[800px]")
-      .replace(/7" × 9\.5" effective area with 0\.75" margins/g, "comfortable padding for web reading");
-  }
+  const basePrompt = isVariant ? VARIANT_SYSTEM_PROMPT : REFINE_SYSTEM_PROMPT;
+  const systemPrompt = buildSystemPrompt(basePrompt, docFormat, docIntent, isWeb);
   const userMessage = isVariant
     ? `Here is the current page HTML. Create a completely different visual variant:\n\n${pageHtml}${docContext}${directionContext}\n\nOutput ONLY the new <section> HTML.`
     : `Current HTML:\n${pageHtml}\n\nInstruction: ${opts.instruction}${docContext}${directionContext}\n\nOutput ONLY the refined <section> HTML.`;
@@ -954,6 +1019,14 @@ async function _refineInternal(
   // Extract section HTML
   const finalMatch = fullHtml.match(/<section[\s\S]*<\/section>/i);
   let finalHtml = finalMatch ? finalMatch[0] : fullHtml;
+
+  // Safety net: if the doc has explicit pixel dimensions but Gemini still emitted
+  // letter classes (`w-[8.5in] h-[11in]`), force-replace them. The prompt should
+  // already steer Gemini, but this guarantees the section matches the frame.
+  if (docFormat) {
+    const dimClass = `w-[${docFormat.width}px] h-[${docFormat.height}px]`;
+    finalHtml = finalHtml.replace(/w-\[8\.5in\]\s+h-\[11in\]/g, dimClass);
+  }
 
   // Sanitize colors
   finalHtml = sanitizeSemanticColors(finalHtml);
