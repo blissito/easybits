@@ -69,7 +69,7 @@ const buildHtml = (payload: Payload, folio: string): string => {
       const c = line.capability;
       const isFree = line.priceMxn === 0;
       const capRow = line.cap
-        ? `<div class="cap-meta"><strong>Incluye ${escapeHtml(line.cap.included)} ${escapeHtml(line.cap.unit)}</strong> · exceso: ${escapeHtml(line.cap.overage)}</div>`
+        ? `<div class="cap-meta">${line.humanLine ? `<div class="cap-human">${escapeHtml(line.humanLine)}</div>` : ""}<span class="cap-tech">${escapeHtml(line.cap.included)} ${escapeHtml(line.cap.unit)} · exceso: ${escapeHtml(line.cap.overage)}</span></div>`
         : "";
       const tierBadge = line.tierLabel
         ? ` <span class="tier-badge">${escapeHtml(line.tierLabel)}</span>`
@@ -152,6 +152,8 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 .tier-badge { display: inline-block; padding: 1px 6px; background: #000; color: #FFF; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-radius: 3px; vertical-align: middle; margin-left: 2px; }
 .cap-incl { font-size: 10.5px; color: rgba(0,0,0,0.6); margin-top: 3px; line-height: 1.3; }
 .cap-meta { font-size: 10px; color: rgba(0,0,0,0.75); margin-top: 4px; padding: 4px 8px; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.12); border-radius: 4px; line-height: 1.3; }
+.cap-human { font-size: 11px; font-weight: 800; color: #000; margin-bottom: 2px; }
+.cap-tech { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 9.5px; color: rgba(0,0,0,0.6); }
 .cap-meta strong { color: #000; }
 .cap-price { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-weight: 900; font-size: 13px; white-space: nowrap; }
 .cap-price.free { font-style: italic; color: rgba(0,0,0,0.7); }

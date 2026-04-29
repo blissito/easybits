@@ -11,10 +11,12 @@ export type CapabilityCap = {
 // 2 opciones (Básico / Pro) en vez de yes/no. Cada tier tiene su propio precio
 // y cap. Sin tiers = capability binaria, usa basePriceMxn.
 export type Tier = {
-  id: string; // "basic" | "pro"
+  id: string; // "basic" | "pro" | "scale"
   label: string;
   priceMxn: number;
   cap: CapabilityCap;
+  // Frase humana que traduce el cap a un caso real. Ej. "~15 audios cortos al mes".
+  humanLine?: string;
 };
 
 // Tier id por defecto cuando una capability binaria está incluida.
@@ -85,6 +87,7 @@ export const CAPABILITIES: Capability[] = [
         id: "basic",
         label: "Básico",
         priceMxn: 300,
+        humanLine: "~15 audios cortos al mes",
         cap: {
           included: "10,000",
           unit: "caracteres/mes",
@@ -95,6 +98,7 @@ export const CAPABILITIES: Capability[] = [
         id: "pro",
         label: "Pro",
         priceMxn: 1500,
+        humanLine: "~75 audios o 1 cliente activo",
         cap: {
           included: "50,000",
           unit: "caracteres/mes",
@@ -105,6 +109,7 @@ export const CAPABILITIES: Capability[] = [
         id: "scale",
         label: "Scale",
         priceMxn: 4500,
+        humanLine: "~300 audios o varios clientes",
         cap: {
           included: "200,000",
           unit: "caracteres/mes",
@@ -140,6 +145,7 @@ export const CAPABILITIES: Capability[] = [
         id: "basic",
         label: "Básico",
         priceMxn: 400,
+        humanLine: "~3 imágenes al día",
         cap: {
           included: "100",
           unit: "imágenes/mes",
@@ -150,6 +156,7 @@ export const CAPABILITIES: Capability[] = [
         id: "pro",
         label: "Pro",
         priceMxn: 1500,
+        humanLine: "~16 al día — un negocio activo en redes",
         cap: {
           included: "500",
           unit: "imágenes/mes",
@@ -160,6 +167,7 @@ export const CAPABILITIES: Capability[] = [
         id: "scale",
         label: "Scale",
         priceMxn: 4500,
+        humanLine: "~70 al día — varias campañas paralelas",
         cap: {
           included: "2,000",
           unit: "imágenes/mes",
@@ -375,6 +383,7 @@ export const CAPABILITIES: Capability[] = [
         id: "basic",
         label: "Básico",
         priceMxn: 600,
+        humanLine: "1-2 reels cortos al mes",
         cap: {
           included: "15",
           unit: "segundos/mes",
@@ -385,6 +394,7 @@ export const CAPABILITIES: Capability[] = [
         id: "pro",
         label: "Pro",
         priceMxn: 2500,
+        humanLine: "~4 reels o 2 demos",
         cap: {
           included: "60",
           unit: "segundos/mes",
@@ -395,6 +405,7 @@ export const CAPABILITIES: Capability[] = [
         id: "scale",
         label: "Scale",
         priceMxn: 7500,
+        humanLine: "~13 reels o varias campañas",
         cap: {
           included: "200",
           unit: "segundos/mes",
@@ -430,6 +441,7 @@ export const CAPABILITIES: Capability[] = [
         id: "basic",
         label: "Básico",
         priceMxn: 1200,
+        humanLine: "~70 páginas/día — monitoreo ligero",
         cap: {
           included: "2,000",
           unit: "páginas/mes",
@@ -440,6 +452,7 @@ export const CAPABILITIES: Capability[] = [
         id: "pro",
         label: "Pro",
         priceMxn: 5000,
+        humanLine: "~330/día — competencia activa",
         cap: {
           included: "10,000",
           unit: "páginas/mes",
@@ -450,6 +463,7 @@ export const CAPABILITIES: Capability[] = [
         id: "scale",
         label: "Scale",
         priceMxn: 15000,
+        humanLine: "~1,600/día — análisis a escala",
         cap: {
           included: "50,000",
           unit: "páginas/mes",

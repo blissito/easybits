@@ -110,7 +110,12 @@ export const CapabilityCard = ({
                   {formatMxn(tier.priceMxn)} / mes
                 </span>
               </div>
-              <p className="text-xs md:text-sm text-black/70 mt-1 font-mono">
+              {tier.humanLine && (
+                <p className="text-sm md:text-base font-bold text-black mt-1.5 leading-tight">
+                  {tier.humanLine}
+                </p>
+              )}
+              <p className="text-[11px] md:text-xs text-black/55 mt-0.5 font-mono">
                 {tier.cap.included} {tier.cap.unit}
               </p>
             </button>

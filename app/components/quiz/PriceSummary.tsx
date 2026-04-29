@@ -281,10 +281,15 @@ export const PriceSummary = ({
               {/* Cap del tier seleccionado (o del capability si es binaria con consumo variable) */}
               {line.cap && (
                 <div className="mt-2 text-[11px] bg-black/5 border border-black/15 rounded-md px-2.5 py-1.5 leading-snug">
-                  <strong className="text-black">
-                    Incluye {line.cap.included} {line.cap.unit}
+                  {line.humanLine && (
+                    <p className="text-[12px] font-bold text-black mb-0.5">
+                      {line.humanLine}
+                    </p>
+                  )}
+                  <strong className="text-black font-mono">
+                    {line.cap.included} {line.cap.unit}
                   </strong>
-                  <span className="text-black/65">
+                  <span className="text-black/55 font-mono">
                     {" "}
                     · exceso: {line.cap.overage}
                   </span>

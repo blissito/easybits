@@ -22,6 +22,7 @@ export type QuoteLine = {
   tierId: string;
   tierLabel?: string; // solo presente si la capability tiene tiers
   cap?: CapabilityCap; // cap aplicable (del tier seleccionado, o del capability si no tiene tiers)
+  humanLine?: string; // frase humana del tier (si aplica)
 };
 
 export type Quote = {
@@ -64,6 +65,7 @@ export const computeQuote = (
         tierId: tier.id,
         tierLabel: tier.label,
         cap: tier.cap,
+        humanLine: tier.humanLine,
       });
     } else {
       // Capability binaria: usa basePriceMxn y cap directo
