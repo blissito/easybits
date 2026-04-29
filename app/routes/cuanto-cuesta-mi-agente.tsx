@@ -535,7 +535,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     Dos hackers. Cero juniors. Cero call center. Cero tickets.
                     Como <strong>Invincible y Eve</strong>: dos personas,
                     criterio absoluto, cero burocracia.{" "}
-                    <strong>Si te tomamos, queda andando.</strong>
+                    <strong>Si te tomamos, queda funcionando.</strong>
                   </p>
                 </div>
                 <div className="mt-6 mx-auto max-w-lg">

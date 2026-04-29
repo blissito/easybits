@@ -241,7 +241,7 @@ ${customSection}
 
 <div class="commitment-block">
   <div class="commitment-tag">✦ Quiénes te van a atender</div>
-  <div class="commitment-text">Dos hackers. Cero juniors. Cero call center. Cero tickets. Como <strong>Invincible y Eve</strong>: dos personas, criterio absoluto, cero burocracia. <strong>Si te tomamos, queda andando.</strong></div>
+  <div class="commitment-text">Dos hackers. Cero juniors. Cero call center. Cero tickets. Como <strong>Invincible y Eve</strong>: dos personas, criterio absoluto, cero burocracia. <strong>Si te tomamos, queda funcionando.</strong></div>
 </div>
 
 <div class="discount-banner">
