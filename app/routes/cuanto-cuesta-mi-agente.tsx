@@ -532,10 +532,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     ✦ Quiénes te van a atender
                   </p>
                   <p className="text-sm text-black leading-snug">
-                    Tipo <strong>Invincible y Eve</strong>, pero en vez de
-                    salvar el mundo te armamos tu agente. Dos haciendo todo:
-                    sin call center, sin juniors, sin monstruos de otra
-                    dimensión. Si te tomamos, te atendemos nosotros.
+                    Dos hackers. Cero juniors. Cero call center. Cero tickets.
+                    Tipo <strong>Invincible y Eve</strong>, pero los monstruos
+                    aquí son tu operación a mano y tus integraciones rotas.{" "}
+                    <strong>Si te tomamos, ya empezaste a ganar.</strong>
                   </p>
                 </div>
                 <div className="mt-6 mx-auto max-w-lg">

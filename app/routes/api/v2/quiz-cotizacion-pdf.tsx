@@ -241,7 +241,7 @@ ${customSection}
 
 <div class="commitment-block">
   <div class="commitment-tag">✦ Quiénes te van a atender</div>
-  <div class="commitment-text">Tipo <strong>Invincible y Eve</strong>, pero en vez de salvar el mundo te armamos tu agente. Dos haciendo todo: sin call center, sin juniors, sin monstruos de otra dimensión. Si te tomamos, te atendemos nosotros.</div>
+  <div class="commitment-text">Dos hackers. Cero juniors. Cero call center. Cero tickets. Tipo <strong>Invincible y Eve</strong>, pero los monstruos aquí son tu operación a mano y tus integraciones rotas. <strong>Si te tomamos, ya empezaste a ganar.</strong></div>
 </div>
 
 <div class="discount-banner">
