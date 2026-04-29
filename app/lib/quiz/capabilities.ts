@@ -67,7 +67,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Las mejores voces mexicanas del mercado. Audios de WhatsApp, mensajes de voz, podcasts.",
     vendor: "ElevenLabs",
-    basePriceMxn: 3000,
+    basePriceMxn: 300,
     bgClass: "bg-brand-yellow",
     isAddon: false,
     includes: [
@@ -84,7 +84,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "basic",
         label: "Básico",
-        priceMxn: 3000,
+        priceMxn: 300,
         cap: {
           included: "10,000",
           unit: "caracteres/mes",
@@ -94,7 +94,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "pro",
         label: "Pro",
-        priceMxn: 5500,
+        priceMxn: 1500,
         cap: {
           included: "50,000",
           unit: "caracteres/mes",
@@ -104,7 +104,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "scale",
         label: "Scale",
-        priceMxn: 9000,
+        priceMxn: 4500,
         cap: {
           included: "200,000",
           unit: "caracteres/mes",
@@ -122,7 +122,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Productos, banners para redes, mockups, ilustraciones bajo demanda.",
     vendor: "Fal / OpenAI",
-    basePriceMxn: 1200,
+    basePriceMxn: 400,
     bgClass: "bg-brand-pink",
     isAddon: false,
     includes: [
@@ -139,7 +139,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "basic",
         label: "Básico",
-        priceMxn: 1200,
+        priceMxn: 400,
         cap: {
           included: "100",
           unit: "imágenes/mes",
@@ -149,7 +149,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "pro",
         label: "Pro",
-        priceMxn: 2500,
+        priceMxn: 1500,
         cap: {
           included: "500",
           unit: "imágenes/mes",
@@ -159,7 +159,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "scale",
         label: "Scale",
-        priceMxn: 5000,
+        priceMxn: 4500,
         cap: {
           included: "2,000",
           unit: "imágenes/mes",
@@ -357,7 +357,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Reels, demos, anuncios cortos. Add-on opcional, consumo alto.",
     vendor: "Runway",
-    basePriceMxn: 2700,
+    basePriceMxn: 600,
     bgClass: "bg-brand-pink",
     isAddon: true,
     includes: [
@@ -374,7 +374,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "basic",
         label: "Básico",
-        priceMxn: 2700,
+        priceMxn: 600,
         cap: {
           included: "15",
           unit: "segundos/mes",
@@ -384,7 +384,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "pro",
         label: "Pro",
-        priceMxn: 4800,
+        priceMxn: 2500,
         cap: {
           included: "60",
           unit: "segundos/mes",
@@ -394,7 +394,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "scale",
         label: "Scale",
-        priceMxn: 9000,
+        priceMxn: 7500,
         cap: {
           included: "200",
           unit: "segundos/mes",
@@ -412,7 +412,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Búsqueda profunda, scraping respetuoso, monitoreo de precios. La perla del bundle.",
     vendor: "Brightdata",
-    basePriceMxn: 6100,
+    basePriceMxn: 1200,
     bgClass: "bg-brand-red",
     isAddon: true,
     includes: [
@@ -429,7 +429,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "basic",
         label: "Básico",
-        priceMxn: 6100,
+        priceMxn: 1200,
         cap: {
           included: "2,000",
           unit: "páginas/mes",
@@ -439,7 +439,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "pro",
         label: "Pro",
-        priceMxn: 10000,
+        priceMxn: 5000,
         cap: {
           included: "10,000",
           unit: "páginas/mes",
@@ -449,7 +449,7 @@ export const CAPABILITIES: Capability[] = [
       {
         id: "scale",
         label: "Scale",
-        priceMxn: 18000,
+        priceMxn: 15000,
         cap: {
           included: "50,000",
           unit: "páginas/mes",
