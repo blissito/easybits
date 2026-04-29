@@ -164,12 +164,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       : "Hola, vi tu landing.";
     const businessLine = lead?.business ? `\nNegocio: ${lead.business}` : "";
     const siteLine = lead?.website ? `\nSitio: ${lead.website}` : "";
-    const setupLine = `Setup único: ${formatUsd(quote.setupOneTimeUsd)} USD (≈ ${formatMxn(quote.setupOneTimeMxn)} MXN)`;
+    const setupLine = `Setup único: ${formatMxn(quote.setupOneTimeMxn)} MXN (≈ ${formatUsd(quote.setupOneTimeUsd)} USD)`;
     const monthlyLine = `Mensualidad: ${formatMxn(quote.monthlyTotalMxn)} MXN/mes (lista, antes del 20% off)`;
-    const integrationsExtra = integrations.hasIntegrations
-      ? `\nIntegraciones custom: discovery ${formatMxn(quote.customIntegrationsDiscoveryMxn)} + desarrollo desde ${formatMxn(quote.customIntegrationsFromMxn)}`
-      : "";
-    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${monthlyLine}${integrationsExtra}\n\nCapacidades:\n${summary}${integrationsLine}${businessLine}${siteLine}`;
+    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${monthlyLine}\n\nCapacidades:\n${summary}${integrationsLine}${businessLine}${siteLine}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -273,7 +270,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     if (integrations.hasIntegrations) {
       next.set("i", "1");
     }
-    setSearchParams(next, { replace: true });
+    // preventScrollReset evita que React Router brinque al top al editar
+    // selecciones desde el summary (quitar/agregar capacidades).
+    setSearchParams(next, { replace: true, preventScrollReset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, isSummaryStep, selections, integrations.hasIntegrations]);
 
@@ -341,7 +340,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6, delay: 0.1 }}
                       className="text-4xl md:text-5xl lg:text-6xl font-black text-black leading-[0.95] mb-6"
                     >
-                      ¿Qué puede hacer un agente IA por tu negocio?
+                      Arma tu agente tú mism@
                     </motion.h1>
                     <motion.p
                       initial={{ opacity: 0, y: 16 }}

@@ -1,6 +1,7 @@
 import type { Route } from "./+types/quiz-cotizacion-pdf";
 import { withPage } from "~/.server/core/browserPool";
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
+import { FIT_GUARANTEE_DAYS } from "~/lib/quiz/capabilities";
 import {
   computeDiscountedMonthly,
   computeQuote,
@@ -57,8 +58,8 @@ const buildHtml = (payload: Payload, folio: string): string => {
   const orchRow = `
     <div class="cap-row">
       <div class="cap-info">
-        <div class="cap-name">Soporte humano + monitoreo continuo</div>
-        <div class="cap-incl">Atención humana mes a mes (ventana definida) · monitoreo de uso, errores y alertas · ajustes menores incluidos</div>
+        <div class="cap-name">Operación + babysit del agente</div>
+        <div class="cap-incl">Que el agente no se rompa · ajustes que pidas · soporte humano, no chatbot</div>
       </div>
       <div class="cap-price">${formatMxn(quote.orchestrationFeeMxn)}</div>
     </div>`;
@@ -101,23 +102,9 @@ const buildHtml = (payload: Payload, folio: string): string => {
   const customSection = customIntegrations
     ? `
   <div class="custom-section">
-    <div class="section-title" style="margin-top:0">Integraciones custom (one-time, fuera del mensual)</div>
+    <div class="custom-tag">🔌 Integraciones que mencionaste</div>
     ${itemsChips}
-    <div class="custom-grid">
-      <div class="custom-card">
-        <div class="custom-label">Discovery (paid)</div>
-        <div class="custom-amount">${formatMxn(quote.customIntegrationsDiscoveryMxn)}</div>
-        <div class="custom-note">Llamada 60 min + documento de scope. <strong>No reembolsable</strong>, acreditable al desarrollo si avanzas en 30 días.</div>
-      </div>
-      <div class="custom-card">
-        <div class="custom-label">Desarrollo</div>
-        <div class="custom-amount">desde ${formatMxn(quote.customIntegrationsFromMxn)}</div>
-        <div class="custom-note">Cotización formal post-discovery. Sin discovery firmado, no hay desarrollo.</div>
-      </div>
-    </div>
-    <div class="custom-tiers">
-      <strong>Tiers:</strong> simple (1 endpoint REST) desde $3,000 · media (multi-endpoint, OAuth) desde $8,000 · compleja (SAP/ERP, sync) desde $20,000
-    </div>
+    <div class="custom-note-inline">Las simples entran en el setup. Las complejas (SAP/ERP, sync continuo) las scopeamos en la primera reunión sin costo extra.</div>
   </div>`
     : "";
 
@@ -174,15 +161,10 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 .savings { font-size: 11px; color: rgba(0,0,0,0.65); padding: 0 4px; margin-top: 2px; font-weight: bold; }
 .disclaimer { font-size: 10px; color: rgba(0,0,0,0.5); padding: 0 4px; margin-top: 6px; }
 
-.custom-section { margin-top: 18px; padding: 14px 16px; border: 2px solid #000; border-radius: 10px; background: #FAFAFA; page-break-inside: avoid; }
-.custom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-.custom-card { padding: 10px 12px; border: 2px solid #000; border-radius: 8px; background: #FFF; }
-.custom-card:first-child { background: rgba(236, 214, 110, 0.3); }
-.custom-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 4px; }
-.custom-amount { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 15px; font-weight: 900; margin-bottom: 4px; }
-.custom-note { font-size: 9.5px; color: rgba(0,0,0,0.7); line-height: 1.35; }
-.custom-tiers { margin-top: 8px; font-size: 9.5px; color: rgba(0,0,0,0.65); line-height: 1.4; }
-.custom-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.custom-section { margin-top: 14px; padding: 10px 14px; border: 2px solid #000; border-radius: 10px; background: #FAFAFA; page-break-inside: avoid; }
+.custom-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 6px; }
+.custom-note-inline { font-size: 10px; color: rgba(0,0,0,0.65); line-height: 1.4; }
+.custom-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .custom-chip { display: inline-block; padding: 2px 8px; background: #ECD66E; border: 1.5px solid #000; border-radius: 999px; font-size: 10px; font-weight: 700; color: #000; }
 
 .commitment-block { margin-top: 18px; padding: 14px 18px; border: 2px solid #000; border-radius: 10px; background: #FFF; page-break-inside: avoid; }
@@ -222,18 +204,16 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 <div class="setup-block">
   <div class="setup-tag">★ Setup único · pago una sola vez ★</div>
   <div class="setup-amount-row">
-    <div class="setup-amount">${formatUsd(quote.setupOneTimeUsd)}</div>
-    <div class="setup-currency">USD</div>
-    <div class="setup-mxn">≈ ${formatMxn(quote.setupOneTimeMxn)} MXN</div>
+    <div class="setup-amount">${formatMxn(quote.setupOneTimeMxn)}</div>
+    <div class="setup-currency">MXN</div>
+    <div class="setup-mxn">≈ ${formatUsd(quote.setupOneTimeUsd)} USD</div>
   </div>
   <ul class="setup-list">
-    <li><strong>Tu marca de pies a cabeza</strong>: logo, colores, tono y voz del agente</li>
-    <li>Setup técnico, vendors y MCPs configurados</li>
-    <li>CLAUDE.md custom de tu negocio</li>
-    <li><strong>Pair WA primeros 30 días</strong> (ventana 9-18h MX, respuesta &lt; 2h)</li>
-    <li>2 integraciones simples incluidas</li>
+    <li><strong>30 días pair WA con dos seniors</strong> (ventana 9-18h MX, respuesta &lt; 2h)</li>
+    <li>Setup técnico + MCPs + tu marca</li>
+    <li>2 integraciones simples</li>
   </ul>
-  <div class="setup-disclaimer">100% por adelantado · no reembolsable · mensualidad arranca día 31. Cancelar la mensualidad no reembolsa el setup.</div>
+  <div class="setup-disclaimer">✓ ${FIT_GUARANTEE_DAYS} días de fit guarantee · refund 100% si no encajamos · después, no reembolsable. Setup + primera mensualidad se cobran juntos vía Stripe.</div>
 </div>
 
 <div class="section-title">Mensualidad recurrente</div>
@@ -254,8 +234,8 @@ ${capRows}
 ${customSection}
 
 <div class="commitment-block">
-  <div class="commitment-tag">✦ Por qué somos directos</div>
-  <div class="commitment-text">Somos un equipo pequeño. Nos comprometemos con cada cliente y los tomamos muy en serio — por eso atendemos pocos a la vez, sin diluir la atención.</div>
+  <div class="commitment-tag">✦ Quiénes te van a atender</div>
+  <div class="commitment-text">Dos hackers que cuidan a sus clientes. No tenemos call center ni juniors. Si te tomamos, te atendemos nosotros.</div>
 </div>
 
 <div class="discount-banner">

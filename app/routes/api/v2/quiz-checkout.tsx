@@ -2,7 +2,12 @@ import { data } from "react-router";
 import type { Route } from "./+types/quiz-checkout";
 import { getStripe } from "~/.server/stripe";
 import { config } from "~/.server/config";
-import { CAPABILITIES, ORCHESTRATION_FEE_MXN } from "~/lib/quiz/capabilities";
+import {
+  CAPABILITIES,
+  FIT_GUARANTEE_DAYS,
+  ORCHESTRATION_FEE_MXN,
+  SETUP_FEE_MXN,
+} from "~/lib/quiz/capabilities";
 import {
   computeDiscountedMonthly,
   computeQuote,
@@ -61,26 +66,29 @@ export const action = async ({ request }: Route.ActionArgs) => {
     ...quote.breakdown.map((b) => b.capability.shortLabel),
     ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
   ].join(" + ");
-  const productName = `Agente IA EasyBits — ${itemsLabel}`;
-  const productDescription = `Mensualidad recurrente con ${QUOTE_DISCOUNT_PCT}% off permanente aplicado: soporte humano + monitoreo (${ORCHESTRATION_FEE_MXN} MXN lista) + ${quote.selectionsCount} capacidades. NOTA: setup único de $8,000 USD se gestiona por WhatsApp tras discovery call — no incluido en este pago${
+  const monthlyName = `Mensualidad agente IA — ${itemsLabel}`;
+  const monthlyDescription = `Recurrente mensual con ${QUOTE_DISCOUNT_PCT}% off permanente aplicado: operación + babysit (${ORCHESTRATION_FEE_MXN} MXN lista) + ${quote.selectionsCount} capacidades${
     hasCustomIntegrations
       ? ". Integraciones custom: discovery + desarrollo cotizado aparte."
       : "."
   }`;
+  const setupName = "Setup único — armado del agente";
+  const setupDescription = `Pago una sola vez. Incluye: 30 días pair WA con dos seniors, setup técnico + MCPs + tu marca, 2 integraciones simples. ${FIT_GUARANTEE_DAYS} días de fit guarantee — refund 100% si no encajamos.`;
 
   try {
     const session = await getStripe().checkout.sessions.create({
       mode: "subscription",
       customer_email: lead.email,
       metadata: {
-        type: "quiz_agent_subscription",
+        type: "quiz_agent_full_combo",
         selections: cleanSelections.join(","),
         custom_integrations: hasCustomIntegrations ? "yes" : "no",
         custom_integrations_desc: integrationsDesc,
         monthly_list_mxn: String(quote.monthlyTotalMxn),
         monthly_charged_mxn: String(discountedMonthlyMxn),
         discount_pct: String(QUOTE_DISCOUNT_PCT),
-        setup_pending_usd: String(quote.setupOneTimeUsd),
+        setup_mxn: String(SETUP_FEE_MXN),
+        fit_guarantee_days: String(FIT_GUARANTEE_DAYS),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
         lead_website: lead.website || "",
@@ -88,14 +96,28 @@ export const action = async ({ request }: Route.ActionArgs) => {
       },
       line_items: [
         {
+          // Mensualidad recurrente (con 20% off ya aplicado)
           price_data: {
             currency: "mxn",
             recurring: { interval: "month" },
             product_data: {
-              name: productName,
-              description: productDescription,
+              name: monthlyName,
+              description: monthlyDescription,
             },
             unit_amount: discountedMonthlyMxn * 100,
+          },
+          quantity: 1,
+        },
+        {
+          // Setup único — se carga en la PRIMERA factura junto con el primer mes.
+          // Stripe permite mezclar one-time + recurring en mode: "subscription".
+          price_data: {
+            currency: "mxn",
+            product_data: {
+              name: setupName,
+              description: setupDescription,
+            },
+            unit_amount: SETUP_FEE_MXN * 100,
           },
           quantity: 1,
         },

@@ -23,10 +23,13 @@ export type Capability = {
   cap?: CapabilityCap;
 };
 
-// Setup único — anclaje del modelo directo. Equivalente a $8,000 USD a ~17 MXN/USD.
-// No reembolsable, se cobra 100% antes de tocar nada, mensualidad arranca día 31.
-export const SETUP_FEE_USD = 8000;
-export const SETUP_FEE_MXN = 136000;
+// Setup único — anclaje del modelo directo. ~$7,000 USD a ~17 MXN/USD.
+// Se cobra junto con la primera mensualidad vía Stripe (line item one-time).
+// Fit guarantee: refund 100% si no encajamos en los primeros 7 días.
+export const SETUP_FEE_USD = 7000;
+export const SETUP_FEE_MXN = 120000;
+// Días de fit guarantee — refund 100% del setup. Después, no reembolsable.
+export const FIT_GUARANTEE_DAYS = 7;
 
 // Mensualidad base — soporte humano + monitoreo continuo. Setup técnico y branding
 // ahora viven en el SETUP_FEE_MXN, no aquí.
@@ -58,7 +61,7 @@ export const CAPABILITIES: Capability[] = [
       "Transcripción de audios entrantes",
     ],
     cap: {
-      included: "150,000",
+      included: "10,000",
       unit: "caracteres/mes",
       overage: "$0.08 MXN por carácter excedido",
     },
@@ -81,7 +84,7 @@ export const CAPABILITIES: Capability[] = [
       "Edición y transformaciones básicas",
     ],
     cap: {
-      included: "500",
+      included: "100",
       unit: "imágenes/mes",
       overage: "$8 MXN por imagen excedida",
     },
@@ -284,7 +287,7 @@ export const CAPABILITIES: Capability[] = [
       "Renders por demanda",
     ],
     cap: {
-      included: "60",
+      included: "15",
       unit: "segundos/mes",
       overage: "$200 MXN por segundo excedido",
     },
@@ -307,7 +310,7 @@ export const CAPABILITIES: Capability[] = [
       "Resúmenes y alertas configurables",
     ],
     cap: {
-      included: "15,000",
+      included: "2,000",
       unit: "páginas/mes",
       overage: "$1.50 MXN por página excedida",
     },

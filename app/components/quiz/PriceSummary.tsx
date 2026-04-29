@@ -14,6 +14,7 @@ import {
   QUOTE_DISCOUNT_PCT,
 } from "~/lib/quiz/pricing";
 import type { Capability } from "~/lib/quiz/capabilities";
+import { FIT_GUARANTEE_DAYS } from "~/lib/quiz/capabilities";
 
 type PriceSummaryProps = {
   quote: Quote;
@@ -121,44 +122,36 @@ export const PriceSummary = ({
         </p>
       </div>
 
-      {/* SETUP ÚNICO — anclaje del modelo, NO reembolsable */}
+      {/* SETUP ÚNICO — se cobra junto con la primera mensualidad vía Stripe */}
       <motion.div
         initial={reduced ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={reduced ? { duration: 0 } : { delay: 0.4, duration: 0.4 }}
         className="mb-6 rounded-2xl border-[3px] border-black bg-black text-white p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)]"
       >
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.25em] font-black text-brand-yellow mb-1">
-              Setup único · Pago una sola vez
-            </p>
-            <p className="text-3xl md:text-4xl font-black tabular-nums">
-              {formatUsd(quote.setupOneTimeUsd)}{" "}
-              <span className="text-sm font-bold text-white/60">USD</span>
-            </p>
-            <p className="text-xs text-white/50 font-mono mt-1">
-              ≈ {formatMxn(quote.setupOneTimeMxn)} MXN
-            </p>
-          </div>
-        </div>
-        <ul className="text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
-          <li>
-            <strong className="text-white">Tu marca de pies a cabeza</strong>:
-            logo, colores, tono y voz del agente
-          </li>
-          <li>Setup técnico, vendors y MCPs configurados</li>
-          <li>CLAUDE.md custom de tu negocio</li>
-          <li>
-            <strong className="text-white">Pair WA primeros 30 días</strong>{" "}
-            (ventana 9-18h MX, respuesta &lt; 2h)
-          </li>
-          <li>2 integraciones simples incluidas</li>
-        </ul>
-        <p className="text-[10px] text-white/45 mt-3 leading-snug">
-          100% por adelantado · no reembolsable · mensualidad arranca día 31.
-          Cancelar la mensualidad no reembolsa el setup.
+        <p className="text-[10px] uppercase tracking-[0.25em] font-black text-brand-yellow mb-1">
+          Setup único · Pago una sola vez
         </p>
+        <p className="text-3xl md:text-4xl font-black tabular-nums">
+          {formatMxn(quote.setupOneTimeMxn)}{" "}
+          <span className="text-sm font-bold text-white/60">MXN</span>
+        </p>
+        <p className="text-xs text-white/50 font-mono mt-1 mb-3">
+          ≈ {formatUsd(quote.setupOneTimeUsd)} USD
+        </p>
+        <ul className="text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
+          <li>30 días pair WA con dos seniors</li>
+          <li>Setup técnico + MCPs + tu marca</li>
+          <li>2 integraciones simples</li>
+        </ul>
+        <div className="mt-3 pt-3 border-t border-white/15 text-[11px] leading-snug">
+          <p className="text-brand-yellow font-bold">
+            ✓ {FIT_GUARANTEE_DAYS} días de fit guarantee
+          </p>
+          <p className="text-white/65 mt-0.5">
+            Refund 100% si no encajamos. Después, no reembolsable.
+          </p>
+        </div>
       </motion.div>
 
       {/* Discount + Download banner — positioned right under setup */}
@@ -223,16 +216,16 @@ export const PriceSummary = ({
           >
             <div className="flex justify-between items-baseline gap-3">
               <span className="text-sm font-bold text-black">
-                Soporte humano + monitoreo continuo
+                Operación + babysit del agente
               </span>
               <span className="font-mono font-bold tabular-nums whitespace-nowrap">
                 {formatMxn(quote.orchestrationFeeMxn)}
               </span>
             </div>
             <ul className="mt-1.5 text-xs text-black/60 list-disc list-inside space-y-0.5">
-              <li>Atención humana mes a mes (ventana definida)</li>
-              <li>Monitoreo de uso, errores y alertas</li>
-              <li>Ajustes menores incluidos sin costo extra</li>
+              <li>Que el agente no se rompa</li>
+              <li>Ajustes que pidas</li>
+              <li>Soporte humano, no chatbot</li>
             </ul>
           </motion.li>
 
@@ -375,74 +368,38 @@ export const PriceSummary = ({
         </p>
       </div>
 
-      {/* Custom integrations — sección aparte, NO en el mensual */}
-      {quote.hasCustomIntegrations && (
+      {/* Custom integrations — info compacta, sin pricing aparte (todo entra en setup + discovery) */}
+      {quote.hasCustomIntegrations && customIntegrationsDescription && (
         <motion.div
           initial={reduced ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={
             reduced ? { duration: 0 } : { delay: 0.6, duration: 0.4 }
           }
-          className="mt-6 rounded-2xl border-[3px] border-black bg-white p-6 shadow-[4px_4px_0_0_rgba(0,0,0,1)]"
+          className="mt-4 rounded-xl border-2 border-black bg-white p-4"
         >
-          <div className="flex items-baseline justify-between gap-3 mb-2">
-            <h4 className="text-sm uppercase tracking-widest font-black text-black flex items-center gap-2">
+          <div className="flex items-baseline justify-between gap-3 mb-1">
+            <p className="text-[10px] uppercase tracking-widest font-black text-black/70 flex items-center gap-1.5">
               <span aria-hidden>🔌</span>
-              Integraciones custom
-            </h4>
+              Integraciones que mencionaste
+            </p>
             {onRemoveCustomIntegrations && (
               <button
                 type="button"
                 onClick={onRemoveCustomIntegrations}
                 aria-label="Quitar integraciones custom"
                 title="Quitar integraciones custom"
-                className="w-6 h-6 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-xs font-black flex items-center justify-center transition-colors"
+                className="w-5 h-5 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-[10px] font-black flex items-center justify-center transition-colors"
               >
                 ×
               </button>
             )}
           </div>
-
-          {customIntegrationsDescription && (
-            <p className="text-xs text-black/70 italic mb-3">
-              "{customIntegrationsDescription}"
-            </p>
-          )}
-
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="rounded-lg border-2 border-black bg-brand-yellow/30 p-3">
-              <p className="text-[10px] uppercase tracking-widest font-black text-black/70 mb-1">
-                Discovery (paid)
-              </p>
-              <p className="font-mono font-black text-lg tabular-nums">
-                {formatMxn(quote.customIntegrationsDiscoveryMxn)}
-              </p>
-              <p className="text-[10px] text-black/65 mt-1 leading-snug">
-                Llamada 60 min + documento de scope.{" "}
-                <strong>No reembolsable</strong>, acreditable al desarrollo si
-                avanzas en 30 días.
-              </p>
-            </div>
-            <div className="rounded-lg border-2 border-black bg-white p-3">
-              <p className="text-[10px] uppercase tracking-widest font-black text-black/70 mb-1">
-                Desarrollo
-              </p>
-              <p className="font-mono font-black text-lg tabular-nums">
-                desde {formatMxn(quote.customIntegrationsFromMxn)}
-              </p>
-              <p className="text-[10px] text-black/65 mt-1 leading-snug">
-                Cotización formal post-discovery según complejidad. Sin
-                discovery firmado, no hay desarrollo.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 text-[10px] text-black/55 leading-snug">
-            <strong className="text-black">Tiers de complejidad:</strong>{" "}
-            simple (1 endpoint REST, auth básico) desde $3,000 · media
-            (multi-endpoint, OAuth, mapping) desde $8,000 · compleja (SAP/ERP,
-            sync continuo) desde $20,000
-          </div>
+          <p className="text-xs text-black/75">{customIntegrationsDescription}</p>
+          <p className="text-[10px] text-black/50 mt-2 leading-snug">
+            Las simples entran en el setup. Las complejas (SAP/ERP, sync
+            continuo) las scopeamos en la primera reunión sin costo extra.
+          </p>
         </motion.div>
       )}
     </div>
