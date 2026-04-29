@@ -139,9 +139,10 @@ export const CapabilityCard = ({
               onAnswer(DEFAULT_TIER_ID);
             }}
             containerClassName="h-16 md:h-20 w-full"
-            className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
+            className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl flex items-center justify-center gap-2"
           >
-            Sí, incluir
+            <span aria-hidden>✓</span>
+            <span>Incluido</span>
           </BrutalButton>
           <button
             type="button"

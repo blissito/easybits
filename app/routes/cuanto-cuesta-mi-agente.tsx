@@ -46,6 +46,7 @@ export const meta = () =>
       "Configura tu agente IA personalizado en 2 minutos. Voz, WhatsApp, imágenes, memoria, video, cotizaciones y más. Cotización al instante.",
     image:
       "https://easybits-public.fly.storage.tigris.dev/699f35cbc8ad86037eda62b1/wPv1V-",
+    url: "https://www.easybits.cloud/cuanto-cuesta-mi-agente",
   });
 
 const CAP_COUNT = CAPABILITIES.length;
