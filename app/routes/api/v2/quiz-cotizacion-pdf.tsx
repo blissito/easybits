@@ -185,7 +185,11 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 .custom-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .custom-chip { display: inline-block; padding: 2px 8px; background: #ECD66E; border: 1.5px solid #000; border-radius: 999px; font-size: 10px; font-weight: 700; color: #000; }
 
-.discount-banner { margin-top: 22px; padding: 18px 22px; border: 3px solid #000; border-radius: 14px; background: #ECD66E; box-shadow: 5px 5px 0 0 #000; text-align: center; page-break-inside: avoid; }
+.commitment-block { margin-top: 18px; padding: 14px 18px; border: 2px solid #000; border-radius: 10px; background: #FFF; page-break-inside: avoid; }
+.commitment-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; font-weight: 900; color: rgba(0,0,0,0.6); margin-bottom: 5px; }
+.commitment-text { font-size: 11.5px; color: #000; line-height: 1.45; }
+
+.discount-banner { margin-top: 18px; padding: 18px 22px; border: 3px solid #000; border-radius: 14px; background: #ECD66E; box-shadow: 5px 5px 0 0 #000; text-align: center; page-break-inside: avoid; }
 .discount-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 3px; font-weight: 900; color: rgba(0,0,0,0.7); margin-bottom: 8px; }
 .discount-headline { font-size: 17px; font-weight: 900; line-height: 1.2; max-width: 480px; margin: 0 auto 6px; }
 .discount-subline { font-size: 11px; color: rgba(0,0,0,0.7); margin-top: 6px; }
@@ -248,6 +252,11 @@ ${capRows}
 <div class="disclaimer">Precios en MXN, no incluyen IVA. Mensualidad recurrente, cancela cuando quieras (el setup nunca se reembolsa). Caps de uso visibles por capability — el exceso se factura aparte.</div>
 
 ${customSection}
+
+<div class="commitment-block">
+  <div class="commitment-tag">✦ Por qué somos directos</div>
+  <div class="commitment-text">Somos un equipo pequeño. Nos comprometemos con cada cliente y los tomamos muy en serio — por eso atendemos pocos a la vez, sin diluir la atención.</div>
+</div>
 
 <div class="discount-banner">
   <div class="discount-tag">★ Descuento permanente ★</div>

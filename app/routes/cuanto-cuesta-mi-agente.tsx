@@ -506,6 +506,16 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     }
                   />
                 )}
+                <div className="mt-8 mx-auto max-w-md rounded-xl border-[2.5px] border-black bg-white px-5 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,1)]">
+                  <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/60 mb-1.5">
+                    ✦ Por qué somos directos
+                  </p>
+                  <p className="text-sm text-black leading-snug">
+                    Somos un equipo pequeño. Nos comprometemos con cada cliente
+                    y los tomamos muy en serio — por eso atendemos pocos a la
+                    vez, sin diluir la atención.
+                  </p>
+                </div>
                 <p className="text-center text-xs text-black/50 mt-6 font-mono">
                   Discovery call de 45 min gratis · Setup ($8K USD) se cobra
                   tras la llamada · Mensualidad arranca día 31 del setup
