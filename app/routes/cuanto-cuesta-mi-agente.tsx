@@ -187,10 +187,14 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     }
     setDownloadingPdf(true);
     setSubmitError(null);
+    // Abort si el fetch se queda colgado (HMR, red lenta, edge case server).
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
       const res = await fetch("/api/v2/quiz-cotizacion-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           selections: serializeSelections(selections),
           customIntegrations: integrations.hasIntegrations
@@ -213,11 +217,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
+    } catch (err) {
+      const aborted = err instanceof DOMException && err.name === "AbortError";
       setSubmitError(
-        "No pudimos generar tu PDF. Pídelo por WhatsApp y te lo mandamos."
+        aborted
+          ? "El PDF tardó demasiado. Recarga la página y vuelve a intentar."
+          : "No pudimos generar tu PDF. Pídelo por WhatsApp y te lo mandamos."
       );
     } finally {
+      clearTimeout(timeoutId);
       setDownloadingPdf(false);
     }
   };
