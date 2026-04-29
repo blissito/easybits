@@ -7,7 +7,12 @@ import {
 } from "motion/react";
 import { useEffect, useState } from "react";
 import type { Quote } from "~/lib/quiz/pricing";
-import { formatMxn, formatUsd } from "~/lib/quiz/pricing";
+import {
+  computeDiscountedMonthly,
+  formatMxn,
+  formatUsd,
+  QUOTE_DISCOUNT_PCT,
+} from "~/lib/quiz/pricing";
 import type { Capability } from "~/lib/quiz/capabilities";
 
 type PriceSummaryProps = {
@@ -23,8 +28,6 @@ type PriceSummaryProps = {
   siteAnalysisCaptured?: boolean;
 };
 
-const DISCOUNT_PCT = 20;
-
 export const PriceSummary = ({
   quote,
   customIntegrationsDescription,
@@ -38,9 +41,7 @@ export const PriceSummary = ({
   siteAnalysisCaptured = false,
 }: PriceSummaryProps) => {
   // El descuento aplica SOLO al mensual, no al setup. El setup es ancla.
-  const discountedMonthly = Math.round(
-    quote.monthlyTotalMxn * (1 - DISCOUNT_PCT / 100)
-  );
+  const discountedMonthly = computeDiscountedMonthly(quote.monthlyTotalMxn);
   const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
 
   const count = useMotionValue(0);
@@ -87,7 +88,7 @@ export const PriceSummary = ({
           className="inline-block mb-3 bg-brand-yellow border-[3px] border-black px-4 py-1.5 rounded-lg shadow-[3px_3px_0_0_rgba(0,0,0,1)]"
         >
           <span className="text-xs md:text-sm font-black tracking-[0.2em] uppercase text-black">
-            ★ {DISCOUNT_PCT}% Descuento permanente en mensualidad ★
+            ★ {QUOTE_DISCOUNT_PCT}% Descuento permanente en mensualidad ★
           </span>
         </motion.div>
 
@@ -177,7 +178,7 @@ export const PriceSummary = ({
             Descarga tu cotización y preséntala para recibir
             <br className="hidden md:block" />{" "}
             <span className="underline decoration-4 underline-offset-2">
-              {DISCOUNT_PCT}% off permanente en mensualidad
+              {QUOTE_DISCOUNT_PCT}% off permanente en mensualidad
             </span>{" "}
             al contratar.
           </p>

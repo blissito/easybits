@@ -1,7 +1,13 @@
 import type { Route } from "./+types/quiz-cotizacion-pdf";
 import { withPage } from "~/.server/core/browserPool";
 import { CAPABILITIES } from "~/lib/quiz/capabilities";
-import { computeQuote, formatMxn, formatUsd } from "~/lib/quiz/pricing";
+import {
+  computeDiscountedMonthly,
+  computeQuote,
+  formatMxn,
+  formatUsd,
+  QUOTE_DISCOUNT_PCT,
+} from "~/lib/quiz/pricing";
 
 type LeadInfo = {
   name: string;
@@ -34,16 +40,12 @@ const escapeHtml = (s: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const DISCOUNT_PCT = 20;
-
 const buildHtml = (payload: Payload, folio: string): string => {
   const { lead, customIntegrations } = payload;
   const validIds = new Set(CAPABILITIES.map((c) => c.id));
   const cleanSelections = payload.selections.filter((s) => validIds.has(s));
   const quote = computeQuote(cleanSelections, !!customIntegrations);
-  const discountedMonthly = Math.round(
-    quote.monthlyTotalMxn * (1 - DISCOUNT_PCT / 100)
-  );
+  const discountedMonthly = computeDiscountedMonthly(quote.monthlyTotalMxn);
   const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
 
   const today = new Intl.DateTimeFormat("es-MX", {
@@ -242,7 +244,7 @@ ${capRows}
   <div class="label">Total mensual con tu descuento</div>
   <div class="amount">${formatMxn(discountedMonthly)} MXN/mes</div>
 </div>
-<div class="savings">Ahorras ${formatMxn(monthlySaving)} MXN cada mes al presentar esta cotización · ${DISCOUNT_PCT}% off permanente en mensualidad</div>
+<div class="savings">Ahorras ${formatMxn(monthlySaving)} MXN cada mes al presentar esta cotización · ${QUOTE_DISCOUNT_PCT}% off permanente en mensualidad</div>
 <div class="disclaimer">Precios en MXN, no incluyen IVA. Mensualidad recurrente, cancela cuando quieras (el setup nunca se reembolsa). Caps de uso visibles por capability — el exceso se factura aparte.</div>
 
 ${customSection}

@@ -3,7 +3,11 @@ import type { Route } from "./+types/quiz-checkout";
 import { getStripe } from "~/.server/stripe";
 import { config } from "~/.server/config";
 import { CAPABILITIES, ORCHESTRATION_FEE_MXN } from "~/lib/quiz/capabilities";
-import { computeQuote } from "~/lib/quiz/pricing";
+import {
+  computeDiscountedMonthly,
+  computeQuote,
+  QUOTE_DISCOUNT_PCT,
+} from "~/lib/quiz/pricing";
 
 type QuizCheckoutPayload = {
   selections: string[];
@@ -51,13 +55,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const integrationsDesc = customIntegrations?.description?.slice(0, 280) || "";
 
   const quote = computeQuote(cleanSelections, hasCustomIntegrations);
+  const discountedMonthlyMxn = computeDiscountedMonthly(quote.monthlyTotalMxn);
 
   const itemsLabel = [
     ...quote.breakdown.map((b) => b.capability.shortLabel),
     ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
   ].join(" + ");
   const productName = `Agente IA EasyBits — ${itemsLabel}`;
-  const productDescription = `Mensualidad recurrente: soporte humano + monitoreo (${ORCHESTRATION_FEE_MXN} MXN) + ${quote.selectionsCount} capacidades. NOTA: setup único de $8,000 USD se gestiona por WhatsApp tras discovery call — no incluido en este pago${
+  const productDescription = `Mensualidad recurrente con ${QUOTE_DISCOUNT_PCT}% off permanente aplicado: soporte humano + monitoreo (${ORCHESTRATION_FEE_MXN} MXN lista) + ${quote.selectionsCount} capacidades. NOTA: setup único de $8,000 USD se gestiona por WhatsApp tras discovery call — no incluido en este pago${
     hasCustomIntegrations
       ? ". Integraciones custom: discovery + desarrollo cotizado aparte."
       : "."
@@ -72,7 +77,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
         selections: cleanSelections.join(","),
         custom_integrations: hasCustomIntegrations ? "yes" : "no",
         custom_integrations_desc: integrationsDesc,
-        monthly_mxn: String(quote.monthlyTotalMxn),
+        monthly_list_mxn: String(quote.monthlyTotalMxn),
+        monthly_charged_mxn: String(discountedMonthlyMxn),
+        discount_pct: String(QUOTE_DISCOUNT_PCT),
         setup_pending_usd: String(quote.setupOneTimeUsd),
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
@@ -88,7 +95,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
               name: productName,
               description: productDescription,
             },
-            unit_amount: quote.monthlyTotalMxn * 100,
+            unit_amount: discountedMonthlyMxn * 100,
           },
           quantity: 1,
         },

@@ -75,3 +75,10 @@ export const formatUsd = (amount: number): string =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+
+// Descuento permanente al presentar la cotización. Aplica SOLO al mensual
+// (el setup nunca se descuenta). Fuente única usada por UI, PDF y Stripe checkout.
+export const QUOTE_DISCOUNT_PCT = 20;
+
+export const computeDiscountedMonthly = (monthlyTotalMxn: number): number =>
+  Math.round(monthlyTotalMxn * (1 - QUOTE_DISCOUNT_PCT / 100));

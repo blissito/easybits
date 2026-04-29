@@ -74,7 +74,7 @@ export const CapabilityCard = ({
       </motion.div>
 
       {capability.basePriceMxn === 0 ? (
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
           <BrutalButton
             onClick={() => {
               playYes();
@@ -85,6 +85,16 @@ export const CapabilityCard = ({
           >
             Sí, incluir
           </BrutalButton>
+          <button
+            type="button"
+            onClick={() => {
+              playNo();
+              onAnswer(false);
+            }}
+            className="text-sm font-mono text-black/55 hover:text-black underline underline-offset-4 decoration-black/30 hover:decoration-black px-3 py-1 transition-colors"
+          >
+            No incluir, saltar
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">

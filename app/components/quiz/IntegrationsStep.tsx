@@ -139,9 +139,21 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
             <span className="block text-base font-bold text-black">
               Sí, tengo cosas que conectar
             </span>
-            <span className="block text-xs text-black/60 mt-1">
-              Discovery {formatMxn(CUSTOM_INTEGRATIONS_DISCOVERY_MXN)} +
-              desarrollo desde {formatMxn(CUSTOM_INTEGRATIONS_FROM_MXN)}*
+            <span className="flex flex-wrap items-center gap-1.5 mt-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-black text-white text-[10px] font-black uppercase tracking-wider rounded-md">
+                Discovery
+              </span>
+              <span className="text-xs font-bold text-black tabular-nums">
+                {formatMxn(CUSTOM_INTEGRATIONS_DISCOVERY_MXN)}
+              </span>
+              <span className="text-xs text-black/50">+</span>
+              <span className="text-xs text-black/70">
+                desarrollo desde{" "}
+                <span className="font-bold text-black tabular-nums">
+                  {formatMxn(CUSTOM_INTEGRATIONS_FROM_MXN)}
+                </span>
+                *
+              </span>
             </span>
           </button>
         </div>
