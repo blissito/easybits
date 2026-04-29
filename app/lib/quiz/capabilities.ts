@@ -284,7 +284,7 @@ export const CAPABILITIES: Capability[] = [
     description:
       "Lee archivos de Figma, extrae componentes, copy, specs y exporta frames como imágenes. Útil para handoff dev, librerías de marca y auditorías.",
     vendor: "Figma",
-    basePriceMxn: 1500,
+    basePriceMxn: 900,
     bgClass: "bg-brand-red",
     isAddon: false,
     includes: [
