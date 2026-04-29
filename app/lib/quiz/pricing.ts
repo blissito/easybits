@@ -99,23 +99,38 @@ export const computeQuote = (
   };
 };
 
-// Serializa selecciones para URL: "voice:pro,images,whatsapp,memory".
+// Serializa selecciones para URL: "voice_pro,images,whatsapp,memory".
 // Capabilities binarias (tierId === DEFAULT_TIER_ID) van sin sufijo.
+// Usamos "_" en vez de ":" porque algunos proxies/routers tratan ":" raw como
+// reserved (host:port semantics) y devuelven 404.
+const TIER_SEPARATOR = "_";
+
 export const serializeSelections = (selections: Selections): string =>
   Array.from(selections.entries())
     .map(([capId, tierId]) =>
-      tierId === DEFAULT_TIER_ID ? capId : `${capId}:${tierId}`
+      tierId === DEFAULT_TIER_ID ? capId : `${capId}${TIER_SEPARATOR}${tierId}`
     )
     .join(",");
 
-// Parsea selecciones desde URL.
+// Parsea selecciones desde URL. Acepta tanto el formato actual ("voice_pro")
+// como el legacy con dos puntos ("voice:pro") por si algún link viejo sigue
+// rondando.
 export const parseSelections = (str: string): Selections => {
   const result: Selections = new Map();
   const validIds = new Set(CAPABILITIES.map((c) => c.id));
-  for (const entry of str.split(",")) {
-    const [capId, tierId] = entry.trim().split(":");
-    if (!capId || !validIds.has(capId)) continue;
-    result.set(capId, tierId || DEFAULT_TIER_ID);
+  for (const rawEntry of str.split(",")) {
+    const entry = rawEntry.trim();
+    if (!entry) continue;
+    // Try new separator first, fall back to legacy ":".
+    const sepIdx =
+      entry.indexOf(TIER_SEPARATOR) >= 0
+        ? entry.indexOf(TIER_SEPARATOR)
+        : entry.indexOf(":");
+    const capId = sepIdx >= 0 ? entry.slice(0, sepIdx) : entry;
+    const tierId =
+      sepIdx >= 0 ? entry.slice(sepIdx + 1) || DEFAULT_TIER_ID : DEFAULT_TIER_ID;
+    if (!validIds.has(capId)) continue;
+    result.set(capId, tierId);
   }
   return result;
 };
