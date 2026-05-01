@@ -6,10 +6,12 @@ import {
   useNavigate,
   useRevalidator,
   Link,
+  redirect,
 } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { Copy } from "~/components/common/Copy";
-import { getUserOrRedirect } from "~/.server/getters";
+import { getUserOrNull } from "~/.server/getters";
+import { getShareSession } from "~/.server/shareLinks";
 import { db } from "~/.server/db";
 import { PageList, type Section3WithVersions } from "~/components/documents/PageList";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
@@ -208,7 +210,18 @@ export const meta = () => [
 ];
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
-  const user = await getUserOrRedirect(request);
+  const sessionUser = await getUserOrNull(request);
+  const share = await getShareSession(request, {
+    resourceType: "document",
+    resourceId: params.id!,
+  });
+  // Share session takes precedence — guests aren't logged in. The owner
+  // identity drives all subsequent queries so the editor sees their data.
+  const user = share ? share.owner : sessionUser;
+  if (!user) {
+    const url = new URL(request.url);
+    throw redirect("/login?next=" + url.pathname);
+  }
   const landing = await db.landing.findUnique({ where: { id: params.id } });
   if (!landing || landing.ownerId !== user.id || landing.version !== 4) {
     throw new Response("Not found", { status: 404 });
@@ -247,7 +260,14 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return { landing, websiteUrl, sourceContent, logoUrl, direction, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions, brandKits };
+  const shareSession = share
+    ? {
+        permission: share.permission,
+        ownerEmail: share.owner.email,
+      }
+    : null;
+
+  return { landing, websiteUrl, sourceContent, logoUrl, direction, aiGenUsed, aiGenLimit, aiGenBonus, userPlan, sectionVersions, brandKits, shareSession };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -266,7 +286,15 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
 }
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
-  const user = await getUserOrRedirect(request);
+  const sessionUser = await getUserOrNull(request);
+  const share = await getShareSession(request, {
+    resourceType: "document",
+    resourceId: params.id!,
+  });
+  const user = share ? share.owner : sessionUser;
+  if (!user) {
+    return { error: "No autorizado" };
+  }
   const landing = await db.landing.findUnique({ where: { id: params.id } });
   if (!landing || landing.ownerId !== user.id || landing.version !== 4) {
     return { error: "No encontrado" };
@@ -274,6 +302,19 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  // Guests with view permission can read but never write. Edit guests can
+  // mutate content/theme but not deploy/unpublish/delete or create brand kits.
+  if (share) {
+    const writeIntents = ["update-sections", "update-theme"];
+    const ownerOnlyIntents = ["deploy", "unpublish", "delete", "save-brand-kit"];
+    if (share.permission === "view" || ownerOnlyIntents.includes(String(intent))) {
+      return { error: "Permiso insuficiente para esta acción" };
+    }
+    if (share.permission === "edit" && !writeIntents.includes(String(intent))) {
+      return { error: "Esta acción no está disponible en links compartidos" };
+    }
+  }
 
   if (intent === "update-sections") {
     const sections = JSON.parse(String(formData.get("sections") || "[]"));
@@ -371,7 +412,7 @@ export default function DocumentEditor() {
   const {
     landing, websiteUrl, sourceContent, logoUrl, direction,
     aiGenUsed: initialAiGenUsed, aiGenLimit, aiGenBonus, userPlan,
-    sectionVersions: savedVersions, brandKits,
+    sectionVersions: savedVersions, brandKits, shareSession,
   } = useLoaderData<typeof loader>();
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
   const navigate = useNavigate();
@@ -1515,7 +1556,20 @@ export default function DocumentEditor() {
   }
 
   return (
-    <article className="pt-14 pb-0 md:pl-28 w-full h-screen flex flex-col overflow-hidden">
+    <article className={`pb-0 ${shareSession ? "pt-0 md:pl-0" : "pt-14 md:pl-28"} w-full h-screen flex flex-col overflow-hidden`}>
+      {shareSession && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-brand-50 border-b-2 border-black text-xs sm:text-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-black uppercase tracking-wide">EasyBits</span>
+            <span className="text-gray-600 truncate">
+              Compartido por <span className="font-semibold">{shareSession.ownerEmail}</span>
+            </span>
+          </div>
+          <span className="px-2 py-0.5 rounded-full border-2 border-black bg-white font-bold uppercase shrink-0">
+            {shareSession.permission === "view" ? "Solo lectura" : shareSession.permission === "edit" ? "Edición" : "Descarga"}
+          </span>
+        </div>
+      )}
       {/* Top bar */}
       <div className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 py-2 shrink-0 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">

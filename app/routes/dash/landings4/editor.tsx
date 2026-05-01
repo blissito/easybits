@@ -6,11 +6,12 @@ import {
   lazy,
   Suspense,
 } from "react";
-import { useLoaderData, useFetcher, useNavigate, Link } from "react-router";
+import { useLoaderData, useFetcher, useNavigate, Link, redirect } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import { Copy } from "~/components/common/Copy";
-import { getUserOrRedirect } from "~/.server/getters";
+import { getUserOrNull } from "~/.server/getters";
+import { getShareSession } from "~/.server/shareLinks";
 import { db } from "~/.server/db";
 import type { Section3 } from "~/lib/landing3/types";
 import { grapesToSections } from "~/lib/landing4/grapesToSections";
@@ -29,7 +30,16 @@ export const meta = () => [
 ];
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
-  const user = await getUserOrRedirect(request);
+  const sessionUser = await getUserOrNull(request);
+  const share = await getShareSession(request, {
+    resourceType: "landing",
+    resourceId: params.id!,
+  });
+  const user = share ? share.owner : sessionUser;
+  if (!user) {
+    const url = new URL(request.url);
+    throw redirect("/login?next=" + url.pathname);
+  }
   const landing = await db.landing.findUnique({ where: { id: params.id } });
   if (!landing || landing.ownerId !== user.id || landing.version !== 5) {
     throw new Response("Not found", { status: 404 });
@@ -59,7 +69,11 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     },
   });
 
-  return { landing, websiteUrl, brandKits };
+  const shareSession = share
+    ? { permission: share.permission, ownerEmail: share.owner.email }
+    : null;
+
+  return { landing, websiteUrl, brandKits, shareSession };
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
@@ -80,7 +94,15 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
 }
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
-  const user = await getUserOrRedirect(request);
+  const sessionUser = await getUserOrNull(request);
+  const share = await getShareSession(request, {
+    resourceType: "landing",
+    resourceId: params.id!,
+  });
+  const user = share ? share.owner : sessionUser;
+  if (!user) {
+    return { error: "No autorizado" };
+  }
   const landing = await db.landing.findUnique({ where: { id: params.id } });
   if (!landing || landing.ownerId !== user.id || landing.version !== 5) {
     return { error: "No encontrado" };
@@ -88,6 +110,17 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (share) {
+    const writeIntents = ["update-sections", "update-theme"];
+    const ownerOnlyIntents = ["deploy", "unpublish", "delete"];
+    if (share.permission === "view" || ownerOnlyIntents.includes(String(intent))) {
+      return { error: "Permiso insuficiente para esta acción" };
+    }
+    if (share.permission === "edit" && !writeIntents.includes(String(intent))) {
+      return { error: "Esta acción no está disponible en links compartidos" };
+    }
+  }
 
   if (intent === "update-sections") {
     const sections = JSON.parse(String(formData.get("sections") || "[]"));
@@ -197,7 +230,7 @@ function playCompletionSound() {
 }
 
 export default function Landing4Editor() {
-  const { landing, websiteUrl, brandKits } = useLoaderData<typeof loader>();
+  const { landing, websiteUrl, brandKits, shareSession } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const saveFetcher = useFetcher();
   const deployFetcher = useFetcher<{
@@ -802,7 +835,20 @@ export default function Landing4Editor() {
   }
 
   return (
-    <article className="pt-14 pb-0 md:pl-20 w-full h-screen flex flex-col overflow-hidden">
+    <article className={`pb-0 ${shareSession ? "pt-0 md:pl-0" : "pt-14 md:pl-20"} w-full h-screen flex flex-col overflow-hidden`}>
+      {shareSession && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-brand-50 border-b-2 border-black text-xs sm:text-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-black uppercase tracking-wide">EasyBits</span>
+            <span className="text-gray-600 truncate">
+              Compartido por <span className="font-semibold">{shareSession.ownerEmail}</span>
+            </span>
+          </div>
+          <span className="px-2 py-0.5 rounded-full border-2 border-black bg-white font-bold uppercase shrink-0">
+            {shareSession.permission === "view" ? "Solo lectura" : shareSession.permission === "edit" ? "Edición" : "Descarga"}
+          </span>
+        </div>
+      )}
       {/* Top bar */}
       <div className="grid grid-cols-3 items-center px-4 py-2 shrink-0 border-b border-gray-200 bg-white z-10">
         {/* Left: back + name */}

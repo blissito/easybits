@@ -266,6 +266,9 @@ export default [
   // Static site proxy
   route("s/:slug/*", "routes/s.$slug.$.tsx"),
 
+  // Magic share link entry point — validates JWT, sets share cookie, redirects to editor
+  route("share/:token", "routes/share.$token.tsx"),
+
   // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),
   route("/.well-known/oauth-authorization-server", "routes/api/wellknown/oauth-authorization-server.ts"),

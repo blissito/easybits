@@ -207,6 +207,7 @@ model User {
   oauthAuthCodes       OAuthAuthCode[]
   characters           Character[]
   videoGenerations     VideoGeneration[]
+  shareLinks           ShareLink[]
 }
 
 model OAuthClient {
@@ -490,6 +491,25 @@ model ShareToken {
 
   @@index([ownerId])
   @@index([fileId])
+  @@index([expiresAt])
+}
+
+model ShareLink {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  resourceType String    // "document" | "landing"
+  resourceId   String    @db.ObjectId
+  permission   String    // "view" | "edit" | "download"
+  ownerId      String    @db.ObjectId
+  owner        User      @relation(fields: [ownerId], references: [id])
+  source       String    // "mcp" | "ui" | "sdk"
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  lastUsedAt   DateTime?
+  useCount     Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([ownerId])
+  @@index([resourceType, resourceId])
   @@index([expiresAt])
 }
 

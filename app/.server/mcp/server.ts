@@ -402,6 +402,86 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
+    "create_share_link",
+    "Create a magic share link to a document or landing with granular permissions. The recipient opens the URL and accesses the resource without logging in (guest session). Returns `{ url, token, expiresAt, permission, shareLinkId }`.\n\n- permission='view': read-only PDF snapshot (renders inline, no editor).\n- permission='edit': full editor; the visitor's changes save as the owner. Heads up: AI generations consume the owner's credits.\n- permission='download': PDF download (attachment).\n\nDefault expiry is 7 days. Min 60s, max 30 days (clamped). Token is JWT-signed and DB-backed (revocable via revoke_share_link).",
+    {
+      resourceType: z.enum(["document", "landing"]).describe("Type of resource being shared"),
+      resourceId: z.string().describe("ID of the document or landing"),
+      permission: z.enum(["view", "edit", "download"]).describe("Permission level granted to anyone with the link"),
+      expiresIn: z.number().int().optional().describe("Lifetime in seconds (default 604800 = 7 days, min 60, max 2592000 = 30 days)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { createShareLink } = await import("../shareLinks");
+      const result = await createShareLink({
+        resourceType: params.resourceType,
+        resourceId: params.resourceId,
+        permission: params.permission,
+        ownerId: ctx.user.id,
+        expiresIn: params.expiresIn,
+        source: "mcp",
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                url: result.url,
+                token: result.token,
+                expiresAt: result.expiresAt,
+                permission: params.permission,
+                shareLinkId: result.shareLink.id,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    })
+  );
+
+  server.tool(
+    "list_share_links",
+    "List active share links you've created. Filter by resource. Excludes revoked links by default.",
+    {
+      resourceType: z.enum(["document", "landing"]).optional().describe("Filter by resource type"),
+      resourceId: z.string().optional().describe("Filter by a specific resource"),
+      includeRevoked: z.boolean().optional().describe("Include revoked links (default false)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listShareLinks } = await import("../shareLinks");
+      const items = await listShareLinks({
+        ownerId: ctx.user.id,
+        resourceType: params.resourceType,
+        resourceId: params.resourceId,
+        includeRevoked: params.includeRevoked,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ items }, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
+    "revoke_share_link",
+    "Revoke a share link by ID. The link stops working immediately for new requests; cached pages may still render briefly.",
+    {
+      shareLinkId: z.string().describe("ID of the share link to revoke (from create_share_link or list_share_links)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { revokeShareLink } = await import("../shareLinks");
+      const result = await revokeShareLink(params.shareLinkId, ctx.user.id);
+      return {
+        content: [{ type: "text", text: JSON.stringify({ revoked: true, id: result.id }, null, 2) }],
+      };
+    })
+  );
+
+  server.tool(
     "update_file",
     "Update a file's name, access level, or metadata. For access changes (public↔private), copies the object between storage buckets (platform files only). Returns the updated file object with new `url` for public files.",
     {
@@ -2170,18 +2250,73 @@ Call get_docs("document-design") for full design guide with validated patterns.`
   );
 
   server.tool(
+    "clone_document",
+    `Clone or reimagine a document from any visual source (image, PDF, or another EasyBits document) using Gemini Vision. Outputs a NEW document (Landing v4) — does not mutate any existing one.
+
+SOURCE — pass exactly one shape:
+- { type: "image", url } — PNG/JPG. Accepts public URL or data URL ("data:image/png;base64,...").
+- { type: "pdf", fileId, pages? } — PDF stored in EasyBits (upload via upload_file first). Optional 1-indexed page numbers, e.g. [1,3,5].
+- { type: "document", documentId } — clone from another EasyBits document (each page screenshotted as a reference).
+
+MODE:
+- "clone" (default) — faithful pixel-level reproduction at the requested pageFormat. Ignores brandKit.
+- "reimagine" — uses the source as STRUCTURAL reference (information hierarchy + flow) and applies brand colors/fonts/mood. Best paired with brandKitId.
+
+PAGE FORMAT — defaults to "slide-16-9" (1920×1080). Pass any preset key (slide-16-9, letter, ig-feed, ig-square, ig-story, etc.) or { width, height } in pixels (100-10000).
+
+Returns { documentId, totalPages, status: "generating" } immediately. Pages stream in serially — poll get_document to watch progress. ~10-15s per page on Gemini 2.5 Pro.`,
+    {
+      source: z.discriminatedUnion("type", [
+        z.object({ type: z.literal("image"), url: z.string().describe("Public URL or data URL of the reference image") }),
+        z.object({ type: z.literal("pdf"), fileId: z.string().describe("EasyBits file ID of the PDF"), pages: z.array(z.number().int().min(1)).optional().describe("Optional 1-indexed page numbers (default: all pages up to maxPages)") }),
+        z.object({ type: z.literal("document"), documentId: z.string().describe("EasyBits document ID to clone from") }),
+      ]).describe("The visual source to clone or reimagine"),
+      name: z.string().describe("Name for the new document"),
+      pageFormat: z
+        .union([
+          z.enum(["slide-16-9", "letter", "ig-feed", "li-feed", "ig-square", "fb-square", "ig-story", "wsp-status", "tiktok"]),
+          z.object({ width: z.number().int().min(100).max(10000), height: z.number().int().min(100).max(10000) }),
+        ])
+        .optional()
+        .describe("Output canvas. Default 'slide-16-9' (1920×1080). Pass a preset key or { width, height } in pixels."),
+      mode: z.enum(["clone", "reimagine"]).optional().describe("'clone' (default) for faithful reproduction; 'reimagine' to apply brand direction with the source as structural reference"),
+      brandKitId: z.string().optional().describe("Brand kit to apply in reimagine mode. Falls back to user's default brand kit. Ignored in clone mode."),
+      instruction: z.string().optional().describe("Extra guidance for reimagine mode (e.g. 'make it more playful', 'use diagonal accents')"),
+      maxPages: z.number().int().min(1).max(30).optional().describe("Cap on number of pages to generate (default 20, max 30)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { cloneDocument } = await import("../core/documentClone");
+      const result = await cloneDocument(ctx, {
+        source: params.source,
+        name: params.name,
+        pageFormat: params.pageFormat as any,
+        mode: params.mode,
+        brandKitId: params.brandKitId,
+        instruction: params.instruction,
+        maxPages: params.maxPages,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
     "regenerate_document_page",
-    "Create a completely different visual design for a document page while keeping the same content. Useful when the current design doesn't look right. Takes 5-15s.",
+    "Create a completely different visual design for a document page while keeping the same content. Useful when the current design doesn't look right. Takes 5-15s.\n\nThe doc's stored format (letter / slide-16-9 / ig-feed / etc., set at create_document) is honored automatically — DO NOT pass it again here. The AI sees the exact pixel canvas (e.g. 1920×1080 for slides) so layouts fit the frame.",
     {
       documentId: z.string().describe("The document ID"),
       sectionId: z.string().describe("The section/page ID to regenerate (from get_document sections)"),
       direction: directionSchema,
-      pageFormat: z.enum(["letter", "web"]).optional().describe("Page format: 'letter' (8.5×11in, default) or 'web' (1280px wide, flexible height)"),
+      responsive: z.boolean().optional().describe("Override: true → output responsive web HTML (max-w-7xl, flexible height) instead of the doc's fixed canvas. Default false. Most callers should omit this and let the doc's format drive the output."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { documentId, sectionId, direction, pageFormat } = params;
-      const result = await regenerateDocumentPage(ctx, documentId, { sectionId, direction, pageFormat });
+      const { documentId, sectionId, direction, responsive } = params;
+      const result = await regenerateDocumentPage(ctx, documentId, {
+        sectionId,
+        direction,
+        pageFormat: responsive ? "web" : undefined,
+      });
       return { content: [{ type: "text", text: JSON.stringify({ success: true, sectionId, htmlLength: result.html.length, hint: "Use get_page_html to retrieve the updated content" }, null, 2) }] };
     })
   );
