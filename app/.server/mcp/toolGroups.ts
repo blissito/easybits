@@ -91,7 +91,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   // Documents — CRUD
   "list_documents", "get_document",
   "create_document", "update_document", "delete_document",
-  "clone_document",
+  "duplicate_document",
   "open_design_in_editor",
   // Documents — pages
   "set_page_html", "get_page_html",

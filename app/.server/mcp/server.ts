@@ -2463,14 +2463,16 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
     })
   );
 
-  // --- Clone Document Tool ---
+  // --- Duplicate Document Tool (fast in-DB copy, no AI) ---
+  // For Vision-based cloning/reimagining of arbitrary sources (image/pdf/document),
+  // use `clone_document` instead.
 
   server.tool(
-    "clone_document",
-    "Clone an existing document. Creates a copy with all pages, theme, and metadata.",
+    "duplicate_document",
+    "Duplicate an existing document — fast in-DB copy of all pages, theme, and metadata. No AI involved. For Vision-based cloning from images/PDFs/other docs (with optional reimagine + brand kit), use `clone_document` instead.",
     {
-      documentId: z.string().describe("The document ID to clone"),
-      name: z.string().optional().describe("Name for the cloned document (default: original name + ' (copia)')"),
+      documentId: z.string().describe("The document ID to duplicate"),
+      name: z.string().optional().describe("Name for the duplicate (default: original name + ' (copia)')"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
