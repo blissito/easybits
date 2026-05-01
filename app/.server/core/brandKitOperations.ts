@@ -14,6 +14,17 @@ interface BrandKitColors {
 interface BrandKitFonts {
   heading: string;
   body: string;
+  /** Optional typographic scale — pixel sizes (or full descriptors) per role.
+   *  When present, every AI generation/regenerate using this kit will be told
+   *  to use these EXACT sizes — no per-page improvisation. */
+  scale?: {
+    h1?: string;       // e.g. "96px"
+    h2?: string;       // e.g. "48px"
+    h3?: string;       // e.g. "32px"
+    body?: string;     // e.g. "22px"
+    label?: string;    // e.g. "13px uppercase tracking-wide"
+    caption?: string;  // e.g. "14px"
+  };
 }
 
 export async function listBrandKits(userId: string) {
@@ -110,6 +121,7 @@ export function brandKitToDirection(kit: {
     },
     headingFont: f?.heading,
     bodyFont: f?.body,
+    typographyScale: f?.scale,
     mood: kit.mood || undefined,
     extras: c.extras,
   };

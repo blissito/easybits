@@ -16,6 +16,42 @@ import {
 import { sanitizeSemanticColors } from "./sanitizeColors";
 import type { Section3 } from "./types";
 import type { DesignDirection } from "./directions";
+import { GAMMA_LAYOUTS } from "./directions";
+
+/**
+ * Append optional direction fields (audience, voice, density, presets, etc.)
+ * to a base direction-instruction block. Keeps backward-compatible with old
+ * callers that only set name/fonts/colors/mood/layoutHint.
+ */
+function appendDirectionExtras(direction: DesignDirection): string {
+  const lines: string[] = [];
+  if (direction.audience) lines.push(`Audience: ${direction.audience}`);
+  if (direction.voice) lines.push(`Voice / tone: ${direction.voice}`);
+  if (direction.typographyScale) {
+    const s = direction.typographyScale;
+    const parts: string[] = [];
+    if (s.h1) parts.push(`h1=${s.h1}`);
+    if (s.h2) parts.push(`h2=${s.h2}`);
+    if (s.h3) parts.push(`h3=${s.h3}`);
+    if (s.body) parts.push(`body=${s.body}`);
+    if (s.label) parts.push(`label=${s.label}`);
+    if (s.caption) parts.push(`caption=${s.caption}`);
+    if (parts.length > 0) {
+      lines.push(`TYPOGRAPHY SCALE (mandatory — use these EXACT sizes via inline style="font-size: Xpx", NO improvisation): ${parts.join(", ")}`);
+    }
+  }
+  if (direction.density) lines.push(`Density: ${direction.density}`);
+  if (direction.borderRadius) lines.push(`Border radius: ${direction.borderRadius}`);
+  if (direction.shadows) lines.push(`Shadows: ${direction.shadows}`);
+  if (direction.imageryStyle) lines.push(`Imagery style: ${direction.imageryStyle}`);
+  if (direction.contentDiscipline) lines.push(`Content discipline: ${direction.contentDiscipline}`);
+  if (direction.referenceBrands && direction.referenceBrands.length > 0)
+    lines.push(`Reference brands (take design cues from): ${direction.referenceBrands.join(", ")}`);
+  if (direction.layoutPreset && GAMMA_LAYOUTS[direction.layoutPreset])
+    lines.push(`Layout preset (FOLLOW THIS RECIPE EXACTLY): "${direction.layoutPreset}" — ${GAMMA_LAYOUTS[direction.layoutPreset]}`);
+  if (direction.customInstructions) lines.push(`Custom instructions: ${direction.customInstructions}`);
+  return lines.length > 0 ? "\n" + lines.join("\n") : "";
+}
 
 export type PageFormat = "letter" | "web";
 
@@ -295,7 +331,7 @@ COLORS — use ONLY semantic Tailwind classes (the editor injects CSS variables 
 - NEVER use hardcoded hex colors like bg-[#xxx] or text-[#xxx] — always use semantic classes
 - The palette is: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}
 Mood: ${direction.mood}
-Layout approach: ${direction.layoutHint}
+Layout approach: ${direction.layoutHint}${appendDirectionExtras(direction)}
 IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL heading elements and style="font-family: '${direction.bodyFont}'" on ALL body text elements. Include the Google Fonts <link> tag inside the FIRST <section> only.`;
   }
   // Truncate prompt to prevent token overflow (max ~15K chars ≈ 5K tokens)
@@ -340,7 +376,25 @@ const DocumentOutlineSchema = z.object({
     pageNumber: z.number(),
     label: z.string().describe("Page title for sidebar"),
     type: z.enum(["cover", "content", "data", "visual", "closing"]),
-    layoutHint: z.string().describe("Layout approach: split, full-bleed, grid, editorial, table-heavy, sidebar"),
+    layoutPreset: z.enum([
+      "cover",
+      "section-divider",
+      "agenda",
+      "big-statement",
+      "one-big-stat",
+      "stat-grid",
+      "two-column",
+      "three-column",
+      "image-full-bleed",
+      "image-text-split",
+      "bento-grid",
+      "card-grid",
+      "comparison-table",
+      "timeline-vertical",
+      "process-steps",
+      "quote",
+      "closing-cta",
+    ]).describe("Premium layout preset (Gamma-style recipe). Pick the BEST FIT for this page's content. The renderer will follow the recipe exactly."),
     contentBrief: z.string().describe("2-4 sentences describing exactly what goes on this page"),
     keyElements: z.array(z.string()).describe("Specific elements: stats grid, table, hero image, timeline, etc."),
     backgroundStyle: z.enum(["white", "primary", "gradient", "surface-alt", "image"]),
@@ -393,7 +447,7 @@ COLORS — use ONLY semantic Tailwind classes (the editor injects CSS variables 
 - NEVER use hardcoded hex colors like bg-[#xxx] or text-[#xxx] — always use semantic classes
 - The palette is: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}
 Mood: ${direction.mood}
-Layout approach: ${direction.layoutHint}
+Layout approach: ${direction.layoutHint}${appendDirectionExtras(direction)}
 IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL heading elements and style="font-family: '${direction.bodyFont}'" on ALL body text elements. Include the Google Fonts <link> tag inside the FIRST <section> only.`;
 }
 
@@ -472,7 +526,8 @@ RULES:
 - ${pageCountHint}
 ${skipCover ? "- CRITICAL: Do NOT include a cover/title page. The cover already exists. Start with page type 'content', 'data', or 'visual'. NEVER use type 'cover'." : "- First page is ALWAYS a stunning cover/title page."}
 - Distribute content EVENLY — no page should be overloaded
-- Each page must have a DISTINCT layout (mix split, full-bleed, grid, editorial, sidebar, table-heavy)
+- Each page must use a DISTINCT layoutPreset (do not repeat the same preset back-to-back). Pick the BEST FIT per page from the enum: cover (only if skipCover=false), section-divider, agenda, big-statement, one-big-stat, stat-grid, two-column, three-column, image-full-bleed, image-text-split, bento-grid, card-grid, comparison-table, timeline-vertical, process-steps, quote, closing-cta
+- A premium document varies rhythm: at least one stat-heavy preset, one image-led preset, one quote/big-statement break, one closing-cta or section-divider
 - Narrative flows naturally: ${skipCover ? "introduction → detail → data → closing" : "cover → introduction → detail → data → closing"}
 - contentBrief must be detailed enough that a separate AI can generate the page independently
 - keyElements must list specific visual elements (not vague descriptions)
@@ -547,7 +602,7 @@ ${outlineJson}
 YOUR PAGE ASSIGNMENT:
 - Label: ${page.label}
 - Type: ${page.type}
-- Layout: ${page.layoutHint}
+- Layout preset (FOLLOW THIS RECIPE EXACTLY): "${page.layoutPreset}" — ${GAMMA_LAYOUTS[page.layoutPreset]}
 - Background: ${page.backgroundStyle}
 - Content: ${page.contentBrief}
 - Key elements: ${page.keyElements.join(", ")}

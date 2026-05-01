@@ -3,6 +3,48 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { resolveModel, currentDateLine } from "./streamCore";
 
+/**
+ * Premium layout recipes inspired by Gamma. Each recipe is a tight description
+ * of structure + content discipline + visual rhythm — the AI follows it as a
+ * spec instead of inventing a layout from scratch. Use via `direction.layoutPreset`.
+ */
+export const GAMMA_LAYOUTS: Record<string, string> = {
+  cover:
+    "Full-bleed cover. Document title (huge, max 6 words), one-line subtitle (max 12 words), date or author in small caps. Generous whitespace; no body text. Optional accent shape or full-bleed editorial image with dark overlay.",
+  "section-divider":
+    "Chapter break. Section number (small) + section title (huge, single line) + one-sentence intent. 70%+ whitespace. No bullets, no images.",
+  agenda:
+    "Numbered list of 3-7 sections. Each row: number (large), section title (medium), one-line description (muted). Minimal decoration, strong vertical rhythm.",
+  "big-statement":
+    "Single huge headline (display type, 8-15 words max), one supporting line below in body color. Center-aligned. No bullets, no images. The page is the statement.",
+  "one-big-stat":
+    "ONE massive number/percentage (display, takes 50%+ of vertical space) + short label below + one-line implication ('what this means'). NEVER more than one stat. Background can use primary color with on-primary text.",
+  "stat-grid":
+    "3 or 4 stats in a grid. Each cell: number (large), label (small caps), one-line implication (muted). Equal weight; the grid IS the page. No paragraphs.",
+  "two-column":
+    "50/50 split. Left: headline + 2-4 short paragraphs OR 3-5 disciplined bullets (max 15 words each, active voice). Right: visual (image, icon list, key stat, or pull-quote). Vertical center alignment.",
+  "three-column":
+    "Three parallel ideas (e.g. before/during/after, problem/insight/solution, past/present/future). Each column: small icon or number, title, one short paragraph. Equal heights, equal visual weight.",
+  "image-full-bleed":
+    "Full-bleed editorial image with dark overlay (bg-black/40 to bg-black/60). Headline (large, white) + one-line caption sit bottom-left or center. No body text. Image MUST use data-image-query.",
+  "image-text-split":
+    "50/50 image-text split. One half: full-bleed image with object-cover. Other half: title (large) + 2-3 short paragraphs OR 3-4 bullets. No decorative clutter; the image carries the visual.",
+  "bento-grid":
+    "Asymmetric grid (e.g. 2x3 with one tall card and one wide card). Mix of cell types: stat card, image card, quote card, short-text card, icon card. Each cell self-contained. Use border or subtle shadow per cell.",
+  "card-grid":
+    "Uniform grid of 3-6 cards (3x2 or 2x3). Each card: icon or small number, title (medium), one-line description. Equal heights. Use the direction's borderRadius and shadows tokens.",
+  "comparison-table":
+    "Vs / comparison layout. Two or three columns side by side, each with a title and 4-6 rows of features/attributes. Use accent color to highlight the recommended/winning column. Plain rows; no zebra stripes unless density is dense-editorial.",
+  "timeline-vertical":
+    "Chronological events stacked vertically. Each event: date/step (left, accent color), title (medium), one short paragraph. Connecting line on the left. 4-7 events max.",
+  "process-steps":
+    "Numbered horizontal or vertical steps with arrows or chevrons between them. Each step: large number, title, one-line description. 3-5 steps. Equal sizing.",
+  quote:
+    "Centered pull-quote. Huge serif type (or display sans if mood is vibrant), 12-25 words. Attribution below in small caps with author name + role. Plenty of whitespace; optional small portrait on the side.",
+  "closing-cta":
+    "Final page. Big headline ('what's next', 'thank you', or strong CTA), one-line subtitle, contact info or call-to-action button styling, optional small logo. Generous whitespace; mirror the cover's energy.",
+};
+
 export const DesignDirectionSchema = z.object({
   name: z.string().describe("Creative direction name, e.g. 'The Editorial'"),
   tagline: z
@@ -25,6 +67,79 @@ export const DesignDirectionSchema = z.object({
   layoutHint: z
     .string()
     .describe("Layout archetype: 'split-screen', 'editorial', 'immersive-gallery', 'community-feed', 'bento-grid', 'magazine'"),
+
+  // --- Gamma-style premium layout preset ---
+  layoutPreset: z
+    .enum([
+      "cover",
+      "section-divider",
+      "agenda",
+      "big-statement",
+      "one-big-stat",
+      "stat-grid",
+      "two-column",
+      "three-column",
+      "image-full-bleed",
+      "image-text-split",
+      "bento-grid",
+      "card-grid",
+      "comparison-table",
+      "timeline-vertical",
+      "process-steps",
+      "quote",
+      "closing-cta",
+    ])
+    .optional()
+    .describe("Premium layout preset (Gamma-style). When set, the AI follows that exact layout recipe instead of inventing a layout from scratch."),
+
+  // --- Enriched fields (community-valued) ---
+  audience: z
+    .string()
+    .optional()
+    .describe("Target audience, e.g. 'C-level executives', 'technical PMs', 'Gen Z gamers'"),
+  voice: z
+    .string()
+    .optional()
+    .describe("Tone of voice, e.g. 'authoritative and concise', 'warm and inviting', 'playful'"),
+  typographyScale: z
+    .object({
+      h1: z.string().optional(),
+      h2: z.string().optional(),
+      h3: z.string().optional(),
+      body: z.string().optional(),
+      label: z.string().optional(),
+      caption: z.string().optional(),
+    })
+    .optional()
+    .describe("Mandatory pixel sizes per role (h1, h2, h3, body, label, caption) — forces typographic consistency across all pages. Use exact strings like '96px', '6rem', '13px uppercase tracking-wide'"),
+  density: z
+    .enum(["spacious", "comfortable", "compact", "dense-editorial"])
+    .optional()
+    .describe("Content density: spacious=lots of whitespace, dense-editorial=newspaper-style"),
+  borderRadius: z
+    .enum(["sharp", "soft", "rounded", "pill"])
+    .optional()
+    .describe("Corner radius: sharp=0, soft=4-6px, rounded=12-16px, pill=999px"),
+  shadows: z
+    .enum(["none", "subtle", "soft", "dramatic"])
+    .optional()
+    .describe("Shadow style across cards/elements"),
+  imageryStyle: z
+    .string()
+    .optional()
+    .describe("Imagery rules, e.g. 'editorial photography only, no clipart'"),
+  contentDiscipline: z
+    .string()
+    .optional()
+    .describe("Content rules, e.g. 'max 15 words per bullet, active voice'"),
+  referenceBrands: z
+    .array(z.string())
+    .optional()
+    .describe("Brands to take design cues from, e.g. ['Stripe', 'Linear']"),
+  customInstructions: z
+    .string()
+    .optional()
+    .describe("Free-form styling instructions appended to the prompt"),
 });
 
 export type DesignDirection = z.infer<typeof DesignDirectionSchema>;

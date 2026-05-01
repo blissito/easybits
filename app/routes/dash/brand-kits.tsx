@@ -93,13 +93,31 @@ interface ExtraColor {
   hex: string;
 }
 
+interface TypographyScale {
+  h1?: string;
+  h2?: string;
+  h3?: string;
+  body?: string;
+  label?: string;
+  caption?: string;
+}
+
 interface BrandKitForm {
   name: string;
   colors: typeof DEFAULT_COLORS & { extras?: ExtraColor[] };
-  fonts: { heading: string; body: string };
+  fonts: { heading: string; body: string; scale?: TypographyScale };
   mood: string;
   logoUrl: string;
 }
+
+const DEFAULT_SCALE: TypographyScale = {
+  h1: "96px",
+  h2: "48px",
+  h3: "32px",
+  body: "22px",
+  label: "13px uppercase tracking-wide",
+  caption: "14px",
+};
 
 const EMPTY_FORM: BrandKitForm = {
   name: "",
@@ -290,6 +308,7 @@ export default function BrandKitsPage() {
       name: kit.name,
       colors: { primary: c.primary, secondary: c.secondary, accent: c.accent, surface: c.surface, extras: c.extras || [] },
       fonts: (kit.fonts as any) || { heading: "Inter", body: "Inter" },
+      // (scale rides inside fonts.scale — no schema change needed)
       mood: kit.mood || "",
       logoUrl: kit.logoUrl || "",
     });
@@ -517,6 +536,52 @@ export default function BrandKitsPage() {
                   onChange={(v) => setForm({ ...form, fonts: { ...form.fonts, body: v } })}
                 />
               </div>
+            </div>
+
+            <div className="border-2 border-black rounded-xl p-4 bg-gray-50">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-bold">
+                  Escala tipográfica <span className="text-xs font-normal text-gray-600">(opcional — fuerza tamaños consistentes en todas las páginas)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, fonts: { ...form.fonts, scale: { ...DEFAULT_SCALE } } })}
+                  className="text-xs font-bold underline"
+                >
+                  Usar default Gamma
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {(["h1", "h2", "h3", "body", "label", "caption"] as const).map((role) => (
+                  <div key={role}>
+                    <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-600 mb-1">
+                      {role}
+                    </label>
+                    <input
+                      type="text"
+                      value={form.fonts.scale?.[role] || ""}
+                      onChange={(e) => setForm({
+                        ...form,
+                        fonts: {
+                          ...form.fonts,
+                          scale: { ...(form.fonts.scale || {}), [role]: e.target.value || undefined },
+                        },
+                      })}
+                      placeholder={DEFAULT_SCALE[role]}
+                      className="w-full px-2 py-1 text-sm border-2 border-black rounded-lg"
+                    />
+                  </div>
+                ))}
+              </div>
+              {form.fonts.scale && Object.values(form.fonts.scale).some((v) => v) && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, fonts: { ...form.fonts, scale: undefined } })}
+                  className="mt-2 text-xs text-red-600 font-bold underline"
+                >
+                  Limpiar escala
+                </button>
+              )}
             </div>
 
             <div>

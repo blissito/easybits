@@ -2194,19 +2194,61 @@ Call get_docs("document-design") for full design guide with validated patterns.`
   // --- Document AI Tools ---
 
   const directionSchema = z.object({
-    name: z.string().optional().describe("Direction/style name"),
+    // Identity
+    name: z.string().optional().describe("Direction/style name (e.g. 'editorial-modern', 'The Chronicle')"),
+    tagline: z.string().optional().describe("One-line vibe (e.g. 'Bold serif typography meets minimalist space')"),
+
+    // Audience & voice — biggest quality lever per Gamma research
+    audience: z.string().optional().describe("Who reads this (e.g. 'C-level execs', 'technical PMs', 'Gen Z gamers'). Drives vocabulary, density, examples"),
+    voice: z.string().optional().describe("Tone of voice (e.g. 'authoritative and concise', 'warm and inviting', 'playful and bold')"),
+
+    // Typography
     headingFont: z.string().optional().describe("Google Font for headings (e.g. 'Playfair Display')"),
     bodyFont: z.string().optional().describe("Google Font for body text (e.g. 'Inter')"),
+    typographyScale: z.object({
+      h1: z.string().optional().describe("h1 size, e.g. '96px' or '6rem'"),
+      h2: z.string().optional().describe("h2 size, e.g. '48px'"),
+      h3: z.string().optional().describe("h3 size, e.g. '32px'"),
+      body: z.string().optional().describe("body text size, e.g. '22px'"),
+      label: z.string().optional().describe("label/caption size, e.g. '13px uppercase tracking-wide'"),
+      caption: z.string().optional().describe("caption size, e.g. '14px'"),
+    }).optional().describe("Mandatory pixel sizes per role — forces consistency across all pages. When set, the AI MUST use these EXACT sizes, no improvisation. Best supplied at brandkit level so every doc inherits it"),
+
+    // Color & mood
     colors: z.object({
       primary: z.string().describe("Primary color hex"),
       accent: z.string().describe("Accent color hex"),
       surface: z.string().describe("Surface/background color hex"),
       surfaceAlt: z.string().describe("Alt surface color hex"),
       text: z.string().describe("Text color hex"),
-    }).optional().describe("Custom color palette"),
+    }).optional().describe("Custom color palette — when provided, the AI MUST use these exact hex values"),
     mood: z.enum(["dark", "light", "warm", "cool", "vibrant"]).optional().describe("Visual mood"),
-    layoutHint: z.string().optional().describe("Layout style hint (e.g. 'editorial', 'magazine', 'minimal')"),
-  }).optional().describe("Design direction for AI generation — controls fonts, colors, mood, and layout style");
+
+    // Layout & visual system
+    layoutHint: z.string().optional().describe("Layout archetype (e.g. 'editorial', 'split-screen', 'bento-grid', 'magazine', 'asymmetric left/right with strong typography')"),
+    layoutPreset: z.enum([
+      "cover", "section-divider", "agenda", "big-statement",
+      "one-big-stat", "stat-grid", "two-column", "three-column",
+      "image-full-bleed", "image-text-split", "bento-grid", "card-grid",
+      "comparison-table", "timeline-vertical", "process-steps",
+      "quote", "closing-cta",
+    ]).optional().describe("Premium layout preset (Gamma-style recipe). When set, the AI follows the layout EXACTLY — best for nudging a single page toward a known-good structure (e.g. 'one-big-stat' to turn a paragraph-heavy page into one massive number with implication)"),
+    density: z.enum(["spacious", "comfortable", "compact", "dense-editorial"]).optional().describe("Content density — spacious=lots of whitespace, dense-editorial=newspaper-style packed layouts"),
+    borderRadius: z.enum(["sharp", "soft", "rounded", "pill"]).optional().describe("Corner radius across cards/buttons (sharp=0, soft=4-6px, rounded=12-16px, pill=999px)"),
+    shadows: z.enum(["none", "subtle", "soft", "dramatic"]).optional().describe("Shadow style across cards/elements"),
+
+    // Imagery
+    imageryStyle: z.string().optional().describe("Imagery rules (e.g. 'editorial photography only, no clipart', 'abstract gradients only', 'iconography only', 'no imagery')"),
+
+    // Content discipline (Gamma)
+    contentDiscipline: z.string().optional().describe("Content rules (e.g. 'max 15 words per bullet, active voice', 'one big stat per page with implication', 'every section starts with a question')"),
+
+    // Reference brands
+    referenceBrands: z.array(z.string()).optional().describe("Brands to take design cues from (e.g. ['Stripe', 'Linear', 'Vercel'])"),
+
+    // Free-form override
+    customInstructions: z.string().optional().describe("Free-form styling instructions appended to the prompt (Base44-style template). Use sparingly — prefer structured fields above"),
+  }).optional().describe("Design direction for AI generation — typography, color, layout, voice, audience, content discipline. All fields optional; supply only what you want to enforce");
 
   server.tool(
     "generate_document",

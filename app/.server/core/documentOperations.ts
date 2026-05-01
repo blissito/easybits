@@ -6,6 +6,7 @@ import { resolveAiKey } from "./aiKeyOperations";
 import { checkAiGenerationLimit, incrementAiGeneration } from "../aiGenerationLimit";
 import { getAiModel, resolveModelLocal } from "../aiModels";
 import { generateDocumentParallel } from "@easybits.cloud/html-tailwind-generator/generateDocument";
+import { GAMMA_LAYOUTS } from "@easybits.cloud/html-tailwind-generator/directions";
 import { streamText } from "ai";
 import { enrichImages, findImageSlots, generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
 import { sanitizeSemanticColors } from "../sanitizeColors";
@@ -631,12 +632,115 @@ Write an enhanced version of this description:`,
 // --- AI Document Operations ---
 
 interface DirectionOpts {
+  // Identity
   name?: string;
+  tagline?: string;
+
+  // Audience & voice (Gamma's biggest quality lever)
+  audience?: string;
+  voice?: string;
+
+  // Typography
   headingFont?: string;
   bodyFont?: string;
+  /** Mandatory pixel sizes per role — forces consistency across all pages.
+   *  When set (typically from a brand kit), every regenerate uses these EXACT sizes. */
+  typographyScale?: {
+    h1?: string;
+    h2?: string;
+    h3?: string;
+    body?: string;
+    label?: string;
+    caption?: string;
+  };
+
+  // Color & mood
   colors?: { primary: string; accent: string; surface: string; surfaceAlt: string; text: string };
   mood?: string;
+
+  // Layout & visual system (Base44 "styling instructions templates")
   layoutHint?: string;
+  layoutPreset?:
+    | "cover" | "section-divider" | "agenda" | "big-statement"
+    | "one-big-stat" | "stat-grid" | "two-column" | "three-column"
+    | "image-full-bleed" | "image-text-split" | "bento-grid" | "card-grid"
+    | "comparison-table" | "timeline-vertical" | "process-steps"
+    | "quote" | "closing-cta";
+  density?: "spacious" | "comfortable" | "compact" | "dense-editorial";
+  borderRadius?: "sharp" | "soft" | "rounded" | "pill";
+  shadows?: "none" | "subtle" | "soft" | "dramatic";
+
+  // Imagery (callout in research)
+  imageryStyle?: string;
+
+  // Content discipline (Gamma "max 15 words per bullet, active voice")
+  contentDiscipline?: string;
+
+  // Reference brands ("looks like Stripe / Linear / Vercel")
+  referenceBrands?: string[];
+
+  // Free-form override (Base44 styling instructions templates / Replit vibe)
+  customInstructions?: string;
+}
+
+function buildDirectionContext(d?: DirectionOpts): string {
+  if (!d) return "";
+  const has = (v: unknown) => v !== undefined && v !== null && v !== "";
+  const anyField =
+    has(d.name) || has(d.tagline) || has(d.audience) || has(d.voice) ||
+    has(d.headingFont) || has(d.bodyFont) || has(d.typographyScale) ||
+    has(d.colors) || has(d.mood) ||
+    has(d.layoutHint) || has(d.layoutPreset) || has(d.density) || has(d.borderRadius) || has(d.shadows) ||
+    has(d.imageryStyle) || has(d.contentDiscipline) ||
+    (d.referenceBrands && d.referenceBrands.length > 0) || has(d.customInstructions);
+  if (!anyField) return "";
+
+  const c = (d.colors || {}) as Record<string, string>;
+  const lines: string[] = ["", "DESIGN DIRECTION:"];
+
+  if (d.name) lines.push(`- Name: ${d.name}${d.tagline ? ` — ${d.tagline}` : ""}`);
+  else if (d.tagline) lines.push(`- Tagline: ${d.tagline}`);
+  if (d.audience) lines.push(`- Audience: ${d.audience}`);
+  if (d.voice) lines.push(`- Voice / tone: ${d.voice}`);
+  if (d.mood) lines.push(`- Mood: ${d.mood}`);
+  if (d.layoutHint) lines.push(`- Layout hint: ${d.layoutHint}`);
+  if (d.layoutPreset) {
+    const recipe = GAMMA_LAYOUTS[d.layoutPreset];
+    if (recipe) lines.push(`- Layout preset (FOLLOW THIS RECIPE EXACTLY): "${d.layoutPreset}" — ${recipe}`);
+  }
+  if (d.density) lines.push(`- Density: ${d.density}`);
+  if (d.headingFont) lines.push(`- Heading font: ${d.headingFont} (inline style on ALL headings)`);
+  if (d.bodyFont) lines.push(`- Body font: ${d.bodyFont} (inline style on ALL body text)`);
+  if (d.typographyScale) {
+    const s = d.typographyScale;
+    const parts: string[] = [];
+    if (s.h1) parts.push(`h1=${s.h1}`);
+    if (s.h2) parts.push(`h2=${s.h2}`);
+    if (s.h3) parts.push(`h3=${s.h3}`);
+    if (s.body) parts.push(`body=${s.body}`);
+    if (s.label) parts.push(`label=${s.label}`);
+    if (s.caption) parts.push(`caption=${s.caption}`);
+    if (parts.length > 0) {
+      lines.push(`- TYPOGRAPHY SCALE (mandatory — use these EXACT sizes via inline style="font-size: Xpx", NO improvisation): ${parts.join(", ")}`);
+    }
+  }
+  if (d.borderRadius) lines.push(`- Border radius: ${d.borderRadius}`);
+  if (d.shadows) lines.push(`- Shadows: ${d.shadows}`);
+  if (d.imageryStyle) lines.push(`- Imagery style: ${d.imageryStyle}`);
+  if (d.contentDiscipline) lines.push(`- Content discipline: ${d.contentDiscipline}`);
+  if (d.referenceBrands && d.referenceBrands.length > 0)
+    lines.push(`- Reference brands (take design cues from): ${d.referenceBrands.join(", ")}`);
+  if (has(c.primary) || has(c.accent) || has(c.surface)) {
+    lines.push(
+      `- Colors: primary=${c.primary || "N/A"}, accent=${c.accent || "N/A"}, surface=${c.surface || "N/A"}, surfaceAlt=${c.surfaceAlt || "N/A"}, text=${c.text || "N/A"}`
+    );
+    lines.push(
+      `- COLOR RULE (mandatory): The page MUST use these exact hex values via Tailwind arbitrary classes (bg-[${c.primary || "#..."}], text-[${c.text || "#..."}], etc.) OR the project's semantic tokens (bg-primary, text-on-surface). DO NOT invent new colors regardless of any layout/style hints above.`
+    );
+  }
+  if (d.customInstructions) lines.push(`- Custom instructions: ${d.customInstructions}`);
+
+  return "\n" + lines.join("\n");
 }
 
 export async function uploadLogoToStorage(dataUrl: string, userId: string): Promise<string> {
@@ -976,17 +1080,7 @@ async function _refineInternal(
   const docContext = doc.prompt ? `\n\nDOCUMENT CONTEXT: ${doc.prompt}` : "";
 
   // Direction context
-  let directionContext = "";
-  if (opts.direction?.headingFont || opts.direction?.bodyFont) {
-    const d = opts.direction;
-    const colors = (d.colors || {}) as Record<string, string>;
-    directionContext = `\n\nDESIGN DIRECTION:
-- Mood: ${d.mood || "professional"}
-- Layout hint: ${d.layoutHint || "clean and structured"}
-- Heading font: ${d.headingFont} (inline style)
-- Body font: ${d.bodyFont} (inline style)
-- Colors: primary=${colors.primary || "N/A"}, accent=${colors.accent || "N/A"}, surface=${colors.surface || "N/A"}`;
-  }
+  const directionContext = buildDirectionContext(opts.direction);
 
   // Read format/intent from doc metadata so social/presentation docs get
   // format-aware prompts (1080×1920 Stories, 1080×1350 IG feed, etc.)
