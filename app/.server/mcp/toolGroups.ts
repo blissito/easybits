@@ -14,7 +14,6 @@ export type ToolGroupKey =
   | "core"
   | "design"
   | "docs"
-  | "slides"
   | "sites"
   | "brand"
   | "magnet"
@@ -37,9 +36,9 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "design",
     label: "Design",
     description:
-      "Canva-like: documentos, presentaciones, brand kits e imágenes. Ideal para Claude.ai / Claude Design.",
+      "Canva-like: documentos como diseño universal (cualquier formato — letter, social, slide 16:9), brand kits e imágenes. Ideal para Claude.ai / Claude Design.",
     recommended: true,
-    toolCount: 60,
+    toolCount: 42,
   },
   {
     key: "core",
@@ -52,11 +51,9 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Documents",
     description: "Solo tools de documentos (create/update/deploy + quotations + structured_doc).",
   },
-  {
-    key: "slides",
-    label: "Presentations",
-    description: "Solo tools de presentaciones (crear, editar, deployar slides).",
-  },
+  // REVISIT (2026-04-30): "slides" group removed. Docs (slide-16-9 preset) cubren
+  // el caso 2D. Decidir si se rescata el motor 3D como bloque de docs o se elimina.
+  // Detalle: memory/todo_revisit_presentations_3d.md
   {
     key: "sites",
     label: "Websites",
@@ -122,19 +119,6 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "import_html",
   "search_files",
   "list_themes",
-  // Presentations — CRUD
-  "list_presentations", "get_presentation",
-  "create_presentation", "update_presentation", "delete_presentation",
-  "clone_presentation",
-  // Presentations — slides
-  "add_slide", "delete_slide", "reorder_slides",
-  "set_slide_html", "get_slide_html",
-  "get_slide_screenshot",
-  // Presentations — styles (clone-style feature)
-  "list_presentation_styles", "save_presentation_style", "delete_presentation_style",
-  // Presentations — deploy / export
-  "deploy_presentation", "unpublish_presentation",
-  "get_presentation_pdf",
   // Images
   "generate_image", "transform_image",
   "optimize_image",

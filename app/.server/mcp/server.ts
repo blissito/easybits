@@ -82,15 +82,6 @@ import {
   importDatabase,
 } from "../core/databaseOperations";
 import {
-  listPresentations,
-  getPresentation,
-  createPresentation,
-  updatePresentation,
-  deletePresentation,
-  deployPresentation,
-  unpublishPresentation,
-} from "../core/presentationOperations";
-import {
   listDocuments,
   getDocument,
   createDocument,
@@ -247,16 +238,14 @@ export function createMcpServer(groups?: string[]) {
   if (enabled.has("all")) {
     registerCoreTools(server);
     registerDocTools(server);
-    registerSlideTools(server);
     registerSiteTools(server);
     registerBrandTools(server);
     registerVideoTools(server);
   } else if (enabled.has("design")) {
-    // Design = Canva-like: docs + slides + brand + image tools from core + video.
+    // Design = Canva-like: documents as universal design surface + brand + images + video.
     // Allowlist below filters to the curated subset.
     registerCoreTools(server);
     registerDocTools(server);
-    registerSlideTools(server);
     registerBrandTools(server);
     registerVideoTools(server);
   } else if (enabled.has("magnet") || coreOnly) {
@@ -269,7 +258,6 @@ export function createMcpServer(groups?: string[]) {
   } else {
     if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
     if (enabled.has("docs")) registerDocTools(server);
-    if (enabled.has("slides")) registerSlideTools(server);
     if (enabled.has("sites")) registerSiteTools(server);
     if (enabled.has("brand")) registerBrandTools(server);
     if (enabled.has("video")) {
@@ -965,7 +953,7 @@ How to embed safely (the only reliable rule):
     "get_docs",
     "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
     {
-      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, presentations, presentation-design, documents, document-design, account, sdk, errors, tool-groups"),
+      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, documents, document-design, account, sdk, errors, tool-groups"),
     },
     async (params) => {
       const markdown = getDocsMarkdown(params.section);
@@ -2358,358 +2346,13 @@ Call get_docs("document-design") for full design guide with validated patterns.`
   );
 }
 
-// ─── Slide/Presentation Tools ───────────────────────────────────
-function registerSlideTools(server: McpServer) {
-  // --- Presentation Tools ---
-
-  server.tool(
-    "list_presentations",
-    "List your presentations (id, name, prompt, theme, status, websiteId, createdAt).",
-    {},
-    wrapHandler(async (_params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listPresentations(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "get_presentation",
-    "Get a presentation by ID with full slide data.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getPresentation(ctx, params.presentationId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "create_presentation",
-    `Create a new presentation. Slides are optional — you can add them later via add_slide or update_presentation.
-
-If providing slide html, each slide MUST follow these rules:
-- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
-- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
-- Max 3 cards, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
-- Colors: ONLY semantic classes (bg-primary, text-on-surface, etc.) — never hex.
-- NO emoji, NO JavaScript, NO inline styles. Images: data-image-query="english keywords".
-- HTML must be well-formed (balanced tags).
-Call get_docs("presentation-design") for the full design guide with validated patterns and layout classes.`,
-    {
-      name: z.string().describe("Presentation name"),
-      prompt: z.string().describe("Description or prompt for the presentation"),
-      slides: z.array(z.object({
-        id: z.string().describe("Unique slide ID"),
-        order: z.number().describe("Slide order (0-based)"),
-        type: z.enum(["2d", "3d"]).optional().describe("Slide type (default: 2d)"),
-        html: z.string().optional().describe("HTML content of the slide"),
-      })).optional().describe("Array of slides"),
-      theme: z.string().optional().describe("Reveal.js theme (default: black). Options: black, white, league, beige, night, serif, simple, solarized, moon, dracula, sky, blood"),
-      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
-      transition: z.string().optional().describe("Slide transition (default: slide). Options: slide, fade, convex, concave, zoom, none"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createPresentation(ctx, params as any);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "update_presentation",
-    "Update a presentation's name, slides, theme, or prompt. Replaces ALL slides when slides[] is provided — for editing a single slide, use set_slide_html instead. Each slide: { id, order, html }. Slide HTML must follow layout rules — call get_docs('presentation-design') for the full guide.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      name: z.string().optional().describe("New name"),
-      prompt: z.string().optional().describe("New prompt/description"),
-      slides: z.array(z.object({
-        id: z.string().describe("Unique slide ID"),
-        order: z.number().describe("Slide order (0-based)"),
-        type: z.enum(["2d", "3d"]).optional().describe("Slide type"),
-        html: z.string().optional().describe("HTML content of the slide"),
-      })).optional().describe("Replace all slides"),
-      theme: z.string().optional().describe("Reveal.js theme"),
-      paletteId: z.string().optional().describe("Color palette ID. Options: midnight, ocean, forest, corporate, neon, sunset, slate, rosé, sand, aurora, galaxy, easybits, minimal, brutal, retro"),
-      transition: z.string().optional().describe("Slide transition. Options: slide, fade, convex, concave, zoom, none"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { presentationId, ...opts } = params;
-      const result = await updatePresentation(ctx, presentationId, opts as any);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "delete_presentation",
-    "Delete a presentation permanently.",
-    {
-      presentationId: z.string().describe("The presentation ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deletePresentation(ctx, params.presentationId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "deploy_presentation",
-    "Publish a presentation as a live website at www.easybits.cloud/s/{slug}/ — shareable link, no hosting needed. Returns the public URL. Requires at least one slide.",
-    {
-      presentationId: z.string().describe("The presentation ID to deploy"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deployPresentation(ctx, params.presentationId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "unpublish_presentation",
-    "Unpublish a presentation, removing its website and reverting to draft status.",
-    {
-      presentationId: z.string().describe("The presentation ID to unpublish"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await unpublishPresentation(ctx, params.presentationId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "get_slide_screenshot",
-    "Take a screenshot of a single presentation slide. Returns a PNG image (960x540). Requires Chrome installed locally — designed for Claude Code MCP usage.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideIndex: z.number().optional().describe("Slide index (0-based, default 0)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
-      const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, params.slideIndex ?? 0);
-      return { content: [result] };
-    })
-  );
-
-  // --- Granular Slide CRUD ---
-
-  server.tool(
-    "get_slide_html",
-    "Get the HTML content of a single slide. Returns { slideId, order, html }. Use this to read a slide before editing it with set_slide_html.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideId: z.string().describe("The slide ID (from get_presentation slides[].id)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { getSlideHtml } = await import("../core/presentationOperations");
-      const result = await getSlideHtml(ctx, params.presentationId, params.slideId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "set_slide_html",
-    `Replace the ENTIRE HTML of a single slide. This is the primary tool for editing slides — use it when rewriting or changing a slide's content.
-
-SLIDE LAYOUT RULES (MANDATORY):
-- Root: <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">
-- Text: max text-3xl for titles (text-4xl ONLY on cover). Body: text-sm/text-base.
-- Max 3 cards in grids, max 3 KPIs, max 5 bullets (8 words each), max 4 timeline items.
-- Max 2 columns side by side. Tables: max 4 columns, text-xs.
-- Colors: ONLY semantic classes (bg-primary, text-on-surface, bg-surface-alt, etc.) — never hardcoded hex.
-- Contrast: dark bg → text-white or text-on-primary. Light bg → text-gray-900 or text-on-surface.
-- NO emoji — use data-icon-query="icon-name" for icons (auto-resolved to SVG).
-- NO JavaScript, NO inline styles (exception: style="width:XX%" for progress bars).
-- Images: <img data-image-query="english search keywords" class="..." /> for auto Pexels enrichment.
-- CRITICAL: HTML MUST be well-formed. Every <div> needs </div>. Unbalanced tags break the viewer.
-- Use the CSS layout classes: .card-grid, .timeline, .kpi-row, .vs-grid, .blockquote-card, .pill-row, .icon-list, .data-table, .progress-bar, .diagram, .centered, .columns+.col, .three-bg.
-Call get_docs("presentation-design") for the full design guide with validated patterns.`,
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideId: z.string().describe("The slide ID to update (from get_presentation slides[].id)"),
-      html: z.string().describe("New HTML content for the slide"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { setSlideHtml } = await import("../core/presentationOperations");
-      const result = await setSlideHtml(ctx, params.presentationId, params.slideId, params.html);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "add_slide",
-    `Add a new slide to a presentation. If html is omitted, adds a blank slide. Use afterSlideId to insert after a specific slide; omit to append at the end.
-
-If providing html, it MUST follow slide layout rules: root <section class="w-[960px] h-[540px] relative overflow-hidden flex flex-col p-12">, semantic colors only, max 3 cards/KPIs, max 5 bullets, no emoji, no JS, no inline styles. See set_slide_html description or call get_docs("presentation-design") for full rules.`,
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      html: z.string().optional().describe("HTML content for the new slide. Omit for a blank slide"),
-      afterSlideId: z.string().optional().describe("Insert after this slide ID. Omit to append at end"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { addSlide } = await import("../core/presentationOperations");
-      const result = await addSlide(ctx, params.presentationId, {
-        html: params.html,
-        afterSlideId: params.afterSlideId,
-      });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "delete_slide",
-    "Delete a single slide from a presentation. Remaining slides are automatically reindexed.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideId: z.string().describe("The slide ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { deleteSlide } = await import("../core/presentationOperations");
-      const result = await deleteSlide(ctx, params.presentationId, params.slideId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "reorder_slides",
-    "Reorder slides in a presentation. Pass the complete array of slide IDs in the desired order. Any slides not in the array are appended at the end.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-      slideIds: z.array(z.string()).describe("Ordered array of slide IDs"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { reorderSlides } = await import("../core/presentationOperations");
-      const result = await reorderSlides(ctx, params.presentationId, params.slideIds);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "get_presentation_pdf",
-    "Export a presentation as a PDF file (one slide per page, 960×540px landscape). Returns base64-encoded PDF data. Requires Chrome installed locally — designed for Claude Code MCP usage.",
-    {
-      presentationId: z.string().describe("The presentation ID"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { takePresentationPdf } = await import("../core/presentationScreenshot");
-      const pdf = await takePresentationPdf(ctx.user.id, params.presentationId);
-      if (!pdf) {
-        return { content: [{ type: "text", text: "Failed to generate PDF. Ensure the presentation has slides and Chrome is installed." }] };
-      }
-      return {
-        content: [{
-          type: "resource",
-          resource: {
-            uri: `easybits://presentation/${params.presentationId}/pdf`,
-            mimeType: "application/pdf",
-            blob: pdf.toString("base64"),
-          },
-        }],
-      };
-    })
-  );
-
-  // --- Presentation Clone & Styles ---
-
-  server.tool(
-    "clone_presentation",
-    "[EXPERIMENTAL] Clone or get inspired by a PDF to create a presentation. Upload a PDF first with upload_file, then pass the fileId. Mode 'clone' reproduces each page as HTML+Tailwind (best effort, quality varies). Mode 'inspire' extracts the design style and applies it to new content. Returns immediately — poll with get_presentation to see slides appear. Default model: gemini-2.5-pro.",
-    {
-      fileId: z.string().describe("EasyBits file ID of the uploaded PDF"),
-      mode: z.enum(["clone", "inspire"]).describe("'clone' = faithful reproduction, 'inspire' = extract style for new content"),
-      name: z.string().describe("Name for the new presentation"),
-      content: z.string().optional().describe("For 'inspire' mode: the topic/content for the new presentation"),
-      styleId: z.string().optional().describe("Reuse a previously saved style instead of extracting from the PDF"),
-      maxPages: z.number().optional().describe("Max pages to process (default 20)"),
-      model: z.string().optional().describe("AI model to use (default: gemini-2.5-flash)"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { clonePresentationFromPdf } = await import("../core/presentationClone");
-      const result = await clonePresentationFromPdf(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "save_presentation_style",
-    "Extract and save the visual style from a presentation as a reusable 'Style LoRA'. Once saved, use the styleId with clone_presentation in 'inspire' mode to generate unlimited presentations with that style.",
-    {
-      presentationId: z.string().describe("The presentation ID to extract style from"),
-      name: z.string().describe("Name for the style (e.g. 'Udemy Corporate 2026')"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { getPresentation } = await import("../core/presentationOperations");
-      const { savePresentationStyle } = await import("../core/presentationStyles");
-      const { pdfToImages } = await import("../core/pdfToImages");
-
-      // Get presentation slides, render them as images for style extraction
-      const pres = await getPresentation(ctx, params.presentationId);
-      const slides = (pres.slides as any[]) || [];
-      if (slides.length === 0) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "Presentation has no slides" }) }] };
-      }
-
-      // Take screenshots of representative slides for style extraction
-      const { takeSlideScreenshot } = await import("../core/presentationScreenshot");
-      const indices = slides.length <= 4
-        ? slides.map((_: any, i: number) => i)
-        : [0, Math.floor(slides.length / 3), Math.floor(2 * slides.length / 3), slides.length - 1];
-
-      const pageImages: string[] = [];
-      for (const idx of indices) {
-        const result = await takeSlideScreenshot(ctx.user.id, params.presentationId, idx);
-        if (result.type === "image") pageImages.push(result.data);
-      }
-
-      if (pageImages.length === 0) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "Could not capture slide screenshots" }) }] };
-      }
-
-      const style = await savePresentationStyle(ctx, { name: params.name, pageImages });
-      return { content: [{ type: "text", text: JSON.stringify(style, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "list_presentation_styles",
-    "List your saved presentation styles ('Style LoRAs'). Use a styleId with clone_presentation to generate presentations in that style.",
-    {},
-    wrapHandler(async (_params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { listPresentationStyles } = await import("../core/presentationStyles");
-      const styles = await listPresentationStyles(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(styles, null, 2) }] };
-    })
-  );
-
-  server.tool(
-    "delete_presentation_style",
-    "Delete a saved presentation style.",
-    {
-      styleId: z.string().describe("The style ID to delete"),
-    },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { deletePresentationStyle } = await import("../core/presentationStyles");
-      const result = await deletePresentationStyle(ctx, params.styleId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    })
-  );
-}
+// ─── Slide/Presentation Tools — REMOVED 2026-04-30 ──────────────
+// MCP slide tools were removed to push documents (`format.preset: "slide-16-9"`)
+// as the universal design surface. Underlying core (`presentationOperations`,
+// `presentationClone`, `buildRevealHtml`) and routes (`/dash/presentations`,
+// `/api/v2/presentations*`) still exist.
+// REVISIT: rescue the Three.js 3D engine as a doc block, or eliminate the
+// entire feature. See memory/todo_revisit_presentations_3d.md.
 
 // ─── Website/Site Tools ─────────────────────────────────────────
 function registerSiteTools(server: McpServer) {

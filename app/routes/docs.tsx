@@ -1126,7 +1126,6 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                     ["core", "12", "Files, DB, documents, quotations, usage stats (default)"],
                     ["files", "~37", "All file ops: bulk, sharing, permissions, webhooks, image transforms, AI keys"],
                     ["docs", "~33", "All document tools: AI generation, refine, screenshots, structured docs"],
-                    ["slides", "~18", "Presentations: slides, deploy, PDF, style templates"],
                     ["sites", "~8", "Websites: CRUD, file upload, deploy"],
                     ["brand", "~8", "Brand kits, templates, themes"],
                     ["all", "~104", "Everything"],
