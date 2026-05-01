@@ -2250,6 +2250,71 @@ Call get_docs("document-design") for full design guide with validated patterns.`
   );
 
   server.tool(
+    "apply_brand_kit",
+    `Swap the brand kit on an existing document. Updates metadata.brandKitId + metadata.customColors so deployed renders pick up the new theme automatically (semantic Tailwind classes do the work — no AI needed).
+
+Pass \`regenerate: true\` to ALSO have the AI rethink each page's layout under the new mood/fonts (slow — runs regenerate_document_page per section serially).
+
+Defaults to the user's default brand kit if brandKitId is omitted. Returns the kit applied + (when regenerated) per-page success/failure counts.`,
+    {
+      documentId: z.string().describe("The document ID"),
+      brandKitId: z.string().optional().describe("Brand kit to apply. Falls back to user's default kit when omitted."),
+      regenerate: z.boolean().optional().describe("Also regenerate every page so the AI rethinks layouts under the new mood/fonts (slow). Default false — semantic classes already re-render with new colors."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { applyBrandKit } = await import("../core/documentTransform");
+      const result = await applyBrandKit(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "change_document_format",
+    `Change a document's canvas size (e.g., letter → slide-16-9, or to a social preset). Updates metadata.format + metadata.intent.
+
+Defaults to regenerating all pages because stale pixel-width classes (e.g. \`w-[816px]\`) inside a new canvas would break visually. Pass \`regenerate: false\` only if you plan to call regenerate_document_page yourself or rebuild the pages from scratch afterwards.
+
+Accepts a preset key (slide-16-9, letter, ig-feed, ig-square, ig-story, etc.) OR { width, height } in pixels (100-10000).`,
+    {
+      documentId: z.string().describe("The document ID"),
+      pageFormat: z.union([
+        z.enum(["slide-16-9", "letter", "ig-feed", "li-feed", "ig-square", "fb-square", "ig-story", "wsp-status", "tiktok"]),
+        z.object({ width: z.number().int().min(100).max(10000), height: z.number().int().min(100).max(10000) }),
+      ]).describe("Target canvas — preset key or { width, height }"),
+      regenerate: z.boolean().optional().describe("Regenerate all pages for the new canvas. Default true."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { changeDocumentFormat } = await import("../core/documentTransform");
+      const result = await changeDocumentFormat(ctx, {
+        documentId: params.documentId,
+        pageFormat: params.pageFormat as any,
+        regenerate: params.regenerate,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "wait_for_document",
+    `Block until a document's background generation stabilizes (no recent updates AND minimum sections present), or timeout. Use after clone_document or any tool that returns status:"generating" so you can respond once the doc is ready instead of polling get_document yourself.
+
+Returns { ready, sectionCount, elapsedMs }. ready:false means timeout — call again or fall back to get_document.`,
+    {
+      documentId: z.string().describe("The document ID to wait on"),
+      minSections: z.number().int().min(1).optional().describe("Minimum number of content sections required before considering it ready (default 1)"),
+      timeoutMs: z.number().int().min(1000).max(120000).optional().describe("Hard timeout in ms (default 60000, max 120000)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { waitForDocument } = await import("../core/documentTransform");
+      const result = await waitForDocument(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
     "clone_document",
     `Clone or reimagine a document from any visual source (image, PDF, or another EasyBits document) using Gemini Vision. Outputs a NEW document (Landing v4) — does not mutate any existing one.
 

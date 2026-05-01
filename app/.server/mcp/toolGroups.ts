@@ -135,6 +135,8 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "create_share_link", "list_share_links", "revoke_share_link",
   // Vision-based document cloning / reimagining
   "clone_document",
+  // Document transforms (chat-style editing)
+  "apply_brand_kit", "change_document_format", "wait_for_document",
 ]);
 
 export const CORE_ALLOWLIST = new Set<string>([
@@ -171,6 +173,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
   "create_share_link", "list_share_links", "revoke_share_link",
   "clone_document",
+  "apply_brand_kit", "change_document_format", "wait_for_document",
 ]);
 
 /** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */

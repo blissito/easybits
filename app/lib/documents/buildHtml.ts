@@ -266,20 +266,43 @@ ${branding}
 <script>
 (function() {
   var el = document.getElementById('flipbook');
-  var W = Math.min(window.innerWidth - 32, 612);
-  var H = Math.round(W * (11 / 8.5));
+  // Native page dimensions — driven by metadata.format on the document.
+  // Letter: 816×1056 (default). Slide-16-9: 1920×1080. Social: 1080×1080/1350/1920. Etc.
+  var NATIVE_W = ${pageW};
+  var NATIVE_H = ${pageH};
+  var ASPECT = NATIVE_H / NATIVE_W;
+  var IS_LANDSCAPE = NATIVE_W > NATIVE_H;
+  // Cap viewer width so very large canvases don't try to render at native size.
+  // Landscape decks get more room (capped at 1100); portrait at 612 like before.
+  var MAX_W = IS_LANDSCAPE ? 1100 : 612;
+
+  function computeSize() {
+    var availableW = window.innerWidth - 32;
+    var availableH = window.innerHeight - 120; // toolbar + padding
+    var w = Math.min(availableW, MAX_W);
+    var h = Math.round(w * ASPECT);
+    if (h > availableH) {
+      h = availableH;
+      w = Math.round(h / ASPECT);
+    }
+    return { w: w, h: h };
+  }
+
+  var size = computeSize();
+  var W = size.w;
+  var H = size.h;
 
   var flip = new St.PageFlip(el, {
     width: W,
     height: H,
     size: 'fixed',
-    minWidth: 300,
-    maxWidth: 612,
-    minHeight: 400,
-    maxHeight: 792,
-    showCover: true,
+    minWidth: 200,
+    maxWidth: MAX_W,
+    minHeight: Math.round(200 * ASPECT),
+    maxHeight: Math.round(MAX_W * ASPECT),
+    showCover: !IS_LANDSCAPE, // single-page first only makes sense for portrait books
     mobileScrollSupport: false,
-    usePortrait: true,
+    usePortrait: !IS_LANDSCAPE,
     startPage: 0,
     drawShadow: true,
     flippingTime: 600,
@@ -290,11 +313,11 @@ ${branding}
 
   flip.loadFromHTML(document.querySelectorAll('.flipbook-page'));
 
-  // Scale page content to fit the flipbook page size
+  // Scale page content (designed at NATIVE_W × NATIVE_H) into the flipbook size.
   function scalePages() {
     var pages = document.querySelectorAll('.page-inner');
-    var scaleX = W / 816;
-    var scaleY = H / 1056;
+    var scaleX = W / NATIVE_W;
+    var scaleY = H / NATIVE_H;
     var scale = Math.min(scaleX, scaleY);
     for (var i = 0; i < pages.length; i++) {
       pages[i].style.transform = 'scale(' + scale + ')';
@@ -339,8 +362,9 @@ ${branding}
 
   // Responsive resize
   window.addEventListener('resize', function() {
-    W = Math.min(window.innerWidth - 32, 612);
-    H = Math.round(W * (11 / 8.5));
+    var s = computeSize();
+    W = s.w;
+    H = s.h;
     flip.updateSetting({ width: W, height: H });
     flip.update();
     scalePages();
