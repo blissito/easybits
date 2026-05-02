@@ -2368,7 +2368,7 @@ MODE:
 - "clone" (default) — faithful pixel-level reproduction at the requested pageFormat. Ignores brandKit.
 - "reimagine" — uses the source as STRUCTURAL reference (information hierarchy + flow) and applies brand colors/fonts/mood. Best paired with brandKitId.
 
-PAGE FORMAT — defaults to "slide-16-9" (1920×1080). Pass any preset key (slide-16-9, letter, ig-feed, ig-square, ig-story, etc.) or { width, height } in pixels (100-10000).
+PAGE FORMAT — auto-detected from the source aspect ratio when omitted: 16:9-ish source → slide-16-9, 1:1 → ig-square, 4:5 → ig-feed, 9:16 → ig-story, document source uses its own metadata.format. Falls back to letter for portrait scans / unknown ratios. Pass an explicit preset key (slide-16-9, letter, ig-feed, ig-square, ig-story, etc.) or { width, height } in pixels (100-10000) to override.
 
 Returns { documentId, totalPages, status: "generating" } immediately. Pages stream in serially — poll get_document to watch progress. ~10-15s per page on Gemini 2.5 Pro.`,
     {
@@ -2384,7 +2384,7 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
           z.object({ width: z.number().int().min(100).max(10000), height: z.number().int().min(100).max(10000) }),
         ])
         .optional()
-        .describe("Output canvas. Default 'slide-16-9' (1920×1080). Pass a preset key or { width, height } in pixels."),
+        .describe("Output canvas. Default: auto-detected from source aspect ratio (16:9 → slide-16-9, 1:1 → ig-square, 4:5 → ig-feed, 9:16 → ig-story; portrait/unknown → letter). Pass a preset key or { width, height } in pixels to override."),
       mode: z.enum(["clone", "reimagine"]).optional().describe("'clone' (default) for faithful reproduction; 'reimagine' to apply brand direction with the source as structural reference"),
       brandKitId: z.string().optional().describe("Brand kit to apply in reimagine mode. Falls back to user's default brand kit. Ignored in clone mode."),
       instruction: z.string().optional().describe("Extra guidance for reimagine mode (e.g. 'make it more playful', 'use diagonal accents')"),

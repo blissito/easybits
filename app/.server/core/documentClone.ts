@@ -242,20 +242,55 @@ ${instructionBlock}
 OUTPUT: ONLY the <section>…</section>. No markdown, no explanations.`;
 }
 
+/**
+ * Map an aspect ratio to the closest social preset. Returns null when nothing fits cleanly
+ * (the caller falls back to letter for those — typical of portrait scans, screenshots, etc).
+ */
+function mapAspectToPreset(width: number, height: number): SocialPresetKey | null {
+  if (!width || !height) return null;
+  const r = width / height;
+  if (r >= 1.6) return "slide-16-9";        // 16:9 deck
+  if (r >= 1.27 && r <= 1.4) return "slide-16-9"; // 4:3-ish → upgrade to 16:9 deck
+  if (r >= 0.95 && r <= 1.05) return "ig-square"; // 1:1
+  if (r >= 0.78 && r <= 0.82) return "ig-feed";   // 4:5 portrait
+  if (r >= 0.55 && r <= 0.6) return "ig-story";   // 9:16
+  return null;
+}
+
 export async function cloneDocument(ctx: AuthContext, opts: CloneDocumentOpts) {
   requireScope(ctx, "WRITE");
 
   const mode: Mode = opts.mode || "clone";
   const maxPages = Math.min(opts.maxPages ?? 20, 30);
 
-  // Resolve target format → defaults to slide-16-9 (Ghosty's primary use case).
-  const formatInput: FormatInput =
-    typeof opts.pageFormat === "string"
-      ? { preset: opts.pageFormat as SocialPresetKey }
-      : opts.pageFormat || { preset: "slide-16-9" };
-  const { format, intent } = resolveFormat(formatInput);
-  const targetDims = format || { width: 816, height: 1056 }; // letter fallback @ 96dpi
-  const resolvedIntent = intent || detectIntent(targetDims);
+  // Resolve target format. When the agent doesn't pass `pageFormat`, auto-detect from the
+  // source aspect ratio so PDFs / portrait screenshots / 1:1 IG posts don't get mangled
+  // into 16:9 by an opinionated default.
+  let formatInput: FormatInput | undefined;
+  let autoDetectedNote = "";
+  if (opts.pageFormat !== undefined) {
+    formatInput =
+      typeof opts.pageFormat === "string"
+        ? { preset: opts.pageFormat as SocialPresetKey }
+        : opts.pageFormat;
+  } else if (opts.source.type === "document") {
+    // Cheap DB read — source's own canvas wins.
+    const srcDoc = await db.landing.findUnique({
+      where: { id: opts.source.documentId },
+      select: { metadata: true },
+    });
+    const meta = (srcDoc?.metadata as { format?: { width: number; height: number } } | null) ?? null;
+    if (meta?.format?.width && meta?.format?.height) {
+      formatInput = { width: meta.format.width, height: meta.format.height };
+      autoDetectedNote = `source-doc ${meta.format.width}×${meta.format.height}`;
+    }
+  }
+
+  // Tentative dims for resolveSource fallback. If formatInput is still unknown, use letter
+  // so the source resolve doesn't itself depend on a format we haven't picked yet.
+  const tentative = formatInput
+    ? resolveFormat(formatInput).format ?? { width: 816, height: 1056 }
+    : { width: 816, height: 1056 };
 
   // Resolve brand direction (reimagine only — clone ignores brand)
   let direction: ReturnType<typeof brandKitToDirection> | null = null;
@@ -264,8 +299,27 @@ export async function cloneDocument(ctx: AuthContext, opts: CloneDocumentOpts) {
     if (kit) direction = brandKitToDirection(kit);
   }
 
-  // Resolve source → page images
-  const { pages, sourceName } = await resolveSource(ctx, opts.source, targetDims, maxPages);
+  // Resolve source → page images (uses `tentative` as a fallback only when image dims fail to parse).
+  const { pages, sourceName } = await resolveSource(ctx, opts.source, tentative, maxPages);
+
+  // Auto-detect from the resolved first page when format is still unknown.
+  if (!formatInput && pages.length > 0) {
+    const firstW = pages[0].width;
+    const firstH = pages[0].height;
+    const preset = mapAspectToPreset(firstW, firstH);
+    if (preset) {
+      formatInput = { preset };
+      autoDetectedNote = `${firstW}×${firstH} → ${preset}`;
+    }
+  }
+
+  const { format, intent } = resolveFormat(formatInput);
+  const targetDims = format || { width: 816, height: 1056 }; // letter fallback @ 96dpi
+  const resolvedIntent = intent || detectIntent(targetDims);
+
+  if (autoDetectedNote) {
+    console.log(`[cloneDocument] auto-detected pageFormat: ${autoDetectedNote}`);
+  }
 
   // Create the empty Landing v4 document up front so the agent gets an id back.
   const doc = await db.landing.create({

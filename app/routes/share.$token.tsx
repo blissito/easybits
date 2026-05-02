@@ -57,18 +57,26 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
   const { link } = result;
   const permission = result.payload.perm as SharePermission;
 
-  // view → inline PDF (read-only snapshot rendered server-side). download → PDF
-  // as attachment. Neither needs the editor or a cookie session. Documents only
-  // for v1; landings fall through to the editor cookie path.
-  if ((permission === "view" || permission === "download") && link.resourceType === "document") {
-    throw redirect(
-      pdfPathFor(link.resourceType, link.resourceId, token, permission === "view")
-    );
+  // Documents:
+  //   view     → inline PDF (read-only snapshot rendered server-side, no editor/cookie).
+  //   download → PDF attachment (no editor/cookie).
+  //   edit     → lightweight share editor at /share/document/:token (Canvas v3 + FloatingToolbar).
+  // Landings fall through to the dash editor with a share cookie for now (no PDF endpoint yet).
+  if (link.resourceType === "document") {
+    if (permission === "view" || permission === "download") {
+      throw redirect(
+        pdfPathFor(link.resourceType, link.resourceId, token, permission === "view")
+      );
+    }
+    // permission === "edit" → cookie + lightweight share editor
+    throw redirect(`/share/document/${token}`, {
+      headers: {
+        "Set-Cookie": buildShareCookie(token, link.expiresAt),
+      },
+    });
   }
 
-  // edit (and landing view/download for now) → set cookie scoped to this share,
-  // then land in the existing editor. The editor's loader has a fallback that
-  // detects the cookie and renders as the resource owner without login.
+  // Landings (any permission) → set share cookie, land in existing editor.
   const target = dashPathFor(link.resourceType, link.resourceId);
   throw redirect(target, {
     headers: {

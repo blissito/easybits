@@ -63,6 +63,8 @@ export interface GrapesEditorHandle {
   setZoom: (value: number) => void;
   /** Get current canvas zoom level */
   getZoom: () => number;
+  /** Container element wrapping the GrapesJS canvas — useful to measure available width for fit-zoom calculations. */
+  getCanvasContainer: () => HTMLElement | null;
 }
 
 interface BrandKitItem {
@@ -98,6 +100,8 @@ interface Props {
   blocks?: { id: string; label: string; category: string; content: string | object; media?: string }[];
   /** Called when the most visible section changes due to canvas scroll */
   onVisibleSectionChange?: (sectionId: string) => void;
+  /** Called once the canvas iframe has loaded — useful to apply auto-fit zoom based on document format. */
+  onCanvasReady?: () => void;
   /**
    * Editor UI variant. Default `"classic"` preserves the original EasyBits look
    * (dark sidebar `w-80`, hierarchical block grid, black canvas). Set to
@@ -130,7 +134,7 @@ function getPanelTabs(variant: EditorVariant): readonly PanelTab[] {
 }
 
 const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
-  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks, onVisibleSectionChange, editorVariant = "classic" }, ref) => {
+  ({ initialHtml, theme = "minimal", customColors: rawCustomColors, brandKits, onChange, onAiAction, onThemeChange, onBrandKitChange, initialBrandKitId, hiddenTabs = [], canvasStyles, devices, panelSide = "left", blocks: customBlocks, onVisibleSectionChange, onCanvasReady, editorVariant = "classic" }, ref) => {
     // Inject theme CSS on first render (per-variant)
     useEffect(() => { injectDarkCss(editorVariant); }, [editorVariant]);
 
@@ -146,6 +150,8 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
     onAiActionRef.current = onAiAction;
     const onVisibleSectionChangeRef = useRef(onVisibleSectionChange);
     onVisibleSectionChangeRef.current = onVisibleSectionChange;
+    const onCanvasReadyRef = useRef(onCanvasReady);
+    onCanvasReadyRef.current = onCanvasReady;
     const onThemeChangeRef = useRef(onThemeChange);
     onThemeChangeRef.current = onThemeChange;
     const onBrandKitChangeRef = useRef(onBrandKitChange);
@@ -278,6 +284,7 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
       getZoom: () => {
         return editorRef.current?.Canvas.getZoom() ?? 100;
       },
+      getCanvasContainer: () => editorContainerRef.current,
     }));
 
     function getThemeCss() {
@@ -490,6 +497,10 @@ const GrapesEditor = forwardRef<GrapesEditorHandle, Props>(
             extraStyle.textContent = canvasStyles;
             doc.head.appendChild(extraStyle);
           }
+
+          // Notify parent the canvas is ready so it can apply auto-fit zoom etc.
+          // Defer one frame so the container has its final layout dimensions.
+          requestAnimationFrame(() => onCanvasReadyRef.current?.());
 
           doc.addEventListener("keydown", (e: KeyboardEvent) => {
             if (e.key !== " ") return;

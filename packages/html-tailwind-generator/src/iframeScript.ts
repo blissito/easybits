@@ -69,9 +69,9 @@ export function getIframeScript(): string {
 
   function emitElementSelected(el) {
     var rect = el.getBoundingClientRect();
-    var attrs = {};
-    if (el.tagName === 'IMG') attrs = { src: el.getAttribute('src') || '', alt: el.getAttribute('alt') || '' };
-    if (el.tagName === 'A') attrs = { href: el.getAttribute('href') || '', target: el.getAttribute('target') || '' };
+    var attrs = { style: el.getAttribute('style') || '' };
+    if (el.tagName === 'IMG') { attrs.src = el.getAttribute('src') || ''; attrs.alt = el.getAttribute('alt') || ''; }
+    if (el.tagName === 'A') { attrs.href = el.getAttribute('href') || ''; attrs.target = el.getAttribute('target') || ''; }
     var ot = el.outerHTML.split('>')[0] + '>';
     if (ot.length > 200) ot = ot.substring(0, 200);
     window.parent.postMessage({
@@ -148,15 +148,18 @@ export function getIframeScript(): string {
     el.style.boxShadow = SHADOW_SELECTED;
 
     var rect = el.getBoundingClientRect();
-    var attrs = {};
+    var attrs = { style: el.getAttribute('style') || '' };
     if (el.tagName === 'IMG') {
-      attrs = { src: el.getAttribute('src') || '', alt: el.getAttribute('alt') || '' };
+      attrs.src = el.getAttribute('src') || '';
+      attrs.alt = el.getAttribute('alt') || '';
     }
     if (el.tagName === 'A') {
-      attrs = { href: el.getAttribute('href') || '', target: el.getAttribute('target') || '' };
+      attrs.href = el.getAttribute('href') || '';
+      attrs.target = el.getAttribute('target') || '';
     }
 
-    window.parent.postMessage({
+    var clickClassName = (typeof el.className === 'string' ? el.className : '') || '';
+    var clickPayload = {
       type: 'element-selected',
       sectionId: getSectionId(el),
       tagName: el.tagName,
@@ -166,8 +169,10 @@ export function getIframeScript(): string {
       elementPath: getElementPath(el),
       isSectionRoot: el.dataset && el.dataset.sectionId ? true : false,
       attrs: attrs,
-      className: el.className || '',
-    }, '*');
+      className: clickClassName,
+    };
+    console.log('[share/iframe] selected', { tag: el.tagName, className: clickClassName, path: clickPayload.elementPath });
+    window.parent.postMessage(clickPayload, '*');
   }, true);
 
   // Double-click — contentEditable for text
@@ -287,9 +292,13 @@ export function getIframeScript(): string {
             }
           }
         }
+        console.log('[share/iframe] update-attribute', { sectionId: msg.sectionId, attr: msg.attr, value: msg.value, found: !!target });
         if (target) {
-          if (msg.attr === 'style' && msg.value.indexOf(':') !== -1) {
-            // Merge style property instead of replacing entire style
+          // For style: single-property values ("color: #abc") merge via setProperty so other
+          // inline styles survive (FloatingToolbar relies on this). Multi-prop or empty values
+          // replace the whole style attribute atomically (used by ShareInspector after stripInlineProps).
+          if (msg.attr === 'style' && typeof msg.value === 'string'
+              && msg.value.indexOf(':') !== -1 && msg.value.indexOf(';') === -1) {
             var parts = msg.value.split(':');
             var prop = parts[0].trim();
             var val = parts.slice(1).join(':').trim();

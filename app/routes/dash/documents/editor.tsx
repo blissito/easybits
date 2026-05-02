@@ -35,8 +35,8 @@ export interface StreamingPreviewHandle {
 }
 
 /** Lightweight iframe preview used during streaming generation (no GrapesJS overhead).
- * The iframe shell is created once; only the body innerHTML is patched on updates. */
-const StreamingPreview = React.forwardRef<StreamingPreviewHandle, { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string }; onVisibleSectionChange?: (sectionId: string) => void }>(({ sections, themeCssData, onVisibleSectionChange }, ref) => {
+ * The iframe shell is created once per format; only the body innerHTML is patched on updates. */
+const StreamingPreview = React.forwardRef<StreamingPreviewHandle, { sections: Section3[]; themeCssData?: { css: string; tailwindConfig: string }; onVisibleSectionChange?: (sectionId: string) => void; format?: { width: number; height: number } }>(({ sections, themeCssData, onVisibleSectionChange, format }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevCountRef = useRef(0);
   const contentSections = sections.filter((s) => s.id !== "__grapes_css__");
@@ -50,8 +50,19 @@ const StreamingPreview = React.forwardRef<StreamingPreviewHandle, { sections: Se
     },
   }));
 
-  // Build the initial shell only once
+  // Build the initial shell. Rebuilt only when format changes — patching keeps in-flight content.
+  // CSS `zoom` needs a literal unitless number — `calc()` mixing px and unitless is invalid
+  // and silently dropped. We bake an initial value computed from window.innerWidth and update
+  // it on resize via a dedicated effect below.
+  const initialZoom = useMemo(() => {
+    if (!format) return 1;
+    if (typeof window === "undefined") return 1;
+    return Math.min(1, Math.max(0.1, (window.innerWidth - 48) / format.width));
+  }, [format?.width]);
   const shellDoc = useMemo(() => {
+    const pageCss = format
+      ? `.page-section { width: ${format.width}px; height: ${format.height}px; zoom: ${initialZoom.toFixed(3)}; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; }`
+      : `.page-section { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; } .page-section > section { height: 11in; overflow: hidden; }`;
     return `<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
 <script src="https://cdn.tailwindcss.com"><\/script>
@@ -61,13 +72,32 @@ ${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/scr
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Inter', sans-serif; background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; }
 ${themeCssData?.css || ""}
-.page-section { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; }
-.page-section > section { height: 11in; overflow: hidden; }
+${pageCss}
 @keyframes fade-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .page-section { animation: fade-in 0.4s ease-out; }
 </style></head><body></body></html>`;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [format?.width, format?.height, initialZoom]);
+
+  // Update the zoom rule on parent-window resize so the page keeps fitting as the layout shifts.
+  useEffect(() => {
+    if (!format) return;
+    const onResize = () => {
+      const iframe = iframeRef.current;
+      const doc = iframe?.contentDocument;
+      if (!doc) return;
+      const zoom = Math.min(1, Math.max(0.1, (window.innerWidth - 48) / format.width));
+      let style = doc.getElementById("page-zoom") as HTMLStyleElement | null;
+      if (!style) {
+        style = doc.createElement("style");
+        style.id = "page-zoom";
+        doc.head.appendChild(style);
+      }
+      style.textContent = `.page-section { zoom: ${zoom.toFixed(3)} !important; }`;
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [format?.width]);
 
   // Patch iframe body incrementally instead of recreating srcDoc
   useEffect(() => {
@@ -148,6 +178,43 @@ ${themeCssData?.css || ""}
     />
   );
 });
+
+/** Static chip showing the document's canvas format. Click → toast hinting at change_document_format MCP.
+ * Reads metadata.format and metadata.intent already computed in the parent. */
+function FormatChip({ format, intent }: { format?: { width?: number; height?: number } | null; intent?: "social" | "presentation" | "document" }) {
+  const w = format?.width;
+  const h = format?.height;
+  const label = w && h ? `${w}×${h}` : "Carta";
+  const ratio = w && h ? w / h : 8.5 / 11;
+  const ratioLabel = (() => {
+    if (Math.abs(ratio - 16 / 9) < 0.05) return "16:9";
+    if (Math.abs(ratio - 9 / 16) < 0.05) return "9:16";
+    if (Math.abs(ratio - 1) < 0.05) return "1:1";
+    if (Math.abs(ratio - 4 / 5) < 0.05) return "4:5";
+    if (Math.abs(ratio - 4 / 3) < 0.05) return "4:3";
+    return null;
+  })();
+  const intentLabel = intent === "social" ? "Social" : intent === "presentation" ? "Slide" : null;
+  const onClick = () => {
+    toast(
+      "Cambia el formato con el MCP `change_document_format` (slide-16-9, ig-square, ig-story, letter…)",
+      { duration: 5000, icon: "📐" }
+    );
+  };
+  return (
+    <button
+      onClick={onClick}
+      className="bg-white border-2 border-black rounded-xl px-3 py-1 shadow-[4px_4px_0_0_rgba(0,0,0,1)] text-xs font-bold hover:bg-gray-50 flex items-center gap-1.5"
+      title="Formato del documento — click para info"
+    >
+      <span>{label}</span>
+      {ratioLabel && <span className="text-gray-400">·</span>}
+      {ratioLabel && <span className="text-gray-600">{ratioLabel}</span>}
+      {intentLabel && <span className="text-gray-400">·</span>}
+      {intentLabel && <span className="text-gray-600">{intentLabel}</span>}
+    </button>
+  );
+}
 
 /** Show brutalist toast with CTA when generation limit is hit */
 function showLimitToast(message: string, upgradeUrl: string) {
@@ -542,25 +609,85 @@ export default function DocumentEditor() {
     section, [data-section-id] { width: 8.5in; min-height: 11in; max-height: 11in; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }
   `;
 
-  // Zoom
-  const ZOOM_LEVELS = [25, 50, 75, 100, 125, 150];
+  // Zoom — fit is computed dynamically from the canvas container width vs the section width.
+  // Letter (no metadata.format) defaults to its inches sizing where 100% reads naturally;
+  // bigger formats (1920×1080 slides, 1080×1920 stories) get auto-fit so users see the page
+  // without manual zoom-out. Manual zoom is preserved on resize.
   const [zoomPct, setZoomPct] = useState(100);
+  const computedFitRef = useRef<number>(100);
+
+  const computeFit = useCallback((): number => {
+    const container = editorRef.current?.getCanvasContainer?.();
+    const containerW = container?.clientWidth ?? 0;
+    if (!containerW) return 100;
+    const sectionW = canvasFormat?.width ?? 816; // letter @ 96dpi
+    // Reserve ~64px for the dark padding the canvas iframe applies (24px each side + scrollbar).
+    const fitPct = Math.floor(((containerW - 64) / sectionW) * 100);
+    return Math.max(10, Math.min(100, fitPct));
+  }, [canvasFormat?.width]);
+
+  const ZOOM_LEVELS_BASE = useMemo(() => [25, 50, 75, 100, 125, 150], []);
+  const getZoomLevels = useCallback((): number[] => {
+    const fit = computedFitRef.current;
+    return Array.from(new Set([fit, ...ZOOM_LEVELS_BASE])).sort((a, b) => a - b);
+  }, [ZOOM_LEVELS_BASE]);
+
   const zoomIn = useCallback(() => setZoomPct((z) => {
-    const idx = ZOOM_LEVELS.indexOf(z);
-    const next = idx >= 0 ? ZOOM_LEVELS[Math.min(idx + 1, ZOOM_LEVELS.length - 1)] : z;
+    const levels = getZoomLevels();
+    const next = levels.find((l) => l > z) ?? levels[levels.length - 1];
     editorRef.current?.setZoom(next);
     return next;
-  }), []);
+  }), [getZoomLevels]);
   const zoomOut = useCallback(() => setZoomPct((z) => {
-    const idx = ZOOM_LEVELS.indexOf(z);
-    const next = idx >= 0 ? ZOOM_LEVELS[Math.max(idx - 1, 0)] : z;
+    const levels = getZoomLevels();
+    const reversed = [...levels].reverse();
+    const next = reversed.find((l) => l < z) ?? levels[0];
     editorRef.current?.setZoom(next);
     return next;
-  }), []);
+  }), [getZoomLevels]);
   const zoomFit = useCallback(() => {
-    setZoomPct(75);
-    editorRef.current?.setZoom(75);
-  }, []);
+    const fit = computeFit();
+    computedFitRef.current = fit;
+    setZoomPct(fit);
+    editorRef.current?.setZoom(fit);
+  }, [computeFit]);
+
+  // Auto-fit when GrapesJS canvas iframe is loaded — only for non-letter formats where the
+  // native page size is bigger than the visible canvas. Letter docs keep 100% to feel natural.
+  // Also hooks up the ResizeObserver here so it only runs once the canvas is mounted.
+  const [canvasReadyTick, setCanvasReadyTick] = useState(0);
+  const handleCanvasReady = useCallback(() => {
+    const fit = computeFit();
+    computedFitRef.current = fit;
+    const isBigFormat = (canvasFormat?.width ?? 0) > 1200 || (canvasFormat?.height ?? 0) > 1200;
+    if (isBigFormat && fit < 100) {
+      setZoomPct(fit);
+      editorRef.current?.setZoom(fit);
+    }
+    setCanvasReadyTick((t) => t + 1);
+  }, [computeFit, canvasFormat?.width, canvasFormat?.height]);
+
+  // Recompute fit on container resize. Only re-apply if the user is at-or-below the previous
+  // fit (i.e., hasn't manually zoomed in). Preserves explicit user zoom-in.
+  useEffect(() => {
+    if (canvasReadyTick === 0) return;
+    const container = editorRef.current?.getCanvasContainer?.();
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const newFit = computeFit();
+      const oldFit = computedFitRef.current;
+      computedFitRef.current = newFit;
+      setZoomPct((current) => {
+        if (current <= oldFit) {
+          editorRef.current?.setZoom(newFit);
+          return newFit;
+        }
+        return current;
+      });
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [computeFit, canvasReadyTick]);
 
   // Cmd/Ctrl + scroll to zoom
   useEffect(() => {
@@ -1852,7 +1979,13 @@ export default function DocumentEditor() {
         {/* Editor area — iframe during generation, GrapesJS after */}
         <div className={`${codeViewSectionId ? "md:w-1/2" : ""} flex-1 h-full overflow-hidden relative`}>
           {isGenerating ? (
-            <StreamingPreview ref={streamingRef} sections={sections} themeCssData={themeCssData} onVisibleSectionChange={handleVisibleSectionChange} />
+            <StreamingPreview
+              ref={streamingRef}
+              sections={sections}
+              themeCssData={themeCssData}
+              onVisibleSectionChange={handleVisibleSectionChange}
+              format={canvasFormat?.width && canvasFormat?.height ? { width: canvasFormat.width, height: canvasFormat.height } : undefined}
+            />
           ) : sections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-200">
               <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
@@ -1873,6 +2006,7 @@ export default function DocumentEditor() {
                 onAiAction={handleAiAction}
                 onThemeChange={handleThemeChange}
                 onVisibleSectionChange={handleVisibleSectionChange}
+                onCanvasReady={handleCanvasReady}
               />
             </Suspense>
           )}
@@ -1901,12 +2035,15 @@ export default function DocumentEditor() {
               <button onClick={stopGeneration} className="text-xs font-bold text-red-500 hover:underline ml-1">Detener</button>
             </div>
           )}
-          {/* Zoom controls */}
+          {/* Zoom controls + format indicator */}
           {!isGenerating && sections.length > 0 && (
-            <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white border-2 border-black rounded-xl px-2 py-1 shadow-[4px_4px_0_0_rgba(0,0,0,1)] z-30 select-none">
-              <button onClick={zoomOut} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Alejar">−</button>
-              <button onClick={zoomFit} className="min-w-[3rem] text-center text-xs font-bold hover:bg-gray-100 rounded px-1 py-1" title="Ajustar">{zoomPct}%</button>
-              <button onClick={zoomIn} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Acercar">+</button>
+            <div className="absolute bottom-4 right-4 flex items-center gap-2 z-30 select-none">
+              <FormatChip format={canvasFormat} intent={docIntent} />
+              <div className="flex items-center gap-1 bg-white border-2 border-black rounded-xl px-2 py-1 shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
+                <button onClick={zoomOut} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Alejar">−</button>
+                <button onClick={zoomFit} className="min-w-[3rem] text-center text-xs font-bold hover:bg-gray-100 rounded px-1 py-1" title="Ajustar al canvas">{zoomPct}%</button>
+                <button onClick={zoomIn} className="w-7 h-7 flex items-center justify-center text-lg font-bold hover:bg-gray-100 rounded" title="Acercar">+</button>
+              </div>
             </div>
           )}
         </div>
