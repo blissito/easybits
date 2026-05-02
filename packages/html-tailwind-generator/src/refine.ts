@@ -16,8 +16,10 @@ RULES:
 - Return raw HTML only — no markdown fences, no explanations
 
 COLOR SYSTEM — CRITICAL:
-- Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted, bg-secondary, text-secondary, bg-accent, text-accent
+- Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, bg-surface-deep, text-on-surface, text-on-surface-muted, text-on-surface-deep, bg-secondary, text-secondary, bg-accent, text-accent
+- POLARITY (critical): bg-surface-alt = LIGHT TINT of surface (cards on light pages — pair with text-on-surface). bg-surface-deep = HIGH-CONTRAST DARK surface (dark cards/footers on light themes — pair with text-on-surface-deep). bg-secondary = the brand's secondary color. NEVER use bg-surface-alt + text-on-primary for "dark cards" — that produces invisible white-on-white. For dark cards use bg-surface-deep, bg-primary, or bg-secondary.
 - NEVER use hardcoded colors: NO bg-gray-*, bg-black, bg-white, text-gray-*, text-black, text-white, etc.
+- NEVER use Tailwind JIT arbitrary value syntax for colors: bg-[#abc123], text-[#fff], from-[#hex], border-[#hex], ring-[#hex], shadow-[#hex] are STRICTLY FORBIDDEN. Tailwind accepts them but they bypass the theme/brandkit system and break when the user swaps colors. The semantic class IS the brand color — use bg-primary, not bg-[#userhex].
 - The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
 - ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-accent. Use text-primary ONLY on bg-surface/bg-surface-alt (it's the same hue as bg-primary — invisible on primary backgrounds).
 - CONTRAST RULE: on bg-primary or bg-primary-dark → use ONLY text-on-primary. On bg-surface or bg-surface-alt → use text-on-surface, text-on-surface-muted, or text-primary. NEVER use text-primary on bg-primary — they are the SAME COLOR. NEVER put text-on-surface on bg-primary or text-on-primary on bg-surface.
@@ -104,9 +106,12 @@ export interface RefineOptions {
   onDone?: (html: string) => void;
   /** Called on error */
   onError?: (error: Error) => void;
-  /** Theme colors for AI context (deprecated — use themeName) */
+  /** Custom-theme palette (hex map: primary, secondary, accent, surface).
+   *  Required when themeName === "custom"; optional otherwise (built-in themes
+   *  resolve their hex values via LANDING_THEMES). Used both for prompt context
+   *  AND for theme-aware sanitization of arbitrary `bg-[#hex]` classes. */
   themeColors?: Record<string, string>;
-  /** Theme name (e.g. "minimal", "noche") — tells the AI the design mood */
+  /** Theme name (e.g. "minimal", "noche", "custom") — tells the AI the design mood */
   themeName?: string;
   /** Brand kit info for AI context */
   brandKit?: {
@@ -135,7 +140,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     onChunk,
     onDone,
     onError,
-    themeColors: _themeColors,
+    themeColors,
     themeName,
     brandKit,
   } = options;
@@ -169,8 +174,9 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
   // Inject theme + brand kit context
   let finalSystem = systemPrompt + currentDateLine();
 
-  if (themeName && themeName !== "custom") {
-    finalSystem += `\n\n## Active Theme\n${buildThemePromptContext(themeName)}`;
+  if (themeName) {
+    // Custom themes get their palette from themeColors; built-in themes look it up by name.
+    finalSystem += `\n\n## Active Theme\n${buildThemePromptContext(themeName, themeColors)}`;
   }
 
   if (brandKit) {
@@ -203,8 +209,10 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
       html = html.replace(/^```(?:html|xml)?\s*/, "").replace(/\s*```$/, "");
     }
 
-    // Sanitize hardcoded colors to semantic classes
-    html = sanitizeSemanticColors(html);
+    // Sanitize hardcoded colors to semantic classes. themeColors lets the
+    // sanitizer map arbitrary `bg-[#hex]` to the nearest semantic role using
+    // RGB distance against the active palette (instead of HSL hue fallback).
+    html = sanitizeSemanticColors(html, themeColors);
 
     // Enrich images (DALL-E if openaiApiKey, otherwise Pexels)
     html = await enrichImages(html, { pexelsApiKey, openaiApiKey, persistImage });

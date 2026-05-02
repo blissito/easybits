@@ -46,8 +46,15 @@ IMAGE OVERLAYS — CRITICAL:
 - For testimonial/quote backgrounds: use bg-surface/90 backdrop-blur-sm on the card
 
 COLOR SYSTEM — CRITICAL (READ CAREFULLY):
-- Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted, bg-secondary, text-secondary, bg-accent, text-accent
+- Use semantic color classes: bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary, bg-surface, bg-surface-alt, bg-surface-deep, text-on-surface, text-on-surface-muted, text-on-surface-deep, bg-secondary, text-secondary, bg-accent, text-accent
+- POLARITY of surface tokens (CRITICAL — agents confuse these):
+  • bg-surface = the page background (light on light themes, dark on dark themes)
+  • bg-surface-alt = a SLIGHT TINT of bg-surface (almost the same lightness — used for cards/alternating rows). NOT a dark surface. Pair with text-on-surface (NOT text-on-primary).
+  • bg-surface-deep = a HIGH-CONTRAST DARK SURFACE, brand-independent (use for dark cards/footers/sidebars on light themes). Pair with text-on-surface-deep (light text).
+  • bg-secondary = the BRAND'S SECONDARY color (from brandkit). Different from bg-surface-alt — use this when you want a "second brand color" feel, not just a tint.
+  Common mistake: agents reach for "bg-surface-alt + text-on-primary" thinking it's a dark card. That produces white text on near-white background. For dark cards, use bg-surface-deep, bg-primary, or bg-secondary instead.
 - NEVER use hardcoded Tailwind color classes: NO bg-gray-*, bg-black, bg-white, bg-indigo-*, bg-blue-*, bg-purple-*, text-gray-*, text-black, text-white, etc.
+- NEVER use Tailwind JIT arbitrary value syntax for colors: bg-[#abc123], text-[#fff], from-[#hex], border-[#hex], ring-[#hex], shadow-[#hex] are STRICTLY FORBIDDEN. Tailwind accepts them but they bypass the theme/brandkit system and break when the user swaps colors. The semantic class IS the brand color — use bg-primary, not bg-[#userhex].
 - The ONLY exception: border-gray-200 or border-gray-700 for subtle dividers.
 - ALL backgrounds MUST use: bg-primary, bg-primary-dark, bg-surface, bg-surface-alt
 - ALL text MUST use: text-on-surface, text-on-surface-muted, text-on-primary, text-accent. Use text-primary ONLY on bg-surface/bg-surface-alt (it's the same hue as bg-primary — invisible on primary backgrounds).
@@ -161,9 +168,11 @@ export interface GenerateOptions {
   onPartialSection?: (index: number, partialHtml: string) => void;
   onDone?: (sections: Section3[]) => void;
   onError?: (error: Error) => void;
-  /** Theme colors to inject into the AI prompt (deprecated — use themeName) */
+  /** Custom-theme palette (hex map: primary, secondary, accent, surface).
+   *  Required when themeName === "custom"; optional otherwise. Used both for
+   *  prompt context AND for theme-aware sanitization. */
   themeColors?: Record<string, string>;
-  /** Theme name (e.g. "minimal", "noche", "oceano") — tells the AI the design mood */
+  /** Theme name (e.g. "minimal", "noche", "oceano", "custom") — tells the AI the design mood */
   themeName?: string;
   /** Brand kit info for AI context */
   brandKit?: {
@@ -176,13 +185,18 @@ export interface GenerateOptions {
 /**
  * Generate a landing page with streaming AI + image enrichment.
  */
-function buildVisualContext(themeName?: string, brandKit?: GenerateOptions["brandKit"]): string {
+function buildVisualContext(
+  themeName?: string,
+  brandKit?: GenerateOptions["brandKit"],
+  themeColors?: Record<string, string>
+): string {
   if (!themeName && !brandKit) return "";
 
   const lines: string[] = ["\n\n## Visual Context — MANDATORY"];
 
-  if (themeName && themeName !== "custom") {
-    lines.push(buildThemePromptContext(themeName));
+  if (themeName) {
+    // Custom themes get their palette from themeColors; built-in themes look it up by name.
+    lines.push(buildThemePromptContext(themeName, themeColors));
   }
 
   if (brandKit?.fonts) {
@@ -208,13 +222,13 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
     referenceImage,
     extraInstructions,
     systemPrompt = SYSTEM_PROMPT,
-    themeColors: _themeColors,
+    themeColors,
     themeName,
     brandKit,
     ...rest
   } = options;
 
-  const visualContext = buildVisualContext(themeName, brandKit);
+  const visualContext = buildVisualContext(themeName, brandKit, themeColors);
   const extra = extraInstructions ? `\nAdditional instructions: ${extraInstructions}` : "";
   const content: any[] = [];
 
@@ -240,5 +254,6 @@ export async function generateLanding(options: GenerateOptions): Promise<Section
     ...rest,
     systemPrompt: systemPrompt + visualContext,
     userContent: content,
+    themeColors,
   });
 }

@@ -96,10 +96,17 @@ RULES:
 - Sections can have ANY background — full-bleed color, gradients, or white. Not limited to white paper.
 
 STRICT PROHIBITIONS:
+0. **NO ARBITRARY HEX COLORS** — Tailwind JIT arbitrary value syntax for colors is STRICTLY FORBIDDEN: bg-[#abc123], text-[#fff], from-[#hex], to-[#hex], via-[#hex], border-[#hex], ring-[#hex], shadow-[#hex] are ALL banned. Tailwind accepts them but they bypass the theme/brandkit system and break when the user swaps colors. Even if a hex value is mentioned in this prompt, NEVER write it as a class — use the semantic class (bg-primary, text-on-surface, etc.) which resolves to the right hex automatically.
 1. **NO EMOJI** — Never use emoji characters (🚀❌✅📊 etc.). Instead use inline SVG icons or colored divs. For bullet decorators use small colored circles (<span class="w-2 h-2 rounded-full bg-primary inline-block"></span>) or simple SVG.
 2. **NO Chart.js / NO JavaScript** — Never reference Chart.js, canvas, or any JS library. For data visualization use pure CSS: progress bars (div with percentage width + bg-primary), horizontal bars, styled tables with colored cells. Never use <canvas> or <script>.
 3. **NO buttons or CTAs** — This is a ${isWeb ? "document" : "print document"}, not a ${isWeb ? "landing page" : "web page"}. No "Contactar", "Ver más", "Comprar" buttons. Use text with contact info instead.
-4. **CONTRAST IS MANDATORY** — Dark/colored backgrounds (bg-primary, bg-primary-dark, bg-secondary, dark gradients) MUST use text-white or text-on-primary. Light backgrounds (white, bg-surface, bg-surface-alt) MUST use text-gray-900 or text-on-surface. NEVER use dark text on dark backgrounds or light text on light backgrounds.
+4. **CONTRAST IS MANDATORY** — Each bg has ONE valid text family:
+  • bg-primary / bg-primary-dark / dark gradients → text-on-primary
+  • bg-secondary → text-on-secondary
+  • bg-accent → text-on-accent
+  • bg-surface or bg-surface-alt → text-on-surface, text-on-surface-muted (DO NOT use text-on-primary here — surface-alt is a LIGHT TINT, not dark)
+  • bg-surface-deep → text-on-surface-deep (a HIGH-CONTRAST DARK surface; light text required)
+  Common mistake: pairing bg-surface-alt with text-on-primary thinking surface-alt is "the dark card variant" — it's a LIGHT tint and produces invisible white-on-white. For dark cards use bg-surface-deep, bg-primary, or bg-secondary. NEVER use dark text on dark backgrounds or light text on light backgrounds.
 5. **Max 2 font weights per page** — Pick 2 (e.g. font-semibold + font-normal, or font-bold + font-light). Don't mix 4-5 weights.
 6. **Generous whitespace** — Don't fill every centimeter. Leave breathing room. Use py-8, py-12, gap-6, gap-8 liberally. Less content per page = more professional.
 
@@ -151,8 +158,9 @@ CSS PROGRESS BARS — use this pattern for data visualization:
 
 COLOR SYSTEM — use semantic classes:
 - bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
-- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
-- bg-secondary, text-secondary, bg-accent, text-accent
+- bg-surface (page bg), bg-surface-alt (LIGHT TINT for cards/rows — NOT dark), bg-surface-deep (HIGH-CONTRAST DARK surface for dark cards on light themes)
+- text-on-surface, text-on-surface-muted, text-on-surface-deep (light text — for use on bg-surface-deep)
+- bg-secondary (brand's secondary color), text-secondary, bg-accent, text-accent
 - Cover pages should use bold full-bleed backgrounds (bg-primary, gradients from-primary to-primary-dark)
 - CONTRAST: bg-primary/bg-primary-dark/bg-secondary → text-white or text-on-primary. White/bg-surface → text-gray-900 or text-on-surface
 
@@ -326,10 +334,11 @@ TYPOGRAPHY: Use these Google Fonts via <link href="${fontsUrl}" rel="stylesheet"
 - Body: font-family: '${direction.bodyFont}', sans-serif (via inline style)
 COLORS — use ONLY semantic Tailwind classes (the editor injects CSS variables that resolve these):
 - bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
-- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
-- bg-secondary, text-secondary, bg-accent, text-accent
-- NEVER use hardcoded hex colors like bg-[#xxx] or text-[#xxx] — always use semantic classes
-- The palette is: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}
+- bg-surface (page bg), bg-surface-alt (LIGHT TINT for cards/rows — NOT dark), bg-surface-deep (HIGH-CONTRAST DARK surface for dark cards on light themes)
+- text-on-surface, text-on-surface-muted, text-on-surface-deep (light text — for use on bg-surface-deep)
+- bg-secondary (brand's secondary color), text-secondary, bg-accent, text-accent
+- NEVER use hardcoded hex colors like bg-[#xxx], text-[#xxx], from-[#xxx], border-[#xxx] — these are STRICTLY FORBIDDEN. Even when a hex value is mentioned below, NEVER write it as a class. Tailwind JIT accepts arbitrary values but they bypass the theme system and break on brandkit swaps.
+- The active palette resolves bg-primary → ${direction.colors.primary}, bg-accent → ${direction.colors.accent}, bg-surface → ${direction.colors.surface}. Use the SEMANTIC CLASS (bg-primary), NEVER the hex (bg-[${direction.colors.primary}]).
 Mood: ${direction.mood}
 Layout approach: ${direction.layoutHint}${appendDirectionExtras(direction)}
 IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL heading elements and style="font-family: '${direction.bodyFont}'" on ALL body text elements. Include the Google Fonts <link> tag inside the FIRST <section> only.`;
@@ -360,10 +369,23 @@ IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL h
     });
   }
 
+  // Forward direction colors to the sanitizer so arbitrary `bg-[#hex]` classes
+  // that slip through despite the prompt ban map to the correct semantic role
+  // via RGB distance against the active palette.
+  const themeColors = direction
+    ? {
+        primary: direction.colors.primary,
+        accent: direction.colors.accent,
+        surface: direction.colors.surface,
+        ...(direction.colors as Record<string, string>),
+      }
+    : undefined;
+
   return streamGenerate({
     ...rest,
     systemPrompt: DOCUMENT_SYSTEM_PROMPT,
     userContent: content,
+    themeColors,
   });
 }
 
@@ -442,10 +464,11 @@ TYPOGRAPHY: Use these Google Fonts via <link href="${fontsUrl}" rel="stylesheet"
 - Body: font-family: '${direction.bodyFont}', sans-serif (via inline style)
 COLORS — use ONLY semantic Tailwind classes (the editor injects CSS variables that resolve these):
 - bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
-- bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
-- bg-secondary, text-secondary, bg-accent, text-accent
-- NEVER use hardcoded hex colors like bg-[#xxx] or text-[#xxx] — always use semantic classes
-- The palette is: primary=${direction.colors.primary}, accent=${direction.colors.accent}, surface=${direction.colors.surface}
+- bg-surface (page bg), bg-surface-alt (LIGHT TINT for cards/rows — NOT dark), bg-surface-deep (HIGH-CONTRAST DARK surface for dark cards on light themes)
+- text-on-surface, text-on-surface-muted, text-on-surface-deep (light text — for use on bg-surface-deep)
+- bg-secondary (brand's secondary color), text-secondary, bg-accent, text-accent
+- NEVER use hardcoded hex colors like bg-[#xxx], text-[#xxx], from-[#xxx], border-[#xxx] — these are STRICTLY FORBIDDEN. Even when a hex value is mentioned below, NEVER write it as a class. Tailwind JIT accepts arbitrary values but they bypass the theme system and break on brandkit swaps.
+- The active palette resolves bg-primary → ${direction.colors.primary}, bg-accent → ${direction.colors.accent}, bg-surface → ${direction.colors.surface}. Use the SEMANTIC CLASS (bg-primary), NEVER the hex (bg-[${direction.colors.primary}]).
 Mood: ${direction.mood}
 Layout approach: ${direction.layoutHint}${appendDirectionExtras(direction)}
 IMPORTANT: Apply inline style="font-family: '${direction.headingFont}'" on ALL heading elements and style="font-family: '${direction.bodyFont}'" on ALL body text elements. Include the Google Fonts <link> tag inside the FIRST <section> only.`;
@@ -650,10 +673,21 @@ OUTPUT: A single JSON object on ONE line, no markdown fences:
         const obj = objects[0];
         if (!obj?.html) throw new Error(`No valid HTML output for page ${page.pageNumber}`);
 
+        // Theme-aware sanitization: maps any leaked `bg-[#hex]` to the nearest
+        // semantic role using RGB distance against the active direction palette.
+        const themeColors = direction
+          ? {
+              primary: direction.colors.primary,
+              accent: direction.colors.accent,
+              surface: direction.colors.surface,
+              ...(direction.colors as Record<string, string>),
+            }
+          : undefined;
+
         const section: Section3 = {
           id: nanoid(8),
           order: pageIdx,
-          html: sanitizeSemanticColors(addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html))),
+          html: sanitizeSemanticColors(addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html)), themeColors),
           label: obj.label || page.label,
         };
 

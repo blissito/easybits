@@ -283,6 +283,10 @@ export interface StreamGenerateOptions {
   onDone?: (sections: Section3[]) => void;
   /** Called on error */
   onError?: (error: Error) => void;
+  /** Active theme palette (hex map). Forwarded to sanitizeSemanticColors so
+   *  arbitrary `bg-[#hex]` classes that slip through map to the nearest
+   *  semantic role via RGB distance instead of HSL hue fallback. */
+  themeColors?: Record<string, string>;
 }
 
 /**
@@ -345,6 +349,7 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
     onRawChunk,
     onDone,
     onError,
+    themeColors,
   } = options;
 
   const openaiApiKey = _openaiApiKey || process.env.OPENAI_API_KEY;
@@ -452,7 +457,7 @@ export async function streamGenerate(options: StreamGenerateOptions): Promise<Se
     const section: Section3 = {
       id: nanoid(8),
       order: sectionOrder++,
-      html: sanitizeSemanticColors(addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html))),
+      html: sanitizeSemanticColors(addSvgLoadingPlaceholders(addLoadingPlaceholders(obj.html)), themeColors),
       label: obj.label,
     };
     allSections.push(section);

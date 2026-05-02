@@ -8,6 +8,7 @@ import { checkAiGenerationLimit, incrementAiGeneration } from "~/.server/aiGener
 import { enrichImages, findImageSlots } from "@easybits.cloud/html-tailwind-generator/images";
 import { generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
 import { sanitizeSemanticColors } from "~/.server/sanitizeColors";
+import { resolveLandingPalette } from "~/.server/themePalette";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 import type { PageFormat } from "@easybits.cloud/html-tailwind-generator/generateDocument";
 import { PAGE_FORMAT_CONFIG } from "@easybits.cloud/html-tailwind-generator/generateDocument";
@@ -42,6 +43,7 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 - bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
 - bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
 - bg-secondary, text-secondary, bg-accent, text-accent
+- NEVER use Tailwind JIT arbitrary value syntax for colors: bg-[#abc123], text-[#fff], from-[#hex], border-[#hex] are STRICTLY FORBIDDEN. Tailwind accepts them but they bypass the theme/brandkit system. The semantic class IS the brand color.
 - CONTRAST: bg-primary/bg-primary-dark → text-on-primary or text-white
 - CONTRAST: bg-surface/bg-surface-alt → text-on-surface
 - You may use Tailwind gray/white/black for subtle accents, but primary colors MUST come from semantic classes
@@ -95,6 +97,7 @@ COLOR SYSTEM — use ONLY semantic Tailwind classes (NEVER hardcode hex/rgb colo
 - bg-primary, text-primary, bg-primary-light, bg-primary-dark, text-on-primary
 - bg-surface, bg-surface-alt, text-on-surface, text-on-surface-muted
 - bg-secondary, text-secondary, bg-accent, text-accent
+- NEVER use Tailwind JIT arbitrary value syntax for colors: bg-[#abc123], text-[#fff], from-[#hex], border-[#hex] are STRICTLY FORBIDDEN. Tailwind accepts them but they bypass the theme/brandkit system. The semantic class IS the brand color.
 - CONTRAST: bg-primary/bg-primary-dark → text-on-primary or text-white
 - CONTRAST: bg-surface/bg-surface-alt → text-on-surface
 - You may use Tailwind gray/white/black for subtle accents, but primary colors MUST come from semantic classes
@@ -218,18 +221,30 @@ export async function action({ request }: Route.ActionArgs) {
     neighborContext = `\n\nDocument outline (${allSections.length} pages):\n${outline}`;
   }
 
+  // Resolve the canonical palette server-side (custom > built-in > direction.colors).
+  // The client may send a stale `direction` from session, but the DB is the source
+  // of truth for what theme/customColors are active right now.
+  const activePalette = resolveLandingPalette(landing);
+
   // Build full direction context for refine
   let directionContext = "";
   if (direction?.headingFont || direction?.bodyFont) {
     const fontsUrl = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(direction.headingFont).replace(/%20/g, "+")}:wght@400;700;900&family=${encodeURIComponent(direction.bodyFont).replace(/%20/g, "+")}:wght@400;500;600&display=swap`;
-    const colors = direction.colors || {};
+    const palette = activePalette || direction.colors || {};
+    const paletteLines = Object.entries(palette)
+      .filter(([, v]) => typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v as string))
+      .map(([k, v]) => `  - bg-${k} → ${v}`)
+      .join("\n");
     directionContext = `\n\nDESIGN DIRECTION:
 - Style: "${direction.name || ""}" — ${direction.tagline || ""}
 - Mood: ${direction.mood || "professional"}
 - Layout hint: ${direction.layoutHint || "clean and structured"}
 - Heading font: ${direction.headingFont} (inline style)
 - Body font: ${direction.bodyFont} (inline style)
-- Colors: primary=${colors.primary || "N/A"}, accent=${colors.accent || "N/A"}, surface=${colors.surface || "N/A"}
+
+ACTIVE PALETTE (the semantic classes resolve to these hex values):
+${paletteLines || "  - (none — fall back to default theme)"}
+Use the SEMANTIC CLASS (bg-primary, text-on-surface, bg-accent), NEVER the hex (bg-[${palette.primary || "#xxx"}]). Tailwind JIT accepts arbitrary hex but they bypass the theme system.
 
 TYPOGRAPHY — CRITICAL: Maintain these fonts on ALL elements:
 - Headings: style="font-family: '${direction.headingFont}', sans-serif" (inline style on h1, h2, h3, etc.)
@@ -430,8 +445,9 @@ Each <section> = exactly one page. If content needs 3 pages, output 3 separate <
           finalHtml = finalMatch ? finalMatch[0] : fullHtml;
         }
 
-        // Sanitize hardcoded colors → semantic classes
-        finalHtml = sanitizeSemanticColors(finalHtml);
+        // Sanitize hardcoded colors → semantic classes. activePalette enables
+        // theme-aware mapping for any `bg-[#hex]` that slipped past the prompt.
+        finalHtml = sanitizeSemanticColors(finalHtml, activePalette);
 
         // Enrich images (Pexels → DALL-E → placeholder)
         const imageSlots = findImageSlots(finalHtml);

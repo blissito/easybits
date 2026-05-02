@@ -96,12 +96,16 @@ export async function applyBrandKit(ctx: AuthContext, opts: ApplyBrandKitOpts) {
   if (!kit) throwJson("No brand kit found (none specified and no default)", 404);
 
   const direction = brandKitToDirection(kit);
-  const customColors = {
-    bg: direction.colors.surface,
-    accent: direction.colors.accent,
-    text: direction.colors.text,
+  // Store in the canonical shape that `buildCustomTheme` (SDK) expects:
+  // { primary, secondary, accent, surface }. Earlier this saved keys named
+  // `bg`/`surfaceAlt`/`text` which collided with nothing in the theme system,
+  // so `surface` was undefined and screenshots fell back to white.
+  const kitColors = (kit.colors as Record<string, string>) || {};
+  const customColors: Record<string, string> = {
     primary: direction.colors.primary,
-    surfaceAlt: direction.colors.surfaceAlt,
+    secondary: kitColors.secondary || direction.colors.surfaceAlt,
+    accent: direction.colors.accent,
+    surface: direction.colors.surface,
   };
 
   const fresh = await db.landing.findUnique({ where: { id: opts.documentId } });

@@ -4,6 +4,7 @@ import { db } from "~/.server/db";
 import { resolveAiKey } from "~/.server/core/aiKeyOperations";
 import { refineLanding } from "@easybits.cloud/html-tailwind-generator/refine";
 import type { Section3 } from "@easybits.cloud/html-tailwind-generator";
+import { resolveLandingPalette } from "~/.server/themePalette";
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -38,6 +39,13 @@ export async function action({ request }: Route.ActionArgs) {
 
   const userKey = await resolveAiKey(ctx.user.id, "ANTHROPIC");
 
+  // Server-side palette resolution. The client may send a stale themeColors/themeName,
+  // but the DB is the source of truth for what's currently active. The body values
+  // act as fallbacks for older callers.
+  const activePalette = resolveLandingPalette(landing);
+  const resolvedThemeName = landing.theme || (themeName as string | undefined);
+  const resolvedThemeColors = activePalette || (themeColors as Record<string, string> | undefined);
+
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -55,8 +63,8 @@ export async function action({ request }: Route.ActionArgs) {
           instruction,
           referenceImage,
           isVariant: !!isVariant,
-          themeColors,
-          themeName,
+          themeColors: resolvedThemeColors,
+          themeName: resolvedThemeName,
           brandKit,
           pexelsApiKey: process.env.PEXELS_API_KEY,
           onChunk(html) {

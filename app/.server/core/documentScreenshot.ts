@@ -5,8 +5,9 @@ import { buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
-import { withPage } from "./browserPool";
+import { withPage, setContentAndWaitForAssets } from "./browserPool";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
+import { resolveLandingPaletteWithBrandKit } from "../themePalette";
 
 export async function takeDocumentScreenshot(
   userId: string,
@@ -40,18 +41,22 @@ export async function takeDocumentScreenshot(
   const pageSections = [...cssSections, targetSection];
 
   const metadata = doc.metadata as Record<string, any> | null;
+  // Resolve palette server-side: handles legacy customColors shape (bg/surfaceAlt
+  // keys) and falls back to the brand kit when customColors is missing entirely.
+  const palette = await resolveLandingPaletteWithBrandKit(doc);
+  const themeName = doc.theme || metadata?.theme;
   const html = buildDeployHtmlV4(pageSections, {
     showBranding: false,
     title: doc.name || "Document",
-    themeName: metadata?.theme,
-    customColors: metadata?.customColors,
+    themeName,
+    customColors: themeName === "custom" ? palette : undefined,
   });
 
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
   try {
     return await withPage(async (page) => {
-      await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
+      await setContentAndWaitForAssets(page, optimizedHtml);
       const buffer = await page.screenshot({ type: "png" });
       return { type: "image" as const, mimeType: "image/png" as const, data: buffer.toString("base64") };
     });
@@ -89,8 +94,9 @@ export async function takeDocumentPdf(
   const sectionsForPrint = [...cssSections, ...filteredContent];
 
   const metadata = doc.metadata as Record<string, any> | null;
-  const docTheme = metadata?.theme;
-  const customColors = metadata?.customColors;
+  const palettePdf = await resolveLandingPaletteWithBrandKit(doc);
+  const docTheme = doc.theme || metadata?.theme;
+  const customColors = docTheme === "custom" ? palettePdf : undefined;
   let themeCss: string | undefined;
   let tailwindConfig: string | undefined;
 
@@ -111,7 +117,7 @@ export async function takeDocumentPdf(
 
   try {
     return await withPage(async (page) => {
-      await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
+      await setContentAndWaitForAssets(page, optimizedHtml);
       if (format?.width && format?.height) {
         return await page.pdf({
           width: `${format.width}px`,
@@ -149,11 +155,13 @@ export async function takeOgScreenshot(
   const pageSections = [...cssSections, contentSections[0]];
 
   const metadata = doc.metadata as Record<string, any> | null;
+  const ogPalette = await resolveLandingPaletteWithBrandKit(doc);
+  const ogThemeName = doc.theme || metadata?.theme;
   const html = buildDeployHtmlV4(pageSections, {
     showBranding: false,
     title: doc.name || "Document",
-    themeName: metadata?.theme,
-    customColors: metadata?.customColors,
+    themeName: ogThemeName,
+    customColors: ogThemeName === "custom" ? ogPalette : undefined,
   });
 
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
@@ -169,7 +177,7 @@ export async function takeOgScreenshot(
 
   try {
     return await withPage(async (page) => {
-      await page.setContent(ogHtml, { waitUntil: "networkidle" });
+      await setContentAndWaitForAssets(page, ogHtml);
       return await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
     }, { viewport: { width: 1200, height: 630 } });
   } catch (err: any) {
@@ -211,8 +219,9 @@ export async function exportDocumentImages(
   const cssSections = sections.filter((s) => s.id === "__grapes_css__");
 
   const metadata = doc.metadata as Record<string, any> | null;
-  const docTheme = metadata?.theme;
-  const customColors = metadata?.customColors;
+  const exportPalette = await resolveLandingPaletteWithBrandKit(doc);
+  const docTheme = doc.theme || metadata?.theme;
+  const customColors = docTheme === "custom" ? exportPalette : undefined;
   let themeCss: string | undefined;
   let tailwindConfig: string | undefined;
   if (customColors) {
@@ -243,7 +252,7 @@ export async function exportDocumentImages(
           { themeCss, tailwindConfig, title: doc.name || "Document", format },
         );
         const optimizedHtml = await replaceCdnWithCompiledCSS(html);
-        await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
+        await setContentAndWaitForAssets(page, optimizedHtml);
         const buffer = await page.screenshot({
           type: "png",
           clip: { x: 0, y: 0, width: format.width, height: format.height },

@@ -1,7 +1,7 @@
 import { db } from "../db";
 import type { Slide } from "~/lib/buildRevealHtml";
 import { getPalette } from "~/lib/buildRevealHtml";
-import { withPage } from "./browserPool";
+import { withPage, setContentAndWaitForAssets } from "./browserPool";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 
@@ -62,8 +62,7 @@ export async function takeSlideScreenshot(
 
   try {
     return await withPage(async (page) => {
-      await page.setContent(html, { waitUntil: "domcontentloaded" });
-      await page.waitForFunction(() => document.fonts.ready.then(() => true), { timeout: 5000 }).catch(() => {});
+      await setContentAndWaitForAssets(page, html);
       const buffer = await page.screenshot({ type: "png" });
       return { type: "image" as const, mimeType: "image/png" as const, data: buffer.toString("base64") };
     }, { viewport: { width: 960, height: 540 } });
@@ -136,7 +135,7 @@ ${slidesHtml}
 
   try {
     return await withPage(async (page) => {
-      await page.setContent(optimizedHtml, { waitUntil: "networkidle" });
+      await setContentAndWaitForAssets(page, optimizedHtml);
       return await page.pdf({ width: "960px", height: "540px", printBackground: true, landscape: false });
     });
   } catch (err: any) {
