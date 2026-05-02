@@ -26,6 +26,7 @@ import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
+import { safeImageBlock } from "./safeImageBlock";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 
 // Legacy quotation/fast-pdf tools are hidden by default so the agent does not
@@ -688,11 +689,9 @@ How to embed safely (the only reliable rule):
 
       return {
         content: [
-          ...files.map((f: any) => ({
-            type: "image" as const,
-            data: f.b64 as string,
-            mimeType: "image/png",
-          })),
+          ...files.map((f: any) =>
+            safeImageBlock(f.b64 as string, "image/png", "generate_image")
+          ),
           {
             type: "text" as const,
             text:
@@ -2518,11 +2517,9 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
       }
 
       return {
-        content: pages.map((p, i) => ({
-          type: "image" as const,
-          mimeType: "image/png" as const,
-          data: p.image,
-        })),
+        content: pages.map((p, i) =>
+          safeImageBlock(p.image, "image/png", `pdf_to_images page ${i + 1}`)
+        ),
       };
     })
   );
@@ -2538,7 +2535,11 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
       const ctx = extra.authInfo as unknown as AuthContext;
       const { takeDocumentScreenshot } = await import("../core/documentScreenshot");
       const result = await takeDocumentScreenshot(ctx.user.id, params.documentId, params.pageIndex ?? 0);
-      return { content: [result] };
+      const block =
+        result.type === "image"
+          ? safeImageBlock(result.data, result.mimeType, "get_page_screenshot")
+          : result;
+      return { content: [block] };
     })
   );
 
