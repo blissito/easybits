@@ -381,11 +381,23 @@ function arbitraryValueReplacements(html: string, themeColors?: Record<string, s
     return `${variants}${util}-${role}${op}`;
   });
 
-  // text-[#hex] → seed marker. Walker resolves to text-on-X based on ancestor bg.
+  // text-[#hex] handling. When the palette is provided and the hex matches a
+  // brand role (primary/secondary/accent — NOT surface, since `text-surface`
+  // doesn't exist), preserve the COLOR INTENT by emitting `text-{role}` so the
+  // text stays brand-colored. Otherwise seed as MUTED and let the walker decide
+  // based on ancestor bg.
   const textPattern = /(?<![A-Za-z0-9_-])((?:[a-z-]+:)*)text-\[#([0-9a-fA-F]{3,8})\](\/\d{1,3})?(?![A-Za-z0-9_-])/g;
-  s = s.replace(textPattern, (_m, variants: string) => {
-    // Seed as MUTED — most arbitrary text colors are body copy. Walker upgrades on dark bg.
-    return `${variants}text-on-surface-MUTED`;
+  s = s.replace(textPattern, (_m, variants: string, hex: string, opacity: string | undefined) => {
+    const op = opacity || "";
+    if (themeColors) {
+      const role = hexToRole(hex, themeColors);
+      // text-{role} only makes sense for chromatic roles. surface→fall back to seed.
+      if (role === "primary" || role === "secondary" || role === "accent") {
+        return `${variants}text-${role}${op}`;
+      }
+    }
+    // Seed as MUTED — walker upgrades on dark bg ancestors.
+    return `${variants}text-on-surface-MUTED${op}`;
   });
 
   return s;
