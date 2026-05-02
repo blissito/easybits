@@ -3,13 +3,14 @@ import { motion } from "motion/react";
 import { Input } from "~/components/common/Input";
 import { BrutalButton } from "~/components/common/BrutalButton";
 
+// website se llena después vía WebsiteEnrich (post-summary). business y
+// description quedan fuera porque el form sólo pide los 3 datos esenciales
+// (nombre, email, whatsapp) — añadir más campos baja la conversión del lead.
 export type LeadData = {
   name: string;
   email: string;
   whatsapp: string;
   website: string;
-  business: string;
-  description: string;
 };
 
 type LeadFormProps = {
@@ -29,8 +30,6 @@ export const LeadForm = ({ onSubmit, isLoading }: LeadFormProps) => {
       email: String(fd.get("email") || "").trim(),
       whatsapp: String(fd.get("whatsapp") || "").trim(),
       website: "",
-      business: "",
-      description: "",
     };
     if (!data.name || !data.email || !data.whatsapp) {
       setError("Necesitamos nombre, email y WhatsApp para mandarte la cotización.");
@@ -66,8 +65,7 @@ export const LeadForm = ({ onSubmit, isLoading }: LeadFormProps) => {
           Falta 1 paso para ver tu precio final
         </h2>
         <p className="text-base text-black/70">
-          Te llega tu cotización completa al WhatsApp + PDF descargable.
-          Sin spam.
+          Te mandamos la cotización por email con PDF adjunto. Sin spam.
         </p>
       </div>
 

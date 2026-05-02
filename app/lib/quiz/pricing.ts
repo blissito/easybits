@@ -173,3 +173,39 @@ export const QUOTE_DISCOUNT_PCT = 20;
 
 export const computeDiscountedMonthly = (monthlyTotalMxn: number): number =>
   Math.round(monthlyTotalMxn * (1 - QUOTE_DISCOUNT_PCT / 100));
+
+// Plan anual: paga 12 meses upfront → setup gratis. Solo elegible desde tier
+// basic (3+ capacidades) — en minimal (1-2 caps) los 12 meses apenas pagan
+// el setup que regalamos. La mensualidad mantiene el 20% off (sin descuento
+// adicional por anual — el premio es el setup gratis).
+export const ANNUAL_PLAN_MIN_SELECTIONS = 3;
+
+export const isAnnualPlanEligible = (selectionsCount: number): boolean =>
+  selectionsCount >= ANNUAL_PLAN_MIN_SELECTIONS;
+
+export type BillingMode = "monthly" | "annual";
+
+export type AnnualPlan = {
+  eligible: boolean;
+  // Mensualidad equivalente (igual que la mensual con descuento — sin descuento
+  // extra por anual). Útil para mostrar "$X/mes pagados anualmente".
+  monthlyEquivMxn: number;
+  // Total que cobramos en una sola charge anual.
+  totalAnnualMxn: number;
+  // Lo que el usuario AHORRA al elegir anual: el setup que ya no paga.
+  setupSavingsMxn: number;
+};
+
+export const computeAnnualPlan = (
+  monthlyTotalMxn: number,
+  setupOneTimeMxn: number,
+  selectionsCount: number
+): AnnualPlan => {
+  const monthlyEquivMxn = computeDiscountedMonthly(monthlyTotalMxn);
+  return {
+    eligible: isAnnualPlanEligible(selectionsCount),
+    monthlyEquivMxn,
+    totalAnnualMxn: monthlyEquivMxn * 12,
+    setupSavingsMxn: setupOneTimeMxn,
+  };
+};

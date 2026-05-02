@@ -1,4 +1,5 @@
 import {
+  AnimatePresence,
   motion,
   useMotionValue,
   useTransform,
@@ -6,7 +7,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { useEffect, useState } from "react";
-import type { Quote } from "~/lib/quiz/pricing";
+import type { AnnualPlan, BillingMode, Quote } from "~/lib/quiz/pricing";
 import {
   computeDiscountedMonthly,
   formatMxn,
@@ -17,6 +18,9 @@ import type { Capability } from "~/lib/quiz/capabilities";
 
 type PriceSummaryProps = {
   quote: Quote;
+  annualPlan: AnnualPlan;
+  billingMode: BillingMode;
+  onBillingModeChange: (mode: BillingMode) => void;
   customIntegrationsDescription?: string;
   onDownloadPdf?: () => void;
   isDownloadingPdf?: boolean;
@@ -30,6 +34,9 @@ type PriceSummaryProps = {
 
 export const PriceSummary = ({
   quote,
+  annualPlan,
+  billingMode,
+  onBillingModeChange,
   customIntegrationsDescription,
   onDownloadPdf,
   isDownloadingPdf = false,
@@ -40,6 +47,7 @@ export const PriceSummary = ({
   onRemoveCustomIntegrations,
   siteAnalysisCaptured = false,
 }: PriceSummaryProps) => {
+  const isAnnual = billingMode === "annual" && annualPlan.eligible;
   // El descuento aplica SOLO al mensual, no al setup. El setup es ancla.
   const discountedMonthly = computeDiscountedMonthly(quote.monthlyTotalMxn);
   const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
@@ -69,10 +77,16 @@ export const PriceSummary = ({
   const removable = !!onRemoveCapability;
   const canAdd = !!onAddCapability && availableToAdd.length > 0;
 
+  // Acordeón: arranca abierto si hay pocas selecciones (no estorba) y cerrado si
+  // hay muchas (para que los CTAs queden above-the-fold). El usuario lo abre.
+  const [isBreakdownOpen, setIsBreakdownOpen] = useState(
+    quote.selectionsCount <= 3
+  );
+
   return (
     <div className="w-full max-w-xl mx-auto">
-      <div className="text-center mb-8">
-        <p className="text-sm uppercase tracking-widest font-bold text-black/60 mb-3">
+      <div className="text-center mb-4">
+        <p className="text-sm uppercase tracking-widest font-bold text-black/60 mb-2">
           Tu agente custom
         </p>
 
@@ -85,130 +99,206 @@ export const PriceSummary = ({
               ? { duration: 0 }
               : { delay: 0.3, type: "spring", stiffness: 200, damping: 12 }
           }
-          className="inline-block mb-3 bg-brand-yellow border-[3px] border-black px-4 py-1.5 rounded-lg shadow-[3px_3px_0_0_rgba(0,0,0,1)]"
+          className="inline-block bg-brand-yellow border-[3px] border-black px-4 py-1.5 rounded-lg shadow-[3px_3px_0_0_rgba(0,0,0,1)]"
         >
           <span className="text-xs md:text-sm font-black tracking-[0.2em] uppercase text-black">
             ★ {QUOTE_DISCOUNT_PCT}% Descuento permanente en mensualidad ★
           </span>
         </motion.div>
-
-        {/* Original monthly — struck through, smaller */}
-        <div className="text-xl md:text-2xl font-bold text-black/40 tabular-nums line-through mt-1">
-          {formatMxn(quote.monthlyTotalMxn)} MXN / mes
-        </div>
-
-        {/* Discounted monthly — BIG in brand accent purple */}
-        <div className="flex items-baseline justify-center gap-2 mt-1">
-          <span className="text-6xl md:text-7xl font-black text-brand-500 tabular-nums">
-            {formatMxn(display)}
-          </span>
-          <span className="text-xl font-bold text-black/60">
-            MXN / mes
-          </span>
-        </div>
-
-        <p className="text-sm text-black/60 mt-3 max-w-md mx-auto leading-snug">
-          {quote.selectionsCount}{" "}
-          {quote.selectionsCount === 1 ? "capacidad" : "capacidades"}
-          {quote.hasCustomIntegrations && " · integraciones custom"}
-          <span className="block mt-1 text-xs italic text-black/55">
-            mucho menos que un salario y con más retorno de inversión
-          </span>
-        </p>
-        <p className="text-xs text-black/55 mt-1.5 font-mono">
-          Ahorras {formatMxn(monthlySaving)} MXN cada mes — al presentar tu
-          cotización
-        </p>
       </div>
 
-      {/* SETUP ÚNICO — se cobra junto con la primera mensualidad vía Stripe */}
-      <motion.div
-        initial={reduced ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={reduced ? { duration: 0 } : { delay: 0.4, duration: 0.4 }}
-        className="mb-6 rounded-2xl border-[3px] border-black bg-black text-white p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)]"
-      >
-        <p className="text-[10px] uppercase tracking-[0.25em] font-black text-brand-yellow mb-1">
-          Setup único · Pago una sola vez
-        </p>
-        <p className="text-3xl md:text-4xl font-black tabular-nums">
-          {formatMxn(quote.setupOneTimeMxn)}{" "}
-          <span className="text-sm font-bold text-white/60">MXN</span>
-        </p>
-        <p className="text-xs text-white/50 font-mono mt-1">
-          ≈ {formatUsd(quote.setupOneTimeUsd)} USD
-        </p>
-        <p className="text-[10px] text-white/55 mt-1 mb-3 leading-snug">
-          Escala según scope: $35K (mínimo) → $50K → $80K → $120K (full).
-          Más capacidades, más vendors a configurar.
-        </p>
-        <ul className="text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
+      {/* Toggle billing mode — Mensual + setup vs Anual sin setup */}
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onBillingModeChange("monthly")}
+          aria-pressed={!isAnnual}
+          className={`rounded-xl border-[3px] border-black px-3 py-2.5 text-left transition-all ${
+            !isAnnual
+              ? "bg-white shadow-[3px_3px_0_0_rgba(0,0,0,1)] -translate-x-0.5 -translate-y-0.5"
+              : "bg-white/60 hover:bg-white"
+          }`}
+        >
+          <p className="text-[10px] uppercase tracking-[0.18em] font-black text-black/70">
+            Pago mensual
+          </p>
+          <p className="text-xs text-black/60 mt-0.5 leading-tight">
+            Mensualidad + setup único
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => annualPlan.eligible && onBillingModeChange("annual")}
+          aria-pressed={isAnnual}
+          disabled={!annualPlan.eligible}
+          title={
+            annualPlan.eligible
+              ? "Pagas un año, instalación gratis"
+              : "Disponible desde 3 capacidades"
+          }
+          className={`relative rounded-xl border-[3px] border-black px-3 py-2.5 text-left transition-all ${
+            !annualPlan.eligible
+              ? "bg-white/40 opacity-60 cursor-not-allowed"
+              : isAnnual
+                ? "bg-brand-yellow shadow-[3px_3px_0_0_rgba(0,0,0,1)] -translate-x-0.5 -translate-y-0.5"
+                : "bg-white/60 hover:bg-white"
+          }`}
+        >
+          <p className="text-[10px] uppercase tracking-[0.18em] font-black text-black/70">
+            Pago anual
+          </p>
+          <p className="text-xs text-black/70 mt-0.5 leading-tight font-bold">
+            {annualPlan.eligible
+              ? "Setup GRATIS · ahorras hasta " +
+                formatMxn(annualPlan.setupSavingsMxn)
+              : "Desde 3 capacidades"}
+          </p>
+          {isAnnual && (
+            <span className="absolute -top-2 -right-2 bg-black text-white text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded">
+              ★ activo
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Métricas compactas — adaptan según billing mode */}
+      <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Mensualidad — siempre visible, copy cambia según modo */}
+        <div className="rounded-2xl border-[3px] border-black bg-white p-4 shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
+          <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/60">
+            {isAnnual
+              ? "Mensualidad equivalente"
+              : `Mensualidad (${QUOTE_DISCOUNT_PCT}% off)`}
+          </p>
+          <p className="text-xs text-black/40 tabular-nums line-through mt-0.5">
+            {formatMxn(quote.monthlyTotalMxn)} MXN
+          </p>
+          <p className="text-3xl md:text-4xl font-black text-brand-500 tabular-nums leading-tight">
+            {formatMxn(display)}
+          </p>
+          <p className="text-[10px] text-black/55 font-mono mt-0.5">
+            {isAnnual
+              ? `MXN / mes · pagado anualmente`
+              : `MXN / mes · ahorras ${formatMxn(monthlySaving)}`}
+          </p>
+        </div>
+
+        {/* Card derecha — Setup único (mensual) o Total anual (anual) */}
+        {isAnnual ? (
+          <motion.div
+            key="annual-card"
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={
+              reduced ? { duration: 0 } : { delay: 0.2, duration: 0.4 }
+            }
+            className="rounded-2xl border-[3px] border-black bg-brand-yellow text-black p-4 shadow-[4px_4px_0_0_rgba(0,0,0,1)]"
+          >
+            <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/80">
+              Total anual · pago único
+            </p>
+            <p className="text-3xl md:text-4xl font-black tabular-nums leading-tight mt-1">
+              {formatMxn(annualPlan.totalAnnualMxn)}
+            </p>
+            <p className="text-[10px] text-black/65 font-mono mt-0.5">
+              MXN · 12 meses incluidos
+            </p>
+            <p className="text-[10px] text-black font-black mt-1.5">
+              ✓ SETUP GRATIS · ahorras{" "}
+              {formatMxn(annualPlan.setupSavingsMxn)} MXN
+            </p>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="monthly-card"
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={
+              reduced ? { duration: 0 } : { delay: 0.2, duration: 0.4 }
+            }
+            className="rounded-2xl border-[3px] border-black bg-black text-white p-4 shadow-[4px_4px_0_0_rgba(0,0,0,1)]"
+          >
+            <p className="text-[10px] uppercase tracking-[0.2em] font-black text-brand-yellow">
+              Setup único · pago una sola vez
+            </p>
+            <p className="text-3xl md:text-4xl font-black tabular-nums leading-tight mt-1">
+              {formatMxn(quote.setupOneTimeMxn)}
+            </p>
+            <p className="text-[10px] text-white/55 font-mono mt-0.5">
+              MXN · ≈ {formatUsd(quote.setupOneTimeUsd)} USD
+            </p>
+            <p className="text-[10px] text-brand-yellow font-bold mt-1.5">
+              ✓ Hablamos por WhatsApp antes de cobrar
+            </p>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Qué incluye el setup — collapsible para no saturar above-the-fold */}
+      <details className="mb-5 rounded-xl border-2 border-black bg-white p-3 group">
+        <summary className="cursor-pointer text-xs font-bold text-black/70 list-none flex items-center justify-between gap-2">
+          <span>¿Qué incluye el setup único?</span>
+          <span className="text-black/40 group-open:rotate-90 transition-transform">
+            ▸
+          </span>
+        </summary>
+        <ul className="mt-2 text-xs text-black/70 space-y-1 list-disc list-inside leading-relaxed">
           <li>30 días pair WA con dos seniors</li>
           <li>Setup técnico + MCPs + tu marca</li>
           <li>2 integraciones simples</li>
+          <li>
+            Escala por scope: $59.5K (mínimo) → $85K → $119K → $170K (full).
+            Más capacidades, más vendors a configurar.
+          </li>
         </ul>
-        <div className="mt-3 pt-3 border-t border-white/15 text-[11px] leading-snug">
-          <p className="text-brand-yellow font-bold">
-            ✓ Hablamos por WhatsApp antes de cobrar
-          </p>
-          <p className="text-white/65 mt-0.5">
-            Validamos que encajamos. Si no, no hay deal.
-          </p>
-        </div>
-      </motion.div>
+      </details>
 
-      {/* Discount + Download banner — positioned right under setup */}
-      {onDownloadPdf && (
-        <motion.div
-          initial={reduced ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={
-            reduced ? { duration: 0 } : { delay: 0.5, duration: 0.4 }
-          }
-          className="mb-8 rounded-2xl border-[3px] border-black bg-brand-yellow p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] text-center"
+      <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setIsBreakdownOpen((v) => !v)}
+          aria-expanded={isBreakdownOpen}
+          className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-black/[0.03] transition-colors"
         >
-          <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] font-black text-black/70 mb-2">
-            ★ Descuento permanente ★
-          </p>
-          <p className="text-base md:text-lg font-black text-black leading-tight">
-            Descarga tu cotización y preséntala para recibir
-            <br className="hidden md:block" />{" "}
-            <span className="underline decoration-4 underline-offset-2">
-              {QUOTE_DISCOUNT_PCT}% off permanente en mensualidad
-            </span>{" "}
-            al contratar.
-          </p>
-          <button
-            onClick={onDownloadPdf}
-            disabled={disableDownload || isDownloadingPdf}
-            className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isDownloadingPdf ? (
-              <>
-                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Generando tu cotización…</span>
-              </>
-            ) : (
-              "↓ Descargar cotización (PDF)"
-            )}
-          </button>
-          {isDownloadingPdf && (
-            <p className="text-[10px] text-black/55 mt-2 font-mono">
-              Tarda 2-4 segundos
-            </p>
-          )}
-        </motion.div>
-      )}
-
-      <div className="rounded-2xl border-[3px] border-black bg-white p-6 shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
-        <h4 className="text-sm uppercase tracking-widest font-bold text-black mb-4">
-          Desglose mensual
-          {removable && (
-            <span className="ml-2 text-[10px] font-normal text-black/45 normal-case tracking-normal">
-              · puedes editar
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-sm uppercase tracking-widest font-bold text-black">
+              Desglose mensual
+              {removable && (
+                <span className="ml-2 text-[10px] font-normal text-black/45 normal-case tracking-normal">
+                  · puedes editar
+                </span>
+              )}
             </span>
-          )}
-        </h4>
+            <span className="text-xs text-black/55 font-mono tabular-nums truncate">
+              {quote.selectionsCount}{" "}
+              {quote.selectionsCount === 1 ? "capacidad" : "capacidades"} +
+              babysit · {formatMxn(discountedMonthly)} / mes
+            </span>
+          </div>
+          <span
+            className={`text-black/50 text-xl font-black transition-transform shrink-0 ${
+              isBreakdownOpen ? "rotate-90" : ""
+            }`}
+            aria-hidden
+          >
+            ▸
+          </span>
+        </button>
+        <AnimatePresence initial={false}>
+          {isBreakdownOpen && (
+            <motion.div
+              key="breakdown-body"
+              initial={reduced ? false : { height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={
+                reduced
+                  ? { duration: 0 }
+                  : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+              }
+              className="overflow-hidden"
+            >
+              <div className="px-5 pb-5 pt-1 border-t border-black/10">
         <ul className="flex flex-col gap-3">
           {/* Orchestration line — NOT removable, base of the bundle */}
           <motion.li
@@ -400,7 +490,54 @@ export const PriceSummary = ({
           Precios en MXN, no incluyen IVA. Mensualidad recurrente, cancela
           cuando quieras (el setup nunca se reembolsa).
         </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+
+      {/* Discount + Download banner — abajo del desglose para no estorbar above-the-fold */}
+      {onDownloadPdf && (
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={
+            reduced ? { duration: 0 } : { delay: 0.5, duration: 0.4 }
+          }
+          className="mt-4 rounded-2xl border-[3px] border-black bg-brand-yellow p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] text-center"
+        >
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] font-black text-black/70 mb-2">
+            ★ Descuento permanente ★
+          </p>
+          <p className="text-base md:text-lg font-black text-black leading-tight">
+            Descarga tu cotización y preséntala para recibir
+            <br className="hidden md:block" />{" "}
+            <span className="underline decoration-4 underline-offset-2">
+              {QUOTE_DISCOUNT_PCT}% off permanente en mensualidad
+            </span>{" "}
+            al contratar.
+          </p>
+          <button
+            onClick={onDownloadPdf}
+            disabled={disableDownload || isDownloadingPdf}
+            className="mt-4 inline-flex items-center gap-2 bg-black text-white font-bold text-sm md:text-base px-5 py-3 rounded-xl border-[3px] border-black hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isDownloadingPdf ? (
+              <>
+                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Generando tu cotización…</span>
+              </>
+            ) : (
+              "↓ Descargar cotización (PDF)"
+            )}
+          </button>
+          {isDownloadingPdf && (
+            <p className="text-[10px] text-black/55 mt-2 font-mono">
+              Tarda 2-4 segundos
+            </p>
+          )}
+        </motion.div>
+      )}
 
       {/* Custom integrations — info compacta, sin pricing aparte (todo entra en setup + discovery) */}
       {quote.hasCustomIntegrations && customIntegrationsDescription && (

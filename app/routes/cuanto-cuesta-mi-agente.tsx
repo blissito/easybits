@@ -7,6 +7,7 @@ import { QuizStep, StepIndicator } from "~/components/quiz/QuizStep";
 import { CapabilityCard } from "~/components/quiz/CapabilityCard";
 import { PriceSummary } from "~/components/quiz/PriceSummary";
 import { LeadForm, type LeadData } from "~/components/quiz/LeadForm";
+import { RunningTotal } from "~/components/quiz/RunningTotal";
 import { WebsiteEnrich } from "~/components/quiz/WebsiteEnrich";
 import {
   IntegrationsStep,
@@ -14,12 +15,16 @@ import {
 } from "~/components/quiz/IntegrationsStep";
 import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
 import { CAPABILITIES, DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
+import { QUIZ_WHATSAPP_NUMBER } from "~/lib/quiz/contact";
 import {
+  computeAnnualPlan,
   computeQuote,
   formatMxn,
   formatUsd,
+  isAnnualPlanEligible,
   parseSelections,
   serializeSelections,
+  type BillingMode,
   type Selections,
 } from "~/lib/quiz/pricing";
 import { playReveal } from "~/lib/quiz/sounds";
@@ -27,7 +32,7 @@ import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/cuanto-cuesta-mi-agente";
 
-const WHATSAPP_NUMBER = "527757609276";
+const WHATSAPP_NUMBER = QUIZ_WHATSAPP_NUMBER;
 const QUIZ_FORM_ID = "69efd203ad74435521a74b34";
 
 export const clientLoader = async () => {
@@ -72,11 +77,37 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // billingMode controla si pagan mensual + setup, o anual con setup gratis.
+  // Se fuerza a 'monthly' si el usuario no tiene 3+ capacidades (minimal no
+  // califica — el margen es muy chico, ver computeAnnualPlan).
+  const [billingMode, setBillingMode] = useState<BillingMode>("monthly");
 
   const quote = useMemo(
     () => computeQuote(selections, integrations.hasIntegrations),
     [selections, integrations.hasIntegrations]
   );
+
+  const annualPlan = useMemo(
+    () =>
+      computeAnnualPlan(
+        quote.monthlyTotalMxn,
+        quote.setupOneTimeMxn,
+        quote.selectionsCount
+      ),
+    [quote.monthlyTotalMxn, quote.setupOneTimeMxn, quote.selectionsCount]
+  );
+
+  // Si el usuario tenía annual seleccionado pero quita capacidades hasta
+  // quedar bajo el threshold, lo regresamos a monthly automáticamente.
+  useEffect(() => {
+    if (billingMode === "annual" && !annualPlan.eligible) {
+      setBillingMode("monthly");
+    }
+  }, [billingMode, annualPlan.eligible]);
+
+  const effectiveBillingMode: BillingMode = annualPlan.eligible
+    ? billingMode
+    : "monthly";
 
   // tierId === null → no incluir; cualquier string → incluir con ese tier.
   const handleAnswer = (capId: string, tierId: string | null) => {
@@ -99,22 +130,30 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     setSubmitError(null);
     setLead(data);
     try {
-      if (QUIZ_FORM_ID) {
-        const res = await fetch(`/api/v2/forms/${QUIZ_FORM_ID}/submit`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...data,
-            selections: serializeSelections(selections),
-            integrations: integrations.hasIntegrations
-              ? integrations.description || "yes (sin descripción)"
-              : "no",
-            monthly_mxn: String(quote.monthlyTotalMxn),
-            setup_usd: String(quote.setupOneTimeUsd),
-          }),
-        });
-        if (!res.ok) throw new Error(`form submit failed: ${res.status}`);
-      }
+      // Endpoint dedicado: guarda el lead Y manda la cotización por email
+      // con PDF adjunto. Si el email falla no bloqueamos al usuario — el
+      // lead queda guardado y puede descargar manualmente desde el summary.
+      const res = await fetch("/api/v2/quiz-lead-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          selections: serializeSelections(selections),
+          integrations: integrations.hasIntegrations
+            ? integrations.description || "yes (sin descripción)"
+            : "no",
+          monthly_mxn: String(quote.monthlyTotalMxn),
+          setup_mxn: String(quote.setupOneTimeMxn),
+          billingMode: effectiveBillingMode,
+          customIntegrations: integrations.hasIntegrations
+            ? {
+                description: integrations.description,
+                items: integrations.items,
+              }
+            : null,
+        }),
+      });
+      if (!res.ok) throw new Error(`lead submit failed: ${res.status}`);
       setStep((s) => s + 1);
     } catch (err) {
       setSubmitError("No pudimos guardar tus datos. Intenta de nuevo.");
@@ -137,6 +176,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         body: JSON.stringify({
           selections: serializeSelections(selections),
           monthlyTotalMxn: quote.monthlyTotalMxn,
+          billingMode: effectiveBillingMode,
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -169,11 +209,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     const greeting = lead
       ? `Hola, soy ${lead.name}.`
       : "Hola, vi tu landing.";
-    const businessLine = lead?.business ? `\nNegocio: ${lead.business}` : "";
     const siteLine = lead?.website ? `\nSitio: ${lead.website}` : "";
     const setupLine = `Setup único: ${formatMxn(quote.setupOneTimeMxn)} MXN (≈ ${formatUsd(quote.setupOneTimeUsd)} USD)`;
     const monthlyLine = `Mensualidad: ${formatMxn(quote.monthlyTotalMxn)} MXN/mes (lista, antes del 20% off)`;
-    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${monthlyLine}\n\nCapacidades:\n${summary}${integrationsLine}${businessLine}${siteLine}`;
+    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${monthlyLine}\n\nCapacidades:\n${summary}${integrationsLine}${siteLine}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -197,6 +236,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         signal: controller.signal,
         body: JSON.stringify({
           selections: serializeSelections(selections),
+          billingMode: effectiveBillingMode,
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -255,7 +295,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const isLeadStep = step === STEP_LEAD;
   const isSummaryStep = step === STEP_SUMMARY;
 
-  // Hydrate state from URL (?s=voice:pro,images,whatsapp&i=1) on first mount.
+  // Stripe redirect flags. `paidFlag` y `cancelledFlag` se setean en quiz-checkout
+  // success_url/cancel_url. Render dedicado para que el usuario no caiga
+  // en el cotizador vacío después de pagar miles de pesos.
+  const paidFlag = searchParams.get("paid") === "1";
+  const cancelledFlag = searchParams.get("cancelled") === "1";
+  const checkoutSessionId = searchParams.get("session_id") || "";
+  const showCheckoutResult = paidFlag || cancelledFlag;
+
+  // Hydrate state from URL (?s=voice:pro,images,whatsapp&i=1&ii=hubspot&b=annual) on first mount.
   useEffect(() => {
     if (hydrated) return;
     const sParam = searchParams.get("s");
@@ -264,7 +312,22 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       if (parsed.size > 0) {
         setSelections(parsed);
         if (searchParams.get("i") === "1") {
-          setIntegrations((prev) => ({ ...prev, hasIntegrations: true }));
+          const itemsParam = searchParams.get("ii") || "";
+          const items = itemsParam
+            .split(",")
+            .map((s) => decodeURIComponent(s).trim())
+            .filter(Boolean);
+          setIntegrations({
+            hasIntegrations: true,
+            items,
+            description: items.join(" · "),
+          });
+        }
+        if (
+          searchParams.get("b") === "annual" &&
+          isAnnualPlanEligible(parsed.size)
+        ) {
+          setBillingMode("annual");
         }
         setStep(STEP_SUMMARY);
       }
@@ -281,18 +344,47 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     }
     if (integrations.hasIntegrations) {
       next.set("i", "1");
+      if (integrations.items.length > 0) {
+        next.set(
+          "ii",
+          integrations.items.map((it) => encodeURIComponent(it)).join(",")
+        );
+      }
+    }
+    if (effectiveBillingMode === "annual") {
+      next.set("b", "annual");
     }
     // preventScrollReset evita que React Router brinque al top al editar
     // selecciones desde el summary (quitar/agregar capacidades).
     setSearchParams(next, { replace: true, preventScrollReset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, isSummaryStep, selections, integrations.hasIntegrations]);
+  }, [
+    hydrated,
+    isSummaryStep,
+    selections,
+    integrations.hasIntegrations,
+    integrations.items,
+    effectiveBillingMode,
+  ]);
 
   // Confetti + reveal sound when the summary first appears
   const [celebratedSummary, setCelebratedSummary] = useState(false);
   useEffect(() => {
     if (!isSummaryStep || celebratedSummary) return;
     setCelebratedSummary(true);
+    // Reset scroll al top antes del confetti — el usuario llega del lead step
+    // con el viewport en una posición arbitraria y se perdería el momento "wow"
+    // y las métricas/CTAs del summary. Respeta prefers-reduced-motion porque
+    // `behavior: "smooth"` ignora esa preferencia.
+    if (typeof window !== "undefined") {
+      const prefersReduced = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      window.scrollTo({
+        top: 0,
+        behavior: prefersReduced ? "auto" : "smooth",
+      });
+    }
     playReveal();
     import("js-confetti")
       .then(({ default: JSConfetti }) => {
@@ -317,7 +409,95 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     <section className="min-h-screen bg-brand-grass flex flex-col pb-[env(safe-area-inset-bottom)]">
       <AuthNav user={user} />
       <main className="flex-1 flex flex-col px-8 md:px-20 lg:px-32 py-24 md:py-40 max-w-5xl mx-auto w-full">
-        {!isHero && (
+        {showCheckoutResult && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="max-w-xl mx-auto w-full">
+              {paidFlag ? (
+                <div className="rounded-3xl border-[3px] border-black bg-white p-8 md:p-10 shadow-[6px_6px_0_0_rgba(0,0,0,1)] text-center">
+                  <div className="text-5xl mb-4" aria-hidden>
+                    🎉
+                  </div>
+                  <h1 className="text-3xl md:text-4xl font-black text-black mb-3 leading-tight">
+                    ¡Pago confirmado!
+                  </h1>
+                  <p className="text-base md:text-lg text-black/75 mb-6 leading-snug">
+                    Te contactamos por WhatsApp en{" "}
+                    <strong>menos de 24h hábiles</strong> para arrancar el
+                    pair WA y configurar tu agente. Si pagaste fuera de horario
+                    (9-18h MX), respondemos al siguiente día hábil.
+                  </p>
+                  <div className="bg-brand-yellow border-2 border-black rounded-xl px-5 py-4 mb-6 text-left">
+                    <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/70 mb-2">
+                      Próximos pasos
+                    </p>
+                    <ol className="text-sm text-black/80 space-y-1.5 leading-snug list-decimal list-inside">
+                      <li>Te llega email de confirmación con tu factura.</li>
+                      <li>
+                        Te escribimos al WhatsApp que dejaste para iniciar
+                        discovery.
+                      </li>
+                      <li>
+                        En 24h tu agente arranca con pair WA los primeros 30
+                        días.
+                      </li>
+                    </ol>
+                  </div>
+                  <BrutalButton
+                    onClick={() => {
+                      const msg = `Hola, acabo de pagar el setup ${checkoutSessionId ? `(sesión ${checkoutSessionId.slice(-8)})` : ""}. Listo para arrancar.`;
+                      window.open(
+                        `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    Avisarles por WhatsApp →
+                  </BrutalButton>
+                  <p className="text-xs text-black/50 mt-4 font-mono">
+                    Si no recibes respuesta en 24h, escríbenos directo al
+                    WhatsApp.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-3xl border-[3px] border-black bg-white p-8 md:p-10 shadow-[6px_6px_0_0_rgba(0,0,0,1)] text-center">
+                  <div className="text-5xl mb-4" aria-hidden>
+                    🛑
+                  </div>
+                  <h1 className="text-3xl md:text-4xl font-black text-black mb-3 leading-tight">
+                    Pago cancelado — sin cargos
+                  </h1>
+                  <p className="text-base md:text-lg text-black/75 mb-6 leading-snug">
+                    No te cobramos nada. Si tuviste dudas o algo no se vio
+                    bien, hablemos por WhatsApp antes de pagar — preferimos
+                    cerrar el deal hablando.
+                  </p>
+                  <div className="flex flex-col md:flex-row gap-3 justify-center">
+                    <BrutalButton
+                      onClick={() => {
+                        const msg = `Hola, intenté pagar pero cancelé. ¿Podemos hablar antes?`;
+                        window.open(
+                          `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
+                          "_blank"
+                        );
+                      }}
+                    >
+                      Hablar por WhatsApp
+                    </BrutalButton>
+                    <BrutalButton
+                      mode="ghost"
+                      onClick={() => {
+                        setSearchParams({}, { replace: true });
+                      }}
+                    >
+                      Volver al cotizador
+                    </BrutalButton>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {!showCheckoutResult && !isHero && (
           <div className="mb-6 relative flex justify-center items-center">
             <StepIndicator current={step} total={TOTAL_PROGRESS_STEPS} />
             {!isSummaryStep && step > 1 && (
@@ -332,6 +512,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         )}
 
         {/* Stable canvas — content pinned to top so layout doesn't shift */}
+        {!showCheckoutResult && (
         <div className="flex-1 flex flex-col items-stretch min-h-[calc(100svh-220px)] md:min-h-[760px]">
           <AnimatePresence mode="wait">
             {isHero && (
@@ -376,10 +557,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.6 }}
-                      className="text-sm text-black/60 mt-6 font-mono"
+                      className="text-sm text-black/85 mt-6 font-mono font-bold"
                     >
-                      {CAP_COUNT} capacidades · setup único $8K USD ·
-                      mensualidad MXN
+                      Setup único desde $59,500 MXN (~$3,500 USD) ·
+                      mensualidad desde $3K · te armamos todo
                     </motion.p>
                   </div>
                   <div className="order-1 md:order-2 max-w-[260px] md:max-w-none mx-auto w-full">
@@ -398,34 +579,39 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   }
                 />
                 {/* Always render to avoid layout shift; invisible until first selection */}
-                <p
+                <div
                   aria-hidden={selections.size === 0}
-                  className={`text-center text-sm font-mono mt-6 tabular-nums transition-opacity duration-200 ${
+                  className={`transition-opacity duration-200 ${
                     selections.size === 0
                       ? "opacity-0 select-none"
-                      : "opacity-100 text-black/60"
+                      : "opacity-100"
                   }`}
                 >
-                  acumulado: {formatMxn(quote.monthlyTotalMxn)} / mes
-                </p>
+                  <RunningTotal
+                    monthlyTotalMxn={quote.monthlyTotalMxn}
+                    setupOneTimeMxn={quote.setupOneTimeMxn}
+                  />
+                </div>
               </QuizStep>
             )}
 
             {isIntegrationsStep && (
               <QuizStep stepKey="integrations">
                 <IntegrationsStep onAnswer={handleIntegrations} />
-                <p className="text-center text-sm font-mono text-black/60 mt-6 tabular-nums">
-                  acumulado: {formatMxn(quote.monthlyTotalMxn)} / mes
-                </p>
+                <RunningTotal
+                  monthlyTotalMxn={quote.monthlyTotalMxn}
+                  setupOneTimeMxn={quote.setupOneTimeMxn}
+                />
               </QuizStep>
             )}
 
             {isLeadStep && (
               <QuizStep stepKey="lead">
                 <div className="mb-6">
-                  <p className="text-center text-sm font-mono text-black/60 tabular-nums">
-                    Estimación parcial: {formatMxn(quote.monthlyTotalMxn)} / mes
-                  </p>
+                  <RunningTotal
+                    monthlyTotalMxn={quote.monthlyTotalMxn}
+                    setupOneTimeMxn={quote.setupOneTimeMxn}
+                  />
                 </div>
                 <LeadForm onSubmit={handleLeadSubmit} isLoading={submitting} />
                 {submitError && (
@@ -440,6 +626,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
               <QuizStep stepKey="summary">
                 <PriceSummary
                   quote={quote}
+                  annualPlan={annualPlan}
+                  billingMode={effectiveBillingMode}
+                  onBillingModeChange={setBillingMode}
                   customIntegrationsDescription={
                     integrations.hasIntegrations
                       ? integrations.description
@@ -576,6 +765,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             )}
           </AnimatePresence>
         </div>
+        )}
       </main>
     </section>
   );

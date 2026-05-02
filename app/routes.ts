@@ -228,6 +228,7 @@ export default [
     route("forms/:formId/enrich", "routes/api/v2/forms.$formId.enrich.ts"),
     route("quiz-checkout", "routes/api/v2/quiz-checkout.tsx"),
     route("quiz-cotizacion-pdf", "routes/api/v2/quiz-cotizacion-pdf.tsx"),
+    route("quiz-lead-submit", "routes/api/v2/quiz-lead-submit.tsx"),
   ]),
   // v1
   ...prefix("api/v1", [
@@ -268,6 +269,10 @@ export default [
 
   // Magic share link entry point — validates JWT, sets share cookie, redirects to editor
   route("share/:token", "routes/share.$token.tsx"),
+  // Lightweight share editor for documents (edit permission only — view/download still go to PDF)
+  route("share/document/:token", "routes/share.document.$token.tsx"),
+  // Persistence endpoint for share-edit sessions
+  route("api/v2/share/documents/:token/section", "routes/api/v2/share.documents.$token.section.ts"),
 
   // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),

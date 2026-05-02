@@ -42,20 +42,20 @@ export type Capability = {
 
 // Setup único — escala según cuántas capacidades selecciona el cliente.
 // Más capacidades = más vendors a configurar = más trabajo de armado.
-// $120K MXN es el techo (~$7K USD), aplica al cliente full bundle.
+// $170K MXN es el techo (~$10K USD), aplica al cliente full bundle.
 // Se cobra junto con la primera mensualidad vía Stripe (line item one-time).
 // Validamos fit por WhatsApp antes de cobrar — si no encajamos, no hay deal.
 // Una vez iniciado el armado, setup no reembolsable.
 export const SETUP_TIERS_MXN = {
-  minimal: 35000, // 0-2 capacidades — un solo caso de uso
-  basic: 50000, // 3-5 capacidades — SMB con flow concreto
-  pro: 80000, // 6-8 capacidades — multi-canal, varias herramientas
-  full: 120000, // 9+ capacidades — agente full
+  minimal: 59500, // 0-2 capacidades — un solo caso de uso (~$3.5K USD)
+  basic: 85000, // 3-5 capacidades — SMB con flow concreto (~$5K USD)
+  pro: 119000, // 6-8 capacidades — multi-canal, varias herramientas (~$7K USD)
+  full: 170000, // 9+ capacidades — agente full (~$10K USD)
 } as const;
 
 // Constantes legacy (techo del rango). Se mantienen para referencia / fallback.
 export const SETUP_FEE_MXN = SETUP_TIERS_MXN.full;
-export const SETUP_FEE_USD = 7000;
+export const SETUP_FEE_USD = 10000;
 
 // Mensualidad base — soporte humano + monitoreo continuo. Setup técnico y branding
 // ahora viven en el SETUP_FEE_MXN, no aquí.
