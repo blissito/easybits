@@ -165,9 +165,16 @@ export const MAX_REFERRALS = 50;           // anti-abuse cap
 // Pricing rebalance (May 2026): piso de $5 MXN/crédito — protege margen del
 // costo promedio ($1.17 MXN/gen Gemini Pro) considerando que el mismo crédito
 // puede gastarse en operaciones más caras (avatar fal.ai, voz ElevenLabs).
-// Packs pequeños mantienen prima ($7-$8/cr); packs grandes bajan a $5/cr piso.
-// Quitamos diferenciación por plan en packs grandes — el plan premia con
-// créditos mensuales incluidos, no con descuento de pack.
+// Curva descendente real: cada pack más grande = $/cr menor que el anterior,
+// para que comprar volumen siempre tenga sentido económico.
+//
+// Curva final ($/cr): 5→7.80, 10→6.90, 50→5.98, 100→5.49, 800→5.31,
+// 1000→5.20, 1200→5.08, 3000→5.00. Sin diferenciación por plan en
+// packs grandes — el plan premia con créditos mensuales incluidos, no
+// con descuento de pack.
+//
+// Orden: ascendente por número de créditos para que la grid en /dash/packs
+// se vea ordenada (los temáticos quedan intercalados según su tamaño).
 export const GENERATION_PACKS: GenerationPack[] = [
   // Packs originales (sin recipe — créditos genéricos).
   { id: "pack_5", generations: 5, prices: { Byte: 39, Mega: 39, Tera: 39 }, description: "Perfecto para crear un documento profesional" },
@@ -175,14 +182,16 @@ export const GENERATION_PACKS: GenerationPack[] = [
   { id: "pack_50", generations: 50, prices: { Byte: 299, Mega: 299, Tera: 299 }, featured: true, description: "Crea todo un sitio web con múltiples páginas" },
   { id: "pack_100", generations: 100, prices: { Byte: 549, Mega: 549, Tera: 549 }, description: "Para equipos y proyectos a gran escala" },
 
-  // Packs temáticos (con recipe visible). El motor sigue procesando solo `generations`.
+  // Packs temáticos (con recipe visible). El motor sigue procesando solo
+  // `generations`; el recipe es cosmético para comunicar caso de uso.
+  // Ordenados por tamaño ascendente.
   {
     id: "pack_creator_daily",
     label: "Creator Daily",
     emoji: "🎬",
     audience: "Influencer publicando diario en redes",
     generations: 800,
-    prices: { Byte: 4499, Mega: 4499, Tera: 4499 },
+    prices: { Byte: 4249, Mega: 4249, Tera: 4249 },
     description: "Producción diaria de reels con avatar + voz clonada + landings",
     recipe: [
       { service: "video.fal.avatar", count: 30, label: "30 reels avatar 30s" },
@@ -191,31 +200,31 @@ export const GENERATION_PACKS: GenerationPack[] = [
     ],
   },
   {
-    id: "pack_research_design",
-    label: "Research & Design",
-    emoji: "🔎",
-    audience: "Equipo de marketing investigando competencia",
-    generations: 1200,
-    prices: { Byte: 6499, Mega: 6499, Tera: 6499 },
-    description: "Scrapea web, genera imágenes y arma docs con datos frescos",
-    recipe: [
-      { service: "research.brightdata.scrape", count: 800, label: "800 páginas web scrape" },
-      { service: "image.fal.generate", count: 200, label: "200 imágenes generadas" },
-      { service: "doc.easybits.generate", count: 80, label: "80 documentos" },
-    ],
-  },
-  {
     id: "pack_ecommerce_catalogo",
     label: "Catálogo Ecommerce",
     emoji: "🛍️",
     audience: "Tienda online actualizando producto",
     generations: 1000,
-    prices: { Byte: 5499, Mega: 5499, Tera: 5499 },
+    prices: { Byte: 5199, Mega: 5199, Tera: 5199 },
     description: "Imágenes producto + descripciones + reels demos",
     recipe: [
       { service: "image.fal.generate", count: 400, label: "400 imágenes producto" },
       { service: "doc.easybits.generate", count: 100, label: "100 fichas técnicas" },
       { service: "video.fal.avatar", count: 20, label: "20 reels demo" },
+    ],
+  },
+  {
+    id: "pack_research_design",
+    label: "Research & Design",
+    emoji: "🔎",
+    audience: "Equipo de marketing investigando competencia",
+    generations: 1200,
+    prices: { Byte: 6099, Mega: 6099, Tera: 6099 },
+    description: "Scrapea web, genera imágenes y arma docs con datos frescos",
+    recipe: [
+      { service: "research.brightdata.scrape", count: 800, label: "800 páginas web scrape" },
+      { service: "image.fal.generate", count: 200, label: "200 imágenes generadas" },
+      { service: "doc.easybits.generate", count: 80, label: "80 documentos" },
     ],
   },
   {

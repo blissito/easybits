@@ -28,6 +28,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     promoLabel: pack.promoLabel ?? null,
     featured: pack.featured ?? false,
     description: pack.description ?? null,
+    label: pack.label ?? null,
+    emoji: pack.emoji ?? null,
+    audience: pack.audience ?? null,
     nextPlanName: nextPlan || null,
     nextPlanPrice: nextPlan ? pack.prices[nextPlan] : null,
   }));
@@ -100,6 +103,9 @@ function PackCard({
     promoLabel: string | null;
     featured: boolean;
     description: string | null;
+    label: string | null;
+    emoji: string | null;
+    audience: string | null;
     nextPlanName: string | null;
     nextPlanPrice: number | null;
   };
@@ -131,8 +137,19 @@ function PackCard({
         </div>
       )}
       <div className={`p-6 border-b-2 text-center ${pack.featured ? "border-brand-500 bg-brand-50" : "border-black"}`}>
+        {pack.label && (
+          <p className="text-xs uppercase tracking-widest font-black text-black/70 mb-1">
+            {pack.emoji && <span className="mr-1" aria-hidden>{pack.emoji}</span>}
+            {pack.label}
+          </p>
+        )}
         <p className="text-5xl font-bold">{pack.generations}</p>
         <p className="text-iron mt-1">créditos</p>
+        {pack.audience && (
+          <p className="text-[11px] text-iron/70 italic mt-1.5 leading-tight">
+            {pack.audience}
+          </p>
+        )}
       </div>
       <div className="p-6 flex flex-col flex-1 justify-between">
         <div className="text-center mb-6">
