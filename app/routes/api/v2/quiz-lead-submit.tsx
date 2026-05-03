@@ -1,6 +1,7 @@
 import { data } from "react-router";
 import type { Route } from "./+types/quiz-lead-submit";
 import { sendQuizQuotation } from "~/.server/emails/sendQuizQuotation";
+import { generateQuizFolio } from "~/.server/quiz/pdf";
 import { parseSelections, type BillingMode } from "~/lib/quiz/pricing";
 
 const QUIZ_FORM_ID = "69efd203ad74435521a74b34";
@@ -74,10 +75,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
     formSubmitOk = false;
   }
 
-  // Send quotation email with PDF attached. Don't await `getSesTransport()` to fail
-  // the whole request if email is misconfigured — log the error and report it,
-  // but keep the lead capture as the source of truth.
-  const result = await sendQuizQuotation({
+  // Fire-and-forget: el render de PDF (Playwright) + envío SES tarda varios
+  // segundos. Bloquear la respuesta hace que el usuario espere mirando un
+  // spinner antes de ver su precio. El lead ya quedó guardado arriba; si el
+  // email/PDF falla, lo logueamos y el usuario puede descargar el PDF manual
+  // desde el summary.
+  const folio = generateQuizFolio();
+  void sendQuizQuotation({
+    folio,
     payload: {
       selections: payload.selections,
       customIntegrations: payload.customIntegrations,
@@ -89,13 +94,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
         website: payload.website || "",
       },
     },
+  }).catch((err) => {
+    console.error("[quiz-lead-submit] sendQuizQuotation background error", err);
   });
 
   return data({
     ok: true,
     formSubmitOk,
-    emailSent: result.ok,
-    emailError: result.ok ? undefined : result.error,
-    folio: result.folio,
+    emailQueued: true,
+    folio,
   });
 };

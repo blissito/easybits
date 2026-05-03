@@ -54,12 +54,6 @@ export const LeadForm = ({ onSubmit, isLoading }: LeadFormProps) => {
       transition={{ duration: 0.4 }}
       className="w-full max-w-xl mx-auto flex flex-col gap-5"
     >
-      <div className="bg-brand-yellow border-2 border-black rounded-xl px-5 py-3 text-center">
-        <p className="text-sm md:text-base font-black text-black">
-          ⭐ 20% de descuento permanente — solo para quien completa el quiz
-        </p>
-      </div>
-
       <div className="text-center mb-2">
         <h2 className="text-3xl md:text-4xl font-black text-black mb-2 leading-tight">
           Falta 1 paso para ver tu precio final
@@ -99,7 +93,7 @@ export const LeadForm = ({ onSubmit, isLoading }: LeadFormProps) => {
 
       <div className="flex justify-center mt-2">
         <BrutalButton type="submit" mode="brand" isLoading={isLoading}>
-          Ver mi precio + 20% descuento →
+          Ver mi precio →
         </BrutalButton>
       </div>
 
