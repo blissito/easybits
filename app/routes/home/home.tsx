@@ -15,8 +15,14 @@ import { Steps } from "./Steps";
 import { getUserOrNull } from "~/.server/getters";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const user = await getUserOrNull(request);
-  return { user: user as User | null };
+  // Tolera prerender (sin JWT_SECRET / sin cookies) y cualquier fallo de
+  // sesión sin tirar la home — el ErrorBoundary tumbaría el AuthNav.
+  try {
+    const user = await getUserOrNull(request);
+    return { user: user as User | null };
+  } catch {
+    return { user: null as User | null };
+  }
 };
 
 export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => {
