@@ -126,6 +126,7 @@ export const CAPABILITIES: Capability[] = [
       "Bot en tu workspace de Slack o Teams",
       "Mentions, threads y DMs respondidos",
       "Acceso al contexto de tu negocio",
+      "Human-in-the-loop: tu equipo aprueba/edita respuestas antes de mandar (disponible en Slack y Teams)",
     ],
   },
   {
