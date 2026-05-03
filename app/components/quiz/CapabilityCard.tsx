@@ -3,7 +3,6 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { cn } from "~/utils/cn";
 import type { Capability } from "~/lib/quiz/capabilities";
 import { DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
-import { formatMxn } from "~/lib/quiz/pricing";
 import { ILLUSTRATION_BY_ID } from "~/components/quiz/illustrations/CapabilityIllustrations";
 import { playYes, playNo } from "~/lib/quiz/sounds";
 
@@ -69,13 +68,11 @@ export const CapabilityCard = ({
         <p className="text-base md:text-lg text-black/80 mb-2">
           {capability.description}
         </p>
-        {!hasTiers && (
-          <p className="text-sm font-mono text-black/60">
-            {capability.basePriceMxn === 0
-              ? "Incluido sin costo extra"
-              : `+ ${formatMxn(capability.basePriceMxn)} / mes si lo incluyes`}
-          </p>
-        )}
+        <p className="text-sm font-mono text-black/55">
+          {hasTiers
+            ? "Elige el nivel — armado en el setup"
+            : "Armado en el setup, sin costo mensual extra"}
+        </p>
       </motion.div>
 
       {/* Tiered: Básico / Pro stacked + skip */}
@@ -105,9 +102,6 @@ export const CapabilityCard = ({
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-lg md:text-xl font-black text-black">
                   {tier.label}
-                </span>
-                <span className="font-mono font-black text-base md:text-lg tabular-nums text-black">
-                  {formatMxn(tier.priceMxn)} / mes
                 </span>
               </div>
               {tier.humanLine && (

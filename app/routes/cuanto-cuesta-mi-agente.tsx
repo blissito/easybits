@@ -8,7 +8,6 @@ import { CapabilityCard } from "~/components/quiz/CapabilityCard";
 import { PriceSummary, type PlanBilling } from "~/components/quiz/PriceSummary";
 import type { PlanKey } from "~/lib/plans";
 import { LeadForm, type LeadData } from "~/components/quiz/LeadForm";
-import { RunningTotal } from "~/components/quiz/RunningTotal";
 import { WebsiteEnrich } from "~/components/quiz/WebsiteEnrich";
 import {
   IntegrationsStep,
@@ -586,41 +585,17 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     handleAnswer(CAPABILITIES[step - 1].id, tierId)
                   }
                 />
-                {/* Always render to avoid layout shift; invisible until first selection */}
-                <div
-                  aria-hidden={selections.size === 0}
-                  className={`transition-opacity duration-200 ${
-                    selections.size === 0
-                      ? "opacity-0 select-none"
-                      : "opacity-100"
-                  }`}
-                >
-                  <RunningTotal
-                    monthlyTotalMxn={quote.monthlyTotalMxn}
-                    setupOneTimeMxn={quote.setupOneTimeMxn}
-                  />
-                </div>
               </QuizStep>
             )}
 
             {isIntegrationsStep && (
               <QuizStep stepKey="integrations">
                 <IntegrationsStep onAnswer={handleIntegrations} />
-                <RunningTotal
-                  monthlyTotalMxn={quote.monthlyTotalMxn}
-                  setupOneTimeMxn={quote.setupOneTimeMxn}
-                />
               </QuizStep>
             )}
 
             {isLeadStep && (
               <QuizStep stepKey="lead">
-                <div className="mb-6">
-                  <RunningTotal
-                    monthlyTotalMxn={quote.monthlyTotalMxn}
-                    setupOneTimeMxn={quote.setupOneTimeMxn}
-                  />
-                </div>
                 <LeadForm onSubmit={handleLeadSubmit} isLoading={submitting} />
                 {submitError && (
                   <p className="text-center text-red-600 mt-4 font-bold">
