@@ -253,6 +253,36 @@ export const PriceSummary = ({
         </ul>
       </details>
 
+      {/* Uso de IA — créditos (separado de capacidades infra) */}
+      <div className="rounded-2xl border-[3px] border-black bg-yellow-100 shadow-[4px_4px_0_0_rgba(0,0,0,1)] p-5">
+        <div className="flex items-start gap-3">
+          <span className="text-3xl shrink-0">🪙</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-black uppercase tracking-widest mb-1">
+              Uso de IA — voz, imagen, video, investigación
+            </p>
+            <p className="text-sm text-black/75 leading-relaxed">
+              Estas capacidades se cobran por <b>créditos</b>, no por mensualidad. Tu
+              plan EasyBits incluye créditos al mes y puedes comprar packs adicionales
+              desde <b>$39 MXN</b> (5 créditos) hasta <b>$1,999 MXN</b> (3,000 créditos).
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <a
+                href="/s/sol-sonriente/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-black text-white rounded-full font-bold hover:bg-black/80"
+              >
+                Ver packs ↗
+              </a>
+              <span className="inline-flex items-center px-3 py-1.5 bg-white border-2 border-black rounded-full font-mono">
+                1 crédito ≈ 1 doc · 6 cr = 1 reel avatar · 8 cr = 1 min voz
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] overflow-hidden">
         <button
           type="button"

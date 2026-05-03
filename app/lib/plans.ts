@@ -120,6 +120,20 @@ export function formatPrice(price: number): string {
   return price === 0 ? "$0" : `$${price}`;
 }
 
+/**
+ * A single line of a pack's "recipe" — illustrates what the user can DO with the
+ * pack's créditos in a typical use case. Cosmetic only — the user is free to spend
+ * créditos on any service. Backend consumes `generations`, ignores `recipe`.
+ */
+export interface PackRecipeLine {
+  /** ServiceId from `app/.server/services/registry.ts`. */
+  service: string;
+  /** Estimated count of operations this represents (e.g. 30 reels, 60 minutes, etc.). */
+  count: number;
+  /** Human-readable label for the card. */
+  label: string;
+}
+
 export interface GenerationPack {
   id: string;
   generations: number;
@@ -132,6 +146,14 @@ export interface GenerationPack {
   featured?: boolean;
   /** Short catchy description */
   description?: string;
+  /** Display label for thematic packs (e.g. "Creator Daily"). Falls back to id-based label. */
+  label?: string;
+  /** Card emoji for visual recipe layout. */
+  emoji?: string;
+  /** One-line audience hint shown above recipe ("Influencer publicando diario"). */
+  audience?: string;
+  /** Recipe breakdown — purely cosmetic, used by UI to render "qué te rinde" cards. */
+  recipe?: PackRecipeLine[];
 }
 
 // Referral system constants
@@ -141,8 +163,68 @@ export const REFERRAL_WELCOME_BONUS = 2;   // referred earns on signup
 export const MAX_REFERRALS = 50;           // anti-abuse cap
 
 export const GENERATION_PACKS: GenerationPack[] = [
-  { id: "pack_5", generations: 5, prices: { Byte: 29, Mega: 29, Tera: 29 }, description: "Perfecto para crear un documento profesional" },
-  { id: "pack_10", generations: 10, prices: { Byte: 49, Mega: 39, Tera: 29 }, description: "Ideal para una landing page completa con variantes" },
-  { id: "pack_50", generations: 50, prices: { Byte: 199, Mega: 169, Tera: 149 }, promoPrice: 99, promoLabel: "Precio de lanzamiento", featured: true, description: "Crea todo un sitio web con múltiples páginas" },
-  { id: "pack_100", generations: 100, prices: { Byte: 349, Mega: 249, Tera: 249 }, description: "Para equipos y proyectos a gran escala" },
+  // Packs originales (sin recipe — créditos genéricos). Tope retail $7 MXN/crédito.
+  { id: "pack_5", generations: 5, prices: { Byte: 39, Mega: 39, Tera: 39 }, description: "Perfecto para crear un documento profesional" },
+  { id: "pack_10", generations: 10, prices: { Byte: 69, Mega: 49, Tera: 39 }, description: "Ideal para una landing page completa con variantes" },
+  { id: "pack_50", generations: 50, prices: { Byte: 249, Mega: 199, Tera: 179 }, promoPrice: 129, promoLabel: "Precio de lanzamiento", featured: true, description: "Crea todo un sitio web con múltiples páginas" },
+  { id: "pack_100", generations: 100, prices: { Byte: 449, Mega: 349, Tera: 299 }, description: "Para equipos y proyectos a gran escala" },
+
+  // Packs temáticos (con recipe visible). El motor sigue procesando solo `generations`.
+  {
+    id: "pack_creator_daily",
+    label: "Creator Daily",
+    emoji: "🎬",
+    audience: "Influencer publicando diario en redes",
+    generations: 800,
+    prices: { Byte: 699, Mega: 649, Tera: 599 },
+    description: "Producción diaria de reels con avatar + voz clonada + landings",
+    recipe: [
+      { service: "video.fal.avatar", count: 30, label: "30 reels avatar 30s" },
+      { service: "voice.elevenlabs.tts", count: 60, label: "60 min voz clonada" },
+      { service: "doc.easybits.generate", count: 50, label: "50 docs/landings" },
+    ],
+  },
+  {
+    id: "pack_research_design",
+    label: "Research & Design",
+    emoji: "🔎",
+    audience: "Equipo de marketing investigando competencia",
+    generations: 1200,
+    prices: { Byte: 899, Mega: 849, Tera: 799 },
+    description: "Scrapea web, genera imágenes y arma docs con datos frescos",
+    recipe: [
+      { service: "research.brightdata.scrape", count: 800, label: "800 páginas web scrape" },
+      { service: "image.fal.generate", count: 200, label: "200 imágenes generadas" },
+      { service: "doc.easybits.generate", count: 80, label: "80 documentos" },
+    ],
+  },
+  {
+    id: "pack_ecommerce_catalogo",
+    label: "Catálogo Ecommerce",
+    emoji: "🛍️",
+    audience: "Tienda online actualizando producto",
+    generations: 1000,
+    prices: { Byte: 799, Mega: 749, Tera: 699 },
+    description: "Imágenes producto + descripciones + reels demos",
+    recipe: [
+      { service: "image.fal.generate", count: 400, label: "400 imágenes producto" },
+      { service: "doc.easybits.generate", count: 100, label: "100 fichas técnicas" },
+      { service: "video.fal.avatar", count: 20, label: "20 reels demo" },
+    ],
+  },
+  {
+    id: "pack_studio_pro",
+    label: "Studio Pro",
+    emoji: "🎙",
+    audience: "Productora con varios clientes activos",
+    generations: 3000,
+    prices: { Byte: 2299, Mega: 2099, Tera: 1999 },
+    description: "Volumen alto: avatar premium + voz scale + scrape pesado",
+    recipe: [
+      { service: "video.fal.avatar", count: 100, label: "100 reels avatar" },
+      { service: "voice.elevenlabs.tts", count: 250, label: "250 min voz" },
+      { service: "research.brightdata.scrape", count: 1500, label: "1,500 páginas scrape" },
+      { service: "image.fal.generate", count: 400, label: "400 imágenes" },
+    ],
+  },
 ];

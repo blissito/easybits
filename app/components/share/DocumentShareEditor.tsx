@@ -33,6 +33,7 @@ interface Props {
 type SaveState = "idle" | "saving" | "error";
 
 export default function DocumentShareEditor({
+  landingId,
   landingName,
   sections: initialSections,
   theme,
@@ -89,8 +90,13 @@ export default function DocumentShareEditor({
 [data-section-id] { width: ${w}px; height: ${h}px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
 [data-section-id] > section { width: 100% !important; height: 100% !important; }`;
       } else {
+        // Letter default: dimensiona el wrapper, NO añade padding propio. La <section>
+        // interna del doc ya trae su layout (w-[8.5in] h-[11in] + flex-col + header/content/footer
+        // con sus propias px-[0.75in] py-[0.5in]). Si añadimos padding aquí se duplica y el
+        // contenido se empuja al top dejando hueco abajo.
         pageCss = `body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
-[data-section-id] { width: 8.5in; min-height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }`;
+[data-section-id] { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; border-radius: 4px; }
+[data-section-id] > section { width: 100% !important; height: 100% !important; }`;
       }
       // set-custom-css replaces the entire style tag content, so combine brand + page CSS.
       canvasRef.current?.postMessage({ action: "set-custom-css", css: brandCss + "\n" + pageCss });
@@ -216,6 +222,18 @@ export default function DocumentShareEditor({
           <span className={`text-xs ${saveState === "error" ? "text-red-600 font-bold" : "text-gray-500"}`}>
             {saveLabel}
           </span>
+          <a
+            href={`/api/v2/documents/${landingId}/pdf?token=${encodeURIComponent(token)}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border-2 border-black bg-white hover:bg-brand-50 font-bold uppercase shrink-0 text-[10px] transition-colors"
+            title="Descargar PDF"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            PDF
+          </a>
           <span className="px-2 py-0.5 rounded-full border-2 border-black bg-white font-bold uppercase shrink-0 text-[10px]">
             Edición
           </span>

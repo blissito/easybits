@@ -3394,6 +3394,323 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "image_generate",
+    "Generate an image from a text prompt using fal.ai Flux models. Returns a public image URL ready to use in landings, documents, social posts, or as `referenceImage` for `avatar_video_create` / `video_create`.\n\nHow to use:\n- Required: `prompt` (English or Spanish, descriptive).\n- `quality`: 'fast' (default, Flux Schnell, 1 crédito) or 'premium' (Flux Dev, 3 créditos, mucho mejor calidad).\n- `ratio`: '1:1' (default, square) | '16:9' (landscape) | '9:16' (vertical/reels) | '4:3' | '3:4'.\n- `negative`: things to avoid (text, logos, blur, etc.).\n- `seed`: integer for reproducibility (omit for random).\n- Returns `imageUrl` (CDN public) y `fileId`.\n\nUse for: hero images en landings, banners redes, mockups producto, ilustraciones, retratos para alimentar pipeline avatar.",
+    {
+      prompt: z.string().min(1).max(2000).describe("Descripción de la imagen a generar."),
+      quality: z.enum(["fast", "premium"]).optional().describe("'fast' (1 crédito, Flux Schnell) o 'premium' (3 créditos, Flux Dev). Default fast."),
+      ratio: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().describe("Aspect ratio. Default 1:1."),
+      negative: z.string().max(500).optional().describe("Negative prompt (qué evitar)."),
+      seed: z.number().int().optional().describe("Seed para reproducir la misma imagen."),
+      isPublic: z.boolean().optional().describe("Default true (URL pública reusable). Set false para privado."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        const result = await consumeService<import("../services/providers/fal").FalImageOutput>(
+          "image.fal.generate",
+          {
+            prompt: params.prompt,
+            quality: params.quality,
+            ratio: params.ratio,
+            negative: params.negative,
+            seed: params.seed,
+            isPublic: params.isPublic,
+          },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              fileId: result.data.fileId,
+              imageUrl: result.data.imageUrl,
+              width: result.data.width,
+              height: result.data.height,
+              modelId: result.data.modelId,
+              hint: `Imagen lista. fileId: ${result.data.fileId}. URL pública lista para usar como referenceImage en avatar/video o embed en landing.`,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
+        }
+        if (e instanceof ServiceConfigError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
+        }
+        if (e instanceof ServiceProviderError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `fal.ai: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "research_scrape",
+    "Fetch a single web page via Brightdata Web Unlocker (bypasses bot detection, residential IPs). Returns the page HTML or markdown.\n\nHow to use:\n- Required: `url` (target page, full https://...).\n- Optional: `country` (ISO code like 'us', 'mx' for geo-localized fetches).\n- Optional: `asMarkdown=true` returns clean markdown instead of raw HTML — useful when you want to feed into doc generation or summarization.\n- Cost: 1 crédito per page.\n\nUse for: monitorear precios competencia, scraping respetuoso, fetch de páginas que normalmente bloquean bots. Para queries de búsqueda en Google/Bing usa `research_search` en su lugar.",
+    {
+      url: z.string().url().describe("Full https:// URL of the target page."),
+      country: z.string().length(2).optional().describe("ISO 3166-1 country code (us, mx, gb...) for geo-localized fetch."),
+      asMarkdown: z.boolean().optional().describe("If true, returns clean markdown. Default false (raw HTML)."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        const result = await consumeService<import("../services/providers/brightdata").BrightdataScrapeOutput>(
+          "research.brightdata.scrape",
+          { url: params.url, country: params.country, asMarkdown: params.asMarkdown },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              url: result.data.url,
+              statusCode: result.data.statusCode,
+              format: result.data.format,
+              body: result.data.body,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
+        }
+        if (e instanceof ServiceConfigError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
+        }
+        if (e instanceof ServiceProviderError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Brightdata: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "research_search",
+    "Run a search query (Google by default; also Bing/Yandex/DuckDuckGo) via Brightdata SERP API. Returns structured results: organic listings, snack pack, knowledge panel, FAQs, paginated.\n\nHow to use:\n- Required: `query` (the search terms, plain text — no need to URL-encode).\n- Optional: `engine` (default 'google').\n- Optional: `country` (ISO code for localized SERP).\n- Cost: 2 créditos per search.\n\nUse for: investigación competencia, monitor de menciones, descubrir contenido fresco, validar pricing público. Para fetch de una URL específica usa `research_scrape`.",
+    {
+      query: z.string().min(1).max(500).describe("Search query in plain text."),
+      engine: z.enum(["google", "bing", "yandex", "duckduckgo"]).optional().describe("Search engine. Default google."),
+      country: z.string().length(2).optional().describe("ISO 3166-1 country code for localized results."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        const result = await consumeService<import("../services/providers/brightdata").BrightdataSearchOutput>(
+          "research.brightdata.search",
+          { query: params.query, engine: params.engine, country: params.country },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              query: result.data.query,
+              engine: result.data.engine,
+              results: result.data.results,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
+        }
+        if (e instanceof ServiceConfigError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
+        }
+        if (e instanceof ServiceProviderError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Brightdata: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "voice_tts_create",
+    "Generate a voice mp3 from text using ElevenLabs (Spanish-friendly, voice cloning supported). Returns a public mp3 File whose `audioUrl` can be piped directly into `avatar_video_create`.\n\nHow to use:\n- Required: `text` (max ~5000 chars per call).\n- Optional: `voiceId` (use the user's cloned voice id, or leave blank for default Spanish voice).\n- Cost: 1 crédito per 100 chars. 1 min of speech ≈ 800 chars ≈ 8 créditos.\n- Returns `audioUrl` ready to feed into avatar pipeline.\n\nTypical pipeline: (1) `voice_tts_create({text})` → audioUrl. (2) `avatar_video_create({imageUrl, audioUrl})` → reel mp4.",
+    {
+      text: z.string().min(1).max(5000).describe("Text to synthesize. Spanish recommended for default voice."),
+      voiceId: z.string().optional().describe("ElevenLabs voice id. Use the user's cloned voice for personalized output."),
+      modelId: z.string().optional().describe("Model id. Default eleven_multilingual_v2."),
+      stability: z.number().min(0).max(1).optional().describe("0..1 — higher = more consistent. Default 0.5."),
+      similarityBoost: z.number().min(0).max(1).optional().describe("0..1 — similarity to source/cloned voice. Default 0.75."),
+      isPublic: z.boolean().optional().describe("Default true (so the URL is reusable as audioUrl in avatar). Set false for private."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        const result = await consumeService<import("../services/providers/elevenlabs").ElevenLabsTtsOutput>(
+          "voice.elevenlabs.tts",
+          {
+            text: params.text,
+            voiceId: params.voiceId,
+            modelId: params.modelId,
+            stability: params.stability,
+            similarityBoost: params.similarityBoost,
+            isPublic: params.isPublic,
+          },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              fileId: result.data.fileId,
+              audioUrl: result.data.audioUrl,
+              voiceId: result.data.voiceId,
+              modelId: result.data.modelId,
+              chars: result.data.chars,
+              hint: `Audio listo. Pasa audioUrl="${result.data.audioUrl}" a avatar_video_create para generar el reel.`,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: e.code,
+                message: `No te alcanzan los créditos: necesitas ${e.requiredCost}, tienes ${e.available}.`,
+                requiredCost: e.requiredCost,
+                available: e.available,
+              }, null, 2),
+            }],
+          };
+        }
+        if (e instanceof ServiceConfigError) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: e.code,
+                message: `El servicio no está configurado en el servidor (falta ${e.missing}).`,
+              }, null, 2),
+            }],
+          };
+        }
+        if (e instanceof ServiceProviderError) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: e.code,
+                message: `ElevenLabs rechazó la generación: ${e.providerMessage}`,
+                providerStatus: e.providerStatus,
+              }, null, 2),
+            }],
+          };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "avatar_video_create",
+    "Generate a talking-head avatar video (fal.ai, OSS models pay-per-use) from a portrait image + audio. Returns the mp4 as a File in the user's library.\n\nHow to use:\n- Required: `imageUrl` (HTTPS URL of a clear face portrait, ideally clean background) AND `audioUrl` (pre-recorded mp3/wav with the voice/speech).\n- For TTS, generate audio FIRST with a separate tool (e.g. ElevenLabs) and pass the resulting URL here. This tool only animates the face.\n- Output is vertical (9:16) by default — ideal for reels/shorts. Pass `ratio: '16:9'` for landscape or `'1:1'` for square posts.\n- Cost: 0.2 créditos per second. 30s reel = 6 créditos. Max 60s.\n- Returns `fileId` — pass to `get_file` for the playable URL.\n\nUse for: influencer talking-head content, corporate explainers, personalized greetings, course lessons. Do NOT use for purely visual scenes (use `video_create` instead).",
+    {
+      imageUrl: z.string().url().describe("HTTPS URL of the portrait image (face, clean background recommended)."),
+      audioUrl: z.string().url().describe("HTTPS URL of pre-recorded audio (mp3/wav). The avatar's mouth syncs to this audio."),
+      durationSec: z.number().int().min(2).max(60).optional().describe("Output duration hint in seconds (used for cost estimate; actual length matches audio). Default 30. Cost = 0.2 × duration créditos."),
+      ratio: z.enum(["9:16", "16:9", "1:1"]).optional().describe("Aspect ratio. Default 9:16 (vertical/reels)."),
+      isPublic: z.boolean().optional().describe("If true, the resulting File is uploaded with public access (CDN URL). Default false."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        const result = await consumeService<import("../services/providers/fal").FalAvatarOutput>(
+          "video.fal.avatar",
+          {
+            imageUrl: params.imageUrl,
+            audioUrl: params.audioUrl,
+            durationSec: params.durationSec,
+            ratio: params.ratio,
+            isPublic: params.isPublic,
+          },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              fileId: result.data.fileId,
+              videoUrl: result.data.videoUrl,
+              durationSec: result.data.durationSec,
+              modelId: result.data.modelId,
+              hint: `Avatar listo. fileId: ${result.data.fileId}. Use get_file para obtener URL reproducible.`,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: e.code,
+                message: `No te alcanzan los créditos: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack para continuar.`,
+                requiredCost: e.requiredCost,
+                available: e.available,
+              }, null, 2),
+            }],
+          };
+        }
+        if (e instanceof ServiceConfigError) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: e.code,
+                message: `El servicio no está configurado en el servidor (falta ${e.missing}). Avísale al admin de EasyBits.`,
+              }, null, 2),
+            }],
+          };
+        }
+        if (e instanceof ServiceProviderError) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: e.code,
+                message: `fal.ai rechazó la generación: ${e.providerMessage}`,
+                providerStatus: e.providerStatus,
+              }, null, 2),
+            }],
+          };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
     "list_videos",
     "List the user's video generations (latest first). Returns status, prompt, and file ids for each.",
     {

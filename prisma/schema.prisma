@@ -621,15 +621,16 @@ model Referral {
 model AiGenerationLog {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   userId       String   @db.ObjectId
-  type         String   // "generate" | "refine" | "variant" | "directions" | "enhance"
-  product      String   // "document" | "landing" | "presentation"
+  type         String   // ServiceId from app/.server/services/registry.ts (e.g. "doc.gemini.generate", "video.hedra.avatar")
+  product      String   // ServiceProduct: "doc" | "video" | "voice" | "image" | "avatar" | legacy values
+  cost         Int      @default(1) // tokens (fichas) consumed by this operation. Doc=1, avatar 30s=15, etc.
   modelId      String?  // "gemini-2.5-pro", "claude-sonnet-4-6"
   inputTokens  Int?
   outputTokens Int?
   resourceId   String?  // landingId of the document/landing
   pageCount    Int?     // pages generated
   durationMs   Int?     // total generation time
-  source       String?  // "monthly" | "bonus" — which quota was consumed
+  source       String?  // "monthly" | "bonus" | "split" — which quota bucket was consumed
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
 

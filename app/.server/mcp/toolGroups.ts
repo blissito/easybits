@@ -125,7 +125,14 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "pdf_to_images",
   // Video
   "video_create", "list_videos",
+  "avatar_video_create",
   "character_remember", "character_list", "character_delete",
+  // Voice
+  "voice_tts_create",
+  // Research
+  "research_scrape", "research_search",
+  // Image
+  "image_generate",
   // Brand
   "list_brand_kits", "get_default_brand_kit", "extract_brand_kit_from_url",
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
@@ -168,6 +175,10 @@ export const CORE_ALLOWLIST = new Set<string>([
   "transform_image",
   "generate_image",
   "video_create", "list_videos",
+  "avatar_video_create",
+  "voice_tts_create",
+  "research_scrape", "research_search",
+  "image_generate",
   "character_remember", "character_list", "character_delete",
   "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
@@ -180,9 +191,47 @@ export const CORE_ALLOWLIST = new Set<string>([
 export const VIDEO_ALLOWLIST = new Set<string>([
   "video_create",
   "list_videos",
+  "avatar_video_create",
   "character_remember",
   "character_list",
   "character_delete",
+  "get_file",
+  "list_files",
+  "upload_file",
+]);
+
+/** Avatar toolset — talking-head generation (fal.ai now, HeyGen later). Reuses character store + file IO + voice. */
+export const AVATAR_ALLOWLIST = new Set<string>([
+  "avatar_video_create",
+  "voice_tts_create",
+  "character_remember",
+  "character_list",
+  "character_delete",
+  "get_file",
+  "list_files",
+  "upload_file",
+]);
+
+/** Voice toolset — TTS + (future) STT + cloning. */
+export const VOICE_ALLOWLIST = new Set<string>([
+  "voice_tts_create",
+  "get_file",
+  "list_files",
+  "upload_file",
+]);
+
+/** Research toolset — Brightdata Web Unlocker + SERP API. */
+export const RESEARCH_ALLOWLIST = new Set<string>([
+  "research_scrape",
+  "research_search",
+  "list_files",
+  "upload_file",
+]);
+
+/** Image toolset — fal.ai Flux generation + (future) transforms. */
+export const IMAGE_ALLOWLIST = new Set<string>([
+  "image_generate",
+  "transform_image",
   "get_file",
   "list_files",
   "upload_file",
