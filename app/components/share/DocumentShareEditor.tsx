@@ -82,20 +82,21 @@ export default function DocumentShareEditor({
 
     function buildAndPushCss() {
       let pageCss: string;
+      const viewportW = window.innerWidth;
+      const padding = 32;
       if (w && h) {
-        const viewportW = window.innerWidth;
-        const padding = 48;
         const zoom = Math.min(1, Math.max(0.1, (viewportW - padding) / w));
         pageCss = `body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
 [data-section-id] { width: ${w}px; height: ${h}px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
 [data-section-id] > section { width: 100% !important; height: 100% !important; }`;
       } else {
-        // Letter default: dimensiona el wrapper, NO añade padding propio. La <section>
-        // interna del doc ya trae su layout (w-[8.5in] h-[11in] + flex-col + header/content/footer
-        // con sus propias px-[0.75in] py-[0.5in]). Si añadimos padding aquí se duplica y el
-        // contenido se empuja al top dejando hueco abajo.
+        // Letter default: 8.5in ≈ 816px @ 96dpi. En desktop deja la página
+        // a tamaño real; en mobile aplica zoom para que la hoja completa
+        // entre en el viewport sin scroll horizontal.
+        const LETTER_PX = 816;
+        const zoom = Math.min(1, Math.max(0.1, (viewportW - padding) / LETTER_PX));
         pageCss = `body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
-[data-section-id] { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; border-radius: 4px; }
+[data-section-id] { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
 [data-section-id] > section { width: 100% !important; height: 100% !important; }`;
       }
       // set-custom-css replaces the entire style tag content, so combine brand + page CSS.
