@@ -162,12 +162,18 @@ export const REFERRAL_UPGRADE_BONUS = 10;  // referrer earns if referred upgrade
 export const REFERRAL_WELCOME_BONUS = 2;   // referred earns on signup
 export const MAX_REFERRALS = 50;           // anti-abuse cap
 
+// Pricing rebalance (May 2026): piso de $5 MXN/crédito — protege margen del
+// costo promedio ($1.17 MXN/gen Gemini Pro) considerando que el mismo crédito
+// puede gastarse en operaciones más caras (avatar fal.ai, voz ElevenLabs).
+// Packs pequeños mantienen prima ($7-$8/cr); packs grandes bajan a $5/cr piso.
+// Quitamos diferenciación por plan en packs grandes — el plan premia con
+// créditos mensuales incluidos, no con descuento de pack.
 export const GENERATION_PACKS: GenerationPack[] = [
-  // Packs originales (sin recipe — créditos genéricos). Tope retail $7 MXN/crédito.
+  // Packs originales (sin recipe — créditos genéricos).
   { id: "pack_5", generations: 5, prices: { Byte: 39, Mega: 39, Tera: 39 }, description: "Perfecto para crear un documento profesional" },
-  { id: "pack_10", generations: 10, prices: { Byte: 69, Mega: 49, Tera: 39 }, description: "Ideal para una landing page completa con variantes" },
-  { id: "pack_50", generations: 50, prices: { Byte: 249, Mega: 199, Tera: 179 }, promoPrice: 129, promoLabel: "Precio de lanzamiento", featured: true, description: "Crea todo un sitio web con múltiples páginas" },
-  { id: "pack_100", generations: 100, prices: { Byte: 449, Mega: 349, Tera: 299 }, description: "Para equipos y proyectos a gran escala" },
+  { id: "pack_10", generations: 10, prices: { Byte: 69, Mega: 69, Tera: 69 }, description: "Ideal para una landing page completa con variantes" },
+  { id: "pack_50", generations: 50, prices: { Byte: 299, Mega: 299, Tera: 299 }, featured: true, description: "Crea todo un sitio web con múltiples páginas" },
+  { id: "pack_100", generations: 100, prices: { Byte: 549, Mega: 549, Tera: 549 }, description: "Para equipos y proyectos a gran escala" },
 
   // Packs temáticos (con recipe visible). El motor sigue procesando solo `generations`.
   {
@@ -176,7 +182,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     emoji: "🎬",
     audience: "Influencer publicando diario en redes",
     generations: 800,
-    prices: { Byte: 699, Mega: 649, Tera: 599 },
+    prices: { Byte: 4499, Mega: 4499, Tera: 4499 },
     description: "Producción diaria de reels con avatar + voz clonada + landings",
     recipe: [
       { service: "video.fal.avatar", count: 30, label: "30 reels avatar 30s" },
@@ -190,7 +196,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     emoji: "🔎",
     audience: "Equipo de marketing investigando competencia",
     generations: 1200,
-    prices: { Byte: 899, Mega: 849, Tera: 799 },
+    prices: { Byte: 6499, Mega: 6499, Tera: 6499 },
     description: "Scrapea web, genera imágenes y arma docs con datos frescos",
     recipe: [
       { service: "research.brightdata.scrape", count: 800, label: "800 páginas web scrape" },
@@ -204,7 +210,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     emoji: "🛍️",
     audience: "Tienda online actualizando producto",
     generations: 1000,
-    prices: { Byte: 799, Mega: 749, Tera: 699 },
+    prices: { Byte: 5499, Mega: 5499, Tera: 5499 },
     description: "Imágenes producto + descripciones + reels demos",
     recipe: [
       { service: "image.fal.generate", count: 400, label: "400 imágenes producto" },
@@ -218,7 +224,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     emoji: "🎙",
     audience: "Productora con varios clientes activos",
     generations: 3000,
-    prices: { Byte: 2299, Mega: 2099, Tera: 1999 },
+    prices: { Byte: 14999, Mega: 14999, Tera: 14999 },
     description: "Volumen alto: avatar premium + voz scale + scrape pesado",
     recipe: [
       { service: "video.fal.avatar", count: 100, label: "100 reels avatar" },

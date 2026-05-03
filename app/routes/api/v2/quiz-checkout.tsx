@@ -2,25 +2,25 @@ import { data } from "react-router";
 import type { Route } from "./+types/quiz-checkout";
 import { getStripe } from "~/.server/stripe";
 import { config } from "~/.server/config";
-import { ORCHESTRATION_FEE_MXN } from "~/lib/quiz/capabilities";
 import {
-  computeAnnualPlan,
-  computeDiscountedMonthly,
+  ANNUAL_DISCOUNT_PCT,
+  BABYSIT_MONTHLY_MXN,
+  computeAnnualFromMonthly,
   computeQuote,
-  isAnnualPlanEligible,
   parseSelections,
-  QUOTE_DISCOUNT_PCT,
   serializeSelections,
-  type BillingMode,
+  SETUP_FLAT_MXN,
 } from "~/lib/quiz/pricing";
+import { PLANS, type PlanKey } from "~/lib/plans";
+
+type PlanBilling = "monthly" | "annual";
 
 type QuizCheckoutPayload = {
-  // Formato "voice:pro,images,whatsapp" — string serializado por serializeSelections.
   selections: string;
-  monthlyTotalMxn: number;
+  plan?: PlanKey;
+  planBilling?: PlanBilling;
+  babysit?: boolean;
   customIntegrations: { description: string } | null;
-  // Default monthly. annual solo válido si selectionsCount >= 3.
-  billingMode?: BillingMode;
   lead: {
     name: string;
     email: string;
@@ -30,6 +30,9 @@ type QuizCheckoutPayload = {
     description?: string;
   } | null;
 };
+
+const isPlanKey = (v: unknown): v is PlanKey =>
+  v === "Byte" || v === "Mega" || v === "Tera";
 
 export const action = async ({ request }: Route.ActionArgs) => {
   if (request.method !== "POST") {
@@ -59,114 +62,124 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const hasCustomIntegrations = !!customIntegrations;
   const integrationsDesc = customIntegrations?.description?.slice(0, 280) || "";
 
+  // Solo lo usamos para enriquecer metadata (capabilities seleccionadas).
+  // Setup ya no escala con el quote.
   const quote = computeQuote(selectionsMap, hasCustomIntegrations);
-  const discountedMonthlyMxn = computeDiscountedMonthly(quote.monthlyTotalMxn);
 
-  // Resolver billing mode con guardrails: annual solo si payload pidió anual
-  // Y el usuario tiene 3+ capacidades. Si no es elegible, caemos a monthly
-  // sin error — es una salvaguarda contra clientes que manipulen la URL.
-  const requestedAnnual = payload.billingMode === "annual";
-  const annualEligible = isAnnualPlanEligible(quote.selectionsCount);
-  const effectiveBillingMode: BillingMode =
-    requestedAnnual && annualEligible ? "annual" : "monthly";
-  const annualPlan = computeAnnualPlan(
-    quote.monthlyTotalMxn,
-    quote.setupOneTimeMxn,
-    quote.selectionsCount
-  );
+  const planKey: PlanKey = isPlanKey(payload.plan) ? payload.plan : "Mega";
+  const plan = PLANS[planKey];
+  // Byte (gratis) no soporta anual — se cae a monthly siempre.
+  const planBilling: PlanBilling =
+    planKey !== "Byte" && payload.planBilling === "annual"
+      ? "annual"
+      : "monthly";
+  const babysit = !!payload.babysit;
 
-  const itemsLabel = [
-    ...quote.breakdown.map((b) =>
+  const itemsLabel = quote.breakdown
+    .map((b) =>
       b.tierLabel
         ? `${b.capability.shortLabel} (${b.tierLabel})`
         : b.capability.shortLabel
-    ),
-    ...(hasCustomIntegrations ? ["Integraciones custom*"] : []),
-  ].join(" + ");
-  const monthlyName = `Mensualidad agente IA — ${itemsLabel}`;
-  const monthlyDescription = `Recurrente mensual con ${QUOTE_DISCOUNT_PCT}% off permanente aplicado: operación + babysit (${ORCHESTRATION_FEE_MXN} MXN lista) + ${quote.selectionsCount} capacidades${
-    hasCustomIntegrations
-      ? ". Integraciones custom: discovery + desarrollo cotizado aparte."
-      : "."
-  }`;
-  const annualName = `Plan anual agente IA — ${itemsLabel}`;
-  const annualDescription = `Cobro anual: 12 meses con ${QUOTE_DISCOUNT_PCT}% off permanente. Setup único INCLUIDO sin costo (ahorras ${quote.setupOneTimeMxn} MXN). Renueva automáticamente al precio anual.`;
-  const setupName = "Setup único — armado del agente";
-  const setupDescription = `Pago una sola vez. Incluye: 30 días pair WA con dos seniors, setup técnico + MCPs + tu marca, 2 integraciones simples. Validamos fit por WhatsApp antes del cobro: si no encajamos, no hay deal.`;
+    )
+    .concat(hasCustomIntegrations ? ["Integraciones custom*"] : [])
+    .join(" + ");
 
-  // Construye line items según modo. Annual: 1 line item recurring yearly,
-  // sin setup. Monthly: mensualidad recurrente + setup one-time.
-  const lineItems =
-    effectiveBillingMode === "annual"
-      ? [
-          {
-            price_data: {
-              currency: "mxn" as const,
-              recurring: { interval: "year" as const },
-              product_data: {
-                name: annualName,
-                description: annualDescription,
-              },
-              unit_amount: annualPlan.totalAnnualMxn * 100,
-            },
-            quantity: 1,
+  const setupName = "Setup único — armado del agente";
+  const setupDescription = `Pago una sola vez. Setup técnico + personalización total: configuración del agente, MCPs conectados, 2 integraciones simples, hosting; tu marca, prompts custom para tu vertical, capacidades armadas (${itemsLabel || "ninguna"}), 30 días pair WA y onboarding con tu equipo.${hasCustomIntegrations ? " Integraciones complejas se cotizan en discovery sin costo extra." : ""}`;
+
+  // Line items:
+  // - Setup: siempre, one-time, $59K flat
+  // - Plan: si Mega/Tera, recurring (mensual o anual con descuento natural)
+  // - Babysit: si opt-in, recurring mensual
+  const lineItems: Array<{
+    price_data: {
+      currency: "mxn";
+      recurring?: { interval: "month" | "year" };
+      product_data: { name: string; description?: string };
+      unit_amount: number;
+    };
+    quantity: number;
+  }> = [
+    {
+      price_data: {
+        currency: "mxn",
+        product_data: { name: setupName, description: setupDescription },
+        unit_amount: SETUP_FLAT_MXN * 100,
+      },
+      quantity: 1,
+    },
+  ];
+
+  let planChargedMxn = 0;
+  if (planKey !== "Byte") {
+    const monthly = plan.price;
+    if (planBilling === "annual") {
+      planChargedMxn = computeAnnualFromMonthly(monthly);
+      lineItems.push({
+        price_data: {
+          currency: "mxn",
+          recurring: { interval: "year" },
+          product_data: {
+            name: `Plan ${plan.name} — anual (créditos)`,
+            description: `${plan.aiGenerationsPerMonth} créditos/mes incluidos · ${ANNUAL_DISCOUNT_PCT}% off por pago anual.`,
           },
-        ]
-      : [
-          {
-            // Mensualidad recurrente (con 20% off ya aplicado)
-            price_data: {
-              currency: "mxn" as const,
-              recurring: { interval: "month" as const },
-              product_data: {
-                name: monthlyName,
-                description: monthlyDescription,
-              },
-              unit_amount: discountedMonthlyMxn * 100,
-            },
-            quantity: 1,
+          unit_amount: planChargedMxn * 100,
+        },
+        quantity: 1,
+      });
+    } else {
+      planChargedMxn = monthly;
+      lineItems.push({
+        price_data: {
+          currency: "mxn",
+          recurring: { interval: "month" },
+          product_data: {
+            name: `Plan ${plan.name} — mensual (créditos)`,
+            description: `${plan.aiGenerationsPerMonth} créditos/mes incluidos. Cancela cuando quieras.`,
           },
-          {
-            // Setup único (escalado según selecciones) — se carga en la PRIMERA
-            // factura junto con el primer mes. Stripe permite mezclar one-time +
-            // recurring en mode: "subscription".
-            price_data: {
-              currency: "mxn" as const,
-              product_data: {
-                name: setupName,
-                description: setupDescription,
-              },
-              unit_amount: quote.setupOneTimeMxn * 100,
-            },
-            quantity: 1,
-          },
-        ];
+          unit_amount: monthly * 100,
+        },
+        quantity: 1,
+      });
+    }
+  }
+
+  if (babysit) {
+    lineItems.push({
+      price_data: {
+        currency: "mxn",
+        recurring: { interval: "month" },
+        product_data: {
+          name: "Babysit del agente",
+          description:
+            "Humano que vigila el agente, ajusta prompts y te responde por WhatsApp. Soporte real, no chatbot.",
+        },
+        unit_amount: BABYSIT_MONTHLY_MXN * 100,
+      },
+      quantity: 1,
+    });
+  }
+
+  // Mode: subscription si hay algo recurring (plan no-Byte o babysit). Si solo
+  // hay setup (Byte sin babysit) → mode payment one-time.
+  const hasRecurring = lineItems.some((li) => li.price_data.recurring);
+  const mode = hasRecurring ? "subscription" : "payment";
 
   try {
     const session = await getStripe().checkout.sessions.create({
-      mode: "subscription",
+      mode,
       customer_email: lead.email,
       metadata: {
-        type: "quiz_agent_full_combo",
-        billing_mode: effectiveBillingMode,
+        type: "quiz_agent_v3",
+        plan: planKey,
+        plan_billing: planBilling,
+        babysit: babysit ? "yes" : "no",
+        setup_mxn: String(SETUP_FLAT_MXN),
+        plan_charged_mxn: String(planChargedMxn),
+        babysit_mxn: babysit ? String(BABYSIT_MONTHLY_MXN) : "0",
         selections: serializeSelections(selectionsMap),
         custom_integrations: hasCustomIntegrations ? "yes" : "no",
         custom_integrations_desc: integrationsDesc,
-        monthly_list_mxn: String(quote.monthlyTotalMxn),
-        monthly_charged_mxn: String(discountedMonthlyMxn),
-        annual_total_mxn:
-          effectiveBillingMode === "annual"
-            ? String(annualPlan.totalAnnualMxn)
-            : "",
-        discount_pct: String(QUOTE_DISCOUNT_PCT),
-        setup_mxn:
-          effectiveBillingMode === "annual"
-            ? "0"
-            : String(quote.setupOneTimeMxn),
-        setup_waived_mxn:
-          effectiveBillingMode === "annual"
-            ? String(quote.setupOneTimeMxn)
-            : "0",
         lead_name: lead.name,
         lead_whatsapp: lead.whatsapp,
         lead_website: lead.website || "",

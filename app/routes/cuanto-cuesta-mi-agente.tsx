@@ -5,7 +5,8 @@ import { AuthNav } from "~/components/login/auth-nav";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { QuizStep, StepIndicator } from "~/components/quiz/QuizStep";
 import { CapabilityCard } from "~/components/quiz/CapabilityCard";
-import { PriceSummary } from "~/components/quiz/PriceSummary";
+import { PriceSummary, type PlanBilling } from "~/components/quiz/PriceSummary";
+import type { PlanKey } from "~/lib/plans";
 import { LeadForm, type LeadData } from "~/components/quiz/LeadForm";
 import { RunningTotal } from "~/components/quiz/RunningTotal";
 import { WebsiteEnrich } from "~/components/quiz/WebsiteEnrich";
@@ -17,16 +18,15 @@ import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustrati
 import { CAPABILITIES, DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
 import { QUIZ_WHATSAPP_NUMBER } from "~/lib/quiz/contact";
 import {
-  computeAnnualPlan,
+  BABYSIT_MONTHLY_MXN,
   computeQuote,
   formatMxn,
-  formatUsd,
-  isAnnualPlanEligible,
   parseSelections,
   serializeSelections,
-  type BillingMode,
+  SETUP_FLAT_MXN,
   type Selections,
 } from "~/lib/quiz/pricing";
+import { PLANS } from "~/lib/plans";
 import { playReveal } from "~/lib/quiz/sounds";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -77,37 +77,22 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  // billingMode controla si pagan mensual + setup, o anual con setup gratis.
-  // Se fuerza a 'monthly' si el usuario no tiene 3+ capacidades (minimal no
-  // califica — el margen es muy chico, ver computeAnnualPlan).
-  const [billingMode, setBillingMode] = useState<BillingMode>("monthly");
+  // Plan de créditos seleccionado en el summary. Default Mega — el sweet spot
+  // para uso profesional regular (50 cr/mes a $299).
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>("Mega");
+  // Mensual vs anual del plan. Solo aplica para Mega/Tera; Byte fuerza monthly.
+  const [planBilling, setPlanBilling] = useState<PlanBilling>("monthly");
+  // Babysit del agente — add-on mensual opcional ($3K/mes).
+  const [babysitOpt, setBabysitOpt] = useState(false);
 
   const quote = useMemo(
     () => computeQuote(selections, integrations.hasIntegrations),
     [selections, integrations.hasIntegrations]
   );
 
-  const annualPlan = useMemo(
-    () =>
-      computeAnnualPlan(
-        quote.monthlyTotalMxn,
-        quote.setupOneTimeMxn,
-        quote.selectionsCount
-      ),
-    [quote.monthlyTotalMxn, quote.setupOneTimeMxn, quote.selectionsCount]
-  );
-
-  // Si el usuario tenía annual seleccionado pero quita capacidades hasta
-  // quedar bajo el threshold, lo regresamos a monthly automáticamente.
-  useEffect(() => {
-    if (billingMode === "annual" && !annualPlan.eligible) {
-      setBillingMode("monthly");
-    }
-  }, [billingMode, annualPlan.eligible]);
-
-  const effectiveBillingMode: BillingMode = annualPlan.eligible
-    ? billingMode
-    : "monthly";
+  // Billing efectivo: forzar monthly si Byte (gratis no tiene anual).
+  const effectivePlanBilling: PlanBilling =
+    selectedPlan === "Byte" ? "monthly" : planBilling;
 
   // tierId === null → no incluir; cualquier string → incluir con ese tier.
   const handleAnswer = (capId: string, tierId: string | null) => {
@@ -142,9 +127,11 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           integrations: integrations.hasIntegrations
             ? integrations.description || "yes (sin descripción)"
             : "no",
-          monthly_mxn: String(quote.monthlyTotalMxn),
-          setup_mxn: String(quote.setupOneTimeMxn),
-          billingMode: effectiveBillingMode,
+          monthly_mxn: String(PLANS[selectedPlan].price),
+          setup_mxn: String(SETUP_FLAT_MXN),
+          plan: selectedPlan,
+          planBilling: effectivePlanBilling,
+          babysit: babysitOpt,
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -175,8 +162,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selections: serializeSelections(selections),
-          monthlyTotalMxn: quote.monthlyTotalMxn,
-          billingMode: effectiveBillingMode,
+          plan: selectedPlan,
+          planBilling: effectivePlanBilling,
+          babysit: babysitOpt,
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -210,9 +198,17 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       ? `Hola, soy ${lead.name}.`
       : "Hola, vi tu landing.";
     const siteLine = lead?.website ? `\nSitio: ${lead.website}` : "";
-    const setupLine = `Setup único: ${formatMxn(quote.setupOneTimeMxn)} MXN (≈ ${formatUsd(quote.setupOneTimeUsd)} USD)`;
-    const monthlyLine = `Mensualidad: ${formatMxn(quote.monthlyTotalMxn)} MXN/mes (lista, antes del 20% off)`;
-    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${monthlyLine}\n\nCapacidades:\n${summary}${integrationsLine}${siteLine}`;
+    const setupLine = `Setup único: ${formatMxn(SETUP_FLAT_MXN)} MXN`;
+    const planInfo = PLANS[selectedPlan];
+    const planLine = `Plan créditos: ${planInfo.name} (${planInfo.aiGenerationsPerMonth ?? "∞"} cr/mes${
+      planInfo.price > 0
+        ? ` · ${formatMxn(planInfo.price)} MXN/mes${effectivePlanBilling === "annual" ? " · facturado anual" : ""}`
+        : " · gratis"
+    })`;
+    const babysitLine = babysitOpt
+      ? `\nBabysit: +${formatMxn(BABYSIT_MONTHLY_MXN)} MXN/mes`
+      : "";
+    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${planLine}${babysitLine}\n\nCapacidades:\n${summary}${integrationsLine}${siteLine}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -236,7 +232,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         signal: controller.signal,
         body: JSON.stringify({
           selections: serializeSelections(selections),
-          billingMode: effectiveBillingMode,
+          plan: selectedPlan,
+          planBilling: effectivePlanBilling,
+          babysit: babysitOpt,
           customIntegrations: integrations.hasIntegrations
             ? {
                 description: integrations.description,
@@ -323,11 +321,15 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             description: items.join(" · "),
           });
         }
-        if (
-          searchParams.get("b") === "annual" &&
-          isAnnualPlanEligible(parsed.size)
-        ) {
-          setBillingMode("annual");
+        const planParam = searchParams.get("p");
+        if (planParam === "Byte" || planParam === "Mega" || planParam === "Tera") {
+          setSelectedPlan(planParam);
+        }
+        if (searchParams.get("pb") === "annual") {
+          setPlanBilling("annual");
+        }
+        if (searchParams.get("bs") === "1") {
+          setBabysitOpt(true);
         }
         setStep(STEP_SUMMARY);
       }
@@ -351,8 +353,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         );
       }
     }
-    if (effectiveBillingMode === "annual") {
-      next.set("b", "annual");
+    next.set("p", selectedPlan);
+    if (effectivePlanBilling === "annual") {
+      next.set("pb", "annual");
+    }
+    if (babysitOpt) {
+      next.set("bs", "1");
     }
     // preventScrollReset evita que React Router brinque al top al editar
     // selecciones desde el summary (quitar/agregar capacidades).
@@ -364,7 +370,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     selections,
     integrations.hasIntegrations,
     integrations.items,
-    effectiveBillingMode,
+    selectedPlan,
+    effectivePlanBilling,
+    babysitOpt,
   ]);
 
   // Confetti + reveal sound when the summary first appears
@@ -626,9 +634,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
               <QuizStep stepKey="summary">
                 <PriceSummary
                   quote={quote}
-                  annualPlan={annualPlan}
-                  billingMode={effectiveBillingMode}
-                  onBillingModeChange={setBillingMode}
+                  selectedPlan={selectedPlan}
+                  onSelectPlan={setSelectedPlan}
+                  planBilling={effectivePlanBilling}
+                  onPlanBillingChange={setPlanBilling}
+                  babysitOpt={babysitOpt}
+                  onBabysitToggle={setBabysitOpt}
                   customIntegrationsDescription={
                     integrations.hasIntegrations
                       ? integrations.description

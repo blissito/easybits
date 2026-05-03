@@ -167,8 +167,26 @@ export const formatUsd = (amount: number): string =>
     maximumFractionDigits: 0,
   }).format(amount);
 
-// Descuento permanente al presentar la cotización. Aplica SOLO al mensual
-// (el setup nunca se descuenta). Fuente única usada por UI, PDF y Stripe checkout.
+// Setup único FIJO. El cotizador ya no lo escala por número de capacidades:
+// todos los clientes pagan el mismo setup base. Las capacidades se reflejan
+// en el plan de créditos (Byte/Mega/Tera) y recargas, no en el setup.
+export const SETUP_FLAT_MXN = 59000;
+
+// Babysit opcional: humano que vigila el agente, ajusta prompts, da soporte.
+// Se cobra como add-on mensual al plan de créditos elegido. Reutiliza la
+// constante histórica de orquestación para no duplicar el número.
+export const BABYSIT_MONTHLY_MXN = 3000;
+
+// Descuento natural por pago anual (≈ 2 meses gratis). Aplica solo a
+// planes Mega/Tera — Byte es gratis y no tiene anual.
+export const ANNUAL_DISCOUNT_PCT = 17;
+
+export const computeAnnualFromMonthly = (monthlyMxn: number): number =>
+  Math.round(monthlyMxn * 12 * (1 - ANNUAL_DISCOUNT_PCT / 100));
+
+// LEGACY — se mantienen exports para no romper imports existentes (PDF,
+// emails, scripts) hasta que el modelo de "renta + 20% off" desaparezca
+// del todo. La nueva pantalla NO debería usarlos.
 export const QUOTE_DISCOUNT_PCT = 20;
 
 export const computeDiscountedMonthly = (monthlyTotalMxn: number): number =>
