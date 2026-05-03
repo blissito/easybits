@@ -37,7 +37,11 @@ export const Hero = () => {
         </Link>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">
-        <img className="absolute" alt="star" src="/home/star.svg" />
+        <img
+          className="absolute -top-16 left-1/2 -translate-x-1/2 w-12 hidden md:block"
+          alt="star"
+          src="/home/star.svg"
+        />
         <img
           className="absolute -left-[800px] w-16"
           alt="star"
