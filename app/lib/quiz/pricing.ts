@@ -95,7 +95,13 @@ export const computeQuote = (
 
   const capsTotalMxn = breakdown.reduce((acc, b) => acc + b.priceMxn, 0);
   const monthlyTotalMxn = ORCHESTRATION_FEE_MXN + capsTotalMxn;
-  const setupOneTimeMxn = computeSetupMxn(breakdown.length);
+  // Add-ons (babysit, etc.) NO cuentan como "capacidades del agente": son
+  // servicios paralelos. Excluirlos de selectionsCount mantiene correcta la
+  // copy ("X capacidades"), el tier de setup y la elegibilidad anual.
+  const capabilitiesCount = breakdown.filter(
+    (b) => !b.capability.isAddon
+  ).length;
+  const setupOneTimeMxn = computeSetupMxn(capabilitiesCount);
 
   return {
     setupOneTimeMxn,
@@ -111,7 +117,7 @@ export const computeQuote = (
       : 0,
     hasCustomIntegrations,
     breakdown,
-    selectionsCount: breakdown.length,
+    selectionsCount: capabilitiesCount,
   };
 };
 

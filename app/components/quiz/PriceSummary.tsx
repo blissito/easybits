@@ -3,7 +3,6 @@ import { useState } from "react";
 import type { Quote } from "~/lib/quiz/pricing";
 import {
   ANNUAL_DISCOUNT_PCT,
-  BABYSIT_MONTHLY_MXN,
   computeAnnualFromMonthly,
   formatMxn,
   SETUP_FLAT_MXN,
@@ -19,8 +18,6 @@ type PriceSummaryProps = {
   onSelectPlan: (plan: PlanKey) => void;
   planBilling: PlanBilling;
   onPlanBillingChange: (mode: PlanBilling) => void;
-  babysitOpt: boolean;
-  onBabysitToggle: (next: boolean) => void;
   customIntegrationsDescription?: string;
   onDownloadPdf?: () => void;
   isDownloadingPdf?: boolean;
@@ -46,8 +43,6 @@ export const PriceSummary = ({
   onSelectPlan,
   planBilling,
   onPlanBillingChange,
-  babysitOpt,
-  onBabysitToggle,
   customIntegrationsDescription,
   onDownloadPdf,
   isDownloadingPdf = false,
@@ -226,43 +221,9 @@ export const PriceSummary = ({
         )}
       </div>
 
-      {/* Bloque 3 — Babysit opcional */}
-      <button
-        type="button"
-        onClick={() => onBabysitToggle(!babysitOpt)}
-        aria-pressed={babysitOpt}
-        className={`w-full text-left rounded-2xl border-[3px] border-black p-4 mb-5 transition-all shadow-[3px_3px_0_0_rgba(0,0,0,1)] ${
-          babysitOpt
-            ? "bg-brand-yellow -translate-x-0.5 -translate-y-0.5"
-            : "bg-white hover:bg-white/90"
-        }`}
-      >
-        <div className="flex items-start gap-3">
-          <div
-            className={`w-6 h-6 shrink-0 rounded-md border-[2.5px] border-black flex items-center justify-center text-sm font-black ${
-              babysitOpt ? "bg-black text-brand-yellow" : "bg-white text-transparent"
-            }`}
-          >
-            ✓
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline justify-between gap-3 flex-wrap">
-              <p className="text-sm font-black uppercase tracking-widest text-black">
-                Babysit del agente · opcional
-              </p>
-              <p className="text-sm font-mono font-black text-black tabular-nums">
-                +{formatMxn(BABYSIT_MONTHLY_MXN)}/mes
-              </p>
-            </div>
-            <p className="text-xs text-black/70 mt-1 leading-relaxed">
-              Humano que vigila el agente, ajusta prompts cuando algo no jala y
-              te responde por WhatsApp. Soporte real, no chatbot.
-            </p>
-          </div>
-        </div>
-      </button>
-
-      {/* Bloque 4 — Recargas (packs) inline */}
+      {/* Bloque 3 — Recargas (packs) inline. Babysit ahora vive en el stepper
+          como una capacidad más, aparece en el breakdown de "Lo que tu agente
+          hace" como cualquier otra. */}
       <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] p-5 mb-5">
         <div className="flex items-baseline justify-between gap-3 mb-3">
           <p className="text-sm font-black text-black uppercase tracking-widest">

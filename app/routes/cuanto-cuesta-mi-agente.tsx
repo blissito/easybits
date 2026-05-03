@@ -17,7 +17,6 @@ import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustrati
 import { CAPABILITIES, DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
 import { QUIZ_WHATSAPP_NUMBER } from "~/lib/quiz/contact";
 import {
-  BABYSIT_MONTHLY_MXN,
   computeQuote,
   formatMxn,
   parseSelections,
@@ -81,8 +80,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>("Mega");
   // Mensual vs anual del plan. Solo aplica para Mega/Tera; Byte fuerza monthly.
   const [planBilling, setPlanBilling] = useState<PlanBilling>("monthly");
-  // Babysit del agente — add-on mensual opcional ($3K/mes).
-  const [babysitOpt, setBabysitOpt] = useState(false);
+  // Babysit ahora vive como capability `babysit` en `selections` — es un paso
+  // del stepper como cualquier otra. Derivado para los payloads.
+  const babysitOpt = selections.has("babysit");
 
   const quote = useMemo(
     () => computeQuote(selections, integrations.hasIntegrations),
@@ -204,10 +204,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         ? ` · ${formatMxn(planInfo.price)} MXN/mes${effectivePlanBilling === "annual" ? " · facturado anual" : ""}`
         : " · gratis"
     })`;
-    const babysitLine = babysitOpt
-      ? `\nBabysit: +${formatMxn(BABYSIT_MONTHLY_MXN)} MXN/mes`
-      : "";
-    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${planLine}${babysitLine}\n\nCapacidades:\n${summary}${integrationsLine}${siteLine}`;
+    // Babysit ahora vive como capability en el summary, no necesita línea aparte.
+    const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${planLine}\n\nCapacidades:\n${summary}${integrationsLine}${siteLine}`;
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`,
       "_blank"
@@ -307,6 +305,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     if (sParam) {
       const parsed = parseSelections(sParam);
       if (parsed.size > 0) {
+        // Compat: links viejos llevan ?bs=1 — mapeamos a la capability babysit.
+        if (searchParams.get("bs") === "1" && !parsed.has("babysit")) {
+          parsed.set("babysit", DEFAULT_TIER_ID);
+        }
         setSelections(parsed);
         if (searchParams.get("i") === "1") {
           const itemsParam = searchParams.get("ii") || "";
@@ -326,9 +328,6 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         }
         if (searchParams.get("pb") === "annual") {
           setPlanBilling("annual");
-        }
-        if (searchParams.get("bs") === "1") {
-          setBabysitOpt(true);
         }
         setStep(STEP_SUMMARY);
       }
@@ -356,9 +355,6 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     if (effectivePlanBilling === "annual") {
       next.set("pb", "annual");
     }
-    if (babysitOpt) {
-      next.set("bs", "1");
-    }
     // preventScrollReset evita que React Router brinque al top al editar
     // selecciones desde el summary (quitar/agregar capacidades).
     setSearchParams(next, { replace: true, preventScrollReset: true });
@@ -371,7 +367,6 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     integrations.items,
     selectedPlan,
     effectivePlanBilling,
-    babysitOpt,
   ]);
 
   // Confetti + reveal sound when the summary first appears
@@ -613,8 +608,6 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   onSelectPlan={setSelectedPlan}
                   planBilling={effectivePlanBilling}
                   onPlanBillingChange={setPlanBilling}
-                  babysitOpt={babysitOpt}
-                  onBabysitToggle={setBabysitOpt}
                   customIntegrationsDescription={
                     integrations.hasIntegrations
                       ? integrations.description

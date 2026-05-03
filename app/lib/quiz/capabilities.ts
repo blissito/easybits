@@ -318,6 +318,26 @@ export const CAPABILITIES: Capability[] = [
   // cotizador. Se mueven al modelo de créditos: video.fal.avatar y
   // research.brightdata.{scrape,search} en app/.server/services/registry.ts.
   // Consumibles via packs o créditos del plan mensual.
+  {
+    id: "babysit",
+    label: "Babysit del agente",
+    shortLabel: "Babysit",
+    emoji: "🛟",
+    question: "¿Quieres que un humano vigile tu agente y ajuste prompts cuando algo no jale?",
+    description:
+      "Soporte real, no chatbot. Un humano monitorea al agente, retoca prompts cuando detecta drift y te responde por WhatsApp. Mensual, opcional, cancelable.",
+    vendor: "EasyBits",
+    // Mantener en sync con BABYSIT_MONTHLY_MXN en pricing.ts. Existe duplicado
+    // porque pricing.ts importa de capabilities.ts (no podemos invertir el flow).
+    basePriceMxn: 3000,
+    bgClass: "bg-brand-yellow",
+    isAddon: true,
+    includes: [
+      "Humano vigilando el agente en horario hábil",
+      "Ajustes de prompts cuando el agente se desvía",
+      "Soporte por WhatsApp directo, sin tickets",
+    ],
+  },
 ];
 
 export const getCapabilityById = (id: string): Capability | undefined =>

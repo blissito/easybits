@@ -25,11 +25,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Byte",
     price: 0,
     storageGB: 0.1,
-    aiGenerationsPerMonth: 2,
+    aiGenerationsPerMonth: 9,
     stripeIntent: null,
     features: [
       "100 MB de almacenamiento",
-      "2 créditos AI/mes incluidos",
+      "9 créditos AI/mes incluidos",
       "MCP + SDK + API",
       "Webhooks",
       "Landing pages",
