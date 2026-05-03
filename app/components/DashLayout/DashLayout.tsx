@@ -1,7 +1,7 @@
-import { Outlet, redirect } from "react-router";
+import { data, Outlet, redirect } from "react-router";
 import { HeaderMobile, SideBar } from "./SideBar";
 import { getUserOrNull } from "~/.server/getters";
-import { hasValidShareCookie } from "~/.server/shareLinks";
+import { clearShareCookie, hasValidShareCookie } from "~/.server/shareLinks";
 import type { Route } from "./+types/DashLayout";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -29,6 +29,18 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
   const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase());
   const isAdmin = adminEmails.includes(user.email?.toLowerCase() || "") || user.roles.includes("Admin");
+
+  // Limpieza proactiva: si el user logueado todavía trae cookie de share
+  // pegada (de una visita previa al share link), la borramos para que no
+  // pueda causar confusiones futuras en navegadores donde caduque la
+  // sesión y caigan en el branch isShareSession.
+  const cookieHeader = request.headers.get("Cookie") || "";
+  if (cookieHeader.includes("eb_share=")) {
+    return data(
+      { isAdmin, isShareSession: false },
+      { headers: { "Set-Cookie": clearShareCookie() } }
+    );
+  }
   return { isAdmin, isShareSession: false };
 };
 
