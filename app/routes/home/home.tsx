@@ -12,10 +12,20 @@ import type { Route } from "./+types/home";
 import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Steps } from "./Steps";
+import { getUserOrNull } from "~/.server/getters";
 
-export const clientLoader = async ({}: Route.ClientLoaderArgs) => {
-  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
-  return { user: user as User };
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const user = await getUserOrNull(request);
+  return { user: user as User | null };
+};
+
+export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => {
+  try {
+    const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+    return { user: user as User | null };
+  } catch {
+    return await serverLoader();
+  }
 };
 
 export const meta = () =>
@@ -28,7 +38,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   return (
     <section className="overflow-hidden w-full">
-      <AuthNav user={user} />
+      <AuthNav user={user ?? undefined} />
       <Hero />
       <Banners rotation={2}>
         <>
