@@ -73,7 +73,7 @@ export default function StatsComponent({ data }: { data: StatsData }) {
         {/* Row 2: Usage cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <StatsCard
-            title="AI Generaciones"
+            title="Créditos AI"
             amount={genLimit.limit !== null ? `${genLimit.used} / ${genLimit.limit}` : `${genLimit.used}`}
             className="bg-brand-100"
             tooltip={`${genLimit.remaining ?? "∞"} restantes${genLimit.bonus ? ` (+${genLimit.bonus} bonus)` : ""}`}

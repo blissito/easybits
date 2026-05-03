@@ -127,7 +127,7 @@ export const ITEMS = {
         </svg>
       ),
       path: "/dash/packs",
-      title: "Generaciones AI",
+      title: "Créditos AI",
       index: 2.5,
     },
     {

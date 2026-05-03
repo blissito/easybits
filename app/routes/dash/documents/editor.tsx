@@ -833,7 +833,7 @@ export default function DocumentEditor() {
       // Check limit client-side
       if (aiGenLimit !== null && aiGenUsed >= aiGenLimit && aiGenBonus <= 0) {
         showLimitToast(
-          `Has usado todas tus ${aiGenLimit} generaciones de este mes.`,
+          `Has usado todas tus ${aiGenLimit} créditos de este mes.`,
           "/dash/packs"
         );
         setIsGenerating(false);
@@ -1744,7 +1744,7 @@ export default function DocumentEditor() {
             const color = totalRemaining <= 0 ? "text-red-500" : totalRemaining <= 2 ? "text-yellow-600" : "text-gray-400";
             return (
               <span className={`hidden sm:inline text-xs font-bold ${color}`}>
-                {totalRemaining} generaciones restantes
+                {totalRemaining} créditos restantes
               </span>
             );
           })()}
@@ -1836,7 +1836,7 @@ export default function DocumentEditor() {
       {aiGenLimit !== null && aiGenUsed >= aiGenLimit && aiGenBonus <= 0 && (
         <div className="flex items-center justify-between px-4 py-2 bg-red-50 border-b-2 border-red-200 shrink-0">
           <span className="text-sm font-bold text-red-700">
-            Agotaste tus generaciones de este mes.
+            Agotaste tus créditos de este mes.
           </span>
           <Link
             to="/dash/packs"

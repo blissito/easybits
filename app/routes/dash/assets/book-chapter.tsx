@@ -758,7 +758,7 @@ export default function BookChapter() {
     try {
       if (aiGenLimit !== null && aiGenUsed >= aiGenLimit && aiGenBonus <= 0) {
         showLimitToast(
-          `Has usado todas tus ${aiGenLimit} generaciones de este mes.`,
+          `Has usado todas tus ${aiGenLimit} créditos de este mes.`,
           "/dash/packs"
         );
         setIsGenerating(false);
@@ -990,7 +990,7 @@ export default function BookChapter() {
       {aiGenLimit !== null && aiGenUsed >= aiGenLimit && aiGenBonus <= 0 && (
         <div className="flex items-center justify-between px-4 py-2 bg-red-50 border-b-2 border-red-200 shrink-0">
           <span className="text-sm font-bold text-red-700">
-            Agotaste tus generaciones de este mes.
+            Agotaste tus créditos de este mes.
           </span>
           <Link
             to="/dash/packs"

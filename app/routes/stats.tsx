@@ -70,7 +70,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     labels: monthLabels,
     datasets: [
       {
-        label: "AI Generaciones",
+        label: "Créditos AI",
         data: months.map((m) => {
           const g = genByMonth[m] || { documents: 0, landings: 0, presentations: 0 };
           return g.documents + g.landings + g.presentations;

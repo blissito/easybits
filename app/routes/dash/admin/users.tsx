@@ -311,9 +311,9 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
           </div>
           {stats && (
             <div className="text-[10px] text-gray-400 mt-0.5">
-              <span title="Generaciones con cuota mensual">📊 {stats.monthly} mensual</span>
+              <span title="Créditos con cuota mensual">📊 {stats.monthly} mensual</span>
               {" · "}
-              <span title="Generaciones con bonus">🎁 {stats.bonus} bonus usado</span>
+              <span title="Créditos con bonus">🎁 {stats.bonus} bonus usado</span>
               {stats.bonusAcquired > 0 && (
                 <span title="Total bonus adquirido (compras + admin)"> · 💰 {stats.bonusAcquired} adquirido</span>
               )}

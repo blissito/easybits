@@ -8,7 +8,7 @@ import { GENERATION_PACKS, NEXT_PLAN, REFERRAL_SIGNUP_BONUS, REFERRAL_UPGRADE_BO
 import type { Route } from "./+types/packs";
 
 export const meta = () => [
-  { title: "Packs de Generaciones — EasyBits" },
+  { title: "Packs de Créditos — EasyBits" },
   { name: "robots", content: "noindex" },
 ];
 
@@ -47,10 +47,10 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <section className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Generaciones AI</h1>
+      <h1 className="text-3xl font-bold mb-2">Créditos AI</h1>
       <p className="text-iron mb-8">
-        Compra packs de generaciones extra. No expiran ni se resetean
-        mensualmente.
+        1 crédito = 1 documento profesional. Compra packs extra cuando
+        los necesites — no expiran ni se resetean mensualmente.
       </p>
 
       {/* Current usage */}
@@ -132,7 +132,7 @@ function PackCard({
       )}
       <div className={`p-6 border-b-2 text-center ${pack.featured ? "border-brand-500 bg-brand-50" : "border-black"}`}>
         <p className="text-5xl font-bold">{pack.generations}</p>
-        <p className="text-iron mt-1">generaciones</p>
+        <p className="text-iron mt-1">créditos</p>
       </div>
       <div className="p-6 flex flex-col flex-1 justify-between">
         <div className="text-center mb-6">
@@ -194,9 +194,9 @@ function ReferralSection({
   return (
     <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-6">
       <h2 className="text-2xl font-bold mb-2">
-        🎁 Invita amigos, gana generaciones gratis
+        🎁 Invita amigos, gana créditos gratis
       </h2>
-      <p className="text-sm text-iron mb-4">Comparte tu link y ambos ganan generaciones AI</p>
+      <p className="text-sm text-iron mb-4">Comparte tu link y ambos ganan créditos AI</p>
 
       {/* Referral link */}
       <div className="flex items-center gap-2 mb-6">
