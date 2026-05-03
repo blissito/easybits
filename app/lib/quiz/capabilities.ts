@@ -243,6 +243,24 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "removebg",
+    label: "Quitar fondo de imágenes",
+    shortLabel: "Remove BG",
+    emoji: "✂️",
+    question: "¿Tu agente quita el fondo de fotos de producto, retratos o assets?",
+    description:
+      "Procesa imágenes y devuelve PNG transparente listo para catálogo, ecommerce o composición. Corre local en EasyBits (modelo open-source u2net), sin API de terceros ni límite por imagen.",
+    vendor: "EasyBits / u2net",
+    basePriceMxn: 1500,
+    bgClass: "bg-linen",
+    isAddon: false,
+    includes: [
+      "Quita fondo y devuelve PNG con transparencia",
+      "Volumen ilimitado — sin contador por imagen, sin créditos",
+      "Acepta JPG/PNG, optimizado para fotos de producto y retratos",
+    ],
+  },
+  {
     id: "site",
     label: "Landings ilimitadas",
     shortLabel: "Landings",
