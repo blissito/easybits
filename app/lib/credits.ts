@@ -68,14 +68,14 @@ export const COST_SEARCH = 2 * CREDIT_SCALE;
 // Bandas explícitas (NO derivadas de CREDIT_SCALE). El número representa
 // el TOPE de la banda — cualquier consumo ≤ este número cae en ese plan.
 //
-//   Byte:    0–999 cr     (Gratis hasta freeUntil; paid hasta tope)
-//   Mega:  1,000–6,999 cr (interpolación lineal $299–$899)
-//   Tera:  7,000–30,000 cr (interpolación lineal $1,499–$2,999)
+//   Byte:     0–999 cr     (Gratis hasta freeUntil; paid hasta tope)
+//   Mega:  1,000–10,000 cr (interpolación lineal $499–$2,499)
+//   Tera: 10,001–50,000 cr (interpolación lineal $2,999–$7,999)
 
 export const PLAN_CREDITS = {
   Byte: 999,
-  Mega: 6999,
-  Tera: 30000,
+  Mega: 10000,
+  Tera: 50000,
 } as const;
 
 // ──────────────────────────────────────────────────────────────────
@@ -168,21 +168,21 @@ export const PRICE_BANDS: PriceBand[] = [
     priceMax: 99,
     freeUntil: Math.round(PLAN_CREDITS.Byte * 0.55), // ≈ 5K en scale 1000
   },
-  // Mega: interpola de $299 a $899.
+  // Mega: interpola de $499 a $2,499.
   {
     plan: "Mega",
     minCredits: PLAN_CREDITS.Byte + 1,
     maxCredits: PLAN_CREDITS.Mega,
-    priceMin: 299,
-    priceMax: 899,
+    priceMin: 499,
+    priceMax: 2499,
   },
-  // Tera: interpola de $1,499 a $2,999.
+  // Tera: interpola de $2,999 a $7,999.
   {
     plan: "Tera",
     minCredits: PLAN_CREDITS.Mega + 1,
     maxCredits: PLAN_CREDITS.Tera,
-    priceMin: 1499,
-    priceMax: 2999,
+    priceMin: 2999,
+    priceMax: 7999,
   },
 ];
 
