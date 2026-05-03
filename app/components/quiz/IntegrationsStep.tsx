@@ -227,7 +227,12 @@ export const IntegrationsStep = ({ onAnswer }: IntegrationsStepProps) => {
         </p>
       </motion.div>
 
-      <BrutalButton onClick={handleSubmit} isDisabled={opted === null}>
+      <BrutalButton
+        onClick={handleSubmit}
+        isDisabled={opted === null}
+        containerClassName="h-16 md:h-20"
+        className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
+      >
         Continuar →
       </BrutalButton>
     </div>

@@ -92,7 +92,13 @@ export const LeadForm = ({ onSubmit, isLoading }: LeadFormProps) => {
       )}
 
       <div className="flex justify-center mt-2">
-        <BrutalButton type="submit" mode="brand" isLoading={isLoading}>
+        <BrutalButton
+          type="submit"
+          mode="brand"
+          isLoading={isLoading}
+          containerClassName="h-16 md:h-20"
+          className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
+        >
           Ver mi precio →
         </BrutalButton>
       </div>

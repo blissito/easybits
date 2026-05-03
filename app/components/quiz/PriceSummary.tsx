@@ -14,13 +14,11 @@ import type { Capability } from "~/lib/quiz/capabilities";
 import { formatCredits } from "~/lib/credits";
 import { GENERATION_PACKS, PLANS, type PlanKey } from "~/lib/plans";
 
-// Precio del pack más barato (cualquier plan) — para mostrar "desde $X" en la
-// card de recargas sin tener que pasar prop adicional.
+// Precio del pack más barato (cualquier plan) — para la leyenda mínima
+// "recargas desde $X" en el summary.
 const CHEAPEST_PACK_MXN = Math.min(
   ...GENERATION_PACKS.map((p) => Math.min(...Object.values(p.prices)))
 );
-const PACK_MIN_CR = Math.min(...GENERATION_PACKS.map((p) => p.generations));
-const PACK_MAX_CR = Math.max(...GENERATION_PACKS.map((p) => p.generations));
 
 // Color de fondo por plan en la card del summary. Cada plan tiene su
 // identidad visual: Byte azul (gratis/arranque), Mega amarillo (sweet spot),
@@ -45,9 +43,15 @@ export type PlanBilling = "monthly" | "annual";
 type PriceSummaryProps = {
   quote: Quote;
   selectedPlan: PlanKey;
+  /** Precio mensual MXN del plan, derivado del configurador (sliders). */
+  planMonthlyMxn: number;
+  /** Total cr/mes que cubre el plan según el configurador. */
+  planCreditsPerMonth: number;
+  /** Créditos overflow (cuando excede la banda Tera). 0 si no aplica. */
+  planOverageCredits?: number;
   planBilling: PlanBilling;
   onPlanBillingChange: (mode: PlanBilling) => void;
-  // Trigger para volver al paso del plan en el stepper.
+  /** Trigger para volver al configurador (sliders). */
   onChangePlan?: () => void;
   // CTA de pago — se rendea dentro de la plan card. Si no se pasa, no se
   // muestra el botón (la página externa puede tener su propio CTA).
@@ -62,6 +66,9 @@ type PriceSummaryProps = {
 export const PriceSummary = ({
   quote,
   selectedPlan,
+  planMonthlyMxn,
+  planCreditsPerMonth,
+  planOverageCredits = 0,
   planBilling,
   onPlanBillingChange,
   onChangePlan,
@@ -80,7 +87,6 @@ export const PriceSummary = ({
     planSupportsAnnual && planBilling === "annual" ? "annual" : "monthly";
 
   const [isCapsOpen, setIsCapsOpen] = useState(quote.selectionsCount <= 3);
-  const [isPacksOpen, setIsPacksOpen] = useState(false);
 
   return (
     <div className="w-full max-w-xl mx-auto">
@@ -143,18 +149,18 @@ export const PriceSummary = ({
         );
       })()}
 
-      {/* Bloque 2 — Plan seleccionado. Identidad visual por plan
-          (color), sin emoji, sin números de créditos (esos viven en la card
-          de recargas). Solo precio + billing toggle + cambiar plan. */}
+      {/* Bloque 2 — Plan derivado del configurador. El precio es continuo
+          (no fijo por plan), depende de los sliders del paso anterior.
+          "ajustar consumo" regresa al configurador. */}
       {(() => {
         const plan = PLANS[selectedPlan];
-        const isFree = plan.price === 0;
-        const annualTotal = isFree ? 0 : computeAnnualFromMonthly(plan.price);
+        const isFree = planMonthlyMxn === 0;
+        const annualTotal = isFree ? 0 : computeAnnualFromMonthly(planMonthlyMxn);
         const showingAnnual =
-          planSupportsAnnual && effectiveBilling === "annual";
+          planSupportsAnnual && effectiveBilling === "annual" && !isFree;
         return (
           <div className={`rounded-2xl border-[3px] border-black ${PLAN_BG[selectedPlan]} shadow-[4px_4px_0_0_rgba(0,0,0,1)] p-5 mb-5`}>
-            {/* "cambiar plan" como link tiny arriba a la derecha */}
+            {/* "ajustar consumo" como link tiny arriba a la derecha */}
             {onChangePlan && (
               <div className="flex justify-end mb-1">
                 <button
@@ -162,7 +168,7 @@ export const PriceSummary = ({
                   onClick={onChangePlan}
                   className="text-[11px] font-mono text-black/55 hover:text-black underline underline-offset-2"
                 >
-                  cambiar plan
+                  ajustar consumo
                 </button>
               </div>
             )}
@@ -191,7 +197,7 @@ export const PriceSummary = ({
                     ? "Gratis"
                     : showingAnnual
                       ? `${formatMxn(annualTotal)}/año`
-                      : `${formatMxn(plan.price)}/mes`}
+                      : `${formatMxn(planMonthlyMxn)}/mes`}
                 </span>
                 {/* Sub-línea siempre presente cuando el plan es pago — para
                     que el toggle Mensual/Anual no empuje la card. Mensual la
@@ -258,8 +264,8 @@ export const PriceSummary = ({
                   onClick={onCheckout}
                   isLoading={isCheckoutLoading}
                   isDisabled={isCheckoutDisabled}
-                  containerClassName="w-full"
-                  className="w-full"
+                  containerClassName="h-16 md:h-20 w-full"
+                  className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl"
                 >
                   Pagar personalización y arrancar →
                 </BrutalButton>
@@ -269,109 +275,24 @@ export const PriceSummary = ({
         );
       })()}
 
-      {/* Bloque 3 — Créditos y recargas libres. Acordeón colapsable que
-          incluye 3 packs temáticos verticalizados como teaser. */}
-      {(() => {
-        const planCredits = PLANS[selectedPlan].aiGenerationsPerMonth;
-        // 3 packs verticalizados que más le hablan al SMB mexicano —
-        // creators, ecommerce, marketing. El "Studio Pro" queda fuera
-        // porque su volumen ($15K) confunde como teaser.
-        const FEATURED_PACK_IDS = [
-          "pack_creator_daily",
-          "pack_ecommerce_catalogo",
-          "pack_research_design",
-        ];
-        const featuredPacks = FEATURED_PACK_IDS.map((id) =>
-          GENERATION_PACKS.find((p) => p.id === id)
-        ).filter((p): p is NonNullable<typeof p> => Boolean(p));
-        return (
-          <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] overflow-hidden mb-5">
-            <button
-              type="button"
-              onClick={() => setIsPacksOpen((v) => !v)}
-              aria-expanded={isPacksOpen}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] transition-colors"
-            >
-              <span aria-hidden className="text-xl">⚡</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-black text-black uppercase tracking-widest leading-tight">
-                  Créditos · recargas libres
-                </p>
-                <p className="text-[11px] text-black/60 mt-0.5 leading-snug">
-                  Tu plan incluye <strong className="text-black">{planCredits ? formatCredits(planCredits) : "∞"} créditos/mes</strong> y recargas desde {formatMxn(CHEAPEST_PACK_MXN)} MXN · packs de {formatCredits(PACK_MIN_CR)}–{formatCredits(PACK_MAX_CR)} créditos · sin caducidad.
-                </p>
-              </div>
-              <span
-                className={`text-black/50 text-xl font-black transition-transform shrink-0 ${
-                  isPacksOpen ? "rotate-180" : ""
-                }`}
-                aria-hidden
-              >
-                ▾
-              </span>
-            </button>
-            <AnimatePresence initial={false}>
-              {isPacksOpen && (
-                <motion.div
-                  key="packs-body"
-                  initial={reduced ? false : { height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-                  transition={
-                    reduced
-                      ? { duration: 0 }
-                      : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
-                  }
-                  className="overflow-hidden"
-                >
-                  <div className="px-4 pb-4 pt-1 border-t border-black/10">
-                    <p className="text-[10px] uppercase tracking-wider font-black text-black/55 mb-2 mt-2">
-                      Packs por uso típico
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      {featuredPacks.map((pack) => {
-                        const price = pack.prices[selectedPlan];
-                        return (
-                          <div
-                            key={pack.id}
-                            className="rounded-xl border-2 border-black bg-white p-3 shadow-[2px_2px_0_0_rgba(0,0,0,1)] flex flex-col gap-1"
-                          >
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-base" aria-hidden>{pack.emoji}</span>
-                              <span className="text-[10px] font-mono font-black text-black/55 uppercase tracking-wider">
-                                {formatCredits(pack.generations)} cr
-                              </span>
-                            </div>
-                            <p className="text-sm font-black text-black leading-tight">
-                              {pack.label}
-                            </p>
-                            <p className="text-[10px] text-black/55 leading-snug">
-                              {pack.audience}
-                            </p>
-                            {pack.recipe && pack.recipe.length > 0 && (
-                              <ul className="text-[10px] text-black/50 mt-0.5 space-y-0.5 leading-snug">
-                                {pack.recipe.map((r) => (
-                                  <li key={r.service}>· {r.label}</li>
-                                ))}
-                              </ul>
-                            )}
-                            <p className="text-[10px] font-mono text-black/40 mt-1">
-                              ≈ 1 semana al ritmo típico
-                            </p>
-                            <p className="text-base font-black text-black tabular-nums mt-1">
-                              {formatMxn(price)}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })()}
+      {/* Bloque 3 — Leyenda mínima de recargas. Antes era un acordeón con 3
+          packs adentro; el feedback fue que distraía del flow de cotización.
+          Ahora es una sola línea sutil. Tu plan ya cubre el consumo
+          configurado; las recargas son escape hatch si te quedas corto. */}
+      <p className="text-center text-[11px] text-black/55 leading-snug mb-5">
+        ¿Te quedas corto un mes? Recargas créditos desde{" "}
+        <strong className="text-black/80">{formatMxn(CHEAPEST_PACK_MXN)} MXN</strong>{" "}
+        · sin caducidad
+        {planOverageCredits > 0 && (
+          <>
+            {" "}· tu consumo configurado excede Tera por{" "}
+            <strong className="text-black/80">
+              {formatCredits(planOverageCredits)} cr
+            </strong>
+          </>
+        )}
+        .
+      </p>
 
       {/* Bloque 4 — Lo que tu agente hace (capabilities sin precios) */}
       <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] overflow-hidden mb-5">

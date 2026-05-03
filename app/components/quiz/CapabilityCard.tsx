@@ -69,6 +69,24 @@ export const CapabilityCard = ({
         <p className="text-base md:text-lg text-black/80 mb-2 whitespace-pre-line">
           {capability.description}
         </p>
+
+        {/* Format badges — solo para la cap de documentos. Chips con los
+            colores brand de cada formato (rojo PDF, azul Word, verde Excel)
+            como guiño visual a sus logos oficiales. */}
+        {capability.id === "documents" && (
+          <div className="flex flex-wrap items-center gap-2 mb-3 mt-1">
+            <span className="inline-flex items-center justify-center min-w-[44px] px-2 py-1 rounded-md bg-[#E32B2B] text-white text-[11px] font-black tracking-tight shadow-[2px_2px_0_0_rgba(0,0,0,1)] border-2 border-black">
+              PDF
+            </span>
+            <span className="inline-flex items-center justify-center min-w-[44px] px-2 py-1 rounded-md bg-[#2B579A] text-white text-[11px] font-black tracking-tight shadow-[2px_2px_0_0_rgba(0,0,0,1)] border-2 border-black">
+              DOCX
+            </span>
+            <span className="inline-flex items-center justify-center min-w-[44px] px-2 py-1 rounded-md bg-[#217346] text-white text-[11px] font-black tracking-tight shadow-[2px_2px_0_0_rgba(0,0,0,1)] border-2 border-black">
+              XLSX
+            </span>
+          </div>
+        )}
+
         <p className="text-sm font-mono text-black/55">
           {hasTiers
             ? "Elige el nivel — armado en el setup"
@@ -128,31 +146,11 @@ export const CapabilityCard = ({
             No incluir
           </button>
         </div>
-      ) : capability.basePriceMxn === 0 ? (
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
-          <BrutalButton
-            onClick={() => {
-              playYes();
-              onAnswer(DEFAULT_TIER_ID);
-            }}
-            containerClassName="h-16 md:h-20 w-full"
-            className="h-16 md:h-20 w-full px-4 md:px-8 text-xl md:text-2xl flex items-center justify-center gap-2"
-          >
-            <span aria-hidden>✓</span>
-            <span>Incluido</span>
-          </BrutalButton>
-          <button
-            type="button"
-            onClick={() => {
-              playNo();
-              onAnswer(null);
-            }}
-            className="text-sm font-mono text-black/55 hover:text-black underline underline-offset-4 decoration-black/30 hover:decoration-black px-3 py-1 transition-colors"
-          >
-            No incluir, saltar
-          </button>
-        </div>
       ) : (
+        // Mismo layout para caps gratuitas (basePriceMxn === 0) y de paga.
+        // Antes las gratuitas tenían un botón "✓ Incluido" grande + skip
+        // link — feedback fue que rompía la consistencia. Reutilizamos el
+        // mismo layout 2-cols del paid cap (h-16/h-20, full width) tal cual.
         <div className="grid grid-cols-2 gap-4 md:gap-6 w-full max-w-xl">
           <BrutalButton
             mode="ghost"

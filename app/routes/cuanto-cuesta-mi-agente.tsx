@@ -12,7 +12,13 @@ import {
   IntegrationsStep,
   type IntegrationsAnswer,
 } from "~/components/quiz/IntegrationsStep";
-import { PlanStep } from "~/components/quiz/PlanStep";
+import {
+  ConfiguradorStep,
+  computeTotalCredits,
+  DEFAULT_CONSUMPTION,
+  type ConsumptionConfig,
+} from "~/components/quiz/ConfiguradorStep";
+import { computePlanFromCredits } from "~/lib/credits";
 import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
 import { CAPABILITIES, DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
 import { QUIZ_WHATSAPP_NUMBER } from "~/lib/quiz/contact";
@@ -78,23 +84,39 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  // Plan de créditos seleccionado en el summary. Default Mega — el sweet spot
-  // para uso profesional regular (50 cr/mes a $299).
-  const [selectedPlan, setSelectedPlan] = useState<PlanKey>("Mega");
-  // Mensual vs anual del plan. Solo aplica para Mega/Tera; Byte fuerza monthly.
+  // Configuración de consumo del agente — sliders del ConfiguradorStep.
+  // El plan (Byte/Mega/Tera) y el precio se DERIVAN de aquí.
+  const [consumption, setConsumption] = useState<ConsumptionConfig>(
+    DEFAULT_CONSUMPTION
+  );
+  // Mensual vs anual del plan. Solo aplica cuando hay precio mensual > 0.
   const [planBilling, setPlanBilling] = useState<PlanBilling>("monthly");
   // Babysit ahora vive como capability `babysit` en `selections` — es un paso
   // del stepper como cualquier otra. Derivado para los payloads.
   const babysitOpt = selections.has("babysit");
+
+  // Derived: total cr/mes y plan/precio según los sliders.
+  const totalCredits = useMemo(
+    () => computeTotalCredits(consumption),
+    [consumption]
+  );
+  const planQuote = useMemo(
+    () => computePlanFromCredits(totalCredits),
+    [totalCredits]
+  );
+  const selectedPlan = planQuote.plan;
 
   const quote = useMemo(
     () => computeQuote(selections, integrations.hasIntegrations),
     [selections, integrations.hasIntegrations]
   );
 
-  // Billing efectivo: forzar monthly si Byte (gratis no tiene anual).
-  const effectivePlanBilling: PlanBilling =
-    selectedPlan === "Byte" ? "monthly" : planBilling;
+  // Billing efectivo: forzar monthly si el plan es gratis (no aplica anual).
+  // Antes el switch era por nombre del plan (Byte=gratis), ahora Byte puede
+  // ser pago si el slider lo empuja cerca de Mega — chequeamos el quote.
+  const effectivePlanBilling: PlanBilling = planQuote.isFree
+    ? "monthly"
+    : planBilling;
 
   // tierId === null → no incluir; cualquier string → incluir con ese tier.
   const handleAnswer = (capId: string, tierId: string | null) => {
@@ -129,7 +151,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           integrations: integrations.hasIntegrations
             ? integrations.description || "yes (sin descripción)"
             : "no",
-          monthly_mxn: String(PLANS[selectedPlan].price),
+          monthly_mxn: String(planQuote.priceMxn),
           setup_mxn: String(
             computeSetupEffective(
               quote.capsTotalMxn,
@@ -210,10 +232,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       integrations.hasIntegrations
     );
     const setupLine = `Setup único: ${formatMxn(setupEff)} MXN`;
-    const planInfo = PLANS[selectedPlan];
-    const planLine = `Plan créditos: ${planInfo.name} (${planInfo.aiGenerationsPerMonth ?? "∞"} cr/mes${
-      planInfo.price > 0
-        ? ` · ${formatMxn(planInfo.price)} MXN/mes${effectivePlanBilling === "annual" ? " · facturado anual" : ""}`
+    const planLine = `Plan créditos: ${selectedPlan} (${totalCredits.toLocaleString("es-MX")} cr/mes configurados${
+      planQuote.priceMxn > 0
+        ? ` · ${formatMxn(planQuote.priceMxn)} MXN/mes${effectivePlanBilling === "annual" ? " · facturado anual" : ""}`
         : " · gratis"
     })`;
     // Babysit ahora vive como capability en el summary, no necesita línea aparte.
@@ -335,10 +356,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             description: items.join(" · "),
           });
         }
-        const planParam = searchParams.get("p");
-        if (planParam === "Byte" || planParam === "Mega" || planParam === "Tera") {
-          setSelectedPlan(planParam);
-        }
+        // Plan ya no es seleccionable directo — se deriva de los sliders
+        // del ConfiguradorStep. El param `p=` queda como compat de links
+        // viejos: lo ignoramos para no forzar un plan que no coincida con
+        // el consumo actual del usuario.
         if (searchParams.get("pb") === "annual") {
           setPlanBilling("annual");
         }
@@ -465,6 +486,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                         "_blank"
                       );
                     }}
+                    containerClassName="h-16 md:h-20"
+                    className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
                   >
                     Avisarles por WhatsApp →
                   </BrutalButton>
@@ -495,6 +518,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                           "_blank"
                         );
                       }}
+                      containerClassName="h-16 md:h-20"
+                      className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
                     >
                       Hablar por WhatsApp
                     </BrutalButton>
@@ -503,6 +528,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       onClick={() => {
                         setSearchParams({}, { replace: true });
                       }}
+                      containerClassName="h-16 md:h-20"
+                      className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
                     >
                       Volver al cotizador
                     </BrutalButton>
@@ -565,7 +592,11 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.6, delay: 0.3 }}
                     >
-                      <BrutalButton onClick={() => setStep(1)}>
+                      <BrutalButton
+                        onClick={() => setStep(1)}
+                        containerClassName="h-16 md:h-20"
+                        className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
+                      >
                         Configurar mi agente →
                       </BrutalButton>
                     </motion.div>
@@ -606,11 +637,11 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
 
             {isPlanStep && (
               <QuizStep stepKey="plan">
-                <PlanStep
-                  selectedPlan={selectedPlan}
-                  onSelect={setSelectedPlan}
+                <ConfiguradorStep
+                  consumption={consumption}
+                  onChange={setConsumption}
                   onContinue={() => {
-                    // Si el lead ya se capturó antes (caso "cambiar plan"
+                    // Si el lead ya se capturó antes (caso "ajustar consumo"
                     // desde el summary), saltamos el lead form y vamos
                     // directo al summary — no le pedimos los datos otra vez.
                     setStep(lead ? STEP_SUMMARY : STEP_LEAD);
@@ -635,6 +666,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                 <PriceSummary
                   quote={quote}
                   selectedPlan={selectedPlan}
+                  planMonthlyMxn={planQuote.priceMxn}
+                  planCreditsPerMonth={totalCredits}
+                  planOverageCredits={planQuote.overageCredits}
                   planBilling={effectivePlanBilling}
                   onPlanBillingChange={setPlanBilling}
                   onChangePlan={() => setStep(STEP_PLAN)}
@@ -713,6 +747,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     mode="ghost"
                     onClick={handleWhatsApp}
                     isDisabled={submitting || downloadingPdf}
+                    containerClassName="h-16 md:h-20"
+                    className="h-16 md:h-20 px-8 md:px-12 text-xl md:text-2xl"
                   >
                     Hablar con Brenda primero (whatsapp)
                   </BrutalButton>
