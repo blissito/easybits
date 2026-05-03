@@ -3,6 +3,7 @@ import type { Route } from "./+types/quiz-lead-submit";
 import { sendQuizQuotation } from "~/.server/emails/sendQuizQuotation";
 import { generateQuizFolio } from "~/.server/quiz/pdf";
 import { parseSelections, type BillingMode } from "~/lib/quiz/pricing";
+import type { PlanKey } from "~/lib/plans";
 
 const QUIZ_FORM_ID = "69efd203ad74435521a74b34";
 
@@ -17,7 +18,10 @@ type Payload = {
   integrations: string; // human-readable description ("yes — HubSpot, Mercado Libre" or "no")
   monthly_mxn: string;
   setup_mxn: string;
-  // Default monthly. annual sólo si selectionsCount >= 3.
+  // Plan de créditos elegido en el stepper.
+  plan?: PlanKey;
+  // El cliente manda `planBilling`. Aceptamos `billingMode` también por compat.
+  planBilling?: BillingMode;
   billingMode?: BillingMode;
   // Custom integrations payload (parsed for the PDF)
   customIntegrations: { description: string; items?: string[] } | null;
@@ -86,7 +90,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
     payload: {
       selections: payload.selections,
       customIntegrations: payload.customIntegrations,
-      billingMode: payload.billingMode,
+      plan: payload.plan,
+      planBilling: payload.planBilling ?? payload.billingMode,
+      billingMode: payload.planBilling ?? payload.billingMode,
       lead: {
         name: payload.name,
         email: payload.email,

@@ -1,16 +1,18 @@
 import { withPage } from "~/.server/core/browserPool";
 import { QUIZ_WHATSAPP_DISPLAY } from "~/lib/quiz/contact";
 import {
-  computeAnnualPlan,
-  computeDiscountedMonthly,
+  ANNUAL_DISCOUNT_PCT,
+  computeAnnualFromMonthly,
   computeQuote,
+  computeSetupEffective,
+  CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN,
   formatMxn,
   formatUsd,
-  isAnnualPlanEligible,
   parseSelections,
-  QUOTE_DISCOUNT_PCT,
+  SETUP_BASE_MXN,
   type BillingMode,
 } from "~/lib/quiz/pricing";
+import { PLANS, type PlanKey } from "~/lib/plans";
 
 export type QuizPdfLead = {
   name: string;
@@ -25,7 +27,12 @@ export type QuizPdfPayload = {
   // Formato "voice:pro,images,whatsapp"
   selections: string;
   customIntegrations: { description: string; items?: string[] } | null;
-  // Default monthly. annual sólo si selectionsCount >= 3.
+  // Plan de créditos elegido en el stepper. Default Mega si no se manda.
+  plan?: PlanKey;
+  // Mensual vs anual del plan. Solo aplica para Mega/Tera. Acepta ambos
+  // nombres por compat: el cliente manda `planBilling`, el contrato viejo de
+  // emails/sendQuizQuotation usa `billingMode`.
+  planBilling?: BillingMode;
   billingMode?: BillingMode;
   lead: QuizPdfLead;
 };
@@ -52,17 +59,25 @@ export const buildQuizPdfHtml = (
 ): string => {
   const { lead, customIntegrations } = payload;
   const selectionsMap = parseSelections(payload.selections || "");
-  const quote = computeQuote(selectionsMap, !!customIntegrations);
-  const discountedMonthly = computeDiscountedMonthly(quote.monthlyTotalMxn);
-  const monthlySaving = quote.monthlyTotalMxn - discountedMonthly;
-  const isAnnual =
-    payload.billingMode === "annual" &&
-    isAnnualPlanEligible(quote.selectionsCount);
-  const annualPlan = computeAnnualPlan(
-    quote.monthlyTotalMxn,
-    quote.setupOneTimeMxn,
-    quote.selectionsCount
+  const hasCustomIntegrations = !!customIntegrations;
+  const quote = computeQuote(selectionsMap, hasCustomIntegrations);
+
+  // Plan de créditos — el modelo nuevo. El plan es la suscripción mensual,
+  // las capabilities ya están armadas en el setup.
+  const planKey: PlanKey = (payload.plan as PlanKey) || "Mega";
+  const plan = PLANS[planKey];
+  const planSupportsAnnual = planKey !== "Byte" && plan.price > 0;
+  const billingMode = payload.planBilling ?? payload.billingMode;
+  const isAnnual = planSupportsAnnual && billingMode === "annual";
+  const planMonthly = plan.price;
+  const planAnnualTotal = planSupportsAnnual
+    ? computeAnnualFromMonthly(planMonthly)
+    : 0;
+  const setupEffectiveMxn = computeSetupEffective(
+    quote.capsTotalMxn,
+    hasCustomIntegrations
   );
+  const setupUsdEffective = Math.round(setupEffectiveMxn / 17 / 100) * 100;
 
   const today = new Intl.DateTimeFormat("es-MX", {
     day: "numeric",
@@ -70,22 +85,10 @@ export const buildQuizPdfHtml = (
     year: "numeric",
   }).format(new Date());
 
-  const orchRow = `
-    <div class="cap-row">
-      <div class="cap-info">
-        <div class="cap-name">Operación + babysit del agente</div>
-        <div class="cap-incl">Que el agente no se rompa · ajustes que pidas · soporte humano, no chatbot</div>
-      </div>
-      <div class="cap-price">${formatMxn(quote.orchestrationFeeMxn)}</div>
-    </div>`;
-
+  // Capabilities listadas como "incluidas en el setup" — sin precio por línea.
   const capRows = quote.breakdown
     .map((line) => {
       const c = line.capability;
-      const isFree = line.priceMxn === 0;
-      const capRow = line.cap
-        ? `<div class="cap-meta">${line.humanLine ? `<div class="cap-human">${escapeHtml(line.humanLine)}</div>` : ""}<span class="cap-tech">${escapeHtml(line.cap.included)} ${escapeHtml(line.cap.unit)} · exceso: ${escapeHtml(line.cap.overage)}</span></div>`
-        : "";
       const tierBadge = line.tierLabel
         ? ` <span class="tier-badge">${escapeHtml(line.tierLabel)}</span>`
         : "";
@@ -94,9 +97,8 @@ export const buildQuizPdfHtml = (
       <div class="cap-info">
         <div class="cap-name">${escapeHtml(c.shortLabel)}${tierBadge} <span class="cap-vendor">(${escapeHtml(c.vendor)})</span></div>
         <div class="cap-incl">${c.includes.map((i) => escapeHtml(i)).join(" · ")}</div>
-        ${capRow}
       </div>
-      <div class="cap-price ${isFree ? "free" : ""}">${isFree ? "Incluido" : formatMxn(line.priceMxn)}</div>
+      <div class="cap-price free">Incluido</div>
     </div>`;
     })
     .join("");
@@ -120,9 +122,9 @@ export const buildQuizPdfHtml = (
   const customSection = customIntegrations
     ? `
   <div class="custom-section">
-    <div class="custom-tag">🔌 Integraciones que mencionaste</div>
+    <div class="custom-tag">🔌 Integraciones custom incluidas en el setup</div>
     ${itemsChips}
-    <div class="custom-note-inline">Las simples entran en el setup. Las complejas (SAP/ERP, sync continuo) las scopeamos en la primera reunión sin costo extra.</div>
+    <div class="custom-note-inline">Suben +${formatMxn(CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN)} al setup único. Las complejas (SAP/ERP, sync continuo) las scopeamos en la primera reunión sin discovery extra.</div>
   </div>`
     : "";
 
@@ -223,68 +225,55 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 </div>
 
 <div class="setup-block">
-  <div class="setup-tag">★ Setup ${isAnnual ? "GRATIS · plan anual" : "único · pago una sola vez"} ★</div>
+  <div class="setup-tag">★ Setup único · pago una sola vez ★</div>
   <div class="setup-amount-row">
-    <div class="setup-amount">${
-      isAnnual
-        ? `INCLUIDO`
-        : formatMxn(quote.setupOneTimeMxn)
-    }</div>
-    ${
-      isAnnual
-        ? `<div class="setup-currency" style="color:#ECD66E;">ahorras ${formatMxn(annualPlan.setupSavingsMxn)} MXN</div>`
-        : `<div class="setup-currency">MXN</div>
-    <div class="setup-mxn">≈ ${formatUsd(quote.setupOneTimeUsd)} USD</div>`
-    }
+    <div class="setup-amount">${formatMxn(setupEffectiveMxn)}</div>
+    <div class="setup-currency">MXN</div>
+    <div class="setup-mxn">≈ ${formatUsd(setupUsdEffective)} USD</div>
   </div>
+  ${
+    quote.capsTotalMxn > 0 || hasCustomIntegrations
+      ? `<div class="setup-mxn" style="margin-top:-4px;margin-bottom:8px;">${formatMxn(SETUP_BASE_MXN)} base${quote.capsTotalMxn > 0 ? ` + ${formatMxn(quote.capsTotalMxn)} capacidades` : ""}${hasCustomIntegrations ? ` + ${formatMxn(CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN)} integraciones custom` : ""}</div>`
+      : ""
+  }
+  <div style="font-size:13px;font-weight:900;color:#FFF;margin:8px 0 4px;line-height:1.3;">Tu agente nace con tu marca, tu voz y tu manera.</div>
+  <div style="font-size:11px;color:rgba(255,255,255,0.78);line-height:1.5;margin-bottom:8px;">Dos expertos en robots lo arman pieza por pieza: modelo, prompts, MCPs, integraciones y branding. Babysit del agente, 30 días acompañándote por WhatsApp y onboarding con tu equipo — todo incluido. Cuando arranca, ya queda funcionando y listo para producción.</div>
   <ul class="setup-list">
-    <li><strong>30 días pair WA con dos seniors</strong> (ventana 9-18h MX, respuesta &lt; 2h)</li>
-    <li>Setup técnico + MCPs + tu marca</li>
+    <li>Modelos Claude/Gemini configurados</li>
+    <li>MCPs conectados a tus DBs/APIs</li>
+    <li>Prompts custom para tu vertical</li>
+    <li>Tu logo, colores y tono</li>
     <li>2 integraciones simples</li>
+    <li>Hosting 24/7 + babysit del agente</li>
   </ul>
-  <div class="setup-disclaimer">${
-    isAnnual
-      ? `✓ Hablamos por WhatsApp antes de cobrar · al pagar plan anual el setup se incluye sin costo · renueva automático al precio anual · cancelaciones no reembolsables.`
-      : `✓ Hablamos por WhatsApp antes de cobrar · si no encajamos, no hay deal · setup no reembolsable una vez iniciado el armado. Setup + primera mensualidad se cobran juntos vía Stripe.`
+  <div class="setup-disclaimer">✓ Hablamos por WhatsApp antes de cobrar · si no encajamos, no hay deal · setup no reembolsable una vez iniciado el armado. Setup + primera mensualidad se cobran juntos vía Stripe.</div>
+</div>
+
+<div class="section-title">Plan de créditos · ${escapeHtml(plan.name)}</div>
+<div class="cap-row" style="border-bottom:none;padding-bottom:4px;">
+  <div class="cap-info">
+    <div class="cap-name">${escapeHtml(plan.name)} <span class="cap-vendor">(${plan.aiGenerationsPerMonth ?? "∞"} créditos/mes)</span></div>
+    <div class="cap-incl">${plan.features.slice(0, 4).map((f) => escapeHtml(f)).join(" · ")}</div>
+  </div>
+  <div class="cap-price">${
+    planMonthly === 0
+      ? "Gratis"
+      : isAnnual
+        ? `${formatMxn(planAnnualTotal)}/año`
+        : `${formatMxn(planMonthly)}/mes`
   }</div>
-</div>
-
-<div class="section-title">Mensualidad recurrente</div>
-${orchRow}
-${capRows}
-
-<div class="total-row">
-  <div class="label">Total mensual (lista)</div>
-  <div class="amount-original">${formatMxn(quote.monthlyTotalMxn)} MXN</div>
-</div>
-<div class="total-final-row">
-  <div class="label">${isAnnual ? "Mensualidad equivalente" : "Total mensual con tu descuento"}</div>
-  <div class="amount">${formatMxn(discountedMonthly)} MXN/mes</div>
 </div>
 ${
   isAnnual
-    ? `<div class="total-final-row" style="margin-top:8px;padding-top:10px;border-top:2px dashed rgba(0,0,0,0.2);">
-  <div class="label">Total a pagar AHORA (12 meses)</div>
-  <div class="amount">${formatMxn(annualPlan.totalAnnualMxn)} MXN</div>
-</div>
-<div class="savings" style="color:#ECD66E;background:#000;padding:6px 10px;border-radius:6px;display:inline-block;">★ Setup gratis: ahorras ${formatMxn(annualPlan.setupSavingsMxn)} MXN al pagar anual</div>
-<div class="disclaimer">Precios en MXN, no incluyen IVA. Plan anual: 12 meses pagados upfront, renueva automático al precio anual. Cancelaciones no reembolsables. Caps de uso visibles por capability — el exceso se factura aparte.</div>`
-    : `<div class="savings">Ahorras ${formatMxn(monthlySaving)} MXN cada mes al presentar esta cotización · ${QUOTE_DISCOUNT_PCT}% off permanente en mensualidad</div>
-<div class="disclaimer">Precios en MXN, no incluyen IVA. Mensualidad recurrente, cancela cuando quieras (el setup nunca se reembolsa). Caps de uso visibles por capability — el exceso se factura aparte.</div>`
+    ? `<div class="disclaimer" style="margin-top:4px;">≈ ${formatMxn(Math.round(planAnnualTotal / 12))}/mes pagado anualmente · ${ANNUAL_DISCOUNT_PCT}% off vs mensual.</div>`
+    : ""
 }
+<div class="disclaimer" style="margin-bottom:14px;">1 crédito = 1 documento profesional · 6 cr = 1 reel avatar · 8 cr = 1 min voz clonada. Recargas desde $39 MXN — packs sin caducidad.</div>
+
+<div class="section-title">Lo que tu agente hace · incluido en el setup</div>
+${capRows}
 
 ${customSection}
-
-<div class="commitment-block">
-  <div class="commitment-tag">✦ Quiénes te van a atender</div>
-  <div class="commitment-text">Dos hackers. Cero juniors. Cero call center. Cero tickets. Como <strong>Invincible y Eve</strong>: dos personas, criterio absoluto, cero burocracia. <strong>Si te tomamos, queda funcionando.</strong></div>
-</div>
-
-<div class="discount-banner">
-  <div class="discount-tag">★ Descuento permanente ★</div>
-  <div class="discount-headline">Presenta esta cotización para recibir 20% OFF PERMANENTE en mensualidad</div>
-  <div class="discount-subline">Aplicable al contratar · Folio ${folio} · El descuento no aplica al setup único</div>
-</div>
 
 <div class="footer">
   <div class="url">www.easybits.cloud / cuanto-cuesta-mi-agente</div>

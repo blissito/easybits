@@ -3,6 +3,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { cn } from "~/utils/cn";
 import type { Capability } from "~/lib/quiz/capabilities";
 import { DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
+import { formatMxn } from "~/lib/quiz/pricing";
 import { ILLUSTRATION_BY_ID } from "~/components/quiz/illustrations/CapabilityIllustrations";
 import { playYes, playNo } from "~/lib/quiz/sounds";
 
@@ -65,13 +66,15 @@ export const CapabilityCard = ({
         <h2 className="text-2xl md:text-3xl font-black text-black mb-3 leading-tight">
           {capability.question}
         </h2>
-        <p className="text-base md:text-lg text-black/80 mb-2">
+        <p className="text-base md:text-lg text-black/80 mb-2 whitespace-pre-line">
           {capability.description}
         </p>
         <p className="text-sm font-mono text-black/55">
           {hasTiers
             ? "Elige el nivel — armado en el setup"
-            : "Armado en el setup, sin costo mensual extra"}
+            : capability.basePriceMxn === 0
+              ? "Incluido en el setup, sin costo extra"
+              : `+${formatMxn(capability.basePriceMxn)} al setup único · sin mensualidad extra`}
         </p>
       </motion.div>
 

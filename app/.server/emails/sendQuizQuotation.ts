@@ -66,7 +66,7 @@ const buildQuotationEmailHtml = (
           : `<div style="background:#000;color:#FFF;border-radius:10px;padding:16px;margin:16px 0;">
         <p style="font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#ECD66E;font-weight:900;margin:0 0 6px;">Setup único · pago una sola vez</p>
         <p style="font-family:monospace;font-size:24px;font-weight:900;margin:0 0 4px;">${formatMxn(quote.setupOneTimeMxn)} MXN</p>
-        <p style="font-size:11px;color:rgba(255,255,255,0.6);margin:0;">Incluye 30 días pair WA con dos seniors · setup técnico + MCPs + tu marca · 2 integraciones simples</p>
+        <p style="font-size:11px;color:rgba(255,255,255,0.6);margin:0;">Incluye 30 días de acompañamiento por WhatsApp con dos expertos en robots · setup técnico + MCPs + tu marca · 2 integraciones simples</p>
       </div>
 
       <div style="background:#ECD66E;border:2px solid #000;border-radius:10px;padding:14px;margin:0 0 16px;">

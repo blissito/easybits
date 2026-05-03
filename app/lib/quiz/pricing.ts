@@ -69,6 +69,9 @@ export const computeQuote = (
   const breakdown: QuoteLine[] = [];
 
   for (const cap of CAPABILITIES) {
+    // Caps marcadas comingSoon NO entran al breakdown ni suman al setup,
+    // aunque alguien las haya forzado vía URL hydration o estado legacy.
+    if (cap.comingSoon) continue;
     const tierId = selections.get(cap.id);
     if (!tierId) continue;
 
@@ -173,10 +176,32 @@ export const formatUsd = (amount: number): string =>
     maximumFractionDigits: 0,
   }).format(amount);
 
-// Setup único FIJO. El cotizador ya no lo escala por número de capacidades:
-// todos los clientes pagan el mismo setup base. Las capacidades se reflejan
-// en el plan de créditos (Byte/Mega/Tera) y recargas, no en el setup.
-export const SETUP_FLAT_MXN = 59000;
+// Setup base — piso del setup. Cubre infraestructura, branding, prompts,
+// MCPs base, hosting 24/7, babysit del agente y los 30 días de acompañamiento por WhatsApp.
+// Cada capability seleccionada suma su `basePriceMxn` one-time encima.
+// Custom integrations bumpea otros +$10K. El total es dinámico — recalcula
+// en vivo cuando el usuario agrega o quita caps en el summary.
+export const SETUP_BASE_MXN = 39000;
+
+// Alias retro-compat — algunos callers (whatsapp message, metadata) siguen
+// importando este nombre. Apunta al nuevo base. Si quieres el setup
+// efectivo (con caps + integraciones), usa `computeSetupEffective`.
+export const SETUP_FLAT_MXN = SETUP_BASE_MXN;
+
+// Bump al setup cuando el cliente trae integraciones custom (CRM/ERP/sistemas
+// internos). Es un cargo único que se suma al setup base + caps.
+export const CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN = 10000;
+
+// Setup efectivo = base + suma de capabilities seleccionadas + bump opcional
+// por integraciones. Pasa `quote.capsTotalMxn` para incluir el costo de las
+// caps. Si llamas con 0 obtienes el piso ($39K, sin integraciones).
+export const computeSetupEffective = (
+  capsTotalMxn: number,
+  hasCustomIntegrations: boolean
+): number =>
+  SETUP_BASE_MXN +
+  capsTotalMxn +
+  (hasCustomIntegrations ? CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN : 0);
 
 // Babysit opcional: humano que vigila el agente, ajusta prompts, da soporte.
 // Se cobra como add-on mensual al plan de créditos elegido. Reutiliza la

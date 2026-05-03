@@ -7,9 +7,11 @@ import {
   BABYSIT_MONTHLY_MXN,
   computeAnnualFromMonthly,
   computeQuote,
+  computeSetupEffective,
+  CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN,
   parseSelections,
   serializeSelections,
-  SETUP_FLAT_MXN,
+  SETUP_BASE_MXN,
 } from "~/lib/quiz/pricing";
 import { PLANS, type PlanKey } from "~/lib/plans";
 
@@ -84,13 +86,17 @@ export const action = async ({ request }: Route.ActionArgs) => {
     .concat(hasCustomIntegrations ? ["Integraciones custom*"] : [])
     .join(" + ");
 
+  const setupEffectiveMxn = computeSetupEffective(
+    quote.capsTotalMxn,
+    hasCustomIntegrations
+  );
   const setupName = "Setup único — armado del agente";
-  const setupDescription = `Pago una sola vez. Setup técnico + personalización total: configuración del agente, MCPs conectados, 2 integraciones simples, hosting; tu marca, prompts custom para tu vertical, capacidades armadas (${itemsLabel || "ninguna"}), 30 días pair WA y onboarding con tu equipo.${hasCustomIntegrations ? " Integraciones complejas se cotizan en discovery sin costo extra." : ""}`;
+  const setupDescription = `Pago una sola vez. Setup técnico + personalización total: configuración del agente, MCPs conectados, 2 integraciones simples, hosting; tu marca, prompts custom para tu vertical, capacidades armadas (${itemsLabel || "ninguna"}), 30 días de acompañamiento por WhatsApp y onboarding con tu equipo.${hasCustomIntegrations ? ` Incluye integraciones custom (+${CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN.toLocaleString("es-MX")} MXN al setup).` : ""}`;
 
   // Line items:
-  // - Setup: siempre, one-time, $59K flat
+  // - Setup: siempre, one-time. Sube +$10K si trae integraciones custom.
   // - Plan: si Mega/Tera, recurring (mensual o anual con descuento natural)
-  // - Babysit: si opt-in, recurring mensual
+  // - Babysit: ya no se cobra aparte — viene incluido con el setup.
   const lineItems: Array<{
     price_data: {
       currency: "mxn";
@@ -104,7 +110,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       price_data: {
         currency: "mxn",
         product_data: { name: setupName, description: setupDescription },
-        unit_amount: SETUP_FLAT_MXN * 100,
+        unit_amount: setupEffectiveMxn * 100,
       },
       quantity: 1,
     },
@@ -144,24 +150,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
   }
 
-  if (babysit) {
-    lineItems.push({
-      price_data: {
-        currency: "mxn",
-        recurring: { interval: "month" },
-        product_data: {
-          name: "Babysit del agente",
-          description:
-            "Humano que vigila el agente, ajusta prompts y te responde por WhatsApp. Soporte real, no chatbot.",
-        },
-        unit_amount: BABYSIT_MONTHLY_MXN * 100,
-      },
-      quantity: 1,
-    });
-  }
+  // Babysit ya no se cobra: viene incluido con el setup. La constante
+  // BABYSIT_MONTHLY_MXN sigue importada para retrocompatibilidad de metadata
+  // pero no se agrega como line item.
 
-  // Mode: subscription si hay algo recurring (plan no-Byte o babysit). Si solo
-  // hay setup (Byte sin babysit) → mode payment one-time.
+  // Mode: subscription si hay algo recurring (plan no-Byte). Si solo hay
+  // setup (Byte sin plan recurring) → mode payment one-time.
   const hasRecurring = lineItems.some((li) => li.price_data.recurring);
   const mode = hasRecurring ? "subscription" : "payment";
 
@@ -174,7 +168,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
         plan: planKey,
         plan_billing: planBilling,
         babysit: babysit ? "yes" : "no",
-        setup_mxn: String(SETUP_FLAT_MXN),
+        setup_mxn: String(setupEffectiveMxn),
+        setup_base_mxn: String(SETUP_BASE_MXN),
+        setup_caps_mxn: String(quote.capsTotalMxn),
+        custom_integrations_setup_bump_mxn: hasCustomIntegrations
+          ? String(CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN)
+          : "0",
         plan_charged_mxn: String(planChargedMxn),
         babysit_mxn: babysit ? String(BABYSIT_MONTHLY_MXN) : "0",
         selections: serializeSelections(selectionsMap),

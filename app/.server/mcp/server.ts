@@ -3626,6 +3626,7 @@ function registerVideoTools(server: McpServer) {
     })
   );
 
+  server.tool(
     "avatar_video_create",
     "TALKING HEAD video generator. Powered by fal.ai (SadTalker / Hallo2 / LivePortrait — OSS models, pay-per-use). Takes a portrait image + audio and returns an mp4 with the face mouthing the words in sync with the audio.\n\nALIASES (this is the right tool when the user asks for any of these): talking head, talking-head, talking head video, lip-sync video, portrait animation, animated avatar, AI avatar, face animation, video con avatar, video con cara hablando, avatar que habla, video lip sync, foto que habla. There is NO separate fal MCP — fal.ai is the underlying provider for this tool.\n\nHow to use:\n- Required: `imageUrl` (HTTPS URL of a clear face portrait, ideally clean background) AND `audioUrl` (pre-recorded mp3/wav with the voice/speech).\n- For TTS, generate audio FIRST with `voice_tts_create` and pass the resulting URL here. This tool only animates the face — it does NOT synthesize speech.\n- Output is vertical (9:16) by default — ideal for reels/shorts. Pass `ratio: '16:9'` for landscape or `'1:1'` for square posts.\n- Cost: 0.2 créditos per second. 30s reel = 6 créditos. Max 60s.\n- Returns `fileId` — pass to `get_file` for the playable URL.\n\nUse for: influencer talking-head content, corporate explainers, personalized greetings, course lessons, ads con persona hablando. Do NOT use for purely visual scenes without a face (use `video_create` instead).",
     {

@@ -38,6 +38,10 @@ export type Capability = {
   cap?: CapabilityCap;
   // 2 tiers (Básico / Pro). Cuando existe, el card pregunta tier en vez de yes/no.
   tiers?: Tier[];
+  // Roadmap: la capability se muestra como "próximamente" en la pill list
+  // del summary pero NO aparece como paso del stepper, NO se puede seleccionar
+  // y NO suma al setup. Sirve como signaling de roadmap al usuario.
+  comingSoon?: boolean;
 };
 
 // Setup único — escala según cuántas capacidades selecciona el cliente.
@@ -81,7 +85,7 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "whatsapp",
     label: "Vive en WhatsApp",
-    shortLabel: "WhatsApp",
+    shortLabel: "Atiende por WhatsApp",
     emoji: "💬",
     question: "¿Tu agente atiende clientes por WhatsApp?",
     description:
@@ -99,11 +103,11 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "memory",
     label: "Memoria + Storage",
-    shortLabel: "Memoria",
+    shortLabel: "Recuerda y guarda",
     emoji: "🧠",
-    question: "¿Quieres que el agente recuerde y guarde todo?",
+    question: "Tu agente recuerda todo y guarda lo que necesites en su propia nube.",
     description:
-      "Base sin la cual nada funciona. DB persistente + storage S3 para conversaciones, PDFs, fotos, contratos. Incluido cuando armamos tu agente, sin costo extra.",
+      "Base sin la cual nada funciona. DB persistente + storage S3 para conversaciones, PDFs, fotos, contratos.",
     vendor: "EasyBits",
     basePriceMxn: 0,
     bgClass: "bg-brand-pink",
@@ -117,11 +121,11 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "quotes",
     label: "Cotizaciones automáticas",
-    shortLabel: "Cotizaciones",
+    shortLabel: "Cotiza",
     emoji: "🧾",
-    question: "¿Quieres que el agente cotice a tus clientes en automático?",
+    question: "¿Quieres que el agente genere cotizaciones PDF desde tu Catálogo?",
     description:
-      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento al cliente hasta que responde.",
+      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento; incluyen link cliqueable de pago.",
     vendor: "EasyBits",
     basePriceMxn: 2800,
     bgClass: "bg-rose",
@@ -135,35 +139,35 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "payments",
     label: "Cobro con Mercado Pago",
-    shortLabel: "Cobro",
+    shortLabel: "Cobra",
     emoji: "💳",
-    question: "¿Quieres cobrar a tus clientes en línea con Mercado Pago?",
+    question: "¿Quieres que el agente genere links de pago con Mercado Pago?",
     description:
-      "El agente genera link de pago de Mercado Pago. Tu cliente paga con tarjeta, OXXO, transferencia o saldo MP. Tú recibes el dinero sin perseguir cobros.",
+      "El agente genera links instantáneos con precios exactos. Tu cliente paga con tarjeta, OXXO, transferencia o saldo MP. Tú recibes el dinero sin perseguir cobros.",
     vendor: "Mercado Pago",
     basePriceMxn: 1800,
     bgClass: "bg-lime",
     isAddon: false,
     includes: [
-      "Link de pago Mercado Pago generado por el agente",
+      "Link de pago y código QR generados por el agente",
       "Cobra con tarjeta, OXXO, SPEI o saldo MP",
       "Notificación automática cuando el cliente paga",
     ],
   },
   {
     id: "documents",
-    label: "Documentos PDF",
-    shortLabel: "Documentos",
+    label: "Documentos (PDF, DOCX, XLSX)",
+    shortLabel: "Genera PDF, DOCX y XLSX",
     emoji: "📄",
-    question: "¿Tu agente genera documentos PDF (contratos, fichas, materiales)?",
+    question: "¿Tu agente genera documentos en PDF, Word y Excel?",
     description:
-      "Contratos, fichas técnicas, propuestas, manuales — generados por el agente con tu branding.",
+      "Contratos, fichas técnicas, propuestas, manuales, reportes en hojas de cálculo — generados por el agente con tu branding y listos para mandar.",
     vendor: "EasyBits",
     basePriceMxn: 1400,
     bgClass: "bg-linen",
     isAddon: false,
     includes: [
-      "Plantillas PDF con tu branding",
+      "Plantillas PDF, DOCX y XLSX con tu branding",
       "Generación bajo demanda por el agente",
       "Versionado y archivo automático",
     ],
@@ -171,7 +175,7 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "slackteams",
     label: "Slack o Teams (canal interno)",
-    shortLabel: "Slack/Teams",
+    shortLabel: "Atiende en Slack/Teams",
     emoji: "👥",
     question: "¿Tu equipo usa Slack o Teams y quiere preguntarle al agente ahí?",
     description:
@@ -190,7 +194,7 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "gworkspace",
     label: "Google Workspace",
-    shortLabel: "Workspace",
+    shortLabel: "Usa Google Workspace",
     emoji: "📧",
     question: "¿Quieres que el agente trabaje con tu Google Workspace?",
     description:
@@ -206,28 +210,9 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
-    id: "canva",
-    label: "Canva Enterprise (diseño con tu brand kit)",
-    shortLabel: "Canva Enterprise",
-    emoji: "🪄",
-    question: "¿Quieres que el agente diseñe en Canva Enterprise con tus templates?",
-    description:
-      "Requiere plan Canva Enterprise (corporativo, no Free/Pro/Teams) — es el único que expone Autofill y Brand Templates por API. El agente entra a tu cuenta, usa tus templates y brand kit, arma posts, presentaciones y materiales — y exporta listo para mandar.",
-    vendor: "Canva",
-    basePriceMxn: 1500,
-    bgClass: "bg-rose",
-    isAddon: false,
-    includes: [
-      "Requiere plan Canva Enterprise (no funciona con Free/Pro/Teams)",
-      "Conexión OAuth con tu cuenta de Canva Enterprise",
-      "Usa tus templates y brand kit existentes",
-      "Genera posts y presentaciones, exporta a PDF/PNG",
-    ],
-  },
-  {
     id: "figma",
     label: "Figma (handoff y assets)",
-    shortLabel: "Figma",
+    shortLabel: "Lee tus archivos de Figma",
     emoji: "🧩",
     question: "¿Tu agente trabaja con archivos de Figma de tu equipo?",
     description:
@@ -245,12 +230,12 @@ export const CAPABILITIES: Capability[] = [
   {
     id: "removebg",
     label: "Quitar fondo de imágenes",
-    shortLabel: "Remove BG",
+    shortLabel: "Quita el fondo a fotos",
     emoji: "✂️",
     question: "¿Tu agente quita el fondo de fotos de producto, retratos o assets?",
     description:
-      "Procesa imágenes y devuelve PNG transparente listo para catálogo, ecommerce o composición. Corre local en EasyBits (modelo open-source u2net), sin API de terceros ni límite por imagen.",
-    vendor: "EasyBits / u2net",
+      "Procesa imágenes y devuelve PNG transparente listo para catálogo, ecommerce o composición.",
+    vendor: "Modelo IA de Easybits",
     basePriceMxn: 1500,
     bgClass: "bg-linen",
     isAddon: false,
@@ -261,31 +246,13 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
-    id: "site",
-    label: "Landings ilimitadas",
-    shortLabel: "Landings",
-    emoji: "🌐",
-    question: "¿Quieres publicar landings y sitios sin límite?",
-    description:
-      "No te damos una landing — te damos miles. Una por campaña, producto, cliente o evento. Con formularios que capturan leads en automático. Incluido cuando armamos tu agente, sin costo extra.",
-    vendor: "EasyBits",
-    basePriceMxn: 0,
-    bgClass: "bg-brand-yellow",
-    isAddon: false,
-    includes: [
-      "Miles de landings con dominio propio",
-      "Formularios + captura de leads automática",
-      "Editor visual + SSL + el agente las arma y publica",
-    ],
-  },
-  {
     id: "domain",
     label: "Tu propio dominio",
-    shortLabel: "Dominio",
+    shortLabel: "Usa tu dominio",
     emoji: "🌍",
     question: "¿Vas a usar tu propio dominio (negocio.com)?",
     description:
-      "Conectamos tus landings y portales al dominio que ya tienes. SSL automático, configuración DNS guiada, branding consistente.",
+      "Conectamos tus landings, páginas y dashboards al dominio que ya tienes. SSL automático, configuración DNS guiada, branding consistente.",
     vendor: "EasyBits",
     basePriceMxn: 400,
     bgClass: "bg-maya",
@@ -297,9 +264,27 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "site",
+    label: "Páginas Web",
+    shortLabel: "Codea páginas web",
+    emoji: "🌐",
+    question: "Tu agente codea y publica páginas web en tu propio dominio.",
+    description:
+      "No te damos una landing — te damos miles. Una por campaña, producto, cliente o evento. Con formularios que capturan leads en automático.\n\nPublica dashboards instantáneos y compártelos con tus clientes.",
+    vendor: "EasyBits",
+    basePriceMxn: 0,
+    bgClass: "bg-brand-yellow",
+    isAddon: false,
+    includes: [
+      "Miles de landings con dominio propio",
+      "Formularios + captura de leads automática",
+      "Editor visual + SSL + el agente las arma y publica",
+    ],
+  },
+  {
     id: "webchat",
     label: "Web chat en tu sitio",
-    shortLabel: "Web chat",
+    shortLabel: "Vive en tu sitio web",
     emoji: "💻",
     question: "¿Quieres un chat embebido en tu sitio para visitantes?",
     description:
@@ -318,25 +303,111 @@ export const CAPABILITIES: Capability[] = [
   // cotizador. Se mueven al modelo de créditos: video.fal.avatar y
   // research.brightdata.{scrape,search} en app/.server/services/registry.ts.
   // Consumibles via packs o créditos del plan mensual.
+  //
+  // Babysit del agente NO es una capability. Viene incluido en cualquier
+  // setup pagado — no es opcional, no se cotiza aparte. La constante
+  // BABYSIT_MONTHLY_MXN en pricing.ts queda como referencia interna pero ya
+  // no se cobra al cliente.
+
+  // ──────────────────────────────────────────────────────────────────
+  // PRÓXIMAMENTE — caps que aparecen en la lista "+ Agregar más" como
+  // signaling de roadmap. NO seleccionables, NO entran al stepper, NO
+  // suman al setup. Cuando estén listas, basta quitarles `comingSoon`.
+  // ──────────────────────────────────────────────────────────────────
   {
-    id: "babysit",
-    label: "Babysit del agente",
-    shortLabel: "Babysit",
-    emoji: "🛟",
-    question: "¿Quieres que un humano vigile tu agente y ajuste prompts cuando algo no jale?",
+    id: "voicecall",
+    label: "Llamadas de voz",
+    shortLabel: "Llama por voz",
+    emoji: "📞",
+    question: "¿Tu agente hace llamadas de voz salientes?",
     description:
-      "Soporte real, no chatbot. Un humano monitorea al agente, retoca prompts cuando detecta drift y te responde por WhatsApp. Mensual, opcional, cancelable.",
-    vendor: "EasyBits",
-    // Mantener en sync con BABYSIT_MONTHLY_MXN en pricing.ts. Existe duplicado
-    // porque pricing.ts importa de capabilities.ts (no podemos invertir el flow).
-    basePriceMxn: 3000,
-    bgClass: "bg-brand-yellow",
-    isAddon: true,
+      "El agente llama a tus clientes con voz clonada (Twilio + ElevenLabs). Ideal para confirmaciones, recordatorios y outbound calificado.",
+    vendor: "Twilio · ElevenLabs",
+    basePriceMxn: 0,
+    bgClass: "bg-rose",
+    isAddon: false,
     includes: [
-      "Humano vigilando el agente en horario hábil",
-      "Ajustes de prompts cuando el agente se desvía",
-      "Soporte por WhatsApp directo, sin tickets",
+      "Llamadas salientes con voz clonada",
+      "Confirmaciones, recordatorios, follow-ups",
+      "Logs y transcripciones automáticas",
     ],
+    comingSoon: true,
+  },
+  {
+    id: "videocall",
+    label: "Videollamadas con avatar",
+    shortLabel: "Videollama con avatar",
+    emoji: "🎥",
+    question: "¿Tu agente atiende videollamadas con avatar realista?",
+    description:
+      "El agente entra a videollamadas con un avatar foto-realista que habla con tu voz clonada. Atiende leads, demos o entrevistas mientras tú haces otra cosa.",
+    vendor: "HeyGen · Synthesia",
+    basePriceMxn: 0,
+    bgClass: "bg-rose",
+    isAddon: false,
+    includes: [
+      "Avatar realista con tu voz clonada",
+      "Demos, entrevistas y onboarding 24/7",
+      "Grabación + transcripción automática",
+    ],
+    comingSoon: true,
+  },
+  {
+    id: "computeruse",
+    label: "Operador de pantalla",
+    shortLabel: "Opera tu compu",
+    emoji: "🖥️",
+    question: "¿Tu agente opera apps directamente desde una pantalla, sin API?",
+    description:
+      "Cuando una herramienta no tiene API, el agente la usa como humano: ve la pantalla, mueve el mouse y teclea. Funciona en cualquier app web o de escritorio (sistemas legacy, ERPs viejos, panels internos).",
+    vendor: "Claude Computer Use",
+    basePriceMxn: 0,
+    bgClass: "bg-maya",
+    isAddon: false,
+    includes: [
+      "Opera apps sin API por visión + mouse/teclado",
+      "Sirve para sistemas legacy, ERPs viejos, panels internos",
+      "Logs y screenshots de cada acción",
+    ],
+    comingSoon: true,
+  },
+  {
+    id: "designs",
+    label: "Presentaciones + diseños (sin Canva)",
+    shortLabel: "Diseña con AI",
+    emoji: "🎨",
+    question: "¿Tu agente arma presentaciones y posts con tu brand kit?",
+    description:
+      "Sustituye a Canva: el agente genera presentaciones, posts y materiales con tu marca usando créditos. Sin templates rígidos, sin licencias Enterprise, sin OAuth — todo dentro de Easybits.",
+    vendor: "Easybits",
+    basePriceMxn: 0,
+    bgClass: "bg-brand-yellow",
+    isAddon: false,
+    includes: [
+      "Presentaciones, posts y carruseles con tu brand kit",
+      "Cobra en créditos del plan — sin renta extra",
+      "Edita y exporta a PDF/PNG/PPTX",
+    ],
+    comingSoon: true,
+  },
+  {
+    id: "blender",
+    label: "Blender (3D y video)",
+    shortLabel: "Renderiza 3D",
+    emoji: "🎬",
+    question: "¿Tu agente arma escenas 3D y renders en Blender?",
+    description:
+      "El agente compone, anima y renderiza escenas 3D para producto, ads o explainers — sin que tú toques Blender.",
+    vendor: "Blender · Easybits",
+    basePriceMxn: 0,
+    bgClass: "bg-brand-pink",
+    isAddon: false,
+    includes: [
+      "Composición y animación de escenas",
+      "Renders MP4/PNG de producto",
+      "Pipeline orquestado por el agente",
+    ],
+    comingSoon: true,
   },
 ];
 

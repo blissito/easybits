@@ -1,57 +1,75 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
+import { BrutalButton } from "~/components/common/BrutalButton";
 import type { Quote } from "~/lib/quiz/pricing";
 import {
   ANNUAL_DISCOUNT_PCT,
   computeAnnualFromMonthly,
+  computeSetupEffective,
+  CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN,
   formatMxn,
-  SETUP_FLAT_MXN,
+  SETUP_BASE_MXN,
 } from "~/lib/quiz/pricing";
 import type { Capability } from "~/lib/quiz/capabilities";
 import { GENERATION_PACKS, PLANS, type PlanKey } from "~/lib/plans";
+
+// Precio del pack más barato (cualquier plan) — para mostrar "desde $X" en la
+// card de recargas sin tener que pasar prop adicional.
+const CHEAPEST_PACK_MXN = Math.min(
+  ...GENERATION_PACKS.map((p) => Math.min(...Object.values(p.prices)))
+);
+const PACK_MIN_CR = Math.min(...GENERATION_PACKS.map((p) => p.generations));
+const PACK_MAX_CR = Math.max(...GENERATION_PACKS.map((p) => p.generations));
+
+// Color de fondo por plan en la card del summary. Cada plan tiene su
+// identidad visual: Byte azul (gratis/arranque), Mega amarillo (sweet spot),
+// Tera rosa (premium). NOTA: el fondo de la página es brand-grass, por eso
+// Byte no usa ese tono — quedaría camuflado.
+const PLAN_BG: Record<PlanKey, string> = {
+  Byte: "bg-linen",
+  Mega: "bg-brand-yellow",
+  Tera: "bg-brand-pink",
+};
+
+// Icono SVG por plan — los mismos que se usan en /planes (Pricing.tsx) para
+// consistencia visual entre cotizador y página pública de planes.
+const PLAN_ICON: Record<PlanKey, string> = {
+  Byte: "/home/foco.svg",
+  Mega: "/home/rocket.svg",
+  Tera: "/home/coder.svg",
+};
 
 export type PlanBilling = "monthly" | "annual";
 
 type PriceSummaryProps = {
   quote: Quote;
   selectedPlan: PlanKey;
-  onSelectPlan: (plan: PlanKey) => void;
   planBilling: PlanBilling;
   onPlanBillingChange: (mode: PlanBilling) => void;
-  customIntegrationsDescription?: string;
-  onDownloadPdf?: () => void;
-  isDownloadingPdf?: boolean;
-  disableDownload?: boolean;
+  // Trigger para volver al paso del plan en el stepper.
+  onChangePlan?: () => void;
+  // CTA de pago — se rendea dentro de la plan card. Si no se pasa, no se
+  // muestra el botón (la página externa puede tener su propio CTA).
+  onCheckout?: () => void;
+  isCheckoutLoading?: boolean;
+  isCheckoutDisabled?: boolean;
   availableToAdd?: Capability[];
   onAddCapability?: (capId: string) => void;
   onRemoveCapability?: (capId: string) => void;
-  onRemoveCustomIntegrations?: () => void;
-  siteAnalysisCaptured?: boolean;
-};
-
-const PLAN_ORDER: PlanKey[] = ["Byte", "Mega", "Tera"];
-
-const PLAN_BLURB: Record<PlanKey, string> = {
-  Byte: "Para probar el agente",
-  Mega: "Para uso profesional regular",
-  Tera: "Para alto volumen y equipos",
 };
 
 export const PriceSummary = ({
   quote,
   selectedPlan,
-  onSelectPlan,
   planBilling,
   onPlanBillingChange,
-  customIntegrationsDescription,
-  onDownloadPdf,
-  isDownloadingPdf = false,
-  disableDownload = false,
+  onChangePlan,
+  onCheckout,
+  isCheckoutLoading = false,
+  isCheckoutDisabled = false,
   availableToAdd = [],
   onAddCapability,
   onRemoveCapability,
-  onRemoveCustomIntegrations,
-  siteAnalysisCaptured = false,
 }: PriceSummaryProps) => {
   const reduced = useReducedMotion();
   const removable = !!onRemoveCapability;
@@ -61,6 +79,7 @@ export const PriceSummary = ({
     planSupportsAnnual && planBilling === "annual" ? "annual" : "monthly";
 
   const [isCapsOpen, setIsCapsOpen] = useState(quote.selectionsCount <= 3);
+  const [isPacksOpen, setIsPacksOpen] = useState(false);
 
   return (
     <div className="w-full max-w-xl mx-auto">
@@ -71,226 +90,279 @@ export const PriceSummary = ({
         </p>
       </div>
 
-      {/* Bloque 1 — Setup único FIJO */}
-      <div className="rounded-2xl border-[3px] border-black bg-black text-white p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] mb-5">
-        <p className="text-[10px] uppercase tracking-[0.2em] font-black text-brand-yellow">
-          Setup único · pago una sola vez
-        </p>
-        <p className="text-4xl md:text-5xl font-black tabular-nums leading-tight mt-1">
-          {formatMxn(SETUP_FLAT_MXN)}
-        </p>
-        <p className="text-xs text-white/70 font-mono mt-1">
-          MXN · setup único y personalización
-        </p>
-        <p className="text-[10px] text-brand-yellow font-bold mt-2">
-          ✓ Hablamos por WhatsApp antes de cobrar
-        </p>
+      {/* Bloque 1 — Setup único. Recalcula en vivo: $39K base + suma de las
+          capabilities seleccionadas + $10K si trae integraciones custom.
+          Babysit del agente viene incluido (no es line item aparte). */}
+      {(() => {
+        const setupEff = computeSetupEffective(
+          quote.capsTotalMxn,
+          quote.hasCustomIntegrations
+        );
+        const hasCaps = quote.capsTotalMxn > 0;
+        return (
+          <div className="rounded-2xl border-[3px] border-black bg-black text-white p-5 md:p-6 shadow-[5px_5px_0_0_rgba(0,0,0,1)] mb-5">
+            <p className="text-[10px] uppercase tracking-[0.2em] font-black text-brand-yellow">
+              Setup único · pago una sola vez
+            </p>
+            <p className="text-4xl md:text-5xl font-black tabular-nums leading-tight mt-1">
+              {formatMxn(setupEff)}
+            </p>
+            {(hasCaps || quote.hasCustomIntegrations) && (
+              <p className="text-[11px] font-mono text-white/55 mt-1">
+                {formatMxn(SETUP_BASE_MXN)} base
+                {hasCaps && ` + ${formatMxn(quote.capsTotalMxn)} capacidades`}
+                {quote.hasCustomIntegrations &&
+                  ` + ${formatMxn(CUSTOM_INTEGRATIONS_SETUP_BUMP_MXN)} integraciones custom`}
+              </p>
+            )}
 
-        {/* Acordeones de qué incluye */}
-        <div className="mt-4 space-y-2">
-          <details className="rounded-xl bg-white/5 border border-white/10 p-3 group">
-            <summary className="cursor-pointer text-xs font-bold text-white list-none flex items-center justify-between gap-2">
-              <span>¿Qué incluye el setup técnico?</span>
-              <span className="text-white/50 group-open:rotate-90 transition-transform">
-                ▸
-              </span>
-            </summary>
-            <ul className="mt-2 text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
-              <li>Configuración del agente: modelos (Claude/Gemini), prompts base y guardrails</li>
-              <li>MCPs conectados — acceso a tus DBs, archivos, APIs y herramientas</li>
-              <li>2 integraciones simples (CRM, forms, webhooks tipo HubSpot/Mercado Libre)</li>
-              <li>Hosting + infraestructura — corre 24/7, escala solo</li>
-            </ul>
-          </details>
-          <details className="rounded-xl bg-white/5 border border-white/10 p-3 group">
-            <summary className="cursor-pointer text-xs font-bold text-white list-none flex items-center justify-between gap-2">
-              <span>¿Qué incluye la personalización?</span>
-              <span className="text-white/50 group-open:rotate-90 transition-transform">
-                ▸
-              </span>
-            </summary>
-            <ul className="mt-2 text-xs text-white/80 space-y-1 list-disc list-inside leading-relaxed">
-              <li>Tu marca: logo, colores, voz, tono — el agente habla como tú</li>
-              <li>Prompts custom para tu vertical y casos de uso del quiz</li>
-              <li>Capacidades armadas: las que seleccionaste quedan listas para usar</li>
-              <li>30 días pair WhatsApp con dos seniors — ajustes ilimitados durante el arranque</li>
-              <li>Onboarding con tu equipo (1-2 sesiones de handoff)</li>
-            </ul>
-          </details>
-        </div>
-      </div>
+            <p className="text-base md:text-lg font-black text-white mt-4 leading-snug">
+              Tu agente nace con tu marca, tu voz y tu manera.
+            </p>
+            <p className="text-sm text-white/75 mt-2 leading-relaxed">
+              Dos expertos en robots lo arman pieza por pieza: modelo, prompts, MCPs,
+              integraciones y branding. Babysit del agente, 30 días acompañándote por
+              WhatsApp y onboarding con tu equipo — todo incluido. Cuando
+              arranca, ya queda funcionando y listo para producción.
+            </p>
 
-      {/* Bloque 2 — Plan de créditos */}
-      <div className="rounded-2xl border-[3px] border-black bg-yellow-100 shadow-[4px_4px_0_0_rgba(0,0,0,1)] p-5 mb-5">
-        <div className="flex items-baseline justify-between gap-3 mb-1">
-          <p className="text-sm font-black text-black uppercase tracking-widest">
-            🪙 Plan de créditos
-          </p>
-          <p className="text-[10px] text-black/55 font-mono">
-            cancelas cuando quieras
-          </p>
-        </div>
-        <p className="text-base text-black font-bold mb-3 leading-snug">
-          1 crédito = 1 documento profesional
-        </p>
-        <p className="text-[11px] text-black/60 font-mono mb-4">
-          (6 cr = 1 reel avatar · 8 cr = 1 min voz clonada · 1 cr = 5 páginas scrapeadas)
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-3">
-          {PLAN_ORDER.map((key) => {
-            const plan = PLANS[key];
-            const isSelected = selectedPlan === key;
-            const isAnnualView =
-              isSelected && key !== "Byte" && effectiveBilling === "annual";
-            const annualPrice = computeAnnualFromMonthly(plan.price);
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onSelectPlan(key)}
-                aria-pressed={isSelected}
-                className={`text-left rounded-xl border-[3px] border-black px-3 py-3 transition-all ${
-                  isSelected
-                    ? "bg-white shadow-[3px_3px_0_0_rgba(0,0,0,1)] -translate-x-0.5 -translate-y-0.5"
-                    : "bg-white/50 hover:bg-white/80"
-                }`}
-              >
-                <p className="text-[10px] uppercase tracking-[0.18em] font-black text-black/70">
-                  {plan.name}
-                </p>
-                <p className="text-2xl font-black text-black tabular-nums leading-tight mt-0.5">
-                  {plan.aiGenerationsPerMonth ?? "∞"}{" "}
-                  <span className="text-xs font-mono text-black/55">
-                    cr/mes
-                  </span>
-                </p>
-                <p className="text-[11px] font-mono text-black/65 mt-1">
-                  {plan.price === 0
-                    ? "Gratis"
-                    : isAnnualView
-                      ? `${formatMxn(annualPrice)}/año`
-                      : `${formatMxn(plan.price)}/mes`}
-                </p>
-                <p className="text-[10px] text-black/50 mt-1.5 leading-snug">
-                  {PLAN_BLURB[key]}
-                </p>
-                {isSelected && (
-                  <span className="inline-block mt-2 text-[9px] font-black uppercase tracking-wider bg-black text-white px-1.5 py-0.5 rounded">
-                    ✓ seleccionado
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Switch mensual/anual sólo para Mega y Tera */}
-        {planSupportsAnnual && (
-          <div className="flex items-center gap-2 mb-1">
-            <div className="inline-flex rounded-full border-2 border-black bg-white p-0.5">
-              <button
-                type="button"
-                onClick={() => onPlanBillingChange("monthly")}
-                aria-pressed={effectiveBilling === "monthly"}
-                className={`text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full transition ${
-                  effectiveBilling === "monthly"
-                    ? "bg-black text-white"
-                    : "text-black/60 hover:text-black"
-                }`}
-              >
-                Mensual
-              </button>
-              <button
-                type="button"
-                onClick={() => onPlanBillingChange("annual")}
-                aria-pressed={effectiveBilling === "annual"}
-                className={`text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full transition ${
-                  effectiveBilling === "annual"
-                    ? "bg-black text-white"
-                    : "text-black/60 hover:text-black"
-                }`}
-              >
-                Anual
-              </button>
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-white/60">
+              <span>✓ Modelos Claude/Gemini</span>
+              <span>✓ MCPs conectados</span>
+              <span>✓ Prompts a tu vertical</span>
+              <span>✓ Tu logo, colores, tono</span>
+              <span>✓ 2 integraciones simples</span>
+              <span>✓ Hosting 24/7</span>
             </div>
-            <p className="text-[11px] font-mono text-black/65">
-              Anual: {ANNUAL_DISCOUNT_PCT}% off (≈ 2 meses gratis)
+
+            <p className="text-[11px] text-brand-yellow font-bold mt-4">
+              ✓ Hablamos por WhatsApp antes de cobrar — si no encajamos, no hay deal
             </p>
           </div>
-        )}
-      </div>
+        );
+      })()}
 
-      {/* Bloque 3 — Recargas (packs) inline. Babysit ahora vive en el stepper
-          como una capacidad más, aparece en el breakdown de "Lo que tu agente
-          hace" como cualquier otra. */}
-      <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] p-5 mb-5">
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <p className="text-sm font-black text-black uppercase tracking-widest">
-            ⚡ Recargas — compra créditos extra
-          </p>
-        </div>
-        <p className="text-[11px] text-black/60 mb-3">
-          Si te quedas sin créditos del mes, recarga sin esperar al ciclo. No
-          caducan mientras esté activo tu plan.
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {GENERATION_PACKS.slice(0, 4).map((pack) => {
-            const price = pack.prices[selectedPlan];
-            return (
-              <div
-                key={pack.id}
-                className={`rounded-xl border-2 p-2.5 text-center ${
-                  pack.featured
-                    ? "border-black bg-brand-yellow"
-                    : "border-black/30 bg-white"
-                }`}
-              >
-                <p className="text-[10px] uppercase tracking-wider font-black text-black/70">
-                  {pack.generations} cr
-                </p>
-                <p className="text-lg font-black text-black tabular-nums mt-0.5">
-                  {formatMxn(price)}
-                </p>
-                {pack.featured && (
-                  <p className="text-[9px] font-black uppercase tracking-wider mt-0.5">
-                    ★ popular
+      {/* Bloque 2 — Plan seleccionado. Identidad visual por plan
+          (color), sin emoji, sin números de créditos (esos viven en la card
+          de recargas). Solo precio + billing toggle + cambiar plan. */}
+      {(() => {
+        const plan = PLANS[selectedPlan];
+        const isFree = plan.price === 0;
+        const annualTotal = isFree ? 0 : computeAnnualFromMonthly(plan.price);
+        const showingAnnual =
+          planSupportsAnnual && effectiveBilling === "annual";
+        return (
+          <div className={`rounded-2xl border-[3px] border-black ${PLAN_BG[selectedPlan]} shadow-[4px_4px_0_0_rgba(0,0,0,1)] p-5 mb-5`}>
+            {/* "cambiar plan" como link tiny arriba a la derecha */}
+            {onChangePlan && (
+              <div className="flex justify-end mb-1">
+                <button
+                  type="button"
+                  onClick={onChangePlan}
+                  className="text-[11px] font-mono text-black/55 hover:text-black underline underline-offset-2"
+                >
+                  cambiar plan
+                </button>
+              </div>
+            )}
+
+            {/* Header principal — icono + nombre del plan a la izquierda
+                aprovechando el espacio, precio grande a la derecha. */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <img
+                  src={PLAN_ICON[selectedPlan]}
+                  alt={`Icono plan ${plan.name}`}
+                  className="w-12 h-12 md:w-14 md:h-14 shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-black/55 leading-none">
+                    Tu plan
                   </p>
+                  <p className="text-2xl md:text-3xl font-black text-black uppercase tracking-wide leading-tight mt-1">
+                    {plan.name}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="block text-2xl md:text-3xl font-black text-black tabular-nums leading-tight">
+                  {isFree
+                    ? "Gratis"
+                    : showingAnnual
+                      ? `${formatMxn(annualTotal)}/año`
+                      : `${formatMxn(plan.price)}/mes`}
+                </span>
+                {/* Sub-línea siempre presente cuando el plan es pago — para
+                    que el toggle Mensual/Anual no empuje la card. Mensual la
+                    rendea invisible (reserva espacio); anual la rendea con
+                    el equivalente mensual. */}
+                {!isFree && (
+                  <span
+                    className={`block text-[11px] font-mono mt-0.5 ${
+                      showingAnnual ? "text-black/55" : "invisible"
+                    }`}
+                    aria-hidden={!showingAnnual}
+                  >
+                    ≈ {formatMxn(Math.round(annualTotal / 12))}/mes
+                  </span>
                 )}
               </div>
-            );
-          })}
-        </div>
-
-        {/* Packs temáticos como pills */}
-        {GENERATION_PACKS.length > 4 && (
-          <div className="mt-3">
-            <p className="text-[10px] uppercase tracking-wider font-black text-black/55 mb-1.5">
-              Packs por uso típico
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {GENERATION_PACKS.slice(4).map((pack) => {
-                const price = pack.prices[selectedPlan];
-                return (
-                  <span
-                    key={pack.id}
-                    className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-black/30 bg-white text-black/80"
-                    title={pack.description}
-                  >
-                    <span aria-hidden>{pack.emoji}</span>
-                    <span className="font-bold">{pack.label}</span>
-                    <span className="font-mono text-black/55">
-                      {pack.generations} cr · {formatMxn(price)}
-                    </span>
-                  </span>
-                );
-              })}
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* Bloque 5 — Lo que tu agente hace (capabilities sin precios) */}
+            {/* Toggle Mensual/Anual — solo vista del pago, no cambia plan */}
+            {planSupportsAnnual && (
+              <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-black/10">
+                <p className="text-[10px] font-mono text-black/55 uppercase tracking-wider">
+                  Vista del pago
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex rounded-full border-2 border-black bg-white p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onPlanBillingChange("monthly")}
+                      aria-pressed={effectiveBilling === "monthly"}
+                      className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full transition ${
+                        effectiveBilling === "monthly"
+                          ? "bg-black text-white"
+                          : "text-black/60 hover:text-black"
+                      }`}
+                    >
+                      Mensual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onPlanBillingChange("annual")}
+                      aria-pressed={effectiveBilling === "annual"}
+                      className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full transition ${
+                        effectiveBilling === "annual"
+                          ? "bg-black text-white"
+                          : "text-black/60 hover:text-black"
+                      }`}
+                    >
+                      Anual
+                    </button>
+                  </div>
+                  <p className="text-[10px] font-mono text-black/65">
+                    {ANNUAL_DISCOUNT_PCT}% off
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* CTA primario dentro de la plan card — el momento de
+                commitment está aquí, no abajo. */}
+            {onCheckout && (
+              <div className="mt-4 pt-4 border-t-2 border-black/15">
+                <BrutalButton
+                  onClick={onCheckout}
+                  isLoading={isCheckoutLoading}
+                  isDisabled={isCheckoutDisabled}
+                  containerClassName="w-full"
+                  className="w-full"
+                >
+                  Pagar personalización y arrancar →
+                </BrutalButton>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Bloque 3 — Créditos y recargas libres. Acordeón colapsable que
+          incluye 3 packs temáticos verticalizados como teaser. */}
+      {(() => {
+        const planCredits = PLANS[selectedPlan].aiGenerationsPerMonth;
+        // 3 packs verticalizados que más le hablan al SMB mexicano —
+        // creators, ecommerce, marketing. El "Studio Pro" queda fuera
+        // porque su volumen ($15K) confunde como teaser.
+        const FEATURED_PACK_IDS = [
+          "pack_creator_daily",
+          "pack_ecommerce_catalogo",
+          "pack_research_design",
+        ];
+        const featuredPacks = FEATURED_PACK_IDS.map((id) =>
+          GENERATION_PACKS.find((p) => p.id === id)
+        ).filter((p): p is NonNullable<typeof p> => Boolean(p));
+        return (
+          <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] overflow-hidden mb-5">
+            <button
+              type="button"
+              onClick={() => setIsPacksOpen((v) => !v)}
+              aria-expanded={isPacksOpen}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] transition-colors"
+            >
+              <span aria-hidden className="text-xl">⚡</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-black uppercase tracking-widest leading-tight">
+                  Créditos · recargas libres
+                </p>
+                <p className="text-[11px] text-black/60 mt-0.5 leading-snug">
+                  Tu plan incluye <strong className="text-black">{planCredits ?? "∞"} créditos/mes</strong> y recargas desde {formatMxn(CHEAPEST_PACK_MXN)} MXN · packs de {PACK_MIN_CR}–{PACK_MAX_CR} créditos · sin caducidad.
+                </p>
+              </div>
+              <span
+                className={`text-black/50 text-xl font-black transition-transform shrink-0 ${
+                  isPacksOpen ? "rotate-180" : ""
+                }`}
+                aria-hidden
+              >
+                ▾
+              </span>
+            </button>
+            <AnimatePresence initial={false}>
+              {isPacksOpen && (
+                <motion.div
+                  key="packs-body"
+                  initial={reduced ? false : { height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                  transition={
+                    reduced
+                      ? { duration: 0 }
+                      : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+                  }
+                  className="overflow-hidden"
+                >
+                  <div className="px-4 pb-4 pt-1 border-t border-black/10">
+                    <p className="text-[10px] uppercase tracking-wider font-black text-black/55 mb-2 mt-2">
+                      Packs por uso típico
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      {featuredPacks.map((pack) => {
+                        const price = pack.prices[selectedPlan];
+                        return (
+                          <div
+                            key={pack.id}
+                            className="rounded-xl border-2 border-black bg-white p-3 shadow-[2px_2px_0_0_rgba(0,0,0,1)] flex flex-col gap-1"
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-base" aria-hidden>{pack.emoji}</span>
+                              <span className="text-[10px] font-mono font-black text-black/55 uppercase tracking-wider">
+                                {pack.generations} cr
+                              </span>
+                            </div>
+                            <p className="text-sm font-black text-black leading-tight">
+                              {pack.label}
+                            </p>
+                            <p className="text-[10px] text-black/55 leading-snug line-clamp-2">
+                              {pack.audience}
+                            </p>
+                            <p className="text-base font-black text-black tabular-nums mt-1">
+                              {formatMxn(price)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })()}
+
+      {/* Bloque 4 — Lo que tu agente hace (capabilities sin precios) */}
       <div className="rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,1)] overflow-hidden mb-5">
         <button
           type="button"
@@ -315,11 +387,11 @@ export const PriceSummary = ({
           </div>
           <span
             className={`text-black/50 text-xl font-black transition-transform shrink-0 ${
-              isCapsOpen ? "rotate-90" : ""
+              isCapsOpen ? "rotate-180" : ""
             }`}
             aria-hidden
           >
-            ▸
+            ▾
           </span>
         </button>
         <AnimatePresence initial={false}>
@@ -382,51 +454,59 @@ export const PriceSummary = ({
                     </motion.li>
                   ))}
 
-                  {/* Análisis de sitio gratis */}
-                  <motion.li
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{
-                      delay: 0.08 + quote.breakdown.length * 0.04,
-                    }}
-                    className="border-b border-black/10 pb-3"
-                  >
-                    <div className="flex justify-between items-baseline gap-3">
-                      <span className="text-sm font-bold text-black flex items-center gap-2 flex-wrap">
-                        <span aria-hidden>🔍</span>
-                        <span>Análisis de sitio gratis</span>
-                      </span>
-                      <span className="text-[10px] uppercase font-black text-brand-500">
-                        Incluido
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-xs text-black/60">
-                      {siteAnalysisCaptured
-                        ? "✓ URL agregada — listo para tu llamada"
-                        : "Revisamos tu sitio antes de la llamada de 24h"}
-                    </p>
-                  </motion.li>
+                  {/* Análisis de sitio gratis y la línea de integraciones
+                      custom se removieron del breakdown — el primero se
+                      moverá a otra parte de la página y las integraciones
+                      ahora se reflejan en el setup (+$10K), no como cap. */}
 
-                  {canAdd && (
-                    <li className="pt-1">
-                      <p className="text-xs text-black/55 mb-2 font-bold uppercase tracking-wider">
-                        + Agregar más capacidades
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {availableToAdd.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => onAddCapability!(c.id)}
-                            className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors flex items-center gap-1"
-                          >
-                            <span aria-hidden>{c.emoji}</span>
-                            <span>{c.shortLabel}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </li>
-                  )}
+                  {canAdd && (() => {
+                    const addable = availableToAdd.filter((c) => !c.comingSoon);
+                    const soonable = availableToAdd.filter((c) => c.comingSoon);
+                    return (
+                      <li className="pt-1">
+                        {addable.length > 0 && (
+                          <>
+                            <p className="text-xs text-black/55 mb-2 font-bold uppercase tracking-wider">
+                              + Agregar más capacidades
+                            </p>
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {addable.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => onAddCapability!(c.id)}
+                                  className="text-xs px-2.5 py-1 rounded-full border border-black/30 text-black/70 hover:bg-black hover:text-white hover:border-black transition-colors flex items-center gap-1"
+                                >
+                                  <span aria-hidden>{c.emoji}</span>
+                                  <span>{c.shortLabel}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        {soonable.length > 0 && (
+                          <>
+                            <p className="text-xs text-black/45 mb-2 font-bold uppercase tracking-wider">
+                              próximamente
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {soonable.map((c) => (
+                                <span
+                                  key={c.id}
+                                  title={`${c.label} — próximamente`}
+                                  aria-disabled="true"
+                                  className="text-xs px-2.5 py-1 rounded-full border border-dashed border-black/20 text-black/40 cursor-not-allowed flex items-center gap-1 select-none"
+                                >
+                                  <span aria-hidden>{c.emoji}</span>
+                                  <span>{c.shortLabel}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })()}
                 </ul>
               </div>
             </motion.div>
@@ -434,60 +514,9 @@ export const PriceSummary = ({
         </AnimatePresence>
       </div>
 
-      {/* Integraciones custom (sin cambios) */}
-      {quote.hasCustomIntegrations && customIntegrationsDescription && (
-        <motion.div
-          initial={reduced ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={
-            reduced ? { duration: 0 } : { delay: 0.3, duration: 0.4 }
-          }
-          className="rounded-xl border-2 border-black bg-white p-4 mb-5"
-        >
-          <div className="flex items-baseline justify-between gap-3 mb-1">
-            <p className="text-[10px] uppercase tracking-widest font-black text-black/70 flex items-center gap-1.5">
-              <span aria-hidden>🔌</span>
-              Integraciones que mencionaste
-            </p>
-            {onRemoveCustomIntegrations && (
-              <button
-                type="button"
-                onClick={onRemoveCustomIntegrations}
-                aria-label="Quitar integraciones custom"
-                title="Quitar integraciones custom"
-                className="w-5 h-5 rounded-full bg-black/10 hover:bg-black hover:text-white text-black/60 text-[10px] font-black flex items-center justify-center transition-colors"
-              >
-                ×
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-black/75">{customIntegrationsDescription}</p>
-          <p className="text-[10px] text-black/50 mt-2 leading-snug">
-            Las simples entran en el setup. Las complejas (SAP/ERP, sync
-            continuo) las scopeamos en la primera reunión sin costo extra.
-          </p>
-        </motion.div>
-      )}
-
-      {/* Botón pequeño de PDF (en lugar de la card grande) */}
-      {onDownloadPdf && (
-        <div className="text-center">
-          <button
-            onClick={onDownloadPdf}
-            disabled={disableDownload || isDownloadingPdf}
-            className="inline-flex items-center gap-2 text-xs text-black/65 hover:text-black underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed font-mono"
-          >
-            {isDownloadingPdf ? (
-              <>
-                <span className="inline-block w-3 h-3 border-2 border-black/60 border-t-transparent rounded-full animate-spin" />
-                <span>Generando cotización…</span>
-              </>
-            ) : (
-              "↓ Descargar cotización (PDF)"
-            )}
-          </button>
-        </div>
-      )}
+      {/* Integraciones custom y PDF download viven ahora en otros lugares:
+          integraciones como line item del breakdown, PDF en el footer de
+          acciones del route. */}
     </div>
   );
 };

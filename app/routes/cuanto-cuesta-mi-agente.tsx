@@ -8,20 +8,20 @@ import { CapabilityCard } from "~/components/quiz/CapabilityCard";
 import { PriceSummary, type PlanBilling } from "~/components/quiz/PriceSummary";
 import type { PlanKey } from "~/lib/plans";
 import { LeadForm, type LeadData } from "~/components/quiz/LeadForm";
-import { WebsiteEnrich } from "~/components/quiz/WebsiteEnrich";
 import {
   IntegrationsStep,
   type IntegrationsAnswer,
 } from "~/components/quiz/IntegrationsStep";
+import { PlanStep } from "~/components/quiz/PlanStep";
 import { HeroIllustration } from "~/components/quiz/illustrations/HeroIllustration";
 import { CAPABILITIES, DEFAULT_TIER_ID } from "~/lib/quiz/capabilities";
 import { QUIZ_WHATSAPP_NUMBER } from "~/lib/quiz/contact";
 import {
   computeQuote,
+  computeSetupEffective,
   formatMxn,
   parseSelections,
   serializeSelections,
-  SETUP_FLAT_MXN,
   type Selections,
 } from "~/lib/quiz/pricing";
 import { PLANS } from "~/lib/plans";
@@ -31,7 +31,6 @@ import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/cuanto-cuesta-mi-agente";
 
 const WHATSAPP_NUMBER = QUIZ_WHATSAPP_NUMBER;
-const QUIZ_FORM_ID = "69efd203ad74435521a74b34";
 
 export const clientLoader = async () => {
   try {
@@ -52,11 +51,15 @@ export const meta = () =>
     url: "https://www.easybits.cloud/cuanto-cuesta-mi-agente",
   });
 
-const CAP_COUNT = CAPABILITIES.length;
-// Steps: 0=hero, 1..N=caps, N+1=integrations, N+2=lead, N+3=summary
+// Solo capabilities seleccionables van al stepper. Las marcadas `comingSoon`
+// aparecen sólo como signaling en la pill list del summary.
+const STEPPER_CAPABILITIES = CAPABILITIES.filter((c) => !c.comingSoon);
+const CAP_COUNT = STEPPER_CAPABILITIES.length;
+// Steps: 0=hero, 1..N=caps, N+1=integrations, N+2=plan, N+3=lead, N+4=summary
 const STEP_INTEGRATIONS = CAP_COUNT + 1;
-const STEP_LEAD = CAP_COUNT + 2;
-const STEP_SUMMARY = CAP_COUNT + 3;
+const STEP_PLAN = CAP_COUNT + 2;
+const STEP_LEAD = CAP_COUNT + 3;
+const STEP_SUMMARY = CAP_COUNT + 4;
 const TOTAL_PROGRESS_STEPS = STEP_SUMMARY; // displayed total (excludes hero)
 
 export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
@@ -127,7 +130,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             ? integrations.description || "yes (sin descripción)"
             : "no",
           monthly_mxn: String(PLANS[selectedPlan].price),
-          setup_mxn: String(SETUP_FLAT_MXN),
+          setup_mxn: String(
+            computeSetupEffective(
+              quote.capsTotalMxn,
+              integrations.hasIntegrations
+            )
+          ),
           plan: selectedPlan,
           planBilling: effectivePlanBilling,
           babysit: babysitOpt,
@@ -197,7 +205,11 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       ? `Hola, soy ${lead.name}.`
       : "Hola, vi tu landing.";
     const siteLine = lead?.website ? `\nSitio: ${lead.website}` : "";
-    const setupLine = `Setup único: ${formatMxn(SETUP_FLAT_MXN)} MXN`;
+    const setupEff = computeSetupEffective(
+      quote.capsTotalMxn,
+      integrations.hasIntegrations
+    );
+    const setupLine = `Setup único: ${formatMxn(setupEff)} MXN`;
     const planInfo = PLANS[selectedPlan];
     const planLine = `Plan créditos: ${planInfo.name} (${planInfo.aiGenerationsPerMonth ?? "∞"} cr/mes${
       planInfo.price > 0
@@ -287,6 +299,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
   const isHero = step === 0;
   const isCapStep = step >= 1 && step <= CAP_COUNT;
   const isIntegrationsStep = step === STEP_INTEGRATIONS;
+  const isPlanStep = step === STEP_PLAN;
   const isLeadStep = step === STEP_LEAD;
   const isSummaryStep = step === STEP_SUMMARY;
 
@@ -425,8 +438,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                   <p className="text-base md:text-lg text-black/75 mb-6 leading-snug">
                     Te contactamos por WhatsApp en{" "}
                     <strong>menos de 24h hábiles</strong> para arrancar el
-                    pair WA y configurar tu agente. Si pagaste fuera de horario
-                    (9-18h MX), respondemos al siguiente día hábil.
+                    acompañamiento y configurar tu agente. Si pagaste fuera
+                    de horario (9-18h MX), respondemos al siguiente día hábil.
                   </p>
                   <div className="bg-brand-yellow border-2 border-black rounded-xl px-5 py-4 mb-6 text-left">
                     <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/70 mb-2">
@@ -439,8 +452,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                         discovery.
                       </li>
                       <li>
-                        En 24h tu agente arranca con pair WA los primeros 30
-                        días.
+                        En 24h tu agente arranca, con acompañamiento por
+                        WhatsApp los primeros 30 días.
                       </li>
                     </ol>
                   </div>
@@ -543,8 +556,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6, delay: 0.15 }}
                       className="text-lg md:text-xl text-black/80 mb-8"
                     >
-                      Configúralo en 2 minutos. Te decimos cuánto es el setup
-                      único y la mensualidad. Discovery call gratis al final.
+                      Entérate en 2 minutos. Sabrás en cuánto queda tu pago de
+                      personalización y tu mensualidad. Tú decides lo que tu
+                      agente podrá hacer. 🫟
                     </motion.p>
                     <motion.div
                       initial={{ opacity: 0, y: 12 }}
@@ -561,8 +575,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ delay: 0.6 }}
                       className="text-sm text-black/85 mt-6 font-mono font-bold"
                     >
-                      Setup único desde $59,500 MXN (~$3,500 USD) ·
-                      mensualidad desde $3K · te armamos todo
+                      Setup único desde $39,000 MXN (~$2,300 USD)
+                      <br />
+                      planes accesibles · te armamos todo
                     </motion.p>
                   </div>
                   <div className="order-1 md:order-2 max-w-[260px] md:max-w-none mx-auto w-full">
@@ -575,9 +590,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             {isCapStep && (
               <QuizStep stepKey={`cap-${step}`}>
                 <CapabilityCard
-                  capability={CAPABILITIES[step - 1]}
+                  capability={STEPPER_CAPABILITIES[step - 1]}
                   onAnswer={(tierId) =>
-                    handleAnswer(CAPABILITIES[step - 1].id, tierId)
+                    handleAnswer(STEPPER_CAPABILITIES[step - 1].id, tierId)
                   }
                 />
               </QuizStep>
@@ -586,6 +601,21 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             {isIntegrationsStep && (
               <QuizStep stepKey="integrations">
                 <IntegrationsStep onAnswer={handleIntegrations} />
+              </QuizStep>
+            )}
+
+            {isPlanStep && (
+              <QuizStep stepKey="plan">
+                <PlanStep
+                  selectedPlan={selectedPlan}
+                  onSelect={setSelectedPlan}
+                  onContinue={() => {
+                    // Si el lead ya se capturó antes (caso "cambiar plan"
+                    // desde el summary), saltamos el lead form y vamos
+                    // directo al summary — no le pedimos los datos otra vez.
+                    setStep(lead ? STEP_SUMMARY : STEP_LEAD);
+                  }}
+                />
               </QuizStep>
             )}
 
@@ -605,17 +635,12 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                 <PriceSummary
                   quote={quote}
                   selectedPlan={selectedPlan}
-                  onSelectPlan={setSelectedPlan}
                   planBilling={effectivePlanBilling}
                   onPlanBillingChange={setPlanBilling}
-                  customIntegrationsDescription={
-                    integrations.hasIntegrations
-                      ? integrations.description
-                      : undefined
-                  }
-                  onDownloadPdf={handleDownloadPdf}
-                  isDownloadingPdf={downloadingPdf}
-                  disableDownload={submitting}
+                  onChangePlan={() => setStep(STEP_PLAN)}
+                  onCheckout={handleCheckout}
+                  isCheckoutLoading={submitting}
+                  isCheckoutDisabled={downloadingPdf}
                   availableToAdd={CAPABILITIES.filter(
                     (c) => !selections.has(c.id)
                   )}
@@ -639,46 +664,43 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       return next;
                     })
                   }
-                  onRemoveCustomIntegrations={() =>
-                    setIntegrations({
-                      hasIntegrations: false,
-                      items: [],
-                      description: "",
-                    })
-                  }
-                  siteAnalysisCaptured={!!lead?.website}
                 />
 
-                <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center items-center">
-                  <BrutalButton
-                    onClick={handleCheckout}
-                    isLoading={submitting}
-                    isDisabled={downloadingPdf}
-                  >
-                    Pagar setup + arrancar →
-                  </BrutalButton>
-                  <BrutalButton
-                    mode="ghost"
-                    onClick={handleWhatsApp}
-                    isDisabled={submitting || downloadingPdf}
-                  >
-                    Hablar primero por WhatsApp
-                  </BrutalButton>
-                </div>
-                <div className="mt-4 flex flex-col md:flex-row gap-2 md:gap-6 justify-center items-center">
+                {/* Acciones secundarias primero (compartir, reset, PDF) — el
+                    usuario las explora antes de comprometerse. Los CTAs
+                    primarios (pagar / WhatsApp) viven al final del stack. */}
+                <div className="mt-8 flex flex-wrap gap-x-4 gap-y-2 justify-center items-center text-xs">
                   <button
                     type="button"
                     onClick={handleCopyLink}
-                    className="text-sm font-bold text-black/70 hover:text-black underline-offset-4 hover:underline py-2 px-3"
+                    className="text-black/65 hover:text-black underline underline-offset-2 font-mono"
                   >
-                    📋 Copiar link de esta cotización
+                    📋 Compartir mi cotización
                   </button>
+                  <span className="text-black/30" aria-hidden>·</span>
                   <button
                     type="button"
                     onClick={handleReset}
-                    className="text-sm font-bold text-black/70 hover:text-black underline-offset-4 hover:underline py-2 px-3"
+                    className="text-black/65 hover:text-black underline underline-offset-2 font-mono"
                   >
-                    ↻ Reiniciar cotización
+                    ↻ Reset
+                  </button>
+                </div>
+                <div className="mt-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={downloadingPdf || submitting}
+                    className="inline-flex items-center gap-2 text-sm text-black/70 hover:text-black underline underline-offset-4 decoration-black/30 hover:decoration-black disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+                  >
+                    {downloadingPdf ? (
+                      <>
+                        <span className="inline-block w-3.5 h-3.5 border-2 border-black/60 border-t-transparent rounded-full animate-spin" />
+                        <span>Generando cotización…</span>
+                      </>
+                    ) : (
+                      "↓ Descargar cotización (PDF)"
+                    )}
                   </button>
                 </div>
                 {submitError && (
@@ -686,27 +708,16 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                     {submitError}
                   </p>
                 )}
-                {lead && !lead.website && (
-                  <WebsiteEnrich
-                    email={lead.email}
-                    formId={QUIZ_FORM_ID}
-                    onEnriched={(website) =>
-                      setLead((prev) => (prev ? { ...prev, website } : prev))
-                    }
-                  />
-                )}
-                <div className="mt-8 mx-auto max-w-md rounded-xl border-[2.5px] border-black bg-white px-5 py-4 shadow-[3px_3px_0_0_rgba(0,0,0,1)]">
-                  <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/60 mb-1.5">
-                    ✦ Quiénes te van a atender
-                  </p>
-                  <p className="text-sm text-black leading-snug">
-                    Dos hackers. Cero juniors. Cero call center. Cero tickets.
-                    Como <strong>Invincible y Eve</strong>: dos personas,
-                    criterio absoluto, cero burocracia.{" "}
-                    <strong>Si te tomamos, queda funcionando.</strong>
-                  </p>
+                <div className="mt-8 mx-auto max-w-xl w-full flex justify-center items-center">
+                  <BrutalButton
+                    mode="ghost"
+                    onClick={handleWhatsApp}
+                    isDisabled={submitting || downloadingPdf}
+                  >
+                    Hablar con Brenda primero (whatsapp)
+                  </BrutalButton>
                 </div>
-                <div className="mt-6 mx-auto max-w-lg">
+                <div className="mt-8 mx-auto max-w-lg">
                   <p className="text-[10px] uppercase tracking-[0.2em] font-black text-black/60 mb-2 text-center">
                     Cómo arrancamos
                   </p>
@@ -723,13 +734,14 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                         Pagas setup + primer mes
                       </strong>{" "}
                       en un solo cargo (Stripe). Cargo único + suscripción
-                      mensual quedan armados.
+                      mensual quedan armados. Si hablamos, seguro ya tienes
+                      un cupón de descuento. 🎟️
                     </li>
                     <li>
                       <strong className="text-black">
                         Arrancamos en 24h
                       </strong>{" "}
-                      con pair WA los primeros 30 días — ventana 9-18h MX.
+                      con acompañamiento por WhatsApp los primeros 30 días — ventana 9-18h MX.
                     </li>
                     <li>
                       <strong className="text-black">
