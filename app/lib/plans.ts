@@ -182,21 +182,23 @@ export const GENERATION_PACKS: GenerationPack[] = [
   { id: "pack_50", generations: 50, prices: { Byte: 299, Mega: 299, Tera: 299 }, featured: true, description: "Crea todo un sitio web con múltiples páginas" },
   { id: "pack_100", generations: 100, prices: { Byte: 549, Mega: 549, Tera: 549 }, description: "Para equipos y proyectos a gran escala" },
 
-  // Packs temáticos (con recipe visible). El motor sigue procesando solo
+  // Packs temáticos (semanales). El motor sigue procesando solo
   // `generations`; el recipe es cosmético para comunicar caso de uso.
+  // Diseñados para 1 SEMANA al ritmo típico — pricing más accesible que
+  // los packs mensuales que veníamos manejando antes.
   // Ordenados por tamaño ascendente.
   {
     id: "pack_creator_daily",
     label: "Creator Daily",
     emoji: "🎬",
     audience: "Influencer publicando diario en redes",
-    generations: 800,
-    prices: { Byte: 4249, Mega: 4249, Tera: 4249 },
-    description: "Producción diaria de reels con avatar + voz clonada + landings",
+    generations: 200,
+    prices: { Byte: 1099, Mega: 1099, Tera: 1099 },
+    description: "1 semana de reels con avatar + voz clonada + landings",
     recipe: [
-      { service: "video.fal.avatar", count: 30, label: "30 reels avatar 30s" },
-      { service: "voice.elevenlabs.tts", count: 60, label: "60 min voz clonada" },
-      { service: "doc.easybits.generate", count: 50, label: "50 docs/landings" },
+      { service: "video.fal.avatar", count: 7, label: "7 reels avatar 30s" },
+      { service: "voice.elevenlabs.tts", count: 15, label: "15 min voz clonada" },
+      { service: "doc.easybits.generate", count: 13, label: "13 docs/landings" },
     ],
   },
   {
@@ -204,13 +206,13 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Catálogo Ecommerce",
     emoji: "🛍️",
     audience: "Tienda online actualizando producto",
-    generations: 1000,
-    prices: { Byte: 5199, Mega: 5199, Tera: 5199 },
-    description: "Imágenes producto + descripciones + reels demos",
+    generations: 250,
+    prices: { Byte: 1299, Mega: 1299, Tera: 1299 },
+    description: "1 semana de imágenes producto + fichas + reels demo",
     recipe: [
-      { service: "image.fal.generate", count: 400, label: "400 imágenes producto" },
-      { service: "doc.easybits.generate", count: 100, label: "100 fichas técnicas" },
-      { service: "video.fal.avatar", count: 20, label: "20 reels demo" },
+      { service: "image.fal.generate", count: 100, label: "100 imágenes producto" },
+      { service: "doc.easybits.generate", count: 25, label: "25 fichas técnicas" },
+      { service: "video.fal.avatar", count: 5, label: "5 reels demo" },
     ],
   },
   {
@@ -218,13 +220,13 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Research & Design",
     emoji: "🔎",
     audience: "Equipo de marketing investigando competencia",
-    generations: 1200,
-    prices: { Byte: 6099, Mega: 6099, Tera: 6099 },
-    description: "Scrapea web, genera imágenes y arma docs con datos frescos",
+    generations: 300,
+    prices: { Byte: 1549, Mega: 1549, Tera: 1549 },
+    description: "1 semana de scrape web + imágenes + docs con datos frescos",
     recipe: [
-      { service: "research.brightdata.scrape", count: 800, label: "800 páginas web scrape" },
-      { service: "image.fal.generate", count: 200, label: "200 imágenes generadas" },
-      { service: "doc.easybits.generate", count: 80, label: "80 documentos" },
+      { service: "research.brightdata.scrape", count: 200, label: "200 páginas web scrape" },
+      { service: "image.fal.generate", count: 50, label: "50 imágenes generadas" },
+      { service: "doc.easybits.generate", count: 20, label: "20 documentos" },
     ],
   },
   {
@@ -232,14 +234,14 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Studio Pro",
     emoji: "🎙",
     audience: "Productora con varios clientes activos",
-    generations: 3000,
-    prices: { Byte: 14999, Mega: 14999, Tera: 14999 },
-    description: "Volumen alto: avatar premium + voz scale + scrape pesado",
+    generations: 750,
+    prices: { Byte: 3799, Mega: 3799, Tera: 3799 },
+    description: "1 semana de volumen alto: avatar + voz scale + scrape pesado",
     recipe: [
-      { service: "video.fal.avatar", count: 100, label: "100 reels avatar" },
-      { service: "voice.elevenlabs.tts", count: 250, label: "250 min voz" },
-      { service: "research.brightdata.scrape", count: 1500, label: "1,500 páginas scrape" },
-      { service: "image.fal.generate", count: 400, label: "400 imágenes" },
+      { service: "video.fal.avatar", count: 25, label: "25 reels avatar" },
+      { service: "voice.elevenlabs.tts", count: 60, label: "60 min voz" },
+      { service: "research.brightdata.scrape", count: 375, label: "375 páginas scrape" },
+      { service: "image.fal.generate", count: 100, label: "100 imágenes" },
     ],
   },
 ];

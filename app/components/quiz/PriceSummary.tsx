@@ -344,8 +344,18 @@ export const PriceSummary = ({
                             <p className="text-sm font-black text-black leading-tight">
                               {pack.label}
                             </p>
-                            <p className="text-[10px] text-black/55 leading-snug line-clamp-2">
+                            <p className="text-[10px] text-black/55 leading-snug">
                               {pack.audience}
+                            </p>
+                            {pack.recipe && pack.recipe.length > 0 && (
+                              <ul className="text-[10px] text-black/50 mt-0.5 space-y-0.5 leading-snug">
+                                {pack.recipe.map((r) => (
+                                  <li key={r.service}>· {r.label}</li>
+                                ))}
+                              </ul>
+                            )}
+                            <p className="text-[10px] font-mono text-black/40 mt-1">
+                              ≈ 1 semana al ritmo típico
                             </p>
                             <p className="text-base font-black text-black tabular-nums mt-1">
                               {formatMxn(price)}
