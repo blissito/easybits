@@ -81,10 +81,12 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
  * Increment the AI generation counter for a user.
  * Consumes monthly quota first, then bonus.
  *
- * `cost` (default 1) is the number of "créditos" this operation consumes.
- * For multi-token services (avatar 30s = 15, voice 1min = 3) the orchestrator
- * passes the computed cost. Quota is split across monthly + bonus if needed.
+ * `cost` (default `COST_DOC` from credits.ts) es el número de créditos que
+ * consume esta operación. Para servicios multi-token (avatar 30s, voz 1min)
+ * el orchestrator pasa el cost computado por el provider. Si CREDIT_SCALE
+ * cambia en credits.ts, el default escala automáticamente.
  */
+import { COST_DOC } from "~/lib/credits";
 export interface GenerationLogData {
   type: GenerationType;
   product: GenerationProduct;
@@ -109,7 +111,7 @@ export function logAiUsage(userId: string, log: GenerationLogData) {
         userId,
         type: log.type,
         product: log.product,
-        cost: Math.max(1, Math.ceil(log.cost ?? 1)),
+        cost: Math.max(1, Math.ceil(log.cost ?? COST_DOC)),
         modelId: log.modelId,
         inputTokens: log.inputTokens,
         outputTokens: log.outputTokens,
@@ -127,7 +129,7 @@ export async function incrementAiGeneration(
   userPlan?: string,
   log?: GenerationLogData,
 ) {
-  const cost = Math.max(1, Math.ceil(log?.cost ?? 1));
+  const cost = Math.max(1, Math.ceil(log?.cost ?? COST_DOC));
 
   const user = await db.user.findUnique({
     where: { id: userId },

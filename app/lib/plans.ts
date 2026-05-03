@@ -1,7 +1,19 @@
 /**
  * Single source of truth for plan pricing across the app.
  * Update prices here — they propagate to /developers, /planes, profile, etc.
+ *
+ * NOTA: los valores de `aiGenerationsPerMonth` y `generations` (en
+ * GENERATION_PACKS) NO viven aquí — vienen de `app/lib/credits.ts`. Si
+ * quieres reescalar la economía completa de créditos, edita
+ * `CREDIT_SCALE` en ese archivo.
  */
+
+import {
+  formatCredits,
+  PACK_SIZES,
+  PACK_VERTICAL_SIZES,
+  PLAN_CREDITS,
+} from "./credits";
 
 export type PlanKey = "Byte" | "Mega" | "Tera";
 
@@ -25,11 +37,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Byte",
     price: 0,
     storageGB: 0.1,
-    aiGenerationsPerMonth: 9,
+    aiGenerationsPerMonth: PLAN_CREDITS.Byte,
     stripeIntent: null,
     features: [
       "100 MB de almacenamiento",
-      "9 créditos AI/mes incluidos",
+      `${formatCredits(PLAN_CREDITS.Byte)} créditos AI/mes incluidos`,
       "MCP + SDK + API",
       "Webhooks",
       "Landing pages",
@@ -44,11 +56,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Mega",
     price: 299,
     storageGB: 10,
-    aiGenerationsPerMonth: 50,
+    aiGenerationsPerMonth: PLAN_CREDITS.Mega,
     stripeIntent: "flow_plan",
     features: [
       "10 GB de almacenamiento",
-      "50 créditos AI/mes incluidos",
+      `${formatCredits(PLAN_CREDITS.Mega)} créditos AI/mes incluidos`,
       "Todo lo de Byte",
       "10 bases de datos",
       "Subidas ilimitadas",
@@ -63,11 +75,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     name: "Tera",
     price: 1499,
     storageGB: 100,
-    aiGenerationsPerMonth: 200,
+    aiGenerationsPerMonth: PLAN_CREDITS.Tera,
     stripeIntent: "studio_plan",
     features: [
       "100 GB de almacenamiento",
-      "200 créditos AI/mes incluidos",
+      `${formatCredits(PLAN_CREDITS.Tera)} créditos AI/mes incluidos`,
       "Todo lo de Mega",
       "20 bases de datos",
       "Proveedores custom",
@@ -176,11 +188,12 @@ export const MAX_REFERRALS = 50;           // anti-abuse cap
 // Orden: ascendente por número de créditos para que la grid en /dash/packs
 // se vea ordenada (los temáticos quedan intercalados según su tamaño).
 export const GENERATION_PACKS: GenerationPack[] = [
-  // Packs originales (sin recipe — créditos genéricos).
-  { id: "pack_5", generations: 5, prices: { Byte: 39, Mega: 39, Tera: 39 }, description: "Perfecto para crear un documento profesional" },
-  { id: "pack_10", generations: 10, prices: { Byte: 69, Mega: 69, Tera: 69 }, description: "Ideal para una landing page completa con variantes" },
-  { id: "pack_50", generations: 50, prices: { Byte: 299, Mega: 299, Tera: 299 }, featured: true, description: "Crea todo un sitio web con múltiples páginas" },
-  { id: "pack_100", generations: 100, prices: { Byte: 549, Mega: 549, Tera: 549 }, description: "Para equipos y proyectos a gran escala" },
+  // Packs originales (sin recipe — créditos genéricos). Tamaños desde
+  // PACK_SIZES en credits.ts para que reescalar la economía sea 1 número.
+  { id: "pack_5", generations: PACK_SIZES.small, prices: { Byte: 39, Mega: 39, Tera: 39 }, description: "Perfecto para crear un documento profesional" },
+  { id: "pack_10", generations: PACK_SIZES.medium, prices: { Byte: 69, Mega: 69, Tera: 69 }, description: "Ideal para una landing page completa con variantes" },
+  { id: "pack_50", generations: PACK_SIZES.large, prices: { Byte: 299, Mega: 299, Tera: 299 }, featured: true, description: "Crea todo un sitio web con múltiples páginas" },
+  { id: "pack_100", generations: PACK_SIZES.bulk, prices: { Byte: 549, Mega: 549, Tera: 549 }, description: "Para equipos y proyectos a gran escala" },
 
   // Packs temáticos (semanales). El motor sigue procesando solo
   // `generations`; el recipe es cosmético para comunicar caso de uso.
@@ -192,7 +205,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Creator Daily",
     emoji: "🎬",
     audience: "Influencer publicando diario en redes",
-    generations: 200,
+    generations: PACK_VERTICAL_SIZES.creatorDaily,
     prices: { Byte: 1099, Mega: 1099, Tera: 1099 },
     description: "1 semana de reels con avatar + voz clonada + landings",
     recipe: [
@@ -206,7 +219,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Catálogo Ecommerce",
     emoji: "🛍️",
     audience: "Tienda online actualizando producto",
-    generations: 250,
+    generations: PACK_VERTICAL_SIZES.ecommerce,
     prices: { Byte: 1299, Mega: 1299, Tera: 1299 },
     description: "1 semana de imágenes producto + fichas + reels demo",
     recipe: [
@@ -220,7 +233,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Research & Design",
     emoji: "🔎",
     audience: "Equipo de marketing investigando competencia",
-    generations: 300,
+    generations: PACK_VERTICAL_SIZES.research,
     prices: { Byte: 1549, Mega: 1549, Tera: 1549 },
     description: "1 semana de scrape web + imágenes + docs con datos frescos",
     recipe: [
@@ -234,7 +247,7 @@ export const GENERATION_PACKS: GenerationPack[] = [
     label: "Studio Pro",
     emoji: "🎙",
     audience: "Productora con varios clientes activos",
-    generations: 750,
+    generations: PACK_VERTICAL_SIZES.studioPro,
     prices: { Byte: 3799, Mega: 3799, Tera: 3799 },
     description: "1 semana de volumen alto: avatar + voz scale + scrape pesado",
     recipe: [

@@ -33,8 +33,13 @@ const POLL_TIMEOUT_MS = 6 * 60 * 1000; // 6 min — OSS models can be slower tha
 /** Default talking-head model. Override via FAL_AVATAR_MODEL env. */
 const DEFAULT_AVATAR_MODEL = process.env.FAL_AVATAR_MODEL || "fal-ai/sadtalker";
 
-/** Cost per second of generated video, in créditos. 30s reel ≈ 6 créditos at this rate. */
-export const TARIFF_FAL_AVATAR_PER_SECOND = 0.2;
+/**
+ * Cost per second of generated video, en créditos. Derivado de credits.ts:
+ * 30s reel = COST_REEL_30S créditos, así que credits/sec = COST_REEL_30S/30.
+ * Para reescalar la economía completa edita CREDIT_SCALE en credits.ts.
+ */
+import { TARIFF_FAL_AVATAR_CREDITS_PER_SECOND } from "~/lib/credits";
+export const TARIFF_FAL_AVATAR_PER_SECOND = TARIFF_FAL_AVATAR_CREDITS_PER_SECOND;
 
 export interface FalAvatarInput {
   /** HTTPS URL of portrait image (face, ideally clean background). */

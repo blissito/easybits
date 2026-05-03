@@ -101,6 +101,24 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "voice",
+    label: "Voz (habla y escucha)",
+    shortLabel: "Habla y escucha",
+    emoji: "🎙",
+    question: "¿Quieres que tu agente hable y entienda voz?",
+    description:
+      "Las mejores voces mexicanas del mercado, indistinguibles de humanas. Tu agente manda notas de voz por WhatsApp, escucha audios entrantes y los transcribe — el flow de voz queda armado en el setup; cada minuto generado consume créditos.",
+    vendor: "ElevenLabs",
+    basePriceMxn: 2000,
+    bgClass: "bg-brand-yellow",
+    isAddon: false,
+    includes: [
+      "Voces mexicanas que pasan por humanas, no IA",
+      "Audios y notas de voz en WhatsApp",
+      "Transcripción de audios entrantes",
+    ],
+  },
+  {
     id: "memory",
     label: "Memoria + Storage",
     shortLabel: "Recuerda y guarda",

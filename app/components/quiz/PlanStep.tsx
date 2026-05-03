@@ -2,6 +2,13 @@ import { motion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { GENERATION_PACKS, PLANS, type PlanKey } from "~/lib/plans";
 import {
+  COST_DOC,
+  COST_REEL_30S,
+  COST_SCRAPE_5_PAGES,
+  COST_VOICE_MINUTE,
+  formatCredits,
+} from "~/lib/credits";
+import {
   computeAnnualFromMonthly,
   formatMxn,
 } from "~/lib/quiz/pricing";
@@ -63,10 +70,23 @@ export const PlanStep = ({
         <h2 className="text-2xl md:text-3xl font-black text-black mb-3 leading-tight">
           ¿Cuántos créditos al mes va a consumir tu agente?
         </h2>
-        <ul className="text-base md:text-lg text-black/80 mb-2 list-disc list-inside space-y-1">
-          <li>1 crédito = 1 documento profesional</li>
-          <li>6 créditos = 1 reel avatar</li>
-          <li>8 créditos = 1 minuto de voz clonada</li>
+        <ul className="text-base md:text-lg text-black/80 mb-3 list-disc list-inside space-y-1.5 leading-snug">
+          <li>
+            <strong>{formatCredits(COST_DOC)} créditos</strong> = 1 documento profesional con tu marca
+            <span className="block ml-6 text-sm text-black/55 font-mono">≈ 5 páginas, lista para mandar</span>
+          </li>
+          <li>
+            <strong>{formatCredits(COST_REEL_30S)} créditos</strong> = 1 reel con avatar y voz
+            <span className="block ml-6 text-sm text-black/55 font-mono">30 segundos · vertical 9:16 para reels/shorts</span>
+          </li>
+          <li>
+            <strong>{formatCredits(COST_VOICE_MINUTE)} créditos</strong> = 1 minuto de voz clonada
+            <span className="block ml-6 text-sm text-black/55 font-mono">≈ 800 caracteres · 1 audio largo de WhatsApp</span>
+          </li>
+          <li>
+            <strong>{formatCredits(COST_SCRAPE_5_PAGES)} créditos</strong> = 5 páginas web scrapeadas
+            <span className="block ml-6 text-sm text-black/55 font-mono">para investigación de competencia o catálogo</span>
+          </li>
         </ul>
         <p className="text-sm text-black/60 mb-6">
           Si te quedas sin créditos del mes, recargas desde {formatMxn(cheapestPackPrice)} MXN — los packs no caducan.
@@ -101,7 +121,7 @@ export const PlanStep = ({
                       {plan.name}
                     </span>
                     <span className="text-2xl md:text-3xl font-black text-black tabular-nums leading-none">
-                      {plan.aiGenerationsPerMonth ?? "∞"}
+                      {plan.aiGenerationsPerMonth ? formatCredits(plan.aiGenerationsPerMonth) : "∞"}
                     </span>
                     <span className="text-xs font-mono text-black/55">
                       cr/mes

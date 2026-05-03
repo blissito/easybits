@@ -33,8 +33,13 @@ const FALLBACK_VOICE_ID = process.env.ELEVENLABS_DEFAULT_VOICE || "EXAVITQu4vr4x
 /** Default model — eleven_multilingual_v2 supports Spanish + voice cloning. */
 const DEFAULT_MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
 
-/** Cost: 1 crédito per 100 characters. 1 min TTS ≈ 800 chars ≈ 8 créditos. */
-export const TARIFF_ELEVENLABS_CHARS_PER_CREDIT = 100;
+/**
+ * Cost: derivado de `app/lib/credits.ts`. Ground truth: 1 minuto de voz ≈
+ * 800 caracteres = COST_VOICE_MINUTE créditos. Si quieres reescalar la
+ * economía completa, edita CREDIT_SCALE en credits.ts — esto se ajusta solo.
+ */
+import { TARIFF_ELEVENLABS_CHARS_PER_CREDIT } from "~/lib/credits";
+export { TARIFF_ELEVENLABS_CHARS_PER_CREDIT };
 
 export interface ElevenLabsTtsInput {
   /** Text to synthesize. Required. Max ~5000 chars per call. */

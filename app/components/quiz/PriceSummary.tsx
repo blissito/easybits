@@ -11,6 +11,7 @@ import {
   SETUP_BASE_MXN,
 } from "~/lib/quiz/pricing";
 import type { Capability } from "~/lib/quiz/capabilities";
+import { formatCredits } from "~/lib/credits";
 import { GENERATION_PACKS, PLANS, type PlanKey } from "~/lib/plans";
 
 // Precio del pack más barato (cualquier plan) — para mostrar "desde $X" en la
@@ -297,7 +298,7 @@ export const PriceSummary = ({
                   Créditos · recargas libres
                 </p>
                 <p className="text-[11px] text-black/60 mt-0.5 leading-snug">
-                  Tu plan incluye <strong className="text-black">{planCredits ?? "∞"} créditos/mes</strong> y recargas desde {formatMxn(CHEAPEST_PACK_MXN)} MXN · packs de {PACK_MIN_CR}–{PACK_MAX_CR} créditos · sin caducidad.
+                  Tu plan incluye <strong className="text-black">{planCredits ? formatCredits(planCredits) : "∞"} créditos/mes</strong> y recargas desde {formatMxn(CHEAPEST_PACK_MXN)} MXN · packs de {formatCredits(PACK_MIN_CR)}–{formatCredits(PACK_MAX_CR)} créditos · sin caducidad.
                 </p>
               </div>
               <span
@@ -338,7 +339,7 @@ export const PriceSummary = ({
                             <div className="flex items-baseline justify-between gap-2">
                               <span className="text-base" aria-hidden>{pack.emoji}</span>
                               <span className="text-[10px] font-mono font-black text-black/55 uppercase tracking-wider">
-                                {pack.generations} cr
+                                {formatCredits(pack.generations)} cr
                               </span>
                             </div>
                             <p className="text-sm font-black text-black leading-tight">
