@@ -5,16 +5,19 @@ import { hasValidShareCookie } from "~/.server/shareLinks";
 import type { Route } from "./+types/DashLayout";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  // Guest share sessions skip the login + onboarding gates here. The child
-  // route's loader is responsible for validating the share against the
-  // requested resource and rejecting mismatches.
-  const isShareSession = await hasValidShareCookie(request);
-  if (isShareSession) {
-    return { isAdmin: false, isShareSession: true };
-  }
-
+  // Si el visitante está logueado, SIEMPRE va por la vista normal del dash
+  // (con sidebar). El share-cookie sólo tiene efecto cuando no hay sesión
+  // de usuario — si no, una cookie de share quedaba pegada después de
+  // visitar un share link y "robaba" el sidebar al dueño del dashboard.
   const user = await getUserOrNull(request);
   if (!user) {
+    // Guest share sessions skip the login + onboarding gates aquí. El child
+    // route's loader es responsable de validar el share contra el recurso
+    // pedido y rechazar mismatches.
+    const isShareSession = await hasValidShareCookie(request);
+    if (isShareSession) {
+      return { isAdmin: false, isShareSession: true };
+    }
     const url = new URL(request.url);
     throw redirect("/login?next=" + url.pathname);
   }
