@@ -86,7 +86,7 @@ export default function DocumentShareEditor({
       const padding = 32;
       if (w && h) {
         const zoom = Math.min(1, Math.max(0.1, (viewportW - padding) / w));
-        pageCss = `body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
+        pageCss = `body { background: #e5e7eb !important; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
 [data-section-id] { width: ${w}px; height: ${h}px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
 [data-section-id] > section { width: 100% !important; height: 100% !important; }`;
       } else {
@@ -95,7 +95,7 @@ export default function DocumentShareEditor({
         // entre en el viewport sin scroll horizontal.
         const LETTER_PX = 816;
         const zoom = Math.min(1, Math.max(0.1, (viewportW - padding) / LETTER_PX));
-        pageCss = `body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
+        pageCss = `body { background: #e5e7eb !important; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
 [data-section-id] { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
 [data-section-id] > section { width: 100% !important; height: 100% !important; }`;
       }
