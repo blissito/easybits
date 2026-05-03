@@ -206,10 +206,7 @@ body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-seri
 <body>
 
 <div class="header">
-  <div>
-    <div class="brand">EasyBits</div>
-    <div class="brand-sub">Agentes IA para tu negocio</div>
-  </div>
+  <img src="https://www.easybits.cloud/logo.png" alt="Easybits" style="height:48px;width:auto;display:block;" />
   <div class="meta">
     <div class="meta-label">Cotización</div>
     <div class="meta-folio">${folio}</div>
@@ -290,9 +287,10 @@ export const renderQuizPdf = async (
 ): Promise<Buffer> => {
   const html = buildQuizPdfHtml(payload, folio);
   return await withPage(async (page) => {
-    // HTML is fully inline (no external assets) — domcontentloaded is enough
-    // and skips ~500ms wait that 'networkidle' adds.
-    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    // Cambiamos a `load` porque ahora el header carga el logo desde
+    // www.easybits.cloud/logo.png — domcontentloaded no esperaría la imagen
+    // y saldría rota en el PDF.
+    await page.setContent(html, { waitUntil: "load" });
     return await page.pdf({
       format: "Letter",
       printBackground: true,
