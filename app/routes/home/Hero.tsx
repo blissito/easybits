@@ -37,25 +37,36 @@ export const Hero = () => {
         </Link>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">
-        <img
+        <FloatingMotif
           className="absolute -top-16 left-1/2 -translate-x-1/2 w-12 hidden md:block"
           alt="star"
           src="/home/star.svg"
+          range={10}
+          duration={3.2}
         />
-        <img
-          className="absolute -left-[800px] w-16"
-          alt="star"
+        <FloatingMotif
+          className="absolute -top-12 -left-[800px] w-16"
+          alt="waves"
           src="/home/waves.svg"
+          range={12}
+          duration={3.6}
+          delay={0.4}
         />
-        <img
-          className="absolute -left-[600px] bottom-0"
+        <FloatingMotif
+          className="absolute -left-[600px] -bottom-20"
           alt="star"
           src="/home/star.svg"
+          range={10}
+          duration={4}
+          delay={0.8}
         />
-        <img
+        <FloatingMotif
           className="absolute bottom-0 -left-8 -rotate-12"
           alt="line"
           src="/home/line.svg"
+          range={8}
+          duration={3.4}
+          delay={0.6}
         />
 
         <div className="absolute -left-10 bottom-40">
@@ -125,5 +136,36 @@ const FloatingItem = ({
     >
       {children}
     </motion.div>
+  );
+};
+
+const FloatingMotif = ({
+  className,
+  src,
+  alt,
+  range = 10,
+  duration = 3.2,
+  delay = 0,
+}: {
+  className?: string;
+  src: string;
+  alt: string;
+  range?: number;
+  duration?: number;
+  delay?: number;
+}) => {
+  return (
+    <motion.img
+      className={className}
+      src={src}
+      alt={alt}
+      animate={{ y: [-range, range, -range] }}
+      transition={{
+        duration,
+        delay,
+        repeat: Infinity,
+        ease: "easeInOut",
+      }}
+    />
   );
 };
