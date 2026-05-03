@@ -74,6 +74,10 @@ export const CAPABILITIES: Capability[] = [
   // (ver app/.server/services/registry.ts). El cliente las consume comprando
   // packs (`GENERATION_PACKS` en plans.ts) o usando los créditos incluidos
   // en su plan mensual.
+  //
+  // Orden importante: las capacidades más "wow"/diferenciadoras van primero
+  // para enganchar; las de infraestructura/canal secundario al final
+  // (webchat cierra el flujo).
   {
     id: "whatsapp",
     label: "Vive en WhatsApp",
@@ -93,21 +97,75 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
-    id: "webchat",
-    label: "Web chat en tu sitio",
-    shortLabel: "Web chat",
-    emoji: "💻",
-    question: "¿Quieres un chat embebido en tu sitio para visitantes?",
+    id: "memory",
+    label: "Memoria + Storage",
+    shortLabel: "Memoria",
+    emoji: "🧠",
+    question: "¿Quieres que el agente recuerde y guarde todo?",
     description:
-      "Widget de chat en tu landing que atiende a quien visite el sitio. Captura leads en caliente.",
+      "Base sin la cual nada funciona. DB persistente + storage S3 para conversaciones, PDFs, fotos, contratos. Incluido cuando armamos tu agente, sin costo extra.",
     vendor: "EasyBits",
-    basePriceMxn: 1200,
+    basePriceMxn: 0,
+    bgClass: "bg-brand-pink",
+    isAddon: false,
+    includes: [
+      "Base de datos persistente por cliente",
+      "Storage S3 ilimitado (sujeto a tu plan)",
+      "Memoria Redis-compatible (alta velocidad)",
+    ],
+  },
+  {
+    id: "quotes",
+    label: "Cotizaciones automáticas",
+    shortLabel: "Cotizaciones",
+    emoji: "🧾",
+    question: "¿Quieres que el agente cotice a tus clientes en automático?",
+    description:
+      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento al cliente hasta que responde.",
+    vendor: "EasyBits",
+    basePriceMxn: 2800,
     bgClass: "bg-rose",
     isAddon: false,
     includes: [
-      "Widget de chat embebido en tu sitio",
-      "Atiende visitantes en tiempo real",
-      "Captura de leads conectada al CRM",
+      "Cotizaciones con tu inventario y precios",
+      "Folio, IVA y branding incluido",
+      "Seguimiento automático al cliente",
+    ],
+  },
+  {
+    id: "payments",
+    label: "Cobro con Mercado Pago",
+    shortLabel: "Cobro",
+    emoji: "💳",
+    question: "¿Quieres cobrar a tus clientes en línea con Mercado Pago?",
+    description:
+      "El agente genera link de pago de Mercado Pago. Tu cliente paga con tarjeta, OXXO, transferencia o saldo MP. Tú recibes el dinero sin perseguir cobros.",
+    vendor: "Mercado Pago",
+    basePriceMxn: 1800,
+    bgClass: "bg-lime",
+    isAddon: false,
+    includes: [
+      "Link de pago Mercado Pago generado por el agente",
+      "Cobra con tarjeta, OXXO, SPEI o saldo MP",
+      "Notificación automática cuando el cliente paga",
+    ],
+  },
+  {
+    id: "documents",
+    label: "Documentos PDF",
+    shortLabel: "Documentos",
+    emoji: "📄",
+    question: "¿Tu agente genera documentos PDF (contratos, fichas, materiales)?",
+    description:
+      "Contratos, fichas técnicas, propuestas, manuales — generados por el agente con tu branding.",
+    vendor: "EasyBits",
+    basePriceMxn: 1400,
+    bgClass: "bg-linen",
+    isAddon: false,
+    includes: [
+      "Plantillas PDF con tu branding",
+      "Generación bajo demanda por el agente",
+      "Versionado y archivo automático",
     ],
   },
   {
@@ -185,24 +243,6 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
-    id: "memory",
-    label: "Memoria + Storage",
-    shortLabel: "Memoria",
-    emoji: "🧠",
-    question: "¿Quieres que el agente recuerde y guarde todo?",
-    description:
-      "Base sin la cual nada funciona. DB persistente + storage S3 para conversaciones, PDFs, fotos, contratos. Incluido cuando armamos tu agente, sin costo extra.",
-    vendor: "EasyBits",
-    basePriceMxn: 0,
-    bgClass: "bg-brand-pink",
-    isAddon: false,
-    includes: [
-      "Base de datos persistente por cliente",
-      "Storage S3 ilimitado (sujeto a tu plan)",
-      "Memoria Redis-compatible (alta velocidad)",
-    ],
-  },
-  {
     id: "site",
     label: "Landings ilimitadas",
     shortLabel: "Landings",
@@ -239,57 +279,21 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
-    id: "documents",
-    label: "Documentos PDF",
-    shortLabel: "Documentos",
-    emoji: "📄",
-    question: "¿Tu agente genera documentos PDF (contratos, fichas, materiales)?",
+    id: "webchat",
+    label: "Web chat en tu sitio",
+    shortLabel: "Web chat",
+    emoji: "💻",
+    question: "¿Quieres un chat embebido en tu sitio para visitantes?",
     description:
-      "Contratos, fichas técnicas, propuestas, manuales — generados por el agente con tu branding.",
+      "Widget de chat en tu landing que atiende a quien visite el sitio. Captura leads en caliente.",
     vendor: "EasyBits",
-    basePriceMxn: 1400,
-    bgClass: "bg-linen",
-    isAddon: false,
-    includes: [
-      "Plantillas PDF con tu branding",
-      "Generación bajo demanda por el agente",
-      "Versionado y archivo automático",
-    ],
-  },
-  {
-    id: "quotes",
-    label: "Cotizaciones automáticas",
-    shortLabel: "Cotizaciones",
-    emoji: "🧾",
-    question: "¿Quieres que el agente cotice a tus clientes en automático?",
-    description:
-      "Cotizaciones con tu inventario, precios e IVA. El agente las arma, manda y da seguimiento al cliente hasta que responde.",
-    vendor: "EasyBits",
-    basePriceMxn: 2800,
+    basePriceMxn: 1200,
     bgClass: "bg-rose",
     isAddon: false,
     includes: [
-      "Cotizaciones con tu inventario y precios",
-      "Folio, IVA y branding incluido",
-      "Seguimiento automático al cliente",
-    ],
-  },
-  {
-    id: "payments",
-    label: "Cobro con Mercado Pago",
-    shortLabel: "Cobro",
-    emoji: "💳",
-    question: "¿Quieres cobrar a tus clientes en línea con Mercado Pago?",
-    description:
-      "El agente genera link de pago de Mercado Pago. Tu cliente paga con tarjeta, OXXO, transferencia o saldo MP. Tú recibes el dinero sin perseguir cobros.",
-    vendor: "Mercado Pago",
-    basePriceMxn: 1800,
-    bgClass: "bg-lime",
-    isAddon: false,
-    includes: [
-      "Link de pago Mercado Pago generado por el agente",
-      "Cobra con tarjeta, OXXO, SPEI o saldo MP",
-      "Notificación automática cuando el cliente paga",
+      "Widget de chat embebido en tu sitio",
+      "Atiende visitantes en tiempo real",
+      "Captura de leads conectada al CRM",
     ],
   },
   // Capabilities `video` (Runway) y `research` (Brightdata) eliminadas del

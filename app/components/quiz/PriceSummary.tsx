@@ -85,7 +85,7 @@ export const PriceSummary = ({
           {formatMxn(SETUP_FLAT_MXN)}
         </p>
         <p className="text-xs text-white/70 font-mono mt-1">
-          MXN · setup técnico + personalización total
+          MXN · setup único y personalización
         </p>
         <p className="text-[10px] text-brand-yellow font-bold mt-2">
           ✓ Hablamos por WhatsApp antes de cobrar
