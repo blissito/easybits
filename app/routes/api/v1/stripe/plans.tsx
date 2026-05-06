@@ -20,6 +20,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     metadata: { plan: planKey },
+    subscription_data: { metadata: { plan: planKey } },
     line_items: [
       {
         price_data: {

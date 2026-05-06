@@ -226,46 +226,65 @@ export async function action({ request }: ActionFunctionArgs) {
           break;
         }
 
-        await assignAssetToUser(session, stripe);
-        // @todo send notifications
-        break;
+        // Handle plan upgrade (subscription mode). The session is the only
+        // event with both metadata.plan AND customer_details.email — older
+        // code tried to read these from customer.subscription.created (which
+        // is a Subscription object lacking both), causing 100% silent fails.
+        if (session.mode === "subscription" && session.metadata?.plan) {
+          const planKey = session.metadata.plan as string;
+          const planEmail =
+            session.customer_details?.email || session.customer_email || null;
+          const planCustomerId =
+            typeof session.customer === "string" ? session.customer : null;
 
-      case "customer.subscription.created":
-        const checkoutSession = event.data.object as StripeSession;
-        const email = checkoutSession.customer_email || checkoutSession.customer_details?.email || checkoutSession.metadata.customer_email;
-        if (!email) return new Response("No email found", { status: 400 });
+          if (!planEmail || !planCustomerId) {
+            logger.error("Plan upgrade missing email or customer", {
+              sessionId: session.id,
+              planEmail,
+              planCustomerId,
+            });
+            break;
+          }
 
-        const customerId2 = typeof checkoutSession.customer === "string" ? checkoutSession.customer : null;
-        let user = await db.user.findUnique({ where: { email } });
-        if (!user) {
-          user = await db.user.create({
+          let planUser = await db.user.findUnique({ where: { email: planEmail } });
+          if (!planUser) {
+            planUser = await db.user.create({
+              data: {
+                email: planEmail,
+                customer: planCustomerId,
+                stripeIds: [planCustomerId],
+              },
+            });
+          }
+
+          const newRoles = [...stripPlanRoles(planUser.roles || []), planKey];
+          const newStripeIds = (planUser.stripeIds || []).includes(planCustomerId)
+            ? planUser.stripeIds
+            : [...(planUser.stripeIds || []), planCustomerId];
+
+          await db.user.update({
+            where: { id: planUser.id },
             data: {
-              email,
-              ...(customerId2 ? { customer: customerId2, stripeIds: [customerId2] } : {}),
+              roles: newRoles,
+              customer: planCustomerId,
+              stripeIds: newStripeIds,
             },
           });
-        }
-        
-        const plan = checkoutSession.metadata.plan;
-        if (!plan) return new Response("No plan received", { status: 404 });
 
-        const customerId = typeof checkoutSession.customer === "string" ? checkoutSession.customer : null;
-        const roles = [...stripPlanRoles(user.roles || []), plan];
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            roles,
-            ...(customerId ? {
-              customer: customerId,
-              stripeIds: { push: customerId },
-            } : {}),
-          },
-        });
+          if (isPaidPlan(normalizePlan(planKey))) {
+            await processReferralUpgrade(planUser.id);
+          }
 
-        // Award referral upgrade bonus if referred user upgrades to paid plan
-        if (isPaidPlan(normalizePlan(plan))) {
-          await processReferralUpgrade(user.id);
+          logger.info("Plan upgrade processed", {
+            sessionId: session.id,
+            userId: planUser.id,
+            plan: planKey,
+          });
+          break;
         }
+
+        await assignAssetToUser(session, stripe);
+        // @todo send notifications
         break;
 
       case "customer.subscription.resumed":
