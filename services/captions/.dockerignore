@@ -1,0 +1,12 @@
+node_modules
+.git
+out
+input
+public
+*.mp4
+*.MOV
+.env
+.env.local
+.DS_Store
+fly.toml
+README.md

@@ -126,6 +126,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   // Video
   "video_create", "list_videos",
   "avatar_video_create",
+  "generate_captions",
   "character_remember", "character_list", "character_delete",
   // Voice
   "voice_tts_create",
@@ -176,6 +177,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "generate_image",
   "video_create", "list_videos",
   "avatar_video_create",
+  "generate_captions",
   "voice_tts_create",
   "research_scrape", "research_search",
   "image_generate",
@@ -192,6 +194,7 @@ export const VIDEO_ALLOWLIST = new Set<string>([
   "video_create",
   "list_videos",
   "avatar_video_create",
+  "generate_captions",
   "character_remember",
   "character_list",
   "character_delete",

@@ -3744,4 +3744,26 @@ function registerVideoTools(server: McpServer) {
       };
     })
   );
+
+  server.tool(
+    "generate_captions",
+    "Generate viral MrBeast-style animated captions for a video. Input: a public HTTPS URL to an MP4 / MOV / any common video format (iPhone HEVC supported). The service transcribes via Whisper, marks keywords + emojis with Claude Haiku, and renders 1080x1920-ish vertical (or matching source aspect) MP4 with burned-in animated captions (Bangers font, thick stroke, drop-shadow sticker, scale-overshoot pop, instant color switch). Runs synchronously (~30–120s depending on clip length). Returns { outputUrl } pointing to a Tigris-hosted MP4.",
+    {
+      videoUrl: z.string().url().describe("Public HTTPS URL of the source video. Must be reachable from the captions service."),
+      template: z.enum(["mrbeast", "hormozi"]).optional().describe("Caption template. Default: 'mrbeast' (viral, animated, comic font). 'hormozi' is more sober/business."),
+    },
+    wrapHandler(async (params, _extra) => {
+      const { generateCaptions } = await import("../core/captionsOperations");
+      const result = await generateCaptions({
+        videoUrl: params.videoUrl,
+        template: params.template,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ ok: true, ...result }, null, 2),
+        }],
+      };
+    })
+  );
 }
