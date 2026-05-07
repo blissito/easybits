@@ -14,9 +14,12 @@ const PROJECT_ROOT = join(__dirname, "..");
 
 export type Template = "mrbeast" | "hormozi";
 
+export type CaptionPosition = "top" | "center" | "bottom";
+
 export type RenderRequest = {
   videoUrl: string;
   template?: Template;
+  position?: CaptionPosition;
   signal?: AbortSignal;
 };
 
@@ -28,6 +31,7 @@ export type RenderResult = {
   width: number;
   height: number;
   template: Template;
+  position: CaptionPosition;
 };
 
 export async function runPipeline(
@@ -35,6 +39,7 @@ export async function runPipeline(
   log: (m: string) => void = () => {},
 ): Promise<RenderResult> {
   const template: Template = req.template ?? "mrbeast";
+  const position: CaptionPosition = req.position ?? "bottom";
   const jobId = randomUUID();
   const workDir = join("/tmp/captions", jobId);
   const publicDir = join(workDir, "public");
@@ -57,7 +62,7 @@ export async function runPipeline(
     const captions = await enrich(transcript, log);
     if (req.signal?.aborted) throw new Error("aborted");
 
-    log(`[5/5] rendering (${normalized.width}x${normalized.height}, ${template})`);
+    log(`[5/5] rendering (${normalized.width}x${normalized.height}, ${template}, ${position})`);
     // Remotion's staticFile() reads from a publicDir; copy the normalized video
     // into a known relative location so the composition can reference it.
     copyFileSync(normalized.path, join(publicDir, "input.mp4"));
@@ -68,6 +73,7 @@ export async function runPipeline(
       width: normalized.width,
       height: normalized.height,
       template,
+      position,
       captions,
       broll: [],
     };
@@ -93,6 +99,7 @@ export async function runPipeline(
       width: normalized.width,
       height: normalized.height,
       template,
+      position,
     };
   } finally {
     try {

@@ -26,12 +26,15 @@ export type BrollClip = {
 
 export type Template = "mrbeast" | "hormozi";
 
+export type CaptionPosition = "top" | "center" | "bottom";
+
 export type RenderProps = {
   videoSrc: string;
   durationInSeconds: number;
   width: number;
   height: number;
   template: Template;
+  position: CaptionPosition;
   captions: Caption[];
   broll: BrollClip[];
 };

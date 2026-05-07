@@ -3747,21 +3747,46 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "generate_captions",
-    "Generate viral MrBeast-style animated captions for a video. Input: a public HTTPS URL to an MP4 / MOV / any common video format (iPhone HEVC supported). The service transcribes via Whisper, marks keywords + emojis with Claude Haiku, and renders 1080x1920-ish vertical (or matching source aspect) MP4 with burned-in animated captions (Bangers font, thick stroke, drop-shadow sticker, scale-overshoot pop, instant color switch). Runs synchronously (~30–120s depending on clip length). Returns { outputUrl } pointing to a Tigris-hosted MP4.",
+    "Enqueue viral MrBeast-style animated captions for a video. Input: a public HTTPS URL to an MP4 / MOV / any common video format (iPhone HEVC supported). The service transcribes via Whisper, marks keywords + emojis with Claude Haiku, and renders 1080x1920-ish vertical (or matching source aspect) MP4 with burned-in animated captions (Bangers font, thick stroke, drop-shadow sticker, scale-overshoot pop, instant color switch). ASYNC: returns { jobId, status } immediately; poll get_caption_status until status is 'done' (then result.outputUrl) or 'error'. Typical render time: 30s–5min depending on clip length.",
     {
       videoUrl: z.string().url().describe("Public HTTPS URL of the source video. Must be reachable from the captions service."),
       template: z.enum(["mrbeast", "hormozi"]).optional().describe("Caption template. Default: 'mrbeast' (viral, animated, comic font). 'hormozi' is more sober/business."),
+      position: z.enum(["top", "center", "bottom"]).optional().describe("Vertical position of captions on the video. Default: 'bottom'. Use 'top' when the lower portion of frame has important content (face, lower-third graphics)."),
     },
     wrapHandler(async (params, _extra) => {
-      const { generateCaptions } = await import("../core/captionsOperations");
-      const result = await generateCaptions({
+      const { enqueueCaptions } = await import("../core/captionsOperations");
+      const enq = await enqueueCaptions({
         videoUrl: params.videoUrl,
         template: params.template,
+        position: params.position,
       });
       return {
         content: [{
           type: "text",
-          text: JSON.stringify({ ok: true, ...result }, null, 2),
+          text: JSON.stringify({
+            ok: true,
+            jobId: enq.jobId,
+            status: enq.status,
+            message: "Render started. Poll get_caption_status with this jobId every 10–20s until status is 'done' or 'error'.",
+          }, null, 2),
+        }],
+      };
+    })
+  );
+
+  server.tool(
+    "get_caption_status",
+    "Poll a captions render job started by generate_captions. Returns { status, elapsedMs, result?, error?, logs }. Status values: 'pending' (queued) | 'running' (in progress) | 'done' (result.outputUrl populated) | 'error' (error populated). Jobs are kept for 1h after completion. Recommended polling interval: 10–20s.",
+    {
+      jobId: z.string().describe("Job ID returned by generate_captions."),
+    },
+    wrapHandler(async (params, _extra) => {
+      const { getCaptionsJob } = await import("../core/captionsOperations");
+      const state = await getCaptionsJob(params.jobId);
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ ok: true, ...state }, null, 2),
         }],
       };
     })

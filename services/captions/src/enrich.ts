@@ -52,14 +52,15 @@ export async function enrich(
   });
 
   log(`  → Claude Haiku enrichment`);
-  const res = await client.messages.create({
+  const stream = client.messages.stream({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 8192,
+    max_tokens: 32000,
     system: SYSTEM,
     messages: [{ role: "user", content: userMsg }],
   });
+  const final = await stream.finalMessage();
 
-  const textBlock = res.content.find((b) => b.type === "text");
+  const textBlock = final.content.find((b) => b.type === "text");
   if (!textBlock || textBlock.type !== "text") throw new Error("no text response from Haiku");
 
   let raw = textBlock.text.trim();

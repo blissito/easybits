@@ -17,11 +17,11 @@ primary_region = "dfw"
 
   [[http_service.checks]]
     interval = "30s"
-    grace_period = "30s"
+    grace_period = "120s"
     method = "GET"
     path = "/health"
-    timeout = "5s"
+    timeout = "10s"
 
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "4gb"
+  size = "performance-2x"
+  memory = "8gb"

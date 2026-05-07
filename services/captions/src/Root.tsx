@@ -10,6 +10,7 @@ const defaultProps: RenderProps = {
   width: 1080,
   height: 1920,
   template: "mrbeast",
+  position: "bottom",
   captions: [],
   broll: [],
 };

@@ -1,6 +1,6 @@
 import { AbsoluteFill, interpolate, spring, useVideoConfig } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Bangers";
-import type { Caption } from "./types";
+import type { Caption, CaptionPosition } from "./types";
 
 const { fontFamily } = loadFont();
 
@@ -11,22 +11,29 @@ const STROKE_COLOR = "#000000";
 export const MrBeastCaption: React.FC<{
   caption: Caption;
   timeInSeconds: number;
-}> = ({ caption, timeInSeconds }) => {
+  position?: CaptionPosition;
+}> = ({ caption, timeInSeconds, position = "bottom" }) => {
   const { fps, height } = useVideoConfig();
 
   const baseFontSize = Math.round(height * 0.078);
   const keywordFontSize = Math.round(height * 0.092);
   const strokeWidth = Math.max(10, Math.round(height * 0.011));
-  const paddingBottom = Math.round(height * 0.13);
+  const padBlock = Math.round(height * 0.13);
   const gap = Math.round(height * 0.014);
   const shadowOffset = Math.max(3, Math.round(height * 0.0035));
+
+  const positionStyles =
+    position === "top"
+      ? { justifyContent: "flex-start", paddingTop: padBlock }
+      : position === "center"
+        ? { justifyContent: "center" }
+        : { justifyContent: "flex-end", paddingBottom: padBlock };
 
   return (
     <AbsoluteFill
       style={{
-        justifyContent: "flex-end",
+        ...positionStyles,
         alignItems: "center",
-        paddingBottom,
       }}
     >
       <div

@@ -7,6 +7,7 @@ export const MrBeastShort: React.FC<RenderProps> = ({
   videoSrc,
   captions,
   template,
+  position,
   broll,
 }) => {
   const frame = useCurrentFrame();
@@ -43,7 +44,11 @@ export const MrBeastShort: React.FC<RenderProps> = ({
         </AbsoluteFill>
       )}
       {activeCaption && (
-        <CaptionComponent caption={activeCaption} timeInSeconds={timeInSeconds} />
+        <CaptionComponent
+          caption={activeCaption}
+          timeInSeconds={timeInSeconds}
+          position={position}
+        />
       )}
     </AbsoluteFill>
   );

@@ -1,6 +1,6 @@
 import { AbsoluteFill, spring, useVideoConfig } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Montserrat";
-import type { Caption } from "./types";
+import type { Caption, CaptionPosition } from "./types";
 
 const { fontFamily } = loadFont("normal", { weights: ["900"] });
 
@@ -11,20 +11,27 @@ const STROKE_COLOR = "#000000";
 export const HormoziCaption: React.FC<{
   caption: Caption;
   timeInSeconds: number;
-}> = ({ caption, timeInSeconds }) => {
+  position?: CaptionPosition;
+}> = ({ caption, timeInSeconds, position = "bottom" }) => {
   const { fps, height } = useVideoConfig();
 
   const baseFontSize = Math.round(height * 0.055);
   const strokeWidth = Math.max(3, Math.round(height * 0.004));
-  const paddingBottom = Math.round(height * 0.12);
+  const padBlock = Math.round(height * 0.12);
   const gap = Math.round(height * 0.008);
+
+  const positionStyles =
+    position === "top"
+      ? { justifyContent: "flex-start", paddingTop: padBlock }
+      : position === "center"
+        ? { justifyContent: "center" }
+        : { justifyContent: "flex-end", paddingBottom: padBlock };
 
   return (
     <AbsoluteFill
       style={{
-        justifyContent: "flex-end",
+        ...positionStyles,
         alignItems: "center",
-        paddingBottom,
       }}
     >
       <div
