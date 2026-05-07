@@ -18,6 +18,7 @@ export type ToolGroupKey =
   | "brand"
   | "magnet"
   | "video"
+  | "sandbox"
   | "all";
 
 export interface ToolGroup {
@@ -75,6 +76,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Video",
     description: "Video con IA (Runway Gen-4.5) + personajes recurrentes. Ghosty decide: recuerda a quién y genera clips con el mismo personaje en escenas distintas. Ideal para WhatsApp.",
     toolCount: 6,
+  },
+  {
+    key: "sandbox",
+    label: "Sandbox",
+    description: "MicroVMs Firecracker para correr agentes y código aislado. Spawn, exec, archivos, destroy. Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
+    toolCount: 9,
   },
   {
     key: "all",
@@ -254,6 +261,19 @@ export const MAGNET_ALLOWLIST = new Set<string>([
   "get_default_brand_kit", "list_brand_kits",
 ]);
 
+/** Sandbox toolset — Firecracker microVMs para harness de agentes. */
+export const SANDBOX_ALLOWLIST = new Set<string>([
+  "sandbox_create",
+  "sandbox_list",
+  "sandbox_status",
+  "sandbox_destroy",
+  "sandbox_exec",
+  "sandbox_run_code",
+  "sandbox_files_write",
+  "sandbox_files_read",
+  "sandbox_files_list",
+]);
+
 /**
  * Map of group key → allowlist. Groups without an entry load the full tool
  * set of their registered categories (no name-level filtering).
@@ -263,4 +283,5 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   design: DESIGN_ALLOWLIST,
   magnet: MAGNET_ALLOWLIST,
   video: VIDEO_ALLOWLIST,
+  sandbox: SANDBOX_ALLOWLIST,
 };

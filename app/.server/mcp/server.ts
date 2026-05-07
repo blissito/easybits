@@ -83,6 +83,17 @@ import {
   importDatabase,
 } from "../core/databaseOperations";
 import {
+  createSandbox,
+  listSandboxes,
+  getSandbox,
+  destroySandbox,
+  execCommand,
+  runCode,
+  writeFile as sandboxWriteFile,
+  readFile as sandboxReadFile,
+  listFiles as sandboxListFiles,
+} from "../core/sandboxOperations";
+import {
   listDocuments,
   getDocument,
   createDocument,
@@ -929,6 +940,145 @@ How to embed safely (the only reliable rule):
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
+
+  // --- Sandbox Tools (Firecracker microVMs) ---
+
+  server.tool(
+    "sandbox_create",
+    "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Templates: ubuntu (base), python, node, bun, claude-code (preinstalled harness). Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses.",
+    {
+      template: z.enum(["ubuntu", "python", "node", "bun", "claude-code", "nanoclaw"]).describe("Base image template"),
+      timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
+      name: z.string().max(64).optional().describe("Optional human-friendly label"),
+      metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createSandbox(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_list",
+    "List all active sandboxes owned by the current account.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listSandboxes(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_status",
+    "Get current status of a sandbox (running/stopped/error, uptime, resource usage).",
+    {
+      sandboxId: z.string().describe("Sandbox ID returned by sandbox_create"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getSandbox(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_destroy",
+    "Permanently destroy a sandbox and free its resources. Idempotent.",
+    {
+      sandboxId: z.string().describe("Sandbox ID to destroy"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await destroySandbox(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_exec",
+    "Execute a shell command inside a sandbox. Returns stdout, stderr, exitCode, durationMs. Default timeout 60s, max 600s.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      command: z.string().describe("Shell command (e.g. 'ls -la /app', 'npm install')"),
+      cwd: z.string().optional().describe("Working directory (default /root)"),
+      timeoutSeconds: z.number().int().min(1).max(600).optional().describe("Kill command if it exceeds this (default 60)"),
+      env: z.record(z.string()).optional().describe("Extra environment variables"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await execCommand(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_run_code",
+    "Run a snippet of Python/Node/Bash inline (no need to write a file first). Output captured. Default lang=python.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      code: z.string().describe("Source code to execute"),
+      lang: z.enum(["python", "node", "bash"]).optional().describe("Language runtime (default python)"),
+      timeoutSeconds: z.number().int().min(1).max(600).optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await runCode(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_write",
+    "Write a file inside the sandbox. Creates parent dirs if needed. Use encoding=base64 for binary content.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      path: z.string().describe("Absolute path inside sandbox (e.g. /app/main.py)"),
+      content: z.string().describe("File content (utf8 or base64)"),
+      encoding: z.enum(["utf8", "base64"]).optional().describe("Default utf8"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxWriteFile(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_read",
+    "Read a file from the sandbox. Returns content + size. Use encoding=base64 for binary.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      path: z.string().describe("Absolute path inside sandbox"),
+      encoding: z.enum(["utf8", "base64"]).optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxReadFile(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_list",
+    "List directory entries (name, size, isDir, modifiedAt) inside the sandbox.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      path: z.string().describe("Absolute directory path inside sandbox"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxListFiles(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
   // --- Utility Tools ---
 
   server.tool(
