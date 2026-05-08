@@ -99,6 +99,11 @@ import {
   getAgentRunStatus,
 } from "../core/agentOperations";
 import {
+  createSecret,
+  deleteSecretByName,
+  listSecrets,
+} from "../core/secretOperations";
+import {
   listDocuments,
   getDocument,
   createDocument,
@@ -1131,6 +1136,53 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await destroyAgentRun(ctx, params.job_id);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  // --- EasyBits Secrets ---
+  // Per-user encrypted env-var store. Used by `agent_run({ secrets: [...] })`
+  // to inject env vars into the sandbox without the caller ever holding the
+  // plaintext. The actual value is never returned by these tools — only the
+  // name and metadata.
+
+  server.tool(
+    "secret_set",
+    "Create or update an EasyBits Secret for the calling account. Stored AES-256-GCM encrypted at rest. Once saved the value can never be read back via API or MCP — only injected as an env var into a sandbox via `agent_run({ secrets: [name, ...] })`. Names must match `[A-Z_][A-Z0-9_]*` (uppercase, digits, underscores only). Calling with an existing name overwrites the value.",
+    {
+      name: z.string().describe("Env-var-style name, e.g. BRIGHTDATA_API_TOKEN"),
+      value: z.string().min(1).describe("The secret value — sent over TLS, encrypted at rest, never returned again"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createSecret(ctx.user.id, {
+        name: params.name,
+        value: params.value,
+      });
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, name: result.name, createdAt: result.createdAt }, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "secret_list",
+    "List the names of all EasyBits Secrets stored for the calling account. Values are NEVER returned — this only shows names, creation dates and last-used timestamps so you know what's available to pass to `agent_run({ secrets: [...] })`.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listSecrets(ctx.user.id);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "secret_delete",
+    "Delete an EasyBits Secret by name. Any pending or future `agent_run` calls that reference this name will fail until you re-create it.",
+    {
+      name: z.string().describe("Name of the secret to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteSecretByName(ctx.user.id, params.name);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

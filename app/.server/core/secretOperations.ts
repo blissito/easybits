@@ -62,6 +62,16 @@ export async function deleteSecret(
   return { deleted: result.count > 0 };
 }
 
+export async function deleteSecretByName(
+  userId: string,
+  name: string
+): Promise<{ deleted: boolean }> {
+  const result = await db.secret.deleteMany({
+    where: { userId, name: name.trim() },
+  });
+  return { deleted: result.count > 0 };
+}
+
 /**
  * Server-side only — used by `agent_run` to inject secrets as env vars in
  * the sandbox. NEVER expose this to a route loader/action; the plaintext

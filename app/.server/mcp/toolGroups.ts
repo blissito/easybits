@@ -194,6 +194,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "create_share_link", "list_share_links", "revoke_share_link",
   "clone_document",
   "apply_brand_kit", "change_document_format", "wait_for_document",
+  "secret_set", "secret_list", "secret_delete",
 ]);
 
 /** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */
