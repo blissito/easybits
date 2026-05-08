@@ -209,6 +209,7 @@ model User {
   videoGenerations     VideoGeneration[]
   shareLinks           ShareLink[]
   secrets              Secret[]
+  agents               Agent[]
 }
 
 model Secret {
@@ -815,4 +816,24 @@ model FormSubmission {
   createdAt    DateTime @default(now())
 
   @@index([formConfigId])
+}
+
+// Persistent agent registry — links public agentId / embedToken to the
+// underlying sandbox-host microVM. Source of truth for agent ownership and
+// embedToken auth. The microVM itself lives in sandbox-host (not Mongo);
+// expiresAt mirrors the sandbox auto-destroy TTL.
+model Agent {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId     String    @db.ObjectId
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sandboxId   String
+  agentUrl    String
+  template    String
+  embedToken  String    @unique
+  name        String?
+  status      String    @default("running")
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+
+  @@index([ownerId])
 }

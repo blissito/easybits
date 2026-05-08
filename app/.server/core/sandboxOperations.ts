@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 
@@ -310,9 +312,21 @@ export async function startAgent(
   );
 }
 
-// High-level: spawn sandbox + wait running + start agent runtime + return everything.
-// Used by the `agent_create` MCP tool. Distinct from `agent_run` (Claude one-shot
-// managed) — this returns a long-lived agent reachable at agentUrl.
+// High-level: spawn sandbox + wait running + start agent runtime + persist Agent
+// row + return public handles. Distinct from `agent_run` (Claude one-shot
+// managed) — this returns a long-lived agent reachable at agentUrl + an
+// embedToken that can authenticate browser requests without exposing the
+// owner's API key.
+export interface CreatedAgent {
+  agentId: string;
+  embedToken: string;
+  sandboxId: string;
+  agentUrl: string;
+  healthUrl: string;
+  template: SandboxTemplate;
+  expiresAt: Date | null;
+}
+
 export async function createAgent(
   ctx: AuthContext,
   params: {
@@ -323,7 +337,7 @@ export async function createAgent(
     port?: number;
     healthPath?: string;
   }
-): Promise<{ sandboxId: string; agentUrl: string; healthUrl: string; template: SandboxTemplate }> {
+): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
   const sb = await createSandbox(ctx, {
     template: params.template,
@@ -336,11 +350,28 @@ export async function createAgent(
     port: params.port,
     healthPath: params.healthPath,
   });
+  const embedToken = "agt_" + randomBytes(32).toString("hex");
+  const expiresAt = sb.expiresAt ? new Date(sb.expiresAt) : null;
+  const row = await db.agent.create({
+    data: {
+      ownerId: ctx.user.id,
+      sandboxId: sb.sandboxId,
+      agentUrl: ep.agentUrl,
+      template: params.template,
+      embedToken,
+      name: params.name,
+      status: "running",
+      expiresAt,
+    },
+  });
   return {
+    agentId: row.id,
+    embedToken,
     sandboxId: sb.sandboxId,
     template: params.template,
     agentUrl: ep.agentUrl,
     healthUrl: ep.healthUrl,
+    expiresAt,
   };
 }
 
@@ -356,7 +387,7 @@ const GHOSTY_DEFAULT_MODEL = "claude-haiku-4-5";
 export async function spawnGhosty(
   ctx: AuthContext,
   params: { name?: string; systemPrompt?: string; timeoutSeconds?: number } = {}
-): Promise<{ sandboxId: string; agentUrl: string; healthUrl: string; template: SandboxTemplate }> {
+): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
   const hostKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
   if (!hostKey) {
@@ -374,6 +405,90 @@ export async function spawnGhosty(
       SYSTEM_PROMPT: params.systemPrompt ?? GHOSTY_DEFAULT_PROMPT,
     },
   });
+}
+
+// ─────────────── Agent registry (Mongo-backed) ───────────────
+
+export interface AgentRecord {
+  agentId: string;
+  ownerId: string;
+  sandboxId: string;
+  agentUrl: string;
+  template: string;
+  embedToken: string;
+  name: string | null;
+  status: string;
+  createdAt: Date;
+  expiresAt: Date | null;
+}
+
+function toAgentRecord(row: {
+  id: string;
+  ownerId: string;
+  sandboxId: string;
+  agentUrl: string;
+  template: string;
+  embedToken: string;
+  name: string | null;
+  status: string;
+  createdAt: Date;
+  expiresAt: Date | null;
+}): AgentRecord {
+  return {
+    agentId: row.id,
+    ownerId: row.ownerId,
+    sandboxId: row.sandboxId,
+    agentUrl: row.agentUrl,
+    template: row.template,
+    embedToken: row.embedToken,
+    name: row.name,
+    status: row.status,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
+// Owner-only — looks up an agent by id and confirms ownership.
+export async function getAgent(ctx: AuthContext, agentId: string): Promise<AgentRecord> {
+  requireScope(ctx, "READ");
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
+  }
+  return toAgentRecord(row);
+}
+
+export async function listAgents(ctx: AuthContext): Promise<AgentRecord[]> {
+  requireScope(ctx, "READ");
+  const rows = await db.agent.findMany({
+    where: { ownerId: ctx.user.id },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(toAgentRecord);
+}
+
+export async function destroyAgent(ctx: AuthContext, agentId: string): Promise<{ ok: true }> {
+  requireScope(ctx, "DELETE");
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
+  }
+  try {
+    await destroySandbox(ctx, row.sandboxId);
+  } catch {
+    // sandbox may already be gone (TTL expired) — proceed to row delete
+  }
+  await db.agent.delete({ where: { id: agentId } });
+  return { ok: true };
+}
+
+// resolveAgentByEmbedToken: read-only path for embed auth in apiAuth helper.
+// Returns the agent if the token matches; null otherwise. Does NOT enforce
+// scope — caller decides what the embed token is allowed to do.
+export async function findAgentByEmbedToken(token: string): Promise<AgentRecord | null> {
+  if (!token.startsWith("agt_")) return null;
+  const row = await db.agent.findUnique({ where: { embedToken: token } });
+  return row ? toAgentRecord(row) : null;
 }
 
 // messageAgent: POST a message to a chat-* agent and collect the SSE stream

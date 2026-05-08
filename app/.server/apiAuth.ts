@@ -70,3 +70,80 @@ export function requireAuth(ctx: AuthContext | null): AuthContext {
   }
   return ctx;
 }
+
+export type AgentAuthResult =
+  | { kind: "owner"; ctx: AuthContext; agent: AgentAuthInfo }
+  | { kind: "embed"; ctx: AuthContext; agent: AgentAuthInfo };
+
+export interface AgentAuthInfo {
+  agentId: string;
+  ownerId: string;
+  sandboxId: string;
+  agentUrl: string;
+  embedToken: string;
+}
+
+// resolveAgentAuth: dual-mode auth for /api/v2/agents/:id/* endpoints.
+// - eb_sk_* / session: standard owner auth, must own the requested agent.
+// - agt_*: embedToken — scope WRITE limited to operating THIS agent only.
+//   The embed context is built from the agent owner so downstream code that
+//   reads ctx.user keeps working, but the apiKey field is left undefined
+//   (no DB key associated) and scopes are forced to ["WRITE"] (no DELETE,
+//   no ADMIN — embeds cannot destroy or list).
+export async function resolveAgentAuth(
+  request: Request,
+  agentId: string
+): Promise<AgentAuthResult> {
+  const authHeader = request.headers.get("Authorization");
+  const raw = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (raw?.startsWith("agt_")) {
+    const { findAgentByEmbedToken } = await import("./core/sandboxOperations");
+    const agent = await findAgentByEmbedToken(raw);
+    if (!agent || agent.agentId !== agentId) {
+      throw new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const owner = await db.user.findUnique({ where: { id: agent.ownerId } });
+    if (!owner) {
+      throw new Response(JSON.stringify({ error: "Owner not found" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return {
+      kind: "embed",
+      ctx: { user: owner, scopes: ["WRITE"] },
+      agent: {
+        agentId: agent.agentId,
+        ownerId: agent.ownerId,
+        sandboxId: agent.sandboxId,
+        agentUrl: agent.agentUrl,
+        embedToken: agent.embedToken,
+      },
+    };
+  }
+
+  // Owner mode (API key, OAuth JWT, or session)
+  const ctx = requireAuth(await authenticateRequest(request));
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Agent not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  return {
+    kind: "owner",
+    ctx,
+    agent: {
+      agentId: row.id,
+      ownerId: row.ownerId,
+      sandboxId: row.sandboxId,
+      agentUrl: row.agentUrl,
+      embedToken: row.embedToken,
+    },
+  };
+}
