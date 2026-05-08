@@ -22,6 +22,7 @@ export interface SandboxRecord {
   createdAt: string;
   expiresAt: string;
   ownerId: string;
+  metadata?: Record<string, string>;
 }
 
 export interface ExecResult {
@@ -105,6 +106,36 @@ export async function listSandboxes(ctx: AuthContext): Promise<SandboxRecord[]> 
 export async function getSandbox(ctx: AuthContext, sandboxId: string): Promise<SandboxRecord> {
   requireScope(ctx, "READ");
   return callHost<SandboxRecord>("GET", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
+}
+
+export interface WaitUntilRunningOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+}
+
+export async function waitUntilRunning(
+  ctx: AuthContext,
+  sandboxId: string,
+  options: WaitUntilRunningOptions = {}
+): Promise<SandboxRecord> {
+  const { timeoutMs = 30_000, intervalMs = 500 } = options;
+  const deadline = Date.now() + timeoutMs;
+  let last: SandboxRecord | undefined;
+  while (Date.now() <= deadline) {
+    last = await getSandbox(ctx, sandboxId);
+    if (last.status === "running") return last;
+    if (last.status === "error") {
+      const reason = last.metadata?.error ?? "unknown error";
+      throw new Error(`sandbox ${sandboxId} failed to start: ${reason}`);
+    }
+    if (last.status === "stopped") {
+      throw new Error(`sandbox ${sandboxId} is stopped`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(
+    `sandbox ${sandboxId} not running after ${timeoutMs}ms (last status=${last?.status ?? "unknown"})`
+  );
 }
 
 export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {

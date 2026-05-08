@@ -6,6 +6,7 @@ import {
   createSandbox,
   destroySandbox,
   execCommand,
+  waitUntilRunning,
   writeFile as sandboxWriteFile,
   type ExecResult,
 } from "./sandboxOperations";
@@ -125,6 +126,7 @@ export async function runAgent(
     .slice(2, 8)}.js`;
   let exec: ExecResult;
   try {
+    await waitUntilRunning(ctx, sandboxId);
     await sandboxWriteFile(ctx, sandboxId, {
       path: scriptPath,
       content: AGENT_SCRIPT,
