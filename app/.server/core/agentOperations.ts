@@ -300,7 +300,7 @@ export async function enqueueAgentRun(
     template: "node-agent",
     timeoutSeconds: SANDBOX_TTL_S,
     name: "agent-run",
-    metadata: { kind: "agent_run", byok },
+    metadata: { kind: "agent_run" },
   });
   const jobId = sb.sandboxId;
 
