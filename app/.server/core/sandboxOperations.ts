@@ -10,6 +10,7 @@ export type SandboxTemplate =
   | "ubuntu"
   | "python"
   | "node"
+  | "node-agent"
   | "bun"
   | "claude-code"
   | "nanoclaw";

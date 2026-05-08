@@ -93,6 +93,7 @@ import {
   readFile as sandboxReadFile,
   listFiles as sandboxListFiles,
 } from "../core/sandboxOperations";
+import { runAgent } from "../core/agentOperations";
 import {
   listDocuments,
   getDocument,
@@ -947,7 +948,7 @@ How to embed safely (the only reliable rule):
     "sandbox_create",
     "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Templates: ubuntu (base), python, node, bun, claude-code (preinstalled harness). Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses.",
     {
-      template: z.enum(["ubuntu", "python", "node", "bun", "claude-code", "nanoclaw"]).describe("Base image template"),
+      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "nanoclaw"]).describe("Base image template. 'node-agent' = node + @anthropic-ai/sdk pre-baked, used by agent_run."),
       timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
@@ -1075,6 +1076,29 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { sandboxId, ...rest } = params;
       const result = await sandboxListFiles(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_run",
+    "Run a managed Claude agent inside a Firecracker sandbox. EasyBits supplies the Anthropic API key — usage is logged per call (input/output tokens + USD cost) and billed to the calling account. If sandbox_id is omitted, an ephemeral sandbox is created and destroyed for this single call. Pass sandbox_id to reuse a pre-warmed sandbox across calls. Default model: claude-sonnet-4-6, max_tokens: 2048.",
+    {
+      prompt: z.string().min(1).describe("User prompt sent to the model"),
+      sandbox_id: z.string().optional().describe("Existing sandbox ID to reuse (must be a 'node' template). If omitted, an ephemeral sandbox is auto-created and destroyed."),
+      system: z.string().optional().describe("Optional system prompt"),
+      model: z.string().optional().describe("Anthropic model id (default claude-sonnet-4-6)"),
+      max_tokens: z.number().int().min(1).max(8192).optional().describe("Max output tokens (default 2048)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await runAgent(ctx, {
+        prompt: params.prompt,
+        sandboxId: params.sandbox_id,
+        system: params.system,
+        model: params.model,
+        maxTokens: params.max_tokens,
+      });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

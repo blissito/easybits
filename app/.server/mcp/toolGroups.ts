@@ -80,8 +80,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "sandbox",
     label: "Sandbox",
-    description: "MicroVMs Firecracker para correr agentes y código aislado. Spawn, exec, archivos, destroy. Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
-    toolCount: 9,
+    description: "MicroVMs Firecracker para correr agentes y código aislado. Spawn, exec, archivos, destroy + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
+    toolCount: 10,
   },
   {
     key: "all",
@@ -272,6 +272,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_files_write",
   "sandbox_files_read",
   "sandbox_files_list",
+  "agent_run",
 ]);
 
 /**
