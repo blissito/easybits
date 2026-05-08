@@ -15,9 +15,10 @@ import { getSecretValue } from "./secretOperations";
 
 // Env var names buildEnv() owns. A user-supplied secret with the same name
 // would silently break the sandbox (e.g. swap NODE_PATH and break require).
+// ANTHROPIC_API_KEY is NOT reserved — passing it via secrets switches the
+// run to BYOK (Bring Your Own Key) mode and skips Claude billing.
 const RESERVED_ENV_NAMES = new Set([
   "NODE_PATH",
-  "ANTHROPIC_API_KEY",
   "RESULT_PATH",
   "PROMPT_B64",
   "SYSTEM_B64",
@@ -26,6 +27,10 @@ const RESERVED_ENV_NAMES = new Set([
   "ALLOWED_TOOLS_B64",
   "MCP_SERVERS_B64",
 ]);
+
+// Marker file written when the run uses a user-supplied ANTHROPIC_API_KEY.
+// Presence of this flag makes getAgentRunStatus skip Claude-token billing.
+const BYOK_FLAG_PATH = "/tmp/agent_byok.flag";
 
 const HOST_ANTHROPIC_KEY = process.env.SANDBOX_HOST_ANTHROPIC_KEY || "";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
@@ -76,6 +81,7 @@ export interface AgentRunStatusResult {
     inputTokens: number;
     outputTokens: number;
     costCents: number;
+    byok?: boolean;
   };
   model?: string;
   durationMs?: number;
@@ -231,10 +237,11 @@ function buildEnv(
 ): Record<string, string> {
   const model = params.model || DEFAULT_MODEL;
   const maxTurns = params.maxTurns || DEFAULT_MAX_TURNS;
+  const anthropicKey = resolvedSecrets.ANTHROPIC_API_KEY || HOST_ANTHROPIC_KEY;
   return {
     ...resolvedSecrets,
     NODE_PATH: "/usr/local/lib/node_modules",
-    ANTHROPIC_API_KEY: HOST_ANTHROPIC_KEY,
+    ANTHROPIC_API_KEY: anthropicKey,
     RESULT_PATH,
     PROMPT_B64: Buffer.from(params.prompt, "utf8").toString("base64"),
     SYSTEM_B64: params.system
@@ -256,12 +263,6 @@ export async function enqueueAgentRun(
   params: AgentRunParams
 ): Promise<EnqueueAgentRunResult> {
   requireScope(ctx, "WRITE");
-
-  if (!HOST_ANTHROPIC_KEY) {
-    throw new Error(
-      "agent_run not configured: SANDBOX_HOST_ANTHROPIC_KEY env var missing"
-    );
-  }
 
   const resolvedSecrets: Record<string, string> = {};
   if (params.secrets?.length) {
@@ -288,11 +289,18 @@ export async function enqueueAgentRun(
     }
   }
 
+  const byok = !!resolvedSecrets.ANTHROPIC_API_KEY;
+  if (!byok && !HOST_ANTHROPIC_KEY) {
+    throw new Error(
+      "agent_run not configured: no ANTHROPIC_API_KEY available. Either register your own via secret_set + secrets:[\"ANTHROPIC_API_KEY\"] (BYOK), or ask the operator to set SANDBOX_HOST_ANTHROPIC_KEY."
+    );
+  }
+
   const sb = await createSandbox(ctx, {
     template: "node-agent",
     timeoutSeconds: SANDBOX_TTL_S,
     name: "agent-run",
-    metadata: { kind: "agent_run" },
+    metadata: { kind: "agent_run", byok },
   });
   const jobId = sb.sandboxId;
 
@@ -302,6 +310,13 @@ export async function enqueueAgentRun(
       path: SCRIPT_PATH,
       content: AGENT_SCRIPT,
     });
+    if (byok) {
+      // Marker for getAgentRunStatus — read-side decides whether to bill.
+      await sandboxWriteFile(ctx, jobId, {
+        path: BYOK_FLAG_PATH,
+        content: "1",
+      });
+    }
     // Detach so /exec returns immediately while the agent loop runs in
     // background. nohup + redirected stdio + disown survives the parent
     // shell exit.
@@ -375,6 +390,17 @@ export async function getAgentRunStatus(
       : computeCostCents(out.model, inputTokens, outputTokens);
   const durationMs = Math.max(0, (out.finishedAt || 0) - (out.startedAt || 0));
 
+  // BYOK: caller supplied their own ANTHROPIC_API_KEY, so we don't bill the
+  // Claude tokens (they paid Anthropic directly). Sandbox infra billing is
+  // a separate concern, tracked elsewhere when we add it.
+  let isByok = false;
+  try {
+    await sandboxReadFile(ctx, jobId, { path: BYOK_FLAG_PATH });
+    isByok = true;
+  } catch {
+    /* host-key run */
+  }
+
   // Idempotent billing: only fire once per sandbox lifetime. The flag file
   // lives inside the VM, which is the same process boundary as the result
   // file, so a successful read here implies the same VM produced both.
@@ -385,7 +411,7 @@ export async function getAgentRunStatus(
   } catch {
     /* no flag yet */
   }
-  if (!alreadyBilled) {
+  if (!alreadyBilled && !isByok) {
     logAiUsage(ctx.user.id, {
       type: "agent_run",
       product: "agent",
@@ -408,7 +434,12 @@ export async function getAgentRunStatus(
     response: out.response,
     steps: out.steps,
     stopReason: out.stopReason,
-    usage: { inputTokens, outputTokens, costCents },
+    usage: {
+      inputTokens,
+      outputTokens,
+      costCents: isByok ? 0 : costCents,
+      byok: isByok,
+    },
     model: out.model,
     durationMs,
     error: out.error || undefined,
