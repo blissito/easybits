@@ -15,8 +15,10 @@ import { getSecretValue } from "./secretOperations";
 
 // Env var names buildEnv() owns. A user-supplied secret with the same name
 // would silently break the sandbox (e.g. swap NODE_PATH and break require).
-// ANTHROPIC_API_KEY is NOT reserved — passing it via secrets switches the
-// run to BYOK (Bring Your Own Key) mode and skips Claude billing.
+// ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_AUTH_TOKEN are
+// NOT reserved — passing them via secrets switches the run to BYOK
+// (Bring Your Own Key) mode and skips Claude billing. OAuth wins over
+// API key when both are supplied.
 const RESERVED_ENV_NAMES = new Set([
   "NODE_PATH",
   "RESULT_PATH",
@@ -32,6 +34,18 @@ const RESERVED_ENV_NAMES = new Set([
 // Presence of this flag makes getAgentRunStatus skip Claude-token billing.
 const BYOK_FLAG_PATH = "/tmp/agent_byok.flag";
 
+// Host-level Anthropic credentials — used when the caller did NOT pass
+// their own via secrets:[\"ANTHROPIC_API_KEY\"] or secrets:[\"CLAUDE_CODE_OAUTH_TOKEN\"].
+// Priority: OAuth token (Max plan, no per-token billing) → API key fallback.
+// The Anthropic SDK reads ANTHROPIC_AUTH_TOKEN for OAuth and ANTHROPIC_API_KEY
+// for API-key auth, so we just route into whichever the host has set.
+// Note: this gives no automatic 429 fallback inside the sandbox — that's
+// what nanoclaw's credential-proxy does. If we hit OAuth quota and need
+// graceful degradation, we'd need a proxy on localhost inside the VM.
+const HOST_OAUTH_TOKEN =
+  process.env.SANDBOX_HOST_OAUTH_TOKEN ||
+  process.env.CLAUDE_CODE_OAUTH_TOKEN ||
+  "";
 const HOST_ANTHROPIC_KEY = process.env.SANDBOX_HOST_ANTHROPIC_KEY || "";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const SANDBOX_TTL_S = 1800; // 30 min — the real cap on a runaway loop.
@@ -284,11 +298,32 @@ function buildEnv(
   resolvedSecrets: Record<string, string>
 ): Record<string, string> {
   const model = params.model || DEFAULT_MODEL;
-  const anthropicKey = resolvedSecrets.ANTHROPIC_API_KEY || HOST_ANTHROPIC_KEY;
+  // Auth selection: a user-supplied OAuth token wins over a user-supplied
+  // API key (OAuth uses the Max plan, no per-token billing); host-level
+  // OAuth wins over host-level API key for the same reason. We deliberately
+  // emit ONLY ONE of the two env vars to avoid the SDK preferring the
+  // wrong one (it picks ANTHROPIC_API_KEY ahead of ANTHROPIC_AUTH_TOKEN
+  // when both are set).
+  const userOAuth =
+    resolvedSecrets.CLAUDE_CODE_OAUTH_TOKEN ||
+    resolvedSecrets.ANTHROPIC_AUTH_TOKEN ||
+    "";
+  const userApiKey = resolvedSecrets.ANTHROPIC_API_KEY || "";
+  const oauthToken = userOAuth || HOST_OAUTH_TOKEN;
+  const apiKey = userApiKey || HOST_ANTHROPIC_KEY;
+  const useOAuth = !!oauthToken;
+  // Strip auth secrets from the spread — we re-emit them explicitly under
+  // the names the SDK expects, avoiding double-set conflicts.
+  const restSecrets: Record<string, string> = { ...resolvedSecrets };
+  delete restSecrets.CLAUDE_CODE_OAUTH_TOKEN;
+  delete restSecrets.ANTHROPIC_AUTH_TOKEN;
+  delete restSecrets.ANTHROPIC_API_KEY;
   return {
-    ...resolvedSecrets,
+    ...restSecrets,
     NODE_PATH: "/usr/local/lib/node_modules",
-    ANTHROPIC_API_KEY: anthropicKey,
+    ...(useOAuth
+      ? { ANTHROPIC_AUTH_TOKEN: oauthToken }
+      : { ANTHROPIC_API_KEY: apiKey }),
     RESULT_PATH,
     PROMPT_B64: Buffer.from(params.prompt, "utf8").toString("base64"),
     SYSTEM_B64: params.system
@@ -336,10 +371,14 @@ export async function enqueueAgentRun(
     }
   }
 
-  const byok = !!resolvedSecrets.ANTHROPIC_API_KEY;
-  if (!byok && !HOST_ANTHROPIC_KEY) {
+  const byok =
+    !!resolvedSecrets.ANTHROPIC_API_KEY ||
+    !!resolvedSecrets.CLAUDE_CODE_OAUTH_TOKEN ||
+    !!resolvedSecrets.ANTHROPIC_AUTH_TOKEN;
+  const hostHasAuth = !!HOST_OAUTH_TOKEN || !!HOST_ANTHROPIC_KEY;
+  if (!byok && !hostHasAuth) {
     throw new Error(
-      "agent_run not configured: no ANTHROPIC_API_KEY available. Either register your own via secret_set + secrets:[\"ANTHROPIC_API_KEY\"] (BYOK), or ask the operator to set SANDBOX_HOST_ANTHROPIC_KEY."
+      "agent_run not configured: no Anthropic credentials available. Either register your own via secret_set + secrets:[\"ANTHROPIC_API_KEY\"] or secrets:[\"CLAUDE_CODE_OAUTH_TOKEN\"] (BYOK), or ask the operator to set SANDBOX_HOST_OAUTH_TOKEN / SANDBOX_HOST_ANTHROPIC_KEY."
     );
   }
 
