@@ -13,6 +13,10 @@ import {
   writeFile as sandboxWriteFile,
 } from "./sandboxOperations";
 import { getSecretValue } from "./secretOperations";
+import { createApiKey } from "../iam";
+
+const EASYBITS_BASE_URL =
+  process.env.EASYBITS_URL || "https://www.easybits.cloud";
 
 // Env var names buildEnv() owns. A user-supplied secret with the same name
 // would silently break the sandbox (e.g. swap NODE_PATH and break require).
@@ -181,9 +185,13 @@ if (!customSystem && mcpServers && typeof mcpServers === "object") {
   }
 }
 
+const baseAllowed = Array.isArray(allowedTools) && allowedTools.length > 0 ? allowedTools : DEFAULT_ALLOWED_TOOLS;
+const mcpWildcards = mcpServers && typeof mcpServers === "object"
+  ? Object.keys(mcpServers).map((n) => "mcp__" + n + "__*")
+  : [];
 const options = {
   model,
-  allowedTools: Array.isArray(allowedTools) && allowedTools.length > 0 ? allowedTools : DEFAULT_ALLOWED_TOOLS,
+  allowedTools: Array.from(new Set([...baseAllowed, ...mcpWildcards])),
   disallowedTools: DEFAULT_DISALLOWED_TOOLS,
   permissionMode: "dontAsk",
   systemPrompt,
@@ -397,9 +405,33 @@ export async function enqueueAgentRun(
     );
   }
 
+  // Auto-inject EasyBits MCP unless caller already supplied one (or opted out
+  // with `easybits: false`). Mints a per-run ApiKey scoped to the caller's
+  // own scopes; expires shortly after the sandbox TTL so leaks are bounded.
+  const callerEasybits = (params.mcpServers ?? {})["easybits"];
+  let mcpServersWithDefault = params.mcpServers;
+  if (callerEasybits === undefined) {
+    const tempKey = await createApiKey(ctx.user.id, {
+      name: `agent_run-${ctx.user.id}-${Date.now()}`,
+      scopes: ctx.scopes,
+      expiresAt: new Date(Date.now() + (SANDBOX_TTL_S + 300) * 1000),
+    });
+    mcpServersWithDefault = {
+      easybits: {
+        type: "http",
+        url: `${EASYBITS_BASE_URL}/api/mcp`,
+        headers: { Authorization: `Bearer ${tempKey.raw}` },
+      },
+      ...(params.mcpServers ?? {}),
+    };
+  } else if (callerEasybits === false) {
+    const { easybits: _drop, ...rest } = params.mcpServers as Record<string, unknown>;
+    mcpServersWithDefault = rest;
+  }
+
   const expandedParams: AgentRunParams = {
     ...params,
-    mcpServers: expandMcpServerSecrets(params.mcpServers, resolvedSecrets),
+    mcpServers: expandMcpServerSecrets(mcpServersWithDefault, resolvedSecrets),
   };
 
   // Pool warm-reuse — caller supplies a pool_key to opt in. We try to
