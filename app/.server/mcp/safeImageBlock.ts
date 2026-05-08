@@ -50,7 +50,7 @@ const SIGNATURES: Signature[] = [
   },
 ];
 
-function detectMime(buf: Buffer): string | null {
+export function detectMime(buf: Buffer): string | null {
   for (const sig of SIGNATURES) {
     if (sig.matches(buf)) return sig.mime;
   }

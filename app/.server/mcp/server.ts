@@ -27,6 +27,7 @@ import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
+import { offloadOversizedRead } from "./offloadOversizedRead";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 
 // Legacy quotation/fast-pdf tools are hidden by default so the agent does not
@@ -1060,7 +1061,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_files_read",
-    "Read a file from the sandbox. Returns content + size. Use encoding=base64 for binary.",
+    "Read a file from the sandbox. Small text (<50KB) returns inline JSON with full content. Recognized images (PNG/JPEG/GIF/WebP) under 1MB return as MCP image blocks. Larger or binary files upload to platform storage and return a 7-day signed URL plus metadata — this prevents context-window blow-up in the consuming agent. Use encoding=base64 for binary.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       path: z.string().describe("Absolute path inside sandbox"),
@@ -1070,7 +1071,7 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { sandboxId, ...rest } = params;
       const result = await sandboxReadFile(ctx, sandboxId, rest);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return offloadOversizedRead(ctx, result, params.path);
     })
   );
 
