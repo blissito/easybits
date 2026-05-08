@@ -6,21 +6,23 @@ import {
   createSandbox,
   destroySandbox,
   execCommand,
+  getSandbox,
   readFile as sandboxReadFile,
   waitUntilRunning,
   writeFile as sandboxWriteFile,
-  type ExecResult,
 } from "./sandboxOperations";
 
 const HOST_ANTHROPIC_KEY = process.env.SANDBOX_HOST_ANTHROPIC_KEY || "";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TURNS = 30;
-const EPHEMERAL_TTL_S = 600;
-const EXEC_TIMEOUT_S = 540;
+const SANDBOX_TTL_S = 1800; // 30 min — caps the runaway-cost worst case.
+const LAUNCHER_EXEC_TIMEOUT_S = 30;
+const SCRIPT_PATH = "/tmp/agent.js";
+const RESULT_PATH = "/tmp/agent_result.json";
+const LOG_PATH = "/tmp/agent.log";
 
 export interface AgentRunParams {
   prompt: string;
-  sandboxId?: string;
   system?: string;
   model?: string;
   maxTurns?: number;
@@ -37,19 +39,28 @@ export interface AgentStep {
   isError?: boolean;
 }
 
-export interface AgentRunResult {
-  response: string;
-  model: string;
-  usage: {
+export interface EnqueueAgentRunResult {
+  jobId: string;
+  status: "running";
+}
+
+export type AgentRunStatus = "running" | "done" | "error" | "expired";
+
+export interface AgentRunStatusResult {
+  jobId: string;
+  status: AgentRunStatus;
+  response?: string;
+  steps?: AgentStep[];
+  stopReason?: string;
+  usage?: {
     inputTokens: number;
     outputTokens: number;
     costCents: number;
   };
-  steps: AgentStep[];
-  stopReason: string;
-  sandboxId: string;
-  ephemeral: boolean;
-  durationMs: number;
+  model?: string;
+  durationMs?: number;
+  error?: string;
+  log?: string;
 }
 
 interface AgentScriptResult {
@@ -64,12 +75,14 @@ interface AgentScriptResult {
   stopReason: string;
   success: boolean;
   error: string | null;
+  startedAt: number;
+  finishedAt: number;
 }
 
 // Script that runs *inside* the sandbox microVM. Writes its final JSON
-// payload to RESULT_PATH (passed via env) instead of stdout, because the
-// Claude Agent SDK's underlying native binary writes its own logs/protocol
-// frames to stdout/stderr. Decoupling channels is the only reliable way.
+// payload to RESULT_PATH instead of stdout, because the Claude Agent SDK's
+// underlying native binary writes its own protocol frames and logs to
+// stdout/stderr.
 const AGENT_SCRIPT = `
 const fs = require("fs");
 const { query } = require("@anthropic-ai/claude-agent-sdk");
@@ -90,16 +103,11 @@ const mcpServers = parseJson(process.env.MCP_SERVERS_B64, null);
 const resultPath = process.env.RESULT_PATH;
 
 const options = { model, maxTurns };
-if (customSystem) {
-  options.systemPrompt = customSystem;
-}
-if (Array.isArray(allowedTools) && allowedTools.length > 0) {
-  options.allowedTools = allowedTools;
-}
-if (mcpServers && typeof mcpServers === "object") {
-  options.mcpServers = mcpServers;
-}
+if (customSystem) options.systemPrompt = customSystem;
+if (Array.isArray(allowedTools) && allowedTools.length > 0) options.allowedTools = allowedTools;
+if (mcpServers && typeof mcpServers === "object") options.mcpServers = mcpServers;
 
+const startedAt = Date.now();
 const steps = [];
 let finalText = "";
 let resultModel = model;
@@ -110,19 +118,18 @@ let success = true;
 let errorMessage = null;
 
 const writeResult = () => {
-  fs.writeFileSync(
-    resultPath,
-    JSON.stringify({
-      response: finalText,
-      model: resultModel,
-      usage,
-      totalCostUsd,
-      steps,
-      stopReason,
-      success,
-      error: errorMessage,
-    })
-  );
+  fs.writeFileSync(resultPath, JSON.stringify({
+    response: finalText,
+    model: resultModel,
+    usage,
+    totalCostUsd,
+    steps,
+    stopReason,
+    success,
+    error: errorMessage,
+    startedAt,
+    finishedAt: Date.now(),
+  }));
 };
 
 (async () => {
@@ -139,9 +146,7 @@ const writeResult = () => {
           if (block.type === "tool_result") {
             const step = steps.find((s) => s.id === block.tool_use_id);
             if (step) {
-              step.result = typeof block.content === "string"
-                ? block.content
-                : JSON.stringify(block.content);
+              step.result = typeof block.content === "string" ? block.content : JSON.stringify(block.content);
               step.isError = !!block.is_error;
             }
           }
@@ -169,10 +174,32 @@ const writeResult = () => {
 });
 `;
 
-export async function runAgent(
+function buildEnv(params: AgentRunParams): Record<string, string> {
+  const model = params.model || DEFAULT_MODEL;
+  const maxTurns = params.maxTurns || DEFAULT_MAX_TURNS;
+  return {
+    NODE_PATH: "/usr/local/lib/node_modules",
+    ANTHROPIC_API_KEY: HOST_ANTHROPIC_KEY,
+    RESULT_PATH,
+    PROMPT_B64: Buffer.from(params.prompt, "utf8").toString("base64"),
+    SYSTEM_B64: params.system
+      ? Buffer.from(params.system, "utf8").toString("base64")
+      : "",
+    MODEL: model,
+    MAX_TURNS: String(maxTurns),
+    ALLOWED_TOOLS_B64: params.allowedTools
+      ? Buffer.from(JSON.stringify(params.allowedTools), "utf8").toString("base64")
+      : "",
+    MCP_SERVERS_B64: params.mcpServers
+      ? Buffer.from(JSON.stringify(params.mcpServers), "utf8").toString("base64")
+      : "",
+  };
+}
+
+export async function enqueueAgentRun(
   ctx: AuthContext,
   params: AgentRunParams
-): Promise<AgentRunResult> {
+): Promise<EnqueueAgentRunResult> {
   requireScope(ctx, "WRITE");
 
   if (!HOST_ANTHROPIC_KEY) {
@@ -181,99 +208,94 @@ export async function runAgent(
     );
   }
 
-  const model = params.model || DEFAULT_MODEL;
-  const maxTurns = params.maxTurns || DEFAULT_MAX_TURNS;
+  const sb = await createSandbox(ctx, {
+    template: "node-agent",
+    timeoutSeconds: SANDBOX_TTL_S,
+    name: "agent-run",
+    metadata: { kind: "agent_run" },
+  });
+  const jobId = sb.sandboxId;
 
-  let sandboxId = params.sandboxId;
-  let ephemeral = false;
-  if (!sandboxId) {
-    const sb = await createSandbox(ctx, {
-      template: "node-agent",
-      timeoutSeconds: EPHEMERAL_TTL_S,
-      name: "agent-run",
-      metadata: { kind: "agent_run" },
-    });
-    sandboxId = sb.sandboxId;
-    ephemeral = true;
-  }
-
-  const cleanup = async () => {
-    if (ephemeral && sandboxId) {
-      destroySandbox(ctx, sandboxId).catch(() => {});
-    }
-  };
-
-  const startedAt = Date.now();
-  const runId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const scriptPath = `/tmp/agent_${runId}.js`;
-  const resultPath = `/tmp/agent_result_${runId}.json`;
-  let exec: ExecResult;
-  let out: AgentScriptResult;
   try {
-    await waitUntilRunning(ctx, sandboxId);
-    await sandboxWriteFile(ctx, sandboxId, {
-      path: scriptPath,
+    await waitUntilRunning(ctx, jobId);
+    await sandboxWriteFile(ctx, jobId, {
+      path: SCRIPT_PATH,
       content: AGENT_SCRIPT,
     });
-    exec = await execCommand(ctx, sandboxId, {
-      command: `node ${scriptPath}`,
-      timeoutSeconds: EXEC_TIMEOUT_S,
-      env: {
-        // NODE_PATH lets `require("@anthropic-ai/claude-agent-sdk")` resolve
-        // the globally pre-baked SDK in the node-agent template. Dockerfile
-        // ENV doesn't propagate to systemd-spawned shell sessions, so we set
-        // it per-call.
-        NODE_PATH: "/usr/local/lib/node_modules",
-        ANTHROPIC_API_KEY: HOST_ANTHROPIC_KEY,
-        RESULT_PATH: resultPath,
-        PROMPT_B64: Buffer.from(params.prompt, "utf8").toString("base64"),
-        SYSTEM_B64: params.system
-          ? Buffer.from(params.system, "utf8").toString("base64")
-          : "",
-        MODEL: model,
-        MAX_TURNS: String(maxTurns),
-        ALLOWED_TOOLS_B64: params.allowedTools
-          ? Buffer.from(JSON.stringify(params.allowedTools), "utf8").toString(
-              "base64"
-            )
-          : "",
-        MCP_SERVERS_B64: params.mcpServers
-          ? Buffer.from(JSON.stringify(params.mcpServers), "utf8").toString(
-              "base64"
-            )
-          : "",
-      },
+    // Detach so /exec returns immediately while the agent loop runs in
+    // background. nohup + redirected stdio + disown survives the parent
+    // shell exit.
+    await execCommand(ctx, jobId, {
+      command: `nohup node ${SCRIPT_PATH} > ${LOG_PATH} 2>&1 < /dev/null & disown`,
+      timeoutSeconds: LAUNCHER_EXEC_TIMEOUT_S,
+      env: buildEnv(params),
     });
-
-    let resultJson: string;
-    try {
-      const file = await sandboxReadFile(ctx, sandboxId, { path: resultPath });
-      resultJson = file.content;
-    } catch (readErr) {
-      throw new Error(
-        `agent script did not produce result file (exit=${exec.exitCode}, stderr tail: ${exec.stderr.slice(-500)}, read error: ${String(readErr)})`
-      );
-    }
-    out = JSON.parse(resultJson) as AgentScriptResult;
   } catch (err) {
-    await cleanup();
+    destroySandbox(ctx, jobId).catch(() => {});
     throw err;
   }
 
-  const durationMs = Date.now() - startedAt;
-  if (!out.success) {
-    await cleanup();
-    throw new Error(`agent run failed: ${out.error || out.stopReason}`);
+  return { jobId, status: "running" };
+}
+
+export async function getAgentRunStatus(
+  ctx: AuthContext,
+  jobId: string
+): Promise<AgentRunStatusResult> {
+  requireScope(ctx, "READ");
+
+  // Confirm the sandbox is still around. If it expired (TTL hit) we lose
+  // any result that wasn't fetched in time.
+  let exists = true;
+  try {
+    await getSandbox(ctx, jobId);
+  } catch (err) {
+    const msg = String(err);
+    if (msg.includes("404") || msg.includes("not found")) {
+      exists = false;
+    } else {
+      throw err;
+    }
+  }
+  if (!exists) {
+    return { jobId, status: "expired" };
+  }
+
+  // Try reading the result file. If absent, the agent is still running.
+  let resultJson: string | null = null;
+  try {
+    const file = await sandboxReadFile(ctx, jobId, { path: RESULT_PATH });
+    resultJson = file.content;
+  } catch {
+    return { jobId, status: "running" };
+  }
+
+  let out: AgentScriptResult;
+  try {
+    out = JSON.parse(resultJson) as AgentScriptResult;
+  } catch (err) {
+    // Result file present but malformed — surface log for debugging then clean up.
+    const log = await sandboxReadFile(ctx, jobId, { path: LOG_PATH }).catch(
+      () => ({ content: "" })
+    );
+    destroySandbox(ctx, jobId).catch(() => {});
+    return {
+      jobId,
+      status: "error",
+      error: `failed to parse agent result: ${String(err)}`,
+      log: log.content?.slice(-2000) || "",
+    };
   }
 
   const inputTokens = out.usage.input_tokens || 0;
   const outputTokens = out.usage.output_tokens || 0;
-  // Prefer the SDK's total_cost_usd when present (accounts for cache pricing
-  // and per-tool pricing); fall back to our own pricing table for safety.
+  // Prefer the SDK's total_cost_usd when present (it accounts for cache
+  // pricing); fall back to our own pricing table for safety.
   const costCents =
     out.totalCostUsd > 0
       ? Math.round(out.totalCostUsd * 100)
       : computeCostCents(out.model, inputTokens, outputTokens);
+  const durationMs = Math.max(0, (out.finishedAt || 0) - (out.startedAt || 0));
 
   logAiUsage(ctx.user.id, {
     type: "agent_run",
@@ -282,20 +304,21 @@ export async function runAgent(
     modelId: out.model,
     inputTokens,
     outputTokens,
-    resourceId: sandboxId,
+    resourceId: jobId,
     durationMs,
   });
 
-  await cleanup();
+  destroySandbox(ctx, jobId).catch(() => {});
 
   return {
+    jobId,
+    status: out.success ? "done" : "error",
     response: out.response,
-    model: out.model,
-    usage: { inputTokens, outputTokens, costCents },
     steps: out.steps,
     stopReason: out.stopReason,
-    sandboxId,
-    ephemeral,
+    usage: { inputTokens, outputTokens, costCents },
+    model: out.model,
     durationMs,
+    error: out.error || undefined,
   };
 }

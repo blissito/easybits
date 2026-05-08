@@ -273,6 +273,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_files_read",
   "sandbox_files_list",
   "agent_run",
+  "agent_run_status",
 ]);
 
 /**

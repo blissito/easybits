@@ -93,7 +93,10 @@ import {
   readFile as sandboxReadFile,
   listFiles as sandboxListFiles,
 } from "../core/sandboxOperations";
-import { runAgent } from "../core/agentOperations";
+import {
+  enqueueAgentRun,
+  getAgentRunStatus,
+} from "../core/agentOperations";
 import {
   listDocuments,
   getDocument,
@@ -1082,10 +1085,9 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_run",
-    "Run a managed Claude agent (Claude Agent SDK loop) inside a Firecracker sandbox. The agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch/WebSearch tools and full root in an ephemeral Debian microVM with internet egress — it can install packages, fetch URLs, write files, and iterate on the task. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed per call. If sandbox_id is omitted, an ephemeral sandbox is created and destroyed. Returns the agent's final text plus a `steps` trace of every tool call it made. Default: claude-sonnet-4-6, 30 turns max.",
+    "Start a managed Claude agent (Claude Agent SDK loop) inside a fresh Firecracker microVM. The agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch/WebSearch tools and full root in an ephemeral Debian VM with internet egress — it can install packages, fetch URLs, write files, and iterate on the task. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed when the result is fetched. ASYNC: returns { jobId, status:'running' } immediately. Poll with `agent_run_status({ jobId })` until status is 'done'/'error'/'expired'. The sandbox auto-destroys 30 min after enqueue. Default: claude-sonnet-4-6, 30 turns max.",
     {
       prompt: z.string().min(1).describe("Task for the agent. Be specific about expected outputs (file paths, summary, etc)."),
-      sandbox_id: z.string().optional().describe("Existing 'node-agent' sandbox ID to reuse. If omitted, an ephemeral sandbox is auto-created and destroyed."),
       system: z.string().optional().describe("Override system prompt. If omitted, the SDK's default Claude Code system prompt is used."),
       model: z.string().optional().describe("Anthropic model id (default claude-sonnet-4-6)"),
       max_turns: z.number().int().min(1).max(100).optional().describe("Max agent loop iterations before forced stop (default 30). Hard cap to prevent runaway cost."),
@@ -1094,15 +1096,27 @@ How to embed safely (the only reliable rule):
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await runAgent(ctx, {
+      const result = await enqueueAgentRun(ctx, {
         prompt: params.prompt,
-        sandboxId: params.sandbox_id,
         system: params.system,
         model: params.model,
         maxTurns: params.max_turns,
         allowedTools: params.allowed_tools,
         mcpServers: params.mcp_servers,
       });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_run_status",
+    "Poll an agent run started with `agent_run`. Returns the current status: 'running' (still working), 'done' (success — result + steps + usage included), 'error' (failed — error + log included), or 'expired' (sandbox destroyed before result was fetched). Calling this on a 'done'/'error' job destroys the underlying sandbox and bills usage exactly once.",
+    {
+      job_id: z.string().describe("The jobId returned by agent_run"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getAgentRunStatus(ctx, params.job_id);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
