@@ -134,10 +134,19 @@ const DEFAULT_SYSTEM_PROMPT = [
   "Environment: Debian (node:22-slim base), Node 22, root user, internet open, no persistence — the VM is destroyed when you finish.",
   "There is NO Claude Code session and NO project: do not search for .claude directories, settings.json, or skills. They do not exist.",
   "Do not ask the user questions; you have no human to talk to. Do not spawn subagents.",
-  "Use Bash/Read/Write/Edit/Glob/Grep/WebFetch only. /tmp is your scratch space.",
+  "Use Bash/Read/Write/Edit/Glob/Grep/WebFetch and any provided MCP tools. /tmp is your scratch space.",
   "Install only what's strictly needed for the task. Pip on Debian needs --break-system-packages.",
   "Finish by emitting a clear final summary (paths of outputs, sizes, key facts).",
 ].join(" ");
+
+let systemPrompt = customSystem || DEFAULT_SYSTEM_PROMPT;
+if (!customSystem && mcpServers && typeof mcpServers === "object") {
+  const names = Object.keys(mcpServers);
+  if (names.length > 0) {
+    const list = names.map((n) => "mcp__" + n + "__*").join(", ");
+    systemPrompt += " MCP tools available in this run: " + list + ". Use them by their full mcp__<server>__<tool> name and prefer them over WebFetch/Bash when relevant to the task.";
+  }
+}
 
 const options = {
   model,
@@ -145,7 +154,7 @@ const options = {
   allowedTools: Array.isArray(allowedTools) && allowedTools.length > 0 ? allowedTools : DEFAULT_ALLOWED_TOOLS,
   disallowedTools: DEFAULT_DISALLOWED_TOOLS,
   permissionMode: "dontAsk",
-  systemPrompt: customSystem || DEFAULT_SYSTEM_PROMPT,
+  systemPrompt,
 };
 if (mcpServers && typeof mcpServers === "object") options.mcpServers = mcpServers;
 
