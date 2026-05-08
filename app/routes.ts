@@ -126,6 +126,7 @@ export default [
           route("webhooks", "routes/dash/developer/webhooks.tsx"),
           route("databases", "routes/dash/developer/databases.tsx"),
           route("domains", "routes/dash/developer/domains.tsx"),
+          route("secrets", "routes/dash/developer/secrets.tsx"),
         ]),
       ]),
       // Admin dashboard
