@@ -157,6 +157,7 @@ export default [
     route("agents/ghosty", "routes/api/v2/agents-ghosty.ts"),
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
+    route("templates", "routes/api/v2/templates.ts"),
     route("files", "routes/api/v2/files.ts"),
     route("files/search", "routes/api/v2/file-search.ts"),
     route("files/bulk-delete", "routes/api/v2/files-bulk-delete.ts"),

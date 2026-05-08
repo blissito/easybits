@@ -425,6 +425,104 @@ export interface EnhancePromptResult {
   enhanced: string;
 }
 
+// ─── Sandbox templates + persistent agents ───────────────────────
+
+export type AgentTier =
+  | "chat-embed"
+  | "coding-harness"
+  | "autonomous"
+  | "custom"
+  | "base";
+
+export type AgentTemplate =
+  | "ubuntu"
+  | "python"
+  | "node"
+  | "node-agent"
+  | "bun"
+  | "claude-code"
+  | "goose"
+  | "nanoclaw"
+  | "ghosty"
+  | "chat-openai"
+  | "chat-anthropic";
+
+export interface TemplateAgentSpec {
+  port?: number;
+  protocol?: "http" | "sse" | "ws" | "cli-stdin";
+  health_path?: string;
+  health_command?: string;
+}
+
+export interface TemplateEnvSpec {
+  name: string;
+  label?: string;
+  secret?: boolean;
+  required?: boolean;
+  default?: string;
+}
+
+export interface TemplateConnectionMode {
+  id: string;
+  label: string;
+}
+
+export interface TemplateInfo {
+  name: string;
+  display?: string;
+  description?: string;
+  tier?: AgentTier;
+  image: string;
+  memoryMb: number;
+  vcpus: number;
+  agent?: TemplateAgentSpec;
+  requiredEnv?: TemplateEnvSpec[];
+  connectionModes?: TemplateConnectionMode[];
+}
+
+export interface AgentInfo {
+  agentId: string;
+  embedToken: string;
+  sandboxId: string;
+  agentUrl: string;
+  healthUrl?: string;
+  template: AgentTemplate;
+  expiresAt?: string | null;
+}
+
+export interface AgentRecord {
+  agentId: string;
+  ownerId: string;
+  sandboxId: string;
+  agentUrl: string;
+  template: string;
+  embedToken: string;
+  name: string | null;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface CreateAgentParams {
+  template: AgentTemplate;
+  env: Record<string, string>;
+  name?: string;
+  timeoutSeconds?: number;
+  port?: number;
+  healthPath?: string;
+}
+
+export interface SpawnGhostyParams {
+  name?: string;
+  systemPrompt?: string;
+  timeoutSeconds?: number;
+}
+
+export interface MessageAgentParams {
+  content: string;
+  sessionId?: string;
+}
+
 export class EasybitsError extends Error {
   constructor(
     public status: number,
@@ -980,6 +1078,119 @@ export class EasybitsClient {
   /** Returns the MCP endpoint URL */
   getMcpUrl(): string {
     return `${this.baseUrl}/api/mcp`;
+  }
+
+  // ── Templates ───────────────────────────────────────────────
+
+  /** List sandbox templates available in the catalog. Pass tier to filter. */
+  async listTemplates(params?: { tier?: AgentTier }): Promise<TemplateInfo[]> {
+    const qs = params?.tier ? `?tier=${encodeURIComponent(params.tier)}` : "";
+    const out = await this.request<{ templates: TemplateInfo[] }>(
+      `/templates${qs}`,
+    );
+    return out.templates;
+  }
+
+  // ── Agents ──────────────────────────────────────────────────
+
+  /** List agents owned by this client. */
+  async listAgents(): Promise<AgentRecord[]> {
+    const out = await this.request<{ agents: AgentRecord[] }>("/agents");
+    return out.agents;
+  }
+
+  /** Get a single agent record (owner-only). */
+  async getAgent(agentId: string): Promise<AgentRecord> {
+    return this.request<AgentRecord>(`/agents/${agentId}`);
+  }
+
+  /** Generic agent spawn: pick template + provide env. */
+  async createAgent(params: CreateAgentParams): Promise<AgentInfo> {
+    return this.request<AgentInfo>("/agents", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  /** Zero-config Ghosty: managed credentials, Haiku 4.5, generic prompt. */
+  async spawnGhosty(params?: SpawnGhostyParams): Promise<AgentInfo> {
+    return this.request<AgentInfo>("/agents/ghosty", {
+      method: "POST",
+      body: JSON.stringify(params ?? {}),
+    });
+  }
+
+  /** Destroy an agent + its underlying sandbox. */
+  async destroyAgent(agentId: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(`/agents/${agentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  /**
+   * Send a message and collect the SSE stream into a single assembled string.
+   * For real-time streaming use streamAgent instead.
+   */
+  async messageAgent(
+    agentId: string,
+    params: MessageAgentParams,
+  ): Promise<{ content: string; tokens: number }> {
+    let assembled = "";
+    let tokens = 0;
+    for await (const tok of this.streamAgent(agentId, params)) {
+      assembled += tok;
+      tokens++;
+    }
+    return { content: assembled, tokens };
+  }
+
+  /**
+   * Stream tokens from an agent message as an AsyncIterable<string>.
+   * Each yielded string is one token's text. Server-side only (Node fetch
+   * supports ReadableStream readers; in browsers prefer EventSource directly
+   * against /api/v2/agents/:id/message with the embedToken).
+   */
+  async *streamAgent(
+    agentId: string,
+    params: MessageAgentParams,
+  ): AsyncGenerator<string, void, void> {
+    const res = await fetch(`${this.baseUrl}/api/v2/agents/${agentId}/message`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok || !res.body) {
+      const body = await res.text().catch(() => "");
+      throw new EasybitsError(res.status, body);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n\n")) !== -1) {
+        const event = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 2);
+        const dataLine = event.split("\n").find((l) => l.startsWith("data: "));
+        if (!dataLine) continue;
+        try {
+          const evt = JSON.parse(dataLine.slice(6));
+          if (evt.type === "token" && typeof evt.value === "string") {
+            yield evt.value as string;
+          } else if (evt.type === "error") {
+            throw new Error(`agent stream error: ${evt.message}`);
+          }
+        } catch {
+          // ignore non-JSON event lines
+        }
+      }
+    }
   }
 }
 
