@@ -231,6 +231,54 @@ const writeResult = () => {
 });
 `;
 
+// `$secret:NAME` placeholders in mcp_servers[*].env let the caller wire a
+// secret into a child MCP under whatever name that MCP expects, without
+// the plaintext ever leaving the EasyBits server. Example: brightdata's
+// MCP reads `API_TOKEN`, but the user's secret is registered as
+// `BRIGHTDATA_API_TOKEN` — they pass `env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" }`.
+const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
+
+function expandMcpServerSecrets(
+  mcpServers: Record<string, unknown> | undefined,
+  resolvedSecrets: Record<string, string>
+): Record<string, unknown> | undefined {
+  if (!mcpServers) return mcpServers;
+  const out: Record<string, unknown> = {};
+  for (const [serverName, rawCfg] of Object.entries(mcpServers)) {
+    if (!rawCfg || typeof rawCfg !== "object") {
+      out[serverName] = rawCfg;
+      continue;
+    }
+    const cfg = rawCfg as Record<string, unknown>;
+    const env = cfg.env;
+    if (!env || typeof env !== "object") {
+      out[serverName] = cfg;
+      continue;
+    }
+    const newEnv: Record<string, string> = {};
+    for (const [k, v] of Object.entries(env as Record<string, unknown>)) {
+      if (typeof v !== "string") {
+        newEnv[k] = String(v);
+        continue;
+      }
+      const m = v.match(SECRET_REF_RE);
+      if (!m) {
+        newEnv[k] = v;
+        continue;
+      }
+      const secretName = m[1];
+      if (!(secretName in resolvedSecrets)) {
+        throw new Error(
+          `mcp_servers.${serverName}.env.${k} references $secret:${secretName} but ${secretName} is not in the secrets[] list. Add it to secrets[] so it gets resolved.`
+        );
+      }
+      newEnv[k] = resolvedSecrets[secretName];
+    }
+    out[serverName] = { ...cfg, env: newEnv };
+  }
+  return out;
+}
+
 function buildEnv(
   params: AgentRunParams,
   resolvedSecrets: Record<string, string>
@@ -295,6 +343,11 @@ export async function enqueueAgentRun(
     );
   }
 
+  const expandedParams: AgentRunParams = {
+    ...params,
+    mcpServers: expandMcpServerSecrets(params.mcpServers, resolvedSecrets),
+  };
+
   const sb = await createSandbox(ctx, {
     template: "node-agent",
     timeoutSeconds: SANDBOX_TTL_S,
@@ -322,7 +375,7 @@ export async function enqueueAgentRun(
     await execCommand(ctx, jobId, {
       command: `nohup node ${SCRIPT_PATH} > ${LOG_PATH} 2>&1 < /dev/null & disown`,
       timeoutSeconds: LAUNCHER_EXEC_TIMEOUT_S,
-      env: buildEnv(params, resolvedSecrets),
+      env: buildEnv(expandedParams, resolvedSecrets),
     });
   } catch (err) {
     destroySandbox(ctx, jobId).catch(() => {});
