@@ -1082,13 +1082,15 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_run",
-    "Run a managed Claude agent inside a Firecracker sandbox. EasyBits supplies the Anthropic API key — usage is logged per call (input/output tokens + USD cost) and billed to the calling account. If sandbox_id is omitted, an ephemeral sandbox is created and destroyed for this single call. Pass sandbox_id to reuse a pre-warmed sandbox across calls. Default model: claude-sonnet-4-6, max_tokens: 2048.",
+    "Run a managed Claude agent (Claude Agent SDK loop) inside a Firecracker sandbox. The agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch/WebSearch tools and full root in an ephemeral Debian microVM with internet egress — it can install packages, fetch URLs, write files, and iterate on the task. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed per call. If sandbox_id is omitted, an ephemeral sandbox is created and destroyed. Returns the agent's final text plus a `steps` trace of every tool call it made. Default: claude-sonnet-4-6, 30 turns max.",
     {
-      prompt: z.string().min(1).describe("User prompt sent to the model"),
-      sandbox_id: z.string().optional().describe("Existing sandbox ID to reuse (must be a 'node' template). If omitted, an ephemeral sandbox is auto-created and destroyed."),
-      system: z.string().optional().describe("Optional system prompt"),
+      prompt: z.string().min(1).describe("Task for the agent. Be specific about expected outputs (file paths, summary, etc)."),
+      sandbox_id: z.string().optional().describe("Existing 'node-agent' sandbox ID to reuse. If omitted, an ephemeral sandbox is auto-created and destroyed."),
+      system: z.string().optional().describe("Override system prompt. If omitted, the SDK's default Claude Code system prompt is used."),
       model: z.string().optional().describe("Anthropic model id (default claude-sonnet-4-6)"),
-      max_tokens: z.number().int().min(1).max(8192).optional().describe("Max output tokens (default 2048)"),
+      max_turns: z.number().int().min(1).max(100).optional().describe("Max agent loop iterations before forced stop (default 30). Hard cap to prevent runaway cost."),
+      allowed_tools: z.array(z.string()).optional().describe("Allowlist of tools the agent can use, e.g. ['Bash','Read','Write']. If omitted, all default SDK tools are allowed."),
+      mcp_servers: z.record(z.unknown()).optional().describe("Additional MCP servers the agent can connect to. Shape: { name: { command, args, env } } or { name: { type: 'http', url, headers } }. Grant via allowed_tools entries like 'mcp__name__*'."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1097,7 +1099,9 @@ How to embed safely (the only reliable rule):
         sandboxId: params.sandbox_id,
         system: params.system,
         model: params.model,
-        maxTokens: params.max_tokens,
+        maxTurns: params.max_turns,
+        allowedTools: params.allowed_tools,
+        mcpServers: params.mcp_servers,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
