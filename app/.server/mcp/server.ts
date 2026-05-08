@@ -28,6 +28,7 @@ import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
+import { installDynamicTools } from "./dynamicTools";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 
 // Legacy quotation/fast-pdf tools are hidden by default so the agent does not
@@ -227,12 +228,16 @@ export function createMcpServer(groups?: string[]) {
   );
 
   // --- Register tool groups ---
+  // We ALWAYS register every category. The selected groups merely determine
+  // which tools are visible in `tools/list` — non-selected tools stay in
+  // `_registeredTools` (disabled) so `discover_tools` + `run_tool` can reach
+  // them without a session reconnect (see ./dynamicTools.ts).
   const enabled = new Set(groups?.length ? groups : ["core"]);
-  const coreOnly = enabled.has("core") && enabled.size === 1;
 
   // Merge allowlists for all requested groups (e.g. "core,design" = union).
   // Allowlists live in ./toolGroups.ts so the dashboard UI can import the same
   // source of truth (labels, descriptions, tool counts).
+  // `enabled.has("all")` ⇒ no filter, every tool stays enabled.
   const needsAllowlist = [...enabled].some(g => g in GROUP_ALLOWLISTS) && !enabled.has("all");
   let activeAllowlist: Set<string> | null = null;
   if (needsAllowlist) {
@@ -242,54 +247,44 @@ export function createMcpServer(groups?: string[]) {
       if (list) list.forEach(t => activeAllowlist!.add(t));
     }
   }
+  // Groups WITHOUT a curated allowlist (`docs`, `sites`, `brand` alone) keep
+  // their previous behavior: no filtering — every registered tool stays
+  // visible. The new dynamic-discovery meta-tools are appended afterwards.
 
-  // Intercept server.tool once to apply both the legacy-tools gate and the
-  // allowlist filter. Both filters are skip-on-match: if either says "no", the
-  // tool is never registered with the MCP server.
+  // The legacy-tools gate stays a hard skip — those handlers should not even
+  // be reachable via run_tool while EXPOSE_LEGACY_DOC_TOOLS is false.
   {
     const originalTool = server.tool.bind(server);
     (server as any).tool = (...args: any[]) => {
       const toolName = typeof args[0] === "string" ? args[0] : undefined;
-      if (toolName) {
-        if (!EXPOSE_LEGACY_DOC_TOOLS && LEGACY_DOC_TOOLS.has(toolName)) return;
-        if (activeAllowlist && !activeAllowlist.has(toolName)) return;
-      }
+      if (toolName && !EXPOSE_LEGACY_DOC_TOOLS && LEGACY_DOC_TOOLS.has(toolName)) return;
       return (originalTool as any)(...args);
     };
   }
 
-  if (enabled.has("all")) {
-    registerCoreTools(server);
-    registerDocTools(server);
-    registerSiteTools(server);
-    registerBrandTools(server);
-    registerVideoTools(server);
-  } else if (enabled.has("design")) {
-    // Design = Canva-like: documents as universal design surface + brand + images + video.
-    // Allowlist below filters to the curated subset.
-    registerCoreTools(server);
-    registerDocTools(server);
-    registerBrandTools(server);
-    registerVideoTools(server);
-  } else if (enabled.has("magnet") || coreOnly) {
-    // Both magnet and core need these categories — allowlist filters the specific tools
-    registerCoreTools(server);
-    registerDocTools(server);
-    registerSiteTools(server);
-    registerBrandTools(server);
-    if (coreOnly) registerVideoTools(server);
-  } else {
-    if (enabled.has("core") || enabled.has("files")) registerCoreTools(server);
-    if (enabled.has("docs")) registerDocTools(server);
-    if (enabled.has("sites")) registerSiteTools(server);
-    if (enabled.has("brand")) registerBrandTools(server);
-    if (enabled.has("video")) {
-      // Video group also needs file tools (get_file/list_files/upload_file)
-      // so callers can retrieve the finished mp4. Allowlist filters the rest.
-      registerCoreTools(server);
-      registerVideoTools(server);
+  // Register every category unconditionally. Filtering happens below via
+  // .disable() so the SDK keeps the handler but hides the tool from tools/list.
+  registerCoreTools(server);
+  registerDocTools(server);
+  registerSiteTools(server);
+  registerBrandTools(server);
+  registerVideoTools(server);
+
+  // Apply the group's allowlist by disabling tools outside it.
+  // Disabled tools stay in `_registeredTools`, so `run_tool` can still
+  // dispatch them — they're just hidden from `tools/list`.
+  if (activeAllowlist) {
+    const all = (server as any)._registeredTools as Record<string, { disable: () => void }>;
+    for (const [name, tool] of Object.entries(all)) {
+      if (!activeAllowlist.has(name) && typeof tool.disable === "function") {
+        tool.disable();
+      }
     }
   }
+
+  // Always install the dynamic-discovery meta-tools last so they survive any
+  // earlier disable pass and stay reachable regardless of the active group.
+  installDynamicTools(server);
 
   return server;
 }
