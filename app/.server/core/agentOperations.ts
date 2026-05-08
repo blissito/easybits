@@ -6,6 +6,7 @@ import {
   createSandbox,
   destroySandbox,
   execCommand,
+  readFile as sandboxReadFile,
   waitUntilRunning,
   writeFile as sandboxWriteFile,
   type ExecResult,
@@ -14,7 +15,6 @@ import {
 const HOST_ANTHROPIC_KEY = process.env.SANDBOX_HOST_ANTHROPIC_KEY || "";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TURNS = 30;
-const RESULT_MARKER = "__AGENT_RESULT__";
 const EPHEMERAL_TTL_S = 600;
 const EXEC_TIMEOUT_S = 540;
 
@@ -66,7 +66,12 @@ interface AgentScriptResult {
   error: string | null;
 }
 
+// Script that runs *inside* the sandbox microVM. Writes its final JSON
+// payload to RESULT_PATH (passed via env) instead of stdout, because the
+// Claude Agent SDK's underlying native binary writes its own logs/protocol
+// frames to stdout/stderr. Decoupling channels is the only reliable way.
 const AGENT_SCRIPT = `
+const fs = require("fs");
 const { query } = require("@anthropic-ai/claude-agent-sdk");
 
 const decode = (b64) => Buffer.from(b64 || "", "base64").toString("utf8");
@@ -82,6 +87,7 @@ const model = process.env.MODEL || "${DEFAULT_MODEL}";
 const maxTurns = parseInt(process.env.MAX_TURNS || "${DEFAULT_MAX_TURNS}", 10);
 const allowedTools = parseJson(process.env.ALLOWED_TOOLS_B64, null);
 const mcpServers = parseJson(process.env.MCP_SERVERS_B64, null);
+const resultPath = process.env.RESULT_PATH;
 
 const options = { model, maxTurns };
 if (customSystem) {
@@ -102,6 +108,22 @@ let totalCostUsd = 0;
 let stopReason = "unknown";
 let success = true;
 let errorMessage = null;
+
+const writeResult = () => {
+  fs.writeFileSync(
+    resultPath,
+    JSON.stringify({
+      response: finalText,
+      model: resultModel,
+      usage,
+      totalCostUsd,
+      steps,
+      stopReason,
+      success,
+      error: errorMessage,
+    })
+  );
+};
 
 (async () => {
   try {
@@ -138,36 +160,14 @@ let errorMessage = null;
     success = false;
     errorMessage = String((err && err.message) || err);
   }
-
-  process.stdout.write(
-    "\\n${RESULT_MARKER}" +
-      JSON.stringify({
-        response: finalText,
-        model: resultModel,
-        usage,
-        totalCostUsd,
-        steps,
-        stopReason,
-        success,
-        error: errorMessage,
-      })
-  );
+  writeResult();
 })().catch((err) => {
-  process.stderr.write(String((err && err.stack) || err));
+  success = false;
+  errorMessage = String((err && err.stack) || err);
+  try { writeResult(); } catch {}
   process.exit(1);
 });
 `;
-
-function parseResult(stdout: string): AgentScriptResult {
-  const idx = stdout.lastIndexOf(RESULT_MARKER);
-  if (idx === -1) {
-    throw new Error(
-      `agent script did not emit ${RESULT_MARKER} (stdout tail: ${stdout.slice(-500)})`
-    );
-  }
-  const json = stdout.slice(idx + RESULT_MARKER.length).trim();
-  return JSON.parse(json) as AgentScriptResult;
-}
 
 export async function runAgent(
   ctx: AuthContext,
@@ -204,10 +204,11 @@ export async function runAgent(
   };
 
   const startedAt = Date.now();
-  const scriptPath = `/tmp/agent_${Date.now()}_${Math.random()
-    .toString(36)
-    .slice(2, 8)}.js`;
+  const runId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const scriptPath = `/tmp/agent_${runId}.js`;
+  const resultPath = `/tmp/agent_result_${runId}.json`;
   let exec: ExecResult;
+  let out: AgentScriptResult;
   try {
     await waitUntilRunning(ctx, sandboxId);
     await sandboxWriteFile(ctx, sandboxId, {
@@ -224,6 +225,7 @@ export async function runAgent(
         // it per-call.
         NODE_PATH: "/usr/local/lib/node_modules",
         ANTHROPIC_API_KEY: HOST_ANTHROPIC_KEY,
+        RESULT_PATH: resultPath,
         PROMPT_B64: Buffer.from(params.prompt, "utf8").toString("base64"),
         SYSTEM_B64: params.system
           ? Buffer.from(params.system, "utf8").toString("base64")
@@ -242,21 +244,23 @@ export async function runAgent(
           : "",
       },
     });
+
+    let resultJson: string;
+    try {
+      const file = await sandboxReadFile(ctx, sandboxId, { path: resultPath });
+      resultJson = file.content;
+    } catch (readErr) {
+      throw new Error(
+        `agent script did not produce result file (exit=${exec.exitCode}, stderr tail: ${exec.stderr.slice(-500)}, read error: ${String(readErr)})`
+      );
+    }
+    out = JSON.parse(resultJson) as AgentScriptResult;
   } catch (err) {
     await cleanup();
     throw err;
   }
 
   const durationMs = Date.now() - startedAt;
-
-  if (exec.exitCode !== 0) {
-    await cleanup();
-    throw new Error(
-      `agent script exited ${exec.exitCode}: ${exec.stderr.slice(0, 1000)}`
-    );
-  }
-
-  const out = parseResult(exec.stdout);
   if (!out.success) {
     await cleanup();
     throw new Error(`agent run failed: ${out.error || out.stopReason}`);
