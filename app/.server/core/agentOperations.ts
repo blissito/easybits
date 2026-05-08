@@ -34,8 +34,7 @@ const BYOK_FLAG_PATH = "/tmp/agent_byok.flag";
 
 const HOST_ANTHROPIC_KEY = process.env.SANDBOX_HOST_ANTHROPIC_KEY || "";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
-const DEFAULT_MAX_TURNS = 30;
-const SANDBOX_TTL_S = 1800; // 30 min — caps the runaway-cost worst case.
+const SANDBOX_TTL_S = 1800; // 30 min — the real cap on a runaway loop.
 const LAUNCHER_EXEC_TIMEOUT_S = 30;
 const SCRIPT_PATH = "/tmp/agent.js";
 const RESULT_PATH = "/tmp/agent_result.json";
@@ -123,7 +122,8 @@ const parseJson = (b64, fallback) => {
 const userPrompt = decode(process.env.PROMPT_B64);
 const customSystem = decode(process.env.SYSTEM_B64) || null;
 const model = process.env.MODEL || "${DEFAULT_MODEL}";
-const maxTurns = parseInt(process.env.MAX_TURNS || "${DEFAULT_MAX_TURNS}", 10);
+const maxTurnsRaw = process.env.MAX_TURNS;
+const maxTurns = maxTurnsRaw ? parseInt(maxTurnsRaw, 10) : null;
 const allowedTools = parseJson(process.env.ALLOWED_TOOLS_B64, null);
 const mcpServers = parseJson(process.env.MCP_SERVERS_B64, null);
 const resultPath = process.env.RESULT_PATH;
@@ -156,12 +156,12 @@ if (!customSystem && mcpServers && typeof mcpServers === "object") {
 
 const options = {
   model,
-  maxTurns,
   allowedTools: Array.isArray(allowedTools) && allowedTools.length > 0 ? allowedTools : DEFAULT_ALLOWED_TOOLS,
   disallowedTools: DEFAULT_DISALLOWED_TOOLS,
   permissionMode: "dontAsk",
   systemPrompt,
 };
+if (maxTurns) options.maxTurns = maxTurns;
 if (mcpServers && typeof mcpServers === "object") options.mcpServers = mcpServers;
 
 const startedAt = Date.now();
@@ -236,7 +236,6 @@ function buildEnv(
   resolvedSecrets: Record<string, string>
 ): Record<string, string> {
   const model = params.model || DEFAULT_MODEL;
-  const maxTurns = params.maxTurns || DEFAULT_MAX_TURNS;
   const anthropicKey = resolvedSecrets.ANTHROPIC_API_KEY || HOST_ANTHROPIC_KEY;
   return {
     ...resolvedSecrets,
@@ -248,7 +247,7 @@ function buildEnv(
       ? Buffer.from(params.system, "utf8").toString("base64")
       : "",
     MODEL: model,
-    MAX_TURNS: String(maxTurns),
+    MAX_TURNS: params.maxTurns ? String(params.maxTurns) : "",
     ALLOWED_TOOLS_B64: params.allowedTools
       ? Buffer.from(JSON.stringify(params.allowedTools), "utf8").toString("base64")
       : "",
