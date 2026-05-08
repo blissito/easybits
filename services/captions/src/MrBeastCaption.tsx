@@ -1,8 +1,11 @@
 import { AbsoluteFill, interpolate, spring, useVideoConfig } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Bangers";
+import { loadFont as loadEmojiFont } from "@remotion/google-fonts/NotoColorEmoji";
 import type { Caption, CaptionPosition } from "./types";
 
 const { fontFamily } = loadFont();
+const { fontFamily: emojiFontFamily } = loadEmojiFont();
+const fontStack = `${fontFamily}, ${emojiFontFamily}`;
 
 const KEYWORD_COLOR = "#FFEB3B";
 const DEFAULT_COLOR = "#FFFFFF";
@@ -43,7 +46,7 @@ export const MrBeastCaption: React.FC<{
           justifyContent: "center",
           gap,
           maxWidth: "85%",
-          fontFamily,
+          fontFamily: fontStack,
           fontWeight: 400,
           textTransform: "uppercase",
           letterSpacing: "0.02em",

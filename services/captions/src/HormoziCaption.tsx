@@ -1,8 +1,11 @@
 import { AbsoluteFill, spring, useVideoConfig } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Montserrat";
+import { loadFont as loadEmojiFont } from "@remotion/google-fonts/NotoColorEmoji";
 import type { Caption, CaptionPosition } from "./types";
 
 const { fontFamily } = loadFont("normal", { weights: ["900"] });
+const { fontFamily: emojiFontFamily } = loadEmojiFont();
+const fontStack = `${fontFamily}, ${emojiFontFamily}`;
 
 const KEYWORD_COLOR = "#FFD600";
 const DEFAULT_COLOR = "#FFFFFF";
@@ -68,7 +71,7 @@ export const HormoziCaption: React.FC<{
             <span
               key={i}
               style={{
-                fontFamily,
+                fontFamily: fontStack,
                 fontWeight: 900,
                 fontSize: baseFontSize,
                 color,
