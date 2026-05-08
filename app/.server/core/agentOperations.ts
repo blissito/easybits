@@ -11,6 +11,21 @@ import {
   waitUntilRunning,
   writeFile as sandboxWriteFile,
 } from "./sandboxOperations";
+import { getSecretValue } from "./secretOperations";
+
+// Env var names buildEnv() owns. A user-supplied secret with the same name
+// would silently break the sandbox (e.g. swap NODE_PATH and break require).
+const RESERVED_ENV_NAMES = new Set([
+  "NODE_PATH",
+  "ANTHROPIC_API_KEY",
+  "RESULT_PATH",
+  "PROMPT_B64",
+  "SYSTEM_B64",
+  "MODEL",
+  "MAX_TURNS",
+  "ALLOWED_TOOLS_B64",
+  "MCP_SERVERS_B64",
+]);
 
 const HOST_ANTHROPIC_KEY = process.env.SANDBOX_HOST_ANTHROPIC_KEY || "";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
@@ -32,6 +47,7 @@ export interface AgentRunParams {
   maxTurns?: number;
   allowedTools?: string[];
   mcpServers?: Record<string, unknown>;
+  secrets?: string[];
 }
 
 export interface AgentStep {
@@ -200,10 +216,14 @@ const writeResult = () => {
 });
 `;
 
-function buildEnv(params: AgentRunParams): Record<string, string> {
+function buildEnv(
+  params: AgentRunParams,
+  resolvedSecrets: Record<string, string>
+): Record<string, string> {
   const model = params.model || DEFAULT_MODEL;
   const maxTurns = params.maxTurns || DEFAULT_MAX_TURNS;
   return {
+    ...resolvedSecrets,
     NODE_PATH: "/usr/local/lib/node_modules",
     ANTHROPIC_API_KEY: HOST_ANTHROPIC_KEY,
     RESULT_PATH,
@@ -234,6 +254,31 @@ export async function enqueueAgentRun(
     );
   }
 
+  const resolvedSecrets: Record<string, string> = {};
+  if (params.secrets?.length) {
+    const collisions = params.secrets.filter((n) => RESERVED_ENV_NAMES.has(n));
+    if (collisions.length) {
+      throw new Error(
+        `Cannot inject reserved env var name(s): ${collisions.join(", ")}. These are used internally by the agent runner.`
+      );
+    }
+    const lookups = await Promise.all(
+      params.secrets.map(async (name) => ({
+        name,
+        value: await getSecretValue(ctx.user.id, name),
+      }))
+    );
+    const missing = lookups.filter((s) => s.value === null).map((s) => s.name);
+    if (missing.length) {
+      throw new Error(
+        `Missing secrets for this account: ${missing.join(", ")}. Register via secret_set or /dash/developer/secrets.`
+      );
+    }
+    for (const { name, value } of lookups) {
+      resolvedSecrets[name] = value!;
+    }
+  }
+
   const sb = await createSandbox(ctx, {
     template: "node-agent",
     timeoutSeconds: SANDBOX_TTL_S,
@@ -254,7 +299,7 @@ export async function enqueueAgentRun(
     await execCommand(ctx, jobId, {
       command: `nohup node ${SCRIPT_PATH} > ${LOG_PATH} 2>&1 < /dev/null & disown`,
       timeoutSeconds: LAUNCHER_EXEC_TIMEOUT_S,
-      env: buildEnv(params),
+      env: buildEnv(params, resolvedSecrets),
     });
   } catch (err) {
     destroySandbox(ctx, jobId).catch(() => {});

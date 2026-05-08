@@ -1091,7 +1091,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_run",
-    "Start a managed Claude agent (Claude Agent SDK loop) inside a fresh Firecracker microVM. By default the agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch (interactive/session tools like Agent, AskUserQuestion, Skill, TodoWrite are denied — this is a headless VM) and full root with open internet egress. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed when the result is fetched. ASYNC: returns { jobId, status:'running' } immediately. Poll with `agent_run_status({ jobId })` until status is 'done'/'error'/'expired'. Sandbox auto-destroys at 30 min TTL. Default: claude-sonnet-4-6, 30 turns max.",
+    "Start a managed Claude agent (Claude Agent SDK loop) inside a fresh Firecracker microVM. By default the agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch (interactive/session tools like Agent, AskUserQuestion, Skill, TodoWrite are denied — this is a headless VM) and full root with open internet egress. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed when the result is fetched. Pass `secrets: [name, ...]` to inject EasyBits Secrets as env vars in the sandbox — spawned MCP children (brightdata, easybits, etc.) inherit them via process.env. ASYNC: returns { jobId, status:'running' } immediately. Poll with `agent_run_status({ jobId })` until status is 'done'/'error'/'expired'. Sandbox auto-destroys at 30 min TTL. Default: claude-sonnet-4-6, 30 turns max.",
     {
       prompt: z.string().min(1).describe("Task for the agent. Be specific about expected outputs (file paths, summary, etc)."),
       system: z.string().optional().describe("Override system prompt. If omitted, the SDK's default Claude Code system prompt is used."),
@@ -1099,6 +1099,7 @@ How to embed safely (the only reliable rule):
       max_turns: z.number().int().min(1).max(100).optional().describe("Max agent loop iterations before forced stop (default 30). Hard cap to prevent runaway cost."),
       allowed_tools: z.array(z.string()).optional().describe("Allowlist of tools the agent can use, e.g. ['Bash','Read','Write']. If omitted, all default SDK tools are allowed."),
       mcp_servers: z.record(z.unknown()).optional().describe("Additional MCP servers the agent can connect to. Shape: { name: { command, args, env } } or { name: { type: 'http', url, headers } }. Grant via allowed_tools entries like 'mcp__name__*'."),
+      secrets: z.array(z.string()).optional().describe("Names of EasyBits Secrets to inject as env vars in the sandbox. The MCP servers spawned inside (brightdata, easybits, etc.) inherit them via process.env — no need to repeat them under mcp_servers[name].env. Register names via secret_set; list with secret_list."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1109,6 +1110,7 @@ How to embed safely (the only reliable rule):
         maxTurns: params.max_turns,
         allowedTools: params.allowed_tools,
         mcpServers: params.mcp_servers,
+        secrets: params.secrets,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
