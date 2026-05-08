@@ -7,6 +7,7 @@ import {
   destroySandbox,
   execCommand,
   getSandbox,
+  listSandboxes,
   readFile as sandboxReadFile,
   waitUntilRunning,
   writeFile as sandboxWriteFile,
@@ -33,6 +34,16 @@ const RESERVED_ENV_NAMES = new Set([
 // Marker file written when the run uses a user-supplied ANTHROPIC_API_KEY.
 // Presence of this flag makes getAgentRunStatus skip Claude-token billing.
 const BYOK_FLAG_PATH = "/tmp/agent_byok.flag";
+
+// Pool busy-flag (a directory because mkdir is atomic in POSIX, succeeds
+// only if the dir didn't exist — that's our acquire primitive). Released
+// by the agent script in writeResult() once the loop finishes.
+const POOL_FLAG_PATH = "/tmp/agent_running.flag";
+
+// Default warm-pool size when caller passes pool_key without pool_size.
+// 2 covers the common case (e.g. a screenshot job firing 2 viewports in
+// parallel) without holding a lot of compute idle.
+const DEFAULT_POOL_SIZE = 2;
 
 // Host-level Anthropic credentials — used when the caller did NOT pass
 // their own via secrets:[\"ANTHROPIC_API_KEY\"] or secrets:[\"CLAUDE_CODE_OAUTH_TOKEN\"].
@@ -66,6 +77,8 @@ export interface AgentRunParams {
   allowedTools?: string[];
   mcpServers?: Record<string, unknown>;
   secrets?: string[];
+  poolKey?: string;
+  poolSize?: number;
 }
 
 export interface AgentStep {
@@ -201,6 +214,8 @@ const writeResult = () => {
     startedAt,
     finishedAt: Date.now(),
   }));
+  // Release the pool busy-flag (no-op when this VM isn't pooled).
+  try { fs.rmdirSync("${POOL_FLAG_PATH}"); } catch {}
 };
 
 (async () => {
@@ -387,16 +402,75 @@ export async function enqueueAgentRun(
     mcpServers: expandMcpServerSecrets(params.mcpServers, resolvedSecrets),
   };
 
-  const sb = await createSandbox(ctx, {
-    template: "node-agent",
-    timeoutSeconds: SANDBOX_TTL_S,
-    name: "agent-run",
-    metadata: { kind: "agent_run" },
-  });
-  const jobId = sb.sandboxId;
+  // Pool warm-reuse — caller supplies a pool_key to opt in. We try to
+  // acquire an idle sandbox already in the pool (mkdir of POOL_FLAG_PATH
+  // is atomic in POSIX, so it doubles as our acquire primitive). If no
+  // idle one is acquirable AND the pool is below pool_size, the new VM
+  // joins the pool; otherwise it's spawned disposable so it doesn't
+  // count against the pool cap.
+  const poolKey = params.poolKey;
+  const poolSize = Math.max(1, params.poolSize ?? DEFAULT_POOL_SIZE);
+  let jobId = "";
+  let createdNew = false;
+
+  if (poolKey) {
+    const candidates = (await listSandboxes(ctx).catch(() => []))
+      .filter((s) => s.metadata?.pool_key === poolKey && s.status === "running");
+    for (const c of candidates) {
+      try {
+        const r = await execCommand(ctx, c.sandboxId, {
+          command: `mkdir ${POOL_FLAG_PATH} 2>/dev/null && echo OK || echo BUSY`,
+          timeoutSeconds: 5,
+        });
+        if ((r.stdout || "").trim() === "OK") {
+          jobId = c.sandboxId;
+          // Reset prior-run state on the warm VM so the new run's status
+          // and billing flags start clean. The script and pool flag stay.
+          await execCommand(ctx, jobId, {
+            command: `rm -f ${RESULT_PATH} ${LOG_PATH} ${BYOK_FLAG_PATH} ${BILLED_FLAG_PATH}`,
+            timeoutSeconds: 5,
+          }).catch(() => {});
+          break;
+        }
+      } catch {
+        /* try next candidate */
+      }
+    }
+    if (!jobId) {
+      const enterPool = candidates.length < poolSize;
+      const sb = await createSandbox(ctx, {
+        template: "node-agent",
+        timeoutSeconds: SANDBOX_TTL_S,
+        name: "agent-run",
+        metadata: enterPool
+          ? { kind: "agent_run", pool_key: poolKey }
+          : { kind: "agent_run" },
+      });
+      jobId = sb.sandboxId;
+      createdNew = true;
+    }
+  } else {
+    const sb = await createSandbox(ctx, {
+      template: "node-agent",
+      timeoutSeconds: SANDBOX_TTL_S,
+      name: "agent-run",
+      metadata: { kind: "agent_run" },
+    });
+    jobId = sb.sandboxId;
+    createdNew = true;
+  }
 
   try {
-    await waitUntilRunning(ctx, jobId);
+    if (createdNew) {
+      await waitUntilRunning(ctx, jobId);
+      // Acquire the pool busy-flag on fresh sandboxes too — keeps the
+      // release path uniform (the agent script's writeResult rmdir's it
+      // either way; on disposable VMs the rmdir is a harmless no-op).
+      await execCommand(ctx, jobId, {
+        command: `mkdir ${POOL_FLAG_PATH}`,
+        timeoutSeconds: 5,
+      }).catch(() => {});
+    }
     await sandboxWriteFile(ctx, jobId, {
       path: SCRIPT_PATH,
       content: AGENT_SCRIPT,
@@ -417,7 +491,10 @@ export async function enqueueAgentRun(
       env: buildEnv(expandedParams, resolvedSecrets),
     });
   } catch (err) {
-    destroySandbox(ctx, jobId).catch(() => {});
+    // Only destroy on failure if we created this VM. A reused pooled VM
+    // stays alive (its busy-flag remains set so it won't be re-acquired
+    // in a broken state; TTL cleans it up if nothing else does).
+    if (createdNew) destroySandbox(ctx, jobId).catch(() => {});
     throw err;
   }
 

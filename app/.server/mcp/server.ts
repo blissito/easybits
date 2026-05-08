@@ -1100,6 +1100,8 @@ How to embed safely (the only reliable rule):
       allowed_tools: z.array(z.string()).optional().describe("Allowlist of tools the agent can use, e.g. ['Bash','Read','Write']. If omitted, all default SDK tools are allowed."),
       mcp_servers: z.record(z.unknown()).optional().describe("Additional MCP servers the agent can connect to. Shape: { name: { command, args, env } } or { name: { type: 'http', url, headers } }. Grant via allowed_tools entries like 'mcp__name__*'. In env values, use `$secret:NAME` to inject a registered secret under whatever env-var-name the MCP child expects (e.g. brightdata: env: { API_TOKEN: '$secret:BRIGHTDATA_API_TOKEN' }) — the referenced name must be listed in `secrets[]`."),
       secrets: z.array(z.string()).optional().describe("Names of EasyBits Secrets to inject as env vars in the sandbox. The MCP servers spawned inside (brightdata, easybits, etc.) inherit them via process.env — no need to repeat them under mcp_servers[name].env. Register names via secret_set; list with secret_list."),
+      pool_key: z.string().optional().describe("Opt-in warm-pool reuse — pick any stable name (e.g. 'screenshots'). Subsequent agent_run calls with the same pool_key reuse an idle pooled sandbox instead of cold-starting a fresh one (~5s saved, plus cached MCP packages). Concurrent calls land on disposable sandboxes when the pool is busy, so no two runs share a VM. Different pool_keys = isolated pools."),
+      pool_size: z.number().int().min(1).optional().describe("Max number of warm sandboxes that can stay alive for this pool_key (default 2). When N parallel calls hit a pool with size N, all N go warm on the next round; calls beyond that fall back to disposable sandboxes."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1111,6 +1113,8 @@ How to embed safely (the only reliable rule):
         allowedTools: params.allowed_tools,
         mcpServers: params.mcp_servers,
         secrets: params.secrets,
+        poolKey: params.pool_key,
+        poolSize: params.pool_size,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
