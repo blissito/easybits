@@ -1096,7 +1096,7 @@ How to embed safely (the only reliable rule):
       prompt: z.string().min(1).describe("Task for the agent. Be specific about expected outputs (file paths, summary, etc)."),
       system: z.string().optional().describe("Override system prompt. If omitted, the SDK's default Claude Code system prompt is used."),
       model: z.string().optional().describe("Anthropic model id (default claude-sonnet-4-6)"),
-      max_turns: z.number().int().min(1).max(100).optional().describe("Max agent loop iterations before forced stop (default 30). Hard cap to prevent runaway cost."),
+      max_turns: z.number().int().min(1).optional().describe("Max agent loop iterations before forced stop (default 30). The 30-min sandbox TTL caps total runtime regardless. With BYOK, cost is on your Anthropic account."),
       allowed_tools: z.array(z.string()).optional().describe("Allowlist of tools the agent can use, e.g. ['Bash','Read','Write']. If omitted, all default SDK tools are allowed."),
       mcp_servers: z.record(z.unknown()).optional().describe("Additional MCP servers the agent can connect to. Shape: { name: { command, args, env } } or { name: { type: 'http', url, headers } }. Grant via allowed_tools entries like 'mcp__name__*'."),
       secrets: z.array(z.string()).optional().describe("Names of EasyBits Secrets to inject as env vars in the sandbox. The MCP servers spawned inside (brightdata, easybits, etc.) inherit them via process.env — no need to repeat them under mcp_servers[name].env. Register names via secret_set; list with secret_list."),
