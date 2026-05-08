@@ -94,6 +94,7 @@ import {
   listFiles as sandboxListFiles,
 } from "../core/sandboxOperations";
 import {
+  destroyAgentRun,
   enqueueAgentRun,
   getAgentRunStatus,
 } from "../core/agentOperations";
@@ -1110,13 +1111,26 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_run_status",
-    "Poll an agent run started with `agent_run`. Returns the current status: 'running' (still working), 'done' (success — result + steps + usage included), 'error' (failed — error + log included), or 'expired' (sandbox destroyed before result was fetched). Calling this on a 'done'/'error' job destroys the underlying sandbox and bills usage exactly once.",
+    "Poll an agent run started with `agent_run`. Returns the current status: 'running' (still working), 'done' (success — result + steps + usage included), 'error' (failed — error + log included), or 'expired' (sandbox auto-destroyed at TTL before the result was fetched). IDEMPOTENT: safe to call repeatedly — billing fires exactly once and the sandbox is left running until you call `agent_run_destroy` or its 30-min TTL expires.",
     {
       job_id: z.string().describe("The jobId returned by agent_run"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getAgentRunStatus(ctx, params.job_id);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_run_destroy",
+    "Destroy the sandbox underlying an agent run. Call this after you've successfully fetched the result via `agent_run_status` to free resources eagerly. If you don't call it, the sandbox auto-destroys at its 30-min TTL.",
+    {
+      job_id: z.string().describe("The jobId returned by agent_run"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await destroyAgentRun(ctx, params.job_id);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

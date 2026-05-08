@@ -20,6 +20,10 @@ const LAUNCHER_EXEC_TIMEOUT_S = 30;
 const SCRIPT_PATH = "/tmp/agent.js";
 const RESULT_PATH = "/tmp/agent_result.json";
 const LOG_PATH = "/tmp/agent.log";
+// Marker file written *inside the sandbox* once billing has fired for this
+// run. Subsequent status calls see the marker and skip the bill — making
+// agent_run_status idempotent so a buggy poll loop can't burn quota.
+const BILLED_FLAG_PATH = "/tmp/agent_billed.flag";
 
 export interface AgentRunParams {
   prompt: string;
@@ -274,11 +278,9 @@ export async function getAgentRunStatus(
   try {
     out = JSON.parse(resultJson) as AgentScriptResult;
   } catch (err) {
-    // Result file present but malformed — surface log for debugging then clean up.
     const log = await sandboxReadFile(ctx, jobId, { path: LOG_PATH }).catch(
       () => ({ content: "" })
     );
-    destroySandbox(ctx, jobId).catch(() => {});
     return {
       jobId,
       status: "error",
@@ -297,18 +299,32 @@ export async function getAgentRunStatus(
       : computeCostCents(out.model, inputTokens, outputTokens);
   const durationMs = Math.max(0, (out.finishedAt || 0) - (out.startedAt || 0));
 
-  logAiUsage(ctx.user.id, {
-    type: "agent_run",
-    product: "agent",
-    cost: costCents,
-    modelId: out.model,
-    inputTokens,
-    outputTokens,
-    resourceId: jobId,
-    durationMs,
-  });
-
-  destroySandbox(ctx, jobId).catch(() => {});
+  // Idempotent billing: only fire once per sandbox lifetime. The flag file
+  // lives inside the VM, which is the same process boundary as the result
+  // file, so a successful read here implies the same VM produced both.
+  let alreadyBilled = false;
+  try {
+    await sandboxReadFile(ctx, jobId, { path: BILLED_FLAG_PATH });
+    alreadyBilled = true;
+  } catch {
+    /* no flag yet */
+  }
+  if (!alreadyBilled) {
+    logAiUsage(ctx.user.id, {
+      type: "agent_run",
+      product: "agent",
+      cost: costCents,
+      modelId: out.model,
+      inputTokens,
+      outputTokens,
+      resourceId: jobId,
+      durationMs,
+    });
+    await sandboxWriteFile(ctx, jobId, {
+      path: BILLED_FLAG_PATH,
+      content: String(costCents),
+    }).catch(() => {});
+  }
 
   return {
     jobId,
@@ -321,4 +337,21 @@ export async function getAgentRunStatus(
     durationMs,
     error: out.error || undefined,
   };
+}
+
+export async function destroyAgentRun(
+  ctx: AuthContext,
+  jobId: string
+): Promise<{ jobId: string; destroyed: boolean }> {
+  requireScope(ctx, "WRITE");
+  try {
+    await destroySandbox(ctx, jobId);
+    return { jobId, destroyed: true };
+  } catch (err) {
+    const msg = String(err);
+    if (msg.includes("404") || msg.includes("not found")) {
+      return { jobId, destroyed: false };
+    }
+    throw err;
+  }
 }
