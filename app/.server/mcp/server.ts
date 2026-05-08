@@ -1086,7 +1086,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_run",
-    "Start a managed Claude agent (Claude Agent SDK loop) inside a fresh Firecracker microVM. The agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch/WebSearch tools and full root in an ephemeral Debian VM with internet egress — it can install packages, fetch URLs, write files, and iterate on the task. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed when the result is fetched. ASYNC: returns { jobId, status:'running' } immediately. Poll with `agent_run_status({ jobId })` until status is 'done'/'error'/'expired'. The sandbox auto-destroys 30 min after enqueue. Default: claude-sonnet-4-6, 30 turns max.",
+    "Start a managed Claude agent (Claude Agent SDK loop) inside a fresh Firecracker microVM. By default the agent has Bash/Read/Write/Edit/Glob/Grep/WebFetch (interactive/session tools like Agent, AskUserQuestion, Skill, TodoWrite are denied — this is a headless VM) and full root with open internet egress. EasyBits supplies the Anthropic API key; usage (tokens + cost) is logged and billed when the result is fetched. ASYNC: returns { jobId, status:'running' } immediately. Poll with `agent_run_status({ jobId })` until status is 'done'/'error'/'expired'. Sandbox auto-destroys at 30 min TTL. Default: claude-sonnet-4-6, 30 turns max.",
     {
       prompt: z.string().min(1).describe("Task for the agent. Be specific about expected outputs (file paths, summary, etc)."),
       system: z.string().optional().describe("Override system prompt. If omitted, the SDK's default Claude Code system prompt is used."),

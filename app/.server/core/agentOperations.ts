@@ -106,9 +106,31 @@ const allowedTools = parseJson(process.env.ALLOWED_TOOLS_B64, null);
 const mcpServers = parseJson(process.env.MCP_SERVERS_B64, null);
 const resultPath = process.env.RESULT_PATH;
 
-const options = { model, maxTurns };
-if (customSystem) options.systemPrompt = customSystem;
-if (Array.isArray(allowedTools) && allowedTools.length > 0) options.allowedTools = allowedTools;
+// Headless defaults — without these the SDK auto-loads Agent (subagents),
+// AskUserQuestion (interactive), Skill (.claude/skills/), TodoWrite, etc.
+// In an ephemeral VM with no user and no Claude Code session, the agent
+// gets stuck looking for /root/.claude/settings.json instead of doing its
+// job. permissionMode:"dontAsk" denies anything not in allowedTools.
+const DEFAULT_ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch"];
+const DEFAULT_DISALLOWED_TOOLS = ["Agent", "AskUserQuestion", "Skill", "TodoWrite", "ToolSearch", "Monitor"];
+const DEFAULT_SYSTEM_PROMPT = [
+  "You are a non-interactive agent running inside an ephemeral Firecracker microVM.",
+  "Environment: Debian (node:22-slim base), Node 22, root user, internet open, no persistence — the VM is destroyed when you finish.",
+  "There is NO Claude Code session and NO project: do not search for .claude directories, settings.json, or skills. They do not exist.",
+  "Do not ask the user questions; you have no human to talk to. Do not spawn subagents.",
+  "Use Bash/Read/Write/Edit/Glob/Grep/WebFetch only. /tmp is your scratch space.",
+  "Install only what's strictly needed for the task. Pip on Debian needs --break-system-packages.",
+  "Finish by emitting a clear final summary (paths of outputs, sizes, key facts).",
+].join(" ");
+
+const options = {
+  model,
+  maxTurns,
+  allowedTools: Array.isArray(allowedTools) && allowedTools.length > 0 ? allowedTools : DEFAULT_ALLOWED_TOOLS,
+  disallowedTools: DEFAULT_DISALLOWED_TOOLS,
+  permissionMode: "dontAsk",
+  systemPrompt: customSystem || DEFAULT_SYSTEM_PROMPT,
+};
 if (mcpServers && typeof mcpServers === "object") options.mcpServers = mcpServers;
 
 const startedAt = Date.now();
