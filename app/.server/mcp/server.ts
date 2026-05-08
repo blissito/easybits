@@ -1194,9 +1194,9 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_message",
-    "Send a chat message to a persistent agent created via `agent_create` (chat-* templates) and return the assembled response. Internally consumes the agent's SSE stream and returns the full text once complete. For real-time token streaming use the public /api/agents/:id/stream proxy instead. Returns { content, tokens }.",
+    "Send a chat message to a persistent agent created via `agent_create` / `ghosty_spawn` (chat-* templates) and return the assembled response. Internally proxies through sandbox-host (the microVM's IP isn't routable from outside) and consumes the SSE stream into a single string. For real-time token streaming from a browser, use the public /api/v2/agents/:id/message endpoint with the embedToken instead. Returns { content, tokens }.",
     {
-      agentUrl: z.string().url().describe("agentUrl returned by agent_create (http://172.20.X.Y:3000)"),
+      agentId: z.string().describe("agentId returned by agent_create / ghosty_spawn"),
       content: z.string().min(1).describe("User message content"),
       sessionId: z.string().optional().describe("Conversation session id (default 'default'). Multi-visitor embeds should pass a stable per-visitor id."),
     },

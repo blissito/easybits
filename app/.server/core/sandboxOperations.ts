@@ -88,6 +88,39 @@ function ensureConfigured(): void {
   }
 }
 
+// openAgentMessageStream: open a streaming SSE connection to the chat
+// runtime via the sandbox-host proxy. Returns the raw ReadableStream so
+// callers can either consume tokens (messageAgent) or pipe to the public
+// HTTP response (api/v2/agents/:id/message route).
+export async function openAgentMessageStream(
+  sandboxId: string,
+  ownerId: string,
+  body: { content: string; sessionId?: string; port?: number }
+): Promise<ReadableStream<Uint8Array>> {
+  ensureConfigured();
+  const url = `${HOST_URL.replace(/\/$/, "")}/v1/sandbox/${sandboxId}/agent/message`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${HOST_TOKEN}`,
+      "Content-Type": "application/json",
+      "X-Easybits-Owner": ownerId,
+    },
+    body: JSON.stringify({
+      content: body.content,
+      sessionId: body.sessionId ?? "default",
+      port: body.port,
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `sandbox host POST agent/message → ${res.status}: ${text.slice(0, 500)}`
+    );
+  }
+  return res.body;
+}
+
 async function callHost<T>(
   method: "GET" | "POST" | "DELETE" | "PATCH",
   path: string,
@@ -495,22 +528,23 @@ export async function findAgentByEmbedToken(token: string): Promise<AgentRecord 
 // into a single string. For MCP tool callers (non-streaming). Real-time
 // streaming for embed widgets is exposed separately via the public
 // /api/agents/:id/stream proxy (server-sent events end-to-end).
+//
+// Goes through sandbox-host (NOT direct to agentUrl): EasyBits Fly has no
+// route to the microVM's 172.20.X.Y subnet. sandbox-host proxies internally.
 export async function messageAgent(
   ctx: AuthContext,
-  params: { agentUrl: string; content: string; sessionId?: string }
+  params: { agentId: string; content: string; sessionId?: string }
 ): Promise<{ content: string; tokens: number }> {
   requireScope(ctx, "WRITE");
-  const url = `${params.agentUrl.replace(/\/$/, "")}/message`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: params.content, sessionId: params.sessionId ?? "default" }),
-  });
-  if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`agent /message → ${res.status}: ${text.slice(0, 500)}`);
+  const agent = await db.agent.findUnique({ where: { id: params.agentId } });
+  if (!agent || agent.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
   }
-  const reader = res.body.getReader();
+  const stream = await openAgentMessageStream(agent.sandboxId, ctx.user.id, {
+    content: params.content,
+    sessionId: params.sessionId,
+  });
+  const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let assembled = "";
