@@ -428,12 +428,20 @@ export async function spawnGhosty(
       "Ghosty managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
     );
   }
+  // OAuth tokens use Bearer auth (ANTHROPIC_AUTH_TOKEN); standard API keys
+  // use x-api-key (ANTHROPIC_API_KEY). The Anthropic SDK auto-reads
+  // ANTHROPIC_API_KEY from process.env, so we ONLY set the relevant one.
+  const isOAuth = hostKey.startsWith("sk-ant-oat");
+  const credEnv: Record<string, string> = isOAuth
+    ? { ANTHROPIC_AUTH_TOKEN: hostKey }
+    : { ANTHROPIC_API_KEY: hostKey };
+
   return createAgent(ctx, {
     template: "chat-anthropic",
     name: params.name ?? "ghosty",
     timeoutSeconds: params.timeoutSeconds,
     env: {
-      ANTHROPIC_API_KEY: hostKey,
+      ...credEnv,
       ANTHROPIC_MODEL: GHOSTY_DEFAULT_MODEL,
       SYSTEM_PROMPT: params.systemPrompt ?? GHOSTY_DEFAULT_PROMPT,
     },
