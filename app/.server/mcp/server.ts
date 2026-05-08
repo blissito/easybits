@@ -94,6 +94,10 @@ import {
   writeFile as sandboxWriteFile,
   readFile as sandboxReadFile,
   listFiles as sandboxListFiles,
+  listTemplates,
+  createAgent,
+  messageAgent,
+  spawnGhosty,
 } from "../core/sandboxOperations";
 import {
   destroyAgentRun,
@@ -953,7 +957,7 @@ How to embed safely (the only reliable rule):
     "sandbox_create",
     "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Templates: ubuntu (base), python, node, bun, claude-code (preinstalled harness). Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses.",
     {
-      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "nanoclaw"]).describe("Base image template. 'node-agent' = node + @anthropic-ai/sdk pre-baked, used by agent_run."),
+      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "nanoclaw", "ghosty", "chat-openai", "chat-anthropic"]).describe("Base image template. 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghosty' = brand-facing Ghosty agent. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
       timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
@@ -1138,6 +1142,67 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await destroyAgentRun(ctx, params.job_id);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "templates_list",
+    "List available sandbox templates with metadata for catalog UI: tier (chat-embed/coding-harness/autonomous/custom/base), display name, description, required env vars and connection modes. Used by ghosty.studio to render dynamic 'new agent' forms. Pass tier= to filter (e.g. tier=chat-embed for embeddable chatbots only).",
+    {
+      tier: z.enum(["chat-embed", "coding-harness", "autonomous", "custom", "base"]).optional().describe("Filter by tier"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listTemplates(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_create",
+    "Spawn a long-lived agent inside a Firecracker microVM and return its reachable agentUrl. Distinct from `agent_run` (Claude one-shot managed): this returns a persistent endpoint you can post messages to. Use template='chat-openai' or 'chat-anthropic' for embeddable chat with SSE streaming, or 'goose'/'claude-code'/etc for coding harness. The `env` map (API keys, model, system prompt) is injected into the runtime at start time — never baked into the template image. Returns { sandboxId, agentUrl, healthUrl }.",
+    {
+      template: z.enum(["chat-openai", "chat-anthropic", "goose", "claude-code", "nanoclaw", "ghosty"]).describe("Agent template. 'chat-*' = persistent Express+SSE runtime; others = harness/autonomous."),
+      env: z.record(z.string()).describe("Environment variables for the agent (e.g. {OPENAI_API_KEY:'sk-...', OPENAI_MODEL:'gpt-4o-mini', SYSTEM_PROMPT:'...'}). Required keys depend on the template — fetch via templates_list."),
+      name: z.string().max(64).optional().describe("Optional human-friendly label"),
+      timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),
+      port: z.number().int().min(1).max(65535).optional().describe("Override agent port (default 3000 for chat-*)"),
+      healthPath: z.string().optional().describe("Override health probe path (default /health)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createAgent(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "ghosty_spawn",
+    "Spawn THE default Ghosty agent — zero configuration. Uses EasyBits' managed Anthropic credentials (same billing pattern as agent_run: tokens charged via AiGenerationLog), Haiku 4.5 model, and a generic Ghosty system prompt. For when the caller just wants 'an agent' without choosing template, model, or providing keys. Persistent runtime (chat-anthropic, ~256MB). Override via systemPrompt if you want a non-default persona. Returns { sandboxId, agentUrl, healthUrl }.",
+    {
+      name: z.string().max(64).optional().describe("Optional human-friendly label (default 'ghosty')"),
+      systemPrompt: z.string().optional().describe("Override Ghosty's default system prompt"),
+      timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await spawnGhosty(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_message",
+    "Send a chat message to a persistent agent created via `agent_create` (chat-* templates) and return the assembled response. Internally consumes the agent's SSE stream and returns the full text once complete. For real-time token streaming use the public /api/agents/:id/stream proxy instead. Returns { content, tokens }.",
+    {
+      agentUrl: z.string().url().describe("agentUrl returned by agent_create (http://172.20.X.Y:3000)"),
+      content: z.string().min(1).describe("User message content"),
+      sessionId: z.string().optional().describe("Conversation session id (default 'default'). Multi-visitor embeds should pass a stable per-visitor id."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await messageAgent(ctx, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

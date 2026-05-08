@@ -276,6 +276,10 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "agent_run",
   "agent_run_status",
   "agent_run_destroy",
+  "templates_list",
+  "agent_create",
+  "agent_message",
+  "ghosty_spawn",
 ]);
 
 /**

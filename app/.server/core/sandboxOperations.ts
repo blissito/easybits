@@ -13,7 +13,44 @@ export type SandboxTemplate =
   | "node-agent"
   | "bun"
   | "claude-code"
-  | "nanoclaw";
+  | "goose"
+  | "nanoclaw"
+  | "ghosty"
+  | "chat-openai"
+  | "chat-anthropic";
+
+export interface AgentSpec {
+  port?: number;
+  protocol?: "http" | "sse" | "ws" | "cli-stdin";
+  health_path?: string;
+  health_command?: string;
+}
+
+export interface EnvSpec {
+  name: string;
+  label?: string;
+  secret?: boolean;
+  required?: boolean;
+  default?: string;
+}
+
+export interface ConnectionMode {
+  id: string;
+  label: string;
+}
+
+export interface TemplateInfo {
+  name: string;
+  display?: string;
+  description?: string;
+  tier?: "chat-embed" | "coding-harness" | "autonomous" | "custom" | "base";
+  image: string;
+  memoryMb: number;
+  vcpus: number;
+  agent?: AgentSpec;
+  requiredEnv?: EnvSpec[];
+  connectionModes?: ConnectionMode[];
+}
 
 export interface SandboxRecord {
   sandboxId: string;
@@ -222,4 +259,171 @@ export async function listFiles(
     undefined,
     ctx.user.id
   );
+}
+
+// ─────────────── Templates catalog ───────────────
+
+export async function listTemplates(
+  ctx: AuthContext,
+  params: { tier?: TemplateInfo["tier"] } = {}
+): Promise<TemplateInfo[]> {
+  requireScope(ctx, "READ");
+  const qs = params.tier ? `?tier=${encodeURIComponent(params.tier)}` : "";
+  const out = await callHost<{ templates: TemplateInfo[] }>(
+    "GET",
+    `/v1/templates${qs}`,
+    undefined,
+    ctx.user.id
+  );
+  return out.templates;
+}
+
+// ─────────────── Persistent agent lifecycle ───────────────
+
+export interface AgentEndpoint {
+  ok: true;
+  agentUrl: string;
+  healthUrl: string;
+}
+
+export async function startAgent(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: {
+    env: Record<string, string>;
+    port?: number;
+    healthPath?: string;
+    timeoutSeconds?: number;
+  }
+): Promise<AgentEndpoint> {
+  requireScope(ctx, "WRITE");
+  return callHost<AgentEndpoint>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/agent/start`,
+    {
+      env: params.env,
+      port: params.port,
+      healthPath: params.healthPath,
+      timeoutSeconds: params.timeoutSeconds ?? 30,
+    },
+    ctx.user.id
+  );
+}
+
+// High-level: spawn sandbox + wait running + start agent runtime + return everything.
+// Used by the `agent_create` MCP tool. Distinct from `agent_run` (Claude one-shot
+// managed) — this returns a long-lived agent reachable at agentUrl.
+export async function createAgent(
+  ctx: AuthContext,
+  params: {
+    template: SandboxTemplate;
+    env: Record<string, string>;
+    name?: string;
+    timeoutSeconds?: number;
+    port?: number;
+    healthPath?: string;
+  }
+): Promise<{ sandboxId: string; agentUrl: string; healthUrl: string; template: SandboxTemplate }> {
+  requireScope(ctx, "WRITE");
+  const sb = await createSandbox(ctx, {
+    template: params.template,
+    timeoutSeconds: params.timeoutSeconds,
+    name: params.name,
+  });
+  await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 30_000 });
+  const ep = await startAgent(ctx, sb.sandboxId, {
+    env: params.env,
+    port: params.port,
+    healthPath: params.healthPath,
+  });
+  return {
+    sandboxId: sb.sandboxId,
+    template: params.template,
+    agentUrl: ep.agentUrl,
+    healthUrl: ep.healthUrl,
+  };
+}
+
+// spawnGhosty: zero-config persistent agent. Uses EasyBits' managed Anthropic
+// key (same pattern as agent_run) — caller passes nothing required, gets back
+// an agentUrl ready to message. The brand-default for "I just need an agent."
+const GHOSTY_DEFAULT_PROMPT =
+  "Eres Ghosty, el agente conversacional de EasyBits. Sé útil, breve y directo. " +
+  "Habla en el idioma del usuario. Si no sabes algo, dilo.";
+
+const GHOSTY_DEFAULT_MODEL = "claude-haiku-4-5";
+
+export async function spawnGhosty(
+  ctx: AuthContext,
+  params: { name?: string; systemPrompt?: string; timeoutSeconds?: number } = {}
+): Promise<{ sandboxId: string; agentUrl: string; healthUrl: string; template: SandboxTemplate }> {
+  requireScope(ctx, "WRITE");
+  const hostKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
+  if (!hostKey) {
+    throw new Error(
+      "Ghosty managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
+    );
+  }
+  return createAgent(ctx, {
+    template: "chat-anthropic",
+    name: params.name ?? "ghosty",
+    timeoutSeconds: params.timeoutSeconds,
+    env: {
+      ANTHROPIC_API_KEY: hostKey,
+      ANTHROPIC_MODEL: GHOSTY_DEFAULT_MODEL,
+      SYSTEM_PROMPT: params.systemPrompt ?? GHOSTY_DEFAULT_PROMPT,
+    },
+  });
+}
+
+// messageAgent: POST a message to a chat-* agent and collect the SSE stream
+// into a single string. For MCP tool callers (non-streaming). Real-time
+// streaming for embed widgets is exposed separately via the public
+// /api/agents/:id/stream proxy (server-sent events end-to-end).
+export async function messageAgent(
+  ctx: AuthContext,
+  params: { agentUrl: string; content: string; sessionId?: string }
+): Promise<{ content: string; tokens: number }> {
+  requireScope(ctx, "WRITE");
+  const url = `${params.agentUrl.replace(/\/$/, "")}/message`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: params.content, sessionId: params.sessionId ?? "default" }),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`agent /message → ${res.status}: ${text.slice(0, 500)}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let assembled = "";
+  let tokens = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n\n")) !== -1) {
+      const event = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 2);
+      const dataLine = event
+        .split("\n")
+        .find((l) => l.startsWith("data: "));
+      if (!dataLine) continue;
+      try {
+        const evt = JSON.parse(dataLine.slice(6));
+        if (evt.type === "token" && typeof evt.value === "string") {
+          assembled += evt.value;
+          tokens++;
+        } else if (evt.type === "error") {
+          throw new Error(`agent stream error: ${evt.message}`);
+        }
+      } catch {
+        // ignore non-JSON event lines
+      }
+    }
+  }
+  return { content: assembled, tokens };
 }
