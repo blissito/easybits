@@ -408,44 +408,87 @@ export async function createAgent(
   };
 }
 
-// spawnGhosty: zero-config persistent agent. Uses EasyBits' managed Anthropic
-// key (same pattern as agent_run) — caller passes nothing required, gets back
-// an agentUrl ready to message. The brand-default for "I just need an agent."
-const GHOSTY_DEFAULT_PROMPT =
-  "Eres Ghosty, el agente conversacional de EasyBits. Sé útil, breve y directo. " +
-  "Habla en el idioma del usuario. Si no sabes algo, dilo.";
+// Managed-mode autonomous agents. Each brand maps to a default mascot name
+// + system prompt. Backed by chat-anthropic runtime + host-managed
+// credentials (SANDBOX_HOST_ANTHROPIC_KEY) — caller doesn't pass keys.
+// The autonomous template (ghosty / nanoclaw / openclaw) declares image
+// + tier in templates.yaml for catalog UI, but the actual runtime is
+// always chat-anthropic; we'll diverge per-brand once each gets its own
+// rootfs with channel integrations baked in.
+const MANAGED_MODEL = "claude-haiku-4-5";
 
-const GHOSTY_DEFAULT_MODEL = "claude-haiku-4-5";
+const BRAND_DEFAULTS: Record<
+  string,
+  { name: string; prompt: string }
+> = {
+  ghosty: {
+    name: "Ghosty",
+    prompt:
+      "Eres Ghosty, el agente oficial de WhatsApp de la marca Ghosty. Sé útil, " +
+      "breve y directo. Habla en el idioma del usuario. Si no sabes algo, dilo.",
+  },
+  nanoclaw: {
+    name: "Andy",
+    prompt:
+      "Eres Andy, el asistente de Nanoclaw para Slack y Microsoft Teams. " +
+      "Conoces el flujo de canales corporativos y respondes en tono profesional " +
+      "pero cercano. Sé conciso. Habla en el idioma del usuario.",
+  },
+  openclaw: {
+    name: "Molty",
+    prompt:
+      "Eres Molty, una langosta espacial. Asistente personal AI estilo " +
+      "OpenClaw — multi-plataforma, OSS-first, sin filtros corporativos. " +
+      "Sé útil, ingenioso y directo. Habla en el idioma del usuario.",
+  },
+};
 
+function hostManagedAnthropicEnv(): Record<string, string> {
+  const hostKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
+  if (!hostKey) {
+    throw new Error(
+      "Managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
+    );
+  }
+  // OAuth tokens use Bearer (ANTHROPIC_AUTH_TOKEN); plain keys use x-api-key.
+  const isOAuth = hostKey.startsWith("sk-ant-oat");
+  return isOAuth
+    ? { ANTHROPIC_AUTH_TOKEN: hostKey }
+    : { ANTHROPIC_API_KEY: hostKey };
+}
+
+export async function spawnAutonomous(
+  ctx: AuthContext,
+  params: {
+    brand: "ghosty" | "nanoclaw" | "openclaw";
+    name?: string;
+    systemPrompt?: string;
+    timeoutSeconds?: number;
+  }
+): Promise<CreatedAgent> {
+  requireScope(ctx, "WRITE");
+  const cfg = BRAND_DEFAULTS[params.brand];
+  if (!cfg) {
+    throw new Error(`Unknown autonomous brand: ${params.brand}`);
+  }
+  return createAgent(ctx, {
+    template: "chat-anthropic",
+    name: params.name ?? cfg.name,
+    timeoutSeconds: params.timeoutSeconds,
+    env: {
+      ...hostManagedAnthropicEnv(),
+      ANTHROPIC_MODEL: MANAGED_MODEL,
+      SYSTEM_PROMPT: params.systemPrompt ?? cfg.prompt,
+    },
+  });
+}
+
+// Back-compat: spawnGhosty stays as a thin wrapper.
 export async function spawnGhosty(
   ctx: AuthContext,
   params: { name?: string; systemPrompt?: string; timeoutSeconds?: number } = {}
 ): Promise<CreatedAgent> {
-  requireScope(ctx, "WRITE");
-  const hostKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
-  if (!hostKey) {
-    throw new Error(
-      "Ghosty managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
-    );
-  }
-  // OAuth tokens use Bearer auth (ANTHROPIC_AUTH_TOKEN); standard API keys
-  // use x-api-key (ANTHROPIC_API_KEY). The Anthropic SDK auto-reads
-  // ANTHROPIC_API_KEY from process.env, so we ONLY set the relevant one.
-  const isOAuth = hostKey.startsWith("sk-ant-oat");
-  const credEnv: Record<string, string> = isOAuth
-    ? { ANTHROPIC_AUTH_TOKEN: hostKey }
-    : { ANTHROPIC_API_KEY: hostKey };
-
-  return createAgent(ctx, {
-    template: "chat-anthropic",
-    name: params.name ?? "ghosty",
-    timeoutSeconds: params.timeoutSeconds,
-    env: {
-      ...credEnv,
-      ANTHROPIC_MODEL: GHOSTY_DEFAULT_MODEL,
-      SYSTEM_PROMPT: params.systemPrompt ?? GHOSTY_DEFAULT_PROMPT,
-    },
-  });
+  return spawnAutonomous(ctx, { brand: "ghosty", ...params });
 }
 
 // ─────────────── Agent registry (Mongo-backed) ───────────────
