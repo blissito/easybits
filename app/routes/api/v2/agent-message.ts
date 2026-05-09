@@ -12,6 +12,19 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
+// React Router v7 NO enruta OPTIONS al action automáticamente — devuelve
+// 400 antes de llegar. Exporto loader para que el framework acepte la
+// request y respondamos preflight ahí.
+export async function loader({ request }: Route.LoaderArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  return new Response(JSON.stringify({ error: "Method not allowed" }), {
+    status: 405,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
+}
+
 // POST /api/v2/agents/:id/message  (action)
 //
 // Auth: owner (eb_sk_* / session) OR embed (agt_*).
@@ -19,14 +32,7 @@ const CORS_HEADERS = {
 // Goes through sandbox-host's /v1/sandbox/:sbid/agent/message proxy because
 // EasyBits Fly has no route to the microVM's internal subnet. sandbox-host
 // streams the agent's SSE upstream; we re-emit it to the caller verbatim.
-//
-// React Router v7 dispatches OPTIONS to action too — we short-circuit
-// preflight here with a 204 + CORS headers.
 export async function action({ request, params }: Route.ActionArgs) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
   const auth = await resolveAgentAuth(request, params.id!);
   const body = await request.json().catch(() => ({}));
   if (typeof body?.content !== "string" || !body.content.trim()) {
