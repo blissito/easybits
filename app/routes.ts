@@ -159,6 +159,7 @@ export default [
     route("agents/lookup", "routes/api/v2/agents-lookup.ts"),
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
+    route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),
     route("templates", "routes/api/v2/templates.ts"),
     route("files", "routes/api/v2/files.ts"),
     route("files/search", "routes/api/v2/file-search.ts"),

@@ -577,6 +577,15 @@ function validateRequiredEnv(
       missing.push(need);
     }
   }
+  // chat-anthropic accepts ANTHROPIC_API_KEY OR ANTHROPIC_AUTH_TOKEN.
+  // Managed mode (spawnAutonomous) injects AUTH_TOKEN when the host key
+  // is OAuth (sk-ant-oat...) — strict required_env would reject this.
+  if (tpl.name === "chat-anthropic") {
+    if (env.ANTHROPIC_API_KEY?.trim() || env.ANTHROPIC_AUTH_TOKEN?.trim()) {
+      const idx = missing.indexOf("ANTHROPIC_API_KEY");
+      if (idx >= 0) missing.splice(idx, 1);
+    }
+  }
   if (missing.length > 0) {
     throw new Error(
       `Missing required env for template "${tpl.name}": ${missing.join(", ")}`
@@ -940,6 +949,26 @@ export async function destroyAgent(ctx: AuthContext, agentId: string): Promise<{
     // sandbox may already be gone (TTL expired) — proceed to row delete
   }
   await db.agent.delete({ where: { id: agentId } });
+  return { ok: true };
+}
+
+// markAgentLost: caller (UI loader) ya detectó que el sandbox subyacente
+// no responde (probe HTTP falló). Persiste el estado en Mongo así otros
+// consumidores no ven datos engañosos. Truncate expiresAt a now() para
+// que los countdowns de UI no mientan.
+export async function markAgentLost(
+  ctx: AuthContext,
+  agentId: string
+): Promise<{ ok: true }> {
+  requireScope(ctx, "WRITE");
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
+  }
+  await db.agent.update({
+    where: { id: agentId },
+    data: { status: "lost", expiresAt: new Date() },
+  });
   return { ok: true };
 }
 
