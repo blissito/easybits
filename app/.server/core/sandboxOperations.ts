@@ -18,6 +18,7 @@ export type SandboxTemplate =
   | "goose"
   | "nanoclaw"
   | "ghosty"
+  | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
 
@@ -577,10 +578,10 @@ function validateRequiredEnv(
       missing.push(need);
     }
   }
-  // chat-anthropic accepts ANTHROPIC_API_KEY OR ANTHROPIC_AUTH_TOKEN.
+  // chat-anthropic + openclaw accept ANTHROPIC_API_KEY OR ANTHROPIC_AUTH_TOKEN.
   // Managed mode (spawnAutonomous) injects AUTH_TOKEN when the host key
   // is OAuth (sk-ant-oat...) — strict required_env would reject this.
-  if (tpl.name === "chat-anthropic") {
+  if (tpl.name === "chat-anthropic" || tpl.name === "openclaw") {
     if (env.ANTHROPIC_API_KEY?.trim() || env.ANTHROPIC_AUTH_TOKEN?.trim()) {
       const idx = missing.indexOf("ANTHROPIC_API_KEY");
       if (idx >= 0) missing.splice(idx, 1);
@@ -657,9 +658,18 @@ export async function createAgent(
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
 
+  // Generate embedToken upfront — also serves as OPENCLAW_GATEWAY_TOKEN for
+  // the openclaw runtime, so easybits can reuse it as Bearer when proxying
+  // /v1/chat/completions without persisting a second per-agent secret.
+  const embedToken = "agt_" + randomBytes(32).toString("hex");
+  const env = { ...params.env };
+  if (params.template === "openclaw") {
+    env.OPENCLAW_GATEWAY_TOKEN = embedToken;
+  }
+
   // 1. Resolve template + validate the env contract before spawning anything.
   const tpl = await resolveTemplate(ctx, params.template);
-  validateRequiredEnv(tpl, params.env);
+  validateRequiredEnv(tpl, env);
 
   // 2. Spawn microVM and wait for boot.
   const sb = await createSandbox(ctx, {
@@ -671,7 +681,7 @@ export async function createAgent(
 
   // 3. Start the runtime unit declared by the template (default chat-runtime).
   const ep = await startAgent(ctx, sb.sandboxId, {
-    env: params.env,
+    env,
     port: tpl.agent?.port,
     healthPath: tpl.agent?.health_path,
     unit: tpl.agent?.unit,
@@ -691,7 +701,6 @@ export async function createAgent(
   }
 
   // 5. Persist Agent row with runtime metadata snapshot.
-  const embedToken = "agt_" + randomBytes(32).toString("hex");
   const expiresAt = sb.expiresAt ? new Date(sb.expiresAt) : null;
   const row = await db.agent.create({
     data: {
@@ -752,6 +761,21 @@ const chatAnthropicEnv = (
     ? { ANTHROPIC_AUTH_TOKEN: hostKey, ANTHROPIC_MODEL: MANAGED_MODEL }
     : { ANTHROPIC_API_KEY: hostKey, ANTHROPIC_MODEL: MANAGED_MODEL };
 
+// OpenClaw runtime expects ANTHROPIC_API_KEY como provider key + un
+// OPENCLAW_GATEWAY_TOKEN para auth de la HTTP API en :18789.
+// El gateway token NO lo generamos acá — createAgent inyecta el embedToken
+// como OPENCLAW_GATEWAY_TOKEN antes de startAgent, así easybits puede
+// reusarlo como Bearer al proxear /v1/chat/completions sin guardar un
+// segundo secreto.
+//
+// openclaw: env vars per-provider los inyecta spawnAutonomous (depende del
+// PROVIDER seleccionado). Acá retornamos vacío — solo el wrapper
+// start-runtime.sh consume los envs específicos para escribir auth-profiles.
+const openclawEnv = (
+  _hostKey: string,
+  _isOAuth: boolean,
+): Record<string, string> => ({});
+
 const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   ghosty: {
     template: "chat-anthropic",
@@ -771,13 +795,13 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
     envBuilder: chatAnthropicEnv,
   },
   openclaw: {
-    template: "chat-anthropic",
+    template: "openclaw",
     name: "Molty",
     prompt:
       "Eres Molty, una langosta espacial. Asistente personal AI estilo " +
       "OpenClaw — multi-plataforma, OSS-first, sin filtros corporativos. " +
       "Sé útil, ingenioso y directo. Habla en el idioma del usuario.",
-    envBuilder: chatAnthropicEnv,
+    envBuilder: openclawEnv,
   },
   "goose-managed": {
     template: "goose",
@@ -819,6 +843,16 @@ export async function spawnAutonomous(
     brand: AutonomousBrand;
     name?: string;
     systemPrompt?: string;
+    /** "provider/model", e.g. "anthropic/claude-haiku-4-5". Defaults to MANAGED_MODEL on anthropic. */
+    model?: string;
+    /** User-provided plaintext API key for the selected provider (BYOK).
+        Overrides host-managed key. Required for non-anthropic providers
+        since only SANDBOX_HOST_ANTHROPIC_KEY exists in Fly secrets. */
+    providerKey?: string;
+    /** "api_key" → routea a *_API_KEY env (header x-api-key); "oauth" →
+        routea a *_AUTH_TOKEN env (Bearer). Default detecta por prefix:
+        sk-ant-oat → oauth, todo lo demás → api_key. */
+    providerKeyKind?: "api_key" | "oauth";
     timeoutSeconds?: number;
   }
 ): Promise<CreatedAgent> {
@@ -827,19 +861,68 @@ export async function spawnAutonomous(
   if (!cfg) {
     throw new Error(`Unknown autonomous brand: ${params.brand}`);
   }
-  const hostKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
-  if (!hostKey) {
-    throw new Error(
-      "Managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
-    );
-  }
-  const isOAuth = hostKey.startsWith("sk-ant-oat");
 
-  // chat-anthropic runtimes accept SYSTEM_PROMPT env. Goose ignores it
-  // (custom systemPrompt for Goose is backlog).
-  const env: Record<string, string> = cfg.envBuilder(hostKey, isOAuth);
-  if (cfg.template === "chat-anthropic") {
+  // Resolve provider + model. openclaw expects "provider/model"; chat-anthropic
+  // pre-supposes anthropic.
+  const [reqProvider, reqModel] = (params.model ?? `anthropic/${MANAGED_MODEL}`).split("/", 2);
+  const provider = reqProvider || "anthropic";
+  const model = reqModel || MANAGED_MODEL;
+
+  // Auth resolution: BYOK takes precedence; fall back to host-managed key
+  // (only anthropic supported today). Throw clear error otherwise.
+  let providerKey = params.providerKey?.trim();
+  let isOAuth = params.providerKeyKind === "oauth";
+  if (!providerKey) {
+    if (provider !== "anthropic") {
+      throw new Error(
+        `Provider "${provider}" requires the user to save their API key in /app/settings/credentials. Only anthropic has a host-managed fallback.`
+      );
+    }
+    providerKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
+    if (!providerKey) {
+      throw new Error(
+        "Managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
+      );
+    }
+    isOAuth = providerKey.startsWith("sk-ant-oat");
+  } else if (params.providerKeyKind === undefined && provider === "anthropic") {
+    // Backward-compat: si el caller no pasó kind explícito y el key tiene
+    // prefix sk-ant-oat, lo tratamos como oauth.
+    isOAuth = providerKey.startsWith("sk-ant-oat");
+  }
+
+  // Build env: provider-specific *_API_KEY/*_AUTH_TOKEN + brand-shared envs.
+  // The runtime wrapper (start-runtime.sh) reads these and writes the right
+  // auth-profiles.json entry: AUTH_TOKEN env → type:"token", API_KEY → "api_key".
+  const env: Record<string, string> = cfg.envBuilder(providerKey, isOAuth);
+  if (provider === "anthropic") {
+    if (isOAuth) {
+      env.ANTHROPIC_AUTH_TOKEN = providerKey;
+      env.ANTHROPIC_API_KEY = providerKey; // some openclaw paths still read API_KEY
+    } else {
+      env.ANTHROPIC_API_KEY = providerKey;
+    }
+  }
+  if (provider === "openai") {
+    if (isOAuth) {
+      env.OPENAI_AUTH_TOKEN = providerKey;
+    } else {
+      env.OPENAI_API_KEY = providerKey;
+    }
+  }
+  if (provider === "google") env.GEMINI_API_KEY = providerKey;
+  if (provider === "deepseek") env.DEEPSEEK_API_KEY = providerKey;
+  if (provider === "openrouter") env.OPENROUTER_API_KEY = providerKey;
+
+  if (cfg.template === "chat-anthropic" || cfg.template === "openclaw") {
     env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
+  }
+
+  if (cfg.template === "openclaw") {
+    env.PROVIDER = provider;
+    env.MODEL = model;
+  } else if (cfg.template === "chat-anthropic") {
+    env.ANTHROPIC_MODEL = model;
   }
 
   return createAgent(ctx, {
@@ -1031,6 +1114,8 @@ export async function openAgentChunkStream(
     | "messagePath"
     | "acpSessionId"
     | "acpTransportSessionId"
+    | "embedToken"
+    | "template"
   >,
   body: { content: string; sessionId?: string }
 ): Promise<ReadableStream<Uint8Array>> {
@@ -1071,7 +1156,80 @@ export async function openAgentChunkStream(
     });
     return transformAcpStream(upstream.stream, promptId);
   }
+  if (protocol === "http") {
+    // OpenClaw gateway expone /v1/chat/completions compatible con OpenAI.
+    // POST con stream:true → SSE con OpenAI delta chunks. Bearer token =
+    // embedToken (createAgent lo inyecta como OPENCLAW_GATEWAY_TOKEN).
+    const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
+      port: agent.port ?? 18789,
+      path: agent.messagePath ?? "/v1/chat/completions",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${agent.embedToken}`,
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      rawBody: {
+        model: `${agent.template}/default`,
+        messages: [{ role: "user", content: body.content }],
+        stream: true,
+        user: body.sessionId ?? "default",
+      },
+    });
+    return mapOpenAIDeltaToChunk(upstream.stream);
+  }
   throw new Error(`Unsupported agent protocol: ${protocol}`);
+}
+
+// Translate OpenAI-compatible SSE chunks (`data: {choices:[{delta:{content}}]}`)
+// to unified {type:"chunk",value} stream. Stops on `data: [DONE]` → emits
+// {type:"done"}. Network errors → {type:"error",message}.
+function mapOpenAIDeltaToChunk(
+  upstream: ReadableStream<Uint8Array>
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  return new ReadableStream({
+    async start(controller) {
+      const reader = upstream.getReader();
+      const emit = (evt: unknown) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`));
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buffer.indexOf("\n\n")) !== -1) {
+            const event = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 2);
+            for (const line of event.split("\n")) {
+              if (!line.startsWith("data: ")) continue;
+              const payload = line.slice(6);
+              if (payload === "[DONE]") {
+                emit({ type: "done" });
+                continue;
+              }
+              try {
+                const parsed = JSON.parse(payload) as {
+                  choices?: Array<{ delta?: { content?: string } }>;
+                };
+                const text = parsed.choices?.[0]?.delta?.content ?? "";
+                if (text) emit({ type: "chunk", value: text });
+              } catch {
+                // ignore malformed payloads
+              }
+            }
+          }
+        }
+      } catch (e) {
+        emit({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
 }
 
 // Translate chat-runtime SSE events {type:"token",value} → unified {type:"chunk",value}.

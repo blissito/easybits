@@ -24,6 +24,12 @@ export async function action({ request }: Route.ActionArgs) {
     brand: brand as "ghosty" | "nanoclaw" | "openclaw" | "goose-managed",
     name: typeof body?.name === "string" ? body.name : undefined,
     systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined,
+    model: typeof body?.model === "string" ? body.model : undefined,
+    providerKey: typeof body?.providerKey === "string" ? body.providerKey : undefined,
+    providerKeyKind:
+      body?.providerKeyKind === "oauth" || body?.providerKeyKind === "api_key"
+        ? body.providerKeyKind
+        : undefined,
     timeoutSeconds: typeof body?.timeoutSeconds === "number" ? body.timeoutSeconds : undefined,
   });
   return Response.json(result);
