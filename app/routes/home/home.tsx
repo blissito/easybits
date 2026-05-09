@@ -46,6 +46,59 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <section className="overflow-hidden w-full">
       <AuthNav user={user ?? undefined} />
       <Hero />
+
+      <Bento
+        title="Extrae datos de cualquier sitio web"
+        image="https://i.imgur.com/JjN1Q0l.png"
+        className="border-t-2 border-black"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Sin bloqueos, sin captchas, sin VPNs. Tu agente lee el web abierto en
+          HTML limpio o markdown listo para LLM.
+        </p>
+        <ItemList title="HTML completo o markdown estructurado" />
+        <ItemList title="Sortea anti-bot, captchas y rate limits" />
+        <ItemList title="Selecciona país de origen por petición" />
+        <ItemList title="Disponible vía MCP y REST API" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          Lo conectas una vez. Tu agente extrae cuando lo necesite.
+        </p>
+      </Bento>
+      <Bento
+        position="right"
+        title="Búsqueda global desde 195 países"
+        image="https://i.imgur.com/R8qvNsB.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Resultados de Google y Bing en JSON estructurado, con red de IPs
+          residenciales y datacenter en cualquier región del mundo.
+        </p>
+        <ItemList title="SERPs estructuradas (orgánicos, ads, knowledge panels)" />
+        <ItemList title="Más de 400 millones de IPs residenciales e ISP" />
+        <ItemList title="Geo-targeting país a país" />
+        <ItemList title="Compatible con research, monitoring y price tracking" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          Investigación de mercado, SEO y pricing — sin armar la infra.
+        </p>
+      </Bento>
+      <Bento
+        title="Todo en un solo MCP, listo para tu agente"
+        image="https://i.imgur.com/lEOVfUp.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Conecta Claude Code, Claude Desktop, Cursor o cualquier cliente MCP.
+          Tu agente investiga, almacena, genera documentos y lanza landings con
+          un único conector.
+        </p>
+        <ItemList title="Más de 40 tools en un solo endpoint" />
+        <ItemList title="Scraping y búsqueda web incluidos" />
+        <ItemList title="Almacenamiento, formularios, DBs y generación de docs/landings" />
+        <ItemList title="Autenticación por API key — sin código" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          Una API key, un MCP, todo el back-office del agente.
+        </p>
+      </Bento>
+
       <Banners rotation={2}>
         <>
           Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
