@@ -952,6 +952,37 @@ export async function destroyAgent(ctx: AuthContext, agentId: string): Promise<{
   return { ok: true };
 }
 
+// extendAgent: empuja expiresAt hacia adelante para keep-alive desde la UI.
+// Llama al sandbox-host (que reagenda su timer interno) y refleja la nueva
+// expiresAt en el Agent row. extendSeconds default = 300 (5min); el host
+// clampa a [30, 3600] y limita a un máximo de 3600s desde ahora.
+export async function extendAgent(
+  ctx: AuthContext,
+  agentId: string,
+  extendSeconds?: number
+): Promise<AgentRecord> {
+  requireScope(ctx, "WRITE");
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
+  }
+  if (row.status !== "running") {
+    throw new Error(`agent is ${row.status}; cannot extend`);
+  }
+  const sb = await callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${row.sandboxId}/extend`,
+    { extendSeconds: extendSeconds ?? 300 },
+    ctx.user.id
+  );
+  const newExpiresAt = sb.expiresAt ? new Date(sb.expiresAt) : null;
+  const updated = await db.agent.update({
+    where: { id: agentId },
+    data: { expiresAt: newExpiresAt },
+  });
+  return toAgentRecord(updated);
+}
+
 // markAgentLost: caller (UI loader) ya detectó que el sandbox subyacente
 // no responde (probe HTTP falló). Persiste el estado en Mongo así otros
 // consumidores no ven datos engañosos. Truncate expiresAt a now() para
