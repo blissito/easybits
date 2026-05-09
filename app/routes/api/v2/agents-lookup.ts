@@ -35,7 +35,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     );
   }
   return Response.json(
-    { agentId: agent.agentId, template: agent.template },
+    {
+      agentId: agent.agentId,
+      template: agent.template,
+      protocol: agent.protocol,
+    },
     { status: 200, headers: CORS_HEADERS }
   );
 }

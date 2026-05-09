@@ -280,6 +280,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "agent_create",
   "agent_message",
   "ghosty_spawn",
+  "goose_spawn",
 ]);
 
 /**

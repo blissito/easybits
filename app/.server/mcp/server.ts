@@ -97,6 +97,7 @@ import {
   listTemplates,
   createAgent,
   messageAgent,
+  spawnAutonomous,
   spawnGhosty,
 } from "../core/sandboxOperations";
 import {
@@ -1188,6 +1189,20 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await spawnGhosty(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "goose_spawn",
+    "Spawn THE managed Goose agent — zero configuration. Block's open-source coding agent running as ACP server (JSON-RPC over SSE) inside a Firecracker microVM. Uses EasyBits' managed Anthropic credentials (Haiku 4.5). Returns { sandboxId, agentUrl, healthUrl, agentId, embedToken }. systemPrompt is currently ignored for Goose (uses Goose default).",
+    {
+      name: z.string().max(64).optional().describe("Optional human-friendly label (default 'Goose')"),
+      timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await spawnAutonomous(ctx, { brand: "goose-managed", ...params });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

@@ -23,9 +23,12 @@ export type SandboxTemplate =
 
 export interface AgentSpec {
   port?: number;
-  protocol?: "http" | "sse" | "ws" | "cli-stdin";
+  protocol?: "http" | "sse" | "ws" | "cli-stdin" | "acp";
   health_path?: string;
   health_command?: string;
+  unit?: string;
+  env_file?: string;
+  message_path?: string;
 }
 
 export interface EnvSpec {
@@ -88,17 +91,38 @@ function ensureConfigured(): void {
   }
 }
 
-// openAgentMessageStream: open a streaming SSE connection to the chat
-// runtime via the sandbox-host proxy. Returns the raw ReadableStream so
-// callers can either consume tokens (messageAgent) or pipe to the public
-// HTTP response (api/v2/agents/:id/message route).
+// openAgentMessageStream: open a streaming connection to the runtime via
+// the sandbox-host proxy. Returns the raw ReadableStream — caller decides
+// how to parse (chat-runtime simple SSE vs Goose ACP JSON-RPC).
+//
+// Two modes via overloads:
+//   - Standard {content, sessionId} body → chat-runtime path "/message"
+//   - Override with rawBody + path + headers → Goose "/acp" JSON-RPC, etc.
 export async function openAgentMessageStream(
   sandboxId: string,
   ownerId: string,
-  body: { content: string; sessionId?: string; port?: number }
+  body: {
+    content?: string;
+    sessionId?: string;
+    port?: number;
+    path?: string;
+    rawBody?: unknown;
+    headers?: Record<string, string>;
+    method?: string;
+  }
 ): Promise<ReadableStream<Uint8Array>> {
   ensureConfigured();
   const url = `${HOST_URL.replace(/\/$/, "")}/v1/sandbox/${sandboxId}/agent/message`;
+  const payload: Record<string, unknown> = { port: body.port };
+  if (body.path) payload.path = body.path;
+  if (body.method) payload.method = body.method;
+  if (body.headers) payload.headers = body.headers;
+  if (body.rawBody !== undefined) {
+    payload.rawBody = body.rawBody;
+  } else {
+    payload.content = body.content;
+    payload.sessionId = body.sessionId ?? "default";
+  }
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -106,11 +130,7 @@ export async function openAgentMessageStream(
       "Content-Type": "application/json",
       "X-Easybits-Owner": ownerId,
     },
-    body: JSON.stringify({
-      content: body.content,
-      sessionId: body.sessionId ?? "default",
-      port: body.port,
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
@@ -119,6 +139,188 @@ export async function openAgentMessageStream(
     );
   }
   return res.body;
+}
+
+// ─────────────── ACP (Agent Client Protocol) helpers ───────────────
+//
+// Goose serve exposes JSON-RPC 2.0 over SSE on /acp. These helpers do the
+// minimal wire-protocol work we need: initialize handshake, session/new,
+// session/prompt, and a TransformStream that converts ACP notifications
+// to the simple {type:"chunk"|"done"|"error"} SSE events the embed widget
+// already consumes for chat-runtime.
+
+const ACP_HEADERS = { Accept: "application/json, text/event-stream" };
+
+function parseSSEDataLines(chunk: string): unknown[] {
+  // Returns array of parsed JSON values from "data: ..." lines in chunk.
+  const out: unknown[] = [];
+  for (const line of chunk.split("\n")) {
+    if (line.startsWith("data: ")) {
+      try {
+        out.push(JSON.parse(line.slice(6)));
+      } catch {
+        // ignore non-JSON
+      }
+    }
+  }
+  return out;
+}
+
+// Reads the response from an ACP JSON-RPC POST and returns the FIRST
+// `result` payload matching `id`. Used for synchronous handshake calls
+// (initialize, session/new) where we don't care about streaming.
+async function readAcpRpcResult(
+  stream: ReadableStream<Uint8Array>,
+  id: number
+): Promise<{ result?: unknown; error?: { code: number; message: string } }> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n\n")) !== -1) {
+      const event = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 2);
+      for (const evt of parseSSEDataLines(event) as Array<{
+        id?: number;
+        result?: unknown;
+        error?: { code: number; message: string };
+      }>) {
+        if (evt.id === id && (evt.result !== undefined || evt.error !== undefined)) {
+          await reader.cancel();
+          return { result: evt.result, error: evt.error };
+        }
+      }
+    }
+  }
+  return { error: { code: -1, message: "stream closed without matching result" } };
+}
+
+// runAcpHandshake: initialize + session/new. Returns the new sessionId.
+// Called eager during startAgent for ACP runtimes so the first user
+// message has zero handshake overhead.
+async function runAcpHandshake(
+  sandboxId: string,
+  ownerId: string,
+  port: number,
+  messagePath: string
+): Promise<string> {
+  // 1. initialize
+  const initStream = await openAgentMessageStream(sandboxId, ownerId, {
+    port,
+    path: messagePath,
+    headers: ACP_HEADERS,
+    rawBody: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: 1, clientCapabilities: {} },
+    },
+  });
+  const initRes = await readAcpRpcResult(initStream, 1);
+  if (initRes.error) {
+    throw new Error(`ACP initialize failed: ${initRes.error.message}`);
+  }
+  // 2. session/new — pass cwd "/" and empty mcpServers list (Goose's minimal).
+  const sessStream = await openAgentMessageStream(sandboxId, ownerId, {
+    port,
+    path: messagePath,
+    headers: ACP_HEADERS,
+    rawBody: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "session/new",
+      params: { cwd: "/", mcpServers: [] },
+    },
+  });
+  const sessRes = await readAcpRpcResult(sessStream, 2);
+  if (sessRes.error) {
+    throw new Error(`ACP session/new failed: ${sessRes.error.message}`);
+  }
+  const sessionId = (sessRes.result as { sessionId?: string })?.sessionId;
+  if (!sessionId) {
+    throw new Error("ACP session/new returned no sessionId");
+  }
+  return sessionId;
+}
+
+// transformAcpStream: takes an ACP SSE stream of JSON-RPC notifications
+// and emits the simple {type:"chunk"|"done"|"error"} SSE format that the
+// embed widget already understands. The widget stays protocol-agnostic.
+function transformAcpStream(
+  upstream: ReadableStream<Uint8Array>,
+  promptId: number
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  function emit(controller: ReadableStreamDefaultController, evt: unknown) {
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`));
+  }
+
+  function handleEvent(
+    controller: ReadableStreamDefaultController,
+    raw: string
+  ) {
+    for (const evt of parseSSEDataLines(raw) as Array<{
+      method?: string;
+      params?: { update?: { sessionUpdate?: string; content?: Array<{ text?: string }> } };
+      id?: number;
+      result?: unknown;
+      error?: { message: string };
+    }>) {
+      // ACP notification with content chunks
+      if (evt.method === "session/update") {
+        const upd = evt.params?.update;
+        if (
+          upd?.sessionUpdate === "agent_message_chunk" &&
+          Array.isArray(upd.content)
+        ) {
+          const text = upd.content.map((c) => c.text ?? "").join("");
+          if (text) emit(controller, { type: "chunk", value: text });
+        }
+        return;
+      }
+      // Final response to the original prompt id → done
+      if (evt.id === promptId) {
+        if (evt.error) {
+          emit(controller, { type: "error", message: evt.error.message });
+        } else {
+          emit(controller, { type: "done" });
+        }
+      }
+    }
+  }
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = upstream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buffer.indexOf("\n\n")) !== -1) {
+            const event = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 2);
+            handleEvent(controller, event);
+          }
+        }
+      } catch (e) {
+        emit(controller, {
+          type: "error",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
 }
 
 async function callHost<T>(
@@ -313,12 +515,69 @@ export async function listTemplates(
   return out.templates;
 }
 
+// In-process cache of the catalog, 60s TTL. Catalog only changes on a
+// sandbox-host redeploy + yaml update; rapid agent_create calls shouldn't
+// pay a network round-trip per request.
+let templatesCache: { tpls: TemplateInfo[]; expiresAt: number } | null = null;
+
+async function resolveTemplate(
+  ctx: AuthContext,
+  name: SandboxTemplate
+): Promise<TemplateInfo> {
+  if (!templatesCache || Date.now() > templatesCache.expiresAt) {
+    templatesCache = {
+      tpls: await listTemplates(ctx),
+      expiresAt: Date.now() + 60_000,
+    };
+  }
+  const tpl = templatesCache.tpls.find((t) => t.name === name);
+  if (!tpl) throw new Error(`Unknown template: ${name}`);
+  return tpl;
+}
+
+// validateRequiredEnv: cruza el contrato del template con lo que llega.
+// Sigue dos reglas:
+//   1. Cada EnvSpec con `required: true` debe estar presente en `env`.
+//   2. Caso especial Goose (oneOf): si `GOOSE_PROVIDER=anthropic` exige
+//      ANTHROPIC_API_KEY; si `=openai` exige OPENAI_API_KEY. (Ad-hoc por
+//      ahora — hasta que el schema soporte `required_if` genérico.)
+function validateRequiredEnv(
+  tpl: TemplateInfo,
+  env: Record<string, string>
+): void {
+  const missing: string[] = [];
+  for (const spec of tpl.requiredEnv ?? []) {
+    if (spec.required && !(env[spec.name]?.trim())) {
+      missing.push(spec.name);
+    }
+  }
+  if (tpl.name === "goose") {
+    const provider = env.GOOSE_PROVIDER || "anthropic";
+    const need =
+      provider === "anthropic"
+        ? "ANTHROPIC_API_KEY"
+        : provider === "openai"
+        ? "OPENAI_API_KEY"
+        : null;
+    if (need && !env[need]?.trim() && !missing.includes(need)) {
+      missing.push(need);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required env for template "${tpl.name}": ${missing.join(", ")}`
+    );
+  }
+}
+
 // ─────────────── Persistent agent lifecycle ───────────────
 
 export interface AgentEndpoint {
   ok: true;
   agentUrl: string;
   healthUrl: string;
+  unit?: string;
+  port?: number;
 }
 
 export async function startAgent(
@@ -329,6 +588,8 @@ export async function startAgent(
     port?: number;
     healthPath?: string;
     timeoutSeconds?: number;
+    unit?: string;
+    envFile?: string;
   }
 ): Promise<AgentEndpoint> {
   requireScope(ctx, "WRITE");
@@ -340,6 +601,8 @@ export async function startAgent(
       port: params.port,
       healthPath: params.healthPath,
       timeoutSeconds: params.timeoutSeconds ?? 30,
+      unit: params.unit,
+      envFile: params.envFile,
     },
     ctx.user.id
   );
@@ -367,22 +630,41 @@ export async function createAgent(
     env: Record<string, string>;
     name?: string;
     timeoutSeconds?: number;
-    port?: number;
-    healthPath?: string;
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
+
+  // 1. Resolve template + validate the env contract before spawning anything.
+  const tpl = await resolveTemplate(ctx, params.template);
+  validateRequiredEnv(tpl, params.env);
+
+  // 2. Spawn microVM and wait for boot.
   const sb = await createSandbox(ctx, {
     template: params.template,
     timeoutSeconds: params.timeoutSeconds,
     name: params.name,
   });
   await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 30_000 });
+
+  // 3. Start the runtime unit declared by the template (default chat-runtime).
   const ep = await startAgent(ctx, sb.sandboxId, {
     env: params.env,
-    port: params.port,
-    healthPath: params.healthPath,
+    port: tpl.agent?.port,
+    healthPath: tpl.agent?.health_path,
+    unit: tpl.agent?.unit,
+    envFile: tpl.agent?.env_file,
   });
+
+  // 4. ACP eager handshake — first user message has zero handshake cost.
+  const protocol = tpl.agent?.protocol ?? "sse";
+  const port = tpl.agent?.port ?? 3000;
+  const messagePath = tpl.agent?.message_path ?? "/message";
+  let acpSessionId: string | null = null;
+  if (protocol === "acp") {
+    acpSessionId = await runAcpHandshake(sb.sandboxId, ctx.user.id, port, messagePath);
+  }
+
+  // 5. Persist Agent row with runtime metadata snapshot.
   const embedToken = "agt_" + randomBytes(32).toString("hex");
   const expiresAt = sb.expiresAt ? new Date(sb.expiresAt) : null;
   const row = await db.agent.create({
@@ -395,6 +677,11 @@ export async function createAgent(
       name: params.name,
       status: "running",
       expiresAt,
+      protocol,
+      port,
+      unit: tpl.agent?.unit ?? "chat-runtime",
+      messagePath,
+      acpSessionId,
     },
   });
   return {
@@ -417,29 +704,65 @@ export async function createAgent(
 // rootfs with channel integrations baked in.
 const MANAGED_MODEL = "claude-haiku-4-5";
 
-const BRAND_DEFAULTS: Record<
-  string,
-  { name: string; prompt: string }
-> = {
+// BRAND_DEFAULTS: cada brand mapea a un template + nombre de mascota +
+// system prompt + builder de env. Todos usan managed credentials del host.
+//
+// - ghosty/nanoclaw/openclaw → chat-anthropic runtime (SSE simple).
+// - goose-managed → goose runtime (ACP). Prompt no se inyecta como env;
+//   queda como Goose default por ahora (custom systemPrompt está en backlog).
+type BrandConfig = {
+  template: SandboxTemplate;
+  name: string;
+  prompt: string;
+  envBuilder: (hostKey: string, isOAuth: boolean) => Record<string, string>;
+};
+
+const chatAnthropicEnv = (
+  hostKey: string,
+  isOAuth: boolean
+): Record<string, string> =>
+  isOAuth
+    ? { ANTHROPIC_AUTH_TOKEN: hostKey, ANTHROPIC_MODEL: MANAGED_MODEL }
+    : { ANTHROPIC_API_KEY: hostKey, ANTHROPIC_MODEL: MANAGED_MODEL };
+
+const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   ghosty: {
+    template: "chat-anthropic",
     name: "Ghosty",
     prompt:
       "Eres Ghosty, el agente oficial de WhatsApp de la marca Ghosty. Sé útil, " +
       "breve y directo. Habla en el idioma del usuario. Si no sabes algo, dilo.",
+    envBuilder: chatAnthropicEnv,
   },
   nanoclaw: {
+    template: "chat-anthropic",
     name: "Andy",
     prompt:
       "Eres Andy, el asistente de Nanoclaw para Slack y Microsoft Teams. " +
       "Conoces el flujo de canales corporativos y respondes en tono profesional " +
       "pero cercano. Sé conciso. Habla en el idioma del usuario.",
+    envBuilder: chatAnthropicEnv,
   },
   openclaw: {
+    template: "chat-anthropic",
     name: "Molty",
     prompt:
       "Eres Molty, una langosta espacial. Asistente personal AI estilo " +
       "OpenClaw — multi-plataforma, OSS-first, sin filtros corporativos. " +
       "Sé útil, ingenioso y directo. Habla en el idioma del usuario.",
+    envBuilder: chatAnthropicEnv,
+  },
+  "goose-managed": {
+    template: "goose",
+    name: "Goose",
+    prompt: "", // Goose handles its own system prompt internally.
+    envBuilder: (hostKey, isOAuth) => ({
+      GOOSE_PROVIDER: "anthropic",
+      GOOSE_MODEL: MANAGED_MODEL,
+      // Goose accepts both OAuth and plain API keys under ANTHROPIC_API_KEY.
+      ANTHROPIC_API_KEY: hostKey,
+      ...(isOAuth ? {} : {}),
+    }),
   },
 };
 
@@ -457,10 +780,16 @@ function hostManagedAnthropicEnv(): Record<string, string> {
     : { ANTHROPIC_API_KEY: hostKey };
 }
 
+export type AutonomousBrand =
+  | "ghosty"
+  | "nanoclaw"
+  | "openclaw"
+  | "goose-managed";
+
 export async function spawnAutonomous(
   ctx: AuthContext,
   params: {
-    brand: "ghosty" | "nanoclaw" | "openclaw";
+    brand: AutonomousBrand;
     name?: string;
     systemPrompt?: string;
     timeoutSeconds?: number;
@@ -471,15 +800,26 @@ export async function spawnAutonomous(
   if (!cfg) {
     throw new Error(`Unknown autonomous brand: ${params.brand}`);
   }
+  const hostKey = process.env.SANDBOX_HOST_ANTHROPIC_KEY;
+  if (!hostKey) {
+    throw new Error(
+      "Managed mode unavailable: SANDBOX_HOST_ANTHROPIC_KEY not configured."
+    );
+  }
+  const isOAuth = hostKey.startsWith("sk-ant-oat");
+
+  // chat-anthropic runtimes accept SYSTEM_PROMPT env. Goose ignores it
+  // (custom systemPrompt for Goose is backlog).
+  const env: Record<string, string> = cfg.envBuilder(hostKey, isOAuth);
+  if (cfg.template === "chat-anthropic") {
+    env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
+  }
+
   return createAgent(ctx, {
-    template: "chat-anthropic",
+    template: cfg.template,
     name: params.name ?? cfg.name,
     timeoutSeconds: params.timeoutSeconds,
-    env: {
-      ...hostManagedAnthropicEnv(),
-      ANTHROPIC_MODEL: MANAGED_MODEL,
-      SYSTEM_PROMPT: params.systemPrompt ?? cfg.prompt,
-    },
+    env,
   });
 }
 
@@ -504,6 +844,12 @@ export interface AgentRecord {
   status: string;
   createdAt: Date;
   expiresAt: Date | null;
+  // Runtime metadata snapshot (Prisma defaults if missing).
+  protocol: string;
+  port: number;
+  unit: string;
+  messagePath: string;
+  acpSessionId: string | null;
 }
 
 function toAgentRecord(row: {
@@ -517,6 +863,11 @@ function toAgentRecord(row: {
   status: string;
   createdAt: Date;
   expiresAt: Date | null;
+  protocol: string | null;
+  port: number | null;
+  unit: string | null;
+  messagePath: string | null;
+  acpSessionId: string | null;
 }): AgentRecord {
   return {
     agentId: row.id,
@@ -529,6 +880,11 @@ function toAgentRecord(row: {
     status: row.status,
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
+    protocol: row.protocol ?? "sse",
+    port: row.port ?? 3000,
+    unit: row.unit ?? "chat-runtime",
+    messagePath: row.messagePath ?? "/message",
+    acpSessionId: row.acpSessionId,
   };
 }
 
@@ -575,23 +931,120 @@ export async function findAgentByEmbedToken(token: string): Promise<AgentRecord 
   return row ? toAgentRecord(row) : null;
 }
 
-// messageAgent: POST a message to a chat-* agent and collect the SSE stream
-// into a single string. For MCP tool callers (non-streaming). Real-time
-// streaming for embed widgets is exposed separately via the public
-// /api/agents/:id/stream proxy (server-sent events end-to-end).
+// openAgentChunkStream: high-level. Resuelve el agent record, dispatcha
+// por protocol y devuelve un ReadableStream UNIFORME con eventos
+// {type:"chunk"|"done"|"error"} sin importar si el upstream es chat-runtime
+// SSE o Goose ACP. El embed widget consume esto sin saber qué protocolo
+// está atrás.
 //
-// Goes through sandbox-host (NOT direct to agentUrl): EasyBits Fly has no
-// route to the microVM's 172.20.X.Y subnet. sandbox-host proxies internally.
+// Used by /api/v2/agents/:id/message (route público) y por messageAgent
+// (sync MCP tool).
+export async function openAgentChunkStream(
+  agent: Pick<
+    AgentRecord,
+    "agentId" | "ownerId" | "sandboxId" | "protocol" | "port" | "messagePath" | "acpSessionId"
+  >,
+  body: { content: string; sessionId?: string }
+): Promise<ReadableStream<Uint8Array>> {
+  const protocol = agent.protocol ?? "sse";
+  if (protocol === "sse") {
+    // Pass-through: chat-runtime ya emite {type:"token"|"done"} format.
+    // Translate "token" → "chunk" so downstream consumers ven el mismo
+    // shape unificado.
+    const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
+      content: body.content,
+      sessionId: body.sessionId,
+      port: agent.port ?? undefined,
+      path: agent.messagePath ?? undefined,
+    });
+    return mapSSETokenToChunk(upstream);
+  }
+  if (protocol === "acp") {
+    if (!agent.acpSessionId) {
+      throw new Error("ACP agent missing sessionId — handshake not completed");
+    }
+    const promptId = Date.now() & 0x7fffffff; // small positive int
+    const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
+      port: agent.port ?? 3284,
+      path: agent.messagePath ?? "/acp",
+      headers: ACP_HEADERS,
+      rawBody: {
+        jsonrpc: "2.0",
+        id: promptId,
+        method: "session/prompt",
+        params: {
+          sessionId: agent.acpSessionId,
+          prompt: [{ type: "text", text: body.content }],
+        },
+      },
+    });
+    return transformAcpStream(upstream, promptId);
+  }
+  throw new Error(`Unsupported agent protocol: ${protocol}`);
+}
+
+// Translate chat-runtime SSE events {type:"token",value} → unified {type:"chunk",value}.
+// Pass-through {type:"done"} and {type:"error"} verbatim.
+function mapSSETokenToChunk(
+  upstream: ReadableStream<Uint8Array>
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  return new ReadableStream({
+    async start(controller) {
+      const reader = upstream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buffer.indexOf("\n\n")) !== -1) {
+            const event = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 2);
+            for (const evt of parseSSEDataLines(event) as Array<{
+              type?: string;
+              value?: string;
+              message?: string;
+            }>) {
+              if (evt.type === "token" && typeof evt.value === "string") {
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ type: "chunk", value: evt.value })}\n\n`
+                  )
+                );
+              } else if (evt.type === "done") {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+              } else if (evt.type === "error") {
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ type: "error", message: evt.message ?? "unknown" })}\n\n`
+                  )
+                );
+              }
+            }
+          }
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
+// messageAgent: sync wrapper sobre openAgentChunkStream. Para MCP callers
+// (non-streaming). Real-time streaming va por /api/v2/agents/:id/message.
 export async function messageAgent(
   ctx: AuthContext,
   params: { agentId: string; content: string; sessionId?: string }
 ): Promise<{ content: string; tokens: number }> {
   requireScope(ctx, "WRITE");
-  const agent = await db.agent.findUnique({ where: { id: params.agentId } });
-  if (!agent || agent.ownerId !== ctx.user.id) {
+  const row = await db.agent.findUnique({ where: { id: params.agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
     throw new Error("agent not found");
   }
-  const stream = await openAgentMessageStream(agent.sandboxId, ctx.user.id, {
+  const stream = await openAgentChunkStream(toAgentRecord(row), {
     content: params.content,
     sessionId: params.sessionId,
   });
@@ -608,20 +1061,17 @@ export async function messageAgent(
     while ((nl = buffer.indexOf("\n\n")) !== -1) {
       const event = buffer.slice(0, nl);
       buffer = buffer.slice(nl + 2);
-      const dataLine = event
-        .split("\n")
-        .find((l) => l.startsWith("data: "));
-      if (!dataLine) continue;
-      try {
-        const evt = JSON.parse(dataLine.slice(6));
-        if (evt.type === "token" && typeof evt.value === "string") {
+      for (const evt of parseSSEDataLines(event) as Array<{
+        type?: string;
+        value?: string;
+        message?: string;
+      }>) {
+        if (evt.type === "chunk" && typeof evt.value === "string") {
           assembled += evt.value;
           tokens++;
         } else if (evt.type === "error") {
           throw new Error(`agent stream error: ${evt.message}`);
         }
-      } catch {
-        // ignore non-JSON event lines
       }
     }
   }

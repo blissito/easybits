@@ -14,14 +14,14 @@ export async function action({ request }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const body = await request.json().catch(() => ({}));
   const brand = String(body?.brand ?? "");
-  if (!["ghosty", "nanoclaw", "openclaw"].includes(brand)) {
+  if (!["ghosty", "nanoclaw", "openclaw", "goose-managed"].includes(brand)) {
     return Response.json(
-      { error: "brand must be one of: ghosty, nanoclaw, openclaw" },
+      { error: "brand must be one of: ghosty, nanoclaw, openclaw, goose-managed" },
       { status: 400 }
     );
   }
   const result = await spawnAutonomous(ctx, {
-    brand: brand as "ghosty" | "nanoclaw" | "openclaw",
+    brand: brand as "ghosty" | "nanoclaw" | "openclaw" | "goose-managed",
     name: typeof body?.name === "string" ? body.name : undefined,
     systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined,
     timeoutSeconds: typeof body?.timeoutSeconds === "number" ? body.timeoutSeconds : undefined,
