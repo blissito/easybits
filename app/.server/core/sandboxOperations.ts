@@ -279,24 +279,25 @@ function transformAcpStream(
     controller: ReadableStreamDefaultController,
     raw: string
   ) {
+    type AcpContent = { text?: string } | Array<{ text?: string }>;
     for (const evt of parseSSEDataLines(raw) as Array<{
       method?: string;
-      params?: { update?: { sessionUpdate?: string; content?: Array<{ text?: string }> } };
+      params?: { update?: { sessionUpdate?: string; content?: AcpContent } };
       id?: number;
       result?: unknown;
       error?: { message: string };
     }>) {
-      // ACP notification with content chunks
+      // ACP notification with content chunks. Goose emits `content` as a
+      // singular object {type:"text", text:"..."} but the spec also allows
+      // an array — handle both.
       if (evt.method === "session/update") {
         const upd = evt.params?.update;
-        if (
-          upd?.sessionUpdate === "agent_message_chunk" &&
-          Array.isArray(upd.content)
-        ) {
-          const text = upd.content.map((c) => c.text ?? "").join("");
+        if (upd?.sessionUpdate === "agent_message_chunk" && upd.content) {
+          const arr = Array.isArray(upd.content) ? upd.content : [upd.content];
+          const text = arr.map((c) => c.text ?? "").join("");
           if (text) emit(controller, { type: "chunk", value: text });
         }
-        return;
+        continue;
       }
       // Final response to the original prompt id → done
       if (evt.id === promptId) {
