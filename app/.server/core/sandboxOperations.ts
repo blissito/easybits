@@ -98,6 +98,11 @@ function ensureConfigured(): void {
 // Two modes via overloads:
 //   - Standard {content, sessionId} body → chat-runtime path "/message"
 //   - Override with rawBody + path + headers → Goose "/acp" JSON-RPC, etc.
+export interface AgentMessageStream {
+  stream: ReadableStream<Uint8Array>;
+  headers: Headers;
+}
+
 export async function openAgentMessageStream(
   sandboxId: string,
   ownerId: string,
@@ -110,7 +115,7 @@ export async function openAgentMessageStream(
     headers?: Record<string, string>;
     method?: string;
   }
-): Promise<ReadableStream<Uint8Array>> {
+): Promise<AgentMessageStream> {
   ensureConfigured();
   const url = `${HOST_URL.replace(/\/$/, "")}/v1/sandbox/${sandboxId}/agent/message`;
   const payload: Record<string, unknown> = { port: body.port };
@@ -138,7 +143,7 @@ export async function openAgentMessageStream(
       `sandbox host POST agent/message → ${res.status}: ${text.slice(0, 500)}`
     );
   }
-  return res.body;
+  return { stream: res.body, headers: res.headers };
 }
 
 // ─────────────── ACP (Agent Client Protocol) helpers ───────────────
@@ -199,17 +204,20 @@ async function readAcpRpcResult(
   return { error: { code: -1, message: "stream closed without matching result" } };
 }
 
-// runAcpHandshake: initialize + session/new. Returns the new sessionId.
-// Called eager during startAgent for ACP runtimes so the first user
-// message has zero handshake overhead.
+// runAcpHandshake: initialize + session/new. Returns both:
+//   - acpTransportSessionId: header from initialize, must be sent on every
+//     subsequent ACP call (Goose serve enforces this).
+//   - acpSessionId: returned from session/new, identifies the agent session.
+// Called eager during startAgent so the first user message has zero
+// handshake overhead.
 async function runAcpHandshake(
   sandboxId: string,
   ownerId: string,
   port: number,
   messagePath: string
-): Promise<string> {
+): Promise<{ acpTransportSessionId: string; acpSessionId: string }> {
   // 1. initialize
-  const initStream = await openAgentMessageStream(sandboxId, ownerId, {
+  const init = await openAgentMessageStream(sandboxId, ownerId, {
     port,
     path: messagePath,
     headers: ACP_HEADERS,
@@ -220,15 +228,20 @@ async function runAcpHandshake(
       params: { protocolVersion: 1, clientCapabilities: {} },
     },
   });
-  const initRes = await readAcpRpcResult(initStream, 1);
+  const acpTransportSessionId = init.headers.get("acp-session-id") ?? "";
+  if (!acpTransportSessionId) {
+    throw new Error("ACP initialize: server did not return Acp-Session-Id header");
+  }
+  const initRes = await readAcpRpcResult(init.stream, 1);
   if (initRes.error) {
     throw new Error(`ACP initialize failed: ${initRes.error.message}`);
   }
-  // 2. session/new — pass cwd "/" and empty mcpServers list (Goose's minimal).
-  const sessStream = await openAgentMessageStream(sandboxId, ownerId, {
+
+  // 2. session/new — must carry Acp-Session-Id from initialize.
+  const sess = await openAgentMessageStream(sandboxId, ownerId, {
     port,
     path: messagePath,
-    headers: ACP_HEADERS,
+    headers: { ...ACP_HEADERS, "Acp-Session-Id": acpTransportSessionId },
     rawBody: {
       jsonrpc: "2.0",
       id: 2,
@@ -236,15 +249,15 @@ async function runAcpHandshake(
       params: { cwd: "/", mcpServers: [] },
     },
   });
-  const sessRes = await readAcpRpcResult(sessStream, 2);
+  const sessRes = await readAcpRpcResult(sess.stream, 2);
   if (sessRes.error) {
     throw new Error(`ACP session/new failed: ${sessRes.error.message}`);
   }
-  const sessionId = (sessRes.result as { sessionId?: string })?.sessionId;
-  if (!sessionId) {
+  const acpSessionId = (sessRes.result as { sessionId?: string })?.sessionId;
+  if (!acpSessionId) {
     throw new Error("ACP session/new returned no sessionId");
   }
-  return sessionId;
+  return { acpTransportSessionId, acpSessionId };
 }
 
 // transformAcpStream: takes an ACP SSE stream of JSON-RPC notifications
@@ -660,8 +673,11 @@ export async function createAgent(
   const port = tpl.agent?.port ?? 3000;
   const messagePath = tpl.agent?.message_path ?? "/message";
   let acpSessionId: string | null = null;
+  let acpTransportSessionId: string | null = null;
   if (protocol === "acp") {
-    acpSessionId = await runAcpHandshake(sb.sandboxId, ctx.user.id, port, messagePath);
+    const handshake = await runAcpHandshake(sb.sandboxId, ctx.user.id, port, messagePath);
+    acpSessionId = handshake.acpSessionId;
+    acpTransportSessionId = handshake.acpTransportSessionId;
   }
 
   // 5. Persist Agent row with runtime metadata snapshot.
@@ -682,6 +698,7 @@ export async function createAgent(
       unit: tpl.agent?.unit ?? "chat-runtime",
       messagePath,
       acpSessionId,
+      acpTransportSessionId,
     },
   });
   return {
@@ -850,6 +867,7 @@ export interface AgentRecord {
   unit: string;
   messagePath: string;
   acpSessionId: string | null;
+  acpTransportSessionId: string | null;
 }
 
 function toAgentRecord(row: {
@@ -868,6 +886,7 @@ function toAgentRecord(row: {
   unit: string | null;
   messagePath: string | null;
   acpSessionId: string | null;
+  acpTransportSessionId: string | null;
 }): AgentRecord {
   return {
     agentId: row.id,
@@ -885,6 +904,7 @@ function toAgentRecord(row: {
     unit: row.unit ?? "chat-runtime",
     messagePath: row.messagePath ?? "/message",
     acpSessionId: row.acpSessionId,
+    acpTransportSessionId: row.acpTransportSessionId,
   };
 }
 
@@ -942,7 +962,14 @@ export async function findAgentByEmbedToken(token: string): Promise<AgentRecord 
 export async function openAgentChunkStream(
   agent: Pick<
     AgentRecord,
-    "agentId" | "ownerId" | "sandboxId" | "protocol" | "port" | "messagePath" | "acpSessionId"
+    | "agentId"
+    | "ownerId"
+    | "sandboxId"
+    | "protocol"
+    | "port"
+    | "messagePath"
+    | "acpSessionId"
+    | "acpTransportSessionId"
   >,
   body: { content: string; sessionId?: string }
 ): Promise<ReadableStream<Uint8Array>> {
@@ -957,17 +984,20 @@ export async function openAgentChunkStream(
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });
-    return mapSSETokenToChunk(upstream);
+    return mapSSETokenToChunk(upstream.stream);
   }
   if (protocol === "acp") {
     if (!agent.acpSessionId) {
       throw new Error("ACP agent missing sessionId — handshake not completed");
     }
-    const promptId = Date.now() & 0x7fffffff; // small positive int
+    if (!agent.acpTransportSessionId) {
+      throw new Error("ACP agent missing transport session id");
+    }
+    const promptId = Date.now() & 0x7fffffff;
     const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
       port: agent.port ?? 3284,
       path: agent.messagePath ?? "/acp",
-      headers: ACP_HEADERS,
+      headers: { ...ACP_HEADERS, "Acp-Session-Id": agent.acpTransportSessionId },
       rawBody: {
         jsonrpc: "2.0",
         id: promptId,
@@ -978,7 +1008,7 @@ export async function openAgentChunkStream(
         },
       },
     });
-    return transformAcpStream(upstream, promptId);
+    return transformAcpStream(upstream.stream, promptId);
   }
   throw new Error(`Unsupported agent protocol: ${protocol}`);
 }

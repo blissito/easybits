@@ -843,7 +843,11 @@ model Agent {
   messagePath  String? @default("/message")
   // ACP only — populated during eager handshake at startAgent. Reused
   // across messages so we don't re-initialize per call.
-  acpSessionId String?
+  // - acpTransportSessionId: emitted by Goose serve in the initialize
+  //   response header `Acp-Session-Id`. Required on every subsequent call.
+  // - acpSessionId: returned by session/new — identifies the agent session.
+  acpTransportSessionId String?
+  acpSessionId          String?
 
   @@index([ownerId])
 }

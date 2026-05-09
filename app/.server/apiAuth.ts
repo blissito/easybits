@@ -81,6 +81,13 @@ export interface AgentAuthInfo {
   sandboxId: string;
   agentUrl: string;
   embedToken: string;
+  // Runtime metadata snapshot (Prisma defaults preserve back-compat).
+  protocol: string;
+  port: number;
+  unit: string;
+  messagePath: string;
+  acpSessionId: string | null;
+  acpTransportSessionId: string | null;
 }
 
 // resolveAgentAuth: dual-mode auth for /api/v2/agents/:id/* endpoints.
@@ -122,6 +129,12 @@ export async function resolveAgentAuth(
         sandboxId: agent.sandboxId,
         agentUrl: agent.agentUrl,
         embedToken: agent.embedToken,
+        protocol: agent.protocol,
+        port: agent.port,
+        unit: agent.unit,
+        messagePath: agent.messagePath,
+        acpSessionId: agent.acpSessionId,
+        acpTransportSessionId: agent.acpTransportSessionId,
       },
     };
   }
@@ -144,6 +157,12 @@ export async function resolveAgentAuth(
       sandboxId: row.sandboxId,
       agentUrl: row.agentUrl,
       embedToken: row.embedToken,
+      protocol: row.protocol ?? "sse",
+      port: row.port ?? 3000,
+      unit: row.unit ?? "chat-runtime",
+      messagePath: row.messagePath ?? "/message",
+      acpSessionId: row.acpSessionId,
+      acpTransportSessionId: row.acpTransportSessionId,
     },
   };
 }

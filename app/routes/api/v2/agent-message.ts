@@ -1,6 +1,6 @@
 import type { Route } from "./+types/agent-message";
 import { resolveAgentAuth } from "~/.server/apiAuth";
-import { openAgentMessageStream } from "~/.server/core/sandboxOperations";
+import { openAgentChunkStream } from "~/.server/core/sandboxOperations";
 
 // CORS: el endpoint /api/v2/agents/:id/message lo consume el browser desde
 // el sitio del cliente (iframe embed) → debe permitir cualquier origen.
@@ -44,7 +44,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   let stream;
   try {
-    stream = await openAgentMessageStream(auth.agent.sandboxId, auth.agent.ownerId, {
+    stream = await openAgentChunkStream(auth.agent, {
       content: body.content,
       sessionId: typeof body.sessionId === "string" ? body.sessionId : "default",
     });
