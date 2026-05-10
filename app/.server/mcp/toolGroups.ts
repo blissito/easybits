@@ -19,6 +19,7 @@ export type ToolGroupKey =
   | "magnet"
   | "video"
   | "sandbox"
+  | "public-safe"
   | "all";
 
 export interface ToolGroup {
@@ -82,6 +83,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Sandbox",
     description: "MicroVMs Firecracker para correr agentes y código aislado. Spawn, exec, archivos, destroy + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
     toolCount: 10,
+  },
+  {
+    key: "public-safe",
+    label: "Public Safe",
+    description: "Subset mínimo para agentes públicos (B2C / WhatsApp customer-facing): solo retrieve/upload de un file conocido, share-link, db_query con DB-ID inyectado, y generación de imagen/voz. Sin listar workspace, sin eliminar, sin webhooks/websites/secrets. Diseñado para NanoClaw FORMMY_PUBLIC_TEMPLATE.",
+    toolCount: 6,
   },
   {
     key: "all",
@@ -284,6 +291,25 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * Public-safe toolset — minimal surface for B2C / WhatsApp customer-facing
+ * agents. The 6 tools are: retrieve known file by ID, upload an attachment
+ * the user sent, mint a share link, query a DB whose ID was injected via
+ * CLAUDE.md, and generate image / voice (rate-limited by the caller).
+ *
+ * Deliberately excludes: list_files, db_list (workspace enumeration), every
+ * delete_* / update_* (destructive), webhooks / websites / secrets (admin
+ * surface), research_search / research_scrape (open internet).
+ */
+export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
+  "get_file",
+  "upload_file",
+  "create_share_link",
+  "db_query",
+  "generate_image",
+  "voice_tts_create",
+]);
+
+/**
  * Map of group key → allowlist. Groups without an entry load the full tool
  * set of their registered categories (no name-level filtering).
  */
@@ -293,4 +319,5 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   magnet: MAGNET_ALLOWLIST,
   video: VIDEO_ALLOWLIST,
   sandbox: SANDBOX_ALLOWLIST,
+  "public-safe": PUBLIC_SAFE_ALLOWLIST,
 };
