@@ -87,8 +87,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "public-safe",
     label: "Public Safe",
-    description: "Subset mínimo para agentes públicos (B2C / WhatsApp customer-facing): solo retrieve/upload de un file conocido, share-link, db_query con DB-ID inyectado, y generación de imagen/voz. Sin listar workspace, sin eliminar, sin webhooks/websites/secrets. Diseñado para NanoClaw FORMMY_PUBLIC_TEMPLATE.",
-    toolCount: 6,
+    description: "Subset mínimo para agentes públicos (B2C / WhatsApp customer-facing): upload_file, create_share_link, db_select (read-only SQL con anti-stacking, anti-CROSS-JOIN, anti-sqlite_master). Sin listar workspace, sin eliminar, sin webhooks/websites/secrets, sin internet abierto. Diseñado para NanoClaw FORMMY_PUBLIC_TEMPLATE.",
+    toolCount: 3,
   },
   {
     key: "all",
@@ -292,21 +292,25 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
 
 /**
  * Public-safe toolset — minimal surface for B2C / WhatsApp customer-facing
- * agents. The 6 tools are: retrieve known file by ID, upload an attachment
- * the user sent, mint a share link, query a DB whose ID was injected via
- * CLAUDE.md, and generate image / voice (rate-limited by the caller).
+ * agents. Just 3 tools: store a user's attachment, mint a share link for it,
+ * and query a known catalog DB read-only. db_select is hard-locked to
+ * SELECT-only with anti-stacking, anti-cross-join, anti-schema-enumeration
+ * guards (see server.ts:db_select).
  *
- * Deliberately excludes: list_files, db_list (workspace enumeration), every
- * delete_* / update_* (destructive), webhooks / websites / secrets (admin
- * surface), research_search / research_scrape (open internet).
+ * Deliberately excludes: list_files, db_list (workspace enumeration);
+ * db_query (full SQL access); get_file (would need explicit per-tenant
+ * file ID injection — easy to expand later); generate_image, voice_tts_create
+ * (cost vectors — enable per-tenant via override when paid use case warrants);
+ * every delete_* / update_* (destructive); webhooks / websites / secrets
+ * (admin surface); research_search / research_scrape (open internet).
+ *
+ * To grant a specific tenant more reach, override container_config.env in
+ * NanoClaw — don't expand this default set.
  */
 export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
-  "get_file",
   "upload_file",
   "create_share_link",
-  "db_query",
-  "generate_image",
-  "voice_tts_create",
+  "db_select",
 ]);
 
 /**

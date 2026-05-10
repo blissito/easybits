@@ -919,6 +919,96 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
+    "db_select",
+    "Read-only counterpart of db_query — accepts only a single SELECT statement. Rejects anything that mutates, escalates, or stacks queries. Designed for public-facing / customer-agent surfaces where the agent should never write to a database. Same parameterized-argument support as db_query. TIP: discover schema with `SELECT name, sql FROM sqlite_master WHERE type IN ('table','view') ORDER BY name`.",
+    {
+      dbId: z.string().describe("The database ID"),
+      sql: z.string().describe("Single SELECT statement (or WITH ... SELECT). No INSERT/UPDATE/DELETE/DROP/ATTACH/PRAGMA."),
+      args: z.array(z.unknown()).optional().describe("Positional arguments for ? placeholders"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+
+      // Strip line/block comments before keyword detection so a SELECT hidden
+      // behind a comment can't sneak by.
+      const stripped = params.sql
+        .replace(/--[^\n]*/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .trim();
+
+      if (!stripped) {
+        throw new Error("db_select: empty SQL after stripping comments");
+      }
+
+      // Single-statement guard: any semicolon outside an ignored trailing
+      // position would let attackers stack a destructive statement. We allow
+      // exactly one optional trailing `;` and reject the rest.
+      const withoutTrailing = stripped.replace(/;\s*$/, "");
+      if (withoutTrailing.includes(";")) {
+        throw new Error("db_select: only a single statement is allowed (no `;` mid-query)");
+      }
+
+      // Must start with SELECT or WITH (CTE). Anything else is forbidden,
+      // including PRAGMA, ATTACH, BEGIN, EXPLAIN-with-side-effects, etc.
+      const head = withoutTrailing.slice(0, 32).toUpperCase();
+      if (!/^\s*(SELECT|WITH)\b/.test(head)) {
+        throw new Error("db_select: statement must start with SELECT or WITH (CTE)");
+      }
+
+      // Belt-and-braces deny list — these tokens have no business inside a
+      // read-only query and catch crafted statements that started with SELECT
+      // but smuggled mutation via subqueries or sqlite quirks.
+      const upper = withoutTrailing.toUpperCase();
+      const forbidden = [
+        // Mutations
+        /\bINSERT\b/, /\bUPDATE\b/, /\bDELETE\b/, /\bDROP\b/, /\bCREATE\b/,
+        /\bALTER\b/, /\bTRUNCATE\b/, /\bREPLACE\s+INTO\b/,
+        // DB / schema controls
+        /\bATTACH\b/, /\bDETACH\b/, /\bPRAGMA\b/, /\bVACUUM\b/, /\bREINDEX\b/,
+        // Schema enumeration — block sqlite metadata tables. The agent must
+        // know table names via the CLAUDE.md / system prompt; it must NOT
+        // discover sibling tables in the same database.
+        /\bSQLITE_MASTER\b/, /\bSQLITE_SCHEMA\b/,
+        /\bSQLITE_TEMP_MASTER\b/, /\bSQLITE_TEMP_SCHEMA\b/,
+        // Recursive CTEs can loop without bound and run for arbitrary time.
+        // Non-recursive WITH is still allowed (the head check accepts WITH).
+        /\bRECURSIVE\b/,
+      ];
+      for (const pattern of forbidden) {
+        if (pattern.test(upper)) {
+          throw new Error(`db_select: forbidden keyword detected (${pattern.source})`);
+        }
+      }
+
+      // Cartesian-join guard — implicit cross joins (`FROM a, b`) and explicit
+      // `CROSS JOIN` can multiply row counts and DoS the DB. Allow at most
+      // one comma in the FROM list (signals a single CTE / table alias, not
+      // a multi-table cross product).
+      if (/\bCROSS\s+JOIN\b/.test(upper)) {
+        throw new Error("db_select: CROSS JOIN is not allowed");
+      }
+      const fromMatch = upper.match(/\bFROM\b([\s\S]*?)(?:\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|\bHAVING\b|$)/);
+      if (fromMatch) {
+        // Count commas at depth 0 (outside parens) in the FROM clause; >0
+        // means multiple base tables joined implicitly.
+        let depth = 0;
+        let commas = 0;
+        for (const c of fromMatch[1]) {
+          if (c === "(") depth++;
+          else if (c === ")") depth--;
+          else if (c === "," && depth === 0) commas++;
+        }
+        if (commas > 0) {
+          throw new Error("db_select: implicit cross joins (comma in FROM) are not allowed; use explicit JOIN ... ON");
+        }
+      }
+
+      const result = await queryDatabase(ctx, params.dbId, params.sql, params.args, "mcp");
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
     "db_exec",
     "Execute multiple SQL statements in a batch (max 50). Useful for migrations or multi-step operations.",
     {
