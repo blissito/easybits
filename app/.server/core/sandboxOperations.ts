@@ -1170,7 +1170,11 @@ export async function openAgentChunkStream(
         Accept: "text/event-stream",
       },
       rawBody: {
-        model: `${agent.template}/default`,
+        // OpenClaw accepts `openclaw` (default agent) or `openclaw/<agentId>`
+        // — the literal `<template>/default` form returns 400 "Invalid model"
+        // in current upstream (v2026.5.7). Use the bare template name to
+        // route to the configured default agent.
+        model: agent.template,
         messages: [{ role: "user", content: body.content }],
         stream: true,
         user: body.sessionId ?? "default",
