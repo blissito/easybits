@@ -94,8 +94,9 @@ export interface RefineOptions {
   isVariant?: boolean;
   /** Custom system prompt (overrides default REFINE_SYSTEM) */
   systemPrompt?: string;
-  /** Model ID (default: gpt-4o-mini/gpt-4o for OpenAI, claude-haiku/claude-sonnet for Anthropic) */
-  model?: string;
+  /** Model ID string (default: gpt-4o-mini/gpt-4o for OpenAI, claude-haiku/claude-sonnet for Anthropic)
+   *  OR a pre-built LanguageModel from any @ai-sdk/* provider (gemini, mistral, etc.). */
+  model?: string | import("ai").LanguageModel;
   /** Pexels API key for image enrichment. Falls back to PEXELS_API_KEY env var */
   pexelsApiKey?: string;
   /** Called with temp DALL-E URL + query, returns permanent URL. Use to persist to S3/etc. */

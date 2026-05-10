@@ -151,7 +151,11 @@ export interface GenerateOptions {
   referenceImage?: string;
   extraInstructions?: string;
   systemPrompt?: string;
-  model?: string;
+  /** Model ID string (e.g. "claude-sonnet-4-6") OR a pre-built LanguageModel
+   *  from any @ai-sdk/* provider (gemini, mistral, etc.). When passing an
+   *  object the streamGenerate skips internal Anthropic/OpenAI key resolution
+   *  and uses the model directly. */
+  model?: string | import("ai").LanguageModel;
   pexelsApiKey?: string;
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   onSection?: (section: Section3) => void;
