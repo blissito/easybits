@@ -849,5 +849,13 @@ model Agent {
   acpTransportSessionId String?
   acpSessionId          String?
 
+  // WhatsApp link state (cache from openclaw runtime). Shape:
+  //   { status: "disconnected"|"qr_pending"|"pairing"|"connected",
+  //     phoneNumber?: string, lastSyncAt?: string, linkedAt?: string }
+  // Source of truth is the runtime gateway at agentUrl:port/whatsapp/*;
+  // this is mirrored on every status/link/unlink call so the dash can show
+  // last-known state without a roundtrip.
+  whatsapp Json?
+
   @@index([ownerId])
 }
