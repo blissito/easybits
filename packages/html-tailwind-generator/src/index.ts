@@ -15,6 +15,12 @@ export {
 export { buildPreviewHtml, buildDeployHtml } from "./buildHtml";
 export { getIframeScript } from "./iframeScript";
 
+// Color sanitization (semantic-class rewriter; same engine generate/refine
+// run internally before firing onSection/onDone callbacks). Exposed so
+// consumer apps can sanitize HTML produced outside the streaming pipeline
+// — e.g. user paste in a canvas, manual edits saved back to DB, or imports.
+export { sanitizeSemanticColors } from "./sanitizeColors";
+
 // Generation
 export {
   generateLanding,
