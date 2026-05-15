@@ -81,6 +81,7 @@ export interface AgentAuthInfo {
   sandboxId: string;
   agentUrl: string;
   embedToken: string;
+  template: string;
   // Runtime metadata snapshot (Prisma defaults preserve back-compat).
   protocol: string;
   port: number;
@@ -129,6 +130,7 @@ export async function resolveAgentAuth(
         sandboxId: agent.sandboxId,
         agentUrl: agent.agentUrl,
         embedToken: agent.embedToken,
+        template: agent.template,
         protocol: agent.protocol,
         port: agent.port,
         unit: agent.unit,
@@ -157,6 +159,7 @@ export async function resolveAgentAuth(
       sandboxId: row.sandboxId,
       agentUrl: row.agentUrl,
       embedToken: row.embedToken,
+      template: row.template,
       protocol: row.protocol ?? "sse",
       port: row.port ?? 3000,
       unit: row.unit ?? "chat-runtime",

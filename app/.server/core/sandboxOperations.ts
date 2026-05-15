@@ -1307,7 +1307,14 @@ export async function openAgentChunkStream(
           sessionId: body.sessionId,
         },
       });
-      return upstream.stream; // already in unified shape
+      // Passing the raw fetch ReadableStream straight to the Response body
+      // doesn't keep the upstream open through Fly's proxy — the response
+      // closes with 0 bytes received. Wrap in an explicit ReadableStream
+      // with a getReader pump (same pattern as mapSSETokenToChunk /
+      // mapOpenAIDeltaToChunk / transformAcpStream below) so each chunk is
+      // enqueued + flushed individually. Pass-through 1:1, no event mapping
+      // needed because /chat already emits {type:"chunk"|"done"|"error"}.
+      return passThroughSSEStream(upstream.stream);
     }
     // OpenClaw gateway expone /v1/chat/completions compatible con OpenAI.
     // POST con stream:true → SSE con OpenAI delta chunks. Bearer token =
@@ -1390,6 +1397,37 @@ function mapOpenAIDeltaToChunk(
 
 // Translate chat-runtime SSE events {type:"token",value} → unified {type:"chunk",value}.
 // Pass-through {type:"done"} and {type:"error"} verbatim.
+// Byte-level pass-through wrap of an upstream fetch body. Required for
+// ghostyclaw /chat because returning the raw upstream.stream straight to
+// a Response() doesn't survive Fly's proxy — the connection closes with
+// no bytes flushed. Same pattern as the other transformers below, just
+// without event transformation.
+function passThroughSSEStream(
+  upstream: ReadableStream<Uint8Array>
+): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    async start(controller) {
+      const reader = upstream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+      } catch (err) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "error", message: err instanceof Error ? err.message : String(err) })}\n\n`
+          )
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
 function mapSSETokenToChunk(
   upstream: ReadableStream<Uint8Array>
 ): ReadableStream<Uint8Array> {
