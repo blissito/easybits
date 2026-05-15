@@ -1,6 +1,24 @@
 import type { Route } from "./+types/agent-skills";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { installSkill } from "~/.server/core/skillsOperations";
+import { installSkill, listInstalledSkills } from "~/.server/core/skillsOperations";
+
+// GET /api/v2/agents/:id/skills
+// Owner-only. Devuelve { skills: InstalledSkillEntry[] } leyendo el FS de la VM.
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const ctx = requireAuth(await authenticateRequest(request));
+  try {
+    const skills = await listInstalledSkills(ctx, params.id!);
+    return Response.json({ skills });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "internal error";
+    const status = msg.includes("not found")
+      ? 404
+      : msg.includes("unavailable") || msg.includes("invalid")
+        ? 400
+        : 502;
+    return Response.json({ error: msg }, { status });
+  }
+}
 
 // POST /api/v2/agents/:id/skills
 //

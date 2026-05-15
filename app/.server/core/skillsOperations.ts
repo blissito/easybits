@@ -105,6 +105,55 @@ async function notifyRuntime(
   }
 }
 
+export interface InstalledSkillEntry {
+  name: string;
+  description: string;
+  files: string[];
+  sizeBytes: number;
+  uploadedAt: string;
+}
+
+// Lee la lista de skills directamente desde la VM (filesystem real). Es la
+// fuente de verdad para la UI: refleja cualquier skill que vivió ahí, sin
+// importar si pasó por la UI o por API/MCP directa.
+export async function listInstalledSkills(
+  ctx: AuthContext,
+  agentId: string
+): Promise<InstalledSkillEntry[]> {
+  const agent = await loadAgentRow(ctx, agentId);
+  const target = resolveRuntimeTarget(agent.template, agent);
+  // El handler GET vive en /admin/skills (ghostyclaw) o /skills (openclaw),
+  // siempre el install path sin el /install final.
+  const listPath = target.path.replace(/\/install$/, "");
+  const { stream } = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
+    port: target.port,
+    path: listPath,
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${agent.embedToken}`,
+      Accept: "application/json",
+    },
+    // sandbox-host exige content o rawBody; un objeto vacío basta — GET ignora body.
+    rawBody: {},
+  });
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const text = Buffer.concat(chunks.map((c) => Buffer.from(c))).toString("utf8");
+  try {
+    const parsed = JSON.parse(text) as { skills?: InstalledSkillEntry[] };
+    return parsed.skills ?? [];
+  } catch {
+    throw new Error(
+      `runtime returned non-JSON for GET ${listPath}: ${text.slice(0, 200)}`
+    );
+  }
+}
+
 export async function installSkill(
   ctx: AuthContext,
   agentId: string,
