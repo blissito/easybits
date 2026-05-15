@@ -36,6 +36,18 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "agent not found" }, { status: 404 });
   }
 
+  const proxyBody = {
+    port: agent.port ?? 8787,
+    path: body.path,
+    method: body.method ?? "GET",
+    headers: {
+      Authorization: `Bearer ${agent.embedToken}`,
+      Accept: "application/json",
+    },
+    ...(body.body !== undefined ? { rawBody: body.body } : {}),
+  };
+  console.log("[agent-admin] →", agent.sandboxId, JSON.stringify({ port: proxyBody.port, path: proxyBody.path, method: proxyBody.method, hasRawBody: body.body !== undefined }));
+
   const upstream = await fetch(
     `${HOST_URL}/v1/sandbox/${agent.sandboxId}/agent/message`,
     {
@@ -45,21 +57,15 @@ export async function action({ request, params }: Route.ActionArgs) {
         "Content-Type": "application/json",
         "X-Easybits-Owner": agent.ownerId,
       },
-      body: JSON.stringify({
-        port: agent.port ?? 8787,
-        path: body.path,
-        method: body.method ?? "GET",
-        headers: {
-          Authorization: `Bearer ${agent.embedToken}`,
-          Accept: "application/json",
-        },
-        ...(body.body !== undefined ? { rawBody: body.body } : {}),
-      }),
+      body: JSON.stringify(proxyBody),
     },
   );
 
+  const upstreamText = await upstream.text();
+  console.log("[agent-admin] ←", upstream.status, upstreamText.slice(0, 300));
+
   // Forward status + body 1:1; el daemon ya devuelve JSON.
-  return new Response(await upstream.text(), {
+  return new Response(upstreamText, {
     status: upstream.status,
     headers: { "Content-Type": "application/json" },
   });
