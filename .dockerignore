@@ -4,6 +4,7 @@ node_modules
 .git
 packages
 cli
+services
 test
 test-results
 *.md
@@ -14,3 +15,11 @@ test-results
 .build
 scripts
 stripe-onboarding-visible.png
+*.tsbuildinfo
+*.log
+pdf_examples
+factura-bonita.html
+demo-sdk-document.html
+.DS_Store
+.vscode
+.idea
