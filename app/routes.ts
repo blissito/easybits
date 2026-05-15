@@ -161,6 +161,8 @@ export default [
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
     route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),
     route("agents/:id/extend", "routes/api/v2/agent-extend.ts"),
+    route("agents/:id/suspend", "routes/api/v2/agent-suspend.ts"),
+    route("agents/:id/resume", "routes/api/v2/agent-resume.ts"),
     route("agents/:id/whatsapp/status", "routes/api/v2/agent-whatsapp-status.ts"),
     route("agents/:id/whatsapp/link", "routes/api/v2/agent-whatsapp-link.ts"),
     route("agents/:id/whatsapp/unlink", "routes/api/v2/agent-whatsapp-unlink.ts"),

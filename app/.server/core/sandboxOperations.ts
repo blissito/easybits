@@ -1198,6 +1198,67 @@ export async function extendAgent(
   return toAgentRecord(updated);
 }
 
+// suspendAgent: pausa la microVM preservando agentId/embedToken/sandboxId.
+// Llama al sandbox-host (snapshot a disco + kill firecracker process) y
+// refleja status="suspended" en la fila del Agent. Resume con resumeAgent.
+export async function suspendAgent(
+  ctx: AuthContext,
+  agentId: string
+): Promise<AgentRecord> {
+  requireScope(ctx, "WRITE");
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
+  }
+  if (row.status === "suspended") {
+    return toAgentRecord(row);
+  }
+  if (row.status !== "running") {
+    throw new Error(`agent is ${row.status}; cannot suspend`);
+  }
+  await callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${row.sandboxId}/suspend`,
+    {},
+    ctx.user.id
+  );
+  const updated = await db.agent.update({
+    where: { id: agentId },
+    data: { status: "suspended" },
+  });
+  return toAgentRecord(updated);
+}
+
+// resumeAgent: revive un agente suspendido (carga snapshot, reinicia el
+// firecracker process, mismo TAP/IP/MAC/rootfs/volumes). agentId intacto.
+export async function resumeAgent(
+  ctx: AuthContext,
+  agentId: string
+): Promise<AgentRecord> {
+  requireScope(ctx, "WRITE");
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || row.ownerId !== ctx.user.id) {
+    throw new Error("agent not found");
+  }
+  if (row.status === "running") {
+    return toAgentRecord(row);
+  }
+  if (row.status !== "suspended") {
+    throw new Error(`agent is ${row.status}; cannot resume`);
+  }
+  await callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${row.sandboxId}/resume`,
+    {},
+    ctx.user.id
+  );
+  const updated = await db.agent.update({
+    where: { id: agentId },
+    data: { status: "running" },
+  });
+  return toAgentRecord(updated);
+}
+
 // markAgentLost: caller (UI loader) ya detectó que el sandbox subyacente
 // no responde (probe HTTP falló). Persiste el estado en Mongo así otros
 // consumidores no ven datos engañosos. Truncate expiresAt a now() para
