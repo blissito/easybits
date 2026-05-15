@@ -4,9 +4,9 @@ import { spawnAutonomous } from "~/.server/core/sandboxOperations";
 
 // POST /api/v2/agents/autonomous
 // Managed-mode spawn for any autonomous-tier brand (ghosty / nanoclaw /
-// openclaw). Uses host-managed Anthropic credentials; caller passes only
-// the brand and optional overrides. Body: { brand, name?, systemPrompt?,
-// timeoutSeconds? }.
+// openclaw / goose-managed). Uses host-managed Anthropic credentials; caller
+// passes only the brand and optional overrides. Body: { brand, name?,
+// systemPrompt?, timeoutSeconds? }.
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });

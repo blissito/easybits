@@ -16,8 +16,7 @@ export type SandboxTemplate =
   | "bun"
   | "claude-code"
   | "goose"
-  | "nanoclaw"
-  | "ghosty"
+  | "ghostyclaw"
   | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
@@ -61,7 +60,7 @@ export interface TemplateInfo {
 export interface SandboxRecord {
   sandboxId: string;
   template: SandboxTemplate;
-  status: "starting" | "running" | "stopped" | "error";
+  status: "starting" | "running" | "stopped" | "error" | "lost";
   createdAt: string;
   expiresAt: string;
   ownerId: string;
@@ -379,10 +378,21 @@ export async function createSandbox(
     Math.max(params.timeoutSeconds ?? DEFAULT_TIMEOUT_S, 30),
     MAX_TIMEOUT_S
   );
+  // Autonomous long-lived templates (ghostyclaw) opt into the persistent
+  // flag so sandbox-host skips the auto-destroy reaper. These boxes live
+  // until explicit DELETE — they hold per-tenant state (Baileys pairing,
+  // SQLite store, groups/) that can't survive sandbox destruction.
+  const persistent = params.template === "ghostyclaw";
   return callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
-    { template: params.template, timeoutSeconds: timeout, name: params.name, metadata: params.metadata },
+    {
+      template: params.template,
+      timeoutSeconds: timeout,
+      name: params.name,
+      metadata: params.metadata,
+      persistent,
+    },
     ctx.user.id
   );
 }
@@ -430,6 +440,33 @@ export async function waitUntilRunning(
 export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {
   requireScope(ctx, "DELETE");
   return callHost<{ ok: true }>("DELETE", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
+}
+
+// Poll the ghostyclaw VM's /chat/ready endpoint via exec curl-from-inside.
+// We can't HTTP the VM directly from EasyBits (Fly has no route to the
+// Firecracker subnet), so we exec curl on the VM via sandbox-agent.
+// Returns true when {ready: true}, false on timeout (default 10 min covers
+// worst-case first-boot build of nanoclaw-agent image).
+async function pollGhostyclawReady(
+  ctx: AuthContext,
+  sandboxId: string,
+  token: string,
+  maxAttempts = 60, // 60 * 10s = 10 min
+): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    try {
+      const result = await execCommand(ctx, sandboxId, {
+        command: `curl -fsS -H "Authorization: Bearer ${token}" http://127.0.0.1:8787/chat/ready 2>/dev/null`,
+        timeoutSeconds: 5,
+      });
+      const parsed = JSON.parse(result.stdout.trim());
+      if (parsed?.ready === true) return true;
+    } catch {
+      // ignore — sandbox-agent or curl may not be ready yet; retry next tick
+    }
+  }
+  return false;
 }
 
 export async function execCommand(
@@ -666,67 +703,106 @@ export async function createAgent(
   if (params.template === "openclaw") {
     env.OPENCLAW_GATEWAY_TOKEN = embedToken;
   }
+  if (params.template === "ghostyclaw") {
+    env.NANOCLAW_ADMIN_TOKEN = embedToken;
+  }
 
   // 1. Resolve template + validate the env contract before spawning anything.
   const tpl = await resolveTemplate(ctx, params.template);
   validateRequiredEnv(tpl, env);
 
-  // 2. Spawn microVM and wait for boot.
+  // 2. Spawn microVM (returns immediately with status="starting"; boot is async
+  //    inside sandbox-host). We only block on this call because we need the
+  //    sandboxId to insert the Agent row.
   const sb = await createSandbox(ctx, {
     template: params.template,
     timeoutSeconds: params.timeoutSeconds,
     name: params.name,
   });
-  await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 30_000 });
 
-  // 3. Start the runtime unit declared by the template (default chat-runtime).
-  const ep = await startAgent(ctx, sb.sandboxId, {
-    env,
-    port: tpl.agent?.port,
-    healthPath: tpl.agent?.health_path,
-    unit: tpl.agent?.unit,
-    envFile: tpl.agent?.env_file,
-  });
-
-  // 4. ACP eager handshake — first user message has zero handshake cost.
+  // 3. Insert Agent row IMMEDIATELY with status="building" so the UI can
+  //    render the card and poll. Runtime bring-up (waitUntilRunning →
+  //    startAgent → ACP handshake) happens in background; on completion it
+  //    updates the row to status="running" with final agentUrl.
   const protocol = tpl.agent?.protocol ?? "sse";
   const port = tpl.agent?.port ?? 3000;
   const messagePath = tpl.agent?.message_path ?? "/message";
-  let acpSessionId: string | null = null;
-  let acpTransportSessionId: string | null = null;
-  if (protocol === "acp") {
-    const handshake = await runAcpHandshake(sb.sandboxId, ctx.user.id, port, messagePath);
-    acpSessionId = handshake.acpSessionId;
-    acpTransportSessionId = handshake.acpTransportSessionId;
-  }
-
-  // 5. Persist Agent row with runtime metadata snapshot.
   const expiresAt = sb.expiresAt ? new Date(sb.expiresAt) : null;
+  const provisionalAgentUrl = `sandbox://${sb.sandboxId}:${port}`;
   const row = await db.agent.create({
     data: {
       ownerId: ctx.user.id,
       sandboxId: sb.sandboxId,
-      agentUrl: ep.agentUrl,
+      agentUrl: provisionalAgentUrl,
       template: params.template,
       embedToken,
       name: params.name,
-      status: "running",
+      status: "building",
       expiresAt,
       protocol,
       port,
       unit: tpl.agent?.unit ?? "chat-runtime",
       messagePath,
-      acpSessionId,
-      acpTransportSessionId,
     },
   });
+
+  // 4. Async bring-up. Fire-and-forget; the UI polls Agent.status to know
+  //    when it transitions building → running (or error). "running" means
+  //    the runtime is FULLY ready to accept messages — not just that the
+  //    systemd unit started. For ghostyclaw the readiness check polls the
+  //    /chat/ready endpoint inside the VM (Docker up + agent image built);
+  //    for other templates we trust startAgent's exit code.
+  void (async () => {
+    try {
+      await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 30_000 });
+      const ep = await startAgent(ctx, sb.sandboxId, {
+        env,
+        port: tpl.agent?.port,
+        healthPath: tpl.agent?.health_path,
+        unit: tpl.agent?.unit,
+        envFile: tpl.agent?.env_file,
+      });
+      let acpSessionId: string | null = null;
+      let acpTransportSessionId: string | null = null;
+      if (protocol === "acp") {
+        const handshake = await runAcpHandshake(sb.sandboxId, ctx.user.id, port, messagePath);
+        acpSessionId = handshake.acpSessionId;
+        acpTransportSessionId = handshake.acpTransportSessionId;
+      }
+      // Ghostyclaw-specific readiness: poll /chat/ready until docker+agent
+      // image are both up (up to 10 min, covers worst-case first-boot agent
+      // image build). UI input stays disabled while status=="building".
+      if (params.template === "ghostyclaw") {
+        const ready = await pollGhostyclawReady(ctx, sb.sandboxId, embedToken);
+        if (!ready) {
+          throw new Error("ghostyclaw not ready after 10min (agent image build likely failed)");
+        }
+      }
+      await db.agent.update({
+        where: { id: row.id },
+        data: {
+          status: "running",
+          agentUrl: ep.agentUrl,
+          acpSessionId,
+          acpTransportSessionId,
+        },
+      });
+    } catch (e) {
+      console.error(`async bringup failed for agent ${row.id}:`, e);
+      await db.agent.update({
+        where: { id: row.id },
+        data: { status: "error" },
+      }).catch(() => {});
+    }
+  })();
+
   return {
     agentId: row.id,
     embedToken,
     sandboxId: sb.sandboxId,
     template: params.template,
-    agentUrl: ep.agentUrl,
-    healthUrl: ep.healthUrl,
+    agentUrl: provisionalAgentUrl,
+    healthUrl: "",
     expiresAt,
   };
 }
@@ -734,16 +810,13 @@ export async function createAgent(
 // Managed-mode autonomous agents. Each brand maps to a default mascot name
 // + system prompt. Backed by chat-anthropic runtime + host-managed
 // credentials (SANDBOX_HOST_ANTHROPIC_KEY) — caller doesn't pass keys.
-// The autonomous template (ghosty / nanoclaw / openclaw) declares image
-// + tier in templates.yaml for catalog UI, but the actual runtime is
-// always chat-anthropic; we'll diverge per-brand once each gets its own
-// rootfs with channel integrations baked in.
 const MANAGED_MODEL = "claude-haiku-4-5";
 
 // BRAND_DEFAULTS: cada brand mapea a un template + nombre de mascota +
-// system prompt + builder de env. Todos usan managed credentials del host.
+// system prompt + builder de env.
 //
-// - ghosty/nanoclaw/openclaw → chat-anthropic runtime (SSE simple).
+// - ghosty → ghostyclaw runtime (long-lived nanoclaw daemon + admin-api).
+// - openclaw → openclaw runtime (gateway HTTP).
 // - goose-managed → goose runtime (ACP). Prompt no se inyecta como env;
 //   queda como Goose default por ahora (custom systemPrompt está en backlog).
 type BrandConfig = {
@@ -752,14 +825,6 @@ type BrandConfig = {
   prompt: string;
   envBuilder: (hostKey: string, isOAuth: boolean) => Record<string, string>;
 };
-
-const chatAnthropicEnv = (
-  hostKey: string,
-  isOAuth: boolean
-): Record<string, string> =>
-  isOAuth
-    ? { ANTHROPIC_AUTH_TOKEN: hostKey, ANTHROPIC_MODEL: MANAGED_MODEL }
-    : { ANTHROPIC_API_KEY: hostKey, ANTHROPIC_MODEL: MANAGED_MODEL };
 
 // OpenClaw runtime expects ANTHROPIC_API_KEY como provider key + un
 // OPENCLAW_GATEWAY_TOKEN para auth de la HTTP API en :18789.
@@ -776,23 +841,37 @@ const openclawEnv = (
   _isOAuth: boolean,
 ): Record<string, string> => ({});
 
+// ghostyclaw runtime (nanoclaw daemon + admin-api). Solo bindea host/port —
+// ANTHROPIC_API_KEY/AUTH_TOKEN los inyecta spawnAutonomous abajo desde el
+// providerKey, y NANOCLAW_ADMIN_TOKEN lo inyecta createAgent reusando el
+// embedToken (mismo patrón que OPENCLAW_GATEWAY_TOKEN).
+const ghostyclawEnv = (
+  _hostKey: string,
+  _isOAuth: boolean,
+): Record<string, string> => ({
+  NANOCLAW_ADMIN_HOST: "0.0.0.0",
+  NANOCLAW_ADMIN_PORT: "8787",
+});
+
 const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   ghosty: {
-    template: "chat-anthropic",
+    template: "ghostyclaw",
     name: "Ghosty",
     prompt:
       "Eres Ghosty, el agente oficial de WhatsApp de la marca Ghosty. Sé útil, " +
       "breve y directo. Habla en el idioma del usuario. Si no sabes algo, dilo.",
-    envBuilder: chatAnthropicEnv,
+    envBuilder: ghostyclawEnv,
   },
   nanoclaw: {
-    template: "chat-anthropic",
+    // Andy persona corriendo encima del mismo runtime ghostyclaw que ghosty;
+    // se diferencian solo por SYSTEM_PROMPT que spawnAutonomous inyecta.
+    template: "ghostyclaw",
     name: "Andy",
     prompt:
       "Eres Andy, el asistente de Nanoclaw para Slack y Microsoft Teams. " +
       "Conoces el flujo de canales corporativos y respondes en tono profesional " +
       "pero cercano. Sé conciso. Habla en el idioma del usuario.",
-    envBuilder: chatAnthropicEnv,
+    envBuilder: ghostyclawEnv,
   },
   openclaw: {
     template: "openclaw",
@@ -914,16 +993,16 @@ export async function spawnAutonomous(
   if (provider === "deepseek") env.DEEPSEEK_API_KEY = providerKey;
   if (provider === "openrouter") env.OPENROUTER_API_KEY = providerKey;
 
-  if (cfg.template === "chat-anthropic" || cfg.template === "openclaw") {
+  if (cfg.template === "openclaw" || cfg.template === "ghostyclaw") {
     env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
   }
 
   if (cfg.template === "openclaw") {
     env.PROVIDER = provider;
     env.MODEL = model;
-  } else if (cfg.template === "chat-anthropic") {
-    env.ANTHROPIC_MODEL = model;
   }
+  // ghostyclaw: el daemon nanoclaw decide modelo/proveedor al spawnear el
+  // agent container (no via env), así que no inyectamos MODEL/PROVIDER aquí.
 
   return createAgent(ctx, {
     template: cfg.template,
@@ -1008,7 +1087,59 @@ export async function getAgent(ctx: AuthContext, agentId: string): Promise<Agent
   if (!row || row.ownerId !== ctx.user.id) {
     throw new Error("agent not found");
   }
+  // Self-healing: si el cached status difiere del estado REAL del sandbox,
+  // reconciliamos. Cubre dos casos:
+  //   1. Mongo dice "error"/"building" pero la VM ya está ready → marca running
+  //   2. Mongo dice "running" pero la VM fue destruida (sandbox-host restart) → marca lost
+  // Sólo lo hacemos en estados transitorios o cuando running puede mentir —
+  // para "lost" ya estamos en estado terminal, no vale la pena re-probe.
+  if (row.status === "building" || row.status === "error" || row.status === "running") {
+    const real = await probeRealStatus(ctx, row).catch(() => null);
+    if (real && real !== row.status) {
+      await db.agent.update({ where: { id: row.id }, data: { status: real } });
+      return toAgentRecord({ ...row, status: real });
+    }
+  }
   return toAgentRecord(row);
+}
+
+// Probe REAL state of the sandbox + runtime, independent of Mongo's cached status.
+// Returns the status the UI should show; null if probe inconclusive (keep cached).
+async function probeRealStatus(
+  ctx: AuthContext,
+  agent: { sandboxId: string; template: string; embedToken: string }
+): Promise<"running" | "building" | "lost" | "error" | null> {
+  // 1. Sandbox exists at all?
+  let sb: SandboxRecord;
+  try {
+    sb = await callHost<SandboxRecord>(
+      "GET",
+      `/v1/sandbox/${agent.sandboxId}`,
+      undefined,
+      ctx.user.id,
+    );
+  } catch (e) {
+    // 404 → host doesn't know this sandbox → lost (zombie row)
+    if (e instanceof Error && /not found|404/i.test(e.message)) return "lost";
+    return null; // network blip — don't change status
+  }
+  if (sb.status === "lost") return "lost";
+  if (sb.status === "error") return "error";
+  if (sb.status === "starting") return "building";
+
+  // 2. Ghostyclaw-specific: probe /chat/ready inside the VM via exec.
+  //    For other templates we trust sb.status === "running" as ready.
+  if (agent.template !== "ghostyclaw") return "running";
+  try {
+    const result = await execCommand(ctx, agent.sandboxId, {
+      command: `curl -fsS -H "Authorization: Bearer ${agent.embedToken}" http://127.0.0.1:8787/chat/ready 2>/dev/null`,
+      timeoutSeconds: 3,
+    });
+    const parsed = JSON.parse(result.stdout.trim());
+    return parsed?.ready === true ? "running" : "building";
+  } catch {
+    return "building"; // probe failed; admin-api not up yet
+  }
 }
 
 export async function listAgents(ctx: AuthContext): Promise<AgentRecord[]> {
@@ -1157,6 +1288,27 @@ export async function openAgentChunkStream(
     return transformAcpStream(upstream.stream, promptId);
   }
   if (protocol === "http") {
+    // Ghostyclaw expone /chat con shape simple {content, sessionId} y emite
+    // SSE en formato unificado {type:"chunk"|"done"|"error"} directamente —
+    // NO necesita el mapper de OpenAI deltas. Path separado del openclaw
+    // gateway que sí es OpenAI-compatible.
+    if (agent.template === "ghostyclaw") {
+      const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
+        port: agent.port ?? 8787,
+        path: agent.messagePath ?? "/chat",
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${agent.embedToken}`,
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        rawBody: {
+          content: body.content,
+          sessionId: body.sessionId,
+        },
+      });
+      return upstream.stream; // already in unified shape
+    }
     // OpenClaw gateway expone /v1/chat/completions compatible con OpenAI.
     // POST con stream:true → SSE con OpenAI delta chunks. Bearer token =
     // embedToken (createAgent lo inyecta como OPENCLAW_GATEWAY_TOKEN).

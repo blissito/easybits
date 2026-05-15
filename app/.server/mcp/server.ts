@@ -1048,7 +1048,7 @@ How to embed safely (the only reliable rule):
     "sandbox_create",
     "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Templates: ubuntu (base), python, node, bun, claude-code (preinstalled harness). Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses.",
     {
-      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "nanoclaw", "ghosty", "chat-openai", "chat-anthropic"]).describe("Base image template. 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghosty' = brand-facing Ghosty agent. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
+      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "ghostyclaw", "openclaw", "chat-openai", "chat-anthropic"]).describe("Base image template. 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
       timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
@@ -1254,7 +1254,7 @@ How to embed safely (the only reliable rule):
     "agent_create",
     "Spawn a long-lived agent inside a Firecracker microVM and return its reachable agentUrl. Distinct from `agent_run` (Claude one-shot managed): this returns a persistent endpoint you can post messages to. Use template='chat-openai' or 'chat-anthropic' for embeddable chat with SSE streaming, or 'goose'/'claude-code'/etc for coding harness. The `env` map (API keys, model, system prompt) is injected into the runtime at start time — never baked into the template image. Returns { sandboxId, agentUrl, healthUrl }.",
     {
-      template: z.enum(["chat-openai", "chat-anthropic", "goose", "claude-code", "nanoclaw", "ghosty"]).describe("Agent template. 'chat-*' = persistent Express+SSE runtime; others = harness/autonomous."),
+      template: z.enum(["chat-openai", "chat-anthropic", "goose", "claude-code", "ghostyclaw", "openclaw"]).describe("Agent template. 'chat-*' = persistent Express+SSE runtime; 'ghostyclaw' = always-on nanoclaw daemon (WhatsApp/Slack/Telegram); 'openclaw' = OpenClaw personal AI; others = harness/autonomous."),
       env: z.record(z.string()).describe("Environment variables for the agent (e.g. {OPENAI_API_KEY:'sk-...', OPENAI_MODEL:'gpt-4o-mini', SYSTEM_PROMPT:'...'}). Required keys depend on the template — fetch via templates_list."),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),

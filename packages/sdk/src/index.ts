@@ -442,8 +442,8 @@ export type AgentTemplate =
   | "bun"
   | "claude-code"
   | "goose"
-  | "nanoclaw"
-  | "ghosty"
+  | "ghostyclaw"
+  | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
 
