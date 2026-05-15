@@ -8,7 +8,22 @@ import { writeFile as sandboxWriteFile, openAgentMessageStream } from "./sandbox
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const SKILL_TEMPLATES = new Set(["openclaw"]);
+const SKILL_TEMPLATES = new Set(["openclaw", "ghostyclaw"]);
+
+// Per-template wire details for the hot-load notification. The Bearer is
+// agent.embedToken in both cases — for ghostyclaw that token is also injected
+// into the VM as NANOCLAW_ADMIN_TOKEN (see sandboxOperations.ts:707), so the
+// admin-api auth() check passes with the same secret.
+function resolveRuntimeTarget(template: string, agent: AgentRow): {
+  port: number;
+  path: string;
+} {
+  if (template === "ghostyclaw") {
+    return { port: 8787, path: "/admin/skills/install" };
+  }
+  // openclaw + any future template that wires its own /skills/install
+  return { port: agent.port ?? 18789, path: "/skills/install" };
+}
 
 export interface InstallSkillResult {
   ok: true;
@@ -35,7 +50,7 @@ async function loadAgentRow(ctx: AuthContext, agentId: string): Promise<AgentRow
   }
   if (!SKILL_TEMPLATES.has(row.template)) {
     throw new Error(
-      `Skills install unavailable for template "${row.template}" — only openclaw exposes /skills/install`
+      `Skills install unavailable for template "${row.template}" — supported: ${[...SKILL_TEMPLATES].join(", ")}`
     );
   }
   if (row.status !== "running") {
@@ -69,9 +84,10 @@ async function notifyRuntime(
   agent: AgentRow,
   body: unknown
 ): Promise<void> {
+  const target = resolveRuntimeTarget(agent.template, agent);
   const { stream } = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
-    port: agent.port ?? 18789,
-    path: "/skills/install",
+    port: target.port,
+    path: target.path,
     method: "POST",
     headers: {
       Authorization: `Bearer ${agent.embedToken}`,

@@ -286,6 +286,8 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "templates_list",
   "agent_create",
   "agent_message",
+  "agent_list",
+  "agent_install_skill",
   "ghosty_spawn",
   "goose_spawn",
 ]);

@@ -99,12 +99,14 @@ import {
   messageAgent,
   spawnAutonomous,
   spawnGhosty,
+  listAgents,
 } from "../core/sandboxOperations";
 import {
   destroyAgentRun,
   enqueueAgentRun,
   getAgentRunStatus,
 } from "../core/agentOperations";
+import { installSkill } from "../core/skillsOperations";
 import {
   createSecret,
   deleteSecretByName,
@@ -1308,6 +1310,52 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await messageAgent(ctx, params);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_list",
+    "List the persistent agents (chat-*, ghostyclaw, openclaw) owned by the calling account. Use this to enumerate agents before messaging, installing skills, or destroying. Returns AgentRecord[] with agentId, template, name, status, sandboxId, agentUrl, embedToken, createdAt and expiresAt.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listAgents(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_install_skill",
+    "Install / upload a skill (Agent Skills Open Standard — a SKILL.md with frontmatter `name`, `description`, `tools` + optional bundled assets) onto a persistent agent. The skill is hot-loaded inside the microVM — the next `agent_message` invocation picks it up without restart. Supported templates today: openclaw, ghostyclaw. Returns { ok, name, path, files, bytes }.",
+    {
+      agentId: z.string().describe("agentId of the persistent agent (from agent_list / agent_create)"),
+      skillFilename: z.string().describe("Filename for the SKILL.md (used to derive the slug, e.g. 'image-resize.md' → slug 'image-resize'). The file is renamed to SKILL.md inside the skill dir."),
+      skillMarkdown: z.string().min(1).describe("Plain-text body of SKILL.md (UTF-8). Must include YAML frontmatter with at minimum `name` and `description`."),
+      assets: z
+        .array(
+          z.object({
+            filename: z.string().describe("Asset filename — must match [A-Za-z0-9._-], lands flat in the skill dir"),
+            contentBase64: z.string().describe("Base64-encoded asset content (any binary)"),
+          })
+        )
+        .optional()
+        .describe("Optional bundled assets (images, scripts, data files). Each ≤10MB; total upload ≤25MB including SKILL.md."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const toAB = (buf: Buffer): ArrayBuffer =>
+        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+      const skillContent = toAB(Buffer.from(params.skillMarkdown, "utf8"));
+      const assets = (params.assets ?? []).map((a) => ({
+        filename: a.filename,
+        content: toAB(Buffer.from(a.contentBase64, "base64")),
+      }));
+      const result = await installSkill(ctx, params.agentId, {
+        skillFilename: params.skillFilename,
+        skillContent,
+        assets,
+      });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

@@ -858,8 +858,9 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
     template: "ghostyclaw",
     name: "Ghosty",
     prompt:
-      "Eres Ghosty, el agente oficial de WhatsApp de la marca Ghosty. Sé útil, " +
-      "breve y directo. Habla en el idioma del usuario. Si no sabes algo, dilo.",
+      "Eres Ghosty, el agente oficial de WhatsApp de la marca Ghosty, " +
+      "de la empresa Formmy. Sé útil, breve y directo. Usas inteligencia " +
+      "fría e ironía. Habla en el idioma del usuario. Si no sabes algo, dilo.",
     envBuilder: ghostyclawEnv,
   },
   nanoclaw: {
