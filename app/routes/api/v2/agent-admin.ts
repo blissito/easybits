@@ -36,6 +36,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "agent not found" }, { status: 404 });
   }
 
+  // sandbox-host's proxy genérico exige `content` o `rawBody` siempre — incluso
+  // para GETs admin que no necesitan body. Pasamos string vacío como rawBody en
+  // ese caso; el daemon ignora el body en GETs.
   const proxyBody = {
     port: agent.port ?? 8787,
     path: body.path,
@@ -44,7 +47,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       Authorization: `Bearer ${agent.embedToken}`,
       Accept: "application/json",
     },
-    ...(body.body !== undefined ? { rawBody: body.body } : {}),
+    rawBody: body.body !== undefined ? body.body : "",
   };
   console.log("[agent-admin] →", agent.sandboxId, JSON.stringify({ port: proxyBody.port, path: proxyBody.path, method: proxyBody.method, hasRawBody: body.body !== undefined }));
 
