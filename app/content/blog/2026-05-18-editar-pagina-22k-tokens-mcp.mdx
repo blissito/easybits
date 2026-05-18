@@ -10,7 +10,7 @@ published: true
 
 # Cuando editar una página cuesta 22K tokens: lo que aprendimos midiendo agentes largos sobre nuestro MCP
 
-Esta semana un equipo cliente (NanoClaw, agentes Claude en WhatsApp) nos compartió el `.jsonl` de una sesión de 55 minutos donde su agente estuvo iterando sobre un plano técnico — un PDF de ingeniería con cinco páginas, cálculos y portada de marca. El usuario humano del lado del chat reportó "lento y respondiendo a destiempo". El droplet no tenía presión (load 0.30, container al 0.04% de CPU). El SDK auto-compactó el contexto **siete veces en menos de una hora**.
+Esta semana el equipo de [Formmy](https://formmy.app) — la gente detrás de **Ghosty**, su agente Claude que vive en WhatsApp y conversa con clientes reales — nos compartió el `.jsonl` de una sesión de 55 minutos donde Ghosty estuvo iterando sobre un plano técnico — un PDF de ingeniería con cinco páginas, cálculos y portada de marca. El usuario humano del lado del chat reportó "lento y respondiendo a destiempo". El droplet no tenía presión (load 0.30, container al 0.04% de CPU). El SDK auto-compactó el contexto **siete veces en menos de una hora**.
 
 Cuando abrimos los logs el patrón era claro y, honestamente, era nuestra culpa. Vale la pena contarlo abierto porque la solución tiene roadmap.
 
@@ -81,4 +81,6 @@ Si las ediciones cuestan tokens proporcionales al **cambio** en vez de al **arch
 
 > "El contrato de edición debería tener el grano del cambio, no del archivo."
 
-Gracias al equipo de NanoClaw por compartirnos los logs. Si tu equipo está midiendo cosas raras con el MCP, escríbenos — esa clase de telemetría es la que nos ayuda a priorizar.
+Gracias enorme al equipo de [Formmy](https://formmy.app) por abrirnos los logs de Ghosty — pocos equipos instrumentan sus agentes con ese nivel de detalle, y menos aún comparten la telemetría con sus proveedores. Si estás construyendo agentes Claude que conversan con humanos reales (WhatsApp, web, voz), pásate a ver lo que están haciendo en **formmy.app**: es de los despliegues más serios de agentes conversacionales que hemos visto en producción.
+
+Y si tu equipo está midiendo cosas raras con nuestro MCP, escríbenos. Esa clase de telemetría es exactamente la que nos ayuda a priorizar.
