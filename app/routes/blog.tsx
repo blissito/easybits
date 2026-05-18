@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "editar-pagina-22k-tokens-mcp",
+    filePath: "app/content/blog/2026-05-18-editar-pagina-22k-tokens-mcp.mdx",
+    title:
+      "Cuando editar una página cuesta 22K tokens: lo que aprendimos midiendo agentes largos sobre nuestro MCP",
+    description:
+      "Una sesión real de 55 minutos editando un PDF técnico vía el MCP de EasyBits: 26 llamadas a set_page_html, varias reescrituras idénticas byte-a-byte, y 7 auto-compactaciones del SDK. Esto es lo que vimos y lo que vamos a cambiar.",
+    date: "2026-05-18",
+    author: "EasyBits Team",
+    tags: ["MCP", "Claude", "agentes", "tokens", "ingeniería"],
+    featuredImage:
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format",
+    readingTime: 6,
+    excerpt:
+      "Reporte de campo: por qué iterar sobre una página vía set_page_html dispara auto-compactaciones, y el roadmap de ediciones por diff que estamos preparando.",
+    published: true,
+  },
+  {
     slug: "oauth-mcp-claude-cowork",
     filePath: "app/content/blog/2026-04-14-oauth-mcp-claude-cowork.mdx",
     title: "OAuth 2.1 + DCR para MCP: cómo conectamos EasyBits a Claude Cowork sin API keys",
