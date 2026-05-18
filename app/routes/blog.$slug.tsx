@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "editar-pagina-22k-tokens-mcp":
+    "app/content/blog/2026-05-18-editar-pagina-22k-tokens-mcp.mdx",
   "oauth-mcp-claude-cowork":
     "app/content/blog/2026-04-14-oauth-mcp-claude-cowork.mdx",
   "por-que-tailwind-en-nuestro-editor-de-documentos":
@@ -36,6 +38,11 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "editar-pagina-22k-tokens-mcp",
+    featuredImage:
+      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format",
+  },
   {
     slug: "oauth-mcp-claude-cowork",
     featuredImage:
