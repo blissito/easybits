@@ -1,0 +1,84 @@
+---
+title: "Cuando editar una página cuesta 22K tokens: lo que aprendimos midiendo agentes largos sobre nuestro MCP"
+description: "Una sesión real de 55 minutos editando un PDF técnico vía el MCP de EasyBits: 26 llamadas a set_page_html, varias reescrituras idénticas byte-a-byte, y 7 auto-compactaciones del SDK. Esto es lo que vimos y lo que vamos a cambiar."
+date: "2026-05-18"
+author: "EasyBits Team"
+tags: ["MCP", "Claude", "agentes", "tokens", "ingeniería"]
+featuredImage: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format"
+published: true
+---
+
+# Cuando editar una página cuesta 22K tokens: lo que aprendimos midiendo agentes largos sobre nuestro MCP
+
+Esta semana un equipo cliente (NanoClaw, agentes Claude en WhatsApp) nos compartió el `.jsonl` de una sesión de 55 minutos donde su agente estuvo iterando sobre un plano técnico — un PDF de ingeniería con cinco páginas, cálculos y portada de marca. El usuario humano del lado del chat reportó "lento y respondiendo a destiempo". El droplet no tenía presión (load 0.30, container al 0.04% de CPU). El SDK auto-compactó el contexto **siete veces en menos de una hora**.
+
+Cuando abrimos los logs el patrón era claro y, honestamente, era nuestra culpa. Vale la pena contarlo abierto porque la solución tiene roadmap.
+
+## Lo que medimos
+
+Agrupamos los `tool_use` del agente por tamaño de payload:
+
+| Hora | Tool | Página | Tokens del call |
+|------|------|--------|-----------------|
+| 19:00 | `set_page_html` | p5 | 18 534 |
+| 19:08 | `set_page_html` | p5 | 18 030 |
+| 19:14 | `set_page_html` | p5 | 17 324 |
+| 19:30 | `set_page_html` | p5 | 18 310 |
+| 19:38 | `add_page` (Hoja 6) | — | 19 886 |
+| 19:54 | `Write /tmp/raw_p6.html` | — | 19 528 |
+| 20:00 | `set_page_html` | p6 | 21 410 |
+
+Sobre la sesión completa:
+
+- Documento `6a0b5dca…` (5 páginas, plano v1): **26 llamadas a `set_page_html`**. La página `p5` fue reescrita 7 veces.
+- En `p1`, `p3` y `p4` registramos **tres o más reescrituras consecutivas con HTML idéntico byte-a-byte** — mismo conteo de caracteres, mismo contenido. El agente reenviaba la página entera aunque el cambio efectivo fuera cero.
+- Documento `6a0b69e3…` (7 páginas, plano v2): **6 `add_page` + 7 `set_page_html`**. Cada página viajó dos veces — una al crearla, otra al "redeploy" final.
+- HTML típico por página: 4K–13K caracteres. Con el overhead del `tool_use`, el SDK contabilizó payloads de **13K a 22K tokens por llamada**.
+
+## Por qué pasa
+
+Hay dos causas raíz. Una es nuestra; la otra es un patrón que el modelo adopta porque nuestro contrato no le ofrece nada mejor.
+
+### 1. `set_page_html` es un reemplazo total, no una edición
+
+El contrato del tool obliga a re-emitir el HTML completo así el cambio sea de tres palabras. Para una página de 9K caracteres eso son ~10K tokens en el `tool_use.input`. Cuatro reescrituras sobre la misma `pageId` en media hora suman ~40K tokens, y el modelo no tiene una vía más barata.
+
+Cuando comparamos esto con el tool `Edit` de Claude Code — que recibe `old_string` → `new_string` y aplica el cambio puntual — la diferencia es de uno o dos órdenes de magnitud por edición.
+
+### 2. El modelo guarda HTML en `/tmp` "por si acaso"
+
+Observamos un patrón que el modelo adopta por su cuenta: hace `Write /tmp/raw_p6.html` con el HTML completo, y a renglón seguido manda `set_page_html` con el mismo HTML. El mismo blob aparece dos veces en la sesión — una vez como argumento de `Write`, otra como argumento del MCP. Costo en tokens: doble. Beneficio real: cero.
+
+Sospechamos que el modelo lo hace porque "set entero" se siente irreversible, así que se autoarchiva una copia. Si la API tuviera un contrato más quirúrgico, este reflejo desaparecería.
+
+> **Lo que el usuario siente:** cada auto-compactación tarda, y mientras tanto los mensajes nuevos del chat se acumulan. Cuando el agente vuelve, su contexto está re-resumido y a veces "olvida" matices del último turno. Latencia + respuestas a destiempo. La culpa parece del modelo, pero la herramienta es la que lo empuja al loop.
+
+## Mitigaciones inmediatas (lado del agente)
+
+Mientras trabajamos en el fix server-side, hay buenas prácticas que ayudan hoy. Si tu agente usa nuestro MCP en sesiones largas, considera ponerlas en su `CLAUDE.md` o prompt de sistema:
+
+- **No dupliques HTML en `/tmp` cuando va a ir al MCP** — mándalo directo.
+- **Una pasada por página.** Si necesitas cambios, piensa el HTML final y manda **un solo** `set_page_html`. No iteres 3-4 veces sobre la misma `pageId` reescribiendo el HTML entero por cada ajuste.
+- **Para tweaks chicos**, lee con `get_page_html`, modifica el fragmento mentalmente y manda un `set_page_html` final. No leas-edita-lee-edita en loop.
+- **Genera assets pesados (imágenes, SVGs) en archivos públicos** vía `upload_website_file` y referencia por URL. No metas `base64` inline en el HTML — eso multiplica el costo del tool call.
+
+Estas reglas atacan el síntoma. La causa raíz vive en el MCP, y es ahí donde estamos trabajando.
+
+## Lo que vamos a investigar de nuestro lado
+
+Tomamos esto como un brief interno. En orden de prioridad:
+
+1. **`update_page_html` con diff/patch.** Al estilo del tool `Edit` de Claude Code: `old_string` → `new_string`, o un JSON-patch sobre selectores CSS/IDs. Para que un ajuste de tres palabras cueste tres palabras, no toda la página. Esto es el cambio de mayor impacto y el que más nos emociona.
+2. **Flags livianos en `get_page_html`.** Que devuelva metadatos, handles o estructura cuando el agente sólo quiere referenciar la página, no leerla completa. Hoy todo viene en bruto.
+3. **Detección server-side de no-op.** Si el HTML entrante es idéntico al guardado, regresar un `ack` sin propagar. Eso blinda al usuario contra reenvíos idénticos del modelo, que sí ocurren y los medimos.
+4. **Una guía oficial de buenas prácticas para agentes.** Qué tools combinar, cuándo usar `autoDeploy:false`, tamaños máximos recomendados por página, patrones anti context-rot en sesiones largas de diseño, y si conviene partir páginas grandes en bloques componibles. Empezamos a redactarla con los datos de esta sesión.
+
+## Por qué importa
+
+Nuestro MCP es, hoy, una de las formas más cómodas de generar PDFs y documentos largos desde un agente. La fricción que estamos midiendo no rompe el flujo: el documento se termina. Pero degrada la experiencia justo en el caso de uso más interesante — sesiones largas y conversacionales donde el usuario y el agente iteran sobre el mismo entregable.
+
+Si las ediciones cuestan tokens proporcionales al **cambio** en vez de al **archivo completo**, todo el patrón se vuelve diez veces más ágil. Es lo que estamos persiguiendo.
+
+> "El contrato de edición debería tener el grano del cambio, no del archivo."
+
+Gracias al equipo de NanoClaw por compartirnos los logs. Si tu equipo está midiendo cosas raras con el MCP, escríbenos — esa clase de telemetría es la que nos ayuda a priorizar.
