@@ -1510,7 +1510,7 @@ How to embed safely (the only reliable rule):
     "get_docs",
     "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
     {
-      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, documents, document-design, account, sdk, errors, tool-groups"),
+      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, documents, document-design, agent-editing, account, sdk, errors, tool-groups"),
     },
     async (params) => {
       const markdown = getDocsMarkdown(params.section);
@@ -1544,7 +1544,7 @@ function registerDocTools(server: McpServer) {
 
   server.tool(
     "get_document",
-    "Get a document with all its pages. Returns sections[] where each has { id, name, html, order }. Use section.id as pageId in set_page_html/get_page_html. WARNING: response can be very large for multi-page documents — use get_page_html if you only need one page.",
+    "Get a document with all its pages. Returns sections[] where each has { id, name, html, order }. Use section.id as pageId for set_page_html/get_page_html/replace_html. To minimize tokens, pass includeHtml:false — sections come back as { id, name, order, type, label, htmlLength, htmlHash } only (no html bodies). The htmlHash lets you detect server-side changes between reads without re-downloading. For full HTML of a single page, prefer get_page_html. See get_docs(\"agent-editing\").",
     {
       documentId: z.string().describe("The document ID"),
       includeHtml: z.boolean().optional().default(true).describe("Include page HTML in response (default true). Set false for lightweight metadata-only listing."),
@@ -2458,7 +2458,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
 
   server.tool(
     "update_document",
-    "Update a document's metadata (name, theme, colors, prompt). To modify pages, use set_page_html, add_page, delete_page, or reorder_pages instead.",
+    "Update a document's metadata (name, theme, colors, prompt). For editing page HTML use replace_html (surgical) or set_page_html (full rewrite) — NEVER pass page HTML through this tool. For structural changes use add_page, delete_page, or reorder_pages. Server detects no-ops automatically.",
     {
       documentId: z.string().describe("The document ID"),
       name: z.string().optional().describe("New name"),
@@ -2569,7 +2569,7 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
 
   server.tool(
     "set_page_html",
-    `Replace the ENTIRE HTML of a single page. This is the primary tool for editing pages — use it when rewriting or significantly changing a page. Only requires pageId (from get_document sections[].id) and the new HTML. For surgical edits to a specific element within a page, use set_section_html instead.
+    `Replace the ENTIRE HTML of a single page. Use ONLY for full-page rewrites or wholesale restructure. For ANY edit smaller than ~80% of the page (text change, color tweak, single element), use replace_html instead — it's faster, sends a fraction of the tokens, and the server skips re-deploy when the resulting HTML is unchanged. See get_docs("agent-editing") for cost-efficient editing patterns.
 
 DOCUMENT PAGE LAYOUT RULES (MANDATORY):
 - Root element: <section class="w-[8.5in] h-[11in] relative overflow-hidden flex flex-col">
@@ -2598,7 +2598,8 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setPageHtml(ctx, params.documentId, params.pageId, params.html);
-      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      const isNoop = (result as any).noop === true;
+      const auto = (!isNoop && params.autoDeploy !== false) ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
       return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
@@ -2634,7 +2635,7 @@ Call get_docs("document-design") for full design guide with validated patterns.`
 
   server.tool(
     "set_section_html",
-    "Replace a specific element WITHIN a page by CSS selector. Use for surgical edits (e.g., changing one card, updating an image). Requires cssSelector to find the target element. Example: cssSelector='.hero' replaces only the hero div. For replacing the entire page HTML, use set_page_html instead (simpler, no selector needed).",
+    "Second choice for surgical edits — prefer replace_html (more reliable, no selector fragility). Use only when you specifically need CSS-selector targeting (e.g. matching by class). Replace a specific element WITHIN a page by CSS selector. Requires cssSelector to find the target element. Example: cssSelector='.hero' replaces only the hero div. Note: GrapesJS can modify attributes between reads, breaking selectors — string-based replace_html avoids this. See get_docs(\"agent-editing\").",
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID containing the element"),
@@ -2645,14 +2646,15 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await setSectionHtmlBySelector(ctx, params.documentId, params.pageId, params.cssSelector, params.html);
-      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      const isNoop = (result as any).noop === true;
+      const auto = (!isNoop && params.autoDeploy !== false) ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
       return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );
 
   server.tool(
     "replace_html",
-    "Replace a specific HTML substring within a page (string-based, like Claude Code's edit model). This is the PREFERRED tool for surgical edits — find the exact HTML snippet you want to change using get_page_html, then replace it. More reliable than set_section_html because it doesn't depend on CSS selectors.",
+    "PRIMARY tool for editing document pages. Use this for ANY targeted change — single sentence, color swap, one element, one attribute. Works like Claude Code's Edit (old_html → new_html). Cheap: only the diff travels, and the server returns {noop:true} when the replacement produces identical HTML (so it's safe to retry without triggering a re-deploy). Read with get_page_html first, copy the exact substring, then replace. Prefer over set_section_html — no CSS selector fragility. See get_docs(\"agent-editing\").",
     {
       documentId: z.string().describe("The document ID"),
       pageId: z.string().describe("The page ID containing the HTML to edit"),
@@ -2663,7 +2665,8 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await replaceHtmlInPage(ctx, params.documentId, params.pageId, params.old_html, params.new_html);
-      const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
+      const isNoop = (result as any).noop === true;
+      const auto = (!isNoop && params.autoDeploy !== false) ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
       return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
     })
   );

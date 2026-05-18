@@ -1384,6 +1384,38 @@ https://www.easybits.cloud/api/mcp?tools=all
 \`\`\`
 `;
 
+SECTIONS["agent-editing"] = `## Agent Editing — Cost-Efficient Document Mutations
+
+A short playbook for agents editing documents through the MCP. Following this avoids unnecessary tokens, server work, and SDK context compactions.
+
+### The hierarchy
+
+1. **Read once, cache the structure.** Call \`get_document({ includeHtml: false })\` to obtain pageIds + \`htmlHash\` per page. Don't re-read the whole document between edits.
+2. **Read the page you'll edit** with \`get_page_html({ pageId })\`.
+3. **Edit small with \`replace_html\`.** For any change <80% of a page — a paragraph, a class, an attribute, a color — use \`replace_html(old_html, new_html)\`. Sends only the diff. The server returns \`{ noop: true }\` if the replacement produces identical HTML, so retries are safe.
+4. **Edit large with \`set_page_html\`.** Only when you're rewriting most of the page. Sends the full page.
+5. **Structure** uses \`add_page\`, \`delete_page\`, \`reorder_pages\`.
+
+### Batching
+
+When making multiple edits, pass \`autoDeploy: false\` on every call except the last, then call \`deploy_document\` once at the end. Each \`autoDeploy: true\` triggers a full Tailwind compile + Playwright PDF render + 3 CDN uploads (~4–10s).
+
+### No-op responses — STOP signal
+
+If a mutation returns \`{ noop: true, reason: "..." }\`, the page didn't change. **Do not retry the same call.** Either you re-sent identical HTML or your replacement was a self-edit. Re-read with \`get_page_html\` if you're unsure of the current state.
+
+### Anti-patterns
+
+- ❌ Calling \`set_page_html\` 7 times in a row with the same HTML "to be sure". Each call costs you tokens; if it differs from what's stored, the server runs a deploy.
+- ❌ Calling \`update_document\` with \`sections[]\` to edit page HTML. Use \`replace_html\` or \`set_page_html\` instead.
+- ❌ Re-reading \`get_document\` after every edit. Cache pageIds; compare \`htmlHash\` to detect external changes.
+- ❌ Using \`set_section_html\` (CSS selector) when \`replace_html\` (string) would work — selectors are fragile when GrapesJS rewrites attributes.
+
+### Detecting stale state
+
+If your edits stopped working (\`old_html not found\`), the page changed since you read it. Re-read with \`get_page_html\` and use the fresh HTML as your \`old_html\` source.
+`;
+
 const SECTION_KEYS = Object.keys(SECTIONS);
 
 const HEADER = `# EasyBits API Reference

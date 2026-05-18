@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
@@ -13,6 +14,7 @@ import { sanitizeSemanticColors } from "../sanitizeColors";
 import { docEvents } from "./docEvents";
 import type { Section3 } from "~/lib/landing3/types";
 import { getPlatformDefaultClient, getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
+import logger from "../logger";
 
 /** Upload a PDF buffer to storage and return a presigned read URL (1h) */
 export async function uploadPdfToStorage(userId: string, pdf: Buffer, docName: string) {
@@ -32,6 +34,35 @@ function throwJson(error: string, status: number): never {
 
 function validateObjectId(id: string): void {
   if (!/^[0-9a-fA-F]{24}$/.test(id)) throwJson("Document not found", 404);
+}
+
+const SECTION_COMPARE_KEYS = ["id", "html", "order", "name", "type", "label"] as const;
+
+/**
+ * Structural equality of two sections arrays.
+ * Returns true when every comparable field matches at every index, so callers
+ * can skip a DB write + auto-deploy when the agent re-sent identical state.
+ */
+function sectionsEqual(a: any[] | null | undefined, b: any[] | null | undefined): boolean {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) {
+    const li = left[i] ?? {};
+    const ri = right[i] ?? {};
+    for (const key of SECTION_COMPARE_KEYS) {
+      if ((li[key] ?? "") !== (ri[key] ?? "")) return false;
+    }
+  }
+  return true;
+}
+
+function htmlHash(html: string | undefined | null): string {
+  return createHash("sha256").update(html ?? "").digest("hex");
+}
+
+function logNoop(tool: string, documentId: string, reason: string) {
+  logger.info("mcp.noop.detected", { tool, documentId, reason });
 }
 
 /**
@@ -189,6 +220,9 @@ export async function getDocument(
         order: s.order,
         name: s.name,
         type: s.type,
+        label: s.label,
+        htmlLength: (s.html ?? "").length,
+        htmlHash: htmlHash(s.html),
       })),
     };
   }
@@ -293,13 +327,27 @@ export async function updateDocument(
     updates.previousSections = existing;
   }
 
-  // Theme/customColors go in metadata
+  // Theme/customColors go in metadata. Copy before mutating so doc.metadata
+  // stays untouched and the no-op check below can compare old vs new state.
   if (opts.theme !== undefined || opts.customColors !== undefined) {
-    const existing = (doc.metadata as Record<string, unknown>) || {};
-    if (opts.theme !== undefined) existing.theme = opts.theme;
-    if (opts.customColors !== undefined) existing.customColors = opts.customColors;
-    if (opts.customColors && existing.theme !== "custom") existing.theme = "custom";
-    updates.metadata = existing;
+    const original = (doc.metadata as Record<string, unknown>) || {};
+    const next: Record<string, unknown> = { ...original };
+    if (opts.theme !== undefined) next.theme = opts.theme;
+    if (opts.customColors !== undefined) next.customColors = opts.customColors;
+    if (opts.customColors && next.theme !== "custom") next.theme = "custom";
+    updates.metadata = next;
+  }
+
+  // No-op guard: skip DB write + autoDeploy when nothing actually changed
+  const noChanges =
+    (updates.name === undefined || updates.name === doc.name) &&
+    (updates.prompt === undefined || updates.prompt === doc.prompt) &&
+    (updates.sections === undefined || sectionsEqual(updates.sections as any[], existing as any[])) &&
+    (updates.metadata === undefined ||
+      JSON.stringify(updates.metadata) === JSON.stringify(doc.metadata ?? {}));
+  if (noChanges) {
+    logNoop("update_document", id, "no fields changed");
+    return { ...doc, noop: true, reason: "no fields changed" } as any;
   }
 
   const result = await db.landing.update({ where: { id }, data: updates });
@@ -323,6 +371,11 @@ export async function setPageHtml(
   const sections = (doc.sections || []) as unknown as Section3[];
   const idx = sections.findIndex((s) => s.id === pageId);
   if (idx === -1) throwJson("Page not found", 404);
+
+  if ((sections[idx].html ?? "") === html) {
+    logNoop("set_page_html", id, "html unchanged");
+    return { success: true, noop: true, reason: "html unchanged", pageId };
+  }
 
   const previousSections = JSON.parse(JSON.stringify(sections));
   sections[idx] = { ...sections[idx], html };
@@ -360,8 +413,13 @@ export async function replaceHtmlInPage(
     );
   }
 
-  const previousSections = JSON.parse(JSON.stringify(sections));
   const updatedHtml = currentHtml.replace(oldHtml, newHtml);
+  if (updatedHtml === currentHtml) {
+    logNoop("replace_html", id, "replacement produced identical html");
+    return { success: true, noop: true, reason: "replacement produced identical html", pageId };
+  }
+
+  const previousSections = JSON.parse(JSON.stringify(sections));
   sections[idx] = { ...sections[idx], html: updatedHtml };
 
   const result = await db.landing.update({
@@ -445,8 +503,12 @@ export async function setSectionHtmlBySelector(
   el.replaceWith(template.content);
 
   // Serialize the updated page HTML
-  const previousSections = JSON.parse(JSON.stringify(sections));
   const updatedHtml = dom.window.document.body.innerHTML;
+  if ((sections[idx].html ?? "") === updatedHtml) {
+    logNoop("set_section_html", id, "selector replacement produced identical html");
+    return { success: true, noop: true, reason: "selector replacement produced identical html", pageId, cssSelector };
+  }
+  const previousSections = JSON.parse(JSON.stringify(sections));
   sections[idx] = { ...sections[idx], html: updatedHtml };
   const result = await db.landing.update({ where: { id }, data: { sections: sections as any, previousSections } });
   docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
