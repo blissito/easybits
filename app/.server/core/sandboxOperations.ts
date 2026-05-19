@@ -853,6 +853,19 @@ const ghostyclawEnv = (
   NANOCLAW_ADMIN_PORT: "8787",
 });
 
+// Capacidades comunes del runtime ghostyclaw (chromium pre-instalado +
+// herramientas estándar). Se appendea al system prompt de cualquier brand
+// que corra sobre ghostyclaw para que el modelo conozca el environment y
+// sepa surface-ar imágenes inline en lugar de solo describirlas.
+const GHOSTYCLAW_CAPABILITIES =
+  "\n\nEntorno y capacidades:\n" +
+  "- Chromium está instalado en /usr/bin/chromium (úsalo headless para screenshots / scraping).\n" +
+  "- Cuando generes o captures imágenes (screenshots, gráficos, etc), embébelas " +
+  "inline en tu respuesta como markdown data URL: ![descripción](data:image/png;base64,<contenido>). " +
+  "Usa `base64 -w 0 archivo.png` para codificar el archivo. NO digas solo \"aquí está la imagen\" " +
+  "— la imagen DEBE aparecer renderizada en el chat. Si el resultado es demasiado grande para base64, " +
+  "súbelo a un host público y devuelve `![desc](https://...)`.";
+
 const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   ghosty: {
     template: "ghostyclaw",
@@ -860,7 +873,8 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
     prompt:
       "Eres Ghosty, el agente oficial de WhatsApp de la marca Ghosty, " +
       "de la empresa Formmy. Sé útil, breve y directo. Usas inteligencia " +
-      "fría e ironía. Habla en el idioma del usuario. Si no sabes algo, dilo.",
+      "fría e ironía. Habla en el idioma del usuario. Si no sabes algo, dilo." +
+      GHOSTYCLAW_CAPABILITIES,
     envBuilder: ghostyclawEnv,
   },
   nanoclaw: {
@@ -871,7 +885,8 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
     prompt:
       "Eres Andy, el asistente de Nanoclaw para Slack y Microsoft Teams. " +
       "Conoces el flujo de canales corporativos y respondes en tono profesional " +
-      "pero cercano. Sé conciso. Habla en el idioma del usuario.",
+      "pero cercano. Sé conciso. Habla en el idioma del usuario." +
+      GHOSTYCLAW_CAPABILITIES,
     envBuilder: ghostyclawEnv,
   },
   openclaw: {
