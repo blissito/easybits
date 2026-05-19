@@ -169,7 +169,6 @@ export default [
     route("agents/:id/skills", "routes/api/v2/agent-skills.ts"),
     route("agents/:id/mcps", "routes/api/v2/agent-mcps.ts"),
     route("agents/:id/admin", "routes/api/v2/agent-admin.ts"),
-    route("agent-upload", "routes/api/v2/agent-upload.ts"),
     route("templates", "routes/api/v2/templates.ts"),
     route("files", "routes/api/v2/files.ts"),
     route("files/search", "routes/api/v2/file-search.ts"),

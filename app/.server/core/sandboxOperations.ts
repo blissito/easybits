@@ -870,15 +870,16 @@ const ghostyclawEnv = (
 // Por eso el flujo correcto es upload → URL pública → markdown ![](url).
 const GHOSTYCLAW_CAPABILITIES =
   " Entorno: chromium en /usr/bin/chromium (úsalo headless para screenshots " +
-  "y scraping). Para mostrar imágenes en el chat web: 1) genera la imagen en " +
-  "/tmp/<nombre>.png; 2) sube y captura la URL en una sola línea con curl: " +
-  "URL=$(curl -sS -X POST -H \"Authorization: Bearer $NANOCLAW_ADMIN_TOKEN\" " +
-  "-H \"Content-Type: image/png\" --data-binary @/tmp/<nombre>.png " +
-  "https://www.easybits.cloud/api/v2/agent-upload); 3) responde con markdown " +
-  "![descripción]($URL) — el widget renderiza la imagen inline. NUNCA uses " +
-  "base64 inline (excede el budget de tokens). Si el canal es WhatsApp o " +
-  "Telegram (chatJid no empieza con web@), usa send_message con image_path " +
-  "en lugar del flow de upload.";
+  "y scraping). Para mostrar imágenes en el chat web sigue este flujo con " +
+  "los tools ya disponibles: 1) genera la imagen en /tmp/<nombre>.png; " +
+  "2) llama mcp__easybits__upload_file con { fileName, contentType: " +
+  "\"image/png\", size: <bytes-del-archivo>, access: \"public\" } — devuelve " +
+  "{ file: { url }, putUrl }; 3) sube los bytes con curl -X PUT --data-binary " +
+  "@/tmp/<nombre>.png \"$putUrl\"; 4) responde con markdown ![descripción]" +
+  "(file.url) — el widget renderiza la imagen inline. NUNCA uses base64 " +
+  "inline (excede el budget de tokens). Si el canal es WhatsApp o Telegram " +
+  "(chatJid no empieza con web@), usa send_message con image_path en lugar " +
+  "del flow de upload.";
 
 const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   ghosty: {
