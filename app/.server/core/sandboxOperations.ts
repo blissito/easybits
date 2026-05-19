@@ -126,7 +126,11 @@ export async function openAgentMessageStream(
     payload.rawBody = body.rawBody;
   } else {
     payload.content = body.content;
-    payload.sessionId = body.sessionId ?? "default";
+    // Claude CLI exige session IDs en formato UUID — pasaba "default" como
+    // fallback rompía `claude --resume default`. Omitimos el campo cuando
+    // no hay sessionId real para que el daemon (o el agent-runner) genere
+    // un UUID fresh en lugar de heredar este literal.
+    if (body.sessionId) payload.sessionId = body.sessionId;
   }
   const res = await fetch(url, {
     method: "POST",
