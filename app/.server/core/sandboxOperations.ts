@@ -857,14 +857,19 @@ const ghostyclawEnv = (
 // herramientas estándar). Se appendea al system prompt de cualquier brand
 // que corra sobre ghostyclaw para que el modelo conozca el environment y
 // sepa surface-ar imágenes inline en lugar de solo describirlas.
+//
+// IMPORTANTE: este string entra como env var SYSTEM_PROMPT al daemon vía
+// systemd EnvironmentFile, que NO acepta valores multilínea — sandbox-host
+// rechaza con 400 si hay \n o \r. Mantener en una sola línea, sin saltos.
 const GHOSTYCLAW_CAPABILITIES =
-  "\n\nEntorno y capacidades:\n" +
-  "- Chromium está instalado en /usr/bin/chromium (úsalo headless para screenshots / scraping).\n" +
-  "- Cuando generes o captures imágenes (screenshots, gráficos, etc), embébelas " +
-  "inline en tu respuesta como markdown data URL: ![descripción](data:image/png;base64,<contenido>). " +
-  "Usa `base64 -w 0 archivo.png` para codificar el archivo. NO digas solo \"aquí está la imagen\" " +
-  "— la imagen DEBE aparecer renderizada en el chat. Si el resultado es demasiado grande para base64, " +
-  "súbelo a un host público y devuelve `![desc](https://...)`.";
+  " Entorno y capacidades: chromium está instalado en /usr/bin/chromium " +
+  "(úsalo headless para screenshots / scraping). Cuando generes o captures " +
+  "imágenes (screenshots, gráficos, etc), embébelas inline en tu respuesta " +
+  "como markdown data URL: ![descripción](data:image/png;base64,<contenido>). " +
+  "Usa `base64 -w 0 archivo.png` para codificar el archivo. NO digas solo " +
+  "\"aquí está la imagen\" — la imagen DEBE aparecer renderizada en el chat. " +
+  "Si el resultado es muy grande para base64, súbelo a un host público y " +
+  "devuelve `![desc](https://...)`.";
 
 const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   ghosty: {
