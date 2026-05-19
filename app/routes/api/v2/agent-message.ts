@@ -44,9 +44,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   let stream;
   try {
+    // sessionId opcional: si no viene (o no es string), omitimos. El daemon
+    // genera un UUID fresh y lo devuelve via newSessionId al closing event.
+    // ANTES defaultaba a "default" pero Claude CLI rechaza ese literal con
+    // "--resume requires UUID format".
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
     stream = await openAgentChunkStream(auth.agent, {
       content: body.content,
-      sessionId: typeof body.sessionId === "string" ? body.sessionId : "default",
+      ...(sessionId ? { sessionId } : {}),
     });
   } catch (e) {
     return Response.json(
