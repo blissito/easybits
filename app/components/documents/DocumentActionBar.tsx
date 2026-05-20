@@ -85,6 +85,9 @@ export function DocumentActionBar({
   const tagRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [measuredH, setMeasuredH] = useState(0);
+  const [hasEyeDropper, setHasEyeDropper] = useState(false);
+  const [pickedHex, setPickedHex] = useState<string | null>(null);
+  useEffect(() => { setHasEyeDropper(typeof window !== "undefined" && "EyeDropper" in window); }, []);
 
   useEffect(() => {
     setClassInput(""); setEditingClass(null); setShowTags(false); setAiPrompt("");
@@ -164,6 +167,16 @@ export function DocumentActionBar({
     setClassInput(""); setEditingClass(null);
   };
   const applyColor = (mode: "text" | "bg", token: string) => apply(classes, `${mode}-${token}`);
+  // Native EyeDropper (Chromium): pick any on-screen pixel — incl. iframe content like a
+  // logo — and apply it as an arbitrary Tailwind color (text-[#hex] / bg-[#hex]).
+  const pickColor = async (mode: "text" | "bg") => {
+    try {
+      const eye = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+      if (!eye) return;
+      const { sRGBHex } = await new eye().open();
+      if (sRGBHex) { setPickedHex(sRGBHex); applyColor(mode, `[${sRGBHex}]`); }
+    } catch { /* user cancelled */ }
+  };
   const submitRefine = () => { if (aiPrompt.trim() && !isRefining) { onRefine(aiPrompt.trim()); setAiPrompt(""); } };
 
   const swatches: { token: string; css: string; transparent?: boolean }[] = [
@@ -378,6 +391,25 @@ export function DocumentActionBar({
                 : { background: css }}
             />
           ))}
+          {pickedHex && (
+            <button
+              onClick={() => applyColor(mode, `[${pickedHex}]`)}
+              title={`${mode}-[${pickedHex}]`}
+              aria-label={`Color tomado ${pickedHex}`}
+              className="w-5 h-5 rounded border-2 border-brand-500 hover:scale-110 transition-transform shrink-0"
+              style={{ background: pickedHex }}
+            />
+          )}
+          {hasEyeDropper && (
+            <button
+              onClick={() => pickColor(mode)}
+              title={`Cuentagotas: tomar color de la pantalla (${mode})`}
+              aria-label="Cuentagotas"
+              className="w-5 h-5 flex items-center justify-center rounded border-2 border-black bg-white hover:bg-brand-50 hover:scale-110 transition-transform shrink-0 text-gray-700"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
+            </button>
+          )}
         </div>
       ))}
     </div>
