@@ -554,11 +554,22 @@ export default function DocumentEditor() {
   const spikeSelectionRef = useRef(spikeSelection);
   spikeSelectionRef.current = spikeSelection;
   const [spikeIframeRect, setSpikeIframeRect] = useState<DOMRect | null>(null);
-  // Parked position of the action bar — lifted here so it survives selection changes.
+  // Parked position of the action bar — persists across selection changes, resets on close.
   const [actionBarPos, setActionBarPos] = useState<{ top: number; left: number } | null>(null);
-  // Reset the parked position when closed/deselected — it re-anchors to the next element.
-  // (Position persists across selection changes while the bar stays open.)
   useEffect(() => { if (!spikeSelection) setActionBarPos(null); }, [spikeSelection]);
+  // ESC closes the bar when focus is in the parent (toolbar). Focus-in-iframe is handled
+  // separately: the iframe forwards a 'escape' message (see buildSrcDoc / handleSpikeMessage).
+  useEffect(() => {
+    if (!spikeSelection) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      setSpikeSelection(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [spikeSelection]);
   const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
@@ -1114,17 +1125,24 @@ export default function DocumentEditor() {
   }, [currentTheme, currentCustomColors]);
 
   // Keep the action bar glued to its element while the canvas scrolls: re-read the live
-  // iframe rect (recomputes the element-anchored position) and shift any parked position
-  // by the scroll delta, so it travels with the content instead of floating fixed.
+  // iframe rect and shift any parked position by the scroll delta. rAF-coalesced so a burst
+  // of scroll events triggers at most one editor re-render per frame.
   const lastCanvasScrollTop = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
+  const pendingScrollTop = useRef(0);
   const handleCanvasScroll = useCallback((scrollTop: number) => {
-    const delta = scrollTop - lastCanvasScrollTop.current;
-    lastCanvasScrollTop.current = scrollTop;
-    if (!delta) return;
-    const sid = spikeSelectionRef.current?.sectionId;
-    if (!sid) return;
-    setSpikeIframeRect(spikeDocRef.current?.getIframeRect(sid) ?? null);
-    setActionBarPos((p) => (p ? { ...p, top: p.top - delta } : p));
+    pendingScrollTop.current = scrollTop;
+    if (scrollRafRef.current != null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const delta = pendingScrollTop.current - lastCanvasScrollTop.current;
+      lastCanvasScrollTop.current = pendingScrollTop.current;
+      if (!delta) return;
+      const sid = spikeSelectionRef.current?.sectionId;
+      if (!sid) return;
+      setSpikeIframeRect(spikeDocRef.current?.getIframeRect(sid) ?? null);
+      setActionBarPos((p) => (p ? { ...p, top: p.top - delta } : p));
+    });
   }, []);
 
   // Edit ops for the spike FloatingToolbar — post to the selected page's iframe.
@@ -2242,7 +2260,6 @@ export default function DocumentEditor() {
                 onRedo={doRedo}
                 onMessage={handleSpikeMessage}
                 onScroll={handleCanvasScroll}
-                onEscape={() => setSpikeSelection(null)}
               />
               <DocumentActionBar
                 selection={spikeSelection}

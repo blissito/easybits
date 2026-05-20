@@ -37,8 +37,6 @@ interface Props {
   onMessage: (msg: IframeMessage) => void;
   /** Fires on container scroll (passes scrollTop) so the parent can re-anchor the action bar. */
   onScroll?: (scrollTop: number) => void;
-  /** Escape pressed (in the canvas or inside a page iframe) — used to close the action bar. */
-  onEscape?: () => void;
   handleRef?: Ref<DocumentCanvasHandle>;
 }
 
@@ -92,7 +90,6 @@ export function DocumentCanvas({
   onRedo,
   onMessage,
   onScroll,
-  onEscape,
   handleRef,
 }: Props) {
   const w = format?.width || 816;
@@ -112,20 +109,8 @@ export function DocumentCanvas({
   onRedoRef.current = onRedo;
   const onScrollRef = useRef(onScroll);
   onScrollRef.current = onScroll;
-  const onEscapeRef = useRef(onEscape);
-  onEscapeRef.current = onEscape;
 
   const clampZoom = (z: number) => Math.min(2, Math.max(0.1, z));
-
-  // Escape closes the action bar. Page iframes capture keyboard focus, so this must be
-  // attached to each iframe's OWN document (same channel the SDK script uses to forward
-  // undo/redo) — a parent/window listener never sees the keypress. Skip while typing.
-  const handleEscape = useCallback((e: KeyboardEvent) => {
-    if (e.key !== "Escape") return;
-    const t = e.target as HTMLElement | null;
-    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-    onEscapeRef.current?.();
-  }, []);
 
   // Cmd/Ctrl + wheel → zoom (also covers trackpad pinch, which fires wheel+ctrlKey).
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -155,14 +140,12 @@ export function DocumentCanvas({
     el?.addEventListener("wheel", handleWheel, { passive: false });
     el?.addEventListener("scroll", onScrollEvt, { passive: true });
     document.addEventListener("keydown", handleKey);
-    document.addEventListener("keydown", handleEscape);
     return () => {
       el?.removeEventListener("wheel", handleWheel);
       el?.removeEventListener("scroll", onScrollEvt);
       document.removeEventListener("keydown", handleKey);
-      document.removeEventListener("keydown", handleEscape);
     };
-  }, [handleWheel, handleKey, handleEscape]);
+  }, [handleWheel, handleKey]);
 
   // Same-origin srcdoc iframes capture their own events, so attach the handlers to each
   // iframe's window/document on load (forwarding via postMessage isn't needed for same-origin).

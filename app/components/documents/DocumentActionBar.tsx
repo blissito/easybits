@@ -35,6 +35,8 @@ const HEADINGS = ["H1", "H2", "H3", "H4", "H5", "H6"];
 const TEXT = ["P", "SPAN", "DIV", "BLOCKQUOTE"];
 const CONTAINERS = ["DIV", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "NAV", "MAIN"];
 const NO_SWITCH = ["A", "IMG", "INPUT", "BUTTON", "SVG", "VIDEO", "IFRAME", "TABLE", "UL", "OL", "LI", "FORM"];
+// Tags that can't sensibly become media (links, form controls, lists, tables…).
+const NO_MEDIA = ["A", "INPUT", "BUTTON", "SVG", "IFRAME", "TABLE", "UL", "OL", "LI", "FORM"];
 
 const COLOR_TOKENS = ["primary", "secondary", "accent", "surface"];
 
@@ -113,8 +115,12 @@ export function DocumentActionBar({
   const classes = (selection.className || "").split(/\s+/).filter(Boolean);
   const tag = (selection.tagName || "").toUpperCase();
   const isImg = tag === "IMG";
+  const isVideo = tag === "VIDEO";
   const isLink = tag === "A";
-  const inlineConflict = hasInlineStyleConflict(selection.attrs?.style as string | undefined);
+  // Convert a text/container node into media (img/video is element replacement, not a tag
+  // rename — img is void so leftover text is dropped on serialize; set src below).
+  const canConvertToMedia = !NO_MEDIA.includes(tag);
+  const inlineConflict = hasInlineStyleConflict(selection.attrs?.style);
   const isSectionRoot = !!selection.isSectionRoot || tag === "SECTION";
 
   let tagOptions: string[] = [];
@@ -132,8 +138,8 @@ export function DocumentActionBar({
   const top = Math.max(8, Math.min(preferred, window.innerHeight - h - 8));
   const left = Math.max(8, Math.min(iframeRect.left + selection.rect.left, window.innerWidth - 400));
 
-  // cn() = clsx + tailwind-merge: resolves conflicts per utility group (incl. responsive
-  // variants) so adding a class substitutes the conflicting one instead of stacking.
+  // cn() = clsx + tailwind-merge: resolves conflicts per utility group so adding a class
+  // substitutes the conflicting one instead of stacking.
   const apply = (base: string[], ...extra: string[]) =>
     onApplyClasses(cn(base.join(" "), ...extra).split(/\s+/).filter(Boolean));
 
@@ -264,6 +270,16 @@ export function DocumentActionBar({
           )}
         </div>
         <span className="text-[10px] font-bold text-gray-400 truncate flex-1">{(selection.text || "").slice(0, 36)}</span>
+        {canConvertToMedia && !isImg && (
+          <button onClick={() => onChangeTag("img")} title="Convertir a imagen" aria-label="Convertir a imagen" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-brand-50 shrink-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
+        )}
+        {canConvertToMedia && !isVideo && (
+          <button onClick={() => onChangeTag("video")} title="Convertir a video" aria-label="Convertir a video" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-brand-50 shrink-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z" fill="currentColor"/></svg>
+          </button>
+        )}
         <button onClick={onViewCode} title="Ver código" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-brand-50 font-mono text-xs font-black shrink-0">{"</>"}</button>
         <button onClick={onDeleteElement} title="Eliminar elemento" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-red-100 text-red-600 shrink-0" aria-label="Eliminar">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
@@ -291,10 +307,10 @@ export function DocumentActionBar({
         </button>
       </div>
 
-      {/* Row 3 — attributes (img / link) */}
-      {(isImg || isLink) && (
+      {/* Row 3 — attributes (img / video / link) */}
+      {(isImg || isVideo || isLink) && (
         <div className="flex flex-col gap-1 border-t-2 border-black/10 pt-1.5">
-          {isImg && attrInput("src", imgSrc, setImgSrc, "src")}
+          {(isImg || isVideo) && attrInput("src", imgSrc, setImgSrc, "src")}
           {isImg && attrInput("alt", imgAlt, setImgAlt, "alt")}
           {isLink && attrInput("href", linkHref, setLinkHref, "href")}
         </div>

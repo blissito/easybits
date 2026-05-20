@@ -14,3 +14,18 @@ export function hasInlineStyleConflict(style?: string | null): boolean {
     return !!prop && prop !== "font-family";
   });
 }
+
+/** Strip a set of CSS properties from an inline style string, keeping the rest. */
+export function stripInlineProps(style: string, propsToStrip: string[]): string {
+  if (!style) return "";
+  const lower = propsToStrip.map((p) => p.toLowerCase());
+  return style
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .filter((decl) => {
+      const prop = decl.split(":")[0]?.trim().toLowerCase();
+      return prop ? !lower.includes(prop) : true;
+    })
+    .join("; ");
+}

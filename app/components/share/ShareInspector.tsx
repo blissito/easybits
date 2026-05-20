@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { IframeMessage } from "~/lib/landing3/types";
-import { hasInlineStyleConflict } from "~/lib/landing4/inlineStyle";
+import { hasInlineStyleConflict, stripInlineProps } from "~/lib/landing4/inlineStyle";
 
 interface Props {
   selection: IframeMessage | null;
@@ -18,21 +18,6 @@ interface Props {
   onUpdateAttribute: (attr: string, value: string) => void;
   onDeleteElement: () => void;
   onClose: () => void;
-}
-
-/** Strip a set of CSS properties from an inline style string, keeping the rest. */
-function stripInlineProps(style: string, propsToStrip: string[]): string {
-  if (!style) return "";
-  const lower = propsToStrip.map((p) => p.toLowerCase());
-  return style
-    .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .filter((decl) => {
-      const prop = decl.split(":")[0]?.trim().toLowerCase();
-      return prop ? !lower.includes(prop) : true;
-    })
-    .join("; ");
 }
 
 const CONTAINER_TAGS = ["DIV", "SECTION", "HEADER", "FOOTER", "NAV", "ASIDE", "MAIN", "ARTICLE"];
@@ -76,7 +61,7 @@ export default function ShareInspector({
   const tag = (selection.tagName || "").toUpperCase();
   const classes = (selection.className || "").split(/\s+/).filter(Boolean);
   const isContainer = CONTAINER_TAGS.includes(tag);
-  const inlineConflict = hasInlineStyleConflict(selection.attrs?.style as string | undefined);
+  const inlineConflict = hasInlineStyleConflict(selection.attrs?.style);
 
   // Position — same logic as FloatingToolbar but trimmed.
   const inspectorWidth = inspectorRef.current?.offsetWidth || 480;
@@ -106,7 +91,7 @@ export default function ShareInspector({
 
     // Inline style with a hardcoded color overrides Tailwind classes via CSS specificity.
     // Strip just the conflicting CSS prop so the swatch's class actually paints.
-    const inlineStyle = (selection!.attrs?.style as string | undefined) || "";
+    const inlineStyle = selection!.attrs?.style || "";
     if (inlineStyle) {
       const stripProps = mode === "text"
         ? ["color"]
