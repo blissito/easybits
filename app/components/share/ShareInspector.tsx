@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { IframeMessage } from "~/lib/landing3/types";
+import { hasInlineStyleConflict } from "~/lib/landing4/inlineStyle";
 
 interface Props {
   selection: IframeMessage | null;
@@ -75,6 +76,7 @@ export default function ShareInspector({
   const tag = (selection.tagName || "").toUpperCase();
   const classes = (selection.className || "").split(/\s+/).filter(Boolean);
   const isContainer = CONTAINER_TAGS.includes(tag);
+  const inlineConflict = hasInlineStyleConflict(selection.attrs?.style as string | undefined);
 
   // Position — same logic as FloatingToolbar but trimmed.
   const inspectorWidth = inspectorRef.current?.offsetWidth || 480;
@@ -159,6 +161,14 @@ export default function ShareInspector({
           ✕
         </button>
       </div>
+
+      {/* Inline-style notice: utilities won't apply to this element */}
+      {inlineConflict && (
+        <div className="flex items-start gap-1.5 bg-amber-950/60 border border-amber-700 rounded-md px-2 py-1.5 text-[10px] leading-snug text-amber-200">
+          <span className="font-black shrink-0">⚠</span>
+          <span>Estilos en línea detectados — las utilidades no se aplican a este elemento. Edita el código o pídele al agente que lo regenere con clases Tailwind.</span>
+        </div>
+      )}
 
       {/* Row 2: chips of current classes */}
       {classes.length > 0 && (

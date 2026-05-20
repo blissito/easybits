@@ -35,6 +35,10 @@ interface Props {
   onUndo?: () => void;
   onRedo?: () => void;
   onMessage: (msg: IframeMessage) => void;
+  /** Fires on container scroll (passes scrollTop) so the parent can re-anchor the action bar. */
+  onScroll?: (scrollTop: number) => void;
+  /** Escape pressed (in the canvas or inside a page iframe) — used to close the action bar. */
+  onEscape?: () => void;
   handleRef?: Ref<DocumentCanvasHandle>;
 }
 
@@ -63,6 +67,17 @@ html, body { width: ${w}px; height: ${h}px; overflow: hidden; }
 </head><body>
 <div data-section-id="${section.id}">${section.html}</div>
 <script>${getIframeScript()}<\/script>
+<script>
+// Forward Escape to the parent (the action bar lives there). Must run INSIDE the iframe
+// because it captures keyboard focus — a parent-side listener never sees the keypress
+// (same reason the SDK forwards undo/redo via postMessage).
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  window.parent.postMessage({ type: 'escape' }, '*');
+});
+<\/script>
 </body></html>`;
 }
 
@@ -76,6 +91,8 @@ export function DocumentCanvas({
   onUndo,
   onRedo,
   onMessage,
+  onScroll,
+  onEscape,
   handleRef,
 }: Props) {
   const w = format?.width || 816;
@@ -93,8 +110,22 @@ export function DocumentCanvas({
   onUndoRef.current = onUndo;
   const onRedoRef = useRef(onRedo);
   onRedoRef.current = onRedo;
+  const onScrollRef = useRef(onScroll);
+  onScrollRef.current = onScroll;
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
 
   const clampZoom = (z: number) => Math.min(2, Math.max(0.1, z));
+
+  // Escape closes the action bar. Page iframes capture keyboard focus, so this must be
+  // attached to each iframe's OWN document (same channel the SDK script uses to forward
+  // undo/redo) — a parent/window listener never sees the keypress. Skip while typing.
+  const handleEscape = useCallback((e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    onEscapeRef.current?.();
+  }, []);
 
   // Cmd/Ctrl + wheel → zoom (also covers trackpad pinch, which fires wheel+ctrlKey).
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -120,17 +151,27 @@ export function DocumentCanvas({
   // Attach to the scroll container + document. Wheel must be non-passive to preventDefault.
   useEffect(() => {
     const el = containerRef.current;
+    const onScrollEvt = () => { if (el) onScrollRef.current?.(el.scrollTop); };
     el?.addEventListener("wheel", handleWheel, { passive: false });
+    el?.addEventListener("scroll", onScrollEvt, { passive: true });
     document.addEventListener("keydown", handleKey);
-    return () => { el?.removeEventListener("wheel", handleWheel); document.removeEventListener("keydown", handleKey); };
-  }, [handleWheel, handleKey]);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      el?.removeEventListener("wheel", handleWheel);
+      el?.removeEventListener("scroll", onScrollEvt);
+      document.removeEventListener("keydown", handleKey);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [handleWheel, handleKey, handleEscape]);
 
   // Same-origin srcdoc iframes capture their own events, so attach the handlers to each
-  // iframe's window on load (forwarding via postMessage isn't needed for same-origin).
+  // iframe's window/document on load (forwarding via postMessage isn't needed for same-origin).
   const attachIframeZoom = useCallback((win: Window | null) => {
     if (!win) return;
     win.addEventListener("wheel", handleWheel, { passive: false });
     win.addEventListener("keydown", handleKey);
+    // (Escape from inside the iframe is forwarded via postMessage by buildSrcDoc, since a
+    // parent-attached listener can't reliably catch keys while the iframe holds focus.)
   }, [handleWheel, handleKey]);
 
   const content = sections

@@ -551,7 +551,14 @@ export default function DocumentEditor() {
   const useCanvasSpike = searchParams.get("canvas") === "1";
   const spikeDocRef = useRef<DocumentCanvasHandle>(null);
   const [spikeSelection, setSpikeSelection] = useState<IframeMessage | null>(null);
+  const spikeSelectionRef = useRef(spikeSelection);
+  spikeSelectionRef.current = spikeSelection;
   const [spikeIframeRect, setSpikeIframeRect] = useState<DOMRect | null>(null);
+  // Parked position of the action bar — lifted here so it survives selection changes.
+  const [actionBarPos, setActionBarPos] = useState<{ top: number; left: number } | null>(null);
+  // Reset the parked position when closed/deselected — it re-anchors to the next element.
+  // (Position persists across selection changes while the bar stays open.)
+  useEffect(() => { if (!spikeSelection) setActionBarPos(null); }, [spikeSelection]);
   const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
@@ -1066,6 +1073,10 @@ export default function DocumentEditor() {
   // Messages from the per-page DocumentCanvas iframes: selection drives FloatingToolbar;
   // text/attribute edits persist the section HTML.
   const handleSpikeMessage = useCallback((msg: IframeMessage) => {
+    if ((msg.type as string) === "escape") {
+      setSpikeSelection(null);
+      return;
+    }
     if (msg.type === "element-selected") {
       // The iframe is CSS-scaled by zoom; its reported rect is unscaled. Pre-scale so the
       // FloatingToolbar (which adds iframeRect.top + rect.top) lands on the element.
@@ -1101,6 +1112,20 @@ export default function DocumentEditor() {
       surface: cc.surface || base.colors.surface,
     };
   }, [currentTheme, currentCustomColors]);
+
+  // Keep the action bar glued to its element while the canvas scrolls: re-read the live
+  // iframe rect (recomputes the element-anchored position) and shift any parked position
+  // by the scroll delta, so it travels with the content instead of floating fixed.
+  const lastCanvasScrollTop = useRef(0);
+  const handleCanvasScroll = useCallback((scrollTop: number) => {
+    const delta = scrollTop - lastCanvasScrollTop.current;
+    lastCanvasScrollTop.current = scrollTop;
+    if (!delta) return;
+    const sid = spikeSelectionRef.current?.sectionId;
+    if (!sid) return;
+    setSpikeIframeRect(spikeDocRef.current?.getIframeRect(sid) ?? null);
+    setActionBarPos((p) => (p ? { ...p, top: p.top - delta } : p));
+  }, []);
 
   // Edit ops for the spike FloatingToolbar — post to the selected page's iframe.
   const postToSpikeSection = useCallback((sectionId: string, msg: Record<string, unknown>) => {
@@ -1313,6 +1338,12 @@ export default function DocumentEditor() {
           skipDbUpdate: true,
           allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
           ...(direction && { direction }),
+          // Per-node refine: when a specific element (not the section root) is selected,
+          // pass its openTag so the endpoint edits only that element and reassembles the page.
+          ...(spikeSelection?.openTag && !spikeSelection?.isSectionRoot && {
+            openTag: spikeSelection.openTag,
+            elementText: spikeSelection.text,
+          }),
         }),
       });
       if (!res.ok) {
@@ -2210,6 +2241,8 @@ export default function DocumentEditor() {
                 onUndo={doUndo}
                 onRedo={doRedo}
                 onMessage={handleSpikeMessage}
+                onScroll={handleCanvasScroll}
+                onEscape={() => setSpikeSelection(null)}
               />
               <DocumentActionBar
                 selection={spikeSelection}
@@ -2233,6 +2266,8 @@ export default function DocumentEditor() {
                 }}
                 onViewCode={() => { if (spikeSelection?.sectionId) handleOpenCode(spikeSelection.sectionId); }}
                 onClose={() => setSpikeSelection(null)}
+                pos={actionBarPos}
+                onPosChange={setActionBarPos}
               />
             </>
           ) : (
