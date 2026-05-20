@@ -1,4 +1,6 @@
 import { nanoid } from "nanoid";
+import { createHash } from "node:crypto";
+import { LRUCache } from "lru-cache";
 import { db } from "../db";
 import { buildDeployHtmlV4 } from "~/lib/landing4/buildHtml";
 import { buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
@@ -8,6 +10,103 @@ import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tail
 import { withPage, setContentAndWaitForAssets } from "./browserPool";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import { resolveLandingPaletteWithBrandKit } from "../themePalette";
+
+/**
+ * Server-rendered page thumbnails for the document editor's PageList. Replaces the old
+ * client-side SVG-foreignObject→canvas capture (fragile: produced black/blank thumbs).
+ * Renders a single page at a small scale via Playwright, identical to the PDF/export
+ * pipeline, so the thumbnail matches the final output exactly.
+ *
+ * Cached in-memory by a hash of the render inputs — no Tigris churn. The key is the
+ * content itself, so identical pages (or reloads within the instance lifetime) skip
+ * the browser entirely.
+ */
+const thumbCache = new LRUCache<string, Buffer>({ max: 400 });
+
+export async function takeDocumentThumbnail(
+  userId: string,
+  documentId: string,
+  input: {
+    sectionId: string;
+    html: string;
+    theme?: string;
+    customColors?: Record<string, string> | null;
+    format?: { width: number; height: number } | null;
+    width?: number;
+  }
+): Promise<Buffer | null> {
+  if (!/^[0-9a-fA-F]{24}$/.test(documentId)) return null;
+
+  const doc = await db.landing.findUnique({ where: { id: documentId } });
+  if (!doc || doc.ownerId !== userId || doc.version !== 4) return null;
+
+  const format = input.format?.width && input.format?.height
+    ? input.format
+    : { width: 816, height: 1056 };
+  const targetW = Math.max(120, Math.min(1200, Math.round(input.width ?? 400)));
+
+  // Theme resolution mirrors the PDF/export path. Trust the editor's live theme/colors
+  // (passed in) over DB so thumbnails don't lag behind unsaved theme switches.
+  const docTheme = input.theme || doc.theme || (doc.metadata as any)?.theme;
+  let themeCss: string | undefined;
+  let tailwindConfig: string | undefined;
+  if (docTheme === "custom") {
+    const palette = input.customColors && Object.keys(input.customColors).length
+      ? input.customColors
+      : await resolveLandingPaletteWithBrandKit(doc);
+    const t = buildCustomTheme(palette as any);
+    themeCss = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+    tailwindConfig = buildSingleThemeCss("minimal").tailwindConfig;
+  } else {
+    const docThemeCss = buildSingleThemeCss(docTheme || "default");
+    themeCss = docThemeCss.css;
+    tailwindConfig = docThemeCss.tailwindConfig;
+  }
+
+  const cacheKey = createHash("sha1")
+    .update(JSON.stringify({ html: input.html, themeCss, tailwindConfig, format, targetW }))
+    .digest("hex");
+  const cached = thumbCache.get(cacheKey);
+  if (cached) return cached;
+
+  // `__grapes_css__` carries GrapesJS-added styles; include it for fidelity.
+  const sections = (doc.sections as unknown as Section3[]) || [];
+  const cssSections = sections.filter((s) => s.id === "__grapes_css__");
+  const pageSection: Section3 = { id: input.sectionId, order: 0, html: input.html } as Section3;
+
+  const scale = targetW / format.width;
+  const clipH = Math.round(format.height * scale);
+
+  const baseHtml = buildDocumentPrintHtml([...cssSections, pageSection], {
+    themeCss,
+    tailwindConfig,
+    title: doc.name || "Document",
+    format,
+  });
+  // Shrink the page to thumbnail size. The .page-section keeps its layout box at
+  // format dims; the transform scales the pixels, and we clip to the scaled rect.
+  const html = baseHtml.replace(
+    "</head>",
+    `<style>html,body{margin:0;padding:0;background:#fff;overflow:hidden;}
+.page-section{transform:scale(${scale});transform-origin:top left;box-shadow:none!important;margin:0!important;}</style></head>`
+  );
+  const optimizedHtml = await replaceCdnWithCompiledCSS(html);
+
+  try {
+    const buffer = await withPage(async (page) => {
+      await setContentAndWaitForAssets(page, optimizedHtml);
+      return await page.screenshot({
+        type: "png",
+        clip: { x: 0, y: 0, width: targetW, height: clipH },
+      });
+    }, { viewport: { width: format.width, height: format.height } });
+    thumbCache.set(cacheKey, buffer);
+    return buffer;
+  } catch (err: any) {
+    console.error("[takeDocumentThumbnail] error:", err.message);
+    return null;
+  }
+}
 
 export async function takeDocumentScreenshot(
   userId: string,

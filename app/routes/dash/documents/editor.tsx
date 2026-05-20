@@ -15,7 +15,11 @@ import { getShareSession } from "~/.server/shareLinks";
 import { db } from "~/.server/db";
 import { PageList, type Section3WithVersions } from "~/components/documents/PageList";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
-import type { Section3 } from "~/lib/landing3/types";
+import { DocumentCanvas, type DocumentCanvasHandle } from "~/components/documents/DocumentCanvas";
+import { DocumentActionBar } from "~/components/documents/DocumentActionBar";
+import { LANDING_THEMES } from "~/lib/landing3/themes";
+import { HiSparkles } from "react-icons/hi";
+import type { Section3, IframeMessage } from "~/lib/landing3/types";
 import type { GrapesEditorHandle, AiAction } from "~/components/landings4/GrapesEditor";
 import { grapesToSections } from "~/lib/landing4/grapesToSections";
 import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
@@ -484,7 +488,7 @@ export default function DocumentEditor() {
   const [aiGenUsed, setAiGenUsed] = useState(initialAiGenUsed);
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const saveFetcher = useFetcher();
   const deployFetcher = useFetcher<{
     url?: string;
@@ -541,6 +545,13 @@ export default function DocumentEditor() {
 
   const editorRef = useRef<GrapesEditorHandle>(null);
   const streamingRef = useRef<StreamingPreviewHandle>(null);
+  // Per-page neutral canvas (early-adopter easter egg behind ?canvas=1). Each page in its
+  // own format-sized iframe so 100vw/100vh + the design's own background resolve natively,
+  // versatile for any size. GrapesJS stays the default editor; both coexist.
+  const useCanvasSpike = searchParams.get("canvas") === "1";
+  const spikeDocRef = useRef<DocumentCanvasHandle>(null);
+  const [spikeSelection, setSpikeSelection] = useState<IframeMessage | null>(null);
+  const [spikeIframeRect, setSpikeIframeRect] = useState<DOMRect | null>(null);
   const [refiningSections, setRefiningSections] = useState<Set<string>>(new Set());
   const [variantLoadingId, setVariantLoadingId] = useState<string | null>(null);
   const [regenTargetId, setRegenTargetId] = useState<string | null>(null);
@@ -599,14 +610,23 @@ export default function DocumentEditor() {
     | "presentation"
     | "document"
     | undefined;
+  // Desk color lives on <html> (not <body>) so imported designs that set their own
+  // body background via an embedded <style> show their real color — matching the
+  // server-rendered thumbnails. We don't force a section background either: generated
+  // docs paint their own (bg-white / bg-surface class), so the page renders directly.
+  // width/height use !important so imported designs that size the page with viewport
+  // units (.slide { width:100vw; height:100vh }) are pinned to the real format instead
+  // of tracking the editor iframe — same fixed size the server thumbnail renders at.
   const documentCanvasCss = canvasFormat?.width && canvasFormat?.height
     ? `
-    body { padding: 24px; background: #374151; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-    section, [data-section-id] { width: ${canvasFormat.width}px; min-height: ${canvasFormat.height}px; max-height: ${canvasFormat.height}px; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0; box-sizing: border-box; }
+    html { background: #374151; }
+    body { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    section, [data-section-id] { width: ${canvasFormat.width}px !important; height: ${canvasFormat.height}px !important; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0; box-sizing: border-box; }
   `
     : `
-    body { padding: 24px; background: #374151; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-    section, [data-section-id] { width: 8.5in; min-height: 11in; max-height: 11in; overflow: hidden; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }
+    html { background: #374151; }
+    body { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+    section, [data-section-id] { width: 8.5in !important; height: 11in !important; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px; padding: 0.75in; box-sizing: border-box; }
   `;
 
   // Zoom — fit is computed dynamically from the canvas container width vs the section width.
@@ -615,6 +635,21 @@ export default function DocumentEditor() {
   // without manual zoom-out. Manual zoom is preserved on resize.
   const [zoomPct, setZoomPct] = useState(100);
   const computedFitRef = useRef<number>(100);
+  const restoredZoomRef = useRef(false);
+  const zoomStorageKey = `eb-doc-zoom-${landing.id}`;
+
+  // Persist zoom per document across refreshes. Restored after mount (not in the useState
+  // initializer) to avoid SSR/hydration mismatch.
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(zoomStorageKey));
+      if (saved >= 10 && saved <= 200) { restoredZoomRef.current = true; setZoomPct(saved); }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try { window.localStorage.setItem(zoomStorageKey, String(zoomPct)); } catch {}
+  }, [zoomStorageKey, zoomPct]);
 
   const computeFit = useCallback((): number => {
     const container = editorRef.current?.getCanvasContainer?.();
@@ -660,7 +695,7 @@ export default function DocumentEditor() {
     const fit = computeFit();
     computedFitRef.current = fit;
     const isBigFormat = (canvasFormat?.width ?? 0) > 1200 || (canvasFormat?.height ?? 0) > 1200;
-    if (isBigFormat && fit < 100) {
+    if (!restoredZoomRef.current && isBigFormat && fit < 100) {
       setZoomPct(fit);
       editorRef.current?.setZoom(fit);
     }
@@ -1002,6 +1037,91 @@ export default function DocumentEditor() {
     [saveSections, setSections, syncToGrapes]
   );
 
+  // Undo/redo for the per-page canvas — snapshots of the sections array. pushUndo runs
+  // before each edit; doUndo/doRedo restore and the changed iframes reload from the html.
+  const undoRef = useRef<Section3[][]>([]);
+  const redoRef = useRef<Section3[][]>([]);
+  const pushUndo = useCallback(() => {
+    undoRef.current.push(sectionsRef.current);
+    if (undoRef.current.length > 50) undoRef.current.shift();
+    redoRef.current = [];
+  }, []);
+  const doUndo = useCallback(() => {
+    const prev = undoRef.current.pop();
+    if (!prev) return;
+    redoRef.current.push(sectionsRef.current);
+    setSections(prev);
+    saveSections(prev);
+    setSpikeSelection(null);
+  }, [setSections, saveSections]);
+  const doRedo = useCallback(() => {
+    const next = redoRef.current.pop();
+    if (!next) return;
+    undoRef.current.push(sectionsRef.current);
+    setSections(next);
+    saveSections(next);
+    setSpikeSelection(null);
+  }, [setSections, saveSections]);
+
+  // Messages from the per-page DocumentCanvas iframes: selection drives FloatingToolbar;
+  // text/attribute edits persist the section HTML.
+  const handleSpikeMessage = useCallback((msg: IframeMessage) => {
+    if (msg.type === "element-selected") {
+      // The iframe is CSS-scaled by zoom; its reported rect is unscaled. Pre-scale so the
+      // FloatingToolbar (which adds iframeRect.top + rect.top) lands on the element.
+      const z = zoomPct / 100;
+      const r = (msg as { rect?: { top: number; left: number; width: number; height: number } }).rect;
+      const scaled = r ? { ...msg, rect: { top: r.top * z, left: r.left * z, width: r.width * z, height: r.height * z } } : msg;
+      setSpikeSelection(scaled);
+      if (msg.sectionId) setSpikeIframeRect(spikeDocRef.current?.getIframeRect(msg.sectionId) ?? null);
+    } else if (msg.type === "element-deselected") {
+      setSpikeSelection(null);
+    } else if ((msg.type === "text-edited" || msg.type === "section-html-updated") && msg.sectionId) {
+      const sectionHtml = (msg as { sectionHtml?: string }).sectionHtml;
+      if (!sectionHtml) return;
+      pushUndo();
+      setSections((prev) => {
+        const next = prev.map((s) => (s.id === msg.sectionId ? { ...s, html: sectionHtml } : s));
+        saveSections(next);
+        return next;
+      });
+    }
+  }, [saveSections, setSections, zoomPct, pushUndo]);
+
+  // Theme palette for the FloatingToolbar color swatches in spike mode.
+  const spikeThemeColors = useMemo(() => {
+    const base = LANDING_THEMES.find((t) => t.id === currentTheme) ?? LANDING_THEMES[0];
+    if (!currentCustomColors) return base.colors;
+    const cc = currentCustomColors as Record<string, string>;
+    return {
+      ...base.colors,
+      primary: cc.primary || base.colors.primary,
+      secondary: cc.secondary || base.colors.secondary,
+      accent: cc.accent || base.colors.accent,
+      surface: cc.surface || base.colors.surface,
+    };
+  }, [currentTheme, currentCustomColors]);
+
+  // Edit ops for the spike FloatingToolbar — post to the selected page's iframe.
+  const postToSpikeSection = useCallback((sectionId: string, msg: Record<string, unknown>) => {
+    spikeDocRef.current?.postToSection(sectionId, msg);
+  }, []);
+  // Raw Tailwind class editing — surface the classes the agent/design used (the
+  // FloatingToolbar only exposes curated presets, hiding the actual utilities).
+  const applySpikeClasses = useCallback((nextClasses: string[]) => {
+    if (!spikeSelection?.sectionId || !spikeSelection?.elementPath) return;
+    const value = nextClasses.join(" ");
+    spikeDocRef.current?.postToSection(spikeSelection.sectionId, {
+      action: "update-attribute",
+      sectionId: spikeSelection.sectionId,
+      elementPath: spikeSelection.elementPath,
+      tagName: spikeSelection.tagName || "*",
+      attr: "class",
+      value,
+    });
+    setSpikeSelection((prev) => (prev ? { ...prev, className: value } : prev));
+  }, [spikeSelection]);
+
   // GrapesJS editor change handler — sync sections from HTML
   const isSavingLocked = useRef(false);
   const lastSectionCount = useRef(sections.length);
@@ -1168,6 +1288,75 @@ export default function DocumentEditor() {
 
   const refineAbortMap = useRef<Map<string, AbortController>>(new Map());
   const variantAbortRef = useRef<AbortController | null>(null);
+
+  // Section-level AI refine for the per-page canvas (no GrapesJS). Refines the selected
+  // element's page via /api/v2/document-refine and re-renders that page's iframe.
+  async function refineSpikeSection(instruction: string) {
+    const sectionId = spikeSelection?.sectionId;
+    if (!sectionId || !instruction.trim()) return;
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+    setRefiningSections((prev) => new Set(prev).add(sectionId));
+    const abortController = new AbortController();
+    refineAbortMap.current.set(sectionId, abortController);
+    try {
+      const res = await fetch("/api/v2/document-refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        signal: abortController.signal,
+        body: JSON.stringify({
+          landingId: landing.id,
+          sectionId,
+          instruction,
+          currentHtml: section.html,
+          skipDbUpdate: true,
+          allSections: sections.map((s) => ({ id: s.id, label: s.label, html: s.html })),
+          ...(direction && { direction }),
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        if (errBody.upgradeUrl) { showLimitToast(errBody.error, errBody.upgradeUrl); return; }
+        throw new Error(errBody.error || "Error al refinar");
+      }
+      setAiGenUsed((c: number) => c + 1);
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = ""; let event = ""; let latestNewHtml = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n"); buf = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) event = line.slice(7).trim();
+          else if (line.startsWith("data: ")) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if (event === "error") throw new Error(d.message || "Error en generación");
+              if ((event === "chunk" || event === "done") && d.html) latestNewHtml = d.html;
+            } catch {}
+          }
+        }
+      }
+      if (latestNewHtml) {
+        const cleaned = latestNewHtml.replace(/^```html?\s*/i, "").replace(/```\s*$/, "").trim();
+        pushUndo();
+        const next = sections.map((s) => (s.id === sectionId ? { ...s, html: cleaned } : s));
+        setSections(next);
+        saveSections(next);
+        setSpikeSelection(null);
+      }
+      playTone();
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      errorToast((err as Error).message || "Error al refinar");
+    } finally {
+      refineAbortMap.current.delete(sectionId);
+      setRefiningSections((prev) => { const n = new Set(prev); n.delete(sectionId); return n; });
+    }
+  }
 
   function stopVariant() {
     variantAbortRef.current?.abort();
@@ -1580,6 +1769,7 @@ export default function DocumentEditor() {
   function renderPageList({ isMobile }: { isMobile: boolean }) {
     return (
       <PageList
+        documentId={landing.id}
         sections={sections}
         selectedSectionIds={selectedSectionIds}
         onSelect={(id, multi) => {
@@ -1592,6 +1782,8 @@ export default function DocumentEditor() {
           );
           if (isGenerating) {
             streamingRef.current?.scrollToSection(id);
+          } else if (useCanvasSpike) {
+            spikeDocRef.current?.scrollToSection(id);
           } else {
             // Use scrollToIndex: robust even when GrapesJS strips data-section-id from
             // the component model during HTML parse. Both sidebar thumbnails and GrapesJS
@@ -1762,6 +1954,21 @@ export default function DocumentEditor() {
               Exportar {sections.filter((s) => s.id !== "__grapes_css__").length} PNG
             </BrutalButton>
           )}
+          <button
+            onClick={() => setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              if (useCanvasSpike) next.delete("canvas"); else next.set("canvas", "1");
+              return next;
+            }, { replace: true })}
+            title="Editor en iframes por página (experimental)"
+            className="eb-beta-btn relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full border-2 border-black text-white text-[11px] font-black uppercase tracking-wide shadow-[3px_3px_0_0_#000] hover:-translate-y-0.5 active:translate-y-0 transition-transform"
+          >
+            <HiSparkles className="eb-twinkle w-3.5 h-3.5" />
+            Editor Beta{useCanvasSpike ? " ✓" : ""}
+            <span className="eb-twinkle absolute -top-1.5 -right-1 text-[11px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" style={{ animationDelay: "0.4s" }}>✦</span>
+            <span className="eb-twinkle absolute -bottom-1 left-2 text-[8px] text-yellow-100" style={{ animationDelay: "0.9s" }}>✦</span>
+            <span className="eb-twinkle absolute top-0.5 left-1/2 text-[7px]" style={{ animationDelay: "1.3s" }}>✧</span>
+          </button>
           <BrutalButton
             size="chip"
             mode="ghost"
@@ -1990,6 +2197,44 @@ export default function DocumentEditor() {
             <div className="flex flex-col items-center justify-center py-24 h-full bg-gray-200">
               <p className="text-gray-400 text-sm">Sin p&aacute;ginas</p>
             </div>
+          ) : useCanvasSpike ? (
+            <>
+              <DocumentCanvas
+                handleRef={spikeDocRef}
+                sections={sections}
+                themeCss={themeCssData?.css || ""}
+                tailwindConfig={themeCssData?.tailwindConfig || "{}"}
+                format={canvasFormat?.width && canvasFormat?.height ? { width: canvasFormat.width, height: canvasFormat.height } : undefined}
+                zoom={zoomPct / 100}
+                onZoomChange={(z) => setZoomPct(Math.round(z * 100))}
+                onUndo={doUndo}
+                onRedo={doRedo}
+                onMessage={handleSpikeMessage}
+              />
+              <DocumentActionBar
+                selection={spikeSelection}
+                iframeRect={spikeIframeRect}
+                themeColors={spikeThemeColors as Record<string, string>}
+                isRefining={spikeSelection?.sectionId ? refiningSections.has(spikeSelection.sectionId) : false}
+                onApplyClasses={applySpikeClasses}
+                onRefine={(instruction) => refineSpikeSection(instruction)}
+                onUpdateAttribute={(attr, value) => {
+                  if (spikeSelection?.sectionId && spikeSelection?.elementPath)
+                    postToSpikeSection(spikeSelection.sectionId, { action: "update-attribute", sectionId: spikeSelection.sectionId, elementPath: spikeSelection.elementPath, tagName: spikeSelection.tagName || "*", attr, value });
+                }}
+                onChangeTag={(newTag) => {
+                  if (spikeSelection?.sectionId && spikeSelection?.elementPath)
+                    postToSpikeSection(spikeSelection.sectionId, { action: "change-tag", sectionId: spikeSelection.sectionId, elementPath: spikeSelection.elementPath, newTag });
+                }}
+                onDeleteElement={() => {
+                  if (spikeSelection?.sectionId && spikeSelection?.elementPath)
+                    postToSpikeSection(spikeSelection.sectionId, { action: "delete-element", sectionId: spikeSelection.sectionId, elementPath: spikeSelection.elementPath });
+                  setSpikeSelection(null);
+                }}
+                onViewCode={() => { if (spikeSelection?.sectionId) handleOpenCode(spikeSelection.sectionId); }}
+                onClose={() => setSpikeSelection(null)}
+              />
+            </>
           ) : (
             <Suspense fallback={<div className="flex items-center justify-center h-full w-full bg-black text-gray-400">Cargando editor...</div>}>
               <GrapesEditor

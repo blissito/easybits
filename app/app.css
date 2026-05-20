@@ -334,6 +334,22 @@ body::selection {
   animation: fade-in-up 0.4s ease-out both;
 }
 
+/* "Editor Beta" magic button — animated gradient + twinkling sparkles */
+@keyframes eb-magic-shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes eb-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(25deg); }
+}
+.eb-beta-btn {
+  background-image: linear-gradient(110deg, #9870ED, #c4b1f7, #7c5ce0, #9870ED);
+  background-size: 200% 100%;
+  animation: eb-magic-shimmer 3.5s linear infinite;
+}
+.eb-twinkle { animation: eb-twinkle 1.8s ease-in-out infinite; }
+
 /* Custom AI Pulse Animation */
 @keyframes ai-pulse {
   0% {

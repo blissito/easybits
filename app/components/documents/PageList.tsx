@@ -11,6 +11,9 @@ interface BrandKit {
 }
 
 interface PageListProps {
+  /** Document id — used to fetch server-rendered page thumbnails. When absent
+   *  (e.g. book chapters, which aren't v4 landings), thumbnails are skipped. */
+  documentId?: string;
   sections: Section3[];
   selectedSectionIds: string[];
   onSelect: (id: string, multi: boolean) => void;
@@ -49,154 +52,131 @@ export interface Section3WithVersions extends Section3 {
   versions?: { html: string; timestamp: number }[];
 }
 
-/** Build HTML for the off-screen capture iframe */
-function buildCaptureHtml(sectionHtml: string, themeCssData?: { css: string; tailwindConfig: string }, pageW = 816, pageH = 1056): string {
-  return `<!DOCTYPE html><html><head>
-<meta charset="UTF-8">
-<script src="https://cdn.tailwindcss.com"><\/script>
-${themeCssData ? `<script>tailwind.config = ${themeCssData.tailwindConfig}<\/script>` : ""}
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; width: ${pageW}px; height: ${pageH}px; overflow: hidden; }
-.eb-capture-page { position: relative; width: ${pageW}px; height: ${pageH}px; overflow: hidden; }
-${themeCssData?.css || ""}
-</style>
-</head><body><div class="eb-capture-page">${sectionHtml}</div></body></html>`;
+/** Cheap, stable string hash (cyrb53) to detect when a page's render inputs change. */
+function hashStr(s: string): string {
+  let h1 = 0xdeadbeef ^ s.length;
+  let h2 = 0x41c6ce57 ^ s.length;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
-const THUMB_W = 200;
+function themeSignature(theme?: string, customColors?: CustomColors): string {
+  return theme === "custom" ? `custom:${JSON.stringify(customColors ?? {})}` : theme ?? "minimal";
+}
 
 /**
- * Captures static thumbnail images from sections using a single off-screen iframe.
- * Processes one section at a time via a queue to avoid N simultaneous Tailwind CDN loads.
+ * Fetches server-rendered PNG thumbnails (one per page) and exposes them as blob URLs.
+ * Replaces the old SVG-foreignObject capture, which produced black/blank thumbnails.
+ * Pages are rendered serially (one in-flight request at a time) to avoid hammering the
+ * server browser pool; a page is (re)rendered only when its HTML or the theme changes.
  */
-function useThumbnailCapture(
+function useServerThumbnails(
+  documentId: string | undefined,
   sections: Section3[],
-  themeCssData?: { css: string; tailwindConfig: string },
+  theme?: string,
+  customColors?: CustomColors,
   format?: { width: number; height: number }
 ) {
-  const pageW = format?.width ?? 816;
-  const pageH = format?.height ?? 1056;
-  const thumbH = Math.round(THUMB_W * (pageH / pageW));
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const queueRef = useRef<{ id: string; html: string }[]>([]);
+  const [failed, setFailed] = useState<Set<string>>(() => new Set());
+  const metaRef = useRef<Record<string, { hash: string; url: string }>>({});
+  const queueRef = useRef<{ id: string; html: string; hash: string }[]>([]);
   const busyRef = useRef(false);
-  const lastHtmlRef = useRef<Record<string, string>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Latest render params, read inside the fetch so processQueue stays stable.
+  const paramsRef = useRef({ theme, customColors, format });
+  paramsRef.current = { theme, customColors, format };
+
   const processQueue = useCallback(() => {
-    if (busyRef.current || queueRef.current.length === 0) return;
+    if (!documentId || busyRef.current || queueRef.current.length === 0) return;
     busyRef.current = true;
-
     const item = queueRef.current.shift()!;
+    const { theme, customColors, format } = paramsRef.current;
 
-    // Create iframe on demand
-    if (!iframeRef.current) {
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${pageW}px;height:${pageH}px;opacity:0;pointer-events:none;border:none;`;
-      document.body.appendChild(iframe);
-      iframeRef.current = iframe;
-    }
+    fetch(`/api/v2/documents/${documentId}/thumbnail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sectionId: item.id, html: item.html, theme, customColors, format }),
+    })
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("thumb failed"))))
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const prev = metaRef.current[item.id];
+        if (prev?.url) URL.revokeObjectURL(prev.url);
+        metaRef.current[item.id] = { hash: item.hash, url };
+        setThumbs((p) => ({ ...p, [item.id]: url }));
+        setFailed((p) => { if (!p.has(item.id)) return p; const n = new Set(p); n.delete(item.id); return n; });
+      })
+      .catch(() => {
+        // Record the attempted hash so we don't retry identical content in a loop;
+        // surface a placeholder instead of spinning forever.
+        metaRef.current[item.id] = { hash: item.hash, url: "" };
+        setFailed((p) => { const n = new Set(p); n.add(item.id); return n; });
+      })
+      .finally(() => {
+        busyRef.current = false;
+        processQueue();
+      });
+  }, [documentId]);
 
-    const iframe = iframeRef.current;
-    const html = buildCaptureHtml(item.html, themeCssData, pageW, pageH);
+  const themeSig = themeSignature(theme, customColors);
+  const formatSig = format ? `${format.width}x${format.height}` : "letter";
 
-    const onLoad = () => {
-      iframe.removeEventListener("load", onLoad);
-      // Wait for Tailwind CDN to process + images to load
-      setTimeout(() => {
-        try {
-          const doc = iframe.contentDocument;
-          if (!doc?.body) throw new Error("no doc");
-          const canvas = document.createElement("canvas");
-          canvas.width = THUMB_W * 2; // 2x for retina
-          canvas.height = thumbH * 2;
-          const ctx = canvas.getContext("2d")!;
-          ctx.scale(2, 2);
-
-          // Use svg foreignObject to render HTML to canvas
-          const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${THUMB_W}" height="${thumbH}">
-            <foreignObject width="${pageW}" height="${pageH}" transform="scale(${THUMB_W / pageW})">
-              ${new XMLSerializer().serializeToString(doc.documentElement)}
-            </foreignObject>
-          </svg>`;
-          const img = new Image();
-          img.onload = () => {
-            ctx.drawImage(img, 0, 0, THUMB_W, thumbH);
-            const dataUrl = canvas.toDataURL("image/png");
-            setThumbs((prev) => ({ ...prev, [item.id]: dataUrl }));
-            busyRef.current = false;
-            processQueue();
-          };
-          img.onerror = () => {
-            // foreignObject failed (cross-origin images etc) — fall back to blank
-            busyRef.current = false;
-            processQueue();
-          };
-          img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgData);
-        } catch {
-          busyRef.current = false;
-          processQueue();
-        }
-      }, 800); // Give Tailwind CDN time to JIT
-    };
-
-    iframe.addEventListener("load", onLoad);
-    iframe.srcdoc = html;
-  }, [themeCssData]);
-
-  // Queue sections that changed
   useEffect(() => {
+    if (!documentId) return;
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const content = sections.filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__");
       let changed = false;
       for (const s of content) {
-        if (lastHtmlRef.current[s.id] !== s.html) {
-          lastHtmlRef.current[s.id] = s.html;
-          // Remove duplicate queued items for this id
+        const h = hashStr(`${s.html}|${themeSig}|${formatSig}`);
+        const current = metaRef.current[s.id]?.hash;
+        const queued = queueRef.current.some((q) => q.id === s.id && q.hash === h);
+        if (current !== h && !queued) {
           queueRef.current = queueRef.current.filter((q) => q.id !== s.id);
-          queueRef.current.push({ id: s.id, html: s.html });
+          queueRef.current.push({ id: s.id, html: s.html, hash: h });
+          setFailed((p) => { if (!p.has(s.id)) return p; const n = new Set(p); n.delete(s.id); return n; });
           changed = true;
         }
       }
-      // Clean up removed sections
+      // Drop thumbnails for removed sections.
       const ids = new Set(content.map((s) => s.id));
-      for (const id of Object.keys(lastHtmlRef.current)) {
-        if (!ids.has(id)) delete lastHtmlRef.current[id];
+      for (const id of Object.keys(metaRef.current)) {
+        if (!ids.has(id)) {
+          if (metaRef.current[id].url) URL.revokeObjectURL(metaRef.current[id].url);
+          delete metaRef.current[id];
+          setThumbs((p) => {
+            const next = { ...p };
+            delete next[id];
+            return next;
+          });
+        }
       }
       if (changed) processQueue();
     }, 500);
 
     return () => clearTimeout(debounceRef.current);
-  }, [sections, processQueue]);
+  }, [sections, themeSig, formatSig, processQueue]);
 
-  // Re-capture all when theme changes
-  const prevThemeRef = useRef(themeCssData);
-  useEffect(() => {
-    if (prevThemeRef.current === themeCssData) return;
-    prevThemeRef.current = themeCssData;
-    // Force re-queue all
-    lastHtmlRef.current = {};
-    setThumbs({});
-  }, [themeCssData]);
-
-  // Cleanup iframe on unmount
+  // Revoke all blob URLs on unmount.
   useEffect(() => {
     return () => {
-      if (iframeRef.current) {
-        iframeRef.current.remove();
-        iframeRef.current = null;
-      }
+      for (const m of Object.values(metaRef.current)) if (m.url) URL.revokeObjectURL(m.url);
     };
   }, []);
 
-  return thumbs;
+  return { thumbs, failed };
 }
 
 export function PageList({
+  documentId,
   sections,
   selectedSectionIds,
   onSelect,
@@ -229,7 +209,7 @@ export function PageList({
   const sorted = [...sections]
     .filter((s) => s.id !== "__grapes_css__" && s.label !== "__css__")
     .sort((a, b) => a.order - b.order);
-  const thumbs = useThumbnailCapture(sections, themeCssData, format);
+  const { thumbs, failed } = useServerThumbnails(documentId, sections, theme, customColors, format);
   const thumbAspect = format
     ? `${format.width} / ${format.height}`
     : "8.5 / 11";
@@ -600,9 +580,13 @@ export function PageList({
                       className="absolute inset-0 w-full h-full object-cover object-top"
                       draggable={false}
                     />
-                  ) : (
+                  ) : documentId && !failed.has(section.id) ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
                       <div className="w-5 h-5 border-2 border-gray-200 border-t-brand-500 rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50 text-gray-300 text-2xl font-bold">
+                      {idx + 1}
                     </div>
                   )}
                   {/* Refine loading overlay */}

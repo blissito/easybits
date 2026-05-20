@@ -211,6 +211,7 @@ export default [
     route("documents/:id/deploy", "routes/api/v2/document-deploy.ts"),
     route("documents/:id/pdf", "routes/api/v2/document-pdf.ts"),
     route("documents/:id/images", "routes/api/v2/document-images.ts"),
+    route("documents/:id/thumbnail", "routes/api/v2/document-thumbnail.ts"),
     route("presentations/:id/pdf", "routes/api/v2/presentation-pdf.ts"),
     route("documents/:id/unpublish", "routes/api/v2/document-unpublish.ts"),
     route("documents/:id/clone", "routes/api/v2/document-clone.ts"),
