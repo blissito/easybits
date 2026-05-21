@@ -23,9 +23,11 @@ interface Props {
   onApplyClasses: (classes: string[]) => void;
   onChangeTag: (newTag: string) => void;
   onUpdateAttribute: (attr: string, value: string) => void;
-  onRefine: (instruction: string) => void;
+  /** Omit to hide the AI refine row (e.g. share mode, where it'd cost the owner's credits). */
+  onRefine?: (instruction: string) => void;
   onDeleteElement: () => void;
-  onViewCode: () => void;
+  /** Omit to hide the view-code button (e.g. share mode has no code panel). */
+  onViewCode?: () => void;
   onClose: () => void;
   pos?: { top: number; left: number } | null;
   onPosChange?: (p: { top: number; left: number }) => void;
@@ -177,7 +179,7 @@ export function DocumentActionBar({
       if (sRGBHex) { setPickedHex(sRGBHex); applyColor(mode, `[${sRGBHex}]`); }
     } catch { /* user cancelled */ }
   };
-  const submitRefine = () => { if (aiPrompt.trim() && !isRefining) { onRefine(aiPrompt.trim()); setAiPrompt(""); } };
+  const submitRefine = () => { if (aiPrompt.trim() && !isRefining && onRefine) { onRefine(aiPrompt.trim()); setAiPrompt(""); } };
 
   const swatches: { token: string; css: string; transparent?: boolean }[] = [
     { token: "transparent", css: "transparent", transparent: true },
@@ -293,32 +295,36 @@ export function DocumentActionBar({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3z" fill="currentColor"/></svg>
           </button>
         )}
-        <button onClick={onViewCode} title="Ver código" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-brand-50 font-mono text-xs font-black shrink-0">{"</>"}</button>
+        {onViewCode && (
+          <button onClick={onViewCode} title="Ver código" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-brand-50 font-mono text-xs font-black shrink-0">{"</>"}</button>
+        )}
         <button onClick={onDeleteElement} title="Eliminar elemento" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-red-100 text-red-600 shrink-0" aria-label="Eliminar">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
         </button>
         <button onClick={onClose} title="Cerrar" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-gray-100 font-black shrink-0" aria-label="Cerrar">×</button>
       </div>
 
-      {/* Row 2 — AI refine (section-level) */}
-      <div className="flex items-center gap-1.5 border-t-2 border-black/10 pt-1.5">
-        <input
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitRefine(); } }}
-          disabled={isRefining}
-          placeholder={isSectionRoot ? "Refinar esta página con IA…" : "Refinar este elemento con IA…"}
-          className="flex-1 border-2 border-black/30 rounded px-2 py-1 text-[11px] outline-none focus:border-brand-500 min-w-0 disabled:opacity-50"
-        />
-        <button
-          onClick={submitRefine}
-          disabled={isRefining || !aiPrompt.trim()}
-          className="px-2.5 py-1 rounded-md border-2 border-black bg-brand-500 text-white text-[10px] font-black uppercase tracking-wider hover:bg-brand-600 disabled:opacity-40 shrink-0 flex items-center gap-1"
-        >
-          {isRefining ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "✦"}
-          {isRefining ? "" : "AI"}
-        </button>
-      </div>
+      {/* Row 2 — AI refine (section-level). Hidden in share mode (no onRefine). */}
+      {onRefine && (
+        <div className="flex items-center gap-1.5 border-t-2 border-black/10 pt-1.5">
+          <input
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitRefine(); } }}
+            disabled={isRefining}
+            placeholder={isSectionRoot ? "Refinar esta página con IA…" : "Refinar este elemento con IA…"}
+            className="flex-1 border-2 border-black/30 rounded px-2 py-1 text-[11px] outline-none focus:border-brand-500 min-w-0 disabled:opacity-50"
+          />
+          <button
+            onClick={submitRefine}
+            disabled={isRefining || !aiPrompt.trim()}
+            className="px-2.5 py-1 rounded-md border-2 border-black bg-brand-500 text-white text-[10px] font-black uppercase tracking-wider hover:bg-brand-600 disabled:opacity-40 shrink-0 flex items-center gap-1"
+          >
+            {isRefining ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "✦"}
+            {isRefining ? "" : "AI"}
+          </button>
+        </div>
+      )}
 
       {/* Row 3 — attributes (img / video / link) */}
       {(isImg || isVideo || isLink) && (

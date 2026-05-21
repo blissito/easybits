@@ -1,22 +1,21 @@
 /**
- * Lightweight share editor for documents. Reuses the landings3 Canvas + FloatingToolbar
- * stack but renders multipage with format-aware page sizing and persists changes via the
- * share-token endpoint instead of the dash editor's owner-only one.
- *
- * What's deliberately disabled vs the dash editor:
- *   - AI refine / variants — costs the owner's credits; not exposed in v1.
- *   - Section move/delete — share invitee shouldn't reorder doc structure.
- *   - View code panel — not needed for content edits.
- *
- * What's enabled:
- *   - Inline text editing (contenteditable in the iframe).
- *   - FloatingToolbar tag swap, color swatches, size presets, delete element, attribute edits.
+ * Share editor for documents. Reuses the SAME canvas + toolbar as the dash editor
+ * (DocumentCanvas + DocumentActionBar) so both stay in sync — there is no longer a
+ * separate share-only toolbar. Differences vs the dash editor:
+ *   - No AI refine (omitting onRefine hides the row) — it'd cost the owner's credits.
+ *   - No code panel (omitting onViewCode hides the button).
+ *   - Persistence goes through the share-token endpoint, not the owner-only one.
  */
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Canvas, type CanvasHandle } from "~/components/landings3/Canvas";
-import ShareInspector from "~/components/share/ShareInspector";
+import {
+  buildSingleThemeCss,
+  buildCustomTheme,
+  type CustomColors,
+} from "@easybits.cloud/html-tailwind-generator";
+import { DocumentCanvas, type DocumentCanvasHandle } from "~/components/documents/DocumentCanvas";
+import { DocumentActionBar } from "~/components/documents/DocumentActionBar";
+import { LANDING_THEMES } from "~/lib/landing3/themes";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
-import { LANDING_THEMES, buildCustomThemeCss, type CustomColors } from "~/lib/landing3/themes";
 
 interface Props {
   landingId: string;
@@ -32,6 +31,8 @@ interface Props {
 
 type SaveState = "idle" | "saving" | "error";
 
+const LETTER_PX = 816;
+
 export default function DocumentShareEditor({
   landingId,
   landingName,
@@ -44,19 +45,36 @@ export default function DocumentShareEditor({
 }: Props) {
   const [sections, setSections] = useState<Section3[]>(initialSections);
   const [selection, setSelection] = useState<IframeMessage | null>(null);
-  const [saveState, setSaveState] = useState<SaveState>("idle");
-  const [canvasReady, setCanvasReady] = useState(false);
   const [iframeRect, setIframeRect] = useState<DOMRect | null>(null);
-  const iframeRectRef = useRef<DOMRect | null>(null);
-  const canvasRef = useRef<CanvasHandle>(null);
-  const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const sectionsRef = useRef(sections);
-  sectionsRef.current = sections;
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [zoom, setZoom] = useState(1);
+  // Parked position of the action bar — persists across selection changes, resets on close.
+  const [actionBarPos, setActionBarPos] = useState<{ top: number; left: number } | null>(null);
 
-  // Resolve theme colors for FloatingToolbar swatches. Merge the doc's brand-kit colors
-  // (primary/secondary/accent/surface from metadata.customColors) with a base theme so the
-  // shape FloatingToolbar expects (with surface-alt, on-surface, etc.) is complete.
-  const resolvedThemeColors = useMemo(() => {
+  const canvasRef = useRef<DocumentCanvasHandle>(null);
+  const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  useEffect(() => { if (!selection) setActionBarPos(null); }, [selection]);
+
+  // Theme CSS + tailwind config injected into each page iframe (same shape the dash editor
+  // builds for DocumentCanvas). Custom palette → CSS variables; otherwise a named theme.
+  const themeCssData = useMemo(() => {
+    if (customColors) {
+      const t = buildCustomTheme(customColors as unknown as CustomColors);
+      const css = `:root {\n${Object.entries(t.colors).map(([k, v]) => `  --color-${k}: ${v};`).join("\n")}\n}`;
+      const { tailwindConfig } = buildSingleThemeCss("minimal");
+      return { css, tailwindConfig };
+    }
+    return buildSingleThemeCss(theme);
+  }, [theme, customColors]);
+
+  // Palette for the toolbar color swatches (merge brand-kit colors over a base theme so the
+  // shape DocumentActionBar expects — primary/secondary/accent/surface — is complete).
+  const themeColors = useMemo(() => {
     const base = LANDING_THEMES.find((t) => t.id === theme) ?? LANDING_THEMES[0];
     if (!customColors) return base.colors;
     return {
@@ -68,48 +86,18 @@ export default function DocumentShareEditor({
     };
   }, [theme, customColors]);
 
-  // Inject document-aware page CSS into the iframe. CSS `zoom` needs a literal unitless
-  // number — `calc()` can't divide by px to get one, so we compute it in JS from the parent
-  // viewport width and re-push on resize.
+  // Fit each page to the viewport width on mount + resize.
   useEffect(() => {
-    if (!canvasReady) return;
-    const w = format?.width;
-    const h = format?.height;
+    const fit = () => {
+      const w = format?.width || LETTER_PX;
+      setZoom(Math.min(1, Math.max(0.1, (window.innerWidth - 48) / w)));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [format]);
 
-    // Brand-kit CSS variables (--color-primary, etc.) so utilities like bg-primary,
-    // text-accent, etc. resolve to the doc's actual colors when applied via swatches.
-    const brandCss = customColors ? buildCustomThemeCss(customColors as unknown as CustomColors) : "";
-
-    function buildAndPushCss() {
-      let pageCss: string;
-      const viewportW = window.innerWidth;
-      const padding = 32;
-      if (w && h) {
-        const zoom = Math.min(1, Math.max(0.1, (viewportW - padding) / w));
-        pageCss = `body { background: #e5e7eb !important; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
-[data-section-id] { width: ${w}px; height: ${h}px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
-[data-section-id] > section { width: 100% !important; height: 100% !important; }`;
-      } else {
-        // Letter default: 8.5in ≈ 816px @ 96dpi. En desktop deja la página
-        // a tamaño real; en mobile aplica zoom para que la hoja completa
-        // entre en el viewport sin scroll horizontal.
-        const LETTER_PX = 816;
-        const zoom = Math.min(1, Math.max(0.1, (viewportW - padding) / LETTER_PX));
-        pageCss = `body { background: #e5e7eb !important; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px 0; min-height: 100vh; margin: 0; }
-[data-section-id] { width: 8.5in; height: 11in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); overflow: hidden; zoom: ${zoom.toFixed(3)}; border-radius: 4px; }
-[data-section-id] > section { width: 100% !important; height: 100% !important; }`;
-      }
-      // set-custom-css replaces the entire style tag content, so combine brand + page CSS.
-      canvasRef.current?.postMessage({ action: "set-custom-css", css: brandCss + "\n" + pageCss });
-    }
-
-    buildAndPushCss();
-    const onResize = () => buildAndPushCss();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [format, canvasReady, customColors]);
-
-  // Persist section changes per-id with debounce so rapid typing doesn't hammer the server.
+  // Persist a section's HTML via the share-token endpoint, debounced per-id.
   const persistSection = useCallback((sectionId: string, html: string) => {
     const existing = saveTimers.current.get(sectionId);
     if (existing) clearTimeout(existing);
@@ -133,55 +121,76 @@ export default function DocumentShareEditor({
     saveTimers.current.set(sectionId, timer);
   }, [token]);
 
-  const handleIframeMessage = useCallback((msg: IframeMessage) => {
-    console.log("[share/parent] msg", msg.type, {
-      sectionId: (msg as { sectionId?: string }).sectionId,
-      className: (msg as { className?: string }).className,
-    });
-    // Refresh iframeRect on every message so the overlay positions against an up-to-date rect
-    // even after scroll/resize between selections.
-    if (iframeRectRef.current) setIframeRect(iframeRectRef.current);
+  // Messages from the per-page DocumentCanvas iframes.
+  const handleMessage = useCallback((msg: IframeMessage) => {
+    if ((msg.type as string) === "escape") { setSelection(null); return; }
     if (msg.type === "element-selected") {
-      setSelection(msg);
+      // The iframe is CSS-scaled by zoom; its reported rect is unscaled. Pre-scale so the
+      // toolbar (which adds iframeRect.top + rect.top) lands on the element.
+      const z = zoomRef.current;
+      const r = (msg as { rect?: { top: number; left: number; width: number; height: number } }).rect;
+      const scaled = r
+        ? { ...msg, rect: { top: r.top * z, left: r.left * z, width: r.width * z, height: r.height * z } }
+        : msg;
+      setSelection(scaled);
+      if (msg.sectionId) setIframeRect(canvasRef.current?.getIframeRect(msg.sectionId) ?? null);
     } else if (msg.type === "element-deselected") {
       setSelection(null);
-    } else if (msg.type === "text-edited" && msg.sectionId) {
+    } else if ((msg.type === "text-edited" || msg.type === "section-html-updated") && msg.sectionId) {
       const sectionHtml = (msg as { sectionHtml?: string }).sectionHtml;
-      if (sectionHtml) {
-        setSections((prev) => prev.map((s) => (s.id === msg.sectionId ? { ...s, html: sectionHtml } : s)));
-        persistSection(msg.sectionId, sectionHtml);
-      }
-    } else if (msg.type === "section-html-updated" && msg.sectionId && msg.sectionHtml) {
-      setSections((prev) => prev.map((s) => (s.id === msg.sectionId ? { ...s, html: msg.sectionHtml! } : s)));
-      persistSection(msg.sectionId, msg.sectionHtml);
+      if (!sectionHtml) return;
+      setSections((prev) => prev.map((s) => (s.id === msg.sectionId ? { ...s, html: sectionHtml } : s)));
+      persistSection(msg.sectionId, sectionHtml);
     }
   }, [persistSection]);
 
-  // Single-flow mutation: compute the next class string locally and write it via update-attribute.
-  // The iframe handler emits 'section-html-updated' which gets persisted by handleIframeMessage.
-  function applyClasses({ add = [], remove = [] }: { add?: string[]; remove?: string[] }) {
+  // Keep the action bar glued to its element as the canvas scrolls (rAF-coalesced).
+  const lastScrollTop = useRef(0);
+  const scrollRaf = useRef<number | null>(null);
+  const pendingScrollTop = useRef(0);
+  const handleScroll = useCallback((scrollTop: number) => {
+    pendingScrollTop.current = scrollTop;
+    if (scrollRaf.current != null) return;
+    scrollRaf.current = requestAnimationFrame(() => {
+      scrollRaf.current = null;
+      const delta = pendingScrollTop.current - lastScrollTop.current;
+      lastScrollTop.current = pendingScrollTop.current;
+      if (!delta) return;
+      const sid = selectionRef.current?.sectionId;
+      if (!sid) return;
+      setIframeRect(canvasRef.current?.getIframeRect(sid) ?? null);
+      setActionBarPos((p) => (p ? { ...p, top: p.top - delta } : p));
+    });
+  }, []);
+
+  // Edit ops — post to the selected page's iframe (same protocol as the dash editor).
+  const applyClasses = useCallback((nextClasses: string[]) => {
     if (!selection?.sectionId || !selection?.elementPath) return;
-    const current = (selection.className || "").split(/\s+/).filter(Boolean);
-    const next = current.filter((c) => !remove.includes(c));
-    for (const c of add) if (!next.includes(c)) next.push(c);
-    console.log("[share/parent] applyClasses", { add, remove, current, next });
-    canvasRef.current?.postMessage({
+    const value = nextClasses.join(" ");
+    canvasRef.current?.postToSection(selection.sectionId, {
       action: "update-attribute",
       sectionId: selection.sectionId,
       elementPath: selection.elementPath,
       tagName: selection.tagName || "*",
       attr: "class",
-      value: next.join(" "),
+      value,
     });
-    // Optimistic update of selection so the chip list re-renders immediately.
-    setSelection({ ...selection, className: next.join(" ") });
-  }
+    setSelection((prev) => (prev ? { ...prev, className: value } : prev));
+  }, [selection]);
 
-  // Generic attribute update — used to surgically clean inline style props that conflict
-  // with utility classes (e.g. `style="color:#hex"` when applying a text-* swatch).
-  function updateSelectedAttribute(attr: string, value: string) {
+  const changeTag = useCallback((newTag: string) => {
     if (!selection?.sectionId || !selection?.elementPath) return;
-    canvasRef.current?.postMessage({
+    canvasRef.current?.postToSection(selection.sectionId, {
+      action: "change-tag",
+      sectionId: selection.sectionId,
+      elementPath: selection.elementPath,
+      newTag,
+    });
+  }, [selection]);
+
+  const updateAttribute = useCallback((attr: string, value: string) => {
+    if (!selection?.sectionId || !selection?.elementPath) return;
+    canvasRef.current?.postToSection(selection.sectionId, {
       action: "update-attribute",
       sectionId: selection.sectionId,
       elementPath: selection.elementPath,
@@ -189,21 +198,17 @@ export default function DocumentShareEditor({
       attr,
       value,
     });
-    if (attr === "style") {
-      const updatedAttrs = { ...(selection.attrs || {}), style: value };
-      setSelection({ ...selection, attrs: updatedAttrs });
-    }
-  }
+  }, [selection]);
 
-  function deleteSelectedElement() {
+  const deleteElement = useCallback(() => {
     if (!selection?.sectionId || !selection?.elementPath) return;
-    canvasRef.current?.postMessage({
+    canvasRef.current?.postToSection(selection.sectionId, {
       action: "delete-element",
       sectionId: selection.sectionId,
       elementPath: selection.elementPath,
     });
     setSelection(null);
-  }
+  }, [selection]);
 
   const saveLabel =
     saveState === "saving" ? "Guardando…" :
@@ -242,23 +247,29 @@ export default function DocumentShareEditor({
       </header>
 
       <div className="flex-1 relative overflow-hidden">
-        <Canvas
-          ref={canvasRef}
+        <DocumentCanvas
+          handleRef={canvasRef}
           sections={sections}
-          theme={theme}
-          onMessage={handleIframeMessage}
-          iframeRectRef={iframeRectRef}
-          onReady={() => setCanvasReady(true)}
+          themeCss={themeCssData?.css || ""}
+          tailwindConfig={themeCssData?.tailwindConfig || "{}"}
+          format={format ?? undefined}
+          zoom={zoom}
+          onZoomChange={setZoom}
+          onMessage={handleMessage}
+          onScroll={handleScroll}
         />
 
-        <ShareInspector
+        <DocumentActionBar
           selection={selection}
           iframeRect={iframeRect}
-          themeColors={resolvedThemeColors}
+          themeColors={themeColors as Record<string, string>}
           onApplyClasses={applyClasses}
-          onUpdateAttribute={updateSelectedAttribute}
-          onDeleteElement={deleteSelectedElement}
+          onChangeTag={changeTag}
+          onUpdateAttribute={updateAttribute}
+          onDeleteElement={deleteElement}
           onClose={() => setSelection(null)}
+          pos={actionBarPos}
+          onPosChange={setActionBarPos}
         />
       </div>
     </article>
