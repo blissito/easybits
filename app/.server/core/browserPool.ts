@@ -147,6 +147,114 @@ export async function setContentAndWaitForAssets(
   }, opts?.perAssetTimeoutMs ?? 8000);
 }
 
+/**
+ * Downscale + recompress oversized `<img>` elements to their rendered display
+ * box before exporting to PDF/PNG. Chromium embeds source-resolution image bytes
+ * regardless of CSS display size, so a 528KB PNG shown at 40px stayed 528KB —
+ * bloating PDFs to 5–9MB and tripping container timeouts. This measures each
+ * image's laid-out box, refetches the source, resizes to box × `factor` (for
+ * print sharpness) with sharp, recompresses to WebP, and swaps the `src` for a
+ * data URL in place. Per-image failures leave the original `src` untouched.
+ *
+ * Call AFTER setContentAndWaitForAssets and BEFORE page.pdf()/page.screenshot().
+ * Set DISABLE_EXPORT_IMAGE_OPT=1 to bypass.
+ */
+export async function optimizePageImages(
+  page: Page,
+  opts?: { factor?: number; maxDimension?: number; quality?: number; maxConcurrent?: number }
+): Promise<void> {
+  if (process.env.DISABLE_EXPORT_IMAGE_OPT === "1") return;
+
+  const factor = opts?.factor ?? 2;
+  const maxDimension = opts?.maxDimension ?? 2000;
+  const quality = opts?.quality ?? 80;
+  const maxConcurrent = opts?.maxConcurrent ?? 6;
+
+  const candidates = await page.evaluate(() =>
+    Array.from(document.images).map((img, idx) => {
+      const r = img.getBoundingClientRect();
+      return {
+        idx,
+        src: img.currentSrc || img.src,
+        displayW: Math.round(r.width),
+        displayH: Math.round(r.height),
+        naturalW: img.naturalWidth,
+        naturalH: img.naturalHeight,
+      };
+    })
+  );
+
+  // Only touch remote raster images whose source is meaningfully bigger than the
+  // box they render in. Skip data:/blob:/relative, SVG (vector), and hidden imgs.
+  const targetLongestOf = (displayW: number, displayH: number) =>
+    Math.min(maxDimension, Math.round(Math.max(displayW, displayH) * factor));
+  const targets = candidates.filter((c) => {
+    if (!c.src || !/^https?:\/\//i.test(c.src)) return false;
+    if (/\.svg(\?|#|$)/i.test(c.src)) return false;
+    if (c.displayW < 1 || c.displayH < 1) return false;
+    if (c.naturalW < 1 || c.naturalH < 1) return false;
+    return Math.max(c.naturalW, c.naturalH) > targetLongestOf(c.displayW, c.displayH) * 1.15;
+  });
+  if (targets.length === 0) return;
+
+  const sharp = (await import("sharp")).default;
+  const replacements: { idx: number; dataUrl: string }[] = [];
+
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < targets.length) {
+      const c = targets[cursor++];
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        let buf: Buffer;
+        try {
+          const res = await fetch(c.src, { signal: ctrl.signal });
+          if (!res.ok) continue;
+          if ((res.headers.get("content-type") || "").includes("svg")) continue;
+          buf = Buffer.from(await res.arrayBuffer());
+        } finally {
+          clearTimeout(timer);
+        }
+        const longest = targetLongestOf(c.displayW, c.displayH);
+        const resize = c.naturalW >= c.naturalH
+          ? { width: longest, withoutEnlargement: true }
+          : { height: longest, withoutEnlargement: true };
+        const out = await sharp(buf, { failOn: "none" })
+          .rotate()
+          .resize(resize)
+          .webp({ quality })
+          .toBuffer();
+        // Don't swap if recompression didn't actually shrink the bytes.
+        if (out.length >= buf.length) continue;
+        replacements.push({ idx: c.idx, dataUrl: `data:image/webp;base64,${out.toString("base64")}` });
+      } catch {
+        // Best-effort: leave the original src on any fetch/decode failure.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(maxConcurrent, targets.length) }, worker));
+  if (replacements.length === 0) return;
+
+  await page.evaluate(
+    (reps) =>
+      Promise.all(
+        reps.map(
+          ({ idx, dataUrl }) =>
+            new Promise<void>((resolve) => {
+              const img = document.images[idx];
+              if (!img) return resolve();
+              img.removeAttribute("srcset");
+              img.addEventListener("load", () => resolve(), { once: true });
+              img.addEventListener("error", () => resolve(), { once: true });
+              img.src = dataUrl;
+            })
+        )
+      ).then(() => undefined),
+    replacements
+  );
+}
+
 /** Graceful shutdown — close the browser if running */
 export async function shutdownPool() {
   if (browserPromise) {

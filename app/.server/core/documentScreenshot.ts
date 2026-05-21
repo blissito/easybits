@@ -7,7 +7,7 @@ import { buildDocumentPrintHtml } from "~/lib/documents/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
-import { withPage, setContentAndWaitForAssets } from "./browserPool";
+import { withPage, setContentAndWaitForAssets, optimizePageImages } from "./browserPool";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import { resolveLandingPaletteWithBrandKit } from "../themePalette";
 
@@ -217,6 +217,7 @@ export async function takeDocumentPdf(
   try {
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
+      await optimizePageImages(page);
       if (format?.width && format?.height) {
         return await page.pdf({
           width: `${format.width}px`,
@@ -277,6 +278,7 @@ export async function takeOgScreenshot(
   try {
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, ogHtml);
+      await optimizePageImages(page);
       return await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
     }, { viewport: { width: 1200, height: 630 } });
   } catch (err: any) {
@@ -352,6 +354,7 @@ export async function exportDocumentImages(
         );
         const optimizedHtml = await replaceCdnWithCompiledCSS(html);
         await setContentAndWaitForAssets(page, optimizedHtml);
+        await optimizePageImages(page);
         const buffer = await page.screenshot({
           type: "png",
           clip: { x: 0, y: 0, width: format.width, height: format.height },
