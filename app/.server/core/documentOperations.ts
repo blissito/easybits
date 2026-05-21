@@ -13,6 +13,7 @@ import { enrichImages, findImageSlots, generateSvg } from "@easybits.cloud/html-
 import { sanitizeSemanticColors } from "../sanitizeColors";
 import { docEvents } from "./docEvents";
 import type { Section3 } from "~/lib/landing3/types";
+import { normalizeDocumentPageHtml } from "~/lib/documents/normalizePageHtml";
 import { getPlatformDefaultClient, getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import logger from "../logger";
 
@@ -356,6 +357,12 @@ export async function updateDocument(
 }
 
 /** Update the full HTML of a single page in a document */
+/** Page fill height for HTML normalization — derived from the doc's stored format (default Letter). */
+function pageMinHeight(doc: { metadata?: unknown }): string {
+  const h = (doc.metadata as { format?: { height?: number } } | null)?.format?.height;
+  return h ? `${h}px` : "11in";
+}
+
 export async function setPageHtml(
   ctx: AuthContext,
   id: string,
@@ -372,13 +379,14 @@ export async function setPageHtml(
   const idx = sections.findIndex((s) => s.id === pageId);
   if (idx === -1) throwJson("Page not found", 404);
 
-  if ((sections[idx].html ?? "") === html) {
+  const normalized = normalizeDocumentPageHtml(html, { minHeight: pageMinHeight(doc) });
+  if ((sections[idx].html ?? "") === normalized) {
     logNoop("set_page_html", id, "html unchanged");
     return { success: true, noop: true, reason: "html unchanged", pageId };
   }
 
   const previousSections = JSON.parse(JSON.stringify(sections));
-  sections[idx] = { ...sections[idx], html };
+  sections[idx] = { ...sections[idx], html: normalized };
   const result = await db.landing.update({ where: { id }, data: { sections: sections as any, previousSections } });
   docEvents.emit("doc:changed", { id, sections: result.sections, updatedAt: result.updatedAt });
   return { success: true, pageId };
@@ -532,7 +540,9 @@ export async function addPage(
   const newSection: Section3 = {
     id: crypto.randomUUID(),
     order: 0,
-    html: opts.html || "<section class=\"w-[8.5in] h-[11in] flex flex-col relative overflow-hidden bg-surface\"><div class=\"flex-1 flex items-center justify-center text-on-surface-muted\">New page</div></section>",
+    html: opts.html
+      ? normalizeDocumentPageHtml(opts.html, { minHeight: pageMinHeight(doc) })
+      : "<section class=\"w-[8.5in] h-[11in] flex flex-col relative overflow-hidden bg-surface\"><div class=\"flex-1 flex items-center justify-center text-on-surface-muted\">New page</div></section>",
     label: opts.label || `Page ${sections.length + 1}`,
   };
 
