@@ -58,6 +58,7 @@ export default function DocumentShareEditor({
   const [zoom, setZoom] = useState(1);
   // Parked position of the action bar — persists across selection changes, resets on close.
   const [actionBarPos, setActionBarPos] = useState<{ top: number; left: number } | null>(null);
+  const [pdfState, setPdfState] = useState<"idle" | "loading" | "error">("idle");
 
   const canvasRef = useRef<DocumentCanvasHandle>(null);
   const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -254,6 +255,36 @@ export default function DocumentShareEditor({
     setSelection(null);
   }, [selection]);
 
+  // PDF download — server-side Playwright render takes seconds, so fetch the blob (showing a
+  // spinner) instead of a bare <a> navigation that gives no feedback. No toast here (the share
+  // page has no Toaster shell), so loading/error state lives inside the button itself.
+  const downloadPdf = useCallback(async () => {
+    if (pdfState === "loading") return;
+    setPdfState("loading");
+    try {
+      const res = await fetch(
+        `/api/v2/documents/${landingId}/pdf?token=${encodeURIComponent(token)}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const safeName = (landingName || "documento").replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setPdfState("idle");
+    } catch (err) {
+      console.error("[share-editor] pdf download failed", err);
+      setPdfState("error");
+      setTimeout(() => setPdfState("idle"), 4000);
+    }
+  }, [pdfState, landingId, token, landingName]);
+
   const saveLabel =
     saveState === "saving" ? "Guardando…" :
     saveState === "error" ? "Error al guardar" :
@@ -272,18 +303,23 @@ export default function DocumentShareEditor({
           <span className={`text-xs ${saveState === "error" ? "text-red-600 font-bold" : "text-gray-500"}`}>
             {saveLabel}
           </span>
-          <a
-            href={`/api/v2/documents/${landingId}/pdf?token=${encodeURIComponent(token)}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border-2 border-black bg-white hover:bg-brand-50 font-bold uppercase shrink-0 text-[10px] transition-colors"
-            title="Descargar PDF"
+          <button
+            onClick={downloadPdf}
+            disabled={pdfState === "loading"}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border-2 border-black font-bold uppercase shrink-0 text-[10px] transition-colors disabled:cursor-wait ${pdfState === "error" ? "bg-red-50 text-red-700" : "bg-white hover:bg-brand-50"}`}
+            title={pdfState === "error" ? "Error al generar PDF — reintenta" : "Descargar PDF"}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            PDF
-          </a>
+            {pdfState === "loading" ? (
+              <span className="w-3 h-3 border-2 border-gray-300 border-t-black rounded-full animate-spin" aria-hidden />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            )}
+            {pdfState === "loading" ? "Generando…" : pdfState === "error" ? "Error" : "PDF"}
+          </button>
           <span className="px-2 py-0.5 rounded-full border-2 border-black bg-white font-bold uppercase shrink-0 text-[10px]">
             Edición
           </span>
