@@ -13,6 +13,24 @@ import type { Section3 } from "~/lib/landing3/types";
 
 const MAX_HTML_BYTES = 256 * 1024; // 256 KB per section is plenty; rejects pathological payloads
 
+// Mongo write-conflict (P2034) retry with backoff. The owner editing in the dash and a guest
+// editing via this endpoint write to the same landing doc; a transient conflict here would
+// otherwise surface as a 500 and silently drop the guest's edit until they edit again.
+async function withRetry<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (err?.code === "P2034" && i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 50 * 2 ** i + Math.random() * 100));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -64,10 +82,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const updated: Section3[] = sections.map((s, i) => (i === idx ? { ...s, html } : s));
 
-  await db.landing.update({
-    where: { id: landing.id },
-    data: { sections: updated as any },
-  });
+  await withRetry(() =>
+    db.landing.update({
+      where: { id: landing.id },
+      data: { sections: updated as any },
+    })
+  );
 
   return Response.json({ ok: true });
 }
