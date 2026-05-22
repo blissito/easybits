@@ -255,6 +255,45 @@ export async function optimizePageImages(
   );
 }
 
+/**
+ * Replace <img> that failed to load (blocked host like imgur → 429, 404, timeout) with a
+ * neutral placeholder, so server-side renders (PDF/PNG/thumbnails) never ship a broken-image
+ * glyph. Preserves the element's box (size + class) so layout doesn't shift; once the image
+ * is ingested to our own CDN it loads normally and this no-ops. Copy is intentionally neutral
+ * ("Imagen no disponible") — it must not leak the technical reason to the document's reader.
+ *
+ * Call AFTER setContentAndWaitForAssets (images have had their load window). Returns the count.
+ */
+export async function replaceBrokenImages(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const broken = Array.from(document.images).filter(
+      (img) => !img.complete || img.naturalWidth === 0
+    );
+    for (const img of broken) {
+      const r = img.getBoundingClientRect();
+      const w = Math.round(r.width || img.width || 0);
+      const h = Math.round(r.height || img.height || 0);
+      const ph = document.createElement("div");
+      ph.className = img.className;
+      ph.setAttribute(
+        "style",
+        `${img.getAttribute("style") || ""};` +
+          `display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;` +
+          `${w ? `width:${w}px;` : ""}${h ? `height:${h}px;` : ""}` +
+          `background:#f3f4f6;color:#9ca3af;border:1px solid #e5e7eb;border-radius:8px;` +
+          `font-family:system-ui,sans-serif;font-size:12px;font-weight:600;overflow:hidden;box-sizing:border-box;`
+      );
+      ph.innerHTML =
+        `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">` +
+        `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>` +
+        `<path d="M21 15l-5-5L5 21"/></svg>` +
+        (Math.min(w, h) >= 64 ? `<span>Imagen no disponible</span>` : ``);
+      img.replaceWith(ph);
+    }
+    return broken.length;
+  });
+}
+
 /** Graceful shutdown — close the browser if running */
 export async function shutdownPool() {
   if (browserPromise) {
