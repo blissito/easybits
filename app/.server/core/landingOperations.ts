@@ -228,7 +228,7 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     if (!pdfBuffer && landing.version === 4) {
       try {
         const { takeDocumentPdf } = await import("./documentScreenshot");
-        pdfBuffer = await takeDocumentPdf(ctx.user.id, landing.id);
+        pdfBuffer = (await takeDocumentPdf(ctx.user.id, landing.id))?.pdf ?? null;
       } catch (err) {
         console.error("[deployLanding] Playwright PDF error:", err);
       }

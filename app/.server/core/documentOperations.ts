@@ -1362,9 +1362,9 @@ export async function createQuotation(
 
   // Generate PDF via Playwright (no deploy, no S3)
   const { takeDocumentPdf } = await import("./documentScreenshot");
-  const pdf = await takeDocumentPdf(ctx.user.id, doc.id);
+  const pdfResult = await takeDocumentPdf(ctx.user.id, doc.id);
 
-  return { document: doc, pdf };
+  return { document: doc, pdf: pdfResult?.pdf ?? null, brokenImages: pdfResult?.brokenImages ?? 0 };
 }
 
 // ─── Structured document helpers ─────────────────────────────────────
@@ -1404,8 +1404,8 @@ async function createStructuredDoc(
   });
 
   const { takeDocumentPdf } = await import("./documentScreenshot");
-  const pdf = await takeDocumentPdf(ctx.user.id, doc.id);
-  return { document: doc, pdf };
+  const pdfResult = await takeDocumentPdf(ctx.user.id, doc.id);
+  return { document: doc, pdf: pdfResult?.pdf ?? null, brokenImages: pdfResult?.brokenImages ?? 0 };
 }
 
 async function editStructuredDoc(
@@ -1426,8 +1426,8 @@ async function editStructuredDoc(
   });
 
   const { takeDocumentPdf } = await import("./documentScreenshot");
-  const pdf = await takeDocumentPdf(ctx.user.id, updated.id);
-  return { document: updated, pdf };
+  const pdfResult = await takeDocumentPdf(ctx.user.id, updated.id);
+  return { document: updated, pdf: pdfResult?.pdf ?? null, brokenImages: pdfResult?.brokenImages ?? 0 };
 }
 
 // ─── Edit Quotation ──────────────────────────────────────────────────

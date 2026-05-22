@@ -169,12 +169,14 @@ export async function takeDocumentScreenshot(
   }
 }
 
-/** Generate a PDF of the document (or a subset of its pages) using Playwright. Returns Buffer or null. */
+/** Generate a PDF of the document (or a subset of its pages) using Playwright. Returns the
+ * PDF buffer plus `brokenImages` — the count of <img> that failed to load (e.g. an external
+ * host that blocks Fly's IP) and were swapped for a placeholder. null if the doc has no pages. */
 export async function takeDocumentPdf(
   userId: string,
   documentId: string,
   opts: { sectionIds?: string[] } = {}
-): Promise<Buffer | null> {
+): Promise<{ pdf: Buffer; brokenImages: number } | null> {
   if (!/^[0-9a-fA-F]{24}$/.test(documentId)) return null;
 
   const doc = await db.landing.findUnique({ where: { id: documentId } });
@@ -220,17 +222,20 @@ export async function takeDocumentPdf(
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
       await optimizePageImages(page);
-      await replaceBrokenImages(page);
+      const brokenImages = await replaceBrokenImages(page);
+      let pdf: Buffer;
       if (format?.width && format?.height) {
-        return await page.pdf({
+        pdf = await page.pdf({
           width: `${format.width}px`,
           height: `${format.height}px`,
           printBackground: true,
         });
+      } else {
+        // Detect landscape sections (w-[11in] h-[8.5in])
+        const isLandscape = filteredContent.some((s) => s.html?.includes('w-[11in]'));
+        pdf = await page.pdf({ format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) });
       }
-      // Detect landscape sections (w-[11in] h-[8.5in])
-      const isLandscape = filteredContent.some((s) => s.html?.includes('w-[11in]'));
-      return await page.pdf({ format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) });
+      return { pdf, brokenImages };
     });
   } catch (err: any) {
     console.error("[takeDocumentPdf] error:", err.message);

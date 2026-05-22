@@ -36,10 +36,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const sectionIds = sectionsParam
     ? sectionsParam.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
-  const pdf = await takeDocumentPdf(ownerUserId, params.id!, { sectionIds });
-  if (!pdf) {
+  const result = await takeDocumentPdf(ownerUserId, params.id!, { sectionIds });
+  if (!result) {
     return Response.json({ error: "Document not found or has no pages" }, { status: 404 });
   }
+  const { pdf, brokenImages } = result;
 
   // Fetch doc name for filename
   const doc = await db.landing.findUnique({ where: { id: params.id! }, select: { name: true } });
@@ -50,6 +51,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${filename}"`,
+      // Surfaces how many <img> couldn't be fetched server-side (placeholdered in the PDF).
+      "X-Broken-Images": String(brokenImages),
     },
   });
 }

@@ -1645,10 +1645,11 @@ function registerDocTools(server: McpServer) {
       // pdf
       const { takeDocumentPdf } = await import("../core/documentScreenshot");
       const { nanoid } = await import("nanoid");
-      const pdf = await takeDocumentPdf(ctx.user.id, params.documentId, { sectionIds: params.sectionIds });
-      if (!pdf) {
+      const pdfResult = await takeDocumentPdf(ctx.user.id, params.documentId, { sectionIds: params.sectionIds });
+      if (!pdfResult) {
         return { content: [{ type: "text", text: JSON.stringify({ error: "document not found, empty, or rendering failed" }) }], isError: true };
       }
+      const { pdf, brokenImages } = pdfResult;
       // Persist the PDF to the user's library so the agent gets a stable URL.
       const { getPlatformPublicClient, buildPublicAssetUrl } = await import("../storage");
       const client = getPlatformPublicClient();
@@ -1675,7 +1676,13 @@ function registerDocTools(server: McpServer) {
       return {
         content: [{
           type: "text",
-          text: JSON.stringify({ file: { id: file.id, url: publicUrl, contentType: "application/pdf", size: pdf.length } }, null, 2),
+          text: JSON.stringify({
+            file: { id: file.id, url: publicUrl, contentType: "application/pdf", size: pdf.length },
+            ...(brokenImages > 0 && {
+              brokenImages,
+              warning: `${brokenImages} imagen(es) no se pudieron cargar desde el servidor (host externo no público) y se reemplazaron por un placeholder en el PDF. Súbelas con upload_file y reemplaza el src para que aparezcan.`,
+            }),
+          }, null, 2),
         }],
       };
     })
@@ -3035,19 +3042,25 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { takeDocumentPdf } = await import("../core/documentScreenshot");
-      const pdf = await takeDocumentPdf(ctx.user.id, params.documentId);
-      if (!pdf) {
+      const pdfResult = await takeDocumentPdf(ctx.user.id, params.documentId);
+      if (!pdfResult) {
         return { content: [{ type: "text" as const, text: "Document not found or has no pages" }], isError: true };
       }
+      const { pdf, brokenImages } = pdfResult;
       return {
-        content: [{
-          type: "resource" as const,
-          resource: {
-            uri: `easybits://documents/${params.documentId}/pdf`,
-            mimeType: "application/pdf",
-            blob: pdf.toString("base64"),
+        content: [
+          ...(brokenImages > 0
+            ? [{ type: "text" as const, text: `⚠️ ${brokenImages} imagen(es) no se pudieron cargar desde el servidor (host externo no público) y aparecen como placeholder en el PDF. Súbelas con upload_file y reemplaza el src.` }]
+            : []),
+          {
+            type: "resource" as const,
+            resource: {
+              uri: `easybits://documents/${params.documentId}/pdf`,
+              mimeType: "application/pdf",
+              blob: pdf.toString("base64"),
+            },
           },
-        }],
+        ],
       };
     })
   );
