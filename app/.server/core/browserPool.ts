@@ -270,24 +270,31 @@ export async function replaceBrokenImages(page: Page): Promise<number> {
       (img) => !img.complete || img.naturalWidth === 0
     );
     for (const img of broken) {
-      const r = img.getBoundingClientRect();
-      const w = Math.round(r.width || img.width || 0);
-      const h = Math.round(r.height || img.height || 0);
+      const cls = img.className;
+      const inline = img.getAttribute("style") || "";
+      // Keep the element's layout intent: copying class + inline style preserves sizing
+      // utilities (w-40, w-full, aspect-square, h-*). Width resolves through layout even
+      // when the image is broken; height collapses for natural-sized images, so add a
+      // modest min-height only when nothing implies a height. We do NOT pixel-lock to the
+      // (already-collapsed) bounding rect — that's what made placeholders show as thin strips.
+      const hasHeight =
+        /(^|\s)(h-|min-h-|max-h-|aspect-)/.test(cls) ||
+        /(^|;|\s)(height|min-height|aspect-ratio)\s*:/.test(inline);
+      const width = Math.round(img.getBoundingClientRect().width);
       const ph = document.createElement("div");
-      ph.className = img.className;
+      ph.className = cls;
       ph.setAttribute(
         "style",
-        `${img.getAttribute("style") || ""};` +
-          `display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;` +
-          `${w ? `width:${w}px;` : ""}${h ? `height:${h}px;` : ""}` +
+        `${inline};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;` +
           `background:#f3f4f6;color:#9ca3af;border:1px solid #e5e7eb;border-radius:8px;` +
-          `font-family:system-ui,sans-serif;font-size:12px;font-weight:600;overflow:hidden;box-sizing:border-box;`
+          `font-family:system-ui,sans-serif;font-size:12px;font-weight:600;overflow:hidden;box-sizing:border-box;` +
+          (hasHeight ? "" : "min-height:140px;")
       );
       ph.innerHTML =
         `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">` +
         `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>` +
         `<path d="M21 15l-5-5L5 21"/></svg>` +
-        (Math.min(w, h) >= 64 ? `<span>Imagen no disponible</span>` : ``);
+        (width >= 80 ? `<span>Imagen no disponible</span>` : ``);
       img.replaceWith(ph);
     }
     return broken.length;
