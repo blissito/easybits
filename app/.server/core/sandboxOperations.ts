@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
+import { getSecretValue } from "./secretOperations";
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
@@ -1058,6 +1059,11 @@ export async function spawnAutonomous(
   // agent default), salvo que el caller pida un modelo explícito.
   if (cfg.template === "ghosty-lite") {
     env.ANTHROPIC_MODEL = reqModel || "claude-sonnet-4-6";
+    // Inyecta la EasyBits key del user (de sus secrets) para que el MCP de
+    // easybits cargue sus 31 tools de negocio. Si no la tiene guardada, el
+    // agente igual corre con las tools nativas (bash/archivos/web).
+    const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
+    if (ebKey) env.EASYBITS_API_KEY = ebKey;
   }
 
   if (cfg.template === "openclaw") {
