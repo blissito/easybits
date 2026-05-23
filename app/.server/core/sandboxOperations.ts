@@ -17,6 +17,7 @@ export type SandboxTemplate =
   | "claude-code"
   | "goose"
   | "ghostyclaw"
+  | "ghosty-lite"
   | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
@@ -386,7 +387,8 @@ export async function createSandbox(
   // flag so sandbox-host skips the auto-destroy reaper. These boxes live
   // until explicit DELETE — they hold per-tenant state (Baileys pairing,
   // SQLite store, groups/) that can't survive sandbox destruction.
-  const persistent = params.template === "ghostyclaw";
+  const persistent =
+    params.template === "ghostyclaw" || params.template === "ghosty-lite";
   return callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -710,6 +712,11 @@ export async function createAgent(
   if (params.template === "ghostyclaw") {
     env.NANOCLAW_ADMIN_TOKEN = embedToken;
   }
+  // ghosty-lite serves /admin/whatsapp/* gated by ADMIN_TOKEN; the UI's admin
+  // proxy sends the embedToken as Bearer, so make them match.
+  if (params.template === "ghosty-lite") {
+    env.ADMIN_TOKEN = embedToken;
+  }
 
   // 1. Resolve template + validate the env contract before spawning anything.
   const tpl = await resolveTemplate(ctx, params.template);
@@ -913,6 +920,20 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
       "Sé útil, ingenioso y directo. Habla en el idioma del usuario.",
     envBuilder: openclawEnv,
   },
+  "ghosty-lite": {
+    // Caja-agente ligera (Anthropic Agent SDK + tools + WhatsApp Baileys, 1
+    // proceso Node). Managed: la cred Anthropic sale del vault del user o del
+    // SANDBOX_HOST_ANTHROPIC_KEY (igual que ghosty) — sin form. El runtime
+    // normaliza oauth→CLAUDE_CODE_OAUTH_TOKEN para el Agent SDK.
+    template: "ghosty-lite",
+    name: "Ghosty Lite",
+    prompt:
+      "Eres Ghosty, agente de WhatsApp de Formmy. Útil, breve y directo, con " +
+      "inteligencia fría e ironía. Habla en el idioma del usuario. Tienes tools " +
+      "(bash, archivos, web) en tu propia caja aislada y herramientas de EasyBits. " +
+      "Úsalas cuando ayuden; no inventes resultados.",
+    envBuilder: () => ({}),
+  },
   "goose-managed": {
     template: "goose",
     name: "Goose",
@@ -943,6 +964,7 @@ function hostManagedAnthropicEnv(): Record<string, string> {
 
 export type AutonomousBrand =
   | "ghosty"
+  | "ghosty-lite"
   | "nanoclaw"
   | "openclaw"
   | "goose-managed";
@@ -1024,8 +1046,16 @@ export async function spawnAutonomous(
   if (provider === "deepseek") env.DEEPSEEK_API_KEY = providerKey;
   if (provider === "openrouter") env.OPENROUTER_API_KEY = providerKey;
 
-  if (cfg.template === "openclaw" || cfg.template === "ghostyclaw") {
+  if (
+    cfg.template === "openclaw" ||
+    cfg.template === "ghostyclaw" ||
+    cfg.template === "ghosty-lite"
+  ) {
     env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
+  }
+  // ghosty-lite (Agent SDK) lee el modelo de ANTHROPIC_MODEL.
+  if (cfg.template === "ghosty-lite") {
+    env.ANTHROPIC_MODEL = model;
   }
 
   if (cfg.template === "openclaw") {
