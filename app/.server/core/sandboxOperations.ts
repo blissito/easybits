@@ -1053,9 +1053,11 @@ export async function spawnAutonomous(
   ) {
     env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
   }
-  // ghosty-lite (Agent SDK) lee el modelo de ANTHROPIC_MODEL.
+  // ghosty-lite corre el Agent SDK (loop agéntico con tools). Haiku es débil
+  // para multi-tool/planeación, así que default a Sonnet (igual que el managed
+  // agent default), salvo que el caller pida un modelo explícito.
   if (cfg.template === "ghosty-lite") {
-    env.ANTHROPIC_MODEL = model;
+    env.ANTHROPIC_MODEL = reqModel || "claude-sonnet-4-6";
   }
 
   if (cfg.template === "openclaw") {
