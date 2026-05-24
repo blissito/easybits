@@ -773,6 +773,13 @@ export async function createAgent(
   if (params.template === "ghosty-lite" || params.template === "open-ghosty") {
     env.ADMIN_TOKEN = embedToken;
   }
+  // open-ghosty's harness (AI SDK) connects to the easybits MCP (dynamic tools,
+  // ?tools=public-safe) when it has the user's EasyBits key. Pull it from the
+  // vault; without it the agent still runs on local tools. Caller env wins.
+  if (params.template === "open-ghosty" && !env.EASYBITS_API_KEY) {
+    const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
+    if (ebKey) env.EASYBITS_API_KEY = ebKey;
+  }
 
   // 1. Resolve template + validate the env contract before spawning anything.
   const tpl = await resolveTemplate(ctx, params.template);
