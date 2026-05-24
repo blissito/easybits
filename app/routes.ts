@@ -167,6 +167,7 @@ export default [
     route("agents/:id/whatsapp/link", "routes/api/v2/agent-whatsapp-link.ts"),
     route("agents/:id/whatsapp/unlink", "routes/api/v2/agent-whatsapp-unlink.ts"),
     route("agents/:id/skills", "routes/api/v2/agent-skills.ts"),
+    route("agents/:id/skills/import", "routes/api/v2/agent-skills-import.ts"),
     route("agents/:id/mcps", "routes/api/v2/agent-mcps.ts"),
     route("agents/:id/admin", "routes/api/v2/agent-admin.ts"),
     route("templates", "routes/api/v2/templates.ts"),

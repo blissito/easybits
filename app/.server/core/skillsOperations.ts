@@ -1,14 +1,14 @@
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { writeFile as sandboxWriteFile, openAgentMessageStream } from "./sandboxOperations";
+import { writeFile as sandboxWriteFile, readFile as sandboxReadFile, openAgentMessageStream } from "./sandboxOperations";
 
 // Cap per-file size at 10 MB so a malicious or careless upload can't OOM
 // the EasyBits process while we base64 the buffer in memory.
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const SKILL_TEMPLATES = new Set(["openclaw", "ghostyclaw"]);
+const SKILL_TEMPLATES = new Set(["openclaw", "ghostyclaw", "open-ghosty"]);
 
 // Per-template wire details for the hot-load notification. The Bearer is
 // agent.embedToken in both cases — for ghostyclaw that token is also injected
@@ -20,6 +20,10 @@ function resolveRuntimeTarget(template: string, agent: AgentRow): {
 } {
   if (template === "ghostyclaw") {
     return { port: 8787, path: "/admin/skills/install" };
+  }
+  if (template === "open-ghosty") {
+    // server.js escucha en :3000; rutas admin con Bearer ADMIN_TOKEN (= embedToken).
+    return { port: 3000, path: "/admin/skills/install" };
   }
   // openclaw + any future template that wires its own /skills/install
   return { port: agent.port ?? 18789, path: "/skills/install" };
@@ -111,6 +115,10 @@ export interface InstalledSkillEntry {
   files: string[];
   sizeBytes: number;
   uploadedAt: string;
+  // Ruta absoluta de la skill DENTRO de la VM. La emiten los listados de los
+  // runtimes (open-ghosty siempre; nanoclaw tras el one-liner). La usa copySkill
+  // para leer los bytes vía readFile. Opcional → backward-compatible.
+  dir?: string;
 }
 
 // Lee la lista de skills directamente desde la VM (filesystem real). Es la
@@ -229,4 +237,63 @@ export async function installSkill(
   await notifyRuntime(agent, { name, path: skillDir, files: written });
 
   return { ok: true, name, path: skillDir, files: written, bytes: total };
+}
+
+// Copia una skill de un agente ORIGEN a uno DESTINO (agente-a-agente). Reusa
+// listInstalledSkills (encontrar la skill + su dir/files en el origen), readFile
+// en base64 (bytes seguros, binarios incluidos) e installSkill (escribe + notifica
+// el runtime destino, re-valida límites/slug/ownership del target).
+export async function copySkill(
+  ctx: AuthContext,
+  targetAgentId: string,
+  params: { fromAgentId: string; name: string }
+): Promise<InstallSkillResult> {
+  requireScope(ctx, "WRITE");
+
+  // 1. Ubicar la skill en el ORIGEN (ownership re-chequeado en loadAgentRow).
+  const source = await loadAgentRow(ctx, params.fromAgentId);
+  const skills = await listInstalledSkills(ctx, params.fromAgentId);
+  const entry =
+    skills.find((s) => s.name === params.name) ??
+    skills.find((s) => slug(s.name) === slug(params.name));
+  if (!entry) {
+    throw new Error(`skill "${params.name}" not found on source agent`);
+  }
+  if (!entry.dir) {
+    throw new Error(
+      `source runtime does not expose an absolute dir for skill "${params.name}" — cannot export`
+    );
+  }
+  const dir = entry.dir;
+
+  // 2. Leer cada archivo del ORIGEN en base64 (binarios seguros).
+  const readOne = async (file: string): Promise<ArrayBuffer> => {
+    const { content } = await sandboxReadFile(ctx, source.sandboxId, {
+      path: `${dir}/${file}`,
+      encoding: "base64",
+    });
+    const buf = Buffer.from(content, "base64");
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  };
+
+  const mdFile =
+    entry.files.find((f) => f.toLowerCase() === "skill.md") ??
+    entry.files.find((f) => f.toLowerCase().endsWith(".md"));
+  if (!mdFile) {
+    throw new Error(`skill "${params.name}" has no SKILL.md on source`);
+  }
+
+  const skillContent = await readOne(mdFile);
+  const assets = await Promise.all(
+    entry.files
+      .filter((f) => f !== mdFile)
+      .map(async (f) => ({ filename: f, content: await readOne(f) }))
+  );
+
+  // 3. Instalar en el DESTINO (reusa validación + escritura + notify).
+  return installSkill(ctx, targetAgentId, {
+    skillFilename: `${entry.name}.md`,
+    skillContent,
+    assets,
+  });
 }
