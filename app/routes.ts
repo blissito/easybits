@@ -236,6 +236,8 @@ export default [
     route("databases/:dbId", "routes/api/v2/database.ts"),
     route("databases/:dbId/query", "routes/api/v2/database-query.ts"),
     route("usage", "routes/api/v2/usage.ts"),
+    route("svc-usage", "routes/api/v2/svc-usage.ts"),
+    route("svc-instances", "routes/api/v2/svc-instances.ts"),
     route("generation-packs", "routes/api/v2/generation-packs.ts"),
     route("docs", "routes/api/v2/docs.ts"),
     route("domains", "routes/api/v2/domains.ts"),

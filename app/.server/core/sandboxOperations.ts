@@ -574,6 +574,58 @@ export async function listTemplates(
   return out.templates;
 }
 
+// Una llamada agente→servicio registrada por el service-mesh (solo metadata).
+export interface SvcUsageRecord {
+  ts: string;
+  caller: string;
+  owner: string;
+  sandbox: string;
+  svc: string;
+  path: string;
+  status: number;
+  ms: number;
+  cost: string; // X-Cost-Unit, ej "audioSeconds=6.68"
+}
+
+// Trazas del service-mesh, owner-scoped (callHost manda X-Easybits-Owner =
+// ctx.user.id, así el host filtra a las llamadas de los agentes del tenant).
+export async function listSvcUsage(
+  ctx: AuthContext,
+  params: { svc?: string } = {}
+): Promise<SvcUsageRecord[]> {
+  requireScope(ctx, "READ");
+  const qs = params.svc ? `?svc=${encodeURIComponent(params.svc)}` : "";
+  const out = await callHost<{ usage: SvcUsageRecord[] }>(
+    "GET",
+    `/v1/usage${qs}`,
+    undefined,
+    ctx.user.id
+  );
+  return out.usage;
+}
+
+// Instancia de servicio "dumb" del tenant corriendo (caja whisper/piper/kokoro/
+// libsql, sufijo "-svc"). La UI lo usa para saber qué servicios ya están en la
+// flota y NO ofrecerlos como "lanzar".
+export interface SvcInstance {
+  sandboxId: string;
+  template: string;
+  status: string;
+  name: string | null;
+}
+
+export async function listSvcInstances(ctx: AuthContext): Promise<SvcInstance[]> {
+  requireScope(ctx, "READ");
+  // GET /v1/sandbox está owner-scopeado por X-Easybits-Owner → las cajas del tenant.
+  const out = await callHost<any[]>("GET", "/v1/sandbox", undefined, ctx.user.id);
+  const arr = Array.isArray(out) ? out : [];
+  return arr
+    .filter(
+      (s) => typeof s?.template === "string" && s.template.endsWith("-svc") && s.status === "running"
+    )
+    .map((s) => ({ sandboxId: s.sandboxId, template: s.template, status: s.status, name: s.name ?? null }));
+}
+
 // In-process cache of the catalog, 60s TTL. Catalog only changes on a
 // sandbox-host redeploy + yaml update; rapid agent_create calls shouldn't
 // pay a network round-trip per request.
