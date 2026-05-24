@@ -19,6 +19,7 @@ export type SandboxTemplate =
   | "goose"
   | "ghostyclaw"
   | "ghosty-lite"
+  | "open-ghosty"
   | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
@@ -389,7 +390,9 @@ export async function createSandbox(
   // until explicit DELETE — they hold per-tenant state (Baileys pairing,
   // SQLite store, groups/) that can't survive sandbox destruction.
   const persistent =
-    params.template === "ghostyclaw" || params.template === "ghosty-lite";
+    params.template === "ghostyclaw" ||
+    params.template === "ghosty-lite" ||
+    params.template === "open-ghosty";
   return callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -765,9 +768,9 @@ export async function createAgent(
   if (params.template === "ghostyclaw") {
     env.NANOCLAW_ADMIN_TOKEN = embedToken;
   }
-  // ghosty-lite serves /admin/whatsapp/* gated by ADMIN_TOKEN; the UI's admin
-  // proxy sends the embedToken as Bearer, so make them match.
-  if (params.template === "ghosty-lite") {
+  // ghosty-lite / open-ghosty serve /admin/whatsapp/* gated by ADMIN_TOKEN; the
+  // UI's admin proxy sends the embedToken as Bearer, so make them match.
+  if (params.template === "ghosty-lite" || params.template === "open-ghosty") {
     env.ADMIN_TOKEN = embedToken;
   }
 
