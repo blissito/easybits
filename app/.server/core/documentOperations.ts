@@ -10,6 +10,7 @@ import { generateDocumentParallel } from "@easybits.cloud/html-tailwind-generato
 import { GAMMA_LAYOUTS } from "@easybits.cloud/html-tailwind-generator/directions";
 import { streamText } from "ai";
 import { enrichImages, findImageSlots, generateSvg } from "@easybits.cloud/html-tailwind-generator/images";
+import { enrichImageQueriesOnly } from "../images/enrichImages";
 import { sanitizeSemanticColors } from "../sanitizeColors";
 import { docEvents } from "./docEvents";
 import type { Section3 } from "~/lib/landing3/types";
@@ -270,11 +271,18 @@ export async function createDocument(
   }
   if (opts.customColors) metadata.customColors = opts.customColors;
 
+  // Resolve data-image-query placeholders to real photos. Leaves <img src> untouched.
+  const sections = await Promise.all(
+    (opts.sections ?? []).map(async (s) =>
+      s.html ? { ...s, html: await enrichImageQueriesOnly(s.html) } : s
+    )
+  );
+
   return db.landing.create({
     data: {
       name,
       prompt: opts.prompt || "",
-      sections: (opts.sections ?? []) as any,
+      sections: sections as any,
       version: 4,
       theme: metadata.customColors ? "custom" : (opts.theme || "default"),
       metadata: Object.keys(metadata).length > 0 ? metadata as any : undefined,
@@ -313,15 +321,19 @@ export async function updateDocument(
       // Snapshot before allowing — likely a reorder, not a wipe
     }
 
-    const merged = opts.sections.map((incoming: any) => {
+    const merged = await Promise.all(opts.sections.map(async (incoming: any) => {
       const found = existing.find((s: any) => s.id === incoming.id);
       // Strip undefined/null values from incoming so they don't overwrite existing
       const clean: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(incoming)) {
         if (v !== undefined && v !== null && v !== "") clean[k] = v;
       }
+      // Resolve data-image-query placeholders; leaves <img src> the agent sent untouched.
+      if (typeof clean.html === "string") {
+        clean.html = await enrichImageQueriesOnly(clean.html);
+      }
       return { ...found, ...clean };
-    });
+    }));
     updates.sections = merged as any;
 
     // Save snapshot of previous sections for undo
@@ -379,7 +391,8 @@ export async function setPageHtml(
   const idx = sections.findIndex((s) => s.id === pageId);
   if (idx === -1) throwJson("Page not found", 404);
 
-  const normalized = normalizeDocumentPageHtml(html, { minHeight: pageMinHeight(doc) });
+  const enriched = await enrichImageQueriesOnly(html);
+  const normalized = normalizeDocumentPageHtml(enriched, { minHeight: pageMinHeight(doc) });
   if ((sections[idx].html ?? "") === normalized) {
     logNoop("set_page_html", id, "html unchanged");
     return { success: true, noop: true, reason: "html unchanged", pageId };
@@ -537,11 +550,12 @@ export async function addPage(
   const sections = (doc.sections || []) as unknown as Section3[];
   const previousSections = JSON.parse(JSON.stringify(sections));
 
+  const enrichedHtml = opts.html ? await enrichImageQueriesOnly(opts.html) : undefined;
   const newSection: Section3 = {
     id: crypto.randomUUID(),
     order: 0,
-    html: opts.html
-      ? normalizeDocumentPageHtml(opts.html, { minHeight: pageMinHeight(doc) })
+    html: enrichedHtml
+      ? normalizeDocumentPageHtml(enrichedHtml, { minHeight: pageMinHeight(doc) })
       : "<section class=\"w-[8.5in] h-[11in] flex flex-col relative overflow-hidden bg-surface\"><div class=\"flex-1 flex items-center justify-center text-on-surface-muted\">New page</div></section>",
     label: opts.label || `Page ${sections.length + 1}`,
   };
