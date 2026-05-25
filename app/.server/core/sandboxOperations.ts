@@ -20,6 +20,8 @@ export type SandboxTemplate =
   | "ghostyclaw"
   | "ghosty-lite"
   | "open-ghosty"
+  | "lang-ghosty"
+  | "rust-ghosty"
   | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
@@ -392,7 +394,9 @@ export async function createSandbox(
   const persistent =
     params.template === "ghostyclaw" ||
     params.template === "ghosty-lite" ||
-    params.template === "open-ghosty";
+    params.template === "open-ghosty" ||
+    params.template === "lang-ghosty" ||
+    params.template === "rust-ghosty";
   return callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -768,17 +772,42 @@ export async function createAgent(
   if (params.template === "ghostyclaw") {
     env.NANOCLAW_ADMIN_TOKEN = embedToken;
   }
-  // ghosty-lite / open-ghosty serve /admin/whatsapp/* gated by ADMIN_TOKEN; the
-  // UI's admin proxy sends the embedToken as Bearer, so make them match.
-  if (params.template === "ghosty-lite" || params.template === "open-ghosty") {
+  // ghosty-lite / open-ghosty / lang-ghosty / rust-ghosty serve /admin/whatsapp/*
+  // gated by ADMIN_TOKEN; the UI's admin proxy sends the embedToken as Bearer, so match.
+  if (
+    params.template === "ghosty-lite" ||
+    params.template === "open-ghosty" ||
+    params.template === "lang-ghosty" ||
+    params.template === "rust-ghosty"
+  ) {
     env.ADMIN_TOKEN = embedToken;
   }
-  // open-ghosty's harness (AI SDK) connects to the easybits MCP (dynamic tools,
-  // ?tools=public-safe) when it has the user's EasyBits key. Pull it from the
-  // vault; without it the agent still runs on local tools. Caller env wins.
-  if (params.template === "open-ghosty" && !env.EASYBITS_API_KEY) {
+  // open-ghosty / lang-ghosty / rust-ghosty connect to the easybits MCP (dynamic
+  // tools) when they have the user's EasyBits key. Pull it from the vault; without
+  // it the agent still runs on local tools. Caller env wins. (rust-ghosty's wrapper
+  // writes ~/.deepseek/mcp.json from EASYBITS_API_KEY so CodeWhale picks it up.)
+  if (
+    (params.template === "open-ghosty" ||
+      params.template === "lang-ghosty" ||
+      params.template === "rust-ghosty") &&
+    !env.EASYBITS_API_KEY
+  ) {
     const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
     if (ebKey) env.EASYBITS_API_KEY = ebKey;
+  }
+  // open-ghosty / lang-ghosty / rust-ghosty usan Gemini para visión (describeImage) e
+  // imágenes (nano_banana). La key vive en el vault de secrets del user (mismo patrón que
+  // EASYBITS_API_KEY). Sin ella, visión/imagen quedan off; el resto del agente corre igual.
+  if (
+    (params.template === "open-ghosty" ||
+      params.template === "lang-ghosty" ||
+      params.template === "rust-ghosty") &&
+    !env.GOOGLE_GENERATIVE_AI_API_KEY
+  ) {
+    const gk =
+      (await getSecretValue(ctx.user.id, "GEMINI_API_KEY").catch(() => null)) ||
+      (await getSecretValue(ctx.user.id, "GOOGLE_GENERATIVE_AI_API_KEY").catch(() => null));
+    if (gk) env.GOOGLE_GENERATIVE_AI_API_KEY = gk;
   }
 
   // 1. Resolve template + validate the env contract before spawning anything.
