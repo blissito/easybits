@@ -136,6 +136,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   // Images
   "generate_image", "transform_image",
   "optimize_image",
+  "edit_image",
   "pdf_to_images",
   // Video
   "video_create", "list_videos",
@@ -189,6 +190,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "delete_website",
   "transform_image",
   "generate_image",
+  "edit_image",
   "video_create", "list_videos",
   "avatar_video_create",
   "generate_captions", "get_caption_status",
@@ -246,9 +248,10 @@ export const RESEARCH_ALLOWLIST = new Set<string>([
   "upload_file",
 ]);
 
-/** Image toolset — fal.ai Flux generation + (future) transforms. */
+/** Image toolset — fal.ai Flux generation + Gemini Nano Banana 2 edit + transforms. */
 export const IMAGE_ALLOWLIST = new Set<string>([
   "image_generate",
+  "edit_image",
   "transform_image",
   "get_file",
   "list_files",

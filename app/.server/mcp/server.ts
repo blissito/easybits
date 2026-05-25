@@ -3945,6 +3945,101 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "edit_image",
+    "Edit, compose, or restyle image(s) with Gemini 'Nano Banana 2' (gemini-3-pro-image-preview). The platform key is used — you NEVER pass a key. Cost: 1 generación (créditos) per call, billed to the user's plan.\n\nHow to use:\n- Required: `prompt` — the edit instruction (e.g. 'replace the background with a sunny beach', 'make it a watercolor', 'put the product on a marble table').\n- Reference image(s) — the usual case. Pass `imageFileIds` (image Files from the user's EasyBits library) and/or `imageUrls` (public https URLs). Multiple references compose together (e.g. put THIS product into THIS scene).\n- `aspectRatio`: optional output ratio ('1:1','16:9','9:16','4:5', etc.). Editing keeps source ratio if omitted.\n- `isPublic`: default true (public CDN URL, reusable as `referenceImage` in avatar/video). Set false for private.\n- `name`: optional filename for the result.\n- If you pass NO reference image, it falls back to text-to-image GENERATION from the prompt alone.\n- Returns `fileId`, `imageUrl` (public if isPublic), and `mode` ('edit' | 'generate').\n\nUse for: retoque y edición de fotos, cambiar fondos, combinar producto+escena, restyle, variaciones a partir de una imagen base, o generación desde cero (sin referencia).",
+    {
+      prompt: z.string().min(1).max(4000).describe("Instrucción de edición. Si no envías referencia, es la descripción para generar desde cero."),
+      imageFileIds: z.array(z.string()).max(4).optional().describe("Imagen(es) de referencia desde la librería EasyBits (fileId). Lo normal al EDITAR. Múltiples se combinan. Omite para generar desde texto puro."),
+      imageUrls: z.array(z.string().url()).max(4).optional().describe("Imagen(es) de referencia por URL pública (https). Alternativa/complemento a imageFileIds."),
+      aspectRatio: z.enum(["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]).optional().describe("Aspect ratio del resultado. Al editar, omite para conservar el de la referencia."),
+      isPublic: z.boolean().optional().describe("Default true (URL pública reusable). Set false para privado."),
+      name: z.string().optional().describe("Nombre del archivo resultante."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        // Resolve reference images (library fileIds + public URLs) to bytes.
+        const images: Array<{ data: Uint8Array; mediaType: string }> = [];
+
+        if (params.imageFileIds?.length) {
+          const { db } = await import("../db");
+          const { getClientForFile, getReadClientForPlatformFile } = await import("../storage");
+          for (const fileId of params.imageFileIds) {
+            const file = await db.file.findUnique({ where: { id: fileId } });
+            if (!file || file.status === "DELETED") {
+              throw new ServiceProviderError("image.gemini.edit", 404, `File not found: ${fileId}`);
+            }
+            if (file.ownerId !== ctx.user.id) {
+              throw new ServiceProviderError("image.gemini.edit", 403, `Forbidden: ${fileId}`);
+            }
+            if (!file.contentType.startsWith("image/")) {
+              throw new ServiceProviderError("image.gemini.edit", 400, `File is not an image: ${fileId}`);
+            }
+            const sourceClient = file.storageProviderId
+              ? await getClientForFile(file.storageProviderId, ctx.user.id)
+              : getReadClientForPlatformFile(file);
+            const readUrl = await sourceClient.getReadUrl(file.storageKey);
+            const r = await fetch(readUrl);
+            if (!r.ok) {
+              throw new ServiceProviderError("image.gemini.edit", r.status, `download failed: ${fileId}`);
+            }
+            images.push({ data: new Uint8Array(await r.arrayBuffer()), mediaType: file.contentType });
+          }
+        }
+
+        if (params.imageUrls?.length) {
+          for (const url of params.imageUrls) {
+            const r = await fetch(url);
+            if (!r.ok) {
+              throw new ServiceProviderError("image.gemini.edit", r.status, `download failed: ${url}`);
+            }
+            const ct = r.headers.get("content-type") || "image/png";
+            images.push({ data: new Uint8Array(await r.arrayBuffer()), mediaType: ct });
+          }
+        }
+
+        const result = await consumeService<import("../services/providers/gemini").GeminiEditImageOutput>(
+          "image.gemini.edit",
+          {
+            prompt: params.prompt,
+            images,
+            aspectRatio: params.aspectRatio,
+            isPublic: params.isPublic,
+            name: params.name,
+          },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              fileId: result.data.fileId,
+              imageUrl: result.data.imageUrl,
+              mode: result.data.mode,
+              modelId: result.data.modelId,
+              hint: `Imagen lista (${result.data.mode}). fileId: ${result.data.fileId}. ${result.data.imageUrl ? "URL pública reusable como referenceImage o embed." : "Privada — usa get_file para una URL temporal."}`,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
+        }
+        if (e instanceof ServiceConfigError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
+        }
+        if (e instanceof ServiceProviderError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Nano Banana 2: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
     "research_scrape",
     "Fetch a single web page via Brightdata Web Unlocker (bypasses bot detection, residential IPs). Returns the page HTML or markdown.\n\nHow to use:\n- Required: `url` (target page, full https://...).\n- Optional: `country` (ISO code like 'us', 'mx' for geo-localized fetches).\n- Optional: `asMarkdown=true` returns clean markdown instead of raw HTML — useful when you want to feed into doc generation or summarization.\n- Cost: 1 crédito per page.\n\nUse for: monitorear precios competencia, scraping respetuoso, fetch de páginas que normalmente bloquean bots. Para queries de búsqueda en Google/Bing usa `research_search` en su lugar.",
     {

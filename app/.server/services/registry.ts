@@ -23,6 +23,7 @@
  */
 import type { ServiceDef } from "./types";
 import { falAvatarService, falImageService } from "./providers/fal";
+import { geminiEditImageService } from "./providers/gemini";
 import { elevenLabsTtsService } from "./providers/elevenlabs";
 import {
   brightdataScrapeService,
@@ -35,6 +36,7 @@ export const SERVICES = {
   "research.brightdata.scrape": brightdataScrapeService,
   "research.brightdata.search": brightdataSearchService,
   "image.fal.generate": falImageService,
+  "image.gemini.edit": geminiEditImageService,
   // Reservados — implementación pendiente:
   // "voice.elevenlabs.stt": elevenLabsSttService,
   // "image.openai.generate": openaiImageService,
