@@ -795,20 +795,9 @@ export async function createAgent(
     const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
     if (ebKey) env.EASYBITS_API_KEY = ebKey;
   }
-  // open-ghosty / lang-ghosty / rust-ghosty usan Gemini para visión (describeImage) e
-  // imágenes (nano_banana). La key vive en el vault de secrets del user (mismo patrón que
-  // EASYBITS_API_KEY). Sin ella, visión/imagen quedan off; el resto del agente corre igual.
-  if (
-    (params.template === "open-ghosty" ||
-      params.template === "lang-ghosty" ||
-      params.template === "rust-ghosty") &&
-    !env.GOOGLE_GENERATIVE_AI_API_KEY
-  ) {
-    const gk =
-      (await getSecretValue(ctx.user.id, "GEMINI_API_KEY").catch(() => null)) ||
-      (await getSecretValue(ctx.user.id, "GOOGLE_GENERATIVE_AI_API_KEY").catch(() => null));
-    if (gk) env.GOOGLE_GENERATIVE_AI_API_KEY = gk;
-  }
+  // NOTA: la GOOGLE key (visión Gemini) NO se inyecta aquí — las credenciales de provider
+  // del user viven en ghosty-studio (provider-credentials), no en el `db.secret` de easybits.
+  // ghosty-studio la pasa en `env` al spawnear (intent create-agent).
 
   // 1. Resolve template + validate the env contract before spawning anything.
   const tpl = await resolveTemplate(ctx, params.template);
