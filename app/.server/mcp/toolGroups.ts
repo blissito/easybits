@@ -134,7 +134,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "search_files",
   "list_themes",
   // Images
-  "generate_image", "transform_image",
+  "create_or_edit_image", "transform_image",
   "optimize_image",
   "edit_image",
   "pdf_to_images",
@@ -148,7 +148,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   // Research
   "research_scrape", "research_search",
   // Image
-  "image_generate",
+  // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   // Brand
   "list_brand_kits", "get_default_brand_kit", "extract_brand_kit_from_url",
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
@@ -189,14 +189,14 @@ export const CORE_ALLOWLIST = new Set<string>([
   "create_website",
   "delete_website",
   "transform_image",
-  "generate_image",
+  "create_or_edit_image",
   "edit_image",
   "video_create", "list_videos",
   "avatar_video_create",
   "generate_captions", "get_caption_status",
   "voice_tts_create",
   "research_scrape", "research_search",
-  "image_generate",
+  // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "character_remember", "character_list", "character_delete",
   "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
   "create_brand_kit", "update_brand_kit", "delete_brand_kit",
@@ -250,7 +250,7 @@ export const RESEARCH_ALLOWLIST = new Set<string>([
 
 /** Image toolset — fal.ai Flux generation + Gemini Nano Banana 2 edit + transforms. */
 export const IMAGE_ALLOWLIST = new Set<string>([
-  "image_generate",
+  // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "edit_image",
   "transform_image",
   "get_file",

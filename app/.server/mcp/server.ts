@@ -672,58 +672,92 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
-    "generate_image",
-    "Generate one or more images from a text prompt using OpenAI gpt-image-1. The generated PNG(s) are saved to the user's EasyBits storage AND returned inline so the client (e.g. Claude.ai) can preview them in the chat. Response includes image content items plus a text block with file IDs/URLs.",
+    "create_or_edit_image",
+    "Create OR edit images with OpenAI gpt-image-2 — full implementation: text-to-image GENERATION and faithful reference-based EDITING in one tool (gpt-image-1 also selectable). NO references → generates from the prompt. Pass `imageFileIds` (library files) and/or `imageUrls` (public https) → EDITS those reference image(s) preserving the composition (e.g. 'keep everything identical, change only the background/lighting'). The result is saved public and returned as `fileId` + `imageUrl` (reusable as referenceImage or embed). Default model gpt-image-2; pass `model:\"gpt-image-1\"` for the older model. The platform key is used — you NEVER pass a key. Cost: billed in créditos by quality (low/medium/high) per image, +1 for edits.",
     {
-      prompt: z.string().describe("Text description of the image to generate"),
-      size: z.enum(["1024x1024", "1024x1536", "1536x1024", "auto"]).default("1024x1024").describe("Output image dimensions"),
-      quality: z.enum(["low", "medium", "high", "auto"]).default("low").describe("Generation quality. Default 'low' for fast response (avoids tool timeouts in web clients). Use 'high' only when the user explicitly asks for a high-quality image."),
-      n: z.number().int().min(1).max(4).default(1).describe("Number of images to generate (1-4)"),
-      name: z.string().optional().describe("Optional base name for the saved file(s). Defaults to a slug of the prompt."),
+      prompt: z.string().min(1).max(4000).describe("What to generate, or the edit instruction when references are passed."),
+      model: z.enum(["gpt-image-2", "gpt-image-1"]).default("gpt-image-2").describe("Image model. Default gpt-image-2."),
+      imageFileIds: z.array(z.string()).max(4).optional().describe("Reference image(s) from the user's EasyBits library (fileId) to EDIT. Omit to generate from scratch."),
+      imageUrls: z.array(z.string().url()).max(4).optional().describe("Reference image(s) by public https URL to EDIT. Alternative/complement to imageFileIds."),
+      size: z.enum(["1024x1024", "1536x1024", "1024x1536", "auto"]).default("1024x1024").describe("Output image dimensions."),
+      quality: z.enum(["low", "medium", "high", "auto"]).default("low").describe("Generation quality. Default 'low' for fast response. Use 'high' only when the user explicitly asks."),
+      n: z.number().int().min(1).max(4).default(1).describe("Number of images to generate (generation only; ignored when editing)."),
+      name: z.string().optional().describe("Optional base name for the saved file(s)."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { generateImage } = await import("../core/imageOperations");
-      const { generateShareToken } = await import("../core/operations");
-      const result = await generateImage(ctx, params);
-      const { files, ...meta } = result;
-
-      // Generate a short-lived public URL for each image so the client can
-      // render it via markdown (works even when the client does not support
-      // MCP image content blocks).
-      const withUrls = await Promise.all(
-        files.map(async ({ b64, ...f }: any) => {
-          try {
-            const { url } = await generateShareToken(ctx, {
-              fileId: f.id,
-              expiresIn: 3600,
-              source: "mcp",
-            });
-            return { ...f, previewUrl: url };
-          } catch {
-            return f;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        // Resolve reference images (library fileIds + public URLs) to bytes.
+        const images: Array<{ data: Uint8Array; mediaType: string }> = [];
+        if (params.imageFileIds?.length) {
+          const { db } = await import("../db");
+          const { getClientForFile, getReadClientForPlatformFile } = await import("../storage");
+          for (const fileId of params.imageFileIds) {
+            const file = await db.file.findUnique({ where: { id: fileId } });
+            if (!file || file.status === "DELETED") throw new ServiceProviderError("image.openai.generate", 404, `File not found: ${fileId}`);
+            if (file.ownerId !== ctx.user.id) throw new ServiceProviderError("image.openai.generate", 403, `Forbidden: ${fileId}`);
+            if (!file.contentType.startsWith("image/")) throw new ServiceProviderError("image.openai.generate", 400, `File is not an image: ${fileId}`);
+            const sourceClient = file.storageProviderId
+              ? await getClientForFile(file.storageProviderId, ctx.user.id)
+              : getReadClientForPlatformFile(file);
+            const readUrl = await sourceClient.getReadUrl(file.storageKey);
+            const r = await fetch(readUrl);
+            if (!r.ok) throw new ServiceProviderError("image.openai.generate", r.status, `download failed: ${fileId}`);
+            images.push({ data: new Uint8Array(await r.arrayBuffer()), mediaType: file.contentType });
           }
-        })
-      );
+        }
+        if (params.imageUrls?.length) {
+          for (const url of params.imageUrls) {
+            const r = await fetch(url);
+            if (!r.ok) throw new ServiceProviderError("image.openai.generate", r.status, `download failed: ${url}`);
+            const ct = (r.headers.get("content-type") || "image/png").split(";")[0];
+            images.push({ data: new Uint8Array(await r.arrayBuffer()), mediaType: ct });
+          }
+        }
 
-      const markdown = withUrls
-        .map((f) => (f.previewUrl ? `![${f.name}](${f.previewUrl})` : ""))
-        .filter(Boolean)
-        .join("\n\n");
-
-      return {
-        content: [
-          ...files.map((f: any) =>
-            safeImageBlock(f.b64 as string, "image/png", "generate_image")
-          ),
+        const result = await consumeService<import("../services/providers/openai").OpenaiImageOutput>(
+          "image.openai.generate",
           {
-            type: "text" as const,
-            text:
-              (markdown ? markdown + "\n\n" : "") +
-              JSON.stringify({ files: withUrls, ...meta }, null, 2),
+            prompt: params.prompt,
+            model: params.model,
+            images,
+            size: params.size,
+            quality: params.quality,
+            n: params.n,
+            name: params.name,
           },
-        ],
-      };
+          { userId: ctx.user.id },
+        );
+        const d = result.data;
+        const markdown = d.images.map((im) => `![image](${im.imageUrl})`).join("\n\n");
+        return {
+          content: [{
+            type: "text" as const,
+            text: markdown + "\n\n" + JSON.stringify({
+              ok: true,
+              fileId: d.fileId,
+              imageUrl: d.imageUrl,
+              mode: d.mode,
+              modelId: d.modelId,
+              images: d.images,
+              hint: `Imagen lista (${d.mode}, ${d.modelId}). fileId: ${d.fileId}. URL pública reusable como referenceImage o embed.`,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
+        }
+        if (e instanceof ServiceConfigError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
+        }
+        if (e instanceof ServiceProviderError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `gpt-image: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
+        }
+        throw e;
+      }
     })
   );
 

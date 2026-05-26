@@ -27,14 +27,14 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - API responses: use `data()` from `react-router` (NOT `json()` — deprecated)
 - AI generation: ALWAYS use `streamText` + SSE (never `generateText`) — users must see progress in real time
 - AI generation cost: ~$1.17 MXN promedio por generación contada (mix 25% generate Sonnet + 75% refine/variant Haiku). `AiGenerationLog` model tracks type/product for analytics
-- Generation packs (MXN):
+- Generation packs (MXN) — fuente de verdad: `GENERATION_PACKS` en `app/lib/plans.ts` + `PACK_SIZES` en `app/lib/credits.ts`. Precio plano (sin diferenciación por plan); la suscripción ES el descuento. Piso de $5 MXN/gen protege margen vs costo ~$1.17 MXN/gen.
 
-| Pack | Byte | Mega | Tera |
-|------|------|------|------|
-| 5 gens | $29 | $29 | $29 |
-| 10 gens | $49 | $39 | $29 |
-| 50 gens | $99 (promo) | $99 (promo) | $99 (promo) |
-| 100 gens | $349 | $249 | $249 |
+| Pack | Precio | Créditos | $/gen |
+|------|--------|----------|-------|
+| pack_5 | $39 | 500 | $7.80 |
+| pack_10 | $69 | 1,000 | $6.90 |
+| pack_50 (featured) | $299 | 5,000 | $5.98 |
+| pack_100 | $549 | 10,000 | $5.49 |
 
 ## Deploy
 - Auto-deploys on push to `main` via GitHub Actions → Fly.io
