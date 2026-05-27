@@ -757,6 +757,8 @@ export async function createAgent(
     env: Record<string, string>;
     name?: string;
     timeoutSeconds?: number;
+    /** Archivos de conocimiento (base64) a sembrar en /data/workspace tras el boot. */
+    seedFiles?: Array<{ name: string; contentBase64: string }>;
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
@@ -794,6 +796,20 @@ export async function createAgent(
   ) {
     const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
     if (ebKey) env.EASYBITS_API_KEY = ebKey;
+  }
+  // rust-ghosty (cerebro CodeWhale) corre opinionated con DeepSeek. Dos secretos los pone
+  // el backend para que se lance de un clic:
+  //   - DEEPSEEK_RUNTIME_TOKEN: auth interna Node(server.js)↔Rust(CodeWhale serve --http).
+  //     Box-only, se auto-genera (como embedToken/OPENCLAW_GATEWAY_TOKEN) — nunca se pide.
+  //   - DEEPSEEK_API_KEY: del vault de secrets del user (db.secret), igual que EASYBITS_API_KEY.
+  if (params.template === "rust-ghosty") {
+    if (!env.DEEPSEEK_RUNTIME_TOKEN) {
+      env.DEEPSEEK_RUNTIME_TOKEN = "dsr_" + randomBytes(32).toString("hex");
+    }
+    if (!env.DEEPSEEK_API_KEY) {
+      const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
+      if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
+    }
   }
   // NOTA: la GOOGLE key (visión Gemini) NO se inyecta aquí — las credenciales de provider
   // del user viven en ghosty-studio (provider-credentials), no en el `db.secret` de easybits.
@@ -854,6 +870,25 @@ export async function createAgent(
         unit: tpl.agent?.unit,
         envFile: tpl.agent?.env_file,
       });
+      // Sembrar archivos de conocimiento en el workspace (drop del form). La VM ya está
+      // running y el runtime creó /data/workspace. Best-effort: un archivo que falle no
+      // aborta el spawn. El agente (CodeWhale) los consulta con sus tools.
+      if (params.seedFiles?.length) {
+        for (const f of params.seedFiles) {
+          const safe =
+            (f.name || "archivo").replace(/[/\\]/g, "_").replace(/^\.+/, "").slice(0, 120) ||
+            "archivo";
+          try {
+            await writeFile(ctx, sb.sandboxId, {
+              path: `/data/workspace/${safe}`,
+              content: f.contentBase64,
+              encoding: "base64",
+            });
+          } catch (e) {
+            console.error(`seed file "${safe}" failed for agent ${row.id}:`, e);
+          }
+        }
+      }
       let acpSessionId: string | null = null;
       let acpTransportSessionId: string | null = null;
       if (protocol === "acp") {

@@ -28,6 +28,7 @@ export async function action({ request }: Route.ActionArgs) {
     env: body.env as Record<string, string>,
     name: typeof body.name === "string" ? body.name : undefined,
     timeoutSeconds: typeof body.timeoutSeconds === "number" ? body.timeoutSeconds : undefined,
+    seedFiles: Array.isArray(body.seedFiles) ? body.seedFiles : undefined,
     // port/healthPath ya no se aceptan del caller — vienen del template
     // metadata leído por createAgent.
   });
