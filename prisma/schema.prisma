@@ -80,30 +80,44 @@ model Asset {
 
 model Order {
   // must
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
   customer_email String
-  assetId        String   @db.ObjectId
-  // optional
-  price          Float?   @default(0)
-  currency       String?  @default("mxn")
-  status         String?  @default("Paid")
-  merchantId     String?  @db.ObjectId // User.id
-  customerId     String?  @db.ObjectId // Could also be User.id
-  total          String?  @default("$ 0.00") // `$ 1024.50 MXN`
+  // Kind of sale: "asset_sale" | "credit_pack" | "subscription" | "custom".
+  // Marketplace readers filter by assetId/merchantId, so platform orders
+  // (assetId/merchantId null) are excluded from those views automatically.
+  type           String?     @default("asset_sale")
+  // Open line items — may or may not reference a model (asset/pack/plan).
+  items          OrderItem[]
+  // optional — only asset_sale orders carry an assetId/merchantId
+  assetId        String?     @db.ObjectId
+  price          Float?      @default(0)
+  currency       String?     @default("mxn")
+  status         String?     @default("Paid")
+  merchantId     String?     @db.ObjectId // User.id
+  customerId     String?     @db.ObjectId // Could also be User.id
+  total          String?     @default("$ 0.00") // `$ 1024.50 MXN`
   priceId        String?
   productId      String?
   note           String?
   //
-  merchant       User?    @relation("OrderMerchant", fields: [merchantId], references: [id])
-  customer       User?    @relation("OrderCustomer", fields: [customerId], references: [id])
-  asset          Asset    @relation(fields: [assetId], references: [id])
+  merchant       User?       @relation("OrderMerchant", fields: [merchantId], references: [id])
+  customer       User?       @relation("OrderCustomer", fields: [customerId], references: [id])
+  asset          Asset?      @relation(fields: [assetId], references: [id])
   // dates
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([merchantId])
   @@index([customerId])
   @@index([assetId])
+}
+
+type OrderItem {
+  kind      String // "asset" | "credit_pack" | "subscription" | "custom"
+  refId     String? // assetId / packId / planKey — optional, open
+  label     String
+  quantity  Int     @default(1)
+  unitPrice Float   @default(0)
 }
 
 type NewsLetter {

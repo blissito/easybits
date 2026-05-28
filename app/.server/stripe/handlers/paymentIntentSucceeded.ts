@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { db } from "~/.server/db";
-import { createOrder, getUserOrNull } from "~/.server/getters";
+import { createAssetOrder, getUserOrNull } from "~/.server/getters";
 import { assignAssetToUserByEmail, getEmailFromEvent } from "~/.server/webhookUtils";
 import { sendPurchase, sendNotifyPurchase } from "~/.server/emails/sendPurchase";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
@@ -38,7 +38,7 @@ const assetId = paymentIntent.metadata?.assetId;
     
           // Asignar el asset al usuario
           const customer = await assignAssetToUserByEmail({ assetId, email: customer_email });
-          const order = await createOrder({
+          const order = await createAssetOrder({
             asset,
             status: "PAID",
             customer

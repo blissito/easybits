@@ -156,7 +156,36 @@ export const getFilesForAssetId = (assetId: string) =>
     },
   });
 
-export const createOrder = ({
+export type OrderItemInput = {
+  kind: string; // "asset" | "credit_pack" | "subscription" | "custom"
+  refId?: string; // assetId / packId / planKey — optional, open
+  label: string;
+  quantity?: number;
+  unitPrice?: number;
+};
+
+export type CreateOrderInput = {
+  customer_email: string;
+  type?: string;
+  items?: OrderItemInput[];
+  assetId?: string;
+  customerId?: string;
+  merchantId?: string;
+  price?: number | null;
+  currency?: string | null;
+  total?: string;
+  status?: string;
+  priceId?: string | null;
+  productId?: string | null;
+  note?: string | null;
+};
+
+/** Generic order — works with or without an associated model (asset/pack/plan). */
+export const createOrder = (input: CreateOrderInput) =>
+  db.order.create({ data: input });
+
+/** Convenience for marketplace asset sales. */
+export const createAssetOrder = ({
   customer,
   asset,
   status,
@@ -165,20 +194,28 @@ export const createOrder = ({
   asset: Asset;
   customer: User; // @todo change confusing name
 }) =>
-  db.order.create({
-    data: {
-      customer_email: customer.email,
-      customerId: customer.id,
-      assetId: asset.id,
-      merchantId: asset.userId,
-      price: asset.price,
-      currency: asset.currency,
-      total: `$ ${asset.price} ${asset.currency}`,
-      priceId: asset.stripePrice,
-      productId: asset.stripeProduct,
-      note: asset.note, // @revisit
-      status,
-    },
+  createOrder({
+    type: "asset_sale",
+    customer_email: customer.email,
+    customerId: customer.id,
+    assetId: asset.id,
+    merchantId: asset.userId,
+    price: asset.price,
+    currency: asset.currency,
+    total: `$ ${asset.price} ${asset.currency}`,
+    priceId: asset.stripePrice,
+    productId: asset.stripeProduct,
+    note: asset.note, // @revisit
+    status,
+    items: [
+      {
+        kind: "asset",
+        refId: asset.id,
+        label: asset.title ?? "Asset",
+        quantity: 1,
+        unitPrice: asset.price ?? 0,
+      },
+    ],
   });
 
 export const getUserSession = async (email: string, request: Request) => {

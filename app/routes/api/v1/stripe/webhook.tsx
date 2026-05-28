@@ -6,7 +6,8 @@ import { processReferralUpgrade } from "~/.server/core/referralOperations";
 import type { StripeSession } from "~/.server/types/stripe";
 import type { ActionFunctionArgs } from "~/.server/types/react-router";
 import Stripe from "stripe";
-import { isPaidPlan, normalizePlan } from "~/lib/plans";
+import { isPaidPlan, normalizePlan, GENERATION_PACKS } from "~/lib/plans";
+import { createOrder } from "~/.server/getters";
 
 const PLAN_ROLES = ["Byte", "Mega", "Tera", "Spark", "Flow", "Studio"];
 
@@ -202,12 +203,13 @@ export async function action({ request }: ActionFunctionArgs) {
         if (session.metadata?.type === "generation_pack") {
           const generations = parseInt(session.metadata.generations || "0", 10);
           const packUserId = session.metadata.userId;
+          const packId = session.metadata.packId;
           if (generations > 0 && packUserId) {
             await db.user.update({
               where: { id: packUserId },
               data: { aiGenerationsBonus: { increment: generations } },
             });
-            // Log pack purchase for analytics
+            // Credit ledger: how many bonus credits were granted (admin stats).
             db.aiGenerationLog.create({
               data: {
                 userId: packUserId,
@@ -217,10 +219,37 @@ export async function action({ request }: ActionFunctionArgs) {
                 source: "bonus",
               },
             }).catch(() => {});
+            // Sales ledger: the purchase itself, as a generic (assetless) Order.
+            const price = session.amount_total != null ? session.amount_total / 100 : 0;
+            const currency = session.currency || "mxn";
+            const packEmail =
+              session.customer_details?.email || session.customer_email || "";
+            createOrder({
+              type: "credit_pack",
+              customer_email: packEmail,
+              customerId: packUserId,
+              price,
+              currency,
+              total: `$ ${price.toFixed(2)} ${currency.toUpperCase()}`,
+              status: "Paid",
+              productId: packId,
+              note: `Generation pack: ${packId}`,
+              items: [
+                {
+                  kind: "credit_pack",
+                  refId: packId,
+                  label: `${packId} — ${generations} créditos`,
+                  quantity: 1,
+                  unitPrice: price,
+                },
+              ],
+            }).catch((e) =>
+              logger.error("Pack order create failed", { packUserId, packId, error: String(e) })
+            );
             logger.info("Generation pack credited", {
               userId: packUserId,
               generations,
-              packId: session.metadata.packId,
+              packId,
             });
           }
           break;

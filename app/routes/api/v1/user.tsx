@@ -1,5 +1,5 @@
 import {
-  createOrder,
+  createAssetOrder,
   getUserOrNull,
   getUserOrRedirect,
 } from "~/.server/getters";
@@ -177,7 +177,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return { success: true };
     }
     // order creation @todo count stats?
-    await createOrder({
+    await createAssetOrder({
       customer: user,
       asset,
     });
