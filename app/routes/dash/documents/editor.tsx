@@ -15,8 +15,12 @@ import { getShareSession } from "~/.server/shareLinks";
 import { db } from "~/.server/db";
 import { PageList, type Section3WithVersions } from "~/components/documents/PageList";
 import { CodeEditor } from "~/components/landings3/CodeEditor";
-import { DocumentCanvas, type DocumentCanvasHandle } from "~/components/documents/DocumentCanvas";
-import { DocumentActionBar } from "~/components/documents/DocumentActionBar";
+import "@easybits.cloud/html-tailwind-generator/document.css";
+import {
+  DocumentCanvas,
+  type DocumentCanvasHandle,
+  DocumentActionBar,
+} from "@easybits.cloud/html-tailwind-generator/document";
 import { LANDING_THEMES } from "~/lib/landing3/themes";
 import { HiSparkles } from "react-icons/hi";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";

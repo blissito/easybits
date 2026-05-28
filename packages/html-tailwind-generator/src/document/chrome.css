@@ -1,0 +1,5 @@
+/* Input for the precompiled document editor chrome stylesheet (dist/document.css).
+   Utilities only — preflight is disabled in tailwind.document.config.cjs so this never
+   resets the host app. Content is scanned from the src/document tsx components. */
+@tailwind components;
+@tailwind utilities;

@@ -1,20 +1,15 @@
 /**
- * Neutral per-page canvas (early-adopter easter egg behind ?canvas=1).
+ * Neutral per-page canvas for documents.
  *
  * Renders each page in its OWN iframe whose viewport equals the document format, so
  * `100vw/100vh` and the design's own `<body>` background resolve natively — versatile
- * for ANY size the agent requests (slide, social, letter, custom) without forcing a
- * theme background. Reuses the SDK interaction script (getIframeScript) so selection,
- * inline text edit and class/attribute edits work exactly like the share editor, lifted
- * to a parent FloatingToolbar.
- *
- * Contrast with the landings3 Canvas (one shared iframe + `<body class="bg-surface">`),
- * which imposes a theme background and a single viewport — wrong model for imported
- * full-bleed designs.
+ * for ANY size (slide, social, letter, custom) without forcing a theme background.
+ * Reuses the interaction script (getIframeScript) so selection, inline text edit and
+ * class/attribute edits work, lifted to a parent toolbar (DocumentActionBar).
  */
 import { useRef, useEffect, useImperativeHandle, useCallback, type Ref } from "react";
-import { getIframeScript } from "@easybits.cloud/html-tailwind-generator";
-import type { Section3, IframeMessage } from "~/lib/landing3/types";
+import { getIframeScript } from "../iframeScript";
+import type { Section3, IframeMessage } from "../types";
 
 export interface DocumentCanvasHandle {
   scrollToSection: (id: string) => void;
@@ -68,7 +63,7 @@ html, body { width: ${w}px; height: ${h}px; overflow: hidden; }
 <script>
 // Forward Escape to the parent (the action bar lives there). Must run INSIDE the iframe
 // because it captures keyboard focus — a parent-side listener never sees the keypress
-// (same reason the SDK forwards undo/redo via postMessage).
+// (same reason undo/redo are forwarded via postMessage).
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
   var t = e.target;

@@ -1,0 +1,39 @@
+{
+  "name": "@easybits.cloud/email-generator",
+  "version": "0.1.0",
+  "description": "Turn EasyBits document sections into email-safe HTML — inline styles, no Tailwind, no scripts. Built for Gmail/Outlook.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "tsup"
+  },
+  "dependencies": {
+    "juice": "^11.0.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0"
+  },
+  "peerDependencies": {
+    "@easybits.cloud/html-tailwind-generator": ">=0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@easybits.cloud/html-tailwind-generator": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@easybits.cloud/html-tailwind-generator": ">=0.3.0",
+    "tsup": "^8.5.1"
+  }
+}

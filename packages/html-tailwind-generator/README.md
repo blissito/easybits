@@ -175,6 +175,56 @@ const url = await deployToS3({
 });
 ```
 
+### Document editor (headless)
+
+A multi-page document editor: each page renders in its own format-sized iframe (letter,
+social, slide, custom) with click-to-select, inline text edit, and class/tag/attribute edits
+driven by a floating toolbar. It is **headless** — you own persistence and the surrounding
+chrome. The hook holds state + edit ops and calls `onPersist(sectionId, html)` on every change
+(debounce/fetch/save-state are yours).
+
+```tsx
+// 1. Import the precompiled chrome stylesheet once (no Tailwind needed in the host).
+import "@easybits.cloud/html-tailwind-generator/document.css";
+import {
+  DocumentCanvas,
+  DocumentActionBar,
+  useDocumentEditor,
+  type Section3,
+} from "@easybits.cloud/html-tailwind-generator/document";
+
+function MyDocEditor({ initialSections }: { initialSections: Section3[] }) {
+  const ed = useDocumentEditor({
+    initialSections,
+    theme: "minimal",          // a named LANDING_THEMES id…
+    customColors: null,        // …or a custom palette { primary, secondary, accent, surface }
+    format: { width: 816, height: 1056 }, // page size in px (defaults to US-Letter @96dpi)
+    onPersist: async (sectionId, html) => {
+      // YOUR save — called raw on every edit/undo/redo. Debounce it as you see fit.
+      await fetch(`/api/docs/${sectionId}`, { method: "POST", body: JSON.stringify({ html }) });
+    },
+  });
+
+  return (
+    <div className="relative h-screen">
+      <DocumentCanvas {...ed.canvasProps} />
+      {/* Omit onRefine/onViewCode (as actionBarProps does) to hide the AI/code buttons. */}
+      <DocumentActionBar {...ed.actionBarProps} />
+    </div>
+  );
+}
+```
+
+`useDocumentEditor` also exposes granular fields (`sections`, `selection`, `canvasRef`, and the
+individual `applyClasses` / `changeTag` / `updateAttribute` / `deleteElement` / `doUndo` / `doRedo`
+handlers) for hosts that add their own features (e.g. an AI-refine row or a code panel).
+
+> **SSR note**: this subpath ships browser-only React components. In a Vite/RR7 host add:
+> ```ts
+> // vite.config.ts
+> ssr: { noExternal: ["@easybits.cloud/html-tailwind-generator"] }
+> ```
+
 ## Exports
 
 | Path | Exports |
@@ -185,6 +235,8 @@ const url = await deployToS3({
 | `@easybits.cloud/html-tailwind-generator/deploy` | `deployToEasyBits`, `deployToS3`, types `DeployToS3Options`, `DeployToEasyBitsOptions` |
 | `@easybits.cloud/html-tailwind-generator/images` | `searchImage`, `enrichImages`, `findImageSlots`, `generateImage`, type `PexelsResult` |
 | `@easybits.cloud/html-tailwind-generator/components` | `Canvas`, `SectionList`, `FloatingToolbar`, `CodeEditor`, type `CanvasHandle` |
+| `@easybits.cloud/html-tailwind-generator/document` | `DocumentCanvas`, `DocumentActionBar`, `useDocumentEditor`, types `DocumentCanvasHandle`, `UseDocumentEditorOptions` |
+| `@easybits.cloud/html-tailwind-generator/document.css` | Precompiled chrome stylesheet for the document editor (import once; preflight-free) |
 
 Types also exported from the root path: `Section3`, `IframeMessage`, `LandingTheme`, `CustomColors`.
 

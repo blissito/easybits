@@ -1,19 +1,21 @@
 /**
- * Brutalist action bar for the per-page document editor (early-adopter ?canvas=1).
+ * Brutalist floating action bar for the per-page document editor.
  *
- * Prototype of the standardized editor toolbar. Brutalism styling (border-2 border-black,
- * brand-500, offset shadow) instead of GrapesJS grays. Features:
+ * Features:
  *  - raw Tailwind class editor (chips + add) with light autocomplete
  *  - theme color swatches (transparent / b&w / tokens) applied as classes
  *  - tag switch, element attributes (img src/alt, link href), AI refine, view code, delete
  *
- * Once validated here it gets ported to the SDK FloatingToolbar so share + dash share one
- * standard toolbar.
+ * `onRefine` and `onViewCode` are optional — omit them to hide the AI refine row / code
+ * button (e.g. a share/read-only host where refine would cost the owner's credits).
+ *
+ * Styling depends on the precompiled chrome stylesheet shipped at
+ * `@easybits.cloud/html-tailwind-generator/document.css` — import it once in the host.
  */
 import { useState, useEffect, useLayoutEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import { cn } from "~/utils/cn";
-import type { IframeMessage } from "~/lib/landing3/types";
-import { hasInlineStyleConflict } from "~/lib/landing4/inlineStyle";
+import { cn } from "../utils/cn";
+import type { IframeMessage } from "../types";
+import { hasInlineStyleConflict } from "../utils/inlineStyle";
 
 interface Props {
   selection: IframeMessage | null;
@@ -304,7 +306,7 @@ export function DocumentActionBar({
         <button onClick={onClose} title="Cerrar" className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-black bg-white hover:bg-gray-100 font-black shrink-0" aria-label="Cerrar">×</button>
       </div>
 
-      {/* Row 2 — AI refine (section-level). Hidden in share mode (no onRefine). */}
+      {/* Row 2 — AI refine (section-level). Hidden when no onRefine. */}
       {onRefine && (
         <div className="flex items-center gap-1.5 border-t-2 border-black/10 pt-1.5">
           <input

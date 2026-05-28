@@ -13,6 +13,7 @@ export default defineConfig({
     directions: "src/directions.ts",
     buildHtmlV4: "src/buildHtmlV4.ts",
     grapesToSections: "src/grapesToSections.ts",
+    document: "src/document/index.ts",
     "hooks/useThumbnailCapture": "src/hooks/useThumbnailCapture.ts",
   },
   format: ["esm"],

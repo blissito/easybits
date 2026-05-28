@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/html-tailwind-generator",
-  "version": "0.2.146",
+  "version": "0.3.0",
   "description": "AI-powered landing page generator with Tailwind CSS — canvas editor, streaming generation, and one-click deploy",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -54,14 +54,20 @@
     "./hooks": {
       "types": "./dist/hooks/useThumbnailCapture.d.ts",
       "import": "./dist/hooks/useThumbnailCapture.js"
-    }
+    },
+    "./document": {
+      "types": "./dist/document.d.ts",
+      "import": "./dist/document.js"
+    },
+    "./document.css": "./dist/document.css"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "prepublishOnly": "tsup"
+    "build": "tsup && npm run build:css",
+    "build:css": "tailwindcss -c tailwind.document.config.cjs -i src/document/chrome.css -o dist/document.css --minify",
+    "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
     "@ai-sdk/anthropic": ">=3",
@@ -124,9 +130,11 @@
   },
   "dependencies": {
     "@easybits.cloud/html-tailwind-generator": "^0.2.132",
+    "clsx": "^2.1.1",
     "nanoid": "^5.1.5"
   },
   "devDependencies": {
+    "tailwindcss": "^3.4.16",
     "tsup": "^8.5.1"
   }
 }
