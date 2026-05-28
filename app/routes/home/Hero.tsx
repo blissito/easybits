@@ -12,21 +12,21 @@ export const Hero = () => {
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Reemplaza tu{" "}
+            El backend que{" "}
             <a
               href="https://formmy.app/ghosty"
               target="_blank"
               rel="noopener noreferrer"
               className="underline decoration-4 decoration-brand-500 underline-offset-4 hover:decoration-black"
             >
-              CRM/ERP
+              tu agente IA
             </a>{" "}
-            tradicional por uno agéntico, todo en uno con un solo MCP
+            controla — archivos, datos y acciones, sin código
           </h1>
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
-            Cotiza tu agente IA en línea en 2 minutos. Llévate el PDF de tu
-            propuesta y agenda tu discovery call.
+            Publica, guarda y automatiza desde un solo MCP. Tu agente ya tiene
+            dónde trabajar.
           </p>
         </TextBlurEffect>
         <Link to="/cuanto-cuesta-mi-agente">
