@@ -52,8 +52,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "ghosty",
     label: "Ghosty",
-    description: "Core + set DB completo (create/query/select/exec/import/list/get/delete). Para agentes Ghosty (DeepSeek) que necesitan su SQLite nativa sin floodear con las 140 tools.",
-    toolCount: 46,
+    description: "Curado y mínimo para agentes Ghosty (DeepSeek): set DB completo + documentos + archivos + imagen (gpt-image-2). Sin brand/forms/websites/media para no floodear la elección de tool.",
+    toolCount: 24,
   },
   {
     key: "docs",
@@ -214,15 +214,26 @@ export const CORE_ALLOWLIST = new Set<string>([
 ]);
 
 /**
- * Ghosty toolset — Core + el set DB completo. Los agentes de ghosty.studio
- * corren DeepSeek (vía CodeWhale): con 140 tools pierden confiabilidad eligiendo
- * tool y el camino dinámico (discover_tools/run_tool) les cuesta. Este grupo les
- * da documentos/archivos/brand (core) + su SQLite nativa sin floodear.
- * Core ya trae db_list/db_create/db_query; aquí sumamos el resto del set DB.
+ * Ghosty toolset — superficie curada y mínima para agentes ghosty.studio
+ * (DeepSeek vía CodeWhale): con 140 tools pierden confiabilidad eligiendo tool.
+ * Set explícito (NO hereda de CORE) para mantenerlo lean: el set DB completo +
+ * documentos + archivos + 1 tool de imagen (OpenAI gpt-image-2). Deliberadamente
+ * SIN brand kits, forms, share links, websites, research, secrets, ni media/
+ * video/voz/tournament — se añaden uno a uno si un caso real lo justifica.
  */
 export const GHOSTY_ALLOWLIST = new Set<string>([
-  ...CORE_ALLOWLIST,
-  "db_select", "db_exec", "db_import", "db_get", "db_delete",
+  // DB — set completo (el punto del grupo)
+  "db_create", "db_query", "db_select", "db_exec",
+  "db_import", "db_list", "db_get", "db_delete",
+  // Documentos
+  "create_document", "get_document", "list_documents", "update_document", "delete_document",
+  "add_page", "delete_page", "reorder_pages",
+  "set_page_html", "get_page_html",
+  "deploy_document", "open_design_in_editor",
+  // Archivos
+  "list_files", "get_file", "upload_file",
+  // Imagen — OpenAI gpt-image-2 (text-to-image + edición por referencia)
+  "create_or_edit_image",
 ]);
 
 /** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */
