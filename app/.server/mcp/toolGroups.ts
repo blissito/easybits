@@ -12,6 +12,7 @@
 
 export type ToolGroupKey =
   | "core"
+  | "ghosty"
   | "design"
   | "docs"
   | "sites"
@@ -47,6 +48,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Core",
     description: "Lo esencial: archivos, DBs, documentos, forms, websites, brand. Para agentes generalistas.",
     toolCount: 41,
+  },
+  {
+    key: "ghosty",
+    label: "Ghosty",
+    description: "Core + set DB completo (create/query/select/exec/import/list/get/delete). Para agentes Ghosty (DeepSeek) que necesitan su SQLite nativa sin floodear con las 140 tools.",
+    toolCount: 46,
   },
   {
     key: "docs",
@@ -206,6 +213,18 @@ export const CORE_ALLOWLIST = new Set<string>([
   "secret_set", "secret_list", "secret_delete",
 ]);
 
+/**
+ * Ghosty toolset — Core + el set DB completo. Los agentes de ghosty.studio
+ * corren DeepSeek (vía CodeWhale): con 140 tools pierden confiabilidad eligiendo
+ * tool y el camino dinámico (discover_tools/run_tool) les cuesta. Este grupo les
+ * da documentos/archivos/brand (core) + su SQLite nativa sin floodear.
+ * Core ya trae db_list/db_create/db_query; aquí sumamos el resto del set DB.
+ */
+export const GHOSTY_ALLOWLIST = new Set<string>([
+  ...CORE_ALLOWLIST,
+  "db_select", "db_exec", "db_import", "db_get", "db_delete",
+]);
+
 /** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */
 export const VIDEO_ALLOWLIST = new Set<string>([
   "video_create",
@@ -324,6 +343,7 @@ export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
  */
 export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   core: CORE_ALLOWLIST,
+  ghosty: GHOSTY_ALLOWLIST,
   design: DESIGN_ALLOWLIST,
   magnet: MAGNET_ALLOWLIST,
   video: VIDEO_ALLOWLIST,
