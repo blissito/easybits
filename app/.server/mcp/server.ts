@@ -24,7 +24,7 @@ import {
 import { z } from "zod";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
-import { GROUP_ALLOWLISTS, type ToolGroupKey } from "./toolGroups";
+import { GROUP_ALLOWLISTS, DYNAMIC_ONLY_TOOLS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
@@ -286,6 +286,18 @@ export function createMcpServer(groups?: string[]) {
       if (!activeAllowlist.has(name) && typeof tool.disable === "function") {
         tool.disable();
       }
+    }
+  }
+
+  // Dynamic-only tools: hide them from `tools/list` in EVERY group — including
+  // `all` and the no-allowlist groups, which the block above leaves untouched.
+  // They stay registered, so discover_tools/run_tool still reach them. Lets us
+  // demote redundant/legacy tools off every agent's tool picker without deleting.
+  {
+    const all = (server as any)._registeredTools as Record<string, { disable?: () => void }>;
+    for (const name of DYNAMIC_ONLY_TOOLS) {
+      const tool = all[name];
+      if (tool && typeof tool.disable === "function") tool.disable();
     }
   }
 

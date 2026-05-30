@@ -349,6 +349,24 @@ export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * Dynamic-only tools — registradas (así `discover_tools`/`run_tool` las siguen
+ * alcanzando) pero ocultas de `tools/list` en TODOS los grupos, incluido `all`
+ * y los grupos sin allowlist (`docs`/`sites`/`brand`). Son tools redundantes o
+ * legacy que conservamos por compatibilidad pero que no queremos floodeando el
+ * selector de tool de ningún agente. NO se borran — se degradan a la vía
+ * dinámica. server.ts las deshabilita incondicionalmente tras el allowlist.
+ */
+export const DYNAMIC_ONLY_TOOLS = new Set<string>([
+  // Sistema viejo de share-token — superado por create/list/revoke_share_link
+  "generate_share_token", "list_share_tokens", "revoke_share_token",
+  "list_permissions", "revoke_permission",
+  // Duplicados exactos de tools más nuevas
+  "extract_brand_kit", // → extract_brand_kit_from_url
+  "get_docs",          // → get_document / list_documents
+  "generate_document", // → create_document (path streaming)
+]);
+
+/**
  * Map of group key → allowlist. Groups without an entry load the full tool
  * set of their registered categories (no name-level filtering).
  */
