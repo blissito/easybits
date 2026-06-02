@@ -1,9 +1,21 @@
 /**
- * Convert PDF pages to base64 PNG images using Playwright + pdf.js.
- * Detects each page's native dimensions and renders at correct aspect ratio.
+ * Convert PDF pages to base64 PNG images using poppler's `pdftoppm`.
+ *
+ * pdftoppm reads the PDF straight from disk and writes one PNG per page with
+ * bounded memory — independent of file size. This replaces the old
+ * chromium + pdf.js path, which fed the whole PDF through CDP as base64
+ * (~3 in-memory copies) and OOM-killed the 1GB host on heavy PDFs, dropping
+ * the open MCP connection mid-request (-32603).
  */
+import { execFile } from "node:child_process";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 
-let browserPromise: ReturnType<typeof launchBrowser> | null = null;
+const execFileAsync = promisify(execFile);
+
+// Serialize rasterization jobs so we never run N pdftoppm processes at once.
 let pdfQueue: Promise<any> = Promise.resolve();
 
 function enqueuePdfJob<T>(fn: () => Promise<T>): Promise<T> {
@@ -12,21 +24,11 @@ function enqueuePdfJob<T>(fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-async function launchBrowser() {
-  const { chromium } = await import("playwright-core");
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-  return chromium.launch({
-    ...(executablePath ? { executablePath } : {}),
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-}
-
-function getBrowser() {
-  if (!browserPromise) browserPromise = launchBrowser();
-  return browserPromise;
-}
-
-const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155";
+// Honest backstop: pdftoppm streams from disk so 90MB docs are fine, but we
+// still buffer the input in Node before writing it. Reject absurd inputs so a
+// pathological file can't exhaust memory. The real work cap is `maxPages`.
+const MAX_PDF_BYTES = 150 * 1024 * 1024;
+const PDFTOPPM_TIMEOUT_MS = 120_000;
 
 export interface PdfPage {
   image: string; // base64 PNG
@@ -34,9 +36,19 @@ export interface PdfPage {
   height: number; // rendered pixel height
 }
 
+/** Parse width/height from a PNG IHDR header. Returns null on failure. */
+function readPngDimensions(buf: Buffer): { width: number; height: number } | null {
+  // 8-byte signature + 4-byte length + "IHDR" + width(4) + height(4)
+  if (buf.length >= 24 && buf[0] === 0x89 && buf.toString("ascii", 1, 4) === "PNG") {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  return null;
+}
+
 /**
- * Convert PDF to images. Returns page images with their native dimensions.
- * @param maxWidth - max render width (default 1200). Height is calculated from PDF aspect ratio.
+ * Convert PDF to images. Returns page images with their rendered dimensions.
+ * @param maxPages - render at most this many leading pages (default 20).
+ * @param maxWidth - render width in px (default 1200). Height preserves aspect ratio.
  */
 export async function pdfToImages(
   pdfBuffer: Buffer,
@@ -44,71 +56,62 @@ export async function pdfToImages(
 ): Promise<PdfPage[]> {
   const { maxPages = 20, maxWidth = 1200 } = opts;
 
-  const html = `<!DOCTYPE html>
-<html><head></head><body>
-<canvas id="canvas"></canvas>
-<script type="module">
-  import * as pdfjsLib from "${PDFJS_CDN}/pdf.min.mjs";
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "${PDFJS_CDN}/pdf.worker.min.mjs";
-
-  async function render(pdfBytes, maxPages, maxW) {
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
-    const total = Math.min(pdf.numPages, maxPages);
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const results = [];
-
-    for (let i = 1; i <= total; i++) {
-      const page = await pdf.getPage(i);
-      const vp = page.getViewport({ scale: 1 });
-      // Scale to fit maxWidth, preserve aspect ratio
-      const scale = Math.min(maxW / vp.width, 2.0); // cap at 2x
-      const viewport = page.getViewport({ scale });
-      const w = Math.round(viewport.width);
-      const h = Math.round(viewport.height);
-      canvas.width = w;
-      canvas.height = h;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, w, h);
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      results.push({
-        image: canvas.toDataURL("image/png").split(",")[1],
-        width: w,
-        height: h,
-      });
-    }
-    return results;
+  if (pdfBuffer.length > MAX_PDF_BYTES) {
+    throw new Error(
+      `PDF too large to rasterize (${(pdfBuffer.length / 1e6).toFixed(1)}MB, max ${MAX_PDF_BYTES / 1e6}MB)`
+    );
   }
 
-  window.__renderPdf = render;
-</script></body></html>`;
-
   return enqueuePdfJob(async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pdf2img-"));
+    const pdfPath = path.join(dir, "in.pdf");
+    const prefix = path.join(dir, "page");
     try {
-      const browser = await getBrowser();
-      const page = await browser.newPage({ viewport: { width: maxWidth, height: maxWidth } });
+      await fs.writeFile(pdfPath, pdfBuffer);
+
+      // -scale-to-x sets width; -scale-to-y -1 preserves aspect ratio.
+      // -l caps the last page rendered so a huge PDF only costs `maxPages`.
       try {
-        await page.setContent(html, { waitUntil: "networkidle", timeout: 30000 });
-        await page.waitForFunction(() => typeof (window as any).__renderPdf === "function", { timeout: 15000 });
-
-        const b64 = pdfBuffer.toString("base64");
-        const results = await page.evaluate(
-          async ({ b64, maxPages, maxW }) => {
-            const binary = atob(b64);
-            const uint8 = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) uint8[i] = binary.charCodeAt(i);
-            return (window as any).__renderPdf(uint8, maxPages, maxW);
-          },
-          { b64, maxPages, maxW: maxWidth }
+        await execFileAsync(
+          "pdftoppm",
+          [
+            "-png",
+            "-scale-to-x", String(maxWidth),
+            "-scale-to-y", "-1",
+            "-l", String(maxPages),
+            pdfPath,
+            prefix,
+          ],
+          { timeout: PDFTOPPM_TIMEOUT_MS, maxBuffer: 1024 * 1024 }
         );
-
-        return results as PdfPage[];
-      } finally {
-        await page.close();
+      } catch (err: any) {
+        const detail = (err?.stderr || err?.message || String(err)).toString().trim();
+        throw new Error(`PDF rendering failed: ${detail}`);
       }
-    } catch (err: any) {
-      browserPromise = null;
-      throw new Error(`PDF rendering failed: ${err.message}`);
+
+      // pdftoppm names files <prefix>-<n>.png (zero-padded for large docs).
+      // Sort numerically by the trailing page number so order is correct.
+      const files = (await fs.readdir(dir))
+        .filter((f) => f.startsWith("page-") && f.endsWith(".png"))
+        .sort((a, b) => {
+          const na = parseInt(a.replace(/\D+/g, ""), 10);
+          const nb = parseInt(b.replace(/\D+/g, ""), 10);
+          return na - nb;
+        });
+
+      const results: PdfPage[] = [];
+      for (const f of files) {
+        const buf = await fs.readFile(path.join(dir, f));
+        const dims = readPngDimensions(buf) || { width: maxWidth, height: maxWidth };
+        results.push({
+          image: buf.toString("base64"),
+          width: dims.width,
+          height: dims.height,
+        });
+      }
+      return results;
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
   });
 }

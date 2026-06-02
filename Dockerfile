@@ -33,9 +33,11 @@ RUN npm prune --omit=dev
 FROM node:20-slim AS runner
 WORKDIR /app
 
-# Install Chromium for document screenshots (playwright-core)
+# Install Chromium for document screenshots (playwright-core) and
+# poppler-utils (pdftoppm) for memory-bounded PDF rasterization.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    poppler-utils \
     fonts-noto-cjk \
     fonts-noto-color-emoji \
     curl \
