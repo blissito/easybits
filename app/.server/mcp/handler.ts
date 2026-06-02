@@ -1,13 +1,15 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createMcpServer } from "~/.server/mcp/server";
 import { authenticateRequest } from "~/.server/apiAuth";
-import { applyRateLimit } from "~/.server/rateLimiter";
+import { RateLimiter } from "~/.server/rateLimiter";
+
+// Per-user rate limit for MCP. Keyed by user id (not IP) so users behind a
+// shared NAT/proxy don't share a bucket, and so the ceiling fits agentic
+// batch workloads. Ample headroom: 300 calls/min per user.
+const mcpRateLimiter = new RateLimiter({ windowMs: 60_000, maxRequests: 300 });
 
 // Stateless mode — each request is independent, auth via Bearer token
 export async function handleMcp(request: Request): Promise<Response> {
-  const rateLimitResponse = await applyRateLimit(request);
-  if (rateLimitResponse) return rateLimitResponse;
-
   const ctx = await authenticateRequest(request);
   if (!ctx) {
     const base = process.env.BASE_URL || "https://www.easybits.cloud";
@@ -17,6 +19,19 @@ export async function handleMcp(request: Request): Promise<Response> {
         status: 401,
         headers: {
           "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+        },
+      }
+    );
+  }
+
+  const { allowed, resetTime } = await mcpRateLimiter.checkRateLimit(ctx.user.id);
+  if (!allowed) {
+    return Response.json(
+      { error: "Rate limit exceeded", message: "Too many requests, slow down." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": Math.ceil((resetTime - Date.now()) / 1000).toString(),
         },
       }
     );
