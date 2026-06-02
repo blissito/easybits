@@ -2889,6 +2889,14 @@ Returns { ready, sectionCount, elapsedMs }. ready:false means timeout — call a
     })
   );
 
+  // TEMPORARILY UNPUBLISHED (2026-06-02): the PDF path rasterizes via chromium +
+  // pdf.js, which spikes memory and OOM-kills the 1GB Fly machine on heavy PDFs
+  // (~17MB / 6 pages), dropping the open MCP connection mid-request → clients see
+  // a raw -32603 "terminated" and retry in a loop. Code kept intact for a later
+  // rework (move PDF rasterization off chromium → mutool/pymupdf). Until then the
+  // tool is not registered at all: invisible to tools/list AND unreachable via
+  // run_tool/discover_tools. Re-enable with ENABLE_CLONE_DOCUMENT=true.
+  if (process.env.ENABLE_CLONE_DOCUMENT === "true")
   server.tool(
     "clone_document",
     `Clone or reimagine a document from any visual source (image, PDF, or another EasyBits document) using Gemini Vision. Outputs a NEW document (Landing v4) — does not mutate any existing one.
