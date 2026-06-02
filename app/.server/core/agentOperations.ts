@@ -557,13 +557,39 @@ export async function getAgentRunStatus(
     return { jobId, status: "expired" };
   }
 
-  // Try reading the result file. If absent, the agent is still running.
+  // Try reading the result file. If absent, the agent is either still working
+  // OR the in-VM process died without writing a result (OOM, native crash, a
+  // hung/killed MCP child). Distinguish the two: probe for a live agent
+  // process. If none is running and there's no result, surface the log tail as
+  // an error instead of reporting "running" forever until the 30-min TTL — that
+  // eternal-"running" blind spot is what made dead jobs look alive and got
+  // polled a dozen times before being given up on.
   let resultJson: string | null = null;
   try {
     const file = await sandboxReadFile(ctx, jobId, { path: RESULT_PATH });
     resultJson = file.content;
   } catch {
-    return { jobId, status: "running" };
+    let alive = true;
+    try {
+      const probe = await execCommand(ctx, jobId, {
+        command: `pgrep -f ${SCRIPT_PATH} >/dev/null && echo ALIVE || echo DEAD`,
+        timeoutSeconds: 5,
+      });
+      alive = (probe.stdout || "").trim() !== "DEAD";
+    } catch {
+      // Probe itself failed — don't false-positive a kill; treat as running.
+    }
+    if (alive) return { jobId, status: "running" };
+    const log = await sandboxReadFile(ctx, jobId, { path: LOG_PATH }).catch(
+      () => ({ content: "" })
+    );
+    return {
+      jobId,
+      status: "error",
+      error:
+        "agent process exited without writing a result (likely crashed or was killed — e.g. OOM or a dead MCP child)",
+      log: log.content?.slice(-2000) || "",
+    };
   }
 
   let out: AgentScriptResult;
