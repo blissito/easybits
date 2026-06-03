@@ -808,12 +808,12 @@ export async function createAgent(
   // si trae su propia key en `env` (ghosty-studio la resolvió del vault), esa gana.
   // NO necesita DEEPSEEK_RUNTIME_TOKEN (no hay auth interna Node↔brain; cagent es loopback).
   if (params.template === "cagent-ghosty") {
-    // Claude business-default scoped a este template. OJO: NO usar
-    // SANDBOX_HOST_ANTHROPIC_KEY — es un OAuth token (sk-ant-oat), y cagent solo habla
-    // API key (x-api-key). CAGENT_ANTHROPIC_API_KEY = API key real (sk-ant-api).
-    if (!env.ANTHROPIC_API_KEY && process.env.CAGENT_ANTHROPIC_API_KEY) {
-      env.ANTHROPIC_API_KEY = process.env.CAGENT_ANTHROPIC_API_KEY;
-    }
+    // DEFAULT = DeepSeek V4 Pro (barato). PREMIUM OPT-IN (Claude, con razonamiento, más
+    // caro): descomenta para inyectar la API key Anthropic managed (CAGENT_ANTHROPIC_API_KEY,
+    // sk-ant-api real — NO usar SANDBOX_HOST_ANTHROPIC_KEY que es OAuth y cagent no lo habla).
+    // if (!env.ANTHROPIC_API_KEY && process.env.CAGENT_ANTHROPIC_API_KEY) {
+    //   env.ANTHROPIC_API_KEY = process.env.CAGENT_ANTHROPIC_API_KEY;
+    // }
     if (!env.DEEPSEEK_API_KEY) {
       const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
       if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
