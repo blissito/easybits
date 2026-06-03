@@ -1,0 +1,175 @@
+#!/bin/bash
+set -euo pipefail
+
+# pdf-assets — mine a PDF for reusable assets (images, text, page renders, fonts)
+# so the agent can REBUILD a cleaner version in HTML instead of re-diffusing it.
+# Part of the doc-remix skill. Read SKILL.md for the full workflow.
+# Requires (already in the container image): pdfimages, pdftotext, pdftoppm,
+# pdffonts, identify, curl, md5sum, awk.
+
+VERSION="1.0.0"
+
+usage() {
+  cat <<'USAGE'
+pdf-assets — Extract reusable assets from a PDF for an HTML rebuild
+
+Usage:
+  pdf-assets mine <file|url> [--dpi N]    Mine a PDF into /workspace/group/doc-remix-<ts>/
+  pdf-assets help
+  pdf-assets version
+
+mine extracts:
+  - embedded images (pdfimages -all, keeps transparency / cutouts)
+  - layout text       (pdftotext -layout  -> text.txt)
+  - page renders      (pdftoppm -png, default -r 110 -> page-*.png) so you can SEE the original
+  - fonts             (pdffonts -> fonts.txt)
+and prints a classified asset manifest (ASSET | TYPE | WxH | ALPHA) to stdout.
+USAGE
+}
+
+# Resolve input to a local PDF path (download URLs, like pdf-reader does).
+resolve_input() {
+  local src="$1" out="$2"
+  if [[ "$src" =~ ^https?:// ]]; then
+    echo "Downloading: $src" >&2
+    curl -sL -o "$out" "$src" || { echo "Error: download failed: $src" >&2; exit 1; }
+  else
+    if [[ ! -f "$src" ]]; then
+      # Fuzzy resolve: filenames with accents (NFC vs NFD), spaces, parens, or
+      # case often don't match the literal path the agent typed. Match by a
+      # normalized basename (Unicode NFKD transliterates í→i, etc.).
+      local _found
+      _found="$(python3 - "$src" <<'PY' 2>/dev/null
+import sys, os, unicodedata
+src = sys.argv[1]
+def norm(s):
+    s = unicodedata.normalize('NFKD', s)
+    return ''.join(c for c in s if not unicodedata.combining(c)).lower().encode('ascii', 'ignore').decode()
+want = norm(os.path.basename(src))
+d = os.path.dirname(src) or '.'
+hit = ''
+if os.path.isdir(d):
+    for f in sorted(os.listdir(d)):
+        p = os.path.join(d, f)
+        if os.path.isfile(p) and norm(f) == want:
+            hit = p
+            break
+print(hit)
+PY
+)"
+      if [[ -n "$_found" ]]; then
+        echo "Resolved -> $(basename "$_found") (fuzzy match)" >&2
+        src="$_found"
+      else
+        echo "Error: file not found: $src" >&2
+        exit 1
+      fi
+    fi
+    cp "$src" "$out"
+  fi
+  [[ "$(head -c 4 "$out" 2>/dev/null)" == "%PDF" ]] || { echo "Error: not a PDF (bad header): $src" >&2; exit 1; }
+}
+
+# classify W H ALPHA SD  -> sets global TYPE
+# SD is normalized standard deviation (0..1) from ImageMagick.
+classify() {
+  local W="$1" H="$2" ALPHA="$3" SD="$4"
+  local long=$(( W > H ? W : H ))
+  local ar
+  ar="$(awk -v w="$W" -v h="$H" 'BEGIN{ if(h==0){print 0}else{printf "%.3f", w/h} }')"
+  # 1. near-uniform OR tiny -> mask / noise (leftover tile, skip in rebuild)
+  if awk -v s="$SD" 'BEGIN{exit !(s < 0.02)}' || [[ "$long" -lt 32 ]]; then TYPE="mask"; return; fi
+  # 2. very large + page-ish aspect -> decorative background (raster reuse only)
+  if [[ "$long" -ge 1500 ]] && awk -v a="$ar" 'BEGIN{exit !(a>=0.5 && a<=2.0)}'; then TYPE="background"; return; fi
+  # 3. banner / wordmark aspect, OR small-with-alpha -> logo
+  if awk -v a="$ar" 'BEGIN{exit !(a>2.0 || a<0.5)}' || { [[ "$long" -lt 200 ]] && [[ "$ALPHA" == "True" ]]; }; then TYPE="logo"; return; fi
+  # 4. mid-size, balanced -> photo (cutout if it carries alpha)
+  if [[ "$long" -ge 200 ]] && [[ "$long" -lt 1500 ]]; then
+    if [[ "$ALPHA" == "True" ]]; then TYPE="photo (cutout)"; else TYPE="photo"; fi
+    return
+  fi
+  TYPE="other"
+}
+
+cmd_mine() {
+  local src="" dpi=110
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dpi) dpi="${2:?--dpi needs a value}"; shift 2 ;;
+      -*) echo "Error: unknown option $1" >&2; exit 1 ;;
+      *) if [[ -z "$src" ]]; then src="$1"; else echo "Error: extra arg $1" >&2; exit 1; fi; shift ;;
+    esac
+  done
+  [[ -n "$src" ]] || { echo "Error: no PDF given" >&2; usage >&2; exit 1; }
+
+  local ts run pdf imgdir
+  ts="$(date +%Y%m%d-%H%M%S)"
+  run="/workspace/group/doc-remix-$ts"
+  imgdir="$run/images"
+  mkdir -p "$imgdir"
+  pdf="$run/source.pdf"
+  resolve_input "$src" "$pdf"
+
+  # 1. Embedded images.
+  # Prefer `mutool extract -a` (MuPDF): reattaches soft masks -> true RGBA cutouts
+  # in one shot (transparent .pam). Fall back to poppler if mutool isn't installed
+  # (then images and their alpha masks come out separate, no baked transparency).
+  if command -v mutool >/dev/null 2>&1; then
+    ( cd "$imgdir" && mutool extract -a "$pdf" >/dev/null 2>&1 ) || true
+    # .pam carries the alpha -> normalize to .png; drop extracted fonts.
+    for p in "$imgdir"/*.pam; do
+      [ -f "$p" ] || continue
+      convert "$p" "${p%.pam}.png" 2>/dev/null && rm -f "$p"
+    done
+    rm -f "$imgdir"/*.cff "$imgdir"/*.ttf "$imgdir"/*.otf 2>/dev/null || true
+  else
+    pdfimages -all "$pdf" "$imgdir/img" 2>/dev/null || true
+  fi
+  # 2. Layout text.
+  pdftotext -layout "$pdf" "$run/text.txt" 2>/dev/null || true
+  # 3. Page renders (to SEE the original design).
+  pdftoppm -png -r "$dpi" "$pdf" "$run/page" 2>/dev/null || true
+  # 4. Fonts.
+  pdffonts "$pdf" > "$run/fonts.txt" 2>/dev/null || true
+
+  # Dedupe exact byte-duplicates (same logo on every page).
+  declare -A seen_md5
+  for f in "$imgdir"/*; do
+    [[ -f "$f" ]] || continue
+    local m
+    m="$(md5sum "$f" | cut -d' ' -f1)"
+    if [[ -n "${seen_md5[$m]:-}" ]]; then rm -f "$f"; else seen_md5[$m]=1; fi
+  done
+
+  # Manifest.
+  local nrender
+  nrender="$(ls "$run"/page-*.png 2>/dev/null | wc -l | tr -d ' ')"
+  echo "=== doc-remix manifest ==="
+  echo "run dir : $run"
+  echo "text    : $run/text.txt"
+  echo "renders : $nrender page PNG(s) at -r $dpi  ($run/page-*.png)"
+  echo "fonts   : $run/fonts.txt"
+  echo
+  printf "%-34s %-15s %-11s %-5s\n" "ASSET" "TYPE" "WxH" "ALPHA"
+  printf "%-34s %-15s %-11s %-5s\n" "-----" "----" "---" "-----"
+  for f in "$imgdir"/*; do
+    [[ -f "$f" ]] || continue
+    local W H ALPHA SD
+    read -r W H ALPHA SD < <(identify -format '%w %h %A %[fx:standard_deviation]\n' "$f[0]" 2>/dev/null || echo "0 0 False 0") || true
+    classify "$W" "$H" "$ALPHA" "$SD"
+    local alpha_yn="no"; if [[ "$ALPHA" == "True" ]]; then alpha_yn="yes"; fi
+    printf "%-34s %-15s %-11s %-5s\n" "${f#"$run"/}" "$TYPE" "${W}x${H}" "$alpha_yn"
+  done
+  echo
+  echo "Next: Read $run/page-1.png to SEE the design, read $run/text.txt for the"
+  echo "structure, then rebuild in HTML with the real assets. Skip TYPE=mask. See SKILL.md."
+}
+
+command="${1:-help}"
+shift || true
+case "$command" in
+  mine) cmd_mine "$@" ;;
+  help|--help|-h) usage ;;
+  version|--version|-v) echo "pdf-assets $VERSION" ;;
+  *) echo "Error: unknown command: $command" >&2; echo "Run 'pdf-assets help'." >&2; exit 1 ;;
+esac

@@ -1,0 +1,50 @@
+MÉTODO — reconstrucción FIEL de una página de documento (el que produjo la portada InnovaKids)
+
+Filosofía: visión solo para VER el layout y recortar assets; el CONTENIDO se extrae GROUNDED
+(del texto real, no se re-transcribe con visión → cero alucinación); los assets se colocan
+POR REFERENCIA (logos/fotos reales, nunca regenerados); el render es determinista.
+
+PASOS (por página)
+
+1. MINAR la fuente (determinista, ya lo hace pdf-assets / poppler):
+   - pdftoppm -png -r 200  → render de la página (para VER el layout y recortar assets)
+   - pdftotext -layout      → el texto real (la fuente del contenido)
+   - pdfimages -all / mutool extract -a → cutouts embebidos (fotos/logos con transparencia)
+   - pdffonts               → tipografías (para igualar)
+
+2. EXTRAER CONTENIDO TIPADO (grounded del texto, NO con visión):
+   { title, subtitle, date, fields:[{icon,value}], authorities:[{name,title}], description:[p1,p2] }
+   Verbatim de pdftotext. Regla dura: 0 inventos, 0 omisiones. Validar contra el texto fuente.
+
+3. PREPARAR ASSETS REALES (por referencia):
+   - Chrome de marca fijo (la barra/header con logos Hidalgo+DESCTI) = recortar del render como
+     UNA imagen (o usar el cutout embebido). Es marca, no se regenera.
+   - Fotos de personas = recortar del render EN CONTEXTO (garantiza cara↔nombre correcto) o
+     usar el cutout embebido correcto.
+   - Subir cada asset público: upload_file (access:"public") → PUT bytes → verificar HTTP 200.
+
+4. CONSTRUIR EL TEMPLATE (HTML) con la GEOMETRÍA de la fuente:
+   - Igualar el aspecto del original (ej. página 595×635pt → section 900×960px).
+   - Chrome fijo (header img) + SLOTS estructurados: bloque de título, campos con iconos,
+     tarjetas de autoridad (foto+nombre+cargo), descripción.
+   - Tokens de marca extraídos de la fuente (guinda #5C1A33, dorado #B5894E).
+   - Layout flex con medidas reales. PROHIBIDO word-break:break-all.
+
+5. LLENAR los slots con el contenido tipado + las URLs de los assets reales.
+
+6. RENDER determinista: create_document (format custom = aspecto de la fuente) → export_document (pdf).
+
+7. VERIFICAR: leer el PDF renderizado y confirmar que cada logo/foto se ve, el contenido es
+   correcto, ningún texto se rompió. Solo entonces "listo".
+
+POR QUÉ SALE FIEL Y NO SE CUELGA
+- El texto viene de pdftotext (grounded) → no se alucina ni se pierden filas.
+- Los assets son los REALES (recorte/cutout), nunca regenerados → marca intacta.
+- El chrome es imagen fija; el contenido son slots → editable.
+- La geometría calza con la fuente → se ve igual.
+- 90% determinista (minar/subir/render); la "inteligencia" (mapear contenido→slots,
+  ubicar regiones) es lo único del LLM, y para repetidos (agenda, tarjetas) es un bloque
+  repetible que se llena por código.
+
+ESTO ES EL "FILL". Para reusar: el LLM propone el template (qué es fijo vs slot, dónde) UNA vez
+por tipo de doc, humano confirma/lockea marca, y de ahí los pasos 2-7 son código determinista.
