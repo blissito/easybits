@@ -230,6 +230,9 @@ export const GHOSTY_ALLOWLIST = new Set<string>([
   "add_page", "delete_page", "reorder_pages",
   "set_page_html", "get_page_html",
   "deploy_document", "open_design_in_editor",
+  // Export a PDF (entrega de archivos): sin esto el agente solo tiene el link web (/s/),
+  // no puede traer un PDF real. get_document_pdf → URL del PDF; export_document → idem por formato.
+  "export_document", "get_document_pdf",
   // Archivos
   "list_files", "get_file", "upload_file",
   // Imagen — OpenAI gpt-image-2 (text-to-image + edición por referencia)

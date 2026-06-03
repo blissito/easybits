@@ -22,6 +22,7 @@ export type SandboxTemplate =
   | "open-ghosty"
   | "lang-ghosty"
   | "rust-ghosty"
+  | "cagent-ghosty"
   | "openclaw"
   | "chat-openai"
   | "chat-anthropic";
@@ -396,7 +397,8 @@ export async function createSandbox(
     params.template === "ghosty-lite" ||
     params.template === "open-ghosty" ||
     params.template === "lang-ghosty" ||
-    params.template === "rust-ghosty";
+    params.template === "rust-ghosty" ||
+    params.template === "cagent-ghosty";
   return callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -780,22 +782,42 @@ export async function createAgent(
     params.template === "ghosty-lite" ||
     params.template === "open-ghosty" ||
     params.template === "lang-ghosty" ||
-    params.template === "rust-ghosty"
+    params.template === "rust-ghosty" ||
+    params.template === "cagent-ghosty"
   ) {
     env.ADMIN_TOKEN = embedToken;
   }
-  // open-ghosty / lang-ghosty / rust-ghosty connect to the easybits MCP (dynamic
-  // tools) when they have the user's EasyBits key. Pull it from the vault; without
-  // it the agent still runs on local tools. Caller env wins. (rust-ghosty's wrapper
-  // writes ~/.deepseek/mcp.json from EASYBITS_API_KEY so CodeWhale picks it up.)
+  // open-ghosty / lang-ghosty / rust-ghosty / cagent-ghosty connect to the easybits MCP
+  // (dynamic tools) when they have the user's EasyBits key. Pull it from the vault; without
+  // it the agent still runs on local tools. Caller env wins. (rust-ghosty's wrapper writes
+  // ~/.deepseek/mcp.json from EASYBITS_API_KEY; cagent-ghosty's start script writes the MCP
+  // toolset into /data/agent.yaml from the same key.)
   if (
     (params.template === "open-ghosty" ||
       params.template === "lang-ghosty" ||
-      params.template === "rust-ghosty") &&
+      params.template === "rust-ghosty" ||
+      params.template === "cagent-ghosty") &&
     !env.EASYBITS_API_KEY
   ) {
     const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
     if (ebKey) env.EASYBITS_API_KEY = ebKey;
+  }
+  // cagent-ghosty (cerebro Docker cagent) elige modelo por prioridad de key (start script):
+  // Claude (ANTHROPIC) > GPT-5 (OPENAI) > DeepSeek. La cred Anthropic managed sale del
+  // SANDBOX_HOST_ANTHROPIC_KEY del host (igual que ghosty/openclaw) — el dueño no pega nada;
+  // si trae su propia key en `env` (ghosty-studio la resolvió del vault), esa gana.
+  // NO necesita DEEPSEEK_RUNTIME_TOKEN (no hay auth interna Node↔brain; cagent es loopback).
+  if (params.template === "cagent-ghosty") {
+    // Claude business-default scoped a este template. OJO: NO usar
+    // SANDBOX_HOST_ANTHROPIC_KEY — es un OAuth token (sk-ant-oat), y cagent solo habla
+    // API key (x-api-key). CAGENT_ANTHROPIC_API_KEY = API key real (sk-ant-api).
+    if (!env.ANTHROPIC_API_KEY && process.env.CAGENT_ANTHROPIC_API_KEY) {
+      env.ANTHROPIC_API_KEY = process.env.CAGENT_ANTHROPIC_API_KEY;
+    }
+    if (!env.DEEPSEEK_API_KEY) {
+      const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
+      if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
+    }
   }
   // rust-ghosty (cerebro CodeWhale) corre opinionated con DeepSeek. Dos secretos los pone
   // el backend para que se lance de un clic:
