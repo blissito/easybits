@@ -101,6 +101,11 @@ import {
   moveFile as sandboxMoveFile,
   mkdir as sandboxMkdir,
   exposeSandboxPort,
+  execBackground,
+  execBackgroundStatus,
+  execBackgroundKill,
+  runCell,
+  kernelRestart,
   listTemplates,
   createAgent,
   messageAgent,
@@ -1103,7 +1108,7 @@ How to embed safely (the only reliable rule):
     "sandbox_create",
     "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Base templates: ubuntu, python, node, bun. Agent/harness templates: node-agent, claude-code, goose, ghostyclaw, openclaw, chat-openai, chat-anthropic (for the chat-* persistent runtimes prefer agent_create). Call templates_list for the full catalog with required env. Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses (extend with sandbox_extend).",
     {
-      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "ghostyclaw", "openclaw", "chat-openai", "chat-anthropic"]).describe("Base image template. 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
+      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "ghostyclaw", "openclaw", "chat-openai", "chat-anthropic", "code-interpreter"]).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
       timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
@@ -1212,7 +1217,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_run_code",
-    "Run a snippet of Python/Node/Bash inline (no need to write a file first). Output captured. Default lang=python. NOTE: each call runs a FRESH process (python3 -c / node -e / bash -c) — there is NO persistent kernel, so variables do NOT survive between calls. Put dependent lines in a single call, or persist state to a file with sandbox_files_write.",
+    "Run a snippet of Python/Node/Bash inline (no need to write a file first). Output captured. Default lang=python. NOTE: each call runs a FRESH process (python3 -c / node -e / bash -c) — there is NO persistent kernel, so variables do NOT survive between calls. Put dependent lines in a single call, or persist state to a file with sandbox_files_write. For stateful Python across cells (and matplotlib charts), use sandbox_run_cell on a 'code-interpreter' sandbox.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       code: z.string().describe("Source code to execute"),
@@ -1332,6 +1337,94 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await exposeSandboxPort(ctx, params.sandboxId, params.port);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_exec_background",
+    "Start a long-running command in the background. Returns { execId, status } immediately instead of blocking like sandbox_exec. Poll with sandbox_exec_status; stop with sandbox_exec_kill. Use for dev servers / long tasks — pair with sandbox_expose_port to reach a server it starts.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      command: z.string().describe("Shell command to run in the background (e.g. 'npm run dev', 'python app.py')"),
+      cwd: z.string().optional().describe("Working directory (default /root)"),
+      env: z.record(z.string()).optional().describe("Extra environment variables"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await execBackground(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_exec_status",
+    "Poll a background command started with sandbox_exec_background. Returns status (running/exited), exitCode (when exited), and the captured stdout/stderr tail (last 1MB each).",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      execId: z.string().describe("The execId returned by sandbox_exec_background"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await execBackgroundStatus(ctx, params.sandboxId, params.execId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_exec_kill",
+    "Kill a background command started with sandbox_exec_background.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      execId: z.string().describe("The execId returned by sandbox_exec_background"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await execBackgroundKill(ctx, params.sandboxId, params.execId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_run_cell",
+    "Run code in the sandbox's PERSISTENT Jupyter kernel — variables, imports and loaded data survive between calls (unlike sandbox_run_code, which is a fresh process each time). Requires a sandbox created with template='code-interpreter'. Returns stdout/stderr plus rich results; matplotlib charts (image/png) come back as native image blocks so the model can see them.",
+    {
+      sandboxId: z.string().describe("Sandbox ID (must be a 'code-interpreter' template)"),
+      code: z.string().describe("Python code for this cell. Builds on the kernel's accumulated state."),
+      timeoutSeconds: z.number().int().min(1).max(600).optional().describe("Kill the cell if it exceeds this (default 60)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await runCell(ctx, sandboxId, rest);
+      // Image results → native MCP image blocks; everything else stays in the
+      // JSON summary so the model still sees stdout/stderr/errors and text outputs.
+      const images = (result.results || []).filter((r) => r.type === "image/png");
+      const summary = {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        error: result.error ?? null,
+        results: (result.results || []).filter((r) => r.type !== "image/png"),
+        images: images.length,
+      };
+      const content: any[] = [{ type: "text", text: JSON.stringify(summary, null, 2) }];
+      for (const img of images) {
+        content.push(safeImageBlock(img.data, "image/png", "sandbox_run_cell"));
+      }
+      return { content };
+    })
+  );
+
+  server.tool(
+    "sandbox_kernel_restart",
+    "Restart the persistent Jupyter kernel for a 'code-interpreter' sandbox — clears all state (variables, imports). Use to start fresh without recreating the sandbox.",
+    {
+      sandboxId: z.string().describe("Sandbox ID (must be a 'code-interpreter' template)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await kernelRestart(ctx, params.sandboxId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

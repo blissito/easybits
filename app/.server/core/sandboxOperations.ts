@@ -25,7 +25,8 @@ export type SandboxTemplate =
   | "cagent-ghosty"
   | "openclaw"
   | "chat-openai"
-  | "chat-anthropic";
+  | "chat-anthropic"
+  | "code-interpreter";
 
 export interface AgentSpec {
   port?: number;
@@ -674,6 +675,110 @@ export async function exposeSandboxPort(
     "POST",
     `/v1/sandbox/${sandboxId}/expose`,
     { port },
+    ctx.user.id
+  );
+}
+
+// ─────────────── Background processes ───────────────
+
+export interface BgStartResult {
+  execId: string;
+  status: string;
+}
+
+export interface BgStatusResult {
+  status: "running" | "exited";
+  exitCode?: number;
+  stdout: string;
+  stderr: string;
+  startedAt: string;
+}
+
+// Start a long-running command in the background (returns immediately with an
+// execId). Poll with execBackgroundStatus; stop with execBackgroundKill. Use for
+// servers/dev processes — pair with exposeSandboxPort to reach them.
+export async function execBackground(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { command: string; cwd?: string; env?: Record<string, string> }
+): Promise<BgStartResult> {
+  requireScope(ctx, "WRITE");
+  return callHost<BgStartResult>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/exec/background`,
+    { command: params.command, cwd: params.cwd, env: params.env },
+    ctx.user.id
+  );
+}
+
+export async function execBackgroundStatus(
+  ctx: AuthContext,
+  sandboxId: string,
+  execId: string
+): Promise<BgStatusResult> {
+  requireScope(ctx, "READ");
+  return callHost<BgStatusResult>(
+    "GET",
+    `/v1/sandbox/${sandboxId}/exec/background/${encodeURIComponent(execId)}`,
+    undefined,
+    ctx.user.id
+  );
+}
+
+export async function execBackgroundKill(
+  ctx: AuthContext,
+  sandboxId: string,
+  execId: string
+): Promise<{ ok: true }> {
+  requireScope(ctx, "WRITE");
+  return callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/exec/background/${encodeURIComponent(execId)}/kill`,
+    {},
+    ctx.user.id
+  );
+}
+
+// ─────────────── Persistent Jupyter kernel ───────────────
+
+export interface CellResult {
+  type: string; // mime, e.g. "text/plain", "image/png", "text/html"
+  data: string;
+}
+
+export interface RunCellResult {
+  stdout: string;
+  stderr: string;
+  results: CellResult[];
+  error?: { ename: string; evalue: string; traceback: string[] } | null;
+}
+
+// Execute a cell in the sandbox's persistent Jupyter kernel (state survives
+// across calls). Requires the `code-interpreter` template. Returns stdout/stderr,
+// rich results (incl. image/png charts), and any error.
+export async function runCell(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { code: string; timeoutSeconds?: number }
+): Promise<RunCellResult> {
+  requireScope(ctx, "WRITE");
+  return callHost<RunCellResult>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/run-cell`,
+    { code: params.code, timeoutSeconds: params.timeoutSeconds },
+    ctx.user.id
+  );
+}
+
+export async function kernelRestart(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<{ ok: true }> {
+  requireScope(ctx, "WRITE");
+  return callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/kernel/restart`,
+    {},
     ctx.user.id
   );
 }
