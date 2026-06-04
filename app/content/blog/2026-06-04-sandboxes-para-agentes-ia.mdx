@@ -10,64 +10,64 @@ published: true
 
 # El código que tu IA escribe tiene que correr en algún lado (y no debería ser tu laptop)
 
-Usas IA para programar. Pero no confías del todo en lo que genera. Tienes razón.
+Usas IA para programar, pero no confías del todo en lo que genera. Y tienes razón.
 
-La [Encuesta de Desarrolladores de Stack Overflow 2026](https://survey.stackoverflow.co/) lo dice sin rodeos: el **84% de los devs usa IA todos los días**, pero solo el **29% confía en que el código salga correcto**. Casi la mitad —el 46%— desconfía abiertamente. La adopción subió; la confianza bajó.
+La [Encuesta de Desarrolladores de Stack Overflow 2026](https://survey.stackoverflow.co/) lo dice claro: el **84% de los devs usa IA todos los días**, pero solo el **29% confía en que el código salga correcto**. Casi la mitad desconfía abiertamente. La adopción subió; la confianza bajó.
 
-Y aun así, ese código llega a producción.
+Y aun así, ese código termina en producción.
 
 ![La brecha de confianza en el código IA: 84% de los devs usa IA todos los días, pero solo el 29% confía en que el código sea correcto](/blog/assets/sandbox-brecha-confianza.jpg)
 
-Esa es la contradicción que casi nadie nombra. Generamos más código del que alcanzamos a leer, lo movemos a un repo, lo desplegamos. El agente escribió un script a las dos de la mañana y al día siguiente está corriendo contra datos reales. La pregunta incómoda no es *"¿la IA programa bien?"* — es *"¿dónde corro lo que escribió antes de creérmelo?"*.
+Generamos más código del que alcanzamos a leer. Lo subimos a un repo y lo desplegamos. Un agente escribió un script de madrugada y al día siguiente ya está corriendo con datos reales. La pregunta importante no es *"¿la IA programa bien?"*. Es *"¿dónde corro lo que escribió antes de confiar en ello?"*.
 
 ## Dónde lo corre la mayoría (y por qué está mal)
 
-Hay dos respuestas comunes, y las dos tienen un problema.
+Hay dos respuestas comunes. Las dos tienen un problema.
 
-**La primera: en tu propia máquina.** Le pides a un agente que procese unos archivos, que limpie una carpeta, que pruebe una migración. El agente escribe el código y lo ejecuta ahí mismo, en tu sistema, con tus permisos. La mayoría de las veces no pasa nada. La vez que pasa, el script borró la carpeta equivocada, o instaló una dependencia con algo adentro, o consumió tu CPU al 100% media hora. Corres código que no escribiste tú —y que dijiste no creerte— con acceso total a todo lo tuyo.
+**Opción 1: en tu propia computadora.** Le pides a un agente que procese unos archivos o que pruebe una migración. El agente escribe el código y lo corre ahí mismo, con tus permisos y tu acceso. Casi siempre no pasa nada. El problema es la vez que sí pasa: un script que borra la carpeta equivocada, una librería que trae algo de más, un proceso que se come tu CPU media hora. Estás corriendo código que tú no escribiste, y en el que dijiste no confiar, con acceso a todo lo tuyo.
 
-**La segunda: un sandbox extranjero.** Si eres profesional, ya sabes que correrlo aislado es lo correcto, así que pagas un servicio gringo de 20 dólares al mes o más. Funciona. Pero te documentan en inglés, te soportan en otra zona horaria, te facturan en dólares con IVA que no puedes deducir limpio, y —el detalle que pocos miran— les entregas tus datos y tu código a una infraestructura sobre la que no tienes ninguna relación local.
+**Opción 2: un sandbox del extranjero.** Si trabajas en serio, ya sabes que lo correcto es aislarlo. Entonces pagas un servicio de Estados Unidos, de 100 dólares al mes para arriba. Funciona, pero la documentación está en inglés, el soporte responde en otro horario, te cobran en dólares con un IVA que no puedes deducir bien, y le entregas tu código y tus datos a una empresa con la que no tienes ninguna relación local.
 
-Ninguna de las dos es buena. La primera es insegura. La segunda es cara, ajena y con fricción fiscal.
+Ninguna de las dos sirve. La primera es insegura. La segunda es cara, ajena y complicada para facturar.
 
-## Qué es un sandbox, en una frase
+## Qué es un sandbox
 
-Un **sandbox** es un entorno aislado donde corres código que no escribiste tú —y en el que no se puede confiar todavía— sin que toque nada tuyo. Si truena, truena ahí, encapsulado. Ni tu laptop, ni tu producto, ni tus otros procesos se enteran.
+Un sandbox es un espacio aislado donde corres código en el que todavía no confías, sin que toque nada tuyo. Si truena, truena ahí adentro. Tu computadora, tu producto y tus demás procesos ni se enteran.
 
-Es exactamente la pieza que falta entre *"la IA generó esto"* y *"esto está en producción"*. El lugar donde el código sospechoso prueba que sirve antes de que le des acceso a algo real.
+Es justo la pieza que falta entre *"la IA generó esto"* y *"esto está en producción"*: el lugar donde el código prueba que sirve antes de darle acceso a algo real.
 
-Por eso el sandbox dejó de ser una herramienta de nicho. En 2026, con agentes generando, refactorizando y ejecutando código de forma autónoma, se volvió infraestructura de base: nadie quiere que el código de un LLM corra suelto en un sistema que importa.
+Por eso dejó de ser una herramienta de nicho. Con agentes que generan y ejecutan código solos, el sandbox se volvió infraestructura básica. Nadie quiere que el código de un modelo corra suelto en un sistema que importa.
 
 ## No todos los sandboxes aíslan igual
 
-Aquí es donde la palabra "sandbox" esconde diferencias técnicas que sí importan.
+La palabra "sandbox" esconde una diferencia técnica que sí importa.
 
-Los hay basados en **contenedores** (tipo Docker): arrancan rapidísimo, pero comparten el kernel del sistema anfitrión. Si el código malicioso encuentra una grieta en ese kernel compartido, el aislamiento se rompe. Para muchos casos está bien; para correr código arbitrario de un LLM que no controlas, es un riesgo que se acepta sin pensarlo demasiado.
+Unos usan **contenedores** (tipo Docker). Arrancan rapidísimo, pero comparten el kernel con la máquina anfitriona. Si el código encuentra una grieta en ese kernel, el aislamiento se rompe. Para muchas tareas alcanza; para correr código arbitrario de un modelo que no controlas, es un riesgo.
 
-Y los hay basados en **microVMs**: cada ejecución arranca su propia máquina virtual ligera, con su **propio kernel**, aislada a nivel de hardware. Una grieta en el código de adentro no alcanza al anfitrión ni a las demás ejecuciones, porque no comparten kernel. Es el modelo que usan los jugadores serios del mercado —E2B sobre Firecracker, por ejemplo— y es más fuerte precisamente porque la frontera de aislamiento es real, no lógica.
+Otros usan **microVMs**. Cada ejecución arranca su propia máquina virtual ligera, con su **propio kernel**, aislada a nivel de hardware. Una falla adentro no llega ni al anfitrión ni a las demás ejecuciones, porque no comparten kernel. Es lo que usan los servicios serios —como E2B sobre Firecracker—, y es más seguro porque la frontera de aislamiento es real.
 
-**Los sandboxes de Easybits son microVMs reales.** Kernel aislado por ejecución, no contenedores compartidos. Arrancan en milisegundos y se conectan directo a tus agentes por **MCP** — el mismo protocolo con el que ya hablan Claude, Cursor y compañía. Tu agente no necesita pegamento extra: pide un sandbox, corre el código, lee el resultado.
+**Los sandboxes de Easybits son microVMs reales.** Kernel aislado por ejecución, no contenedores compartidos. Arrancan en milisegundos y se conectan a tus agentes por **MCP**, el mismo protocolo que ya usan Claude, Cursor y los demás. Tu agente pide un sandbox, corre el código y lee el resultado. Sin configuraciones extra.
 
-## Por qué los construimos nosotros
+## Por qué lo hicimos nosotros
 
-Busqué un referente de sandboxes nacido en Latinoamérica antes de escribir esto. E2B, Daytona, Modal, Vercel Sandbox, Northflank — todos buenísimos, todos de Estados Unidos o Europa. No encontré un equivalente de aquí. Ese vacío fue parte de la decisión.
+Antes de escribir esto busqué un sandbox nacido en Latinoamérica. E2B, Daytona, Modal, Vercel Sandbox, Northflank: todos muy buenos, todos de Estados Unidos o Europa. No encontré uno de aquí. Ese hueco fue parte de la decisión.
 
-Pero el motivo de fondo no es geografía, son tres cosas concretas:
+Pero el motivo de fondo no es la geografía. Son tres cosas concretas:
 
-**Se cobra en pesos y se factura local.** Una línea menos en dólares con IVA que no puedes deducir. Para un freelancer o una agencia que ya pelea con el SAT y con cada suscripción extranjera, eso no es comodidad — es flujo y deducibilidad real.
+**Cobramos en pesos y facturamos local.** Recibes una factura mexicana que sí puedes deducir, sin tipo de cambio ni el IVA enredado de una suscripción extranjera. Una cosa menos que arreglar con el SAT.
 
-**Soporte en español y capacitación incluida.** Cuando algo se rompe a las once de la noche, la respuesta llega en tu idioma y en tu horario, no a las nueve de la mañana en otro continente.
+**Soporte en español y capacitación incluida.** Cuando algo se rompe en la noche, la respuesta llega en tu idioma y en tu horario.
 
-**Ya viene incluido en tu Easybits.** El sandbox no es un servicio suelto: vive junto a tu storage, tus bases de datos y tus documentos en la nube. El agente guarda un archivo, consulta datos de la DB y ejecuta código **sin que tengas que amalgamar cuatro servicios separados** con cinta y llaves de API. Storage + DB + ejecución, controlados por agentes vía MCP, en un solo lugar.
+**Viene incluido en tu Easybits.** El sandbox no es un servicio aparte: vive junto a tu almacenamiento, tus bases de datos y tus documentos en la nube. Tu agente guarda un archivo, consulta la base de datos y ejecuta código sin que tengas que conectar cuatro servicios distintos a mano. Almacenamiento, base de datos y ejecución, en un solo lugar y controlados por agentes.
 
-## ¿Esto es para ti?
+## ¿Es para ti?
 
-Si construyes con agentes, si generas código arbitrario con IA, y hoy lo corres en tu propia compu cruzando los dedos — el siguiente paso natural es un sandbox. No por moda: porque es la diferencia entre *"casi nunca pasa nada"* y *"no puede pasar nada"*.
+Si construyes con agentes, si generas código con IA y hoy lo corres en tu propia computadora cruzando los dedos, el siguiente paso es un sandbox. No por moda, sino por la diferencia entre *"casi nunca pasa nada"* y *"no puede pasar nada"*.
 
-El código que tu IA escribe va a seguir creciendo. La confianza, según los datos, no. Un sandbox es cómo cierras esa brecha sin frenar el ritmo.
+El código que genera tu IA va a seguir creciendo. La confianza, según los datos, no. Un sandbox cierra esa brecha sin frenarte.
 
 👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
 
 ---
 
-*¿En qué corres hoy el código que genera tu IA? Nos da curiosidad genuina cómo lo resuelve la gente. Y si quieres que profundicemos en sandboxes para IA —seguridad, casos de uso, cómo conectarlos a tu agente— dínoslo y escribimos la segunda parte.*
+*¿Dónde corres hoy el código que genera tu IA? Nos da curiosidad cómo lo resuelves. Y si quieres que entremos más a fondo en sandboxes para IA —seguridad, casos de uso, cómo conectarlos a tu agente—, dinos y escribimos la segunda parte.*
