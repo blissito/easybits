@@ -89,11 +89,18 @@ import {
   listSandboxes,
   getSandbox,
   destroySandbox,
+  extendSandbox,
+  suspendSandbox,
+  resumeSandbox,
   execCommand,
   runCode,
   writeFile as sandboxWriteFile,
   readFile as sandboxReadFile,
   listFiles as sandboxListFiles,
+  deleteFile as sandboxDeleteFile,
+  moveFile as sandboxMoveFile,
+  mkdir as sandboxMkdir,
+  exposeSandboxPort,
   listTemplates,
   createAgent,
   messageAgent,
@@ -1094,7 +1101,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_create",
-    "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Templates: ubuntu (base), python, node, bun, claude-code (preinstalled harness). Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses.",
+    "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Base templates: ubuntu, python, node, bun. Agent/harness templates: node-agent, claude-code, goose, ghostyclaw, openclaw, chat-openai, chat-anthropic (for the chat-* persistent runtimes prefer agent_create). Call templates_list for the full catalog with required env. Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses (extend with sandbox_extend).",
     {
       template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "ghostyclaw", "openclaw", "chat-openai", "chat-anthropic"]).describe("Base image template. 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
       timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
@@ -1121,7 +1128,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_status",
-    "Get current status of a sandbox (running/stopped/error, uptime, resource usage).",
+    "Get a sandbox's record: status (starting/running/stopped/error/lost/suspended), template, createdAt, expiresAt, and metadata.",
     {
       sandboxId: z.string().describe("Sandbox ID returned by sandbox_create"),
     },
@@ -1146,6 +1153,46 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
+    "sandbox_extend",
+    "Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on persistent boxes (returns { persistent, noop }). The host clamps total remaining lifetime to 3600s from now.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      extendSeconds: z.number().int().min(1).optional().describe("Seconds to add to the current deadline (default 300, total capped at 3600s from now)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await extendSandbox(ctx, params.sandboxId, params.extendSeconds);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_suspend",
+    "Snapshot a sandbox to disk and free its CPU/IP — the box stops billing compute but keeps its state. NOTE: the TTL is NOT paused; after sandbox_resume call sandbox_extend to refresh the deadline. Restore with sandbox_resume.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await suspendSandbox(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_resume",
+    "Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes). Pair with sandbox_extend afterward since the TTL kept counting while suspended.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await resumeSandbox(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
     "sandbox_exec",
     "Execute a shell command inside a sandbox. Returns stdout, stderr, exitCode, durationMs. Default timeout 60s, max 600s.",
     {
@@ -1165,7 +1212,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_run_code",
-    "Run a snippet of Python/Node/Bash inline (no need to write a file first). Output captured. Default lang=python.",
+    "Run a snippet of Python/Node/Bash inline (no need to write a file first). Output captured. Default lang=python. NOTE: each call runs a FRESH process (python3 -c / node -e / bash -c) — there is NO persistent kernel, so variables do NOT survive between calls. Put dependent lines in a single call, or persist state to a file with sandbox_files_write.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       code: z.string().describe("Source code to execute"),
@@ -1224,6 +1271,67 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { sandboxId, ...rest } = params;
       const result = await sandboxListFiles(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_delete",
+    "Delete a file or directory inside the sandbox. Pass recursive=true to remove a non-empty directory.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      path: z.string().describe("Absolute path inside sandbox"),
+      recursive: z.boolean().optional().describe("Remove directory and its contents (default false)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxDeleteFile(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_move",
+    "Move or rename a file/directory inside the sandbox. Parent directories of the destination are created if needed.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      from: z.string().describe("Absolute source path"),
+      to: z.string().describe("Absolute destination path"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxMoveFile(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_mkdir",
+    "Create a directory (and any missing parents) inside the sandbox.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      path: z.string().describe("Absolute directory path inside sandbox"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxMkdir(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_expose_port",
+    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      port: z.number().int().min(1).max(65535).describe("Port the service listens on inside the sandbox"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await exposeSandboxPort(ctx, params.sandboxId, params.port);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

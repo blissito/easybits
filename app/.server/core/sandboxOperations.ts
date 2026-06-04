@@ -458,6 +458,53 @@ export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promi
   return callHost<{ ok: true }>("DELETE", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
 }
 
+// Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on
+// persistent boxes (host returns { persistent, noop }). Total remaining
+// lifetime is clamped to 3600s from now by the host.
+export async function extendSandbox(
+  ctx: AuthContext,
+  sandboxId: string,
+  extendSeconds?: number
+): Promise<SandboxRecord> {
+  requireScope(ctx, "WRITE");
+  return callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/extend`,
+    { extendSeconds: extendSeconds ?? 300 },
+    ctx.user.id
+  );
+}
+
+// Snapshot the sandbox to disk and free its CPU/IP. The TTL is NOT paused —
+// after resume, call extendSandbox to refresh the deadline. Resume with
+// resumeSandbox.
+export async function suspendSandbox(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<SandboxRecord> {
+  requireScope(ctx, "WRITE");
+  return callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/suspend`,
+    {},
+    ctx.user.id
+  );
+}
+
+// Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes).
+export async function resumeSandbox(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<SandboxRecord> {
+  requireScope(ctx, "WRITE");
+  return callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/resume`,
+    {},
+    ctx.user.id
+  );
+}
+
 // Poll the ghostyclaw VM's /chat/ready endpoint via exec curl-from-inside.
 // We can't HTTP the VM directly from EasyBits (Fly has no route to the
 // Firecracker subnet), so we exec curl on the VM via sandbox-agent.
@@ -562,6 +609,71 @@ export async function listFiles(
     "GET",
     `/v1/sandbox/${sandboxId}/files/list?${qs.toString()}`,
     undefined,
+    ctx.user.id
+  );
+}
+
+export async function deleteFile(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { path: string; recursive?: boolean }
+): Promise<{ ok: true }> {
+  requireScope(ctx, "WRITE");
+  return callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/files/delete`,
+    { path: params.path, recursive: params.recursive ?? false },
+    ctx.user.id
+  );
+}
+
+export async function moveFile(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { from: string; to: string }
+): Promise<{ ok: true }> {
+  requireScope(ctx, "WRITE");
+  return callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/files/move`,
+    { from: params.from, to: params.to },
+    ctx.user.id
+  );
+}
+
+export async function mkdir(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { path: string }
+): Promise<{ ok: true }> {
+  requireScope(ctx, "WRITE");
+  return callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/files/mkdir`,
+    { path: params.path },
+    ctx.user.id
+  );
+}
+
+export interface ExposedPort {
+  url: string;
+  host: string;
+  port: number;
+}
+
+// Expose a port running inside the sandbox as a public URL
+// (https://sb-<id>-<port>.sandboxes.easybits.cloud). The unguessable sandboxId
+// is the capability. The URL is live while the sandbox is running.
+export async function exposeSandboxPort(
+  ctx: AuthContext,
+  sandboxId: string,
+  port: number
+): Promise<ExposedPort> {
+  requireScope(ctx, "WRITE");
+  return callHost<ExposedPort>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/expose`,
+    { port },
     ctx.user.id
   );
 }

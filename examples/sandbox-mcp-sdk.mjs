@@ -46,11 +46,15 @@ const execution = await call("sandbox_run_code", {
 // → 2   (stdout del run-code)
 console.log(execution.stdout.trim());
 
-// 3) limpieza
+// 3) (opcional) exponer un puerto como URL pública (e2b getHost / Daytona getPreviewLink)
+//    await call("sandbox_exec", { sandboxId, command: "python3 -m http.server 3000 &" });
+//    const { url } = await call("sandbox_expose_port", { sandboxId, port: 3000 });
+
+// 4) limpieza
 await call("sandbox_destroy", { sandboxId });
 await client.close();
 
-// NOTA: igual que en el ejemplo de fetch — si el run-code de sandbox-host arranca un proceso
-// fresco por llamada (no un kernel persistente tipo Jupyter como e2b), `globalThis.x` no
-// sobrevive entre celdas; en ese caso mete ambas líneas en una sola, o persiste con
-// sandbox_files_write / sandbox_files_read.
+// NOTA (confirmado): el run-code de sandbox-host arranca un proceso FRESCO por llamada
+// (python3 -c / node -e / bash -c), NO un kernel persistente tipo e2b — `globalThis.x` no
+// sobrevive entre celdas; mete las líneas dependientes en una sola, o persiste con
+// sandbox_files_write / sandbox_files_read. (Kernel persistente: segunda tanda.)

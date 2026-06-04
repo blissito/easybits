@@ -58,10 +58,17 @@ const execution = await eb("sandbox_run_code", {
 // → 2   (run-code corre en el MISMO sandbox; el stdout viene en execution.stdout)
 console.log(execution.stdout.trim());
 
-// Limpieza (o déjalo morir solo por el timeoutSeconds)
+// Exponer un puerto como URL pública (equivalente a e2b getHost / Daytona getPreviewLink).
+// Levanta tu server dentro del sandbox y luego expón el puerto:
+//   await eb("sandbox_exec", { sandboxId, command: "python3 -m http.server 3000 &" });
+//   const { url } = await eb("sandbox_expose_port", { sandboxId, port: 3000 });
+//   console.log(url); // → https://sb-<uuid>-3000.sandboxes.easybits.cloud
+// El sandboxId (no adivinable) es la capability; la URL vive mientras el sandbox corra.
+
+// Limpieza (o déjalo morir por timeoutSeconds; usa sandbox_extend para alargarlo)
 await eb("sandbox_destroy", { sandboxId });
 
-// NOTA: si el run-code de tu flota arranca un proceso fresco por llamada (no un kernel
-// persistente tipo Jupyter como e2b), `globalThis.x` no sobrevive entre celdas — en ese
-// caso mete las dos líneas en UNA sola llamada, o persiste estado con sandbox_files_write +
-// leer el archivo. (e2b sí mantiene el kernel vivo entre runCode; verificar en sandbox-host.)
+// NOTA (confirmado): run-code arranca un proceso FRESCO por llamada (python3 -c / node -e /
+// bash -c), NO un kernel persistente tipo e2b. `globalThis.x` NO sobrevive entre celdas —
+// mete las líneas dependientes en UNA sola llamada, o persiste estado con sandbox_files_write
+// + sandbox_files_read. (Kernel persistente = segunda tanda, pendiente en sandbox-host.)
