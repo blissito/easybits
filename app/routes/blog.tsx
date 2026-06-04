@@ -10,6 +10,22 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "sandboxes-para-agentes-ia",
+    filePath: "app/content/blog/2026-06-04-sandboxes-para-agentes-ia.mdx",
+    title:
+      "El código que tu IA escribe tiene que correr en algún lado (y no debería ser tu laptop)",
+    description:
+      "Encuesta Stack Overflow 2026: 84% de los devs usa IA todos los días, pero solo el 29% confía en que el código salga correcto. Aun así, ese código llega a producción. Te explicamos qué es un sandbox, por qué los microVMs importan, y por qué construimos los nuestros en pesos y en español.",
+    date: "2026-06-04",
+    author: "Equipo Easybits",
+    tags: ["sandboxes", "agentes", "IA", "MCP", "seguridad"],
+    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+    readingTime: 5,
+    excerpt:
+      "Generamos más código del que leemos y no nos lo creemos. Un sandbox es dónde corres ese código sin que toque nada tuyo. Por qué los nuestros son microVMs reales, en pesos y en español.",
+    published: true,
+  },
+  {
     slug: "editar-pagina-22k-tokens-mcp",
     filePath: "app/content/blog/2026-05-18-editar-pagina-22k-tokens-mcp.mdx",
     title:

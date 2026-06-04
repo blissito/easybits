@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "sandboxes-para-agentes-ia":
+    "app/content/blog/2026-06-04-sandboxes-para-agentes-ia.mdx",
   "editar-pagina-22k-tokens-mcp":
     "app/content/blog/2026-05-18-editar-pagina-22k-tokens-mcp.mdx",
   "oauth-mcp-claude-cowork":
@@ -38,6 +40,10 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "sandboxes-para-agentes-ia",
+    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+  },
   {
     slug: "editar-pagina-22k-tokens-mcp",
     featuredImage:
