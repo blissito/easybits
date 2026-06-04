@@ -15,7 +15,7 @@ const BLOG_POSTS = [
     title:
       "El código que tu IA escribe tiene que correr en algún lado (y no debería ser tu laptop)",
     description:
-      "Encuesta Stack Overflow 2026: 84% de los devs usa IA todos los días, pero solo el 29% confía en que el código salga correcto. Aun así, ese código llega a producción. Te explicamos qué es un sandbox, por qué los microVMs importan, y por qué construimos los nuestros en pesos y en español.",
+      "Encuesta Stack Overflow 2025: 84% de los devs ya usa IA, pero solo el 29% confía en que el código salga correcto. Aun así, ese código llega a producción. Te explicamos qué es un sandbox, por qué los microVMs importan, y por qué construimos los nuestros en pesos y en español.",
     date: "2026-06-04",
     author: "Equipo Easybits",
     tags: ["sandboxes", "agentes", "IA", "MCP", "seguridad"],
