@@ -1,18 +1,31 @@
 ---
 title: "Tu agente ya puede correr código, levantar servers y publicar URLs — todo por MCP"
-description: "La segunda parte: qué puede HACER tu agente con los sandboxes de Easybits. Corre código con estado (kernel de Python), genera gráficas a partir de datos, lanza procesos en segundo plano, maneja archivos y expone un puerto como URL pública con HTTPS. Todo desde un solo MCP."
+description: "La segunda parte: qué puede HACER tu agente con los sandboxes de Easybits. Corre código con estado (kernel de Python), genera gráficas a partir de datos, lanza procesos en segundo plano, maneja archivos y expone un puerto como URL pública con HTTPS. Con el SDK de Easybits."
 date: "2026-06-04"
 author: "Equipo Easybits"
-tags: ["sandboxes", "agentes", "IA", "MCP", "code-interpreter"]
+tags: ["sandboxes", "agentes", "IA", "MCP", "SDK", "code-interpreter"]
 featuredImage: "/blog/assets/sandbox-ghosty.jpg"
 published: true
 ---
 
 # Tu agente ya puede correr código, levantar servers y publicar URLs — todo por MCP
 
-En el [post anterior](/blog/sandboxes-para-agentes-ia) explicamos el *qué* y el *por qué*: el código que genera tu IA tiene que correr en algún lado aislado, y por eso construimos sandboxes con microVMs reales. Este es el *cómo*. Qué puede hacer tu agente hoy, con ejemplos.
+En el [post anterior](/blog/sandboxes-para-agentes-ia) explicamos el *qué* y el *por qué*: el código que genera tu IA tiene que correr en algún lado aislado, y por eso construimos sandboxes con microVMs reales. Este es el *cómo*.
 
-Todo lo que sigue se maneja por **MCP** —el mismo protocolo que ya hablan Claude, Cursor y los demás— y vive junto a tus archivos, tus bases de datos y tus documentos en Easybits. Sin pegar cuatro servicios a mano.
+Dos caminos, según quién lo use:
+
+- **Tu agente** los usa por **MCP** — los llama solo, sin que escribas una línea. Si ya conectaste tu agente a Easybits, las tools de sandbox ya están ahí.
+- **Tú, en código**, los usas con el **SDK** `@easybits.cloud/sdk`. Eso es lo que verás aquí.
+
+```bash
+npm install @easybits.cloud/sdk
+```
+
+```js
+import { EasybitsClient } from "@easybits.cloud/sdk";
+
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY });
+```
 
 ## 1. Corre código con memoria (kernel persistente)
 
@@ -20,19 +33,23 @@ La diferencia entre "ejecutar un script" y "trabajar con datos" es el **estado**
 
 Por eso hay dos formas de ejecutar:
 
-- `sandbox_run_code` — un proceso fresco por llamada (rápido para cosas sueltas). Las variables **no** sobreviven.
-- `sandbox_run_cell` — un **kernel de Jupyter vivo**. Las variables, los imports y los datos cargados **persisten entre llamadas**, igual que en un notebook.
+- `sbx.runCode(code)` — un proceso fresco por llamada (rápido para cosas sueltas). Las variables **no** sobreviven.
+- `sbx.runCell(code)` — un **kernel de Jupyter vivo**. Las variables, los imports y los datos cargados **persisten entre llamadas**, igual que en un notebook.
 
-```
-sandbox_create { template: "code-interpreter" }
-sandbox_run_cell { code: "import pandas as pd; df = pd.read_csv('ventas.csv')" }
-sandbox_run_cell { code: "df.groupby('mes').total.sum()" }   # df sigue ahí
+```js
+const sbx = await eb.sandboxes.create({ template: "code-interpreter" });
+
+await sbx.runCell("import pandas as pd; df = pd.read_csv('ventas.csv')");
+const out = await sbx.runCell("df.groupby('mes').total.sum()"); // df sigue ahí
+console.log(out.stdout);
 ```
 
-Y lo mejor: si tu código genera una **gráfica con matplotlib**, te la devolvemos como **imagen**. El modelo no recibe un "se generó un PNG"; recibe la imagen y la *ve*. Eso es lo que hace que un agente analista de datos funcione de verdad.
+Y lo mejor: si tu código genera una **gráfica con matplotlib**, te la devolvemos como **imagen** (PNG en base64), no como texto. Eso es lo que hace que un agente analista de datos funcione de verdad.
 
-```
-sandbox_run_cell { code: "df.plot(); plt.show()" }   # → imagen PNG de vuelta
+```js
+const cell = await sbx.runCell("df.plot(); plt.show()");
+const chart = cell.results.find((r) => r.type === "image/png");
+// chart.data → PNG en base64, listo para mostrar o guardar
 ```
 
 Es el mismo patrón que popularizó el "code interpreter" de los grandes, ahora dentro de tu Easybits.
@@ -41,81 +58,79 @@ Es el mismo patrón que popularizó el "code interpreter" de los grandes, ahora 
 
 Tu agente arma una app, una demo o un dashboard adentro del sandbox. ¿Cómo se la enseñas a alguien? Expones el puerto:
 
-```
-sandbox_exec_background { command: "python3 -m http.server 3000" }
-sandbox_expose_port { port: 3000 }
-// → https://sb-9a973543-...-3000.sandboxes.easybits.cloud
+```js
+await sbx.execBackground("python3 -m http.server 3000");
+const { url } = await sbx.exposePort(3000);
+console.log(url); // https://sb-...-3000.sandboxes.easybits.cloud
 ```
 
-Esa URL es **pública, con HTTPS válido** (certificado emitido automáticamente), y vive mientras el sandbox esté encendido. El identificador del sandbox —imposible de adivinar— es la llave: solo quien tiene el link entra. Es el equivalente al `getHost` de E2B o al preview link de Daytona, sin que configures nada.
+Esa URL es **pública, con HTTPS válido** (certificado emitido automáticamente) y vive mientras el sandbox esté encendido. El identificador del sandbox —imposible de adivinar— es la llave: solo quien tiene el link entra. Es el equivalente al `getHost` de E2B o al preview link de Daytona, sin que configures nada.
 
 ## 3. Procesos largos, sin bloquear
 
 No todo termina en un segundo. Un build, un server de desarrollo, un scraping. Para eso está la ejecución en segundo plano:
 
-- `sandbox_exec_background` → arranca el proceso y te regresa un `execId` al instante.
-- `sandbox_exec_status` → revisas estado y lees el `stdout`/`stderr` acumulado.
-- `sandbox_exec_kill` → lo matas cuando quieras.
+```js
+const { execId } = await sbx.execBackground("npm run build");
+const st = await sbx.bgStatus(execId); // { status, exitCode?, stdout, stderr }
+// ...y cuando quieras: await sbx.bgKill(execId);
+```
 
 Tu agente lanza la tarea, sigue con lo suyo, y vuelve a checar después.
 
 ## 4. Archivos y ciclo de vida
 
-Dentro del sandbox tienes un sistema de archivos completo: `sandbox_files_write`, `read`, `list`, `delete`, `move`, `mkdir`. Y para no desperdiciar recursos, control de vida real:
+Dentro del sandbox tienes un sistema de archivos completo y control de vida real:
 
-- `sandbox_extend` — alarga el tiempo antes de que se auto-destruya.
-- `sandbox_suspend` / `sandbox_resume` — congela a disco y revive (mismo estado, misma IP).
-- `sandbox_destroy` — lo cierras tú.
+```js
+await sbx.files.write("/tmp/data.json", JSON.stringify({ ok: true }));
+const { content } = await sbx.files.read("/tmp/data.json");
+await sbx.files.list("/tmp");
+// también: delete, move, mkdir
+
+await sbx.extend(600);  // alarga el TTL 10 min
+await sbx.suspend();    // congela a disco
+await sbx.resume();     // revive (mismo estado, misma IP)
+await sbx.destroy();    // o déjalo morir solo al cumplir su tiempo
+```
 
 Cada microVM se auto-destruye sola al cumplir su tiempo, así que un proceso desbocado nunca se queda corriendo de a gratis.
 
 ## Todo en un solo lugar (y en pesos)
 
-Esta es la parte que no copias conectando servicios sueltos: el sandbox **vive junto al resto de tu Easybits**. En la misma sesión, tu agente puede:
+Esta es la parte que no copias conectando servicios sueltos: el sandbox **vive junto al resto de tu Easybits**. Con el mismo cliente, en la misma sesión, puedes:
 
-1. Correr código en un sandbox aislado,
-2. guardar el resultado como archivo,
-3. consultarlo después desde tu base de datos,
-4. y publicarlo en un documento o una landing.
+1. Correr código en un sandbox aislado (`eb.sandboxes`),
+2. guardar el resultado como archivo (`eb.uploadFile`),
+3. consultarlo después desde tu base de datos (`eb.db`),
+4. y publicarlo en un documento o una landing (`eb.createDocument`).
 
-Almacenamiento, base de datos, documentos y ejecución de código —controlados por agentes, por un solo MCP—. Facturado en México, en pesos, con soporte en español.
+Almacenamiento, base de datos, documentos y ejecución de código —controlados por agentes, por un solo SDK y un solo MCP—. Facturado en México, en pesos, con soporte en español.
 
 ## El ejemplo completo
 
-Si conectas tu agente a Easybits por MCP, las tools de sandbox ya están ahí —tu agente las llama solo, sin que escribas nada. Pero si lo quieres a mano, aquí está el flujo completo con el SDK oficial de MCP: crear un sandbox, correr código con estado y exponer un puerto como URL pública.
-
-```bash
-npm install @modelcontextprotocol/sdk
-```
-
 ```js
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { EasybitsClient } from "@easybits.cloud/sdk";
 
-// 1. Conéctate al MCP de Easybits (tu API key en EASYBITS_API_KEY)
-const transport = new StreamableHTTPClientTransport(
-  new URL("https://www.easybits.cloud/api/mcp?tools=sandbox"),
-  { requestInit: { headers: { Authorization: `Bearer ${process.env.EASYBITS_API_KEY}` } } }
-);
-const client = new Client({ name: "mi-agente", version: "1.0.0" });
-await client.connect(transport);
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY });
 
-// helper: cada tool devuelve su payload como JSON en content[0].text
-const call = async (name, args = {}) =>
-  JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+// 1. Crea el sandbox (espera a que esté listo)
+const sbx = await eb.sandboxes.create({ template: "code-interpreter" });
 
-// 2. Crea un sandbox con kernel persistente y corre código
-const { sandboxId } = await call("sandbox_create", { template: "code-interpreter" });
-const exec = await call("sandbox_run_cell", { sandboxId, code: "print('hola desde una microVM')" });
-console.log(exec.stdout); // → hola desde una microVM
+// 2. Corre código con estado
+const out = await sbx.runCell("print('hola desde una microVM')");
+console.log(out.stdout); // → hola desde una microVM
 
 // 3. Levanta un server y obtén su URL pública con HTTPS
-await call("sandbox_exec_background", { sandboxId, command: "python3 -m http.server 3000" });
-const { url } = await call("sandbox_expose_port", { sandboxId, port: 3000 });
-console.log(url); // → https://sb-...-3000.sandboxes.easybits.cloud
+await sbx.execBackground("python3 -m http.server 3000");
+const { url } = await sbx.exposePort(3000);
+console.log(url);
+
+// 4. Limpia (o déjalo morir solo por TTL)
+await sbx.destroy();
 ```
 
-¿Prefieres sin dependencias? El mismo flujo sale con un `fetch` directo al endpoint `/api/mcp` (parseando la respuesta SSE). Ambos ejemplos completos están en el [repo de ejemplos](https://github.com/blissito/easybits/tree/main/examples).
+Y si lo tuyo es el agente: lo mismo, pero por MCP, sin escribir nada — el agente llama `sandbox_create`, `sandbox_run_cell` y `sandbox_expose_port` solo. Ejemplos completos (SDK, MCP y fetch) en el [repo](https://github.com/blissito/easybits/tree/main/examples).
 
 👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
 

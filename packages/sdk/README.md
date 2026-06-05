@@ -236,9 +236,51 @@ try {
 }
 ```
 
+## Sandboxes
+
+Run code in isolated Firecracker microVMs — execute code with a persistent
+Jupyter kernel, manage files, run background processes, and expose ports as
+public HTTPS URLs.
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY });
+
+// Create a sandbox (waits until it's running)
+const sbx = await eb.sandboxes.create({ template: "code-interpreter" });
+
+// Persistent Python kernel — state survives between calls
+await sbx.runCell("import pandas as pd; df = pd.read_csv('sales.csv')");
+const out = await sbx.runCell("df.groupby('month').total.sum()");
+console.log(out.stdout);
+
+// matplotlib charts come back as image/png in results[]
+const chart = await sbx.runCell("df.plot(); plt.show()");
+const png = chart.results.find((r) => r.type === "image/png")?.data; // base64
+
+// Run a server and get a public URL
+await sbx.execBackground("python3 -m http.server 3000");
+const { url } = await sbx.exposePort(3000);
+console.log(url); // https://sb-...-3000.sandboxes.easybits.cloud
+
+// Files
+await sbx.files.write("/tmp/data.json", JSON.stringify({ ok: true }));
+const { content } = await sbx.files.read("/tmp/data.json");
+
+// Lifecycle
+await sbx.extend(600);   // add 10 min to the TTL
+await sbx.destroy();
+```
+
+Templates: `code-interpreter` (Python + Jupyter kernel + numpy/pandas/matplotlib),
+`ubuntu`, `node`, `bun`, and more. Use `eb.listTemplates()` for the catalog.
+For one-off snippets without persistent state, use `sbx.runCode(code, { lang })`.
+
 ## MCP Integration
 
-EasyBits also provides an MCP server with 30+ tools for AI agents:
+For **AI agents**, the same sandboxes are available as MCP tools (the agent calls
+them itself — no code needed):
 
 ```bash
 npx -y @easybits.cloud/mcp

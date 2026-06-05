@@ -1192,6 +1192,336 @@ export class EasybitsClient {
       }
     }
   }
+
+  // ── Sandboxes (raw microVMs) ────────────────────────────────
+  //
+  // Low-level Firecracker microVMs: run code, manage files, expose ports.
+  // Distinct from agents (managed). Mirrors E2B's Sandbox DX.
+  //
+  //   const sbx = await eb.sandboxes.create({ template: "code-interpreter" });
+  //   await sbx.runCell("x = 41");
+  //   const { url } = await sbx.exposePort(3000);
+  //   await sbx.destroy();
+  get sandboxes() {
+    const req = <T>(path: string, opts?: RequestInit) =>
+      this.request<T>(path, opts);
+    return {
+      /** Spawn a microVM. Waits until it's running unless waitForReady=false. */
+      create: async (params: CreateSandboxParams): Promise<Sandbox> => {
+        const rec = await req<SandboxRecord>("/sandboxes", {
+          method: "POST",
+          body: JSON.stringify(params),
+        });
+        const sbx = new Sandbox(rec, req);
+        if (params.waitForReady !== false) await sbx.waitUntilReady();
+        return sbx;
+      },
+      /** List the caller's sandboxes. */
+      list: async (): Promise<Sandbox[]> => {
+        const { sandboxes } = await req<{ sandboxes: SandboxRecord[] }>(
+          "/sandboxes",
+        );
+        return sandboxes.map((r) => new Sandbox(r, req));
+      },
+      /** Reconnect to an existing sandbox by id. */
+      get: async (sandboxId: string): Promise<Sandbox> => {
+        const rec = await req<SandboxRecord>(`/sandboxes/${sandboxId}`);
+        return new Sandbox(rec, req);
+      },
+    };
+  }
+}
+
+// ─── Sandbox handle ──────────────────────────────────────────────
+
+type SandboxReq = <T>(path: string, opts?: RequestInit) => Promise<T>;
+
+/**
+ * A live Firecracker microVM. Returned by `eb.sandboxes.create()`.
+ * Instance methods map 1:1 to the sandbox REST API.
+ */
+export class Sandbox {
+  readonly sandboxId: string;
+  readonly template: SandboxTemplate;
+  status: SandboxStatus;
+  createdAt: string;
+  expiresAt: string;
+  metadata?: Record<string, string>;
+  private req: SandboxReq;
+  /** Filesystem operations inside the sandbox. */
+  readonly files: SandboxFiles;
+
+  constructor(record: SandboxRecord, req: SandboxReq) {
+    this.sandboxId = record.sandboxId;
+    this.template = record.template;
+    this.status = record.status;
+    this.createdAt = record.createdAt;
+    this.expiresAt = record.expiresAt;
+    this.metadata = record.metadata;
+    this.req = req;
+    this.files = new SandboxFiles(record.sandboxId, req);
+  }
+
+  private base() {
+    return `/sandboxes/${this.sandboxId}`;
+  }
+  private post<T>(path: string, body?: unknown): Promise<T> {
+    return this.req<T>(`${this.base()}${path}`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  }
+
+  // ── Lifecycle ──
+  /** Refresh this handle's status from the server. */
+  async refresh(): Promise<this> {
+    const rec = await this.req<SandboxRecord>(this.base());
+    this.status = rec.status;
+    this.expiresAt = rec.expiresAt;
+    this.metadata = rec.metadata;
+    return this;
+  }
+  /** Poll until status is "running" (or throw on error/stopped/timeout). */
+  async waitUntilReady(timeoutMs = 60_000, intervalMs = 1500): Promise<this> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      await this.refresh();
+      if (this.status === "running") return this;
+      if (this.status === "error" || this.status === "stopped" || this.status === "lost")
+        throw new EasybitsError(409, `sandbox is ${this.status}`);
+      await sleep(intervalMs);
+    }
+    throw new EasybitsError(504, `sandbox not running after ${timeoutMs}ms`);
+  }
+  /** Extend the TTL before auto-destroy. No-op on persistent boxes. */
+  extend(extendSeconds?: number): Promise<SandboxRecord> {
+    return this.post("/extend", { extendSeconds });
+  }
+  /** Snapshot to disk and free CPU/IP. TTL keeps counting. */
+  suspend(): Promise<SandboxRecord> {
+    return this.post("/suspend");
+  }
+  /** Restore a suspended sandbox. */
+  resume(): Promise<SandboxRecord> {
+    return this.post("/resume");
+  }
+  /** Destroy the microVM. */
+  destroy(): Promise<{ ok: true }> {
+    return this.req(this.base(), { method: "DELETE" });
+  }
+
+  // ── Execution ──
+  /** Run a blocking shell command. */
+  exec(
+    command: string,
+    opts?: { cwd?: string; timeoutSeconds?: number; env?: Record<string, string> },
+  ): Promise<ExecResult> {
+    return this.post("/exec", { command, ...opts });
+  }
+  /** Run a code snippet in a FRESH process (no state between calls). */
+  runCode(
+    code: string,
+    opts?: { lang?: "python" | "node" | "bash"; timeoutSeconds?: number },
+  ): Promise<ExecResult> {
+    return this.post("/run-code", { code, ...opts });
+  }
+  /**
+   * Run a cell in the PERSISTENT Jupyter kernel (state survives across calls,
+   * matplotlib charts returned as image/png). Requires template "code-interpreter".
+   * Retries briefly while the kernel finishes booting on the first call.
+   */
+  async runCell(
+    code: string,
+    opts?: { timeoutSeconds?: number },
+  ): Promise<RunCellResult> {
+    let lastErr: unknown;
+    for (let i = 0; i < 8; i++) {
+      try {
+        return await this.post<RunCellResult>("/run-cell", { code, ...opts });
+      } catch (e) {
+        if (e instanceof EasybitsError && /kernel sidecar unavailable/i.test(e.message)) {
+          lastErr = e;
+          await sleep(3000);
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastErr;
+  }
+  /** Restart the Jupyter kernel (clears all state). */
+  kernelRestart(): Promise<{ ok: true }> {
+    return this.post("/kernel-restart");
+  }
+
+  // ── Background processes ──
+  /** Start a long-running command. Returns an execId to poll. */
+  execBackground(
+    command: string,
+    opts?: { cwd?: string; env?: Record<string, string> },
+  ): Promise<BgStartResult> {
+    return this.post("/bg", { command, ...opts });
+  }
+  /** Poll a background process: status + captured stdout/stderr. */
+  bgStatus(execId: string): Promise<BgStatusResult> {
+    return this.req(`${this.base()}/bg/${encodeURIComponent(execId)}`);
+  }
+  /** Kill a background process. */
+  bgKill(execId: string): Promise<{ ok: true }> {
+    return this.req(`${this.base()}/bg/${encodeURIComponent(execId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  // ── Networking ──
+  /** Expose a port as a public HTTPS URL (sb-<id>-<port>.sandboxes.easybits.cloud). */
+  exposePort(port: number): Promise<ExposedPort> {
+    return this.post("/expose", { port });
+  }
+}
+
+/** Filesystem sub-API for a Sandbox (sbx.files.*). */
+export class SandboxFiles {
+  constructor(private sandboxId: string, private req: SandboxReq) {}
+  private base() {
+    return `/sandboxes/${this.sandboxId}/files`;
+  }
+  write(
+    path: string,
+    content: string,
+    opts?: { encoding?: "utf8" | "base64" },
+  ): Promise<{ ok: true; bytes: number }> {
+    return this.req(`${this.base()}/write`, {
+      method: "POST",
+      body: JSON.stringify({ path, content, ...opts }),
+    });
+  }
+  read(
+    path: string,
+    opts?: { encoding?: "utf8" | "base64" },
+  ): Promise<{ content: string; size: number; encoding: string }> {
+    const qs = new URLSearchParams({ path });
+    if (opts?.encoding) qs.set("encoding", opts.encoding);
+    return this.req(`${this.base()}/read?${qs.toString()}`);
+  }
+  list(path: string): Promise<{ entries: SandboxFileEntry[] }> {
+    const qs = new URLSearchParams({ path });
+    return this.req(`${this.base()}/list?${qs.toString()}`);
+  }
+  delete(path: string, opts?: { recursive?: boolean }): Promise<{ ok: true }> {
+    return this.req(`${this.base()}/delete`, {
+      method: "POST",
+      body: JSON.stringify({ path, ...opts }),
+    });
+  }
+  move(from: string, to: string): Promise<{ ok: true }> {
+    return this.req(`${this.base()}/move`, {
+      method: "POST",
+      body: JSON.stringify({ from, to }),
+    });
+  }
+  mkdir(path: string): Promise<{ ok: true }> {
+    return this.req(`${this.base()}/mkdir`, {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// ─── Sandbox types ───────────────────────────────────────────────
+
+export type SandboxTemplate =
+  | "ubuntu"
+  | "python"
+  | "node"
+  | "node-agent"
+  | "bun"
+  | "claude-code"
+  | "goose"
+  | "ghostyclaw"
+  | "openclaw"
+  | "chat-openai"
+  | "chat-anthropic"
+  | "code-interpreter";
+
+export type SandboxStatus =
+  | "starting"
+  | "running"
+  | "stopped"
+  | "error"
+  | "lost"
+  | "suspended";
+
+export interface CreateSandboxParams {
+  template: SandboxTemplate;
+  timeoutSeconds?: number;
+  name?: string;
+  metadata?: Record<string, string>;
+  /** Wait until status is "running" before returning (default true). */
+  waitForReady?: boolean;
+}
+
+export interface SandboxRecord {
+  sandboxId: string;
+  template: SandboxTemplate;
+  status: SandboxStatus;
+  createdAt: string;
+  expiresAt: string;
+  ownerId: string;
+  metadata?: Record<string, string>;
+}
+
+export interface ExecResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  truncated?: boolean;
+}
+
+export interface SandboxFileEntry {
+  name: string;
+  path: string;
+  size: number;
+  isDir: boolean;
+  modifiedAt: string;
+}
+
+export interface CellResult {
+  /** MIME type, e.g. "text/plain", "image/png", "text/html". */
+  type: string;
+  /** Payload (base64 for image/png). */
+  data: string;
+}
+
+export interface RunCellResult {
+  stdout: string;
+  stderr: string;
+  results: CellResult[];
+  error?: { ename: string; evalue: string; traceback: string[] } | null;
+}
+
+export interface ExposedPort {
+  url: string;
+  host: string;
+  port: number;
+}
+
+export interface BgStartResult {
+  execId: string;
+  status: string;
+}
+
+export interface BgStatusResult {
+  status: "running" | "exited";
+  exitCode?: number;
+  stdout: string;
+  stderr: string;
+  startedAt: string;
 }
 
 // ─── DatabaseHandle ──────────────────────────────────────────────
