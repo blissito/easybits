@@ -146,10 +146,18 @@ export const PlanCard = ({
 };
 
 export const PerkItem = ({ perk }: { perk?: string }) => {
+  const highlight = !!perk && /sandbox/i.test(perk);
   return (
     <div className="flex w-full items-start gap-2 my-2">
       <img alt="bullet" src="/home/bullet.svg" className="mt-[2px]" />
-      <span className="text-sm">{perk}</span>
+      <span className={"text-sm" + (highlight ? " font-semibold text-brand-700" : "")}>
+        {highlight && (
+          <span className="mr-1.5 align-middle text-[10px] font-bold uppercase tracking-wide bg-brand-500 text-white px-1.5 py-[1px] rounded">
+            Nuevo
+          </span>
+        )}
+        {perk}
+      </span>
     </div>
   );
 };
