@@ -48,7 +48,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Branding 'Powered by' en landings",
       "Preview de archivos",
       "3 bases de datos",
-      "Sandboxes: 1 microVM · sesiones de 1h",
+      "Sandboxes: hasta 3 a la vez · sesiones de 1h",
       "7 días de papelera",
       "Packs de créditos desde $39",
     ],
