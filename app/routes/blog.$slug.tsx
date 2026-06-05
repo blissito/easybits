@@ -229,6 +229,11 @@ export const meta = ({ data }: Route.MetaArgs) => {
     { property: "og:url", content: canonical },
     { property: "og:image", content: imageUrl },
     { property: "og:image:alt", content: post.title },
+    // WhatsApp/Facebook render the preview image more reliably with explicit
+    // dimensions + type. Featured images are 1024×1024 JPEG.
+    { property: "og:image:width", content: "1024" },
+    { property: "og:image:height", content: "1024" },
+    { property: "og:image:type", content: "image/jpeg" },
     { property: "article:author", content: post.author },
     {
       property: "article:published_time",
