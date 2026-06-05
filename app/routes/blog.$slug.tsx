@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "tu-agente-corre-codigo-sandboxes-easybits":
+    "app/content/blog/2026-06-04-tu-agente-corre-codigo-sandboxes-easybits.mdx",
   "sandboxes-para-agentes-ia":
     "app/content/blog/2026-06-04-sandboxes-para-agentes-ia.mdx",
   "editar-pagina-22k-tokens-mcp":
@@ -40,6 +42,10 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "tu-agente-corre-codigo-sandboxes-easybits",
+    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+  },
   {
     slug: "sandboxes-para-agentes-ia",
     featuredImage: "/blog/assets/sandbox-ghosty.jpg",

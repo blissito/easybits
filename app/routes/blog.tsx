@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "tu-agente-corre-codigo-sandboxes-easybits",
+    filePath:
+      "app/content/blog/2026-06-04-tu-agente-corre-codigo-sandboxes-easybits.mdx",
+    title:
+      "Tu agente ya puede correr código, ver gráficas y publicar una URL — todo por MCP",
+    description:
+      "La segunda parte: qué puede HACER tu agente con los sandboxes de Easybits. Kernel de Python con estado entre celdas, gráficas que el modelo ve, procesos en segundo plano, archivos, y un puerto expuesto como URL pública con HTTPS. Todo desde un solo MCP.",
+    date: "2026-06-04",
+    author: "Equipo Easybits",
+    tags: ["sandboxes", "agentes", "IA", "MCP", "code-interpreter"],
+    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+    readingTime: 5,
+    excerpt:
+      "El cómo, no el qué: kernel de Python con estado y gráficas que el modelo ve, procesos en segundo plano, archivos y un puerto expuesto como URL pública con HTTPS. Todo por MCP.",
+    published: true,
+  },
+  {
     slug: "sandboxes-para-agentes-ia",
     filePath: "app/content/blog/2026-06-04-sandboxes-para-agentes-ia.mdx",
     title:

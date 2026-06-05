@@ -1,0 +1,96 @@
+---
+title: "Tu agente ya puede correr código, ver gráficas y publicar una URL — todo por MCP"
+description: "La segunda parte: qué puede HACER tu agente con los sandboxes de Easybits. Kernel de Python con estado entre celdas, gráficas que el modelo ve, procesos en segundo plano, archivos, y un puerto expuesto como URL pública con HTTPS. Todo desde un solo MCP."
+date: "2026-06-04"
+author: "Equipo Easybits"
+tags: ["sandboxes", "agentes", "IA", "MCP", "code-interpreter"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# Tu agente ya puede correr código, ver gráficas y publicar una URL — todo por MCP
+
+En el [post anterior](/blog/sandboxes-para-agentes-ia) explicamos el *qué* y el *por qué*: el código que genera tu IA tiene que correr en algún lado aislado, y por eso construimos sandboxes con microVMs reales. Este es el *cómo*. Qué puede hacer tu agente hoy, con ejemplos.
+
+Todo lo que sigue se maneja por **MCP** —el mismo protocolo que ya hablan Claude, Cursor y los demás— y vive junto a tus archivos, tus bases de datos y tus documentos en Easybits. Sin pegar cuatro servicios a mano.
+
+## 1. Corre código con memoria (kernel persistente)
+
+La diferencia entre "ejecutar un script" y "trabajar con datos" es el **estado**. Un agente que analiza un CSV necesita cargarlo una vez y luego hacerle diez preguntas, no recargarlo cada vez.
+
+Por eso hay dos formas de ejecutar:
+
+- `sandbox_run_code` — un proceso fresco por llamada (rápido para cosas sueltas). Las variables **no** sobreviven.
+- `sandbox_run_cell` — un **kernel de Jupyter vivo**. Las variables, los imports y los datos cargados **persisten entre llamadas**, igual que en un notebook.
+
+```
+sandbox_create { template: "code-interpreter" }
+sandbox_run_cell { code: "import pandas as pd; df = pd.read_csv('ventas.csv')" }
+sandbox_run_cell { code: "df.groupby('mes').total.sum()" }   # df sigue ahí
+```
+
+Y lo mejor: si tu código genera una **gráfica con matplotlib**, te la devolvemos como **imagen**. El modelo no recibe un "se generó un PNG"; recibe la imagen y la *ve*. Eso es lo que hace que un agente analista de datos funcione de verdad.
+
+```
+sandbox_run_cell { code: "df.plot(); plt.show()" }   # → imagen PNG de vuelta
+```
+
+Es el mismo patrón que popularizó el "code interpreter" de los grandes, ahora dentro de tu Easybits.
+
+## 2. Levanta un server y compártelo con una URL pública
+
+Tu agente arma una app, una demo o un dashboard adentro del sandbox. ¿Cómo se la enseñas a alguien? Expones el puerto:
+
+```
+sandbox_exec_background { command: "python3 -m http.server 3000" }
+sandbox_expose_port { port: 3000 }
+// → https://sb-9a973543-...-3000.sandboxes.easybits.cloud
+```
+
+Esa URL es **pública, con HTTPS válido** (certificado emitido automáticamente), y vive mientras el sandbox esté encendido. El identificador del sandbox —imposible de adivinar— es la llave: solo quien tiene el link entra. Es el equivalente al `getHost` de E2B o al preview link de Daytona, sin que configures nada.
+
+## 3. Procesos largos, sin bloquear
+
+No todo termina en un segundo. Un build, un server de desarrollo, un scraping. Para eso está la ejecución en segundo plano:
+
+- `sandbox_exec_background` → arranca el proceso y te regresa un `execId` al instante.
+- `sandbox_exec_status` → revisas estado y lees el `stdout`/`stderr` acumulado.
+- `sandbox_exec_kill` → lo matas cuando quieras.
+
+Tu agente lanza la tarea, sigue con lo suyo, y vuelve a checar después.
+
+## 4. Archivos y ciclo de vida
+
+Dentro del sandbox tienes un sistema de archivos completo: `sandbox_files_write`, `read`, `list`, `delete`, `move`, `mkdir`. Y para no desperdiciar recursos, control de vida real:
+
+- `sandbox_extend` — alarga el tiempo antes de que se auto-destruya.
+- `sandbox_suspend` / `sandbox_resume` — congela a disco y revive (mismo estado, misma IP).
+- `sandbox_destroy` — lo cierras tú.
+
+Cada microVM se auto-destruye sola al cumplir su tiempo, así que un proceso desbocado nunca se queda corriendo de a gratis.
+
+## Todo en un solo lugar (y en pesos)
+
+Esta es la parte que no copias conectando servicios sueltos: el sandbox **vive junto al resto de tu Easybits**. En la misma sesión, tu agente puede:
+
+1. Correr código en un sandbox aislado,
+2. guardar el resultado como archivo,
+3. consultarlo después desde tu base de datos,
+4. y publicarlo en un documento o una landing.
+
+Almacenamiento, base de datos, documentos y ejecución de código —controlados por agentes, por un solo MCP—. Facturado en México, en pesos, con soporte en español.
+
+## Empieza en dos líneas
+
+Si ya conectaste tu agente a Easybits por MCP, las tools de sandbox ya están ahí. Si no, [conéctalo en un par de minutos](/blog/conecta-agente-ia-easybits-mcp). Y si prefieres llamarlo a mano, es un `fetch` al endpoint MCP:
+
+```js
+const { sandboxId } = await eb("sandbox_create", { template: "code-interpreter" });
+await eb("sandbox_run_cell", { sandboxId, code: "print('hola desde una microVM')" });
+```
+
+👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
+
+---
+
+*¿Qué le pondrías a correr a tu agente primero? Cuéntanos y lo usamos para decidir qué tool construimos después.*
