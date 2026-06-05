@@ -20,7 +20,7 @@ const BLOG_POSTS = [
     date: "2026-06-04",
     author: "Equipo Easybits",
     tags: ["sandboxes", "agentes", "IA", "MCP", "code-interpreter"],
-    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+    featuredImage: "/blog/assets/sandbox-sdk.jpg",
     readingTime: 5,
     excerpt:
       "El cómo, no el qué: kernel de Python con estado, gráficas a partir de datos, procesos en segundo plano, archivos y un puerto expuesto como URL pública con HTTPS. Todo por MCP.",

@@ -44,7 +44,7 @@ const BLOG_POSTS = {
 const BLOG_POSTS_LIST = [
   {
     slug: "tu-agente-corre-codigo-sandboxes-easybits",
-    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+    featuredImage: "/blog/assets/sandbox-sdk.jpg",
   },
   {
     slug: "sandboxes-para-agentes-ia",
@@ -209,24 +209,26 @@ export const meta = ({ data }: Route.MetaArgs) => {
   const fallbackImage = "https://www.easybits.cloud/logo-eb.svg";
   const imageUrl = getAbsoluteImageUrl(post.featuredImage) || fallbackImage;
 
+  const canonical = `https://www.easybits.cloud/blog/${post.slug}`;
+
   return [
     { title: `${post.title} | EasyBits` },
     { name: "description", content: post.description },
     { name: "keywords", content: post.tags.join(", ") },
     { name: "author", content: post.author },
+    { name: "robots", content: "index, follow, max-image-preview:large" },
+    // Canonical (dedupe for search + AI crawlers)
+    { tagName: "link", rel: "canonical", href: canonical },
 
     // Open Graph
     { property: "og:title", content: post.title },
     { property: "og:description", content: post.description },
     { property: "og:type", content: "article" },
-    {
-      property: "og:url",
-      content: `https://www.easybits.cloud/blog/${post.slug}`,
-    },
-    {
-      property: "og:image",
-      content: imageUrl,
-    },
+    { property: "og:site_name", content: "EasyBits" },
+    { property: "og:locale", content: "es_MX" },
+    { property: "og:url", content: canonical },
+    { property: "og:image", content: imageUrl },
+    { property: "og:image:alt", content: post.title },
     { property: "article:author", content: post.author },
     {
       property: "article:published_time",
@@ -238,10 +240,8 @@ export const meta = ({ data }: Route.MetaArgs) => {
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: post.title },
     { name: "twitter:description", content: post.description },
-    {
-      name: "twitter:image",
-      content: imageUrl,
-    },
+    { name: "twitter:image", content: imageUrl },
+    { name: "twitter:image:alt", content: post.title },
   ];
 };
 
@@ -285,7 +285,8 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "Article",
+            "@type": "BlogPosting",
+            inLanguage: "es",
             headline: post.title,
             description: post.description,
             image: [
