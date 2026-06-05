@@ -12,7 +12,7 @@ export const Hero = () => {
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            El backend que{" "}
+            Sandboxes y backend para{" "}
             <a
               href="https://formmy.app/ghosty"
               target="_blank"
@@ -21,12 +21,12 @@ export const Hero = () => {
             >
               tu agente IA
             </a>{" "}
-            controla — archivos, datos y acciones, sin código
+            — ejecuta código, guarda archivos y publica
           </h1>
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
-            Publica, guarda y automatiza desde un solo MCP. Tu agente ya tiene
-            dónde trabajar.
+            MicroVMs aisladas, archivos, datos y acciones desde un solo MCP. Tu
+            agente ya tiene dónde correr y dónde guardar.
           </p>
         </TextBlurEffect>
         <Link to="/cuanto-cuesta-mi-agente">
