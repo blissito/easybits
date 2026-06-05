@@ -14,16 +14,16 @@ const BLOG_POSTS = [
     filePath:
       "app/content/blog/2026-06-04-tu-agente-corre-codigo-sandboxes-easybits.mdx",
     title:
-      "Tu agente ya puede correr código, ver gráficas y publicar una URL — todo por MCP",
+      "Tu agente ya puede correr código, levantar servers y publicar URLs — todo por MCP",
     description:
-      "La segunda parte: qué puede HACER tu agente con los sandboxes de Easybits. Kernel de Python con estado entre celdas, gráficas que el modelo ve, procesos en segundo plano, archivos, y un puerto expuesto como URL pública con HTTPS. Todo desde un solo MCP.",
+      "La segunda parte: qué puede HACER tu agente con los sandboxes de Easybits. Corre código con estado (kernel de Python), genera gráficas a partir de datos, lanza procesos en segundo plano, maneja archivos y expone un puerto como URL pública con HTTPS. Todo desde un solo MCP.",
     date: "2026-06-04",
     author: "Equipo Easybits",
     tags: ["sandboxes", "agentes", "IA", "MCP", "code-interpreter"],
     featuredImage: "/blog/assets/sandbox-ghosty.jpg",
     readingTime: 5,
     excerpt:
-      "El cómo, no el qué: kernel de Python con estado y gráficas que el modelo ve, procesos en segundo plano, archivos y un puerto expuesto como URL pública con HTTPS. Todo por MCP.",
+      "El cómo, no el qué: kernel de Python con estado, gráficas a partir de datos, procesos en segundo plano, archivos y un puerto expuesto como URL pública con HTTPS. Todo por MCP.",
     published: true,
   },
   {
