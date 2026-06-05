@@ -459,6 +459,17 @@ export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promi
   return callHost<{ ok: true }>("DELETE", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
 }
 
+export interface FleetStats {
+  totalStarted: number;
+  running: number;
+}
+
+// Fleet-wide counters from the host (no user scope — server-to-server with the
+// host token). Powers the public "started sandboxes" metric.
+export async function getFleetStats(): Promise<FleetStats> {
+  return callHost<FleetStats>("GET", "/v1/stats");
+}
+
 // Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on
 // persistent boxes (host returns { persistent, noop }). Total remaining
 // lifetime is clamped to 3600s from now by the host.
