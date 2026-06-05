@@ -80,14 +80,42 @@ Esta es la parte que no copias conectando servicios sueltos: el sandbox **vive j
 
 Almacenamiento, base de datos, documentos y ejecución de código —controlados por agentes, por un solo MCP—. Facturado en México, en pesos, con soporte en español.
 
-## Empieza en dos líneas
+## El ejemplo completo
 
-Si ya conectaste tu agente a Easybits por MCP, las tools de sandbox ya están ahí. Si no, [conéctalo en un par de minutos](/blog/conecta-agente-ia-easybits-mcp). Y si prefieres llamarlo a mano, es un `fetch` al endpoint MCP:
+Si conectas tu agente a Easybits por MCP, las tools de sandbox ya están ahí —tu agente las llama solo, sin que escribas nada. Pero si lo quieres a mano, aquí está el flujo completo con el SDK oficial de MCP: crear un sandbox, correr código con estado y exponer un puerto como URL pública.
+
+```bash
+npm install @modelcontextprotocol/sdk
+```
 
 ```js
-const { sandboxId } = await eb("sandbox_create", { template: "code-interpreter" });
-await eb("sandbox_run_cell", { sandboxId, code: "print('hola desde una microVM')" });
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+// 1. Conéctate al MCP de Easybits (tu API key en EASYBITS_API_KEY)
+const transport = new StreamableHTTPClientTransport(
+  new URL("https://www.easybits.cloud/api/mcp?tools=sandbox"),
+  { requestInit: { headers: { Authorization: `Bearer ${process.env.EASYBITS_API_KEY}` } } }
+);
+const client = new Client({ name: "mi-agente", version: "1.0.0" });
+await client.connect(transport);
+
+// helper: cada tool devuelve su payload como JSON en content[0].text
+const call = async (name, args = {}) =>
+  JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+
+// 2. Crea un sandbox con kernel persistente y corre código
+const { sandboxId } = await call("sandbox_create", { template: "code-interpreter" });
+const exec = await call("sandbox_run_cell", { sandboxId, code: "print('hola desde una microVM')" });
+console.log(exec.stdout); // → hola desde una microVM
+
+// 3. Levanta un server y obtén su URL pública con HTTPS
+await call("sandbox_exec_background", { sandboxId, command: "python3 -m http.server 3000" });
+const { url } = await call("sandbox_expose_port", { sandboxId, port: 3000 });
+console.log(url); // → https://sb-...-3000.sandboxes.easybits.cloud
 ```
+
+¿Prefieres sin dependencias? El mismo flujo sale con un `fetch` directo al endpoint `/api/mcp` (parseando la respuesta SSE). Ambos ejemplos completos están en el [repo de ejemplos](https://github.com/blissito/easybits/tree/main/examples).
 
 👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
 
