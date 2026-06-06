@@ -533,6 +533,43 @@ export class EasybitsError extends Error {
   }
 }
 
+// ─── eb.compute (LLM managed, cobrado por token) ─────────────────
+
+export interface ComputeMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | unknown[];
+  tool_call_id?: string;
+  tool_calls?: unknown[];
+}
+
+export interface ComputeChatParams {
+  /** "gemini-flash" (default) | "gemini-pro" | "gpt-4o-mini" | "claude-sonnet" */
+  model?: string;
+  messages: ComputeMessage[];
+  temperature?: number;
+  max_tokens?: number;
+  top_p?: number;
+  tools?: unknown[];
+  tool_choice?: unknown;
+}
+
+export interface ComputeChatResponse {
+  id: string;
+  model: string;
+  choices: Array<{
+    index: number;
+    message: { role: string; content: string | null; tool_calls?: unknown[] };
+    finish_reason: string;
+  }>;
+  /** `cost` = créditos cobrados por esta llamada (estilo OpenRouter). */
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost: number;
+  };
+}
+
 // ─── Client ──────────────────────────────────────────────────────
 
 const DEFAULT_BASE_URL = "https://www.easybits.cloud";
@@ -1202,6 +1239,43 @@ export class EasybitsClient {
   //   await sbx.runCell("x = 41");
   //   const { url } = await sbx.exposePort(3000);
   //   await sbx.destroy();
+  /**
+   * eb.compute — LLM managed (Gemini/GPT/Claude) cobrado por token contra tus
+   * créditos. No traes key de proveedor: usas tu API key de EasyBits.
+   *
+   *   const json = await eb.compute.prompt("Clasifica este ticket...");
+   *   const r = await eb.compute.chat({ model: "gemini-flash", messages: [...] });
+   */
+  get compute() {
+    const req = <T>(path: string, opts?: RequestInit) => this.request<T>(path, opts);
+    return {
+      /** Chat completion OpenAI-compatible (soporta tools y visión). */
+      chat: (params: ComputeChatParams): Promise<ComputeChatResponse> =>
+        req<ComputeChatResponse>("/compute/v1/chat/completions", {
+          method: "POST",
+          body: JSON.stringify(params),
+        }),
+      /** Atajo: prompt → texto de respuesta. */
+      prompt: async (
+        prompt: string,
+        opts?: { model?: string; system?: string; temperature?: number },
+      ): Promise<string> => {
+        const messages: ComputeMessage[] = [];
+        if (opts?.system) messages.push({ role: "system", content: opts.system });
+        messages.push({ role: "user", content: prompt });
+        const r = await req<ComputeChatResponse>("/compute/v1/chat/completions", {
+          method: "POST",
+          body: JSON.stringify({
+            model: opts?.model ?? "gemini-flash",
+            messages,
+            temperature: opts?.temperature,
+          }),
+        });
+        return r.choices?.[0]?.message?.content ?? "";
+      },
+    };
+  }
+
   get sandboxes() {
     const req = <T>(path: string, opts?: RequestInit) =>
       this.request<T>(path, opts);
