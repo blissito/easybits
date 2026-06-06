@@ -1,10 +1,10 @@
 import type { Route } from "./+types/sandboxes-collection";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
+import { SandboxCreateBody } from "~/.server/sandbox/schemas";
 import {
   createSandbox,
   listSandboxes,
-  type SandboxTemplate,
 } from "~/.server/core/sandboxOperations";
 
 // GET /api/v2/sandboxes — list sandboxes owned by the caller
@@ -26,18 +26,13 @@ export async function action({ request }: Route.ActionArgs) {
   );
   if (limited) return limited;
   const body = await request.json().catch(() => ({}));
-  if (!body?.template) {
-    return Response.json({ error: "template required" }, { status: 400 });
+  const parsed = SandboxCreateBody.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Invalid body", issues: parsed.error.issues },
+      { status: 400 }
+    );
   }
-  const result = await createSandbox(ctx, {
-    template: body.template as SandboxTemplate,
-    timeoutSeconds:
-      typeof body.timeoutSeconds === "number" ? body.timeoutSeconds : undefined,
-    name: typeof body.name === "string" ? body.name : undefined,
-    metadata:
-      body.metadata && typeof body.metadata === "object"
-        ? body.metadata
-        : undefined,
-  });
+  const result = await createSandbox(ctx, parsed.data);
   return Response.json(result);
 }

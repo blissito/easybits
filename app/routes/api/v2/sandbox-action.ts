@@ -2,6 +2,11 @@ import type { Route } from "./+types/sandbox-action";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
+  SandboxExecBody,
+  SandboxRunCodeBody,
+  SandboxRunCellBody,
+} from "~/.server/sandbox/schemas";
+import {
   extendSandbox,
   suspendSandbox,
   resumeSandbox,
@@ -11,6 +16,9 @@ import {
   kernelRestart,
   exposeSandboxPort,
 } from "~/.server/core/sandboxOperations";
+
+const invalid = (issues: unknown) =>
+  Response.json({ error: "Invalid body", issues }, { status: 400 });
 
 // POST /api/v2/sandboxes/:id/:action
 // action ∈ extend | suspend | resume | exec | run-code | run-cell |
@@ -35,36 +43,21 @@ export async function action({ request, params }: Route.ActionArgs) {
       return Response.json(await suspendSandbox(ctx, id));
     case "resume":
       return Response.json(await resumeSandbox(ctx, id));
-    case "exec":
-      if (!body.command)
-        return Response.json({ error: "command required" }, { status: 400 });
-      return Response.json(
-        await execCommand(ctx, id, {
-          command: body.command,
-          cwd: body.cwd,
-          timeoutSeconds: body.timeoutSeconds,
-          env: body.env,
-        })
-      );
-    case "run-code":
-      if (!body.code)
-        return Response.json({ error: "code required" }, { status: 400 });
-      return Response.json(
-        await runCode(ctx, id, {
-          code: body.code,
-          lang: body.lang,
-          timeoutSeconds: body.timeoutSeconds,
-        })
-      );
-    case "run-cell":
-      if (!body.code)
-        return Response.json({ error: "code required" }, { status: 400 });
-      return Response.json(
-        await runCell(ctx, id, {
-          code: body.code,
-          timeoutSeconds: body.timeoutSeconds,
-        })
-      );
+    case "exec": {
+      const p = SandboxExecBody.safeParse(body);
+      if (!p.success) return invalid(p.error.issues);
+      return Response.json(await execCommand(ctx, id, p.data));
+    }
+    case "run-code": {
+      const p = SandboxRunCodeBody.safeParse(body);
+      if (!p.success) return invalid(p.error.issues);
+      return Response.json(await runCode(ctx, id, p.data));
+    }
+    case "run-cell": {
+      const p = SandboxRunCellBody.safeParse(body);
+      if (!p.success) return invalid(p.error.issues);
+      return Response.json(await runCell(ctx, id, p.data));
+    }
     case "kernel-restart":
       return Response.json(await kernelRestart(ctx, id));
     case "expose":

@@ -3,30 +3,17 @@ import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
+import type { SandboxTemplate } from "../sandbox/schemas";
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
 const DEFAULT_TIMEOUT_S = 300;
 const MAX_TIMEOUT_S = 3600;
 
-export type SandboxTemplate =
-  | "ubuntu"
-  | "python"
-  | "node"
-  | "node-agent"
-  | "bun"
-  | "claude-code"
-  | "goose"
-  | "ghostyclaw"
-  | "ghosty-lite"
-  | "open-ghosty"
-  | "lang-ghosty"
-  | "rust-ghosty"
-  | "cagent-ghosty"
-  | "openclaw"
-  | "chat-openai"
-  | "chat-anthropic"
-  | "code-interpreter";
+// SandboxTemplate se deriva de SANDBOX_TEMPLATES en ../sandbox/schemas
+// (fuente única). Se re-exporta para mantener compatibilidad con quien lo
+// importa desde aquí (p.ej. routes/api/v2/agents.ts).
+export type { SandboxTemplate };
 
 export interface AgentSpec {
   port?: number;
