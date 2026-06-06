@@ -41,7 +41,7 @@ async function main() {
         `- sub=${s.id} cust=${c.id} status=${s.status} created=${new Date(s.created * 1000).toISOString()} metadata=${JSON.stringify(s.metadata)}`
       );
       const items = s.items.data.map(
-        (it) => `${it.price.unit_amount! / 100} ${it.price.currency} (${it.price.recurring?.interval})`
+        (it: any) => `${it.price.unit_amount! / 100} ${it.price.currency} (${it.price.recurring?.interval})`
       );
       console.log(`    items: ${items.join(", ")}`);
     }
@@ -70,7 +70,7 @@ async function main() {
     const obj: any = ev.data.object;
     const objEmail = obj?.customer_email || obj?.customer_details?.email;
     const matchesEmail = objEmail === email;
-    const matchesCust = customers.data.some((c) => obj?.customer === c.id);
+    const matchesCust = customers.data.some((c: any) => obj?.customer === c.id);
     if (matchesEmail || matchesCust) {
       console.log(
         `- ${ev.id} type=${ev.type} created=${new Date(ev.created * 1000).toISOString()}`

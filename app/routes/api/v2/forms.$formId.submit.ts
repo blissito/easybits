@@ -1,4 +1,3 @@
-// @ts-expect-error React Router auto-generated types may not exist yet
 import type { Route } from "./+types/forms.$formId.submit";
 import { handleFormSubmission } from "~/.server/core/formOperations";
 import { RateLimiter } from "~/.server/rateLimiter";

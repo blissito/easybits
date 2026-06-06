@@ -9,7 +9,6 @@ const db = new PrismaClient();
     name: doc.name,
     status: doc.status,
     websiteId: doc.websiteId,
-    slug: doc.slug,
     updatedAt: doc.updatedAt,
   });
   if (doc.websiteId) {
