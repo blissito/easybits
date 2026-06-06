@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agent";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { destroyAgent, getAgent } from "~/.server/core/sandboxOperations";
 
 // GET /api/v2/agents/:id — owner-only agent record
@@ -25,6 +26,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   const result = await destroyAgent(ctx, params.id!);
   return Response.json(result);
 }

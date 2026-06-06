@@ -1,5 +1,6 @@
 import type { Route } from "./+types/sandboxes-collection";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   createSandbox,
   listSandboxes,
@@ -19,6 +20,11 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "create"
+  );
+  if (limited) return limited;
   const body = await request.json().catch(() => ({}));
   if (!body?.template) {
     return Response.json({ error: "template required" }, { status: 400 });

@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agent-skills";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { installSkill, listInstalledSkills } from "~/.server/core/skillsOperations";
 
 // GET /api/v2/agents/:id/skills
@@ -36,6 +37,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
 
   let form: FormData;
   try {

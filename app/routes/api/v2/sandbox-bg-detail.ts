@@ -1,5 +1,6 @@
 import type { Route } from "./+types/sandbox-bg-detail";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   execBackgroundStatus,
   execBackgroundKill,
@@ -8,6 +9,11 @@ import {
 // GET /api/v2/sandboxes/:id/bg/:execId — status + captured logs
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   return Response.json(
     await execBackgroundStatus(ctx, params.id, params.execId)
   );
@@ -19,5 +25,10 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   return Response.json(await execBackgroundKill(ctx, params.id, params.execId));
 }

@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agent-resume";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { resumeAgent } from "~/.server/core/sandboxOperations";
 
 // POST /api/v2/agents/:id/resume
@@ -12,6 +13,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   try {
     const result = await resumeAgent(ctx, params.id!);
     return Response.json(result);

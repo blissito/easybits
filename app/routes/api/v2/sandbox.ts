@@ -1,5 +1,6 @@
 import type { Route } from "./+types/sandbox";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { getSandbox, destroySandbox } from "~/.server/core/sandboxOperations";
 
 // GET /api/v2/sandboxes/:id — status
@@ -15,6 +16,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   const result = await destroySandbox(ctx, params.id);
   return Response.json(result);
 }

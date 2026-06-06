@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agents-autonomous";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { spawnAutonomous } from "~/.server/core/sandboxOperations";
 
 // POST /api/v2/agents/autonomous
@@ -12,6 +13,11 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "create"
+  );
+  if (limited) return limited;
   const body = await request.json().catch(() => ({}));
   const brand = String(body?.brand ?? "");
   if (!["ghosty", "ghosty-lite", "nanoclaw", "openclaw", "goose-managed"].includes(brand)) {

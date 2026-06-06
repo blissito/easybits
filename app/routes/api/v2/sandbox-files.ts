@@ -1,5 +1,6 @@
 import type { Route } from "./+types/sandbox-files";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   writeFile,
   readFile,
@@ -12,6 +13,11 @@ import {
 // GET /api/v2/sandboxes/:id/files/:op   (op: read | list, path via ?path=)
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   const url = new URL(request.url);
   const path = url.searchParams.get("path") || "";
   if (params.op === "read") {
@@ -38,6 +44,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   const id = params.id;
   const body = await request.json().catch(() => ({}));
   switch (params.op) {

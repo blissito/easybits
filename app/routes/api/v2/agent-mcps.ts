@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agent-mcps";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   registerAgentMcp,
   type RegisterMcpBody,
@@ -15,6 +16,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
   let body: RegisterMcpBody;
   try {
     body = (await request.json()) as RegisterMcpBody;

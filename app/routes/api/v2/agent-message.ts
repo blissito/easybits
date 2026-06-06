@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agent-message";
 import { resolveAgentAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { openAgentChunkStream } from "~/.server/core/sandboxOperations";
 
 // CORS: el endpoint /api/v2/agents/:id/message lo consume el browser desde
@@ -34,6 +35,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 // streams the agent's SSE upstream; we re-emit it to the caller verbatim.
 export async function action({ request, params }: Route.ActionArgs) {
   const auth = await resolveAgentAuth(request, params.id!);
+  // Keyed por agentId (no por owner): el chat público del embed no debe drenar
+  // el presupuesto de sandbox del dueño ni el de otros agentes.
+  const limited = await applySandboxRateLimit(auth.agent.agentId, "op");
+  if (limited) {
+    const headers = new Headers(limited.headers);
+    for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+    return new Response(limited.body, { status: limited.status, headers });
+  }
   const body = await request.json().catch(() => ({}));
   if (typeof body?.content !== "string" || !body.content.trim()) {
     return Response.json(

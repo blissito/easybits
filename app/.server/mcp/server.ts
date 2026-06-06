@@ -158,6 +158,7 @@ import {
 import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
+import { checkSandboxRateLimit } from "../rateLimiter";
 
 type AutoDeployInfo =
   | { autoDeployed: true; url: string; slug: string; pdfUrl?: string; customUrl?: string }
@@ -180,6 +181,80 @@ async function autoDeployIfPublished(ctx: AuthContext, documentId: string): Prom
     console.error("[auto-deploy] failed for", documentId, e);
   }
   return { autoDeployed: false };
+}
+
+// Tools que tocan el host de sandboxes (caja única RAM-bound). El override de
+// `server.tool` (abajo) envuelve sus handlers con un rate limit keyed por API
+// key/usuario, compartido con el path REST (mismo bucket `sb:create`/`sb:op`).
+// "create" = spawn de microVM/agente (caro); "op" = todo lo demás que carga el host.
+const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
+  // Spawns (comparten el presupuesto de 10/min)
+  sandbox_create: "create",
+  agent_create: "create",
+  ghosty_spawn: "create",
+  goose_spawn: "create",
+  agent_run: "create",
+  // Ops (120/min)
+  sandbox_list: "op",
+  sandbox_status: "op",
+  sandbox_destroy: "op",
+  sandbox_extend: "op",
+  sandbox_suspend: "op",
+  sandbox_resume: "op",
+  sandbox_exec: "op",
+  sandbox_run_code: "op",
+  sandbox_run_cell: "op",
+  sandbox_kernel_restart: "op",
+  sandbox_files_write: "op",
+  sandbox_files_read: "op",
+  sandbox_files_list: "op",
+  sandbox_files_delete: "op",
+  sandbox_files_move: "op",
+  sandbox_files_mkdir: "op",
+  sandbox_expose_port: "op",
+  sandbox_exec_background: "op",
+  sandbox_exec_status: "op",
+  sandbox_exec_kill: "op",
+  agent_run_status: "op",
+  agent_run_destroy: "op",
+  agent_message: "op",
+  agent_list: "op",
+  agent_install_skill: "op",
+};
+
+// Envuelve un handler MCP con el rate limit de sandbox. Fail-open si no hay
+// identificador (auth ya se valida en handler.ts antes del dispatch).
+function withSandboxRateLimit(
+  kind: "create" | "op",
+  handler: (params: any, extra: any) => Promise<any>
+) {
+  return async (params: any, extra: any) => {
+    const ctx = extra?.authInfo as AuthContext | undefined;
+    const id = ctx?.apiKey?.id ?? ctx?.user?.id;
+    if (id) {
+      const rl = await checkSandboxRateLimit(id, kind);
+      if (!rl.allowed) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  error: "Rate limit exceeded",
+                  kind,
+                  retryAfterSeconds: rl.retryAfterS,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+    return handler(params, extra);
+  };
 }
 
 function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
@@ -277,6 +352,13 @@ export function createMcpServer(groups?: string[]) {
     (server as any).tool = (...args: any[]) => {
       const toolName = typeof args[0] === "string" ? args[0] : undefined;
       if (toolName && !EXPOSE_LEGACY_DOC_TOOLS && LEGACY_DOC_TOOLS.has(toolName)) return;
+      // Rate limit de sandbox: envolver el handler (último arg) ANTES de registrar,
+      // así el handler guardado en `_registeredTools` ya lleva el guard y `run_tool`
+      // queda cubierto sin código extra.
+      const kind = toolName ? SANDBOX_TOOL_KIND[toolName] : undefined;
+      if (kind && typeof args[args.length - 1] === "function") {
+        args[args.length - 1] = withSandboxRateLimit(kind, args[args.length - 1]);
+      }
       return (originalTool as any)(...args);
     };
   }

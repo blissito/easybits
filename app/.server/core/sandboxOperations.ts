@@ -352,7 +352,8 @@ async function callHost<T>(
   method: "GET" | "POST" | "DELETE" | "PATCH",
   path: string,
   body?: unknown,
-  ownerId?: string
+  ownerId?: string,
+  timeoutMs = 120_000
 ): Promise<T> {
   ensureConfigured();
   const url = `${HOST_URL.replace(/\/$/, "")}${path}`;
@@ -362,17 +363,53 @@ async function callHost<T>(
   };
   if (ownerId) headers["X-Easybits-Owner"] = ownerId;
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  // Solo GET es idempotente → reintentar ante red/5xx. POST/DELETE no se
+  // reintentan para evitar doble-spawn de VMs o doble-destroy.
+  const maxAttempts = method === "GET" ? 3 : 1;
+  let lastErr: unknown;
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`sandbox host ${method} ${path} → ${res.status}: ${text.slice(0, 500)}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        // Reintenta solo en 502/503/504 (host transitoriamente caído).
+        if (
+          attempt < maxAttempts &&
+          (res.status === 502 || res.status === 503 || res.status === 504)
+        ) {
+          lastErr = new Error(
+            `sandbox host ${method} ${path} → ${res.status}`
+          );
+          await new Promise((r) => setTimeout(r, attempt === 1 ? 300 : 900));
+          continue;
+        }
+        throw new Error(
+          `sandbox host ${method} ${path} → ${res.status}: ${text.slice(0, 500)}`
+        );
+      }
+      return (await res.json()) as T;
+    } catch (e) {
+      const isTimeout = e instanceof Error && e.name === "TimeoutError";
+      const wrapped = isTimeout
+        ? new Error(`sandbox host ${method} ${path} → timeout after ${timeoutMs}ms`)
+        : e;
+      // Reintenta errores de red/timeout solo en GET.
+      if (attempt < maxAttempts && (isTimeout || e instanceof TypeError)) {
+        lastErr = wrapped;
+        await new Promise((r) => setTimeout(r, attempt === 1 ? 300 : 900));
+        continue;
+      }
+      throw wrapped;
+    }
   }
-  return (await res.json()) as T;
+  throw lastErr;
 }
 
 export async function createSandbox(
@@ -550,16 +587,19 @@ export async function execCommand(
   params: { command: string; cwd?: string; timeoutSeconds?: number; env?: Record<string, string> }
 ): Promise<ExecResult> {
   requireScope(ctx, "WRITE");
+  const timeoutSeconds = Math.min(params.timeoutSeconds ?? 60, 600);
   return callHost<ExecResult>(
     "POST",
     `/v1/sandbox/${sandboxId}/exec`,
     {
       command: params.command,
       cwd: params.cwd,
-      timeoutSeconds: Math.min(params.timeoutSeconds ?? 60, 600),
+      timeoutSeconds,
       env: params.env,
     },
-    ctx.user.id
+    ctx.user.id,
+    // El host puede tardar hasta timeoutSeconds — dar margen al fetch.
+    (timeoutSeconds + 15) * 1000
   );
 }
 
@@ -569,15 +609,17 @@ export async function runCode(
   params: { code: string; lang?: "python" | "node" | "bash"; timeoutSeconds?: number }
 ): Promise<ExecResult> {
   requireScope(ctx, "WRITE");
+  const timeoutSeconds = Math.min(params.timeoutSeconds ?? 60, 600);
   return callHost<ExecResult>(
     "POST",
     `/v1/sandbox/${sandboxId}/run-code`,
     {
       code: params.code,
       lang: params.lang ?? "python",
-      timeoutSeconds: Math.min(params.timeoutSeconds ?? 60, 600),
+      timeoutSeconds,
     },
-    ctx.user.id
+    ctx.user.id,
+    (timeoutSeconds + 15) * 1000
   );
 }
 
@@ -773,11 +815,13 @@ export async function runCell(
   params: { code: string; timeoutSeconds?: number }
 ): Promise<RunCellResult> {
   requireScope(ctx, "WRITE");
+  const timeoutSeconds = Math.min(params.timeoutSeconds ?? 120, 600);
   return callHost<RunCellResult>(
     "POST",
     `/v1/sandbox/${sandboxId}/run-cell`,
-    { code: params.code, timeoutSeconds: params.timeoutSeconds },
-    ctx.user.id
+    { code: params.code, timeoutSeconds },
+    ctx.user.id,
+    (timeoutSeconds + 15) * 1000
   );
 }
 

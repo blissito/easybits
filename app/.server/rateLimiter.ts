@@ -178,6 +178,81 @@ export class RateLimiter {
 // Instancia global del rate limiter
 export const webhookRateLimiter = new RateLimiter();
 
+// ─── Sandbox rate limiting (per API key / user) ──────────────────
+// Sandbox spawn es la operación cara (microVM nueva) → tope estricto.
+const sandboxCreateLimiter = new RateLimiter({
+  windowMs: 60_000,
+  maxRequests: 10,
+});
+// Resto de ops (exec, run-cell, files, bg, expose…) → tope holgado.
+const sandboxOpsLimiter = new RateLimiter({
+  windowMs: 60_000,
+  maxRequests: 120,
+});
+
+// Fuente de verdad compartida (REST + MCP). Limita por identificador del caller
+// (API key id o user id), no por IP. La ventana es de 60s; resetTime del
+// RateLimiter colapsa a ~now, así que devolvemos el tamaño de ventana como hint
+// de reintento (cota superior honesta). Fail-open en caso de error interno.
+export async function checkSandboxRateLimit(
+  identifier: string,
+  kind: "create" | "op"
+): Promise<{
+  allowed: boolean;
+  remaining: number;
+  max: number;
+  retryAfterS: number;
+}> {
+  const max = kind === "create" ? 10 : 120;
+  try {
+    const limiter =
+      kind === "create" ? sandboxCreateLimiter : sandboxOpsLimiter;
+    // checkRateLimit usa un cache global keyed por identificador — namespacear
+    // por kind para que los buckets de "create" y "op" no se mezclen.
+    const rateLimit = await limiter.checkRateLimit(`sb:${kind}:${identifier}`);
+    return {
+      allowed: rateLimit.allowed,
+      remaining: rateLimit.remaining,
+      max,
+      retryAfterS: 60,
+    };
+  } catch (error) {
+    console.error("Sandbox rate limiting error:", error);
+    return { allowed: true, remaining: max, max, retryAfterS: 60 };
+  }
+}
+
+// Adaptador REST: devuelve un 429 Response si excede, o null para continuar.
+export async function applySandboxRateLimit(
+  identifier: string,
+  kind: "create" | "op"
+): Promise<Response | null> {
+  const rl = await checkSandboxRateLimit(identifier, kind);
+  if (rl.allowed) return null;
+
+  const resetIso = new Date(Date.now() + rl.retryAfterS * 1000).toISOString();
+  return new Response(
+    JSON.stringify({
+      error: "Rate limit exceeded",
+      message:
+        kind === "create"
+          ? "Too many sandboxes created, please slow down."
+          : "Too many sandbox requests, please slow down.",
+      resetTime: resetIso,
+    }),
+    {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        "X-RateLimit-Limit": rl.max.toString(),
+        "X-RateLimit-Remaining": rl.remaining.toString(),
+        "X-RateLimit-Reset": resetIso,
+        "Retry-After": rl.retryAfterS.toString(),
+      },
+    }
+  );
+}
+
 // Middleware para aplicar rate limiting
 export async function applyRateLimit(
   request: Request

@@ -1,5 +1,6 @@
 import type { Route } from "./+types/agents";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   createAgent,
   listAgents,
@@ -19,6 +20,11 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "create"
+  );
+  if (limited) return limited;
   const body = await request.json().catch(() => ({}));
   if (!body?.template || typeof body.env !== "object" || body.env === null) {
     return Response.json({ error: "template and env required" }, { status: 400 });
