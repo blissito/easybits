@@ -3,12 +3,23 @@ import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
+import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
 const DEFAULT_TIMEOUT_S = 300;
 const MAX_TIMEOUT_S = 3600;
+
+// Templates de EJECUCIÓN DE CÓDIGO donde eb.compute auto-inyecta una
+// ComputeKey (OPENAI_API_KEY) — el código del usuario llama al LLM managed
+// sin su propia key. Excluye chat runtimes (chat-openai/ghostyclaw/openclaw)
+// que tienen su propia auth de provider. Las cajas base (python/ubuntu/etc)
+// van por createSandbox (raw) — wiring pendiente, ver memoria.
+const COMPUTE_AUTOINJECT_TEMPLATES = new Set<SandboxTemplate>([
+  "node-agent",
+  "claude-code",
+]);
 
 // SandboxTemplate se deriva de SANDBOX_TEMPLATES en ../sandbox/schemas
 // (fuente única). Se re-exporta para mantener compatibilidad con quien lo
@@ -480,6 +491,8 @@ export async function waitUntilRunning(
 
 export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {
   requireScope(ctx, "DELETE");
+  // eb.compute: revocar las virtual keys del sandbox (fire-and-forget).
+  void revokeSandboxKeys(sandboxId);
   return callHost<{ ok: true }>("DELETE", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
 }
 
@@ -1144,6 +1157,19 @@ export async function createAgent(
   void (async () => {
     try {
       await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 30_000 });
+      // eb.compute: inyecta una ComputeKey como OPENAI_API_KEY para que el
+      // código del agente llame al LLM managed sin traer su propia key.
+      // Acotado a harnesses de EJECUCIÓN DE CÓDIGO — los chat runtimes
+      // (chat-openai/ghostyclaw/openclaw) tienen su propia auth de LLM y no
+      // deben ser redirigidos al gateway. BYOK gana (skip si ya hay key).
+      if (COMPUTE_AUTOINJECT_TEMPLATES.has(params.template) && !env.OPENAI_API_KEY) {
+        try {
+          env.OPENAI_API_KEY = await mintComputeKey(ctx.user.id, sb.sandboxId);
+          if (!env.OPENAI_BASE_URL) env.OPENAI_BASE_URL = COMPUTE_BASE_URL;
+        } catch (e) {
+          console.error(`eb.compute key mint failed for ${sb.sandboxId}:`, e);
+        }
+      }
       const ep = await startAgent(ctx, sb.sandboxId, {
         env,
         port: tpl.agent?.port,

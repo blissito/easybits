@@ -133,6 +133,70 @@ export const formatCredits = (n: number): string =>
   new Intl.NumberFormat("es-MX").format(n);
 
 // ──────────────────────────────────────────────────────────────────
+// eb.compute — LLM managed dentro de sandboxes, cobrado por TOKEN
+// ──────────────────────────────────────────────────────────────────
+//
+// A diferencia del resto (cobro flat por acción), compute mide a token-level:
+// una code-gen tiene tokens muy variables y un precio plano se va a rojo en
+// llamadas grandes. La config es tuneable en vivo vía AppConfig key
+// "compute-config" (ver app/.server/compute/gateway.ts → getComputeConfig),
+// con estos defaults — NO en envs, para que todas las instancias del app lean
+// la misma fuente sin drift al escalar.
+
+export interface ComputeConfig {
+  /** Tipo de cambio USD→MXN para convertir costo de proveedor a pesos. */
+  usdToMxn: number;
+  /** Horas de vida de una ComputeKey antes de expirar. */
+  keyTtlHours: number;
+  /** Modelo interno usado cuando el request omite `model`. */
+  defaultModel: string;
+  /** friendly name (lo teclea el usuario en `model:`) → model id interno. */
+  models: Record<string, string>;
+  /** model id interno → USD por 1M tokens (margen incluido). */
+  rates: Record<string, { in: number; out: number }>;
+}
+
+export const COMPUTE_DEFAULTS: ComputeConfig = {
+  usdToMxn: 18,
+  keyTtlHours: 24,
+  defaultModel: "gemini-2.5-flash",
+  models: {
+    "gemini-flash": "gemini-2.5-flash",
+    "gemini-pro": "gemini-2.5-pro",
+    "gpt-4o-mini": "gpt-4o-mini",
+    "claude-sonnet": "claude-sonnet-4-6",
+  },
+  // USD por 1M tokens — margen ~2x sobre el costo crudo del proveedor.
+  // CONFIRMAR contra el pricing real de cada proveedor antes de subir precios.
+  rates: {
+    "gemini-2.5-flash": { in: 0.3, out: 2.5 },
+    "gemini-2.5-pro": { in: 2.5, out: 15 },
+    "gpt-4o-mini": { in: 0.6, out: 2.4 },
+    "claude-sonnet-4-6": { in: 6, out: 30 },
+  },
+};
+
+/** Piso MXN por crédito (escala 1). Protege margen — ver plans.ts. */
+const MXN_PER_CREDIT = 5;
+
+/**
+ * Convierte tokens de una completion a créditos escalados (CREDIT_SCALE).
+ * usd = in/1M·rateIn + out/1M·rateOut; credits = usd·usdToMxn / piso · scale.
+ * Mínimo 1 crédito escalado por llamada (≈ 1/100 de un documento).
+ */
+export function computeCreditsForTokens(
+  cfg: ComputeConfig,
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const r = cfg.rates[modelId] ?? cfg.rates[cfg.defaultModel];
+  const usd = (inputTokens / 1e6) * r.in + (outputTokens / 1e6) * r.out;
+  const credits = ((usd * cfg.usdToMxn) / MXN_PER_CREDIT) * CREDIT_SCALE;
+  return Math.max(1, Math.ceil(credits));
+}
+
+// ──────────────────────────────────────────────────────────────────
 // PRICING BANDS — el plan ahora es categoría + precio continuo
 // ──────────────────────────────────────────────────────────────────
 //

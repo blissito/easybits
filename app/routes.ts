@@ -177,6 +177,8 @@ export default [
     route("sandboxes/:id/bg/:execId", "routes/api/v2/sandbox-bg-detail.ts"),
     route("sandboxes/:id/files/:op", "routes/api/v2/sandbox-files.ts"),
     route("sandboxes/:id/:action", "routes/api/v2/sandbox-action.ts"),
+    // eb.compute — gateway OpenAI-compatible (LLM managed dentro de sandboxes)
+    route("compute/v1/chat/completions", "routes/api/v2/compute-chat.ts"),
     route("public-stats", "routes/api/v2/public-stats.ts"),
     route("templates", "routes/api/v2/templates.ts"),
     route("files", "routes/api/v2/files.ts"),

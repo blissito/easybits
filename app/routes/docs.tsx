@@ -17,6 +17,7 @@ const SECTIONS = [
   { id: "auth", label: "Authentication" },
   { id: "cowork", label: "Claude Cowork" },
   { id: "sdk", label: "SDK" },
+  { id: "compute", label: "eb.compute" },
   { id: "files", label: "Files" },
   { id: "bulk", label: "Bulk Operations" },
   { id: "images", label: "Images" },
@@ -403,6 +404,78 @@ try {
     console.log(err.body);   // '{"error":"File not found"}'
   }
 }`} />
+          </section>
+
+          {/* eb.compute */}
+          <section id="compute" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">eb.compute — Managed LLM</h2>
+            <p className="text-gray-600 mb-4">
+              Code running inside an EasyBits sandbox can call an LLM{" "}
+              <strong>without bringing its own API key</strong>. EasyBits proxies
+              to the provider, meters the real tokens, and charges your credits in
+              MXN. It speaks the <strong>OpenAI Chat Completions</strong> wire
+              format, so any framework (the official <code className="bg-gray-100 px-1 rounded">openai</code>{" "}
+              SDK, Vercel AI SDK, LangChain) works by just pointing its base URL.
+            </p>
+            <div className="border-2 border-black rounded-xl p-4 mb-6 bg-gray-50">
+              <p className="text-sm mb-1">
+                <strong>Base URL:</strong>{" "}
+                <code className="bg-white px-1 rounded">https://compute.easybits.cloud/v1</code>
+              </p>
+              <p className="text-sm">
+                Inside an agent sandbox this is injected for you as{" "}
+                <code className="bg-white px-1 rounded">OPENAI_BASE_URL</code> +{" "}
+                <code className="bg-white px-1 rounded">OPENAI_API_KEY</code> — zero
+                config. The key is scoped to that sandbox and revoked when it's
+                destroyed.
+              </p>
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Models</h3>
+            <p className="text-gray-600 mb-3">
+              Pass a friendly name in <code className="bg-gray-100 px-1 rounded">model</code>:
+            </p>
+            <ul className="list-disc pl-6 text-gray-700 mb-6 space-y-1">
+              <li><code className="bg-gray-100 px-1 rounded">gemini-flash</code> — fast & cheap (default)</li>
+              <li><code className="bg-gray-100 px-1 rounded">gemini-pro</code> — higher quality</li>
+              <li><code className="bg-gray-100 px-1 rounded">gpt-4o-mini</code></li>
+              <li><code className="bg-gray-100 px-1 rounded">claude-sonnet</code></li>
+            </ul>
+
+            <h3 className="text-lg font-bold mb-3">Quick start (inside a sandbox)</h3>
+            <CodeExample title="Python" code={`from openai import OpenAI
+
+# OPENAI_API_KEY + OPENAI_BASE_URL are injected into the sandbox
+client = OpenAI()
+
+resp = client.chat.completions.create(
+    model="gemini-flash",
+    messages=[{"role": "user", "content": "Summarize this repo in 2 lines"}],
+)
+print(resp.choices[0].message.content)
+print(resp.usage)  # prompt_tokens, completion_tokens, cost (credits charged)`} />
+
+            <CodeExample title="Streaming" code={`stream = client.chat.completions.create(
+    model="gemini-flash",
+    messages=[{"role": "user", "content": "Write a haiku"}],
+    stream=True,
+    stream_options={"include_usage": True},
+)
+for chunk in stream:
+    if chunk.choices and chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")`} />
+
+            <p className="text-gray-600 mb-2">
+              <strong>Supported:</strong> streaming, tool / function calling, and
+              vision (image input) on all models above.
+            </p>
+            <p className="text-gray-600">
+              <strong>Billing:</strong> per token. Each call records an{" "}
+              <code className="bg-gray-100 px-1 rounded">AiGenerationLog</code> entry
+              and deducts credits; the credits charged are returned in{" "}
+              <code className="bg-gray-100 px-1 rounded">usage.cost</code>. If you're
+              out of credits the request returns <code className="bg-gray-100 px-1 rounded">402</code>.
+            </p>
           </section>
 
           {/* Files */}

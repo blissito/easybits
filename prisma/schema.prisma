@@ -224,6 +224,7 @@ model User {
   shareLinks           ShareLink[]
   secrets              Secret[]
   agents               Agent[]
+  computeKeys          ComputeKey[]
 }
 
 model Secret {
@@ -736,6 +737,22 @@ model AppConfig {
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// Virtual key para eb.compute (LLM managed dentro de un sandbox). Una key por
+// sandbox, inyectada como OPENAI_API_KEY en la microVM. Verificada por el
+// gateway en cada request; el gasto vive en AiGenerationLog (resourceId =
+// sandboxId), no se denormaliza aquí. Revocar = borrar la fila (al destroy).
+model ComputeKey {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique // "sk-eb-" + 32 hex
+  userId    String   @db.ObjectId
+  sandboxId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([sandboxId])
 }
 
 /// Reusable character identity for video generation.
