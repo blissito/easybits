@@ -16,6 +16,7 @@ import {
   kernelRestart,
   exposeSandboxPort,
 } from "~/.server/core/sandboxOperations";
+import { computeEnvFor } from "~/.server/compute/gateway";
 
 const invalid = (issues: unknown) =>
   Response.json({ error: "Invalid body", issues }, { status: 400 });
@@ -46,7 +47,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     case "exec": {
       const p = SandboxExecBody.safeParse(body);
       if (!p.success) return invalid(p.error.issues);
-      return Response.json(await execCommand(ctx, id, p.data));
+      // eb.compute: inyecta OPENAI_API_KEY/BASE_URL (zero-config LLM). BYOK gana.
+      const env = { ...(p.data.env ?? {}) };
+      if (!env.OPENAI_API_KEY) {
+        Object.assign(env, await computeEnvFor(ctx.user.id, id).catch(() => ({})));
+      }
+      return Response.json(await execCommand(ctx, id, { ...p.data, env }));
     }
     case "run-code": {
       const p = SandboxRunCodeBody.safeParse(body);

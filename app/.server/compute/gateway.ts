@@ -103,6 +103,21 @@ export async function revokeSandboxKeys(sandboxId: string): Promise<void> {
   await db.computeKey.deleteMany({ where: { sandboxId } }).catch(() => {});
 }
 
+// Get-or-mint: reusa la key viva del sandbox o crea una. Se inyecta como env
+// en exec/background de sandboxes RAW (python/ubuntu/code-interpreter) para que
+// el código del usuario corra con OPENAI_API_KEY/OPENAI_BASE_URL listos
+// (zero-config), igual que los agentes node-agent/claude-code.
+export async function computeEnvFor(
+  userId: string,
+  sandboxId: string,
+): Promise<Record<string, string>> {
+  const existing = await db.computeKey.findFirst({
+    where: { sandboxId, expiresAt: { gt: new Date() } },
+  });
+  const token = existing ? existing.token : await mintComputeKey(userId, sandboxId);
+  return { OPENAI_API_KEY: token, OPENAI_BASE_URL: COMPUTE_BASE_URL };
+}
+
 // ─────────────── OpenAI ↔ AI SDK translation ───────────────
 
 interface OAIToolCall {
