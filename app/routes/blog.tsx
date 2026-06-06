@@ -10,6 +10,39 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "tu-agente-no-deberia-llamar-tools-una-por-una",
+    filePath:
+      "app/content/blog/2026-06-06-tu-agente-no-deberia-llamar-tools-una-por-una.mdx",
+    title: "Tu agente no debería llamar tools una por una",
+    description:
+      "El cambio del que todos hablan en 2026: Code Mode. En vez de llamar una tool MCP a la vez, el agente escribe un script que las orquesta y lo corre en un sandbox. Anthropic reportó −98.7% de tokens; Cloudflare, −99.9%. El patrón, por qué necesita una caja, y hacia dónde lo llevamos.",
+    date: "2026-06-06",
+    author: "Equipo Easybits",
+    tags: ["sandboxes", "MCP", "agentes", "code-mode", "SDK"],
+    featuredImage: "/blog/assets/sandbox-sdk.jpg",
+    readingTime: 5,
+    excerpt:
+      "El loop clásico de MCP convierte al modelo en un router carísimo: cada resultado pasa por la ventana de contexto solo para copiarse al siguiente input. Code Mode lo cambia — el agente escribe un script, lo corre en un sandbox, y devuelve solo el resultado. −98.7% de tokens.",
+    published: true,
+  },
+  {
+    slug: "migra-tus-pipelines-sandboxes-easybits",
+    filePath:
+      "app/content/blog/2026-06-05-migra-tus-pipelines-sandboxes-easybits.mdx",
+    title:
+      "Tres llamadas son un CI runner: corre tus pipelines en sandboxes de Easybits",
+    description:
+      "execBackground, bgStatus y bgKill. Con esas tres funciones del SDK de Easybits tienes el corazón de un runner de CI: lanzas el build, lees su salida mientras corre y lo matas si se cuelga. Un pipeline real en 20 líneas y, con honestidad, qué conviene migrar y qué todavía no.",
+    date: "2026-06-05",
+    author: "Equipo Easybits",
+    tags: ["sandboxes", "CI", "pipelines", "SDK", "DevOps"],
+    featuredImage: "/blog/assets/sandbox-sdk.jpg",
+    readingTime: 5,
+    excerpt:
+      "El build de un CI es un proceso largo en una caja limpia del que quieres saber tres cosas: si terminó, con qué exit code, y qué imprimió. El SDK expone exactamente eso. Pipeline real en 20 líneas + qué migrar y qué no.",
+    published: true,
+  },
+  {
     slug: "tu-agente-corre-codigo-sandboxes-easybits",
     filePath:
       "app/content/blog/2026-06-04-tu-agente-corre-codigo-sandboxes-easybits.mdx",

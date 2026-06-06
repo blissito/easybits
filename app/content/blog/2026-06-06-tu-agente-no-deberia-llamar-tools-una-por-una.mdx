@@ -1,0 +1,60 @@
+---
+title: "Tu agente no debería llamar tools una por una"
+description: "El cambio del que todos hablan en 2026: Code Mode. En vez de llamar una tool MCP a la vez —y pasar cada resultado por el modelo solo para copiarlo al siguiente input— el agente escribe un script que orquesta las tools y lo corre en un sandbox. Anthropic reportó −98.7% de tokens; Cloudflare, −99.9%. Te explico el patrón, por qué necesita una caja, y hacia dónde lo llevamos en Easybits."
+date: "2026-06-06"
+author: "Equipo Easybits"
+tags: ["sandboxes", "MCP", "agentes", "code-mode", "SDK"]
+featuredImage: "/blog/assets/sandbox-sdk.jpg"
+published: true
+---
+
+# Tu agente no debería llamar tools una por una
+
+Así funciona hoy un agente con MCP: llama una tool, el resultado vuelve al modelo, el modelo decide la siguiente, la llama, el resultado vuelve otra vez. En cada paso, el payload intermedio pasa por la ventana de contexto **solo para copiarse al input de la siguiente llamada**. El modelo se vuelve un router carísimo: pagas precio de inferencia por lo que en realidad es un tubo.
+
+En noviembre de 2025 esto cambió de nombre y de forma. Anthropic publicó *Code execution with MCP*; Cloudflare, *Code Mode*. La idea es la misma: en vez de llamar tools una por una, las tools se exponen como un **SDK de TypeScript** y el modelo **escribe un script** que las encadena. Ese script corre en un sandbox y solo devuelve el resultado final.
+
+Los números no son sutiles:
+
+- **Anthropic:** 150,000 → 2,000 tokens en su ejemplo. **−98.7%.**
+- **Cloudflare:** −99.9% sobre una API de 2,500 endpoints; **−81%** en una tarea compleja de 31 pasos.
+
+Funciona porque el loop, el filtrado y el encadenado pasan **dentro** del sandbox. Si el agente tiene que recorrer 10,000 filas y quedarse con 5, las filtra ahí y el modelo ve 5, no 10,000. Si tiene que iterar sobre 31 fechas, escribe un `for`, no 31 tool-calls.
+
+## El detalle que nadie te resuelve gratis
+
+Ese script tiene que correr **en algún lado aislado**. No puedes ejecutar código que escribió un modelo en tu servidor. Anthropic lo dice y lo deja abierto a propósito: *"Running agent-generated code requires a secure execution environment with appropriate sandboxing."* Cloudflare lo amarra a sus Workers, donde el código ni siquiera puede hacer `fetch` a internet — solo llamar las tools por binding.
+
+O sea: Code Mode necesita tres cosas en el mismo lugar — **las tools, un sandbox donde correr el código, y un modelo que escriba el script.** Casi siempre eso son tres proveedores que pegas con cinta.
+
+## Hacia dónde lo llevamos
+
+En Easybits esas tres piezas ya son **un solo producto**: 40+ tools MCP (archivos, bases de datos, documentos, el sandbox mismo), microVMs Firecracker reales, y un modelo managed. La dirección es que tu agente escriba un script que use tus tools como un SDK tipado, corra en el sandbox, y te devuelva solo el resultado:
+
+```ts
+// Hacia dónde va: un script, no veinte tool-calls
+const { result } = await eb.run(
+  "saca los leads del último mes de mi DB, arma un PDF por cliente y súbelos"
+);
+```
+
+Seamos claros: **esto todavía no es un `npm install` de hoy** — es la dirección, no una promesa lista. Pero no parte de cero.
+
+## Lo que ya es real
+
+La fundación está shipeada:
+
+- **El sandbox** ya corre código del modelo en una caja real (`sbx.runCell`, `exec`, procesos en segundo plano). La parte de "ejecutar código no confiable de forma segura" —la más difícil de Code Mode— ya está.
+- **Las tools** ya existen como MCP, y tu agente ya las **descubre on-demand** con `discover_tools` / `run_tool`, que es exactamente la *progressive disclosure* que Anthropic describe: leer la definición de una tool cuando se necesita, no cargarlas todas de entrada.
+
+Lo que falta —y lo que estamos armando— es la última pieza: que el modelo escriba el **script completo** sobre tus tools en una sola llamada, en vez de llamarlas de una en una.
+
+## El argumento
+
+El cambio de fondo no es "una mejor forma de llamar tools". Es que el agente **programa** en vez de teclear comandos uno por uno. Y para programar necesita una caja — con tus tools y tu modelo adentro, no ensamblados de cuatro vendors gringos ni atados a tu propia key de OpenAI.
+
+Esa caja, en pesos, es lo que estamos construyendo. El sandbox ya está vivo: pruébalo hoy con el [SDK de Easybits](/blog/tu-agente-corre-codigo-sandboxes-easybits). El resto viene en camino.
+
+---
+
+*Para leer más sobre el patrón: [Code execution with MCP (Anthropic)](https://www.anthropic.com/engineering/code-execution-with-mcp) y [Code Mode (Cloudflare)](https://blog.cloudflare.com/code-mode/).*

@@ -1,0 +1,98 @@
+---
+title: "Tres llamadas son un CI runner: corre tus pipelines en sandboxes de Easybits"
+description: "execBackground, bgStatus y bgKill. Con esas tres funciones del SDK de Easybits tienes un runner de CI: lanzas el build, lees su salida mientras corre y lo matas si se cuelga. Un pipeline básico cabe en una sola línea de shell. Te muestro el ejemplo real y, con honestidad, qué conviene migrar y qué todavía no."
+date: "2026-06-05"
+author: "Equipo Easybits"
+tags: ["sandboxes", "CI", "pipelines", "SDK", "DevOps"]
+featuredImage: "/blog/assets/sandbox-sdk.jpg"
+published: true
+---
+
+# Tres llamadas son un CI runner: corre tus pipelines en sandboxes de Easybits
+
+Un amigo me preguntó si podía mover sus pipelines a Easybits. La respuesta corta: el build de un CI no es magia, es un proceso largo que corre en una caja limpia y del que quieres saber tres cosas — si terminó, con qué código de salida, y qué imprimió. El SDK de Easybits expone exactamente eso:
+
+```ts
+const { execId } = await sbx.execBackground("npm run build");
+const st = await sbx.bgStatus(execId); // { status, exitCode?, stdout, stderr }
+// ...y cuando quieras: await sbx.bgKill(execId);
+```
+
+`execBackground` arranca el comando y **vuelve al instante** con un `execId` — no se queda esperando. `bgStatus` te lo consulta cuando quieras: mientras corre da `status: "running"` con el `stdout`/`stderr` acumulado; al terminar, `status: "exited"` y el `exitCode`. `bgKill` lo termina. Ese es el loop de un runner.
+
+## Un pipeline básico es una sola línea
+
+Si tu pipeline es "clona, instala, prueba", todo eso es **un solo comando de shell**. No hay pasos que orquestar: la clonación, el `npm ci` y el `npm test` van encadenados con `&&` dentro de un `execBackground`, y listo.
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
+
+// Caja limpia con Node, que se autodestruye a los 10 min
+const sbx = await eb.sandboxes.create({ template: "node", timeoutSeconds: 600 });
+
+try {
+  const { execId } = await sbx.execBackground(
+    "git clone --depth 1 https://github.com/tu-usuario/tu-repo.git . && npm ci && npm test"
+  );
+
+  // Espera a que termine
+  let st = await sbx.bgStatus(execId);
+  while (st.status === "running") {
+    await new Promise((r) => setTimeout(r, 2000));
+    st = await sbx.bgStatus(execId);
+  }
+
+  console.log(st.stdout);
+  console.log(st.exitCode === 0 ? "✅ pasó" : "❌ falló");
+} finally {
+  await sbx.destroy(); // apaga la caja pase lo que pase
+}
+```
+
+Eso es un CI funcional. La microVM es real (Firecracker, no un contenedor compartido): tu build arranca con filesystem limpio, su propio kernel y red. El comando entero —clone, install, test— es una string; `bgStatus` te dice cuándo terminó y con qué exit code; `destroy` apaga.
+
+¿El repo es privado? El token va en la URL, como secreto, nunca hardcoded:
+
+```ts
+"git clone --depth 1 https://x-access-token:${process.env.GH_TOKEN}@github.com/tu-usuario/tu-repo.git . && npm ci && npm test"
+```
+
+¿Se cuelga? Le pones un límite y lo matas:
+
+```ts
+if (Date.now() - start > 600_000) {
+  await sbx.bgKill(execId); // no pagues la caja de gratis
+  throw new Error("pipeline excedió el tiempo");
+}
+```
+
+## Logs en vivo, gratis
+
+Como cada `bgStatus` trae el `stdout` acumulado, mostrar logs en vivo es restar lo que ya viste — sin websockets ni infraestructura de logs:
+
+```ts
+let seen = 0;
+const st = await sbx.bgStatus(execId);
+process.stdout.write(st.stdout.slice(seen));
+seen = st.stdout.length;
+```
+
+## Qué migrar ya, y qué todavía no
+
+Prefiero que migres lo correcto y te quedes, a que migres todo y te decepciones.
+
+**Migra hoy:** jobs efímeros de build, test y lint. Y un consejo — **no tires tu trigger, reemplaza el *runner***: tu GitHub Action (o tu cron) sigue disparándose en cada push; lo único que cambia es que en vez de correr el build ahí, llama a este script. Es una migración de 20 líneas, no de toda tu infraestructura.
+
+**Todavía no:** matrices grandes en paralelo (hoy el cómputo vive en una sola caja; el escalado horizontal está en camino) y builds que dependen de caché caliente entre corridas para ir rápidos (el fork desde snapshot está en el roadmap, no shipeado). Y si vives del ecosistema de YAML y el marketplace de acciones, esto es cómputo crudo con un SDK tipado, no un motor de pipelines — tú escribes la orquestación en TypeScript.
+
+## El argumento real
+
+El SDK no te vende un "CI as a service" con cien features que no usas. Te da el primitivo —`execBackground` / `bgStatus` / `bgKill`— y tú armas el pipeline en el lenguaje que ya escribes. Para un job de build-and-test, son 20 líneas y cero servidores.
+
+Empieza por uno. `npm i @easybits.cloud/sdk`, una API key, y pega el ejemplo de arriba. Si funciona para uno, funciona para los que quieras.
+
+---
+
+*¿Quieres ver el resto del SDK de sandboxes — kernel de Python con estado, exponer puertos como URL pública, manejo de archivos? Lo cubrimos en [Tu agente ya puede correr código](/blog/tu-agente-corre-codigo-sandboxes-easybits).*

@@ -10,6 +10,10 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "tu-agente-no-deberia-llamar-tools-una-por-una":
+    "app/content/blog/2026-06-06-tu-agente-no-deberia-llamar-tools-una-por-una.mdx",
+  "migra-tus-pipelines-sandboxes-easybits":
+    "app/content/blog/2026-06-05-migra-tus-pipelines-sandboxes-easybits.mdx",
   "tu-agente-corre-codigo-sandboxes-easybits":
     "app/content/blog/2026-06-04-tu-agente-corre-codigo-sandboxes-easybits.mdx",
   "sandboxes-para-agentes-ia":
