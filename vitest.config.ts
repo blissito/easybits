@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
@@ -7,5 +7,8 @@ export default defineConfig({
     environment: "node",
     globals: true,
     setupFiles: ["./test/setup.ts"],
+    // Los *.spec.ts son tests de Playwright (corren con `npm run e2e`),
+    // no de vitest. Excluirlos para no fallar el unit suite.
+    exclude: [...configDefaults.exclude, "**/*.spec.ts"],
   },
 });
