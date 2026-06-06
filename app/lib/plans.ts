@@ -83,7 +83,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       `${formatCredits(PLAN_CREDITS.Tera)} créditos AI/mes incluidos`,
       "Todo lo de Mega",
       "20 bases de datos",
-      "Sandboxes: 20 a la vez · sesiones de 24h",
+      "Sandboxes: 10 simultáneos · sesiones de 24h",
       "Proveedores custom",
       "Dominios custom",
       "Soporte prioritario",
