@@ -884,6 +884,10 @@ model Agent {
   // exponer :6080 en createAgent; null para el resto.
   desktopUrl String?
 
+  // URL pública de la terminal ttyd→tmux con basic-auth inline (computer-ghosty).
+  // Se popula al exponer :7681 en createAgent; null para el resto.
+  terminalUrl String?
+
   // WhatsApp link state (cache from openclaw runtime). Shape:
   //   { status: "disconnected"|"qr_pending"|"pairing"|"connected",
   //     phoneNumber?: string, lastSyncAt?: string, linkedAt?: string }

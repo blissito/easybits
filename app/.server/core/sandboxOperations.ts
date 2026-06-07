@@ -26,6 +26,14 @@ const COMPUTE_AUTOINJECT_TEMPLATES = new Set<SandboxTemplate>([
 // el panel de ghosty-studio (y cualquier cliente MCP/SDK) puede embeber el desktop.
 const DESKTOP_TEMPLATES = new Set<SandboxTemplate>([
   "desktop-ghosty",
+  "computer-ghosty",
+]);
+
+// Templates que además sirven una terminal web (ttyd→tmux en :7681). createAgent
+// expone ese puerto y guarda Agent.terminalUrl con la credencial basic-auth
+// (operator:<embedToken>) inline — el shell NO queda abierto sólo por el subdominio.
+const TERMINAL_TEMPLATES = new Set<SandboxTemplate>([
+  "computer-ghosty",
 ]);
 
 // SandboxTemplate se deriva de SANDBOX_TEMPLATES en ../sandbox/schemas
@@ -1062,7 +1070,8 @@ export async function createAgent(
     params.template === "open-ghosty" ||
     params.template === "lang-ghosty" ||
     params.template === "rust-ghosty" ||
-    params.template === "cagent-ghosty"
+    params.template === "cagent-ghosty" ||
+    params.template === "computer-ghosty"
   ) {
     env.ADMIN_TOKEN = embedToken;
   }
@@ -1230,6 +1239,21 @@ export async function createAgent(
           console.error(`expose 6080 (desktop) failed for ${sb.sandboxId}:`, e);
         }
       }
+      // Terminal web (ttyd→tmux en :7681). El shell exige basic-auth; inyectamos
+      // la credencial (operator:<embedToken>) inline en la URL para que el panel
+      // la abra sin pedir password — el subdominio NO es la única auth.
+      let terminalUrl: string | null = null;
+      if (TERMINAL_TEMPLATES.has(params.template)) {
+        try {
+          const exposed = await exposeSandboxPort(ctx, sb.sandboxId, 7681);
+          terminalUrl = exposed.url.replace(
+            /^https:\/\//,
+            `https://operator:${encodeURIComponent(embedToken)}@`,
+          );
+        } catch (e) {
+          console.error(`expose 7681 (terminal) failed for ${sb.sandboxId}:`, e);
+        }
+      }
       await db.agent.update({
         where: { id: row.id },
         data: {
@@ -1238,6 +1262,7 @@ export async function createAgent(
           acpSessionId,
           acpTransportSessionId,
           desktopUrl,
+          terminalUrl,
         },
       });
     } catch (e) {
@@ -1552,6 +1577,8 @@ export interface AgentRecord {
   acpTransportSessionId: string | null;
   // URL pública del escritorio noVNC (templates desktop-*); null para el resto.
   desktopUrl: string | null;
+  // URL pública de la terminal ttyd→tmux con basic-auth inline (computer-ghosty); null para el resto.
+  terminalUrl: string | null;
 }
 
 function toAgentRecord(row: {
@@ -1572,6 +1599,7 @@ function toAgentRecord(row: {
   acpSessionId: string | null;
   acpTransportSessionId: string | null;
   desktopUrl?: string | null;
+  terminalUrl?: string | null;
 }): AgentRecord {
   return {
     agentId: row.id,
@@ -1591,6 +1619,7 @@ function toAgentRecord(row: {
     acpSessionId: row.acpSessionId,
     acpTransportSessionId: row.acpTransportSessionId,
     desktopUrl: row.desktopUrl ?? null,
+    terminalUrl: row.terminalUrl ?? null,
   };
 }
 
