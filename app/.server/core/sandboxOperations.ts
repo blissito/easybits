@@ -27,6 +27,7 @@ const COMPUTE_AUTOINJECT_TEMPLATES = new Set<SandboxTemplate>([
 const DESKTOP_TEMPLATES = new Set<SandboxTemplate>([
   "desktop-ghosty",
   "computer-ghosty",
+  "computer-ghosty-gemini",
 ]);
 
 // Templates que además sirven una terminal web (ttyd→tmux en :7681). createAgent
@@ -34,6 +35,7 @@ const DESKTOP_TEMPLATES = new Set<SandboxTemplate>([
 // (operator:<embedToken>) inline — el shell NO queda abierto sólo por el subdominio.
 const TERMINAL_TEMPLATES = new Set<SandboxTemplate>([
   "computer-ghosty",
+  "computer-ghosty-gemini",
 ]);
 
 // SandboxTemplate se deriva de SANDBOX_TEMPLATES en ../sandbox/schemas
@@ -1071,7 +1073,8 @@ export async function createAgent(
     params.template === "lang-ghosty" ||
     params.template === "rust-ghosty" ||
     params.template === "cagent-ghosty" ||
-    params.template === "computer-ghosty"
+    params.template === "computer-ghosty" ||
+    params.template === "computer-ghosty-gemini"
   ) {
     env.ADMIN_TOKEN = embedToken;
   }
