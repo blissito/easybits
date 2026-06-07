@@ -1239,17 +1239,14 @@ export async function createAgent(
           console.error(`expose 6080 (desktop) failed for ${sb.sandboxId}:`, e);
         }
       }
-      // Terminal web (ttyd→tmux en :7681). El shell exige basic-auth; inyectamos
-      // la credencial (operator:<embedToken>) inline en la URL para que el panel
-      // la abra sin pedir password — el subdominio NO es la única auth.
+      // Terminal web (ttyd→tmux en :7681). ttyd corre sin basic-auth (el iframe no
+      // puede pasar credenciales en la URL → 401); el subdominio capability es la
+      // auth, igual que el noVNC del escritorio.
       let terminalUrl: string | null = null;
       if (TERMINAL_TEMPLATES.has(params.template)) {
         try {
           const exposed = await exposeSandboxPort(ctx, sb.sandboxId, 7681);
-          terminalUrl = exposed.url.replace(
-            /^https:\/\//,
-            `https://operator:${encodeURIComponent(embedToken)}@`,
-          );
+          terminalUrl = exposed.url;
         } catch (e) {
           console.error(`expose 7681 (terminal) failed for ${sb.sandboxId}:`, e);
         }
