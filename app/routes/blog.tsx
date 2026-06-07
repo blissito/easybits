@@ -10,6 +10,22 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "ejemplo-server-url-publica",
+    filePath: "app/content/blog/2026-06-08-ejemplo-server-url-publica.mdx",
+    title:
+      "Levanta un servidor y compártelo con una URL pública (en 15 líneas)",
+    description:
+      "Tercer Ejemplo: dentro de un sandbox arrancas un servidor y EasyBits te da una URL pública con HTTPS para compartirlo al instante. Sin Docker, sin configurar dominios, sin desplegar nada. Te regalamos el server.js listo para usar.",
+    date: "2026-06-08",
+    author: "Equipo Easybits",
+    tags: ["ejemplos", "sandboxes", "SDK"],
+    featuredImage: "/blog/assets/blog-server-url-editorial.png",
+    readingTime: 4,
+    excerpt:
+      "Arrancas un servidor dentro de un sandbox y exposePort te da una URL pública con HTTPS al instante — sin Docker, sin dominios, sin desplegar. Regalo: server.js sin dependencias.",
+    published: true,
+  },
+  {
     slug: "ejemplo-agente-embebido-en-tu-web",
     filePath:
       "app/content/blog/2026-06-07-ejemplo-agente-embebido-en-tu-web.mdx",

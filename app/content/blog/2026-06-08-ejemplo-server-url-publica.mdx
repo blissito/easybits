@@ -1,0 +1,69 @@
+---
+title: "Levanta un servidor y compártelo con una URL pública (en 15 líneas)"
+description: "Tercer Ejemplo: dentro de un sandbox arrancas un servidor y EasyBits te da una URL pública con HTTPS para compartirlo al instante. Sin Docker, sin configurar dominios, sin desplegar nada. Te regalamos el server.js listo para usar."
+date: "2026-06-08"
+author: "Equipo Easybits"
+tags: ["ejemplos", "sandboxes", "SDK"]
+featuredImage: "/blog/assets/blog-server-url-editorial.png"
+published: true
+---
+
+# Levanta un servidor y compártelo con una URL pública (en 15 líneas)
+
+Vas a hacer algo que se siente mágico la primera vez: arrancar un servidor en la nube y obtener **una URL pública con HTTPS** para compartirlo — sin Docker, sin comprar un dominio, sin desplegar nada. Solo el SDK.
+
+La pieza nueva de hoy es `exposePort`: le dices "abre este puerto al mundo" y te devuelve una dirección lista para abrir en el navegador o pegarle un `fetch`.
+
+👉 **Regalo:** [server.js](/ejemplos/server.js) — un servidor mínimo sin dependencias, listo para subir al sandbox.
+
+## El código completo
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+import { readFileSync } from "node:fs";
+
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
+
+// 1) Una caja con Node que se apaga sola a los 10 minutos.
+const sbx = await eb.sandboxes.create({ template: "node", timeoutSeconds: 600 });
+
+// 2) Subimos nuestro servidor al sandbox.
+await sbx.files.write("server.js", readFileSync("server.js", "utf8"));
+
+// 3) Lo arrancamos en segundo plano (vuelve al instante, no se queda esperando).
+await sbx.execBackground("node server.js");
+
+// 4) Exponemos el puerto 3000 como URL pública con HTTPS.
+const { url } = await sbx.exposePort(3000);
+console.log("Tu servidor está en vivo:", url);
+```
+
+Eso es todo. Abre esa `url` en el navegador y verás la respuesta de tu servidor. O pruébalo desde código:
+
+```ts
+const res = await fetch(url);
+console.log(await res.json());
+// { mensaje: "¡Hola desde tu sandbox de EasyBits!", ruta: "/", hora: "…" }
+```
+
+`execBackground` arranca el servidor sin bloquear tu script, y `exposePort` te da la dirección pública. No tocaste tu laptop ni montaste infraestructura: el servidor corre en una caja limpia en la nube.
+
+## La URL vive mientras viva el sandbox
+
+> El sandbox se apaga solo cuando se acaba su tiempo (`timeoutSeconds`). Cuando eso pasa, la URL deja de responder. Si necesitas más rato, estíralo con `await sbx.extend(600)`. Y cuando termines, **apágalo tú** para no dejar cajas prendidas:
+
+```ts
+await sbx.destroy();
+```
+
+## ¿Para qué sirve esto de verdad?
+
+- Enseñarle a alguien un prototipo sin desplegarlo: le pasas el link y ya.
+- Un webhook temporal para recibir un POST de prueba.
+- Una demo que vive un rato y se apaga sola, sin dejar basura.
+
+## ¿Qué sigue?
+
+Hasta ahora cada Ejemplo usó una sola herramienta. En el próximo las combinamos: un sandbox que **lee un archivo de tu almacenamiento, lo procesa y guarda el resultado en una base de datos** — EasyBits como mini-backend completo.
+
+Mientras tanto: [descarga el server.js](/ejemplos/server.js), `npm i @easybits.cloud/sdk`, pega el código y mira tu servidor cobrar vida con su propia URL.

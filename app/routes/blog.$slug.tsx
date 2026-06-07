@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "ejemplo-server-url-publica":
+    "app/content/blog/2026-06-08-ejemplo-server-url-publica.mdx",
   "ejemplo-agente-embebido-en-tu-web":
     "app/content/blog/2026-06-07-ejemplo-agente-embebido-en-tu-web.mdx",
   "ejemplo-data-analyst-sandbox":
