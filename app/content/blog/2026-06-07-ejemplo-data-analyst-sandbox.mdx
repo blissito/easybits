@@ -1,0 +1,163 @@
+---
+title: "Tu primer analista de datos con IA: analiza un CSV en un sandbox (paso a paso)"
+description: "Un ejemplo para empezar: subes un CSV de ventas a un sandbox, corres unas líneas de Python y obtienes las respuestas — productos más vendidos, ventas por mes, ticket promedio y hasta una gráfica. Te regalamos el CSV para que lo pruebes hoy mismo. Sin configurar nada en tu compu."
+date: "2026-06-07"
+author: "Equipo Easybits"
+tags: ["ejemplos", "sandboxes", "SDK"]
+featuredImage: "/blog/assets/blog-data-analyst-editorial.png"
+published: true
+---
+
+# Tu primer analista de datos con IA: analiza un CSV en un sandbox
+
+Este es el primero de nuestros **Ejemplos**: recetas cortas para que empieces a usar el SDK de Easybits sin enredarte. Si nunca has tocado un sandbox, este es el lugar perfecto para arrancar.
+
+La idea es sencilla: tienes un archivo de ventas (un CSV) y quieres respuestas — ¿qué se vendió más?, ¿cómo fue cada mes?, ¿cuánto gasta en promedio un cliente? En vez de abrir Excel o instalar Python en tu compu, **subes el archivo a un sandbox** (una caja limpia y aislada en la nube), corres unas líneas de código ahí dentro, y te traes el resultado. Cuando terminas, apagas la caja y no queda nada.
+
+👉 **Descarga el CSV de ejemplo para seguir el tutorial:** [ventas-demo.csv](/ejemplos/ventas-demo.csv) — son 215 ventas ficticias (datos inventados, nada real) con estas columnas:
+
+```
+fecha, cliente, producto, categoria, ciudad, cantidad, precio_unitario, total, metodo_pago
+```
+
+## Lo que vamos a hacer
+
+1. Crear un sandbox.
+2. Subirle el CSV.
+3. Hacerle 3 preguntas con un poco de Python.
+4. Sacar una gráfica.
+5. Apagar el sandbox.
+
+Nada más. Vamos.
+
+## Paso 0: instalar el SDK
+
+```bash
+npm i @easybits.cloud/sdk
+```
+
+Necesitas una API key (la consigues en tu panel de Easybits). Guárdala en una variable de entorno para no escribirla en el código:
+
+```bash
+export EASYBITS_API_KEY="tu-api-key"
+```
+
+## Paso 1: crear el sandbox y subir el CSV
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+import { readFileSync } from "node:fs";
+
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
+
+// Creamos una caja preparada para analizar datos (ya trae Python listo).
+// La función espera a que esté lista antes de devolverla.
+const sbx = await eb.sandboxes.create({ template: "code-interpreter" });
+
+// Leemos el CSV de tu compu y lo escribimos dentro del sandbox.
+const csv = readFileSync("ventas-demo.csv", "utf8");
+await sbx.files.write("ventas.csv", csv);
+```
+
+Listo: el archivo ya vive dentro del sandbox como `ventas.csv`. Tu compu no corrió nada — solo mandó el archivo.
+
+## Paso 2: cargar los datos
+
+Para correr Python dentro del sandbox usamos `runCell`. Lo bueno de `runCell` es que **recuerda lo de antes**: las variables que defines en una llamada siguen vivas en la siguiente. Así que cargamos el CSV una vez y lo reutilizamos.
+
+```ts
+await sbx.runCell(`
+import pandas as pd
+df = pd.read_csv("ventas.csv")
+print(f"Cargué {len(df)} ventas")
+`);
+```
+
+`pandas` es la herramienta estándar de Python para trabajar con tablas. Cada llamada a `runCell` te devuelve, entre otras cosas, el `stdout` — o sea, lo que imprimiste con `print`.
+
+## Paso 3: las 3 preguntas
+
+**¿Qué productos se vendieron más?**
+
+```ts
+const top = await sbx.runCell(`
+print(df.groupby("producto")["cantidad"].sum().sort_values(ascending=False).head(5))
+`);
+console.log(top.stdout);
+```
+
+**¿Cuánto se vendió cada mes?**
+
+```ts
+const porMes = await sbx.runCell(`
+df["mes"] = pd.to_datetime(df["fecha"]).dt.strftime("%Y-%m")
+print(df.groupby("mes")["total"].sum())
+`);
+console.log(porMes.stdout);
+```
+
+**¿Cuál es el ticket promedio?**
+
+```ts
+const ticket = await sbx.runCell(`
+print(f"Ticket promedio: ${df['total'].mean():.2f}")
+`);
+console.log(ticket.stdout);
+```
+
+Cada bloque imprime su respuesta y la leemos en `stdout`. Fíjate que `df` sigue existiendo en las tres preguntas: lo cargamos una sola vez en el Paso 2.
+
+## Paso 4: una gráfica
+
+También puedes generar imágenes. Cuando tu código produce una gráfica, te llega dentro de `results` como una imagen en base64, lista para guardar:
+
+```ts
+import { writeFileSync } from "node:fs";
+
+const grafica = await sbx.runCell(`
+import matplotlib.pyplot as plt
+ventas_mes = df.groupby("mes")["total"].sum()
+ventas_mes.plot(kind="bar", title="Ventas por mes")
+plt.tight_layout()
+plt.show()
+`);
+
+// Buscamos la imagen entre los resultados y la guardamos como PNG.
+const png = grafica.results.find((r) => r.type === "image/png");
+if (png) {
+  writeFileSync("ventas-por-mes.png", Buffer.from(png.data, "base64"));
+  console.log("Gráfica guardada en ventas-por-mes.png");
+}
+```
+
+## Paso 5: apagar
+
+Cuando terminas, apaga la caja. No dejes sandboxes prendidos que no usas.
+
+```ts
+await sbx.destroy();
+```
+
+Y eso es todo. Subiste datos, los analizaste y sacaste una gráfica sin instalar nada en tu máquina.
+
+## Bonus: deja que la IA escriba el Python por ti
+
+¿No sabes pandas? No importa. Puedes pedirle a un modelo que escriba el código y solo correrlo:
+
+```ts
+const codigo = await eb.compute.prompt(
+  "Escribe SOLO código Python (sin explicaciones) que lea 'ventas.csv' con " +
+  "pandas e imprima la ciudad con más ventas totales."
+);
+
+const out = await sbx.runCell(codigo);
+console.log(out.stdout);
+```
+
+Tú describes lo que quieres en español, la IA lo traduce a código y el sandbox lo corre de forma segura. Ese es, en el fondo, el corazón de un "analista de datos con IA".
+
+## ¿Qué sigue?
+
+En este ejemplo corrimos todo en serie, en una sola caja. En el siguiente vamos a probar **varias versiones a la vez** y quedarnos con la mejor. Ese es el siguiente Ejemplo.
+
+Mientras tanto: [descarga el CSV](/ejemplos/ventas-demo.csv), `npm i @easybits.cloud/sdk`, y pega el código de arriba. En unos minutos tienes tu primer análisis corriendo.

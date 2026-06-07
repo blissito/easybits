@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "ejemplo-data-analyst-sandbox",
+    filePath:
+      "app/content/blog/2026-06-07-ejemplo-data-analyst-sandbox.mdx",
+    title:
+      "Tu primer analista de datos con IA: analiza un CSV en un sandbox (paso a paso)",
+    description:
+      "Un ejemplo para empezar: subes un CSV de ventas a un sandbox, corres unas líneas de Python y obtienes las respuestas — productos más vendidos, ventas por mes, ticket promedio y hasta una gráfica. Te regalamos el CSV para que lo pruebes hoy mismo. Sin configurar nada en tu compu.",
+    date: "2026-06-07",
+    author: "Equipo Easybits",
+    tags: ["ejemplos", "sandboxes", "SDK"],
+    featuredImage: "/blog/assets/blog-data-analyst-editorial.png",
+    readingTime: 6,
+    excerpt:
+      "El primero de nuestros Ejemplos: subes un CSV de ventas a un sandbox, corres unas líneas de Python y obtienes top de productos, ventas por mes, ticket promedio y una gráfica. Te regalamos el CSV para que lo pruebes hoy mismo.",
+    published: true,
+  },
+  {
     slug: "tu-agente-no-deberia-llamar-tools-una-por-una",
     filePath:
       "app/content/blog/2026-06-06-tu-agente-no-deberia-llamar-tools-una-por-una.mdx",
@@ -19,7 +36,7 @@ const BLOG_POSTS = [
     date: "2026-06-06",
     author: "Equipo Easybits",
     tags: ["sandboxes", "MCP", "agentes", "code-mode", "SDK"],
-    featuredImage: "/blog/assets/sandbox-sdk.jpg",
+    featuredImage: "/blog/assets/blog-tool-batching-editorial.png",
     readingTime: 5,
     excerpt:
       "El loop clásico de MCP convierte al modelo en un router carísimo: cada resultado pasa por la ventana de contexto solo para copiarse al siguiente input. Code Mode lo cambia — el agente escribe un script, lo corre en un sandbox, y devuelve solo el resultado. −98.7% de tokens.",
@@ -36,7 +53,7 @@ const BLOG_POSTS = [
     date: "2026-06-05",
     author: "Equipo Easybits",
     tags: ["sandboxes", "CI", "pipelines", "SDK", "DevOps"],
-    featuredImage: "/blog/assets/sandbox-sdk.jpg",
+    featuredImage: "/blog/assets/blog-pipelines-editorial.png",
     readingTime: 5,
     excerpt:
       "El build de un CI es un proceso largo en una caja limpia del que quieres saber tres cosas: si terminó, con qué exit code, y qué imprimió. El SDK expone exactamente eso. Pipeline real en 20 líneas + qué migrar y qué no.",

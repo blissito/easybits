@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "ejemplo-data-analyst-sandbox":
+    "app/content/blog/2026-06-07-ejemplo-data-analyst-sandbox.mdx",
   "tu-agente-no-deberia-llamar-tools-una-por-una":
     "app/content/blog/2026-06-06-tu-agente-no-deberia-llamar-tools-una-por-una.mdx",
   "migra-tus-pipelines-sandboxes-easybits":

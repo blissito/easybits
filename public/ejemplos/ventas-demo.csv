@@ -1,0 +1,216 @@
+fecha,cliente,producto,categoria,ciudad,cantidad,precio_unitario,total,metodo_pago
+2025-01-01,Laura Méndez,Mouse inalámbrico,Periféricos,CDMX,1,459,459,efectivo
+2025-01-19,Lucía Fierro,Hub USB-C,Accesorios,Querétaro,3,749,2247,transferencia
+2025-01-10,Camila Vega,Teclado mecánico,Periféricos,CDMX,1,899,899,paypal
+2025-01-01,Ana Gómez,Escritorio ajustable,Mobiliario,Querétaro,3,6499,19497,tarjeta
+2025-01-19,Paola Nava,Micrófono USB,Audio,CDMX,1,1899,1899,efectivo
+2025-01-10,Renata Solís,Silla ergonómica,Mobiliario,Querétaro,3,3899,11697,transferencia
+2025-01-01,Sofía Cano,Soporte para laptop,Accesorios,CDMX,1,549,549,paypal
+2025-01-19,Regina Ávila,Bocina bluetooth,Audio,Querétaro,3,899,2697,tarjeta
+2025-01-10,Daniela Ruiz,Lámpara de escritorio,Mobiliario,CDMX,1,699,699,efectivo
+2025-01-01,Valeria Ortiz,Audífonos over-ear,Audio,Querétaro,3,1599,4797,transferencia
+2025-01-19,Laura Méndez,Memoria USB 128GB,Almacenamiento,CDMX,1,249,249,paypal
+2025-01-10,Lucía Fierro,Webcam HD,Periféricos,Querétaro,3,1199,3597,tarjeta
+2025-01-01,Camila Vega,Disco SSD 1TB,Almacenamiento,CDMX,1,1799,1799,efectivo
+2025-01-19,Ana Gómez,Monitor 27",Pantallas,Querétaro,3,4299,12897,transferencia
+2025-01-10,Paola Nava,Cargador 65W,Accesorios,CDMX,1,599,599,paypal
+2025-01-01,Renata Solís,Mouse inalámbrico,Periféricos,Querétaro,3,459,1377,tarjeta
+2025-01-19,Sofía Cano,Hub USB-C,Accesorios,CDMX,1,749,749,efectivo
+2025-02-06,Bruno Reyes,Mouse inalámbrico,Periféricos,Puebla,2,459,918,paypal
+2025-02-24,Carlos Rivas,Hub USB-C,Accesorios,León,4,749,2996,tarjeta
+2025-02-15,Emilio Castro,Teclado mecánico,Periféricos,Puebla,2,899,1798,efectivo
+2025-02-06,Iván Téllez,Escritorio ajustable,Mobiliario,León,4,6499,25996,transferencia
+2025-02-24,Diego Salas,Micrófono USB,Audio,Puebla,2,1899,3798,paypal
+2025-02-15,Tomás Bravo,Silla ergonómica,Mobiliario,León,4,3899,15596,tarjeta
+2025-02-06,Pablo Mora,Soporte para laptop,Accesorios,Puebla,2,549,1098,efectivo
+2025-02-24,Mateo Luna,Bocina bluetooth,Audio,León,4,899,3596,transferencia
+2025-02-15,Andrés Lema,Lámpara de escritorio,Mobiliario,Puebla,2,699,1398,paypal
+2025-02-06,Hugo Pineda,Audífonos over-ear,Audio,León,4,1599,6396,tarjeta
+2025-02-24,Bruno Reyes,Memoria USB 128GB,Almacenamiento,Puebla,2,249,498,efectivo
+2025-02-15,Carlos Rivas,Webcam HD,Periféricos,León,4,1199,4796,transferencia
+2025-02-06,Emilio Castro,Disco SSD 1TB,Almacenamiento,Puebla,2,1799,3598,paypal
+2025-02-24,Iván Téllez,Monitor 27",Pantallas,León,4,4299,17196,tarjeta
+2025-02-15,Diego Salas,Cargador 65W,Accesorios,Puebla,2,599,1198,efectivo
+2025-02-06,Tomás Bravo,Mouse inalámbrico,Periféricos,León,4,459,1836,transferencia
+2025-02-24,Pablo Mora,Hub USB-C,Accesorios,Puebla,2,749,1498,paypal
+2025-02-15,Mateo Luna,Teclado mecánico,Periféricos,León,4,899,3596,tarjeta
+2025-03-24,Mateo Luna,Hub USB-C,Accesorios,Guadalajara,4,749,2996,transferencia
+2025-03-15,Andrés Lema,Teclado mecánico,Periféricos,Mérida,2,899,1798,paypal
+2025-03-06,Hugo Pineda,Escritorio ajustable,Mobiliario,Guadalajara,4,6499,25996,tarjeta
+2025-03-24,Bruno Reyes,Micrófono USB,Audio,Mérida,2,1899,3798,efectivo
+2025-03-15,Carlos Rivas,Silla ergonómica,Mobiliario,Guadalajara,4,3899,15596,transferencia
+2025-03-06,Emilio Castro,Soporte para laptop,Accesorios,Mérida,2,549,1098,paypal
+2025-03-24,Iván Téllez,Bocina bluetooth,Audio,Guadalajara,4,899,3596,tarjeta
+2025-03-15,Diego Salas,Lámpara de escritorio,Mobiliario,Mérida,2,699,1398,efectivo
+2025-03-06,Tomás Bravo,Audífonos over-ear,Audio,Guadalajara,4,1599,6396,transferencia
+2025-03-24,Pablo Mora,Memoria USB 128GB,Almacenamiento,Mérida,2,249,498,paypal
+2025-03-15,Mateo Luna,Webcam HD,Periféricos,Guadalajara,4,1199,4796,tarjeta
+2025-03-06,Andrés Lema,Disco SSD 1TB,Almacenamiento,Mérida,2,1799,3598,efectivo
+2025-03-24,Hugo Pineda,Monitor 27",Pantallas,Guadalajara,4,4299,17196,transferencia
+2025-03-15,Bruno Reyes,Cargador 65W,Accesorios,Mérida,2,599,1198,paypal
+2025-03-06,Carlos Rivas,Mouse inalámbrico,Periféricos,Guadalajara,4,459,1836,tarjeta
+2025-03-24,Emilio Castro,Hub USB-C,Accesorios,Mérida,2,749,1498,efectivo
+2025-03-15,Iván Téllez,Teclado mecánico,Periféricos,Guadalajara,4,899,3596,transferencia
+2025-03-06,Diego Salas,Escritorio ajustable,Mobiliario,Mérida,2,6499,12998,paypal
+2025-03-24,Tomás Bravo,Micrófono USB,Audio,Guadalajara,4,1899,7596,tarjeta
+2025-04-01,Lucía Fierro,Escritorio ajustable,Mobiliario,Monterrey,3,6499,19497,transferencia
+2025-04-19,Camila Vega,Micrófono USB,Audio,Tijuana,1,1899,1899,paypal
+2025-04-10,Ana Gómez,Silla ergonómica,Mobiliario,Monterrey,3,3899,11697,tarjeta
+2025-04-01,Paola Nava,Soporte para laptop,Accesorios,Tijuana,1,549,549,efectivo
+2025-04-19,Renata Solís,Bocina bluetooth,Audio,Monterrey,3,899,2697,transferencia
+2025-04-10,Sofía Cano,Lámpara de escritorio,Mobiliario,Tijuana,1,699,699,paypal
+2025-04-01,Regina Ávila,Audífonos over-ear,Audio,Monterrey,3,1599,4797,tarjeta
+2025-04-19,Daniela Ruiz,Memoria USB 128GB,Almacenamiento,Tijuana,1,249,249,efectivo
+2025-04-10,Valeria Ortiz,Webcam HD,Periféricos,Monterrey,3,1199,3597,transferencia
+2025-04-01,Laura Méndez,Disco SSD 1TB,Almacenamiento,Tijuana,1,1799,1799,paypal
+2025-04-19,Lucía Fierro,Monitor 27",Pantallas,Monterrey,3,4299,12897,tarjeta
+2025-04-10,Camila Vega,Cargador 65W,Accesorios,Tijuana,1,599,599,efectivo
+2025-04-01,Ana Gómez,Mouse inalámbrico,Periféricos,Monterrey,3,459,1377,transferencia
+2025-04-19,Paola Nava,Hub USB-C,Accesorios,Tijuana,1,749,749,paypal
+2025-04-10,Renata Solís,Teclado mecánico,Periféricos,Monterrey,3,899,2697,tarjeta
+2025-04-01,Sofía Cano,Escritorio ajustable,Mobiliario,Tijuana,1,6499,6499,efectivo
+2025-04-19,Regina Ávila,Micrófono USB,Audio,Monterrey,3,1899,5697,transferencia
+2025-04-10,Daniela Ruiz,Silla ergonómica,Mobiliario,Tijuana,1,3899,3899,paypal
+2025-04-01,Valeria Ortiz,Soporte para laptop,Accesorios,Monterrey,3,549,1647,tarjeta
+2025-04-19,Laura Méndez,Bocina bluetooth,Audio,Tijuana,1,899,899,efectivo
+2025-05-18,Lucía Fierro,Soporte para laptop,Accesorios,Tijuana,3,549,1647,paypal
+2025-05-09,Camila Vega,Bocina bluetooth,Audio,Monterrey,1,899,899,tarjeta
+2025-05-27,Ana Gómez,Lámpara de escritorio,Mobiliario,Tijuana,3,699,2097,efectivo
+2025-05-18,Paola Nava,Audífonos over-ear,Audio,Monterrey,1,1599,1599,transferencia
+2025-05-09,Renata Solís,Memoria USB 128GB,Almacenamiento,Tijuana,3,249,747,paypal
+2025-05-27,Sofía Cano,Webcam HD,Periféricos,Monterrey,1,1199,1199,tarjeta
+2025-05-18,Regina Ávila,Disco SSD 1TB,Almacenamiento,Tijuana,3,1799,5397,efectivo
+2025-05-09,Daniela Ruiz,Monitor 27",Pantallas,Monterrey,1,4299,4299,transferencia
+2025-05-27,Valeria Ortiz,Cargador 65W,Accesorios,Tijuana,3,599,1797,paypal
+2025-05-18,Laura Méndez,Mouse inalámbrico,Periféricos,Monterrey,1,459,459,tarjeta
+2025-05-09,Lucía Fierro,Hub USB-C,Accesorios,Tijuana,3,749,2247,efectivo
+2025-05-27,Camila Vega,Teclado mecánico,Periféricos,Monterrey,1,899,899,transferencia
+2025-05-18,Ana Gómez,Escritorio ajustable,Mobiliario,Tijuana,3,6499,19497,paypal
+2025-05-09,Paola Nava,Micrófono USB,Audio,Monterrey,1,1899,1899,tarjeta
+2025-05-27,Renata Solís,Silla ergonómica,Mobiliario,Tijuana,3,3899,11697,efectivo
+2025-05-18,Sofía Cano,Soporte para laptop,Accesorios,Monterrey,1,549,549,transferencia
+2025-06-10,Renata Solís,Silla ergonómica,Mobiliario,Tijuana,3,3899,11697,tarjeta
+2025-06-01,Sofía Cano,Soporte para laptop,Accesorios,Monterrey,1,549,549,efectivo
+2025-06-19,Regina Ávila,Bocina bluetooth,Audio,Tijuana,3,899,2697,transferencia
+2025-06-10,Daniela Ruiz,Lámpara de escritorio,Mobiliario,Monterrey,1,699,699,paypal
+2025-06-01,Valeria Ortiz,Audífonos over-ear,Audio,Tijuana,3,1599,4797,tarjeta
+2025-06-19,Laura Méndez,Memoria USB 128GB,Almacenamiento,Monterrey,1,249,249,efectivo
+2025-06-10,Lucía Fierro,Webcam HD,Periféricos,Tijuana,3,1199,3597,transferencia
+2025-06-01,Camila Vega,Disco SSD 1TB,Almacenamiento,Monterrey,1,1799,1799,paypal
+2025-06-19,Ana Gómez,Monitor 27",Pantallas,Tijuana,3,4299,12897,tarjeta
+2025-06-10,Paola Nava,Cargador 65W,Accesorios,Monterrey,1,599,599,efectivo
+2025-06-01,Renata Solís,Mouse inalámbrico,Periféricos,Tijuana,3,459,1377,transferencia
+2025-06-19,Sofía Cano,Hub USB-C,Accesorios,Monterrey,1,749,749,paypal
+2025-06-10,Regina Ávila,Teclado mecánico,Periféricos,Tijuana,3,899,2697,tarjeta
+2025-06-01,Daniela Ruiz,Escritorio ajustable,Mobiliario,Monterrey,1,6499,6499,efectivo
+2025-06-19,Valeria Ortiz,Micrófono USB,Audio,Tijuana,3,1899,5697,transferencia
+2025-06-10,Laura Méndez,Silla ergonómica,Mobiliario,Monterrey,1,3899,3899,paypal
+2025-06-01,Lucía Fierro,Soporte para laptop,Accesorios,Tijuana,3,549,1647,tarjeta
+2025-07-15,Tomás Bravo,Silla ergonómica,Mobiliario,Guadalajara,4,3899,15596,transferencia
+2025-07-06,Pablo Mora,Soporte para laptop,Accesorios,Mérida,2,549,1098,paypal
+2025-07-24,Mateo Luna,Bocina bluetooth,Audio,Guadalajara,4,899,3596,tarjeta
+2025-07-15,Andrés Lema,Lámpara de escritorio,Mobiliario,Mérida,2,699,1398,efectivo
+2025-07-06,Hugo Pineda,Audífonos over-ear,Audio,Guadalajara,4,1599,6396,transferencia
+2025-07-24,Bruno Reyes,Memoria USB 128GB,Almacenamiento,Mérida,2,249,498,paypal
+2025-07-15,Carlos Rivas,Webcam HD,Periféricos,Guadalajara,4,1199,4796,tarjeta
+2025-07-06,Emilio Castro,Disco SSD 1TB,Almacenamiento,Mérida,2,1799,3598,efectivo
+2025-07-24,Iván Téllez,Monitor 27",Pantallas,Guadalajara,4,4299,17196,transferencia
+2025-07-15,Diego Salas,Cargador 65W,Accesorios,Mérida,2,599,1198,paypal
+2025-07-06,Tomás Bravo,Mouse inalámbrico,Periféricos,Guadalajara,4,459,1836,tarjeta
+2025-07-24,Pablo Mora,Hub USB-C,Accesorios,Mérida,2,749,1498,efectivo
+2025-07-15,Mateo Luna,Teclado mecánico,Periféricos,Guadalajara,4,899,3596,transferencia
+2025-07-06,Andrés Lema,Escritorio ajustable,Mobiliario,Mérida,2,6499,12998,paypal
+2025-07-24,Hugo Pineda,Micrófono USB,Audio,Guadalajara,4,1899,7596,tarjeta
+2025-07-15,Bruno Reyes,Silla ergonómica,Mobiliario,Mérida,2,3899,7798,efectivo
+2025-07-06,Carlos Rivas,Soporte para laptop,Accesorios,Guadalajara,4,549,2196,transferencia
+2025-07-24,Emilio Castro,Bocina bluetooth,Audio,Mérida,2,899,1798,paypal
+2025-08-06,Emilio Castro,Soporte para laptop,Accesorios,León,2,549,1098,efectivo
+2025-08-24,Iván Téllez,Bocina bluetooth,Audio,Puebla,4,899,3596,transferencia
+2025-08-15,Diego Salas,Lámpara de escritorio,Mobiliario,León,2,699,1398,paypal
+2025-08-06,Tomás Bravo,Audífonos over-ear,Audio,Puebla,4,1599,6396,tarjeta
+2025-08-24,Pablo Mora,Memoria USB 128GB,Almacenamiento,León,2,249,498,efectivo
+2025-08-15,Mateo Luna,Webcam HD,Periféricos,Puebla,4,1199,4796,transferencia
+2025-08-06,Andrés Lema,Disco SSD 1TB,Almacenamiento,León,2,1799,3598,paypal
+2025-08-24,Hugo Pineda,Monitor 27",Pantallas,Puebla,4,4299,17196,tarjeta
+2025-08-15,Bruno Reyes,Cargador 65W,Accesorios,León,2,599,1198,efectivo
+2025-08-06,Carlos Rivas,Mouse inalámbrico,Periféricos,Puebla,4,459,1836,transferencia
+2025-08-24,Emilio Castro,Hub USB-C,Accesorios,León,2,749,1498,paypal
+2025-08-15,Iván Téllez,Teclado mecánico,Periféricos,Puebla,4,899,3596,tarjeta
+2025-08-06,Diego Salas,Escritorio ajustable,Mobiliario,León,2,6499,12998,efectivo
+2025-08-24,Tomás Bravo,Micrófono USB,Audio,Puebla,4,1899,7596,transferencia
+2025-08-15,Pablo Mora,Silla ergonómica,Mobiliario,León,2,3899,7798,paypal
+2025-08-06,Mateo Luna,Soporte para laptop,Accesorios,Puebla,4,549,2196,tarjeta
+2025-08-24,Andrés Lema,Bocina bluetooth,Audio,León,2,899,1798,efectivo
+2025-08-15,Hugo Pineda,Lámpara de escritorio,Mobiliario,Puebla,4,699,2796,transferencia
+2025-08-06,Bruno Reyes,Audífonos over-ear,Audio,León,2,1599,3198,paypal
+2025-09-10,Sofía Cano,Lámpara de escritorio,Mobiliario,CDMX,1,699,699,efectivo
+2025-09-01,Regina Ávila,Audífonos over-ear,Audio,Querétaro,3,1599,4797,transferencia
+2025-09-19,Daniela Ruiz,Memoria USB 128GB,Almacenamiento,CDMX,1,249,249,paypal
+2025-09-10,Valeria Ortiz,Webcam HD,Periféricos,Querétaro,3,1199,3597,tarjeta
+2025-09-01,Laura Méndez,Disco SSD 1TB,Almacenamiento,CDMX,1,1799,1799,efectivo
+2025-09-19,Lucía Fierro,Monitor 27",Pantallas,Querétaro,3,4299,12897,transferencia
+2025-09-10,Camila Vega,Cargador 65W,Accesorios,CDMX,1,599,599,paypal
+2025-09-01,Ana Gómez,Mouse inalámbrico,Periféricos,Querétaro,3,459,1377,tarjeta
+2025-09-19,Paola Nava,Hub USB-C,Accesorios,CDMX,1,749,749,efectivo
+2025-09-10,Renata Solís,Teclado mecánico,Periféricos,Querétaro,3,899,2697,transferencia
+2025-09-01,Sofía Cano,Escritorio ajustable,Mobiliario,CDMX,1,6499,6499,paypal
+2025-09-19,Regina Ávila,Micrófono USB,Audio,Querétaro,3,1899,5697,tarjeta
+2025-09-10,Daniela Ruiz,Silla ergonómica,Mobiliario,CDMX,1,3899,3899,efectivo
+2025-09-01,Valeria Ortiz,Soporte para laptop,Accesorios,Querétaro,3,549,1647,transferencia
+2025-09-19,Laura Méndez,Bocina bluetooth,Audio,CDMX,1,899,899,paypal
+2025-09-10,Lucía Fierro,Lámpara de escritorio,Mobiliario,Querétaro,3,699,2097,tarjeta
+2025-09-01,Camila Vega,Audífonos over-ear,Audio,CDMX,1,1599,1599,efectivo
+2025-09-19,Ana Gómez,Memoria USB 128GB,Almacenamiento,Querétaro,3,249,747,transferencia
+2025-09-10,Paola Nava,Webcam HD,Periféricos,CDMX,1,1199,1199,paypal
+2025-09-01,Renata Solís,Disco SSD 1TB,Almacenamiento,Querétaro,3,1799,5397,tarjeta
+2025-10-27,Sofía Cano,Webcam HD,Periféricos,Querétaro,1,1199,1199,transferencia
+2025-10-18,Regina Ávila,Disco SSD 1TB,Almacenamiento,CDMX,3,1799,5397,paypal
+2025-10-09,Daniela Ruiz,Monitor 27",Pantallas,Querétaro,1,4299,4299,tarjeta
+2025-10-27,Valeria Ortiz,Cargador 65W,Accesorios,CDMX,3,599,1797,efectivo
+2025-10-18,Laura Méndez,Mouse inalámbrico,Periféricos,Querétaro,1,459,459,transferencia
+2025-10-09,Lucía Fierro,Hub USB-C,Accesorios,CDMX,3,749,2247,paypal
+2025-10-27,Camila Vega,Teclado mecánico,Periféricos,Querétaro,1,899,899,tarjeta
+2025-10-18,Ana Gómez,Escritorio ajustable,Mobiliario,CDMX,3,6499,19497,efectivo
+2025-10-09,Paola Nava,Micrófono USB,Audio,Querétaro,1,1899,1899,transferencia
+2025-10-27,Renata Solís,Silla ergonómica,Mobiliario,CDMX,3,3899,11697,paypal
+2025-10-18,Sofía Cano,Soporte para laptop,Accesorios,Querétaro,1,549,549,tarjeta
+2025-10-09,Regina Ávila,Bocina bluetooth,Audio,CDMX,3,899,2697,efectivo
+2025-10-27,Daniela Ruiz,Lámpara de escritorio,Mobiliario,Querétaro,1,699,699,transferencia
+2025-10-18,Valeria Ortiz,Audífonos over-ear,Audio,CDMX,3,1599,4797,paypal
+2025-10-09,Laura Méndez,Memoria USB 128GB,Almacenamiento,Querétaro,1,249,249,tarjeta
+2025-10-27,Lucía Fierro,Webcam HD,Periféricos,CDMX,3,1199,3597,efectivo
+2025-11-19,Laura Méndez,Memoria USB 128GB,Almacenamiento,Querétaro,1,249,249,paypal
+2025-11-10,Lucía Fierro,Webcam HD,Periféricos,CDMX,3,1199,3597,tarjeta
+2025-11-01,Camila Vega,Disco SSD 1TB,Almacenamiento,Querétaro,1,1799,1799,efectivo
+2025-11-19,Ana Gómez,Monitor 27",Pantallas,CDMX,3,4299,12897,transferencia
+2025-11-10,Paola Nava,Cargador 65W,Accesorios,Querétaro,1,599,599,paypal
+2025-11-01,Renata Solís,Mouse inalámbrico,Periféricos,CDMX,3,459,1377,tarjeta
+2025-11-19,Sofía Cano,Hub USB-C,Accesorios,Querétaro,1,749,749,efectivo
+2025-11-10,Regina Ávila,Teclado mecánico,Periféricos,CDMX,3,899,2697,transferencia
+2025-11-01,Daniela Ruiz,Escritorio ajustable,Mobiliario,Querétaro,1,6499,6499,paypal
+2025-11-19,Valeria Ortiz,Micrófono USB,Audio,CDMX,3,1899,5697,tarjeta
+2025-11-10,Laura Méndez,Silla ergonómica,Mobiliario,Querétaro,1,3899,3899,efectivo
+2025-11-01,Lucía Fierro,Soporte para laptop,Accesorios,CDMX,3,549,1647,transferencia
+2025-11-19,Camila Vega,Bocina bluetooth,Audio,Querétaro,1,899,899,paypal
+2025-11-10,Ana Gómez,Lámpara de escritorio,Mobiliario,CDMX,3,699,2097,tarjeta
+2025-11-01,Paola Nava,Audífonos over-ear,Audio,Querétaro,1,1599,1599,efectivo
+2025-11-19,Renata Solís,Memoria USB 128GB,Almacenamiento,CDMX,3,249,747,transferencia
+2025-11-10,Sofía Cano,Webcam HD,Periféricos,Querétaro,1,1199,1199,paypal
+2025-12-24,Bruno Reyes,Memoria USB 128GB,Almacenamiento,León,2,249,498,efectivo
+2025-12-15,Carlos Rivas,Webcam HD,Periféricos,Puebla,4,1199,4796,transferencia
+2025-12-06,Emilio Castro,Disco SSD 1TB,Almacenamiento,León,2,1799,3598,paypal
+2025-12-24,Iván Téllez,Monitor 27",Pantallas,Puebla,4,4299,17196,tarjeta
+2025-12-15,Diego Salas,Cargador 65W,Accesorios,León,2,599,1198,efectivo
+2025-12-06,Tomás Bravo,Mouse inalámbrico,Periféricos,Puebla,4,459,1836,transferencia
+2025-12-24,Pablo Mora,Hub USB-C,Accesorios,León,2,749,1498,paypal
+2025-12-15,Mateo Luna,Teclado mecánico,Periféricos,Puebla,4,899,3596,tarjeta
+2025-12-06,Andrés Lema,Escritorio ajustable,Mobiliario,León,2,6499,12998,efectivo
+2025-12-24,Hugo Pineda,Micrófono USB,Audio,Puebla,4,1899,7596,transferencia
+2025-12-15,Bruno Reyes,Silla ergonómica,Mobiliario,León,2,3899,7798,paypal
+2025-12-06,Carlos Rivas,Soporte para laptop,Accesorios,Puebla,4,549,2196,tarjeta
+2025-12-24,Emilio Castro,Bocina bluetooth,Audio,León,2,899,1798,efectivo
+2025-12-15,Iván Téllez,Lámpara de escritorio,Mobiliario,Puebla,4,699,2796,transferencia
+2025-12-06,Diego Salas,Audífonos over-ear,Audio,León,2,1599,3198,paypal
+2025-12-24,Tomás Bravo,Memoria USB 128GB,Almacenamiento,Puebla,4,249,996,tarjeta
+2025-12-15,Pablo Mora,Webcam HD,Periféricos,León,2,1199,2398,efectivo
+2025-12-06,Mateo Luna,Disco SSD 1TB,Almacenamiento,Puebla,4,1799,7196,transferencia
