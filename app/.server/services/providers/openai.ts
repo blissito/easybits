@@ -46,6 +46,22 @@ function getApiKey(): string {
   return key;
 }
 
+/**
+ * Find a storageKey that doesn't collide with an existing File record.
+ * Reusing the same `name` would otherwise hit the File_storageKey_key unique
+ * constraint and bubble up as a raw 500. We auto-suffix (-1, -2, …) instead.
+ */
+async function resolveUniqueStorageKey(userId: string, base: string): Promise<string> {
+  for (let n = 0; n < 50; n++) {
+    const suffix = n === 0 ? "" : `-${n}`;
+    const key = `${userId}/${base}${suffix}.png`;
+    const existing = await db.file.findUnique({ where: { storageKey: key }, select: { id: true } });
+    if (!existing) return key;
+  }
+  // Pathological: 50 collisions. Fall back to a guaranteed-unique random key.
+  return `${userId}/${base}-${nanoid(6)}.png`;
+}
+
 async function uploadPublicPng(
   userId: string,
   buffer: Buffer,
@@ -57,34 +73,49 @@ async function uploadPublicPng(
       .trim()
       .replace(/\s+/g, "-")
       .toLowerCase() || `gpt-image-${nanoid(6)}`;
-  const filename = `${base}.png`;
-  const storageKey = `${userId}/${filename}`;
   const client = getPlatformPublicClient();
-  const putUrl = await client.getPutUrl(storageKey, { timeout: 120 });
-  const putRes = await fetch(putUrl, {
-    method: "PUT",
-    body: new Uint8Array(buffer),
-    headers: { "Content-Type": "image/png" },
-  });
-  if (!putRes.ok) {
-    throw new ServiceProviderError("image.openai.generate", putRes.status, "upload: Tigris public put failed");
+
+  // Up to 2 attempts: the pre-check loop handles the common case; the catch
+  // handles a TOCTOU race (two parallel creates picking the same key).
+  let storageKey = await resolveUniqueStorageKey(userId, base);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const putUrl = await client.getPutUrl(storageKey, { timeout: 120 });
+    const putRes = await fetch(putUrl, {
+      method: "PUT",
+      body: new Uint8Array(buffer),
+      headers: { "Content-Type": "image/png" },
+    });
+    if (!putRes.ok) {
+      throw new ServiceProviderError("image.openai.generate", putRes.status, "upload: Tigris public put failed");
+    }
+    const imageUrl = buildPublicAssetUrl(storageKey);
+    try {
+      const file = await db.file.create({
+        data: {
+          name: `${base}.png`,
+          storageKey,
+          slug: storageKey,
+          size: buffer.length,
+          contentType: "image/png",
+          ownerId: userId,
+          access: "public",
+          url: imageUrl,
+          status: "DONE",
+          source: "openai",
+        },
+      });
+      return { fileId: file.id, imageUrl };
+    } catch (e: any) {
+      if (e?.code === "P2002" && attempt === 0) {
+        // Lost a race on the key — pick a random one and retry once.
+        storageKey = `${userId}/${base}-${nanoid(6)}.png`;
+        continue;
+      }
+      throw new ServiceProviderError("image.openai.generate", null, `save failed: ${e?.message || "db.file.create"}`);
+    }
   }
-  const imageUrl = buildPublicAssetUrl(storageKey);
-  const file = await db.file.create({
-    data: {
-      name: filename,
-      storageKey,
-      slug: storageKey,
-      size: buffer.length,
-      contentType: "image/png",
-      ownerId: userId,
-      access: "public",
-      url: imageUrl,
-      status: "DONE",
-      source: "openai",
-    },
-  });
-  return { fileId: file.id, imageUrl };
+  // Unreachable, but keeps the type checker happy.
+  throw new ServiceProviderError("image.openai.generate", null, "save failed: exhausted retries");
 }
 
 export const openaiImageService: ServiceDef<OpenaiImageInput, OpenaiImageOutput> = {

@@ -68,6 +68,21 @@ function extFor(contentType: string): string {
   return "png";
 }
 
+/**
+ * Find a storageKey that doesn't collide with an existing File record.
+ * Reusing the same `name` would otherwise hit the File_storageKey_key unique
+ * constraint and bubble up as a raw 500. We auto-suffix (-1, -2, …) instead.
+ */
+async function resolveUniqueStorageKey(userId: string, base: string, ext: string): Promise<string> {
+  for (let n = 0; n < 50; n++) {
+    const suffix = n === 0 ? "" : `-${n}`;
+    const key = `${userId}/${base}${suffix}.${ext}`;
+    const existing = await db.file.findUnique({ where: { storageKey: key }, select: { id: true } });
+    if (!existing) return key;
+  }
+  return `${userId}/${base}-${nanoid(6)}.${ext}`;
+}
+
 async function uploadImage(
   userId: string,
   buffer: Buffer,
@@ -81,8 +96,8 @@ async function uploadImage(
     .trim()
     .replace(/\s+/g, "-")
     .toLowerCase() || `nano-banana-${nanoid(6)}`;
-  const filename = `${base}.${ext}`;
-  const storageKey = `${userId}/${filename}`;
+  const storageKey = await resolveUniqueStorageKey(userId, base, ext);
+  const filename = storageKey.slice(userId.length + 1);
 
   if (isPublic) {
     const client = getPlatformPublicClient();
@@ -96,21 +111,25 @@ async function uploadImage(
       throw new ServiceProviderError("image.gemini.edit", putRes.status, "upload: Tigris public put failed");
     }
     const publicUrl = buildPublicAssetUrl(storageKey);
-    const file = await db.file.create({
-      data: {
-        name: filename,
-        storageKey,
-        slug: storageKey,
-        size: buffer.length,
-        contentType,
-        ownerId: userId,
-        access: "public",
-        url: publicUrl,
-        status: "DONE",
-        source: "gemini",
-      },
-    });
-    return { fileId: file.id, publicUrl };
+    try {
+      const file = await db.file.create({
+        data: {
+          name: filename,
+          storageKey,
+          slug: storageKey,
+          size: buffer.length,
+          contentType,
+          ownerId: userId,
+          access: "public",
+          url: publicUrl,
+          status: "DONE",
+          source: "gemini",
+        },
+      });
+      return { fileId: file.id, publicUrl };
+    } catch (e: any) {
+      throw new ServiceProviderError("image.gemini.edit", null, `save failed: ${e?.message || "db.file.create"}`);
+    }
   }
 
   const provider = await resolveProvider(userId);
@@ -124,22 +143,26 @@ async function uploadImage(
   if (!putRes.ok) {
     throw new ServiceProviderError("image.gemini.edit", putRes.status, "upload: Tigris private put failed");
   }
-  const file = await db.file.create({
-    data: {
-      name: filename,
-      storageKey,
-      slug: storageKey,
-      size: buffer.length,
-      contentType,
-      ownerId: userId,
-      access: "private",
-      url: "",
-      status: "DONE",
-      storageProviderId: provider?.id ?? null,
-      source: "gemini",
-    },
-  });
-  return { fileId: file.id, publicUrl: null };
+  try {
+    const file = await db.file.create({
+      data: {
+        name: filename,
+        storageKey,
+        slug: storageKey,
+        size: buffer.length,
+        contentType,
+        ownerId: userId,
+        access: "private",
+        url: "",
+        status: "DONE",
+        storageProviderId: provider?.id ?? null,
+        source: "gemini",
+      },
+    });
+    return { fileId: file.id, publicUrl: null };
+  } catch (e: any) {
+    throw new ServiceProviderError("image.gemini.edit", null, `save failed: ${e?.message || "db.file.create"}`);
+  }
 }
 
 export const geminiEditImageService: ServiceDef<GeminiEditImageInput, GeminiEditImageOutput> = {
