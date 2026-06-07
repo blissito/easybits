@@ -15,6 +15,16 @@ interface BlogContentProps {
   hasPrevPage: boolean;
 }
 
+// Barra de tags curada: pocos tags relevantes en vez de los 15+ del blog.
+// Solo se muestran los que existan en los posts publicados.
+const CURATED_TAGS = [
+  { tag: "ejemplos", label: "Ejemplos" },
+  { tag: "sandboxes", label: "Sandboxes" },
+  { tag: "SDK", label: "SDK" },
+  { tag: "MCP", label: "MCP" },
+  { tag: "agentes", label: "Agentes" },
+];
+
 export const BlogContent = ({
   posts,
   tags,
@@ -63,12 +73,12 @@ export const BlogContent = ({
               active={!currentTag}
               onClick={() => handleTagClick("Todos")}
             />
-            {tags.map((tag) => (
+            {CURATED_TAGS.filter((t) => tags.includes(t.tag)).map((t) => (
               <Chip
-                key={tag}
-                category={tag}
-                active={currentTag === tag}
-                onClick={() => handleTagClick(tag)}
+                key={t.tag}
+                category={t.label}
+                active={currentTag === t.tag}
+                onClick={() => handleTagClick(t.tag)}
               />
             ))}
           </div>
@@ -91,41 +101,48 @@ export const BlogContent = ({
           </form>
         </div>
       </div>
-      {/* CTA prominente a la sección de Ejemplos (recetas del SDK) */}
+      {/* Bloque Ejemplos: promo cuando no se filtra, header + volver cuando sí */}
       <div className="w-full px-4 md:px-[5%] xl:px-0">
         <div className="max-w-7xl mx-auto border-x-[2px] border-black px-4 md:px-6 pt-8">
-          <Link
-            to={currentTag === "ejemplos" ? "/blog" : "/blog?tag=ejemplos"}
-            className={cn(
-              "group flex flex-wrap md:flex-nowrap items-center gap-4 justify-between rounded-2xl border-[2px] border-black p-5 md:p-6 transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
-              currentTag === "ejemplos" ? "bg-brand-500/15" : "bg-grayLight"
-            )}
-          >
-            <div className="flex items-center gap-4">
-              <span className="text-3xl md:text-4xl">📓</span>
-              <div>
-                <h3 className="text-xl md:text-2xl font-bold">Ejemplos</h3>
-                <p className="text-iron">
-                  Recetas cortas para usar el SDK de Easybits — copia, pega y corre.
-                </p>
+          {currentTag === "ejemplos" ? (
+            <div className="flex flex-wrap md:flex-nowrap items-center gap-4 justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-3xl md:text-4xl">📓</span>
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-bold">Ejemplos</h2>
+                  <p className="text-iron">
+                    Recetas cortas y prácticas para empezar a usar el SDK paso a paso.
+                  </p>
+                </div>
               </div>
+              <Link
+                to="/blog"
+                className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold hover:bg-black hover:text-white transition-colors"
+              >
+                ← Ver todos los posts
+              </Link>
             </div>
-            <span className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold group-hover:bg-black group-hover:text-white transition-colors">
-              {currentTag === "ejemplos" ? "← Ver todos los posts" : "Ver ejemplos →"}
-            </span>
-          </Link>
+          ) : (
+            <Link
+              to="/blog?tag=ejemplos"
+              className="group flex flex-wrap md:flex-nowrap items-center gap-4 justify-between rounded-2xl border-[2px] border-black p-5 md:p-6 bg-grayLight transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <div className="flex items-center gap-4">
+                <span className="text-3xl md:text-4xl">📓</span>
+                <div>
+                  <h3 className="text-xl md:text-2xl font-bold">Ejemplos</h3>
+                  <p className="text-iron">
+                    Recetas cortas para usar el SDK de Easybits — copia, pega y corre.
+                  </p>
+                </div>
+              </div>
+              <span className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold group-hover:bg-black group-hover:text-white transition-colors">
+                Ver ejemplos →
+              </span>
+            </Link>
+          )}
         </div>
       </div>
-      {currentTag === "ejemplos" && (
-        <div className="w-full px-4 md:px-[5%] xl:px-0">
-          <div className="max-w-7xl mx-auto border-x-[2px] border-black px-4 md:px-6 pt-10">
-            <h2 className="text-3xl md:text-4xl font-bold">📓 Ejemplos</h2>
-            <p className="text-iron text-lg mt-2">
-              Recetas cortas y prácticas para empezar a usar el SDK paso a paso.
-            </p>
-          </div>
-        </div>
-      )}
       <div className="border-x-[2px] border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
         {posts.length > 0 ? (
           posts.map((post) => <BlogCard key={post.slug} post={post} />)
