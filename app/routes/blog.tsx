@@ -10,6 +10,22 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "ejemplo-agente-embebido-en-tu-web",
+    filePath:
+      "app/content/blog/2026-06-07-ejemplo-agente-embebido-en-tu-web.mdx",
+    title: "Pon un agente que ejecuta código dentro de tu web (sin backend)",
+    description:
+      "Segundo Ejemplo: creas un agente una sola vez con el SDK y lo embebes en cualquier página con 30 líneas de HTML. El visitante le escribe, el agente corre código en un sandbox y te responde en vivo — todo desde el navegador, sin que montes un servidor. Te regalamos el HTML listo para abrir.",
+    date: "2026-06-07",
+    author: "Equipo Easybits",
+    tags: ["ejemplos", "agentes", "SDK"],
+    featuredImage: "/blog/assets/blog-agent-embed-editorial.png",
+    readingTime: 5,
+    excerpt:
+      "Creas un agente una vez con el SDK y lo embebes en cualquier web con 30 líneas de HTML. El visitante le escribe, el agente corre código en un sandbox y responde en vivo — sin backend. El embed token (agt_) es seguro en el cliente.",
+    published: true,
+  },
+  {
     slug: "ejemplo-data-analyst-sandbox",
     filePath:
       "app/content/blog/2026-06-07-ejemplo-data-analyst-sandbox.mdx",

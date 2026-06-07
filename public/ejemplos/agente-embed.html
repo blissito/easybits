@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agente EasyBits embebido</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    #chat { border: 2px solid #111; border-radius: 12px; height: 360px; overflow-y: auto; padding: 12px; }
+    .msg { margin: 6px 0; padding: 8px 12px; border-radius: 10px; max-width: 80%; white-space: pre-wrap; }
+    .user { background: #eee; margin-left: auto; }
+    .bot  { background: #f3eefe; }
+    form { display: flex; gap: 8px; margin-top: 12px; }
+    input { flex: 1; padding: 10px; border: 2px solid #111; border-radius: 10px; }
+    button { padding: 10px 16px; border: 2px solid #111; border-radius: 10px; background: #111; color: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>Pregúntale a mi agente</h2>
+  <div id="chat"></div>
+  <form id="form">
+    <input id="input" placeholder="Escribe tu mensaje…" autocomplete="off" />
+    <button type="submit">Enviar</button>
+  </form>
+
+  <script>
+    // 1) Pega aquí lo que te dio el SDK al crear el agente.
+    //    El embedToken (agt_…) es seguro en el navegador: solo puede
+    //    hablarle a ESTE agente, no borrar ni listar nada.
+    const AGENT_ID    = "PEGA_TU_AGENT_ID";
+    const EMBED_TOKEN = "agt_PEGA_TU_EMBED_TOKEN";
+    const BASE        = "https://www.easybits.cloud";
+
+    const chat = document.getElementById("chat");
+    let sessionId = null; // se mantiene para dar continuidad a la charla
+
+    function add(text, who) {
+      const el = document.createElement("div");
+      el.className = "msg " + who;
+      el.textContent = text;
+      chat.appendChild(el);
+      chat.scrollTop = chat.scrollHeight;
+      return el;
+    }
+
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("input");
+      const content = input.value.trim();
+      if (!content) return;
+      add(content, "user");
+      input.value = "";
+
+      const res = await fetch(`${BASE}/api/v2/agents/${AGENT_ID}/message`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${EMBED_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content, sessionId }),
+      });
+
+      // La respuesta llega como stream (SSE): token por token.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const bot = add("", "bot");
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let i;
+        while ((i = buffer.indexOf("\n\n")) !== -1) {
+          const line = buffer.slice(0, i).replace(/^data: /, "");
+          buffer = buffer.slice(i + 2);
+          try {
+            const evt = JSON.parse(line);
+            if (evt.type === "chunk") { bot.textContent += evt.value; chat.scrollTop = chat.scrollHeight; }
+            else if (evt.type === "error") bot.textContent += `\n[error: ${evt.message}]`;
+          } catch (_) { /* líneas no-JSON del stream: ignóralas */ }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

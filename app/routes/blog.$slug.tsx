@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "ejemplo-agente-embebido-en-tu-web":
+    "app/content/blog/2026-06-07-ejemplo-agente-embebido-en-tu-web.mdx",
   "ejemplo-data-analyst-sandbox":
     "app/content/blog/2026-06-07-ejemplo-data-analyst-sandbox.mdx",
   "tu-agente-no-deberia-llamar-tools-una-por-una":

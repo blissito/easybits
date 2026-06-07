@@ -1,0 +1,114 @@
+---
+title: "Pon un agente que ejecuta código dentro de tu web (sin backend)"
+description: "Segundo Ejemplo: creas un agente una sola vez con el SDK y lo embebes en cualquier página con 30 líneas de HTML. El visitante le escribe, el agente corre código en un sandbox y te responde en vivo — todo desde el navegador, sin que montes un servidor. Te regalamos el HTML listo para abrir."
+date: "2026-06-07"
+author: "Equipo Easybits"
+tags: ["ejemplos", "agentes", "SDK"]
+featuredImage: "/blog/assets/blog-agent-embed-editorial.png"
+published: true
+---
+
+# Pon un agente que ejecuta código dentro de tu web (sin backend)
+
+En el [primer Ejemplo](/blog/ejemplo-data-analyst-sandbox) corrimos código en un sandbox desde Node. Estuvo bien, pero todo pasaba en tu terminal. Ahora subimos la apuesta: vamos a poner un **agente que corre código y responde en vivo dentro de una página web**, y lo va a usar tu visitante desde su navegador. Sin montar un servidor.
+
+¿Cómo, si desde el navegador normalmente no puedes exponer tus llaves? Con un **embed token**: una llave especial que *sí* es segura para poner en el cliente. Ahora lo explico.
+
+👉 **Te regalamos el archivo listo:** [agente-embed.html](/ejemplos/agente-embed.html) — ábrelo, pega dos valores y funciona.
+
+## La idea en dos piezas
+
+1. **Una vez**, en tu terminal, creas el agente con el SDK. Te devuelve un `agentId` y un `embedToken`.
+2. **En tu web**, pegas un bloque de HTML que le manda mensajes al agente y muestra la respuesta. Eso es todo.
+
+## Paso 1: crea el agente (una sola vez)
+
+```bash
+npm i @easybits.cloud/sdk
+export EASYBITS_API_KEY="tu-api-key"
+```
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
+
+const agent = await eb.createAgent({
+  template: "node-agent", // trae el modelo incluido: no necesitas tu propia API key de IA
+  env: {},
+  name: "agente-de-mi-web",
+});
+
+console.log("AGENT_ID:", agent.agentId);
+console.log("EMBED_TOKEN:", agent.embedToken); // empieza con agt_
+```
+
+Guarda esos dos valores. El `node-agent` ya viene con el modelo conectado (se cobra por token consumido), así que **no tienes que conseguir ni pegar ninguna API key de IA**.
+
+## Paso 2: embébelo en tu web
+
+Este es el corazón del ejemplo. Le mandas un mensaje al agente y la respuesta llega *en streaming* — token por token, como cuando ves a un chat "escribiendo":
+
+```html
+<div id="chat"></div>
+<input id="input" placeholder="Escribe tu mensaje…" />
+
+<script>
+  const AGENT_ID    = "PEGA_TU_AGENT_ID";
+  const EMBED_TOKEN = "agt_PEGA_TU_EMBED_TOKEN";
+  const BASE        = "https://www.easybits.cloud";
+
+  async function preguntar(content) {
+    const res = await fetch(`${BASE}/api/v2/agents/${AGENT_ID}/message`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${EMBED_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    // La respuesta es un stream de eventos: { type: "chunk", value: "…" }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let i;
+      while ((i = buffer.indexOf("\n\n")) !== -1) {
+        const line = buffer.slice(0, i).replace(/^data: /, "");
+        buffer = buffer.slice(i + 2);
+        try {
+          const evt = JSON.parse(line);
+          if (evt.type === "chunk") document.getElementById("chat").textContent += evt.value;
+        } catch (_) {}
+      }
+    }
+  }
+
+  document.getElementById("input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") preguntar(e.target.value);
+  });
+</script>
+```
+
+Pégalo en cualquier página, reemplaza `AGENT_ID` y `EMBED_TOKEN`, y ya tienes un agente vivo. Como tu agente corre en un sandbox, **puede ejecutar código** para responderte: pídele que calcule algo, que transforme un texto, que te arme un ejemplo, y lo hará de verdad, no de memoria.
+
+## ¿Por qué el embed token sí puede ir en el navegador?
+
+Aquí está el truco que hace seguro todo esto:
+
+> Tu **API key** (`eb_sk_…`) es tu llave maestra: puede crear, leer, borrar y listar todo lo tuyo. **Nunca** la pongas en el cliente — cualquiera la copiaría del HTML.
+>
+> El **embed token** (`agt_…`) es otra cosa: solo sirve para **mandarle mensajes a ese único agente**. No puede borrar nada, no puede listar tus otros agentes, no puede tocar tus archivos. Por eso *sí* es seguro dejarlo en una página pública.
+
+Es la misma idea de las llaves "publicables" que usan otros servicios: una llave de alcance mínimo para el frontend, y la llave secreta solo en tu lado.
+
+## ¿Qué sigue?
+
+Tu agente no solo platica: tiene acceso a las herramientas de EasyBits. En el próximo Ejemplo lo conectamos a tu **almacenamiento y a una base de datos** — que guarde lo que la gente le escribe, genere un archivo y lo deje listo para descargar. Un mini-backend manejado por un agente.
+
+Mientras tanto: [descarga el HTML](/ejemplos/agente-embed.html), crea tu agente con el Paso 1, pega los dos valores y ábrelo en tu navegador.
