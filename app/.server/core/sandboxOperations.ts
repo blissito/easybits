@@ -21,6 +21,13 @@ const COMPUTE_AUTOINJECT_TEMPLATES = new Set<SandboxTemplate>([
   "claude-code",
 ]);
 
+// Templates que sirven un escritorio noVNC en :6080. createAgent auto-expone ese
+// puerto al terminar el bring-up y guarda la URL pública en Agent.desktopUrl, así
+// el panel de ghosty-studio (y cualquier cliente MCP/SDK) puede embeber el desktop.
+const DESKTOP_TEMPLATES = new Set<SandboxTemplate>([
+  "desktop-ghosty",
+]);
+
 // SandboxTemplate se deriva de SANDBOX_TEMPLATES en ../sandbox/schemas
 // (fuente única). Se re-exporta para mantener compatibilidad con quien lo
 // importa desde aquí (p.ej. routes/api/v2/agents.ts).
@@ -1212,6 +1219,17 @@ export async function createAgent(
           throw new Error("ghostyclaw not ready after 10min (agent image build likely failed)");
         }
       }
+      // Desktop templates: expón :6080 (websockify/noVNC) y guarda la URL
+      // pública. Best-effort — si falla, el agente sigue running sin desktop.
+      let desktopUrl: string | null = null;
+      if (DESKTOP_TEMPLATES.has(params.template)) {
+        try {
+          const exposed = await exposeSandboxPort(ctx, sb.sandboxId, 6080);
+          desktopUrl = `${exposed.url}/vnc.html?autoconnect=true&resize=remote`;
+        } catch (e) {
+          console.error(`expose 6080 (desktop) failed for ${sb.sandboxId}:`, e);
+        }
+      }
       await db.agent.update({
         where: { id: row.id },
         data: {
@@ -1219,6 +1237,7 @@ export async function createAgent(
           agentUrl: ep.agentUrl,
           acpSessionId,
           acpTransportSessionId,
+          desktopUrl,
         },
       });
     } catch (e) {
@@ -1531,6 +1550,8 @@ export interface AgentRecord {
   messagePath: string;
   acpSessionId: string | null;
   acpTransportSessionId: string | null;
+  // URL pública del escritorio noVNC (templates desktop-*); null para el resto.
+  desktopUrl: string | null;
 }
 
 function toAgentRecord(row: {
@@ -1550,6 +1571,7 @@ function toAgentRecord(row: {
   messagePath: string | null;
   acpSessionId: string | null;
   acpTransportSessionId: string | null;
+  desktopUrl?: string | null;
 }): AgentRecord {
   return {
     agentId: row.id,
@@ -1568,6 +1590,7 @@ function toAgentRecord(row: {
     messagePath: row.messagePath ?? "/message",
     acpSessionId: row.acpSessionId,
     acpTransportSessionId: row.acpTransportSessionId,
+    desktopUrl: row.desktopUrl ?? null,
   };
 }
 

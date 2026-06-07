@@ -880,6 +880,10 @@ model Agent {
   acpTransportSessionId String?
   acpSessionId          String?
 
+  // URL pública del escritorio noVNC (templates desktop-*). Se popula al
+  // exponer :6080 en createAgent; null para el resto.
+  desktopUrl String?
+
   // WhatsApp link state (cache from openclaw runtime). Shape:
   //   { status: "disconnected"|"qr_pending"|"pairing"|"connected",
   //     phoneNumber?: string, lastSyncAt?: string, linkedAt?: string }
