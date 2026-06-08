@@ -120,6 +120,12 @@ import {
 } from "../core/agentOperations";
 import { installSkill } from "../core/skillsOperations";
 import {
+  startRecording,
+  stopRecording,
+  listRecordings,
+  recordTask,
+} from "../core/recordingOperations";
+import {
   createSecret,
   deleteSecretByName,
   listSecrets,
@@ -220,6 +226,10 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   agent_message: "op",
   agent_list: "op",
   agent_install_skill: "op",
+  agent_record: "op",
+  agent_recording_start: "op",
+  agent_recording_stop: "op",
+  agent_recording_list: "op",
 };
 
 // Envuelve un handler MCP con el rate limit de sandbox. Fail-open si no hay
@@ -1685,6 +1695,66 @@ How to embed safely (the only reliable rule):
         skillContent,
         assets,
       });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  // --- Desktop recording (computer-use agents) ---
+  // Record what a computer-use agent (computer-ghosty-gemini) does on its desktop.
+  // ffmpeg captures the screen inside the VM → mp4 served over the SAME public URL
+  // as the live desktop (https://sb-<id>-6080.../recordings/<id>.mp4). These tools
+  // RETURN that URL — no upload, no extra port. The recording lives while the VM runs.
+
+  server.tool(
+    "agent_record",
+    "ONE-SHOT: record a computer-use agent (template computer-ghosty-gemini) while it performs a task, and return a public URL to the resulting mp4. Internally: starts screen recording, sends `prompt` to the agent and waits for the turn to finish, stops recording, and returns { url }. This is the simplest way to get 'the agent did X' as a shareable video — one call. The URL is a static mp4 served from the VM's already-public desktop host; it's live while the agent's sandbox is running (capability = the unguessable subdomain). For multi-turn clips, use agent_recording_start / agent_recording_stop instead.",
+    {
+      agentId: z.string().describe("agentId of a running computer-ghosty-gemini agent (from agent_create / agent_list)"),
+      prompt: z.string().min(1).describe("Task for the agent to perform on the desktop while recording, e.g. 'go to wikipedia.org and search for Firecracker'"),
+      sessionId: z.string().optional().describe("Conversation session id (default the agent's own default)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await recordTask(ctx, params.agentId, params.prompt, params.sessionId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_recording_start",
+    "Start recording the desktop of a computer-use agent (computer-ghosty-gemini). ffmpeg captures display :0 to an mp4 inside the VM. One recording at a time per agent; calling again while recording returns the in-progress one. Returns { recording, id, startedAt, url } — the url becomes a playable mp4 after agent_recording_stop. Drive the agent with agent_message between start and stop, then stop to finalize.",
+    {
+      agentId: z.string().describe("agentId of a running computer-ghosty-gemini agent"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await startRecording(ctx, params.agentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_recording_stop",
+    "Stop the in-progress desktop recording and finalize the mp4. Returns { recording:false, id, url, bytes, durationMs } where `url` is a public link to the playable mp4 (served from the VM's desktop host, live while the sandbox runs).",
+    {
+      agentId: z.string().describe("agentId of the computer-ghosty-gemini agent currently recording"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await stopRecording(ctx, params.agentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_recording_list",
+    "List the desktop recordings stored on a computer-use agent's VM. Returns an array of { id, url, bytes, at, recording } sorted newest-first; each `url` is a public link to the mp4 (live while the sandbox runs).",
+    {
+      agentId: z.string().describe("agentId of a computer-ghosty-gemini agent"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listRecordings(ctx, params.agentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
