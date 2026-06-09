@@ -1416,6 +1416,116 @@ If a mutation returns \`{ noop: true, reason: "..." }\`, the page didn't change.
 If your edits stopped working (\`old_html not found\`), the page changed since you read it. Re-read with \`get_page_html\` and use the fresh HTML as your \`old_html\` source.
 `;
 
+  agents: `## Agents & Sandboxes
+
+> Create, manage and execute code on sandboxed AI agent runtimes.
+
+**Base URL:** \`https://www.easybits.cloud/api/v2\`
+
+### Templates
+
+Rust Ghosty is currently the primary agent template. More coming soon.
+
+| Template | Runtime | Default Model | Reasoning |
+|----------|---------|---------------|-----------|
+| \`rust-ghosty\` | CodeWhale (Rust) + Node.js Baileys | DeepSeek V4-Pro | max |
+
+### Create an agent
+
+\`\`\`
+POST /agents
+Authorization: Bearer eb_sk_live_...
+
+{
+  "template": "rust-ghosty",
+  "name": "my-agent",
+  "env": {
+    "DEEPSEEK_RUNTIME_TOKEN": "dsr_...",
+    "ADMIN_TOKEN": "agt_..."
+  }
+}
+\`\`\`
+
+**Response:** \`{ agentId, sandboxId, embedToken, ... }\`
+
+The agent boots in ~10-15s. Poll its health endpoint to know when it's ready.
+
+### Agent health check
+
+\`\`\`
+GET /health
+\`\`\`
+
+Returns \`{ ok: true, model: "deepseek-v4-pro", sessions: 0, ... }\`.
+
+### Execute commands inside the agent
+
+\`\`\`
+POST /sandboxes/{sandboxId}/exec
+Authorization: Bearer eb_sk_live_...
+
+{ "command": "cat /data/.deepseek/config.toml" }
+\`\`\`
+
+**Response:** \`{ exitCode, stdout, stderr, durationMs }\`
+
+### Send messages to the agent
+
+\`\`\`
+POST /message
+Content-Type: application/json
+
+{ "content": "Hello!", "sessionId": "my-session" }
+\`\`\`
+
+The response is an SSE stream (\`text/event-stream\`). Events include \`token\` (streaming), \`done\` (turn complete), and \`error\`.
+
+### MCP tools (agent-side)
+
+Every Rust Ghosty agent exposes MCP tools at \`http://{agent}:3000/mcp\`:
+
+| Tool | Description |
+|------|-------------|
+| \`install_mcp\` | Install a new MCP server at runtime. Agent auto-restarts (~5s). Params: \`name\`, \`url\`, \`token?\` |
+| \`remove_mcp\` | Remove a previously installed MCP server. Params: \`name\` |
+| \`send_message\` | Send a message/file/image via WhatsApp (when linked) |
+| \`describe_image\` | Vision: describe an image by URL |
+| \`upload_received_image\` | Upload a received image to easybits |
+
+### Seed files at spawn
+
+Pass \`seedFiles\` to pre-populate the agent workspace:
+
+\`\`\`
+POST /agents
+{
+  "template": "rust-ghosty",
+  "seedFiles": [
+    { "name": ".deepseek/mcp.json", "contentBase64": "..." }
+  ]
+}
+\`\`\`
+
+The agent's start script respects existing files — if \`mcp.json\` or \`config.toml\` already exist, they won't be overwritten.
+
+### Agent lifecycle
+
+1. **Create** — \`POST /agents\` spawns a sandboxed VM
+2. **Wait** — poll \`GET /health\` (~10-15s boot)
+3. **Use** — chat via \`POST /message\` (SSE), exec via \`POST /sandboxes/{id}/exec\`
+4. **Destroy** — \`DELETE /agents/{agentId}\`
+
+### Configuration
+
+Agents store config at \`/data/.deepseek/config.toml\`. Default Rust Ghosty settings:
+
+\`\`\`toml
+reasoning_effort = "max"
+\`\`\`
+
+Supported values: \`"off"\`, \`"high"\`, \`"max"\`, \`"auto"\` (auto selects tier based on task).
+`,
+
 const SECTION_KEYS = Object.keys(SECTIONS);
 
 const HEADER = `# EasyBits API Reference

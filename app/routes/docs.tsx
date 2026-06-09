@@ -30,6 +30,7 @@ const SECTIONS = [
   { id: "errors", label: "Errors & Rate Limits" },
   { id: "tool-groups", label: "Tool Groups" },
   { id: "mcp-apps", label: "MCP Apps UI" },
+  { id: "agents", label: "Agents & Sandboxes" },
 ] as const;
 
 export default function DocsPage() {
