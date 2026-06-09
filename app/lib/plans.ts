@@ -26,6 +26,10 @@ export interface PlanConfig {
   storageGB: number;
   /** AI generations per month (null = unlimited) */
   aiGenerationsPerMonth: number | null;
+  /** Max concurrent ACTIVE sandboxes (running/starting). Enforced in createSandbox. */
+  concurrentSandboxes: number;
+  /** Max sandbox session length in seconds (TTL window). Mega 1h, Tera 24h. Enforced in create/extend. */
+  maxSandboxTtlSeconds: number;
   /** Stripe intent key (null for free) */
   stripeIntent: string | null;
   /** Features list for pricing cards */
@@ -38,6 +42,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 0,
     storageGB: 0.1,
     aiGenerationsPerMonth: PLAN_CREDITS.Byte,
+    concurrentSandboxes: 2,
+    maxSandboxTtlSeconds: 3600,
     stripeIntent: null,
     features: [
       "100 MB de almacenamiento",
@@ -57,6 +63,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 299,
     storageGB: 10,
     aiGenerationsPerMonth: PLAN_CREDITS.Mega,
+    concurrentSandboxes: 3,
+    maxSandboxTtlSeconds: 3600,
     stripeIntent: "flow_plan",
     features: [
       "10 GB de almacenamiento",
@@ -77,6 +85,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 1499,
     storageGB: 100,
     aiGenerationsPerMonth: PLAN_CREDITS.Tera,
+    concurrentSandboxes: 10,
+    maxSandboxTtlSeconds: 86400,
     stripeIntent: "studio_plan",
     features: [
       "100 GB de almacenamiento",

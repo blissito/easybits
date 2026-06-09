@@ -1416,7 +1416,9 @@ If a mutation returns \`{ noop: true, reason: "..." }\`, the page didn't change.
 If your edits stopped working (\`old_html not found\`), the page changed since you read it. Re-read with \`get_page_html\` and use the fresh HTML as your \`old_html\` source.
 `;
 
-  agents: `## Agents & Sandboxes
+// NOTA: el objeto SECTIONS ya cerró arriba; esta sección se agrega como
+// asignación (statement válido) y queda incluida en SECTION_KEYS.
+SECTIONS.agents = `## Agents & Sandboxes
 
 > Create, manage and execute code on sandboxed AI agent runtimes.
 
@@ -1524,7 +1526,7 @@ reasoning_effort = "max"
 \`\`\`
 
 Supported values: \`"off"\`, \`"high"\`, \`"max"\`, \`"auto"\` (auto selects tier based on task).
-`,
+`;
 
 const SECTION_KEYS = Object.keys(SECTIONS);
 

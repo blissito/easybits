@@ -1,23 +1,19 @@
 import type { Route } from "./+types/keys";
-import { getUserOrNull } from "~/.server/getters";
+import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { createApiKey, listApiKeys } from "~/.server/iam";
-
-function unauthorized() {
-  return Response.json({ error: "Unauthorized" }, { status: 401 });
-}
 
 // GET /api/v2/keys
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = await getUserOrNull(request);
-  if (!user) return unauthorized();
+  // authenticateRequest acepta cookie de sesión (dashboard), API key Y Bearer
+  // OAuth — superset de getUserOrNull, así el SSO puede mintear con su token.
+  const { user } = requireAuth(await authenticateRequest(request));
   const keys = await listApiKeys(user.id);
   return Response.json({ keys });
 }
 
 // POST /api/v2/keys
 export async function action({ request }: Route.ActionArgs) {
-  const user = await getUserOrNull(request);
-  if (!user) return unauthorized();
+  const { user } = requireAuth(await authenticateRequest(request));
 
   if (request.method === "POST") {
     const body = await request.json();

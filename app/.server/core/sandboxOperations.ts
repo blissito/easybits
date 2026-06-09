@@ -5,11 +5,14 @@ import { requireScope } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
+import { PLANS, getUserPlan } from "../../lib/plans";
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
-const DEFAULT_TIMEOUT_S = 300;
-const MAX_TIMEOUT_S = 3600;
+// Default cuando el caller no pasa timeoutSeconds. 30 min: cómodo para una
+// sesión interactiva por MCP/SDK sin morir a media tarea; sigue auto-limpiando
+// cajas olvidadas. Quien quiera más extiende hasta su ventana de plan (Tera 24h).
+const DEFAULT_TIMEOUT_S = 1800;
 
 // Templates de EJECUCIÓN DE CÓDIGO donde eb.compute auto-inyecta una
 // ComputeKey (OPENAI_API_KEY) — el código del usuario llama al LLM managed
@@ -437,14 +440,10 @@ export async function createSandbox(
   }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
-  const timeout = Math.min(
-    Math.max(params.timeoutSeconds ?? DEFAULT_TIMEOUT_S, 30),
-    MAX_TIMEOUT_S
-  );
-  // Autonomous long-lived templates (ghostyclaw) opt into the persistent
-  // flag so sandbox-host skips the auto-destroy reaper. These boxes live
-  // until explicit DELETE — they hold per-tenant state (Baileys pairing,
-  // SQLite store, groups/) that can't survive sandbox destruction.
+  const plan = PLANS[getUserPlan(ctx.user)];
+  // Templates persistentes (agentes de marca) opt-in al flag persistent → el host
+  // les salta el reaper. Son deliberados/pagados, NO sandboxes efímeras: por eso
+  // NO cuentan contra el cap anti-runaway ni contra el TTL por plan.
   const persistent =
     params.template === "ghostyclaw" ||
     params.template === "ghosty-lite" ||
@@ -452,6 +451,42 @@ export async function createSandbox(
     params.template === "lang-ghosty" ||
     params.template === "rust-ghosty" ||
     params.template === "cagent-ghosty";
+
+  // Anti-runaway SOLO para efímeras: tope de cajas activas concurrentes por plan
+  // (hace real el "N simultáneos" de plans.ts; corta loops de sandbox_create).
+  // fail-open: si listSandboxes falla o no devuelve array, NO bloqueamos el spawn.
+  if (!persistent) {
+    const list = await listSandboxes(ctx).catch(() => [] as SandboxRecord[]);
+    const active = (Array.isArray(list) ? list : []).filter(
+      (s) => s.status === "running" || s.status === "starting"
+    ).length;
+    if (active >= plan.concurrentSandboxes) {
+      throw new Response(
+        JSON.stringify({
+          error: "SandboxLimitReached",
+          message: `Límite de ${plan.concurrentSandboxes} cajas activas alcanzado. Suspende o borra una, o sube de plan.`,
+          active,
+          max: plan.concurrentSandboxes,
+        }),
+        { status: 403, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (params.timeoutSeconds && params.timeoutSeconds > plan.maxSandboxTtlSeconds) {
+      throw new Response(
+        JSON.stringify({
+          error: "SandboxTtlExceeded",
+          message: `Tu plan permite sesiones de hasta ${Math.round(plan.maxSandboxTtlSeconds / 3600)}h. Sube a Tera para sesiones de hasta 24h.`,
+          requested: params.timeoutSeconds,
+          max: plan.maxSandboxTtlSeconds,
+        }),
+        { status: 403, headers: { "content-type": "application/json" } }
+      );
+    }
+  }
+  const timeout = Math.min(
+    Math.max(params.timeoutSeconds ?? DEFAULT_TIMEOUT_S, 30),
+    plan.maxSandboxTtlSeconds
+  );
   return callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -461,6 +496,7 @@ export async function createSandbox(
       name: params.name,
       metadata: params.metadata,
       persistent,
+      maxTtlSeconds: plan.maxSandboxTtlSeconds,
     },
     ctx.user.id
   );
@@ -525,18 +561,31 @@ export async function getFleetStats(): Promise<FleetStats> {
 }
 
 // Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on
-// persistent boxes (host returns { persistent, noop }). Total remaining
-// lifetime is clamped to 3600s from now by the host.
+// persistent boxes (host returns { persistent, noop }). The remaining-lifetime
+// window is the per-plan max (Mega 1h, Tera 24h), enforced by the host via the
+// maxTtlSeconds we pass; asking for a bigger window than the plan allows → 403.
 export async function extendSandbox(
   ctx: AuthContext,
   sandboxId: string,
   extendSeconds?: number
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
+  const plan = PLANS[getUserPlan(ctx.user)];
+  if (extendSeconds && extendSeconds > plan.maxSandboxTtlSeconds) {
+    throw new Response(
+      JSON.stringify({
+        error: "SandboxTtlExceeded",
+        message: `Tu plan permite sesiones de hasta ${Math.round(plan.maxSandboxTtlSeconds / 3600)}h. Sube a Tera para sesiones de hasta 24h.`,
+        requested: extendSeconds,
+        max: plan.maxSandboxTtlSeconds,
+      }),
+      { status: 403, headers: { "content-type": "application/json" } }
+    );
+  }
   return callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/extend`,
-    { extendSeconds: extendSeconds ?? 300 },
+    { extendSeconds: extendSeconds ?? 300, maxTtlSeconds: plan.maxSandboxTtlSeconds },
     ctx.user.id
   );
 }

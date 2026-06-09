@@ -200,6 +200,7 @@ export default [
     route("websites/:websiteId/files", "routes/api/v2/website-files.ts"),
     route("keys", "routes/api/v2/keys.ts"),
     route("keys/:keyId", "routes/api/v2/key.ts"),
+    route("me", "routes/api/v2/me.ts"),
     route("presentations", "routes/api/v2/presentations.ts"),
     route("presentations/:id", "routes/api/v2/presentation.ts"),
     route("presentations/:id/deploy", "routes/api/v2/presentation-deploy.ts"),
