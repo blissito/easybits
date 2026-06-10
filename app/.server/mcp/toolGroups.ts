@@ -41,19 +41,19 @@ export const TOOL_GROUPS: ToolGroup[] = [
     description:
       "Canva-like: documentos como diseño universal (cualquier formato — letter, social, slide 16:9), brand kits e imágenes. Ideal para Claude.ai / Claude Design.",
     recommended: true,
-    toolCount: 42,
+    toolCount: 43,
   },
   {
     key: "core",
     label: "Core",
     description: "Lo esencial: archivos, DBs, documentos, forms, websites, brand. Para agentes generalistas.",
-    toolCount: 41,
+    toolCount: 42,
   },
   {
     key: "ghosty",
     label: "Ghosty",
     description: "Curado y mínimo para agentes Ghosty (DeepSeek): set DB completo + documentos + archivos + imagen (gpt-image-2). Sin brand/forms/websites/media para no floodear la elección de tool.",
-    toolCount: 24,
+    toolCount: 25,
   },
   {
     key: "docs",
@@ -144,6 +144,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "create_or_edit_image", "transform_image",
   "optimize_image",
   "edit_image",
+  "describe_image",
   "pdf_to_images",
   // Video
   "video_create", "list_videos",
@@ -198,6 +199,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "transform_image",
   "create_or_edit_image",
   "edit_image",
+  "describe_image",
   "video_create", "list_videos",
   "avatar_video_create",
   "generate_captions", "get_caption_status",
@@ -237,6 +239,8 @@ export const GHOSTY_ALLOWLIST = new Set<string>([
   "list_files", "get_file", "upload_file",
   // Imagen — OpenAI gpt-image-2 (text-to-image + edición por referencia)
   "create_or_edit_image",
+  // Vision — describir/OCR de imágenes (screenshots, fotos) barato (1 cr)
+  "describe_image",
 ]);
 
 /** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */
@@ -285,6 +289,7 @@ export const RESEARCH_ALLOWLIST = new Set<string>([
 export const IMAGE_ALLOWLIST = new Set<string>([
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "edit_image",
+  "describe_image",
   "transform_image",
   "get_file",
   "list_files",

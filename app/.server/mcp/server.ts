@@ -112,6 +112,7 @@ import {
   spawnAutonomous,
   spawnGhosty,
   listAgents,
+  destroyAgent,
 } from "../core/sandboxOperations";
 import {
   destroyAgentRun,
@@ -1660,6 +1661,19 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listAgents(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "agent_destroy",
+    "Destroy a persistent agent created via `agent_create` / `ghosty_spawn`: kills the underlying Firecracker sandbox AND deletes its registry row, so it disappears from `agent_list` and the dashboard. Idempotent — succeeds even if the sandbox was already gone (e.g. TTL expired). Prefer this over `sandbox_destroy`: the latter only frees the VM and leaves the agent registry orphaned (still shown as running). Pass the `agentId` from `agent_list`. Returns { ok: true }.",
+    {
+      agentId: z.string().describe("agentId returned by agent_create / ghosty_spawn / agent_list"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await destroyAgent(ctx, params.agentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
@@ -4440,6 +4454,87 @@ function registerVideoTools(server: McpServer) {
         }
         if (e instanceof ServiceProviderError) {
           return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Nano Banana 2: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
+        }
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "describe_image",
+    "Analiza/describe una imagen y devuelve texto: qué muestra + transcripción del texto visible (OCR). NO genera ni edita imágenes — sólo las LEE. Usa gemini-2.5-flash (vision). Cost: 1 crédito per call, billed to the user's plan.\n\nHow to use:\n- Pasa UNA imagen: `imageFileId` (un File de imagen de la librería EasyBits) O `imageUrl` (URL pública https). Si pasas ambos, se usa `imageFileId`.\n- `question`: opcional — una pregunta específica sobre la imagen (ej. '¿qué color predomina?', '¿cuántas personas hay?', 'extrae el total de la factura'). Si la omites, devuelve una descripción detallada.\n- Siempre intenta extraer el texto visible (OCR) cuando lo hay.\n- Returns `description` (texto) y `modelId`.\n\nUse for: entender screenshots/fotos/diagramas, OCR de texto en imágenes, responder preguntas visuales, describir un asset antes de editarlo con edit_image.",
+    {
+      imageFileId: z.string().optional().describe("File de imagen de la librería EasyBits (fileId). Usa esto O imageUrl."),
+      imageUrl: z.string().url().optional().describe("URL pública (https) de la imagen. Alternativa a imageFileId."),
+      question: z.string().max(1000).optional().describe("Pregunta específica sobre la imagen. Omite para una descripción detallada."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
+      try {
+        if (!params.imageFileId && !params.imageUrl) {
+          throw new ServiceProviderError("image.gemini.describe", 400, "pasa imageFileId o imageUrl");
+        }
+
+        // Resolve the single image (fileId tiene prioridad sobre URL).
+        let image: { data: Uint8Array; mediaType: string } | null = null;
+
+        if (params.imageFileId) {
+          const { db } = await import("../db");
+          const { getClientForFile, getReadClientForPlatformFile } = await import("../storage");
+          const file = await db.file.findUnique({ where: { id: params.imageFileId } });
+          if (!file || file.status === "DELETED") {
+            throw new ServiceProviderError("image.gemini.describe", 404, `File not found: ${params.imageFileId}`);
+          }
+          if (file.ownerId !== ctx.user.id) {
+            throw new ServiceProviderError("image.gemini.describe", 403, `Forbidden: ${params.imageFileId}`);
+          }
+          if (!file.contentType.startsWith("image/")) {
+            throw new ServiceProviderError("image.gemini.describe", 400, `File is not an image: ${params.imageFileId}`);
+          }
+          const sourceClient = file.storageProviderId
+            ? await getClientForFile(file.storageProviderId, ctx.user.id)
+            : getReadClientForPlatformFile(file);
+          const readUrl = await sourceClient.getReadUrl(file.storageKey);
+          const r = await fetch(readUrl);
+          if (!r.ok) {
+            throw new ServiceProviderError("image.gemini.describe", r.status, `download failed: ${params.imageFileId}`);
+          }
+          image = { data: new Uint8Array(await r.arrayBuffer()), mediaType: file.contentType };
+        } else if (params.imageUrl) {
+          const r = await fetch(params.imageUrl);
+          if (!r.ok) {
+            throw new ServiceProviderError("image.gemini.describe", r.status, `download failed: ${params.imageUrl}`);
+          }
+          const ct = r.headers.get("content-type") || "image/png";
+          image = { data: new Uint8Array(await r.arrayBuffer()), mediaType: ct };
+        }
+
+        const result = await consumeService<import("../services/providers/describe").DescribeImageOutput>(
+          "image.gemini.describe",
+          { images: [image!], question: params.question },
+          { userId: ctx.user.id },
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              description: result.data.description,
+              modelId: result.data.modelId,
+            }, null, 2),
+          }],
+        };
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
+        }
+        if (e instanceof ServiceConfigError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
+        }
+        if (e instanceof ServiceProviderError) {
+          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Describe image: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
         }
         throw e;
       }
