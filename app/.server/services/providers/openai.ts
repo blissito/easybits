@@ -124,6 +124,11 @@ export const openaiImageService: ServiceDef<OpenaiImageInput, OpenaiImageOutput>
   displayName: "Image Generate/Edit (OpenAI gpt-image-2)",
   description:
     "Genera o edita imágenes con gpt-image-2. Con imagen(es) de referencia EDITA (fiel a la composición); sin referencia genera desde el prompt.",
+  // Costo upstream real gpt-image-2 (jun 2026, billing por tokens, ref. 1024×1024):
+  //   low ~$0.006 · medium ~$0.053 · high ~$0.211 USD/imagen (~$0.11 · $1.00 · $3.90 MXN @18.5).
+  //   Editar añade input-image tokens (~centavos). Cobramos COST_DOC (1 gen = 100 cr) por
+  //   nivel + 1 al editar → margen ~95% en low (default), ~57% en el peor caso (generar high).
+  //   Si el prompt/imagen de referencia crece, el costo por tokens sube; revisar si cambia el modelo.
   estimateCost(input) {
     const q = input.quality || "low";
     const perImage = q === "high" ? 3 : q === "medium" ? 2 : 1;
