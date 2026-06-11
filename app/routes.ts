@@ -166,6 +166,8 @@ export default [
     route("agents/:id/whatsapp/status", "routes/api/v2/agent-whatsapp-status.ts"),
     route("agents/:id/whatsapp/link", "routes/api/v2/agent-whatsapp-link.ts"),
     route("agents/:id/whatsapp/unlink", "routes/api/v2/agent-whatsapp-unlink.ts"),
+    // WhatsApp Business Cloud API (Meta) — webhook de verificación + eventos
+    route("whatsapp/webhook", "routes/api/v2/whatsapp-webhook.ts"),
     route("agents/:id/skills", "routes/api/v2/agent-skills.ts"),
     route("agents/:id/skills/import", "routes/api/v2/agent-skills-import.ts"),
     route("agents/:id/mcps", "routes/api/v2/agent-mcps.ts"),
