@@ -1088,6 +1088,26 @@ export interface CreatedAgent {
   healthUrl: string;
   template: SandboxTemplate;
   expiresAt: Date | null;
+  /** Comando copy-paste para chatear desde la terminal con ghosty-tui (solo templates de chat web SSE). */
+  tuiCommand?: string;
+}
+
+// Templates que sirven el chat web SSE (POST /message) — los únicos a los que
+// la CLI ghosty-tui (https://github... /Users/bliss/ghosty-tui) puede hablarle.
+// Daemons (ghostyclaw/openclaw, WhatsApp) y workstations computer-* no entran:
+// mostrarles un comando de chat por terminal sería engañoso.
+const SSE_CHAT_TEMPLATES = new Set<string>([
+  "rust-ghosty",
+  "open-ghosty",
+  "lang-ghosty",
+  "cagent-ghosty",
+  "ghosty-lite",
+]);
+
+/** Comando listo para pegar que abre un chat de terminal contra el agente. */
+function tuiCommandFor(template: string, agentId: string, embedToken: string): string | undefined {
+  if (!SSE_CHAT_TEMPLATES.has(template)) return undefined;
+  return `ghosty-tui --agent ${agentId} --token ${embedToken}`;
 }
 
 export async function createAgent(
@@ -1108,6 +1128,12 @@ export async function createAgent(
   // /v1/chat/completions without persisting a second per-agent secret.
   const embedToken = "agt_" + randomBytes(32).toString("hex");
   const env = { ...params.env };
+  // Zona horaria del negocio (CDMX) por default. Sin esto la VM hereda la TZ del
+  // host (UTC en el bare-metal) y el cerebro razona con la hora equivocada. Origen
+  // canónico: cubre todos los callers (MCP agent_create, POST /api/v2/agents, panel).
+  // El caller puede sobreescribir pasando TZ explícito. Requiere tzdata en el rootfs
+  // para runtimes Rust/Go (Node trae ICU); ver templates/*/Dockerfile.
+  if (!env.TZ) env.TZ = "America/Mexico_City";
   if (params.template === "openclaw") {
     env.OPENCLAW_GATEWAY_TOKEN = embedToken;
   }
@@ -1331,6 +1357,7 @@ export async function createAgent(
     agentUrl: provisionalAgentUrl,
     healthUrl: "",
     expiresAt,
+    tuiCommand: tuiCommandFor(params.template, row.id, embedToken),
   };
 }
 
@@ -1628,6 +1655,8 @@ export interface AgentRecord {
   desktopUrl: string | null;
   // URL pública de la terminal ttyd→tmux con basic-auth inline (computer-ghosty); null para el resto.
   terminalUrl: string | null;
+  /** Comando copy-paste para chatear desde la terminal con ghosty-tui (solo templates de chat web SSE). */
+  tuiCommand?: string;
 }
 
 function toAgentRecord(row: {
@@ -1669,6 +1698,7 @@ function toAgentRecord(row: {
     acpTransportSessionId: row.acpTransportSessionId,
     desktopUrl: row.desktopUrl ?? null,
     terminalUrl: row.terminalUrl ?? null,
+    tuiCommand: tuiCommandFor(row.template, row.id, row.embedToken),
   };
 }
 
@@ -1740,7 +1770,27 @@ export async function listAgents(ctx: AuthContext): Promise<AgentRecord[]> {
     where: { ownerId: ctx.user.id },
     orderBy: { createdAt: "desc" },
   });
-  return rows.map(toAgentRecord);
+  // Self-healing del listado (mismo patrón que getAgent): reconciliamos el
+  // status cacheado con el estado REAL del sandbox para los estados que pueden
+  // mentir (running/building/error). Sin esto, una VM destruida por fuera (ej.
+  // sandbox_destroy del MCP) se queda en "running" para siempre y la UI la
+  // muestra VIVA. Probe selectivo + en paralelo para que la latencia no escale
+  // con la flota: los terminales ("lost"/"stopped") no se re-prueban.
+  const RECONCILE = new Set(["running", "building", "error"]);
+  const reconciled = await Promise.all(
+    rows.map(async (row) => {
+      if (!RECONCILE.has(row.status)) return toAgentRecord(row);
+      const real = await probeRealStatus(ctx, row).catch(() => null);
+      if (real && real !== row.status) {
+        await db.agent
+          .update({ where: { id: row.id }, data: { status: real } })
+          .catch(() => undefined);
+        return toAgentRecord({ ...row, status: real });
+      }
+      return toAgentRecord(row);
+    }),
+  );
+  return reconciled;
 }
 
 export async function destroyAgent(ctx: AuthContext, agentId: string): Promise<{ ok: true }> {
