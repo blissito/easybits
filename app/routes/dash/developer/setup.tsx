@@ -55,11 +55,11 @@ export default function SetupPage() {
   );
 }
 
-const mcpEditors = ["Claude Code", "Cursor", "VS Code + Copilot", "Windsurf", "OpenClaw", "NanoClaw", "stdio"] as const;
+const mcpEditors = ["Ghosty Code", "Claude Code", "Cursor", "VS Code + Copilot", "Windsurf", "OpenClaw", "NanoClaw", "stdio"] as const;
 type McpEditor = (typeof mcpEditors)[number];
 
 function McpSection() {
-  const [editor, setEditor] = useState<McpEditor>("Claude Code");
+  const [editor, setEditor] = useState<McpEditor>("Ghosty Code");
 
   return (
     <>
@@ -82,6 +82,22 @@ function McpSection() {
             </button>
           ))}
         </div>
+
+        {editor === "Ghosty Code" && (
+          <>
+            <p className="text-xs text-gray-500 mb-2">
+              Ghosty Code v0.0.4+ ya trae EasyBits <strong>preinstalado</strong> vía HTTP. Solo configura tu API key:
+            </p>
+            <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
+{`export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+ghosty`}
+            </CodeBlock>
+            <p className="text-xs text-gray-400 mt-2">
+              EasyBits aparece como <code className="bg-gray-100 px-1 rounded text-gray-600">easybits</code> en tu lista de MCPs. Nada que instalar.{" "}
+              <Link to="/docs" className="underline">Ver herramientas disponibles</Link>.
+            </p>
+          </>
+        )}
 
         {editor === "Claude Code" && (
           <>

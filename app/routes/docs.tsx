@@ -172,24 +172,30 @@ export default function DocsPage() {
         <main className="flex-1 min-w-0 px-6 md:px-12 py-10 max-w-4xl">
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
-            <h1 className="text-3xl font-bold mb-2">API Documentation</h1>
-            <p className="text-gray-500 mb-4 text-sm">Agentic-first file storage for AI agents and developers</p>
+            <h1 className="text-3xl font-bold mb-2">Documentación de la API</h1>
+            <p className="text-gray-500 mb-4 text-sm">Almacenamiento de archivos agentic-first para desarrolladores y agentes de IA</p>
             <p className="text-gray-600 mb-4">
-              Base URL: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
+              URL base: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
             </p>
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
-              <strong>3 ways to integrate:</strong> REST API (below), <a href="#sdk" className="underline font-medium">typed SDK</a> ({`npm i @easybits.cloud/sdk`}), or{" "}
-              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">MCP server</a> (100+ tools for AI agents (12 core by default)).
+              <strong>3 formas de integrarte:</strong> REST API (abajo),{" "}
+              <a href="#sdk" className="underline font-medium">SDK tipado</a> ({`npm i @easybits.cloud/sdk`}), o{" "}
+              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">servidor MCP</a> (100+ herramientas para agentes, 12 core por defecto).
             </div>
 
-            <h2 className="text-xl font-bold mb-4">Quick Start</h2>
+            <h2 className="text-xl font-bold mb-4">Inicio rápido</h2>
             <ol className="list-decimal list-inside space-y-3 text-gray-700 mb-6">
-              <li>Create an account at <Link to="/login" className="underline font-medium">easybits.cloud</Link></li>
-              <li>Go to <Link to="/dash/developer" className="underline font-medium">Developer Dashboard</Link> and create an API key</li>
-              <li>Make your first request:</li>
+              <li>Crea una cuenta en <Link to="/login" className="underline font-medium">easybits.cloud</Link></li>
+              <li>Ve al <Link to="/dash/developer" className="underline font-medium">Dashboard de Desarrollador</Link> y crea una API key</li>
+              <li>Haz tu primera llamada:</li>
             </ol>
             <TabbedCode
               tabs={[
+                { label: "Ghosty Code", code: `# Ghosty Code v0.0.4+ ya trae EasyBits preinstalado.
+# Solo configura tu API key:
+
+export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+ghosty` },
                 { label: "Claude Code", code: `claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY` },
                 { label: "curl", code: `curl -H "Authorization: Bearer eb_sk_live_YOUR_KEY" \\
   https://www.easybits.cloud/api/v2/files` },
@@ -211,9 +217,9 @@ const { items } = await eb.listFiles();` },
               ]}
             />
             <p className="text-gray-500 text-xs mt-3">
-              <Link to="/dash/developer" className="underline font-medium">Get your API key</Link>.{" "}
-              By default 12 core tools load. Add <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> for more.{" "}
-              <a href="#tool-groups" className="underline">See tool groups</a>.
+              <Link to="/dash/developer" className="underline font-medium">Obtén tu API key</Link>.{" "}
+              Por defecto cargan 12 herramientas core. Agrega <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> para más.{" "}
+              <a href="#tool-groups" className="underline">Ver tool groups</a>.
             </p>
           </section>
 
@@ -236,9 +242,49 @@ import { createClientFromEnv } from "@easybits.cloud/sdk";
 const eb = await createClientFromEnv();` },
               ]}
             />
-            <div className="mt-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
-              <strong>Scopes:</strong> API keys can have READ, WRITE, DELETE, or ADMIN scopes.
-              Operations require the appropriate scope.
+            <div className="mt-6">
+              <h3 className="text-lg font-bold mb-2">What your key grants access to</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                An EasyBits API key authenticates you as the owner of your account. It grants access to{" "}
+                <strong>all your resources</strong>: files, websites, databases, webhooks, documents, presentations, and landings.
+                Keep it secret — anyone with your key can read, modify, or delete your data.
+              </p>
+
+              <h3 className="text-lg font-bold mb-3">Scopes</h3>
+              <p className="text-gray-600 text-sm mb-3">
+                Each key is created with one or more scopes. Use the most restrictive scope your integration needs.
+              </p>
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                  <thead className="bg-black text-white">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-xs uppercase">Scope</th>
+                      <th className="text-left px-4 py-2 text-xs uppercase">Allows</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-4 py-2 font-mono text-xs font-bold">READ</td>
+                      <td className="px-4 py-2 text-xs text-gray-600">List and get files, websites, documents, webhooks, and usage stats</td>
+                    </tr>
+                    <tr className="border-t border-gray-200 bg-gray-50">
+                      <td className="px-4 py-2 font-mono text-xs font-bold">WRITE</td>
+                      <td className="px-4 py-2 text-xs text-gray-600">Create, upload, update, optimize, transform, and share files. Create websites, webhooks, databases, documents, and presentations</td>
+                    </tr>
+                    <tr className="border-t border-gray-200">
+                      <td className="px-4 py-2 font-mono text-xs font-bold">DELETE</td>
+                      <td className="px-4 py-2 text-xs text-gray-600">Soft-delete and permanently remove files, websites, webhooks, and other resources</td>
+                    </tr>
+                    <tr className="border-t border-gray-200 bg-gray-50">
+                      <td className="px-4 py-2 font-mono text-xs font-bold">ADMIN</td>
+                      <td className="px-4 py-2 text-xs text-gray-600">Full access including key management, provider configuration, sandbox/agent operations, and account-wide actions</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-400">
+                Keys created from the Developer Dashboard default to READ + WRITE + DELETE. Use the API to create scoped keys programmatically.
+              </p>
             </div>
             <div className="mt-4 bg-indigo-50 border-2 border-indigo-300 rounded-xl p-4 text-sm">
               <strong>Web clients (Claude.ai / Cowork):</strong> use OAuth 2.1 + Dynamic Client Registration instead of an API key. <a href="#cowork" className="underline font-medium">See the Claude Cowork section →</a>

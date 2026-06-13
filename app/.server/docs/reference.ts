@@ -1,25 +1,26 @@
 // EasyBits API Reference — returned by get_docs MCP tool and GET /api/v2/docs
 
 const SECTIONS: Record<string, string> = {
-  quickstart: `## Quick Start
+  quickstart: `## Inicio rápido
 
-**Base URL:** \`https://www.easybits.cloud/api/v2\`
+**URL base:** \`https://www.easybits.cloud/api/v2\`
 
-**Authentication:** All requests require a Bearer token:
+**Autenticación:** Todas las llamadas requieren un Bearer token:
 \`\`\`
 Authorization: Bearer eb_sk_live_...
 \`\`\`
 
-Get your API key from the [Developer Dashboard](https://www.easybits.cloud/dash/developer).
+Obtén tu API key desde el [Dashboard de Desarrollador](https://www.easybits.cloud/dash/developer). Tu key se ve así: \`eb_sk_live_...\`.
 
-**SDK Install:**
+**Qué acceso otorga tu key:** acceso total a tus archivos, websites, bases de datos, webhooks, documentos, presentaciones y landings. Mantenla en secreto.
+
+**Scopes:** las keys pueden tener READ (listar/obtener), WRITE (crear/subir/actualizar/compartir), DELETE (eliminar), o ADMIN (acceso completo a la cuenta). Las keys creadas desde el dashboard incluyen READ+WRITE+DELETE por defecto.
+
+**MCP — Ghosty Code (preinstalado):**
+Ghosty Code v0.0.4+ ya trae EasyBits preinstalado vía HTTP. Solo configura tu API key:
 \`\`\`bash
-npm install @easybits.cloud/sdk
-\`\`\`
-
-\`\`\`ts
-import { EasybitsClient } from "@easybits.cloud/sdk";
-const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+ghosty
 \`\`\`
 
 **MCP — Claude Code (un comando):**
@@ -40,15 +41,25 @@ claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY
 }
 \`\`\`
 
-By default only 12 core tools load. Enable more with \`--tools\`:
+**SDK:**
+\`\`\`bash
+npm install @easybits.cloud/sdk
+\`\`\`
+
+\`\`\`ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+\`\`\`
+
+Por defecto solo cargan 12 herramientas core. Habilita más con \`--tools\`:
 \`\`\`bash
 # Core + documents + presentations
 claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools docs,slides
 
-# Everything (~104 tools)
+# Todo (~104 herramientas)
 claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools all
 \`\`\`
-Available groups: \`core\` (default), \`files\`, \`docs\`, \`slides\`, \`sites\`, \`brand\`, \`all\`. See [Tool Groups](#tool-groups).
+Grupos disponibles: \`core\` (por defecto), \`files\`, \`docs\`, \`slides\`, \`sites\`, \`brand\`, \`all\`. Ver [Tool Groups](#tool-groups).
 `,
 
   files: `## Files

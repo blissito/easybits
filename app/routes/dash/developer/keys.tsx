@@ -5,6 +5,7 @@ import { createApiKey, revokeApiKey } from "~/.server/iam";
 import { useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
+import type { ApiKeyScope } from "@prisma/client";
 import type { Route } from "./+types/keys";
 
 export const meta = () => [
@@ -25,9 +26,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   if (intent === "create") {
     const name = (formData.get("name") as string) || "Unnamed key";
+    const scopeValues = formData.getAll("scopes") as string[];
+    const scopes = (scopeValues.length > 0 ? scopeValues : ["READ", "WRITE", "DELETE"]) as ApiKeyScope[];
     const key = await createApiKey(user.id, {
       name,
-      scopes: ["READ", "WRITE", "DELETE"],
+      scopes,
     });
     return { created: key };
   }
@@ -74,6 +77,25 @@ export default function KeysPage() {
                   autoFocus
                 />
               </label>
+              <fieldset className="mb-4">
+                <legend className="text-sm font-bold mb-2">Scopes</legend>
+                <div className="space-y-2">
+                  {[
+                    { value: "READ", desc: "List and get your files, websites, documents, and usage stats." },
+                    { value: "WRITE", desc: "Create, upload, update, optimize, transform, and share resources." },
+                    { value: "DELETE", desc: "Soft-delete and permanently remove resources." },
+                  ].map((s) => (
+                    <label key={s.value} className="flex items-start gap-2 cursor-pointer">
+                      <input type="checkbox" name="scopes" value={s.value} defaultChecked className="mt-0.5 accent-black" />
+                      <div>
+                        <span className="text-xs font-mono font-bold">{s.value}</span>
+                        <p className="text-xs text-gray-500">{s.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">All keys get READ + WRITE + DELETE by default. For ADMIN scope, ask the team.</p>
+              </fieldset>
               <div className="flex gap-2 justify-end">
                 <BrutalButton
                   mode="ghost"

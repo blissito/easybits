@@ -6,14 +6,26 @@ import { useState } from "react";
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "Conecta EasyBits a Claude — MCP",
+    title: "Conecta EasyBits a tu agente — MCP",
     description:
-      "Conecta tu agente AI a EasyBits en un solo comando. 100+ herramientas MCP para gestionar archivos desde Claude, Cursor y más.",
+      "Ghosty Code v0.0.4+ ya trae EasyBits preinstalado. Claude, Cursor y cualquier cliente MCP en un comando. 100+ herramientas para gestionar archivos desde tu agente AI.",
   });
 
-const MCP_COMMAND = "claude mcp add easybits -- npx -y @easybits.cloud/mcp";
+const MCP_COMMAND = "export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY && ghosty";
 
 const INSTALL_OPTIONS = [
+  {
+    id: "ghosty-code",
+    label: "Ghosty Code",
+    filename: "Preinstalado — cero configuración",
+    code: `# Ghosty Code v0.0.4+ ya trae EasyBits preinstalado vía HTTP.
+# Solo configura tu API key:
+
+export EASYBITS_API_KEY=eb_sk_live_TU_API_KEY
+ghosty
+
+# EasyBits aparece como "easybits" en tu lista de MCPs.`,
+  },
   {
     id: "claude-desktop",
     label: "Claude Desktop",
@@ -128,10 +140,10 @@ export default function McpPage() {
         <div className="w-full max-w-xl">
           <div className="border-2 border-black rounded-xl bg-white p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <h1 className="text-2xl md:text-3xl font-bold mb-2">
-              Conecta EasyBits a Claude
+              Conecta EasyBits a tu agente
             </h1>
             <p className="text-gray-600 mb-6">
-              Un comando. 100+ herramientas para gestionar archivos desde tu agente AI.
+              Ghosty Code ya lo trae. Claude, Cursor y cualquier cliente MCP en un comando. 100+ herramientas para gestionar archivos desde tu agente AI.
             </p>
 
             {/* Command block */}
