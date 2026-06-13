@@ -15,6 +15,7 @@ export const meta = () => [
 const SECTIONS = [
   { id: "quickstart", label: "Inicio rápido" },
   { id: "auth", label: "Autenticación" },
+  { id: "ghosty-code", label: "Ghosty Code" },
   { id: "cowork", label: "Claude Cowork" },
   { id: "sdk", label: "SDK" },
   { id: "files", label: "Archivos" },
@@ -286,6 +287,57 @@ const eb = await createClientFromEnv();` },
             <div className="mt-4 bg-indigo-50 border-2 border-indigo-300 rounded-xl p-4 text-sm">
               <strong>Web clients (Claude.ai / Cowork):</strong> use OAuth 2.1 + Dynamic Client Registration instead of an API key. <a href="#cowork" className="underline font-medium">See the Claude Cowork section →</a>
             </div>
+          </section>
+
+          {/* Ghosty Code */}
+          <section id="ghosty-code" className="mb-16">
+            <h2 className="text-2xl font-bold mb-2">Ghosty Code</h2>
+            <p className="text-gray-500 mb-4 text-sm">El runtime agéntico con EasyBits preinstalado. Cero configuración.</p>
+
+            <div className="mb-6 bg-black text-white border-2 border-black rounded-xl p-5">
+              <p className="text-sm mb-1 text-gray-300">Ghosty Code v0.0.4+ ya trae EasyBits MCP HTTP preinstalado.</p>
+              <p className="text-sm text-gray-400">Solo necesitas tu API key. Nada que instalar, nada que configurar.</p>
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Conexión en 2 pasos</h3>
+            <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6 text-sm">
+              <li>Configura tu API key: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY</code></li>
+              <li>Ejecuta: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">ghosty</code></li>
+            </ol>
+            <p className="text-xs text-gray-400 mb-6">
+              EasyBits aparece como <code className="bg-gray-100 px-1 rounded">easybits</code> en tu lista de MCPs con 100+ herramientas listas para usar.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3">Qué incluye</h3>
+            <div className="grid md:grid-cols-2 gap-3 mb-6">
+              {[
+                ["⚡", "EasyBits MCP", "100+ herramientas para archivos, documentos, DBs, sandboxes y más"],
+                ["🧠", "DeepSeek V4", "Modelo principal con reasoning de alto nivel"],
+                ["🌐", "Búsqueda web", "BrightData integrado para búsquedas y scraping"],
+                ["📱", "WhatsApp", "Canal de mensajería para agentes always-on"],
+                ["🔌", "MCP dinámico", "Instala y remueve servidores MCP en runtime sin reiniciar"],
+                ["🎨", "Ghosty Studio", "Dashboard para gestionar agentes, skills y configuraciones"],
+              ].map(([icon, title, desc]) => (
+                <div key={title} className="border-2 border-black rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">{icon}</span>
+                    <span className="font-bold text-sm">{title}</span>
+                  </div>
+                  <p className="text-xs text-gray-600">{desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm mb-4">
+              <strong>¿Ya usas Ghosty Code?</strong> Actualiza a v0.0.4+ con{" "}
+              <code className="bg-gray-100 px-1 rounded">ghosty update</code> y EasyBits aparece automáticamente.
+            </div>
+
+            <p className="text-xs text-gray-400">
+              ¿No usas Ghosty Code? EasyBits funciona con{" "}
+              <a href="#cowork" className="underline">Claude Cowork</a>, Cursor, VS Code y cualquier cliente MCP.{" "}
+              <a href="/mcp" className="underline">Ver todas las opciones de conexión</a>.
+            </p>
           </section>
 
           {/* Cowork / OAuth */}
@@ -1239,16 +1291,16 @@ console.log(status.result);  // resultado final del agente`} />
           <section id="tool-groups" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Tool Groups</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              By default the MCP server loads <strong>12 core tools</strong> to minimize token usage.
-              Enable additional groups to unlock more capabilities.
+              Por defecto el servidor MCP carga <strong>12 herramientas core</strong> para minimizar el uso de tokens.
+              Habilita grupos adicionales para desbloquear más capacidades.
             </p>
             <div className="overflow-x-auto mb-6">
               <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
                 <thead className="bg-black text-white">
                   <tr>
-                    <th className="text-left px-4 py-2">Group</th>
-                    <th className="text-left px-4 py-2">Tools</th>
-                    <th className="text-left px-4 py-2">Description</th>
+                    <th className="text-left px-4 py-2">Grupo</th>
+                    <th className="text-left px-4 py-2">Herramientas</th>
+                    <th className="text-left px-4 py-2">Descripción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1270,16 +1322,19 @@ console.log(status.result);  // resultado final del agente`} />
                 </tbody>
               </table>
             </div>
-            <h3 className="text-lg font-bold mb-3">Usage</h3>
+            <h3 className="text-lg font-bold mb-3">Uso</h3>
             <TabbedCode
               tabs={[
-                { label: "Claude Code", code: `# Core + documents + presentations
-claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools docs,slides
+                { label: "Ghosty Code", code: `# Ghosty Code v0.0.4+ — ya viene preinstalado. Solo:
+export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+ghosty` },
+                { label: "Claude Code", code: `# Core + sandboxes + documents
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools sandbox,docs
 
-# Everything
+# Todo
 claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools all` },
-                { label: "Streamable HTTP", code: `// Append ?tools= to the URL
-https://www.easybits.cloud/api/mcp?tools=docs,slides
+                { label: "Streamable HTTP", code: `// Agrega ?tools= a la URL
+https://www.easybits.cloud/api/mcp?tools=sandbox,docs
 https://www.easybits.cloud/api/mcp?tools=all` },
               ]}
             />
