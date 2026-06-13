@@ -13,24 +13,21 @@ export const meta = () => [
 ];
 
 const SECTIONS = [
-  { id: "quickstart", label: "Quick Start" },
-  { id: "auth", label: "Authentication" },
+  { id: "quickstart", label: "Inicio rápido" },
+  { id: "auth", label: "Autenticación" },
   { id: "cowork", label: "Claude Cowork" },
   { id: "sdk", label: "SDK" },
-  { id: "compute", label: "eb.compute" },
-  { id: "files", label: "Files" },
-  { id: "bulk", label: "Bulk Operations" },
-  { id: "images", label: "Images" },
-  { id: "sharing", label: "Sharing" },
+  { id: "files", label: "Archivos" },
+  { id: "bulk", label: "Operaciones en lote" },
+  { id: "images", label: "Imágenes" },
+  { id: "sharing", label: "Compartir" },
   { id: "webhooks", label: "Webhooks" },
-  { id: "websites", label: "Websites" },
-  { id: "presentations", label: "Presentations" },
-  { id: "documents", label: "Documents" },
-  { id: "account", label: "Account & Usage" },
-  { id: "errors", label: "Errors & Rate Limits" },
+  { id: "websites", label: "Sitios web" },
+  { id: "documents", label: "Documentos" },
+  { id: "agents", label: "Agentes & Sandboxes" },
+  { id: "account", label: "Cuenta & Uso" },
+  { id: "errors", label: "Errores & Límites" },
   { id: "tool-groups", label: "Tool Groups" },
-  { id: "mcp-apps", label: "MCP Apps UI" },
-  { id: "agents", label: "Agents & Sandboxes" },
 ] as const;
 
 export default function DocsPage() {
@@ -453,79 +450,7 @@ try {
 }`} />
           </section>
 
-          {/* eb.compute */}
-          <section id="compute" className="mb-16">
-            <h2 className="text-2xl font-bold mb-4">eb.compute — Managed LLM</h2>
-            <p className="text-gray-600 mb-4">
-              Code running inside an EasyBits sandbox can call an LLM{" "}
-              <strong>without bringing its own API key</strong>. EasyBits proxies
-              to the provider, meters the real tokens, and charges your credits in
-              MXN. It speaks the <strong>OpenAI Chat Completions</strong> wire
-              format, so any framework (the official <code className="bg-gray-100 px-1 rounded">openai</code>{" "}
-              SDK, Vercel AI SDK, LangChain) works by just pointing its base URL.
-            </p>
-            <div className="border-2 border-black rounded-xl p-4 mb-6 bg-gray-50">
-              <p className="text-sm mb-1">
-                <strong>Base URL:</strong>{" "}
-                <code className="bg-white px-1 rounded">https://compute.easybits.cloud/v1</code>
-              </p>
-              <p className="text-sm">
-                Inside an agent sandbox this is injected for you as{" "}
-                <code className="bg-white px-1 rounded">OPENAI_BASE_URL</code> +{" "}
-                <code className="bg-white px-1 rounded">OPENAI_API_KEY</code> — zero
-                config. The key is scoped to that sandbox and revoked when it's
-                destroyed.
-              </p>
-            </div>
-
-            <h3 className="text-lg font-bold mb-3">Models</h3>
-            <p className="text-gray-600 mb-3">
-              Pass a friendly name in <code className="bg-gray-100 px-1 rounded">model</code>:
-            </p>
-            <ul className="list-disc pl-6 text-gray-700 mb-6 space-y-1">
-              <li><code className="bg-gray-100 px-1 rounded">gemini-flash</code> — fast & cheap (default)</li>
-              <li><code className="bg-gray-100 px-1 rounded">gemini-pro</code> — higher quality</li>
-              <li><code className="bg-gray-100 px-1 rounded">gpt-4o-mini</code></li>
-              <li><code className="bg-gray-100 px-1 rounded">claude-sonnet</code></li>
-            </ul>
-
-            <h3 className="text-lg font-bold mb-3">Quick start (inside a sandbox)</h3>
-            <CodeExample title="Python" code={`from openai import OpenAI
-
-# OPENAI_API_KEY + OPENAI_BASE_URL are injected into the sandbox
-client = OpenAI()
-
-resp = client.chat.completions.create(
-    model="gemini-flash",
-    messages=[{"role": "user", "content": "Summarize this repo in 2 lines"}],
-)
-print(resp.choices[0].message.content)
-print(resp.usage)  # prompt_tokens, completion_tokens, cost (credits charged)`} />
-
-            <CodeExample title="Streaming" code={`stream = client.chat.completions.create(
-    model="gemini-flash",
-    messages=[{"role": "user", "content": "Write a haiku"}],
-    stream=True,
-    stream_options={"include_usage": True},
-)
-for chunk in stream:
-    if chunk.choices and chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")`} />
-
-            <p className="text-gray-600 mb-2">
-              <strong>Supported:</strong> streaming, tool / function calling, and
-              vision (image input) on all models above.
-            </p>
-            <p className="text-gray-600">
-              <strong>Billing:</strong> per token. Each call records an{" "}
-              <code className="bg-gray-100 px-1 rounded">AiGenerationLog</code> entry
-              and deducts credits; the credits charged are returned in{" "}
-              <code className="bg-gray-100 px-1 rounded">usage.cost</code>. If you're
-              out of credits the request returns <code className="bg-gray-100 px-1 rounded">402</code>.
-            </p>
-          </section>
-
-          {/* Files */}
+          {/* Archivos */}
           <section id="files" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Files</h2>
 
@@ -944,118 +869,7 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             />
           </section>
 
-          {/* Presentations */}
-          <section id="presentations" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Presentations</h2>
-
-            <div className="mb-6 bg-indigo-50 border-2 border-indigo-300 rounded-xl p-4 text-sm space-y-2">
-              <strong>How presentations work:</strong>
-              <ol className="list-decimal list-inside space-y-1 text-gray-700">
-                <li>Create a presentation with a title, theme, and slides</li>
-                <li>Each slide contains HTML content rendered by <a href="https://revealjs.com" target="_blank" rel="noopener noreferrer" className="underline">reveal.js</a></li>
-                <li>Deploy to get a live URL at <code className="bg-gray-100 px-1 rounded">slug.easybits.cloud</code></li>
-                <li>Update slides and redeploy at any time</li>
-              </ol>
-            </div>
-
-            <h3 className="text-lg font-bold mb-4">Slide Object</h3>
-            <CodeExample
-              title="JSON"
-              code={`{
-  "content": "<h2>Welcome</h2><p>Your slide content as HTML</p>",
-  "notes": "Speaker notes for this slide",
-  "is3D": false
-}`}
-            />
-
-            <h3 className="text-lg font-bold mt-8 mb-4">Available Themes</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              <code className="bg-gray-100 px-1 rounded">black</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">white</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">league</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">beige</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">night</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">serif</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">simple</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">solarized</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">moon</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">dracula</code>{" · "}
-              <code className="bg-gray-100 px-1 rounded">sky</code>
-            </p>
-
-            <h3 className="text-lg font-bold mt-8 mb-4">Endpoints</h3>
-
-            <Endpoint
-              method="GET"
-              path="/presentations"
-              description="List your presentations"
-              response={`{ "items": [{ "id": "...", "title": "My Deck", "theme": "black", "status": "DRAFT" }] }`}
-              sdk={`const { items } = await eb.listPresentations();`}
-            />
-            <Endpoint
-              method="GET"
-              path="/presentations/:presentationId"
-              description="Get presentation details including slides"
-              sdk={`const pres = await eb.getPresentation("presentation_id");`}
-            />
-            <Endpoint
-              method="POST"
-              path="/presentations"
-              description="Create a new presentation"
-              body={[
-                { name: "title", type: "string", desc: "Presentation title (required)" },
-                { name: "theme", type: "string", desc: "Reveal.js theme (default: 'black')" },
-                { name: "slides", type: "Slide[]", desc: "Array of slide objects with content HTML" },
-              ]}
-              response={`{ "id": "...", "title": "My Deck", "theme": "black", "slides": [...] }`}
-              sdk={`const pres = await eb.createPresentation({
-  title: "Q1 Review",
-  theme: "moon",
-  slides: [
-    { content: "<h1>Q1 Review</h1><p>Key metrics</p>" },
-    { content: "<h2>Revenue</h2><p>Up 25% YoY</p>" },
-  ],
-});`}
-            />
-            <Endpoint
-              method="PATCH"
-              path="/presentations/:presentationId"
-              description="Update title, theme, or slides"
-              body={[
-                { name: "title", type: "string", desc: "New title" },
-                { name: "theme", type: "string", desc: "New theme" },
-                { name: "slides", type: "Slide[]", desc: "Replace all slides" },
-              ]}
-              sdk={`await eb.updatePresentation("presentation_id", {
-  theme: "dracula",
-  slides: [{ content: "<h1>Updated</h1>" }],
-});`}
-            />
-            <Endpoint
-              method="DELETE"
-              path="/presentations/:presentationId"
-              description="Delete a presentation and its deployed site"
-              response={`{ "success": true }`}
-              sdk={`await eb.deletePresentation("presentation_id");`}
-            />
-            <Endpoint
-              method="POST"
-              path="/presentations/:presentationId/deploy"
-              description="Deploy presentation as a static site at slug.easybits.cloud"
-              response={`{ "url": "https://my-deck.easybits.cloud" }`}
-              sdk={`const { url } = await eb.deployPresentation("presentation_id");
-console.log(url); // https://my-deck.easybits.cloud`}
-            />
-            <Endpoint
-              method="POST"
-              path="/presentations/:presentationId/unpublish"
-              description="Remove the deployed site"
-              response={`{ "success": true }`}
-              sdk={`await eb.unpublishPresentation("presentation_id");`}
-            />
-          </section>
-
-          {/* Documents */}
+          {/* Documentos */}
           <section id="documents" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Documents</h2>
             <p className="text-gray-600 mb-6 text-sm">
@@ -1225,6 +1039,202 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             </div>
           </section>
 
+          {/* Agentes & Sandboxes */}
+          <section id="agents" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Agentes & Sandboxes</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              MicroVMs Firecracker para correr agentes y código aislado. Crea sandboxes, ejecuta comandos, expón puertos, y despliega agentes persistentes — todo desde el SDK, REST API o herramientas MCP.
+            </p>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              <strong>22 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
+              Agrega <code className="bg-gray-100 px-1 rounded">--tools sandbox</code> para habilitarlas.{" "}
+              <a href="#tool-groups" className="underline">Ver tool groups</a>.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Templates</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Cada sandbox se crea desde un template. Estos son los disponibles:
+            </p>
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Template</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Tipo</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Descripción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">code-interpreter</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-green-100 px-2 py-0.5 rounded">sandbox</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Python con kernel Jupyter persistente. Variables, imports y gráficas sobreviven entre celdas</td>
+                  </tr>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">python / node / bun</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-green-100 px-2 py-0.5 rounded">sandbox</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Runtimes base. Cada <code className="bg-gray-100 px-1 rounded">sandbox_run_code</code> ejecuta un proceso fresco</td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">ubuntu</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-green-100 px-2 py-0.5 rounded">sandbox</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Linux completo. Ideal para instalar paquetes, compilar, o correr servidores</td>
+                  </tr>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">rust-ghosty</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Ghosty: cerebro CodeWhale/Rust DeepSeek-first con canales web SSE y WhatsApp</td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">claude-code</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Claude Agent SDK loop. Modelo Sonnet 4.6, billing por token</td>
+                  </tr>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">computer-ghosty</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Computer-use con escritorio Linux XFCE + terminal noVNC público</td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">ghostyclaw / openclaw</td>
+                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
+                    <td className="px-4 py-2 text-xs text-gray-600">Daemons always-on para WhatsApp, Slack, Telegram</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Flujo básico: sandbox efímero</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Crea un sandbox, ejecuta código, expón un puerto, destrúyelo. Ideal para ejecución aislada.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// 1. Crear sandbox Python
+const sb = await eb.createSandbox({ template: "python", timeoutSeconds: 300 });
+console.log(sb.sandboxId);
+
+// 2. Ejecutar código
+const { stdout } = await eb.sandboxExec(sb.sandboxId, {
+  command: "python3 -c 'print(2+2)'",
+});
+console.log(stdout); // "4"
+
+// 3. Destruir (libera recursos)
+await eb.destroySandbox(sb.sandboxId);` },
+                { label: "MCP", code: `# Mismo flujo desde herramientas MCP:
+# sandbox_create(template:"python")
+# sandbox_exec(sandboxId, command:"python3 -c 'print(2+2)'")
+# sandbox_destroy(sandboxId)` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Exponer un puerto (URL pública)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Arranca un servidor dentro del sandbox y obtén una URL HTTPS pública al instante.
+            </p>
+            <CodeExample title="SDK" code={`// 1. Crear sandbox ubuntu
+const sb = await eb.createSandbox({ template: "ubuntu" });
+
+// 2. Arrancar un server Node en background
+await eb.sandboxExecBackground(sb.sandboxId, {
+  command: "npx -y serve /app -l 3000",
+});
+
+// 3. Exponer el puerto → URL pública
+const { url } = await eb.sandboxExposePort(sb.sandboxId, 3000);
+console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Kernel persistente (code-interpreter)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              El template <code className="bg-gray-100 px-1 rounded">code-interpreter</code> mantiene un kernel Jupyter con estado entre celdas. Variables, imports y gráficas (matplotlib) sobreviven.
+            </p>
+            <CodeExample title="SDK" code={`const sb = await eb.createSandbox({ template: "code-interpreter" });
+
+// Celda 1: cargar datos
+await eb.sandboxRunCell(sb.sandboxId, {
+  code: \`import pandas as pd
+df = pd.read_csv("ventas.csv")
+print(df.head())\`,
+});
+
+// Celda 2: usar variable de la celda anterior + gráfica
+await eb.sandboxRunCell(sb.sandboxId, {
+  code: \`df.groupby("mes")["total"].sum().plot(kind="bar")\`,
+});  // ← la gráfica se devuelve como imagen`} />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Agentes persistentes (agent_create)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Crea agentes de larga duración con un endpoint HTTP público. Ideal para chatbots embebidos, asistentes en WhatsApp, o dashboards.
+            </p>
+            <CodeExample title="SDK" code={`// Ghosty (DeepSeek-first, web + WhatsApp) — zero config
+const ghosty = await eb.createAgent({ template: "rust-ghosty" });
+// → { agentId, agentUrl, healthUrl }
+
+// Claude Code managed (Sonnet 4.6, billing por token)
+const coder = await eb.createAgent({ template: "claude-code" });
+
+// Enviar mensaje
+const { content } = await eb.agentMessage(ghosty.agentId, "Hola!");
+console.log(content);`} />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Agent Run (one-shot)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Dispara un agente Claude para una tarea, espera el resultado, y destruye el sandbox. Ideal para CI/CD, procesamiento por lotes, o tareas puntuales.
+            </p>
+            <CodeExample title="SDK" code={`const job = await eb.agentRun({
+  prompt: "Analiza este CSV y genera un reporte en PDF",
+  model: "claude-sonnet-4-6",
+  maxTurns: 10,
+});
+
+// Poll hasta que termine
+let status = await eb.agentRunStatus(job.jobId);
+while (status.status === "running") {
+  await new Promise(r => setTimeout(r, 5000));
+  status = await eb.agentRunStatus(job.jobId);
+}
+console.log(status.result);  // resultado final del agente`} />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Herramientas MCP del grupo sandbox</h3>
+            <div className="grid md:grid-cols-2 gap-3 mb-6">
+              {[
+                ["sandbox_create", "template, timeoutSeconds", "Crear un sandbox nuevo"],
+                ["sandbox_list", "—", "Listar sandboxes activos"],
+                ["sandbox_status", "sandboxId", "Estado del sandbox (running/stopped/error)"],
+                ["sandbox_destroy", "sandboxId", "Destruir y liberar recursos"],
+                ["sandbox_extend", "sandboxId, extendSeconds", "Extender TTL del sandbox"],
+                ["sandbox_suspend", "sandboxId", "Snapshot a disco y liberar CPU"],
+                ["sandbox_resume", "sandboxId", "Restaurar desde snapshot"],
+                ["sandbox_exec", "sandboxId, command", "Ejecutar comando (sync, 60s timeout)"],
+                ["sandbox_exec_background", "sandboxId, command", "Ejecutar comando en background"],
+                ["sandbox_exec_status", "sandboxId, execId", "Consultar estado de ejecución background"],
+                ["sandbox_run_code", "sandboxId, code, lang", "Ejecutar Python/Node/Bash inline"],
+                ["sandbox_run_cell", "sandboxId, code", "Ejecutar celda en kernel Jupyter persistente"],
+                ["sandbox_files_write", "sandboxId, path, content", "Escribir archivo en el sandbox"],
+                ["sandbox_files_read", "sandboxId, path", "Leer archivo del sandbox"],
+                ["sandbox_files_list", "sandboxId, path", "Listar directorio"],
+                ["sandbox_expose_port", "sandboxId, port", "Exponer puerto como URL pública HTTPS"],
+                ["agent_create", "template", "Crear agente persistente (endpoint HTTP)"],
+                ["agent_list", "—", "Listar agentes persistentes"],
+                ["agent_message", "agentId, content", "Enviar mensaje a un agente"],
+                ["agent_run", "prompt, model?", "Agente Claude one-shot (async)"],
+                ["agent_run_status", "jobId", "Consultar estado de agent_run"],
+                ["templates_list", "tier?", "Listar templates disponibles"],
+              ].map(([name, params, desc]) => (
+                <McpTool key={name} name={name} params={params} description={desc} />
+              ))}
+            </div>
+
+            <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
+              <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min, max 60 min).
+            </div>
+          </section>
+
           {/* Tool Groups */}
           <section id="tool-groups" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Tool Groups</h2>
@@ -1243,12 +1253,13 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                 </thead>
                 <tbody>
                   {[
-                    ["core", "12", "Files, DB, documents, quotations, usage stats (default)"],
-                    ["files", "~37", "All file ops: bulk, sharing, permissions, webhooks, image transforms, AI keys"],
-                    ["docs", "~33", "All document tools: AI generation, refine, screenshots, structured docs"],
-                    ["sites", "~8", "Websites: CRUD, file upload, deploy"],
-                    ["brand", "~8", "Brand kits, templates, themes"],
-                    ["all", "~104", "Everything"],
+                    ["core", "12", "Archivos, DB, documentos, cotizaciones, estadísticas (default)"],
+                    ["sandbox", "22", "MicroVMs Firecracker: crear, ejecutar, exponer puertos, agentes persistentes y one-shot"],
+                    ["files", "~37", "Todas las ops de archivos: bulk, sharing, permisos, webhooks, imágenes, AI keys"],
+                    ["docs", "~33", "Documentos: generación AI, refine, screenshots, structured docs"],
+                    ["sites", "~8", "Sitios web: CRUD, upload, deploy"],
+                    ["brand", "~8", "Brand kits, plantillas, temas"],
+                    ["all", "~104", "Todo (incluye slides y agentes)"],
                   ].map(([group, count, desc]) => (
                     <tr key={group} className="border-t border-gray-200">
                       <td className="px-4 py-2 font-mono font-bold">{group}</td>
@@ -1274,66 +1285,6 @@ https://www.easybits.cloud/api/mcp?tools=all` },
             />
           </section>
 
-          {/* MCP Apps UI */}
-          <section id="mcp-apps" className="mb-16">
-            <h2 className="text-2xl font-bold mb-4">MCP Apps UI</h2>
-            <p className="text-gray-600 mb-4 text-sm">
-              EasyBits registers 3 inline UIs using the <code className="bg-gray-100 px-1 rounded">@modelcontextprotocol/ext-apps</code> spec.
-              These are visual interfaces that MCP clients can render alongside tool results.
-            </p>
-
-            <div className="mb-6 bg-purple-50 border-2 border-purple-300 rounded-xl p-4 text-sm">
-              <strong>Status: Experimental.</strong> No MCP client supports rendering Apps UI yet. The UIs are registered and ready — when clients implement the spec, they'll work automatically.{" "}
-              <Link to="/mcp/apps" className="underline font-medium">See live demos</Link>.
-            </div>
-
-            <div className="space-y-4">
-              <AppCard
-                name="File Preview"
-                tool="get_file"
-                uri="easybits://apps/file-preview"
-                description="Renders a rich preview card for any file: images, video, audio, PDF with inline player/viewer, or icon + metadata fallback."
-              />
-              <AppCard
-                name="File Browser"
-                tool="list_files"
-                uri="easybits://apps/file-list"
-                description="Interactive file list with icons, metadata, access badges. Click a file to trigger get_file and see its preview."
-              />
-              <AppCard
-                name="File Upload"
-                tool="upload_file"
-                uri="easybits://apps/file-upload"
-                description="Drag & drop dropzone with real-time progress bar. Handles the full upload flow: get presigned URL, PUT bytes, show success."
-              />
-            </div>
-
-            <h3 className="text-lg font-bold mt-8 mb-4">How It Works</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Each app is an HTML document that uses <code className="bg-gray-100 px-1 rounded">PostMessageTransport</code> to communicate with the MCP client.
-              When a tool is called, the client can render the app's UI inline and pass tool results to it.
-            </p>
-            <CodeExample
-              title="App Registration"
-              code={`// In the MCP server, apps are registered as resources:
-{
-  uri: "easybits://apps/file-preview",
-  name: "EasyBitsFilePreview",
-  mimeType: "text/html",
-  // HTML served inline with PostMessageTransport
-}`}
-            />
-
-            <div className="mt-6 text-sm text-gray-500">
-              <Link to="/mcp/apps" className="font-medium underline hover:no-underline">
-                View interactive demos
-              </Link>
-              {" · "}
-              <Link to="/blog/mcp-apps-ui-easybits-laboratorio" className="font-medium underline hover:no-underline">
-                Read the blog post
-              </Link>
-            </div>
-          </section>
         </main>
       </div>
     </section>
@@ -1490,24 +1441,6 @@ function McpTool({ name, params, description }: { name: string; params: string; 
       </div>
       <p className="text-xs text-gray-500 font-mono mb-2">{params}</p>
       <p className="text-sm text-gray-600">{description}</p>
-    </div>
-  );
-}
-
-function AppCard({ name, tool, uri, description }: { name: string; tool: string; uri: string; description: string }) {
-  return (
-    <div className="border-2 border-black rounded-xl p-4">
-      <div className="flex items-start justify-between mb-2">
-        <h4 className="font-bold">{name}</h4>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-purple-100 text-purple-700 rounded border border-purple-300 shrink-0">
-          Experimental
-        </span>
-      </div>
-      <p className="text-sm text-gray-600 mb-3">{description}</p>
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
-        <span>Tool: <code className="font-mono text-gray-700">{tool}</code></span>
-        <span>URI: <code className="font-mono text-gray-700">{uri}</code></span>
-      </div>
     </div>
   );
 }

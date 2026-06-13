@@ -53,8 +53,8 @@ const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
 
 Por defecto solo cargan 12 herramientas core. Habilita más con \`--tools\`:
 \`\`\`bash
-# Core + documents + presentations
-claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools docs,slides
+# Core + sandboxes + documents
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools sandbox,docs
 
 # Todo (~104 herramientas)
 claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools all
@@ -402,91 +402,68 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`getDocs(section?)\` | Get this documentation |
 `,
 
-  presentations: `## Presentations
+  agents: `## Agentes & Sandboxes
 
-Create and deploy Reveal.js presentations as live websites.
+MicroVMs Firecracker para correr agentes y código aislado. 22 herramientas MCP en el grupo \`sandbox\`.
 
-### List presentations
-\`GET /presentations\`
-Returns: \`{ items: Presentation[] }\`
-SDK: \`eb.listPresentations()\`
+### Templates
+\`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`computer-ghosty\` (computer-use con escritorio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
 
-### Get presentation
-\`GET /presentations/:id\`
-Returns: Presentation with full slide data.
-SDK: \`eb.getPresentation(id)\`
+### Crear sandbox
+\`POST /sandboxes\`
+Body: \`{ template, timeoutSeconds?, name? }\`
+MCP: \`sandbox_create({ template, timeoutSeconds? })\`
 
-### Create presentation
-\`POST /presentations\`
-Body: \`{ name, prompt, slides?, theme? }\`
-Returns: Presentation object.
-SDK: \`eb.createPresentation({ name, prompt, slides?, theme? })\`
+### Ejecutar comando
+\`POST /sandboxes/:id/exec\`
+Body: \`{ command, cwd?, timeoutSeconds?, env? }\`
+MCP: \`sandbox_exec({ sandboxId, command })\`
 
-### Update presentation
-\`PATCH /presentations/:id\`
-Body: \`{ name?, prompt?, slides?, theme? }\`
-SDK: \`eb.updatePresentation(id, { name?, prompt?, slides?, theme? })\`
+### Ejecutar código inline
+\`POST /sandboxes/:id/run-code\`
+Body: \`{ code, lang?, timeoutSeconds? }\`
+MCP: \`sandbox_run_code({ sandboxId, code, lang? })\`
 
-### Delete presentation
-\`DELETE /presentations/:id\`
-SDK: \`eb.deletePresentation(id)\`
+### Kernel persistente (code-interpreter)
+MCP: \`sandbox_run_cell({ sandboxId, code })\` — estado sobrevive entre celdas. Gráficas matplotlib se devuelven como imágenes.
+MCP: \`sandbox_kernel_restart({ sandboxId })\` — reiniciar kernel.
 
-### Deploy presentation
-\`POST /presentations/:id/deploy\`
-Publishes the presentation as a live website. Requires at least one slide.
-Returns: \`{ url, websiteId, slug }\`
-SDK: \`eb.deployPresentation(id)\`
+### Exponer puerto (URL pública)
+\`POST /sandboxes/:id/expose-port\`
+Body: \`{ port }\`
+MCP: \`sandbox_expose_port({ sandboxId, port })\`
+Retorna URL HTTPS pública (viva mientras el sandbox exista).
 
-### Unpublish presentation
-\`POST /presentations/:id/unpublish\`
-Removes the website and reverts to draft status.
-SDK: \`eb.unpublishPresentation(id)\`
+### Archivos
+- \`sandbox_files_write({ sandboxId, path, content })\` — escribir archivo
+- \`sandbox_files_read({ sandboxId, path })\` — leer archivo
+- \`sandbox_files_list({ sandboxId, path })\` — listar directorio
+- \`sandbox_files_delete({ sandboxId, path })\` — eliminar
+- \`sandbox_files_move({ sandboxId, from, to })\` — mover/renombrar
+- \`sandbox_files_mkdir({ sandboxId, path })\` — crear directorio
 
-### Slide object
-\`\`\`json
-{
-  "id": "slide_1",
-  "order": 0,
-  "type": "2d",
-  "html": "<h1>Hello World</h1><p>Welcome to my presentation</p>"
-}
-\`\`\`
+### Ciclo de vida
+- \`sandbox_list()\` — listar sandboxes activos
+- \`sandbox_status({ sandboxId })\` — estado (starting/running/stopped/error/lost/suspended)
+- \`sandbox_extend({ sandboxId, extendSeconds? })\` — extender TTL (máx 60 min)
+- \`sandbox_suspend({ sandboxId })\` — snapshot a disco
+- \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot
+- \`sandbox_destroy({ sandboxId })\` — destruir y liberar
 
-### Themes
-Available Reveal.js themes: \`black\` (default), \`white\`, \`league\`, \`beige\`, \`night\`, \`serif\`, \`simple\`, \`solarized\`, \`moon\`, \`dracula\`, \`sky\`, \`blood\`.
+### Agentes persistentes (agent_create)
+\`POST /agents\`
+Body: \`{ template, name?, timeoutSeconds? }\`
+MCP: \`agent_create({ template })\` — crea agente con endpoint HTTP público
+MCP: \`agent_list()\` — listar agentes
+MCP: \`agent_message({ agentId, content })\` — enviar mensaje
+MCP: \`agent_destroy({ agentId })\` — destruir agente
 
-### Presentation object
-\`\`\`json
-{
-  "id": "pres123",
-  "name": "Q1 Report",
-  "prompt": "Quarterly business review",
-  "slides": [{ "id": "s1", "order": 0, "type": "html", "html": "<h1>Q1</h1>" }],
-  "theme": "black",
-  "status": "DRAFT",
-  "websiteId": null,
-  "createdAt": "2026-02-15T...",
-  "updatedAt": "2026-02-15T..."
-}
-\`\`\`
+### Agent Run (one-shot)
+MCP: \`agent_run({ prompt, model?, maxTurns? })\` — agente Claude asíncrono
+MCP: \`agent_run_status({ jobId })\` — consultar estado
+MCP: \`agent_run_destroy({ jobId })\` — liberar sandbox
 
-### Slide editing (MCP tools)
-- \`get_slide_html({ presentationId, slideId })\` — read a single slide's HTML
-- \`set_slide_html({ presentationId, slideId, html })\` — edit a single slide
-- \`add_slide({ presentationId, html?, afterSlideId? })\` — add a slide
-- \`delete_slide({ presentationId, slideId })\` — remove a slide
-- \`reorder_slides({ presentationId, slideIds[] })\` — reorder slides
-- \`get_presentation_pdf({ presentationId })\` — export as PDF
-
-**IMPORTANT:** Slide HTML must follow layout rules. Call \`get_docs("presentation-design")\` for the full design guide with mandatory constraints, validated patterns, and available CSS layout classes.
-
-### Workflow
-1. \`createPresentation({ name, prompt })\` — create presentation
-2. \`add_slide({ presentationId, html })\` — add slides following presentation-design rules
-3. \`set_slide_html({ presentationId, slideId, html })\` — edit individual slides
-4. \`deployPresentation(id)\` — publish → get live URL at \`www.easybits.cloud/s/{slug}/\`
-5. \`get_presentation_pdf({ presentationId })\` — export as PDF
-6. \`unpublishPresentation(id)\` — take down when done
+Rate limits: 10 spawns/min, 120 ops/min. Sandboxes se auto-destruyen al TTL.
 `,
 
   databases: `## Databases (SQLite-as-a-Service)
@@ -1425,118 +1402,6 @@ If a mutation returns \`{ noop: true, reason: "..." }\`, the page didn't change.
 ### Detecting stale state
 
 If your edits stopped working (\`old_html not found\`), the page changed since you read it. Re-read with \`get_page_html\` and use the fresh HTML as your \`old_html\` source.
-`;
-
-// NOTA: el objeto SECTIONS ya cerró arriba; esta sección se agrega como
-// asignación (statement válido) y queda incluida en SECTION_KEYS.
-SECTIONS.agents = `## Agents & Sandboxes
-
-> Create, manage and execute code on sandboxed AI agent runtimes.
-
-**Base URL:** \`https://www.easybits.cloud/api/v2\`
-
-### Templates
-
-Rust Ghosty is currently the primary agent template. More coming soon.
-
-| Template | Runtime | Default Model | Reasoning |
-|----------|---------|---------------|-----------|
-| \`rust-ghosty\` | CodeWhale (Rust) + Node.js Baileys | DeepSeek V4-Pro | max |
-
-### Create an agent
-
-\`\`\`
-POST /agents
-Authorization: Bearer eb_sk_live_...
-
-{
-  "template": "rust-ghosty",
-  "name": "my-agent",
-  "env": {
-    "DEEPSEEK_RUNTIME_TOKEN": "dsr_...",
-    "ADMIN_TOKEN": "agt_..."
-  }
-}
-\`\`\`
-
-**Response:** \`{ agentId, sandboxId, embedToken, ... }\`
-
-The agent boots in ~10-15s. Poll its health endpoint to know when it's ready.
-
-### Agent health check
-
-\`\`\`
-GET /health
-\`\`\`
-
-Returns \`{ ok: true, model: "deepseek-v4-pro", sessions: 0, ... }\`.
-
-### Execute commands inside the agent
-
-\`\`\`
-POST /sandboxes/{sandboxId}/exec
-Authorization: Bearer eb_sk_live_...
-
-{ "command": "cat /data/.deepseek/config.toml" }
-\`\`\`
-
-**Response:** \`{ exitCode, stdout, stderr, durationMs }\`
-
-### Send messages to the agent
-
-\`\`\`
-POST /message
-Content-Type: application/json
-
-{ "content": "Hello!", "sessionId": "my-session" }
-\`\`\`
-
-The response is an SSE stream (\`text/event-stream\`). Events include \`token\` (streaming), \`done\` (turn complete), and \`error\`.
-
-### MCP tools (agent-side)
-
-Every Rust Ghosty agent exposes MCP tools at \`http://{agent}:3000/mcp\`:
-
-| Tool | Description |
-|------|-------------|
-| \`install_mcp\` | Install a new MCP server at runtime. Agent auto-restarts (~5s). Params: \`name\`, \`url\`, \`token?\` |
-| \`remove_mcp\` | Remove a previously installed MCP server. Params: \`name\` |
-| \`send_message\` | Send a message/file/image via WhatsApp (when linked) |
-| \`describe_image\` | Vision: describe an image by URL |
-| \`upload_received_image\` | Upload a received image to easybits |
-
-### Seed files at spawn
-
-Pass \`seedFiles\` to pre-populate the agent workspace:
-
-\`\`\`
-POST /agents
-{
-  "template": "rust-ghosty",
-  "seedFiles": [
-    { "name": ".deepseek/mcp.json", "contentBase64": "..." }
-  ]
-}
-\`\`\`
-
-The agent's start script respects existing files — if \`mcp.json\` or \`config.toml\` already exist, they won't be overwritten.
-
-### Agent lifecycle
-
-1. **Create** — \`POST /agents\` spawns a sandboxed VM
-2. **Wait** — poll \`GET /health\` (~10-15s boot)
-3. **Use** — chat via \`POST /message\` (SSE), exec via \`POST /sandboxes/{id}/exec\`
-4. **Destroy** — \`DELETE /agents/{agentId}\`
-
-### Configuration
-
-Agents store config at \`/data/.deepseek/config.toml\`. Default Rust Ghosty settings:
-
-\`\`\`toml
-reasoning_effort = "max"
-\`\`\`
-
-Supported values: \`"off"\`, \`"high"\`, \`"max"\`, \`"auto"\` (auto selects tier based on task).
 `;
 
 const SECTION_KEYS = Object.keys(SECTIONS);
