@@ -191,10 +191,14 @@ const url = await getSignedUrl(client, command);
               <h2 className="text-2xl md:text-3xl font-bold mb-4">
                 Tu agente ya sabe usarlo
               </h2>
-              <p className="text-lg text-gray-600 mb-6">
-                EasyBits incluye un servidor MCP con 33+ herramientas. Claude,
-                Cursor, ChatGPT y cualquier cliente MCP manejan tus archivos de
-                forma nativa — sin prompting, sin wrappers.
+              <p className="text-lg text-gray-600 mb-4">
+                <strong>Ghosty Code v0.0.4+ ya trae EasyBits preinstalado.</strong> Cero
+                configuración — solo tu API key.
+              </p>
+              <p className="text-base text-gray-500 mb-6">
+                ¿Claude, Cursor, ChatGPT o cualquier otro cliente MCP? Un comando y
+                listo. 100+ herramientas para que tu agente maneje archivos de forma
+                nativa — sin prompting, sin wrappers.
               </p>
               <div className="space-y-3 text-sm text-gray-700">
                 <div className="flex items-start gap-2">
@@ -246,7 +250,17 @@ curl -X POST https://api.easybits.cloud/v2/share-tokens \\
               />
               <div className="mt-4 border-2 border-black rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
-                  <span className="text-white font-medium text-sm">MCP Setup</span>
+                  <span className="text-white font-medium text-sm">Ghosty Code</span>
+                  <span className="text-gray-400 text-xs uppercase font-mono">bash</span>
+                </div>
+                <CodeBlock bare language="bash">
+                  {`export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+ghosty`}
+                </CodeBlock>
+              </div>
+              <div className="mt-4 border-2 border-black rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
+                  <span className="text-white font-medium text-sm">MCP Setup (otros clientes)</span>
                   <span className="text-gray-400 text-xs uppercase font-mono">bash</span>
                 </div>
                 <CodeBlock bare language="bash">
