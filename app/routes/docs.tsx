@@ -167,6 +167,7 @@ export default function DocsPage() {
         </aside>
 
         {/* Content */}
+        {/* TODO(bliss): terminar traducción — Files, Bulk, Images, Sharing, Webhooks, Websites, Documents, Account y Errors siguen en inglés. Solo sidebar + Quick Start + Auth + Ghosty Code + Tool Groups están en español. */}
         <main className="flex-1 min-w-0 px-6 md:px-12 py-10 max-w-4xl">
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
