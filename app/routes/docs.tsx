@@ -290,6 +290,8 @@ const eb = await createClientFromEnv();` },
           </section>
 
           {/* Ghosty Code */}
+          {/* TODO(bliss): revisar features list — WhatsApp y Ghosty Studio son del agent template rust-ghosty, no de Ghosty Code.
+               Ghosty Code en sí es el runtime DeepSeek-first con EasyBits MCP HTTP preinstalado. */}
           <section id="ghosty-code" className="mb-16">
             <h2 className="text-2xl font-bold mb-2">Ghosty Code</h2>
             <p className="text-gray-500 mb-4 text-sm">El runtime agéntico con EasyBits preinstalado. Cero configuración.</p>
