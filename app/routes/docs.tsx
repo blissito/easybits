@@ -290,8 +290,6 @@ const eb = await createClientFromEnv();` },
           </section>
 
           {/* Ghosty Code */}
-          {/* TODO(bliss): revisar features list — WhatsApp y Ghosty Studio son del agent template rust-ghosty, no de Ghosty Code.
-               Ghosty Code en sí es el runtime DeepSeek-first con EasyBits MCP HTTP preinstalado. */}
           <section id="ghosty-code" className="mb-16">
             <h2 className="text-2xl font-bold mb-2">Ghosty Code</h2>
             <p className="text-gray-500 mb-4 text-sm">El runtime agéntico con EasyBits preinstalado. Cero configuración.</p>
@@ -306,19 +304,36 @@ const eb = await createClientFromEnv();` },
               <li>Configura tu API key: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY</code></li>
               <li>Ejecuta: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">ghosty</code></li>
             </ol>
-            <p className="text-xs text-gray-400 mb-6">
+            <p className="text-xs text-gray-400 mb-4">
               EasyBits aparece como <code className="bg-gray-100 px-1 rounded">easybits</code> en tu lista de MCPs con 100+ herramientas listas para usar.
             </p>
+
+            <h3 className="text-lg font-bold mb-3">¿Versión anterior o instalación manual?</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Si usas Ghosty Code v0.0.3 o necesitas agregar EasyBits manualmente:
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "ghosty mcp", code: `# 1. Agregar el servidor
+ghosty mcp add easybits --url https://www.easybits.cloud/api/mcp?tools=all
+
+# 2. Configurar la key (si no usas EASYBITS_API_KEY)
+export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+
+# 3. Listo
+ghosty` },
+              ]}
+            />
 
             <h3 className="text-lg font-bold mb-3">Qué incluye</h3>
             <div className="grid md:grid-cols-2 gap-3 mb-6">
               {[
                 ["⚡", "EasyBits MCP", "100+ herramientas para archivos, documentos, DBs, sandboxes y más"],
-                ["🧠", "DeepSeek V4", "Modelo principal con reasoning de alto nivel"],
+                ["🧠", "DeepSeek V4", "Modelo principal con razonamiento profundo (thinking tokens)"],
                 ["🌐", "Búsqueda web", "BrightData integrado para búsquedas y scraping"],
-                ["📱", "WhatsApp", "Canal de mensajería para agentes always-on"],
-                ["🔌", "MCP dinámico", "Instala y remueve servidores MCP en runtime sin reiniciar"],
-                ["🎨", "Ghosty Studio", "Dashboard para gestionar agentes, skills y configuraciones"],
+                ["🔌", "MCP dinámico", "Agrega y quita servidores MCP en runtime sin reiniciar"],
+                ["📦", "Sandboxes", "Firecracker microVMs para ejecutar código y agentes aislados"],
+                ["🔄", "Auto-actualización", "ghosty update para mantener todo al día"],
               ].map(([icon, title, desc]) => (
                 <div key={title} className="border-2 border-black rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-1">
