@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState, useEffect } from "react";
@@ -32,21 +32,21 @@ const SECTIONS = [
 ] as const;
 
 export default function DocsPage() {
+  const location = useLocation();
+
   const [activeSection, setActiveSection] = useState(() => {
-    if (typeof window !== "undefined") {
-      const hash = window.location.hash.replace("#", "");
-      if (SECTIONS.some((s) => s.id === hash)) return hash;
-    }
+    const hash = location.hash.replace("#", "");
+    if (hash && SECTIONS.some((s) => s.id === hash)) return hash;
     return "quickstart";
   });
 
   useEffect(() => {
-    const hash = window.location.hash.replace("#", "");
+    const hash = location.hash.replace("#", "");
     if (hash && SECTIONS.some((s) => s.id === hash)) {
       setActiveSection(hash);
       document.getElementById(hash)?.scrollIntoView({ behavior: "smooth" });
     }
-  }, []);
+  }, [location.hash]);
 
   return (
     <section className="min-h-screen bg-white">
