@@ -10,6 +10,7 @@ import { sendWelcomeEmail } from "~/.server/emails/sendWelcome";
 import { decode } from "~/.server/tokens";
 import { generateShareToken } from "~/.server/core/operations";
 import type { AuthContext } from "~/.server/apiAuth";
+import { randomUUID } from "crypto";
 
 // @todo send welcome?
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
@@ -17,17 +18,21 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     params.token ||
     new URL(request.url).searchParams.get("token");
   if (token) {
-    const { email, next, error } = decode(token);
+    const { email, next, ref, error } = decode(token);
     if (error) {
       return { success: false };
     }
     // upsert
+    // publicKey y host son @unique: sin ellos MongoDB los trata como null y
+    // chocan (P2002) con cualquier usuario que ya carezca de esos campos.
+    // Se setean igual que los flujos de Google/Stripe; publicKey además
+    // habilita que el usuario de email genere su propio link de referido.
     const user = await db.user.upsert({
       where: { email: email },
-      create: { email: email },
+      create: { email: email, publicKey: randomUUID(), host: email.split("@")[0] },
       update: {},
     });
-    // welcome
+    // welcome — corre UNA sola vez (acto seguido setea confirmed: true)
     if (!user.confirmed) {
       await db.user.update({
         where: {
@@ -38,6 +43,14 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
           newsletters: { push: { assetId: "easybits" } }, // @todo is ok to suscribe here?
         },
       });
+      // Referido por email: otorga bonos igual que el flujo de Google.
+      // processReferralSignup es idempotente (no-opea si ya existe el Referral).
+      if (ref) {
+        const { processReferralSignup } = await import(
+          "~/.server/core/referralOperations"
+        );
+        await processReferralSignup(user.id, ref);
+      }
       await sendWelcomeEmail(user.email); // welcome after confirm
     }
     // turn on session & redirect to next

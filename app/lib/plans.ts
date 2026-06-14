@@ -10,6 +10,7 @@
 
 import {
   formatCredits,
+  COST_DOC,
   PACK_SIZES,
   PACK_VERTICAL_SIZES,
   PLAN_CREDITS,
@@ -185,11 +186,14 @@ export interface GenerationPack {
   recipe?: PackRecipeLine[];
 }
 
-// Referral system constants
-export const REFERRAL_SIGNUP_BONUS = 3;    // referrer earns on signup
-export const REFERRAL_UPGRADE_BONUS = 10;  // referrer earns if referred upgrades to paid
-export const REFERRAL_WELCOME_BONUS = 2;   // referred earns on signup
-export const MAX_REFERRALS = 50;           // anti-abuse cap
+// Referral system constants — expresados en créditos escalados.
+// Se derivan de COST_DOC (1 documento) para que NUNCA se desfasen si cambia
+// CREDIT_SCALE en credits.ts. La intención original era N generaciones:
+//   signup = 3 docs · upgrade = 10 docs · welcome = 2 docs.
+export const REFERRAL_SIGNUP_BONUS = 3 * COST_DOC;   // referrer earns on signup (3 docs)
+export const REFERRAL_UPGRADE_BONUS = 10 * COST_DOC; // referrer earns if referred upgrades to paid (10 docs)
+export const REFERRAL_WELCOME_BONUS = 2 * COST_DOC;  // referred earns on signup (2 docs)
+export const MAX_REFERRALS = 50;                     // anti-abuse cap
 
 // Pricing rebalance (May 2026): piso de $5 MXN/crédito — protege margen del
 // costo promedio ($1.17 MXN/gen Gemini Pro) considerando que el mismo crédito

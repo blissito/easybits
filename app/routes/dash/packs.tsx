@@ -82,7 +82,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
         <div>
           <h1 className="text-3xl font-bold">Créditos y Tokens</h1>
           <p className="text-iron text-sm">
-            1 crédito = 1 documento profesional · Tokens para GhostyCode y el proxy LLM
+            100 créditos = 1 documento profesional · Tokens para GhostyCode y el proxy LLM
           </p>
         </div>
       </div>

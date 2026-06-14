@@ -104,13 +104,18 @@ export const action = async ({ request }: Route.ClientActionArgs) => {
       return rrRedirect(getStripeURL());
     case "google":
       return rrRedirect(getGoogleURL());
-    case "email_signup":
+    case "email_signup": {
       const email = formData.get("email") as string;
       const displayName = formData.get("displayName") as string;
       const url = new URL(request.url);
       const next = url.searchParams.get("next");
-      await sendMagicLink(email, { displayName, next });
+      // ref viaja en el magic token JWT para que el referido funcione cross-device.
+      const cookie =
+        (await redirectCookieFn().parse(request.headers.get("Cookie"))) || {};
+      const ref = url.searchParams.get("ref") || cookie["ref"];
+      await sendMagicLink(email, { displayName, next, ref });
       return { state: "success" };
+    }
     default:
       return { error: "Error" };
   }
