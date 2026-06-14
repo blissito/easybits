@@ -275,3 +275,48 @@ export const GENERATION_PACKS: GenerationPack[] = [
     ],
   },
 ];
+
+// ─── LLM Token Packs ─────────────────────────────────────────────────────
+// Precios a 10x sobre costo blended DeepSeek V4 Pro (~$5.51 MXN/1M tokens).
+// Curva plana — el margen se mantiene constante porque DeepSeek no da
+// descuento por volumen en su API pública.
+
+export interface LlmTokenPack {
+  id: string;
+  /** Tokens incluidos (ej. 5_000_000 = 5M) */
+  tokens: number;
+  /** Precio único en MXN (sin diferenciación por plan) */
+  price: number;
+  /** Highlight visual */
+  featured?: boolean;
+  /** Short description */
+  description?: string;
+}
+
+export const LLM_TOKEN_PACKS: LlmTokenPack[] = [
+  {
+    id: "llm_5m",
+    tokens: 5_000_000,
+    price: 279,
+    description: "Perfecto para probar el proxy LLM en desarrollo",
+  },
+  {
+    id: "llm_10m",
+    tokens: 10_000_000,
+    price: 549,
+    description: "Ideal para agentes que usan GhostyCode a diario",
+  },
+  {
+    id: "llm_50m",
+    tokens: 50_000_000,
+    price: 2749,
+    featured: true,
+    description: "Para equipos con múltiples agentes en producción",
+  },
+  {
+    id: "llm_100m",
+    tokens: 100_000_000,
+    price: 5499,
+    description: "Volumen pesado — pipelines, CI/CD con LLM, crawling",
+  },
+];

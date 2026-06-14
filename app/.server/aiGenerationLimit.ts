@@ -49,7 +49,7 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
 
   // Unlimited plan
   if (limit === null) {
-    return { allowed: true, used: user.aiGenerationsCount || 0, limit: null, bonus };
+    return { allowed: true, used: user.aiGenerationsCount || 0, limit: null, bonus, resetAt: null };
   }
 
   // Check if we need to reset (30 days since last reset)
@@ -69,12 +69,12 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
   if (count >= limit) {
     // Monthly limit reached — check bonus
     if (bonus > 0) {
-      return { allowed: true, used: count, limit, bonus };
+      return { allowed: true, used: count, limit, bonus, resetAt: user.aiGenerationsResetAt || now };
     }
-    return { allowed: false, used: count, limit, bonus };
+    return { allowed: false, used: count, limit, bonus, resetAt: user.aiGenerationsResetAt || now };
   }
 
-  return { allowed: true, used: count, limit, bonus };
+  return { allowed: true, used: count, limit, bonus, resetAt: user.aiGenerationsResetAt || now };
 }
 
 /**

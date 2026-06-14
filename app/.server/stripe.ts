@@ -61,44 +61,63 @@ export const getStripeCheckout = async (options: {
 };
 
 /**
- * Create a one-time checkout session for a generation pack.
+ * Create a one-time checkout session for a generation or LLM token pack.
  */
 export const createPackCheckout = async ({
   userId,
   email,
   packId,
   generations,
+  tokens,
   priceMxn,
+  type = "generation_pack",
 }: {
   userId: string;
   email: string;
   packId: string;
-  generations: number;
+  generations?: number;
+  tokens?: number;
   priceMxn: number;
+  /** "generation_pack" (default) | "llm_token_pack" */
+  type?: "generation_pack" | "llm_token_pack";
 }) => {
+  const isLlm = type === "llm_token_pack";
+  const tokenCount = tokens ?? 0;
+  const creditCount = generations ?? 0;
+
+  const productName = isLlm
+    ? `Pack de ${tokenCount.toLocaleString("es-MX")} tokens LLM`
+    : `Pack de ${creditCount} créditos AI`;
+
+  const metadata: Record<string, string> = {
+    type,
+    userId,
+    packId,
+  };
+  if (isLlm) {
+    metadata.tokens = String(tokenCount);
+  } else {
+    metadata.generations = String(creditCount);
+  }
+
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     customer_email: email,
-    metadata: {
-      type: "generation_pack",
-      userId,
-      packId,
-      generations: String(generations),
-    },
+    metadata,
     line_items: [
       {
         price_data: {
           currency: "mxn",
           product_data: {
-            name: `Pack de ${generations} generaciones AI`,
+            name: productName,
           },
           unit_amount: priceMxn * 100, // Stripe expects centavos
         },
         quantity: 1,
       },
     ],
-    success_url: `${location}/dash/developer/files?pack=success`,
-    cancel_url: `${location}/dash/developer/files?pack=cancel`,
+    success_url: `${location}/dash/packs?success=1`,
+    cancel_url: `${location}/dash/packs?cancelled=1`,
   });
   return session.url || "/404";
 };

@@ -255,6 +255,52 @@ export async function action({ request }: ActionFunctionArgs) {
           break;
         }
 
+        // Handle LLM token pack purchase
+        if (session.metadata?.type === "llm_token_pack") {
+          const tokens = parseInt(session.metadata.tokens || "0", 10);
+          const packUserId = session.metadata.userId;
+          const packId = session.metadata.packId;
+          if (tokens > 0 && packUserId) {
+            await db.user.update({
+              where: { id: packUserId },
+              data: { llmTokensBonus: { increment: tokens } },
+            });
+            // Sales ledger
+            const price = session.amount_total != null ? session.amount_total / 100 : 0;
+            const currency = session.currency || "mxn";
+            const packEmail =
+              session.customer_details?.email || session.customer_email || "";
+            createOrder({
+              type: "credit_pack",
+              customer_email: packEmail,
+              customerId: packUserId,
+              price,
+              currency,
+              total: `$ ${price.toFixed(2)} ${currency.toUpperCase()}`,
+              status: "Paid",
+              productId: packId,
+              note: `LLM token pack: ${packId}`,
+              items: [
+                {
+                  kind: "llm_token_pack",
+                  refId: packId,
+                  label: `${packId} — ${tokens.toLocaleString("es-MX")} tokens LLM`,
+                  quantity: 1,
+                  unitPrice: price,
+                },
+              ],
+            }).catch((e) =>
+              logger.error("LLM pack order create failed", { packUserId, packId, error: String(e) })
+            );
+            logger.info("LLM token pack credited", {
+              userId: packUserId,
+              tokens,
+              packId,
+            });
+          }
+          break;
+        }
+
         // Handle plan upgrade (subscription mode). The session is the only
         // event with both metadata.plan AND customer_details.email — older
         // code tried to read these from customer.subscription.created (which

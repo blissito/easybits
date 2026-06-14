@@ -1,81 +1,60 @@
 import { useEffect, useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 
-interface LLMBalance {
-  is_available: boolean;
-  balance_infos: Array<{
-    currency: string;
-    total_balance: string;
-    total_balance_human: string;
-    granted_balance: string;
-    granted_balance_human: string;
-    topped_up_balance: string;
-    topped_up_balance_human: string;
-    used: string;
-    used_human: string;
-    remaining: string;
-    remaining_human: string;
-    reset_at: string | null;
-  }>;
+export interface LlmUsageProps {
+  /** Tokens usados en este ciclo */
+  used: number;
+  /** Límite del plan (sin bonus) */
+  planLimit: number;
+  /** Bonus comprado (recargas vía packs) */
+  bonus: number;
+  /** Plan del usuario */
+  plan: string;
+  /** Fecha de reseteo */
+  resetAt: Date | null;
 }
 
-export function LLMUsageCard() {
-  const [balance, setBalance] = useState<LLMBalance | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [recharging, setRecharging] = useState(false);
+export function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
 
-  async function fetchBalance() {
-    const res = await fetch("/api/v2/llm/balance");
-    if (res.ok) setBalance(await res.json());
-    setLoading(false);
-  }
-
-  async function recargar(tokens: number) {
-    setRecharging(true);
-    await fetch("/api/v2/llm/recharge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tokens }),
-    });
-    await fetchBalance();
-    setRecharging(false);
-  }
-
-  useEffect(() => { fetchBalance(); }, []);
-
-  if (loading) return <div className="h-20 bg-gray-100 rounded-xl animate-pulse" />;
-  if (!balance?.balance_infos?.[0]) return null;
-
-  const b = balance.balance_infos[0];
-  const used = Number(b.used);
-  const total = Number(b.total_balance);
+/**
+ * Barra de uso de tokens LLM. Puramente presentacional — recibe datos por props.
+ * Los botones de recarga redirigen al tab de tokens en /dash/packs.
+ */
+export function LlmUsageBar({ used, planLimit, bonus, plan, resetAt }: LlmUsageProps) {
+  const total = planLimit + bonus;
   const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+  const remaining = Math.max(0, total - used);
   const isLow = pct > 80;
 
   return (
-    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-5">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-5 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-lg font-bold">DeepSeek V4 Pro</h3>
+          <h3 className="text-lg font-bold">Tokens LLM</h3>
           <p className="text-xs text-iron mt-0.5">
-            {b.granted_balance_human} plan · {b.topped_up_balance_human} recargados
+            Plan {plan} · {formatTokens(planLimit)}/mes
           </p>
         </div>
-        <span className={`text-xs px-2 py-1 rounded-full border font-bold ${
-          balance.is_available
-            ? "border-green-400 bg-green-50 text-green-700"
-            : "border-red-400 bg-red-50 text-red-700"
-        }`}>
-          {balance.is_available ? "Activo" : "Agotado"}
+        <span
+          className={`text-xs px-2 py-1 rounded-full border font-bold ${
+            remaining > 0
+              ? "border-green-400 bg-green-50 text-green-700"
+              : "border-red-400 bg-red-50 text-red-700"
+          }`}
+        >
+          {remaining > 0 ? "Activo" : "Agotado"}
         </span>
       </div>
 
       {/* Barra de uso */}
       <div className="mb-3">
         <div className="flex justify-between text-xs text-iron mb-1">
-          <span>{b.used_human} usados</span>
-          <span>{b.remaining_human} restantes</span>
+          <span>{formatTokens(used)} usados</span>
+          <span>{formatTokens(remaining)} restantes</span>
         </div>
         <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
           <div
@@ -87,16 +66,16 @@ export function LLMUsageCard() {
         </div>
         <div className="flex justify-between text-[10px] text-iron/60 mt-0.5">
           <span>0</span>
-          <span>{b.total_balance_human}</span>
+          <span>{formatTokens(total)}</span>
         </div>
       </div>
 
       {/* Stats grid */}
       <div className="grid grid-cols-3 gap-2 mb-4">
         {[
-          { label: "Plan", value: b.granted_balance_human },
-          { label: "Recargas", value: b.topped_up_balance_human },
-          { label: "Total", value: b.total_balance_human },
+          { label: "Plan", value: formatTokens(planLimit) },
+          { label: "Recargas", value: formatTokens(bonus) },
+          { label: "Total", value: formatTokens(total) },
         ].map((s) => (
           <div key={s.label} className="text-center border border-gray-200 rounded-lg py-2">
             <div className="text-xs text-iron">{s.label}</div>
@@ -106,31 +85,57 @@ export function LLMUsageCard() {
       </div>
 
       {/* Reset info */}
-      {b.reset_at && (
+      {resetAt && (
         <p className="text-[10px] text-iron/50 mb-3 text-center">
-          Renueva {new Date(b.reset_at).toLocaleDateString("es-MX", {
-            day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+          Renueva{" "}
+          {new Date(resetAt).toLocaleDateString("es-MX", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
           })}
         </p>
       )}
 
-      {/* Recargas rápidas */}
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { label: "5M", tokens: 5_000_000 },
-          { label: "10M", tokens: 10_000_000 },
-          { label: "50M", tokens: 50_000_000 },
-        ].map((p) => (
-          <BrutalButton
-            key={p.tokens}
-            onClick={() => recargar(p.tokens)}
-            disabled={recharging}
-            className="text-xs !py-1 !px-3"
-          >
-            +{p.label}
-          </BrutalButton>
-        ))}
-      </div>
+      {/* Recarga CTA */}
+      <a href="/dash/packs?tab=tokens" className="mt-auto">
+        <BrutalButton className="w-full text-sm" containerClassName="w-full">
+          Comprar tokens
+        </BrutalButton>
+      </a>
     </div>
   );
+}
+
+/**
+ * Wrapper that fetches its own data. Used on standalone pages like
+ * /dash/developer/llm (legacy, now redirects to /dash/packs).
+ */
+export function LLMUsageCard() {
+  const [data, setData] = useState<LlmUsageProps | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/v2/llm/balance")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.balance_infos?.[0]) {
+          const b = json.balance_infos[0];
+          setData({
+            used: Number(b.used),
+            planLimit: Number(b.granted_balance),
+            bonus: Number(b.topped_up_balance),
+            plan: "",
+            resetAt: b.reset_at ? new Date(b.reset_at) : null,
+          });
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="h-40 bg-gray-100 rounded-xl animate-pulse" />;
+  if (!data) return null;
+
+  return <LlmUsageBar {...data} />;
 }

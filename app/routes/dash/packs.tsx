@@ -1,14 +1,25 @@
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useSearchParams } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
+import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 import { getReferralStats } from "~/.server/core/referralOperations";
-import { GENERATION_PACKS, NEXT_PLAN, REFERRAL_SIGNUP_BONUS, REFERRAL_UPGRADE_BONUS, REFERRAL_WELCOME_BONUS, getUserPlan } from "~/lib/plans";
+import {
+  GENERATION_PACKS,
+  LLM_TOKEN_PACKS,
+  NEXT_PLAN,
+  REFERRAL_SIGNUP_BONUS,
+  REFERRAL_UPGRADE_BONUS,
+  REFERRAL_WELCOME_BONUS,
+  getUserPlan,
+  type LlmTokenPack,
+} from "~/lib/plans";
+import { LlmUsageBar, formatTokens } from "~/components/LLMUsageCard";
 import type { Route } from "./+types/packs";
 
 export const meta = () => [
-  { title: "Packs de Créditos — EasyBits" },
+  { title: "Créditos y Tokens — EasyBits" },
   { name: "robots", content: "noindex" },
 ];
 
@@ -16,6 +27,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const plan = getUserPlan(user);
   const genLimit = await checkAiGenerationLimit(user.id, plan);
+  const llmLimit = await checkLLMTokenLimit(user.id, plan);
   const referralStats = await getReferralStats(user.id);
 
   const nextPlan = NEXT_PLAN[plan];
@@ -37,62 +49,219 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
   return {
     packs,
+    llmPacks: LLM_TOKEN_PACKS,
     plan,
-    ...genLimit,
+    genLimit,
+    llmLimit,
     referralStats,
     referralLink: `https://www.easybits.cloud/login?ref=${user.publicKey}`,
   };
 };
 
 export default function PacksPage({ loaderData }: Route.ComponentProps) {
-  const { packs, plan, used, limit, bonus, referralStats, referralLink } =
+  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink } =
     loaderData;
 
-  return (
-    <section className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Créditos AI</h1>
-      <p className="text-iron mb-8">
-        1 crédito = 1 documento profesional. Compra packs extra cuando
-        los necesites — no expiran ni se resetean mensualmente.
-      </p>
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<"credits" | "tokens">(
+    tabParam === "tokens" ? "tokens" : "credits",
+  );
 
-      {/* Current usage */}
-      <div className="border-2 border-black rounded-xl p-4 mb-8 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-sm text-iron">Plan actual</p>
-            <p className="text-xl font-bold">{plan}</p>
-          </div>
-          <div>
-            <p className="text-sm text-iron">Usadas este mes</p>
-            <p className={`text-xl font-bold ${limit !== null && used >= limit ? "text-red-500" : ""}`}>
-              {used} / {limit === null ? "∞" : limit}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-iron">Bonus disponible</p>
-            <p className="text-xl font-bold text-brand-500">{bonus}</p>
-          </div>
+  const switchTab = (t: "credits" | "tokens") => {
+    setTab(t);
+    setSearchParams(t === "tokens" ? { tab: "tokens" } : {}, { replace: true });
+  };
+
+  const showSuccess = searchParams.get("success") === "1";
+
+  return (
+    <section className="p-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div>
+          <h1 className="text-3xl font-bold">Créditos y Tokens</h1>
+          <p className="text-iron text-sm">
+            1 crédito = 1 documento profesional · Tokens para GhostyCode y el proxy LLM
+          </p>
         </div>
       </div>
 
-      {/* Pack cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-        {packs.map((pack) => (
-          <PackCard key={pack.id} pack={pack} />
-        ))}
+      {/* Stripe success toast */}
+      {showSuccess && (
+        <div className="mb-6 border-2 border-green-500 bg-green-50 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="font-bold text-green-800">¡Pago exitoso!</p>
+            <p className="text-sm text-green-700">
+              Tus créditos o tokens ya están disponibles en tu cuenta.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Usage bars: side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+        <CreditUsageBar
+          plan={plan}
+          used={genLimit.used}
+          limit={genLimit.limit}
+          bonus={genLimit.bonus}
+          resetAt={genLimit.resetAt ?? null}
+        />
+        <LlmUsageBar
+          plan={plan}
+          used={llmLimit.used}
+          planLimit={llmLimit.planLimit}
+          bonus={llmLimit.bonus}
+          resetAt={llmLimit.resetAt}
+        />
       </div>
 
+      {/* Tab switcher */}
+      <div className="flex gap-1 mb-6 border-b-2 border-black">
+        <button
+          onClick={() => switchTab("credits")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
+            tab === "credits"
+              ? "bg-black text-white border-black"
+              : "bg-gray-100 text-iron border-gray-300 hover:bg-gray-200"
+          }`}
+        >
+          🪄 Créditos AI
+        </button>
+        <button
+          onClick={() => switchTab("tokens")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
+            tab === "tokens"
+              ? "bg-black text-white border-black"
+              : "bg-gray-100 text-iron border-gray-300 hover:bg-gray-200"
+          }`}
+        >
+          🧠 Tokens LLM
+        </button>
+      </div>
+
+      {/* Pack grid */}
+      {tab === "credits" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+          {packs.map((pack) => (
+            <CreditPackCard key={pack.id} pack={pack} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+          {llmPacks.map((pack) => (
+            <LlmPackCard key={pack.id} pack={pack} />
+          ))}
+        </div>
+      )}
+
       {/* Referral section */}
-      <ReferralSection
-        referralLink={referralLink}
-        stats={referralStats}
-      />
+      <ReferralSection referralLink={referralLink} stats={referralStats} />
     </section>
   );
 }
 
-function PackCard({
+// ─── Credit Usage Bar ──────────────────────────────────────────────────────
+
+function CreditUsageBar({
+  plan,
+  used,
+  limit,
+  bonus,
+  resetAt,
+}: {
+  plan: string;
+  used: number;
+  limit: number | null;
+  bonus: number;
+  resetAt: Date | null;
+}) {
+  const isUnlimited = limit === null;
+  const effectiveLimit = limit ?? used + bonus;
+  const total = effectiveLimit + bonus;
+  const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+  const remaining = Math.max(0, total - used);
+  const isLow = limit !== null && used >= limit;
+
+  return (
+    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-5 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-lg font-bold">Créditos AI</h3>
+          <p className="text-xs text-iron mt-0.5">
+            Plan {plan} · {isUnlimited ? "Ilimitado" : `${limit}/mes`}
+          </p>
+        </div>
+        <span
+          className={`text-xs px-2 py-1 rounded-full border font-bold ${
+            remaining > 0
+              ? "border-green-400 bg-green-50 text-green-700"
+              : "border-red-400 bg-red-50 text-red-700"
+          }`}
+        >
+          {isUnlimited ? "Ilimitado" : remaining > 0 ? "Activo" : "Agotado"}
+        </span>
+      </div>
+
+      <div className="mb-3">
+        <div className="flex justify-between text-xs text-iron mb-1">
+          <span>{used} usados</span>
+          <span>
+            {isUnlimited ? "∞" : remaining} {isUnlimited ? "" : "restantes"}
+          </span>
+        </div>
+        {!isUnlimited && (
+          <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                isLow ? "bg-red-500" : pct > 60 ? "bg-yellow-500" : "bg-green-500"
+              }`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {[
+          { label: "Plan", value: isUnlimited ? "∞" : String(limit) },
+          { label: "Bonus", value: String(bonus) },
+          { label: "Total", value: isUnlimited ? "∞" : String(total) },
+        ].map((s) => (
+          <div key={s.label} className="text-center border border-gray-200 rounded-lg py-2">
+            <div className="text-xs text-iron">{s.label}</div>
+            <div className="text-sm font-bold">{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Reset info */}
+      {resetAt && (
+        <p className="text-[10px] text-iron/50 mb-3 text-center">
+          Renueva{" "}
+          {new Date(resetAt).toLocaleDateString("es-MX", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
+      )}
+
+      <a href="/dash/packs?tab=credits" className="mt-auto">
+        <BrutalButton className="w-full text-sm" containerClassName="w-full">
+          Comprar créditos
+        </BrutalButton>
+      </a>
+    </div>
+  );
+}
+
+// ─── Credit Pack Card ───────────────────────────────────────────────────────
+
+function CreditPackCard({
   pack,
 }: {
   pack: {
@@ -120,23 +289,32 @@ function PackCard({
         method: "POST",
         action: "/api/v2/generation-packs",
         encType: "application/json",
-      }
+      },
     );
   };
 
-  // Redirect to Stripe when URL comes back
   if (fetcher.data?.url) {
     window.location.href = fetcher.data.url;
   }
 
   return (
-    <div className={`border-2 rounded-xl bg-white hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative ${pack.featured ? "border-brand-500 ring-2 ring-brand-500 shadow-[4px_4px_0px_0px_#9870ED] hover:shadow-[6px_6px_0px_0px_#9870ED]" : "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"}`}>
+    <div
+      className={`border-2 rounded-xl bg-white hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative h-full ${
+        pack.featured
+          ? "border-brand-500 ring-2 ring-brand-500 shadow-[4px_4px_0px_0px_#9870ED] hover:shadow-[6px_6px_0px_0px_#9870ED]"
+          : "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+      }`}
+    >
       {pack.promoLabel && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 min-w-max whitespace-nowrap bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">
           {pack.promoLabel}
         </div>
       )}
-      <div className={`p-6 border-b-2 text-center ${pack.featured ? "border-brand-500 bg-brand-50" : "border-black"}`}>
+      <div
+        className={`p-6 border-b-2 text-center ${
+          pack.featured ? "border-brand-500 bg-brand-50" : "border-black"
+        }`}
+      >
         {pack.label && (
           <p className="text-xs uppercase tracking-widest font-black text-black/70 mb-1">
             {pack.emoji && <span className="mr-1" aria-hidden>{pack.emoji}</span>}
@@ -181,6 +359,81 @@ function PackCard({
     </div>
   );
 }
+
+// ─── LLM Token Pack Card ────────────────────────────────────────────────────
+
+function LlmPackCard({ pack }: { pack: LlmTokenPack }) {
+  const fetcher = useFetcher();
+  const isLoading = fetcher.state !== "idle";
+
+  const handleBuy = () => {
+    fetcher.submit(
+      { packId: pack.id, packType: "tokens" },
+      {
+        method: "POST",
+        action: "/api/v2/generation-packs",
+        encType: "application/json",
+      },
+    );
+  };
+
+  if (fetcher.data?.url) {
+    window.location.href = fetcher.data.url;
+  }
+
+  const tokensM = pack.tokens / 1_000_000;
+
+  return (
+    <div
+      className={`border-2 rounded-xl bg-white hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative h-full ${
+        pack.featured
+          ? "border-brand-500 ring-2 ring-brand-500 shadow-[4px_4px_0px_0px_#9870ED] hover:shadow-[6px_6px_0px_0px_#9870ED]"
+          : "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+      }`}
+    >
+      {pack.featured && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 min-w-max whitespace-nowrap bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+          Más popular
+        </div>
+      )}
+      <div
+        className={`p-6 border-b-2 text-center ${
+          pack.featured ? "border-brand-500 bg-brand-50" : "border-black"
+        }`}
+      >
+        <p className="text-xs uppercase tracking-widest font-black text-black/70 mb-1">
+          🧠 Tokens LLM
+        </p>
+        <p className="text-5xl font-bold">{tokensM}M</p>
+        <p className="text-iron mt-1">tokens</p>
+      </div>
+      <div className="p-6 flex flex-col flex-1 justify-between">
+        <div className="text-center mb-6">
+          <p className="text-3xl font-bold">
+            ${pack.price.toLocaleString("es-MX")}{" "}
+            <span className="text-base text-iron font-normal">mxn</span>
+          </p>
+          <p className="text-xs text-iron mt-2">
+            ≈ ${(pack.price / tokensM).toFixed(0)} MXN / 1M tokens
+          </p>
+          {pack.description && (
+            <p className="text-xs text-iron mt-2">{pack.description}</p>
+          )}
+        </div>
+        <BrutalButton
+          onClick={handleBuy}
+          isLoading={isLoading}
+          className={`w-full ${pack.featured ? "bg-brand-500" : "bg-brand-500"}`}
+          containerClassName="w-full"
+        >
+          Comprar
+        </BrutalButton>
+      </div>
+    </div>
+  );
+}
+
+// ─── Referral Section ───────────────────────────────────────────────────────
 
 function ReferralSection({
   referralLink,
