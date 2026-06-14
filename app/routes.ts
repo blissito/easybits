@@ -119,6 +119,7 @@ export default [
         ...prefix("developer", [
           index("routes/dash/developer/keys.tsx"),
           route("files", "routes/dash/developer/files.tsx"),
+          route("llm", "routes/dash/developer/llm.tsx"),
           route("providers", "routes/dash/developer/providers.tsx"),
           route("setup", "routes/dash/developer/setup.tsx"),
           route("mcp", "routes/dash/developer/mcp.tsx"),
@@ -181,6 +182,10 @@ export default [
     route("sandboxes/:id/:action", "routes/api/v2/sandbox-action.ts"),
     // eb.compute — gateway OpenAI-compatible (LLM managed dentro de sandboxes)
     route("compute/v1/chat/completions", "routes/api/v2/compute-chat.ts"),
+    // eb.llm — proxy OpenAI→DeepSeek + balance + recargas
+    route("llm/v1/chat/completions", "routes/api/v2/llm-proxy.ts"),
+    route("llm/balance", "routes/api/v2/llm-balance.ts"),
+    route("llm/recharge", "routes/api/v2/llm-recharge.ts"),
     route("public-stats", "routes/api/v2/public-stats.ts"),
     route("templates", "routes/api/v2/templates.ts"),
     route("files", "routes/api/v2/files.ts"),

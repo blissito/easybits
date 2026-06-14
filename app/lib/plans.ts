@@ -26,6 +26,8 @@ export interface PlanConfig {
   storageGB: number;
   /** AI generations per month (null = unlimited) */
   aiGenerationsPerMonth: number | null;
+  /** LLM proxy tokens free per month (GhostyCode). Byte=5M, Mega=50M, Tera=250M. */
+  llmTokensFreePerMonth: number;
   /** Max concurrent ACTIVE sandboxes (running/starting). Enforced in createSandbox. */
   concurrentSandboxes: number;
   /** Max sandbox session length in seconds (TTL window). Mega 1h, Tera 24h. Enforced in create/extend. */
@@ -42,6 +44,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 0,
     storageGB: 0.1,
     aiGenerationsPerMonth: PLAN_CREDITS.Byte,
+    llmTokensFreePerMonth: 5_000_000, // 5M tokens gratis/mes
     concurrentSandboxes: 2,
     maxSandboxTtlSeconds: 3600,
     stripeIntent: null,
@@ -63,6 +66,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 299,
     storageGB: 10,
     aiGenerationsPerMonth: PLAN_CREDITS.Mega,
+    llmTokensFreePerMonth: 50_000_000, // 50M tokens/mes incluidos
     concurrentSandboxes: 3,
     maxSandboxTtlSeconds: 3600,
     stripeIntent: "flow_plan",
@@ -85,6 +89,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 1499,
     storageGB: 100,
     aiGenerationsPerMonth: PLAN_CREDITS.Tera,
+    llmTokensFreePerMonth: 250_000_000, // 250M tokens/mes incluidos
     concurrentSandboxes: 10,
     maxSandboxTtlSeconds: 86400,
     stripeIntent: "studio_plan",

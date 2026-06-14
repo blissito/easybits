@@ -176,6 +176,35 @@ export const COMPUTE_DEFAULTS: ComputeConfig = {
   },
 };
 
+// ──────────────────────────────────────────────────────────────────
+// LLM PROXY — pricing para el proxy OpenAI→DeepSeek (GhostyCode CLI)
+// Mismo patrón que ComputeConfig: defaults + override vía AppConfig.
+// ──────────────────────────────────────────────────────────────────
+
+export interface LLMProxyConfig {
+  /** Tipo de cambio USD→MXN. */
+  usdToMxn: number;
+  /** Modelo default cuando el request omite `model`. */
+  defaultModel: string;
+  /** RPM por usuario (rate limit). */
+  rpmPerUser: number;
+  /** Tokens free por mes para cuentas Byte (se pisan con PlanConfig). */
+  freeTokensPerMonth: number;
+  /** USD por 1M tokens (margen incluido — 10x DeepSeek por default). */
+  rates: Record<string, { in: number; out: number }>;
+}
+
+export const LLM_PROXY_DEFAULTS: LLMProxyConfig = {
+  usdToMxn: 18,
+  defaultModel: "deepseek-chat",
+  rpmPerUser: 30,
+  freeTokensPerMonth: 5_000_000,
+  rates: {
+    "deepseek-chat": { in: 1.40, out: 2.80 },     // 10x DeepSeek V4 Pro
+    "deepseek-reasoner": { in: 0.55, out: 2.19 },   // R1 — mantiene precio original
+  },
+};
+
 /** Piso MXN por crédito (escala 1). Protege margen — ver plans.ts. */
 const MXN_PER_CREDIT = 5;
 

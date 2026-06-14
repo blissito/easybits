@@ -1184,6 +1184,13 @@ export async function createAgent(
       const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
       if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
     }
+    // Proxy del revendedor — si el usuario tiene DEEPSEEK_API_BASE en sus secrets,
+    // CodeWhale usará esa URL en vez de api.deepseek.com.
+    if (!env.DEEPSEEK_API_BASE) {
+      const dsBase = await getSecretValue(ctx.user.id, "DEEPSEEK_API_BASE")
+        .catch(() => null);
+      if (dsBase) env.DEEPSEEK_API_BASE = dsBase;
+    }
   }
   // rust-ghosty (cerebro CodeWhale) corre opinionated con DeepSeek. Dos secretos los pone
   // el backend para que se lance de un clic:
@@ -1197,6 +1204,13 @@ export async function createAgent(
     if (!env.DEEPSEEK_API_KEY) {
       const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
       if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
+    }
+    // Proxy del revendedor — si el usuario tiene DEEPSEEK_API_BASE en sus secrets,
+    // CodeWhale usará esa URL en vez de api.deepseek.com.
+    if (!env.DEEPSEEK_API_BASE) {
+      const dsBase = await getSecretValue(ctx.user.id, "DEEPSEEK_API_BASE")
+        .catch(() => null);
+      if (dsBase) env.DEEPSEEK_API_BASE = dsBase;
     }
   }
   // NOTA: la GOOGLE key (visión Gemini) NO se inyecta aquí — las credenciales de provider

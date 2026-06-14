@@ -214,6 +214,10 @@ model User {
   aiGenerationsCount   Int?       @default(0)
   aiGenerationsResetAt DateTime?
   aiGenerationsBonus   Int?       @default(0)
+  // LLM proxy token limits (GhostyCode — separados de créditos de documentos)
+  llmTokensUsed        Int        @default(0)
+  llmTokensResetAt     DateTime?
+  llmTokensBonus       Int        @default(0)
   brandKits            BrandKit[]
   formConfigs          FormConfig[]
   mcpTemplates         McpTemplate[]
