@@ -32,43 +32,45 @@ export const SideBar = ({ isAdmin = false }: { isAdmin?: boolean }) => {
 
 const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
   const location = useLocation();
-  const bottomItems = isAdmin
-    ? [ITEMS.adminItem, ...ITEMS.bottomItems]
-    : ITEMS.bottomItems;
+  const middleItems = isAdmin
+    ? [ITEMS.adminItem, ...ITEMS.middleItems]
+    : ITEMS.middleItems;
+
   return (
-    <section className="w-20  h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-50 py-2 flex-col gap-4 overflow-y-auto overflow-x-hidden">
+    <section className="w-20 h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-50 py-2 flex-col gap-0 overflow-y-auto overflow-x-hidden">
       <SideBarItem isLogo />
-      <ul className="flex flex-col gap-3 pt-2 pb-0 items-center">
-        {ITEMS.navItems.map((item, key) => (
-          <SideBarItem
-            isCurrentActive={
-              item.title === "Assets"
-                ? location.pathname.includes(item.path)
-                : item.title === "¡Empieza ya!"
-                ? location.pathname === "/dash" ||
-                  location.pathname === "/dash/" // hack 🤓
-                : undefined
-            }
-            key={key}
-            {...item}
-          />
-        ))}
-        {ITEMS.sectionItems.map((item, key) => (
-          <SideBarItem key={key} {...item} />
-        ))}
-      </ul>
-      {ITEMS.externalItems.length > 0 && (
-        <>
-          <hr className="bg-white opacity-20 h-[1px] w-full" />
-          <ul className="flex flex-col gap-3 py-0 items-center">
-            {ITEMS.externalItems.map((item, key) => (
-              <SideBarItem key={key} {...item} external />
+
+      {/* Secciones con micro-labels */}
+      {ITEMS.sections.map((section) => (
+        <div key={section.label} className="w-full">
+          <div className="w-full flex justify-center pt-4 pb-0.5">
+            <span className="text-[9px] uppercase tracking-[0.18em] text-white/25 font-medium select-none">
+              {section.label}
+            </span>
+          </div>
+          <ul className="flex flex-col gap-3 pt-1 items-center">
+            {section.items.map((item, key) => (
+              <SideBarItem key={key} {...item} />
             ))}
           </ul>
-        </>
-      )}
+        </div>
+      ))}
+
+      {/* Divider + meta items */}
+      <hr className="bg-white/10 h-[1px] w-8 mx-auto mt-3 mb-0" />
+      <ul className="flex flex-col gap-3 pt-2 items-center">
+        {middleItems.map((item, key) => (
+          <SideBarItem
+            key={key}
+            {...item}
+            external={item.path.startsWith("http")}
+          />
+        ))}
+      </ul>
+
+      {/* Bottom */}
       <ul className="flex flex-col items-center pb-0 gap-3 w-full mt-auto">
-        {bottomItems.map((item, key) => (
+        {ITEMS.bottomItems.map((item, key) => (
           <SideBarItem key={key} {...item} />
         ))}
       </ul>
@@ -179,22 +181,23 @@ const FoldMenu = () => {
   }, [isFold]);
 
   const onClick = () => setIsFold(!isFold);
+
+  const allItems = [
+    ...ITEMS.sections.flatMap((s) => s.items),
+    ...ITEMS.middleItems.map((i) => ({ ...i, external: i.path.startsWith("http") })),
+    ...ITEMS.bottomItems,
+  ];
+
   return (
     <div ref={menuRef} className="flex flex-col  justify-end pb-4 items-end h-fit gap-2">
       <AnimatePresence>
         {isFold && (
           <>
-            {ITEMS.navItems
-              .concat(ITEMS.sectionItems)
-              .concat(ITEMS.externalItems.map(i => ({ ...i, external: true })))
-              .concat(ITEMS.bottomItems)
-              .filter(
-                (item) =>
-                  item.index !== 3
-              )
+            {allItems
+              .filter((item) => item.index !== 3)
               .map((item, key) => (
                 <FoldMenuItem key={key} {...item} />
-              ))} {" "}
+              ))}{" "}
           </>
         )}
       </AnimatePresence>

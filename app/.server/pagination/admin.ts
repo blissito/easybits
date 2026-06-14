@@ -27,6 +27,7 @@ export async function getPaginatedUsers({
         createdAt: true,
         updatedAt: true,
         aiGenerationsCount: true,
+        aiGenerationsResetAt: true,
         aiGenerationsBonus: true,
         metadata: true,
       },

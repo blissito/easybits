@@ -1,125 +1,118 @@
-export const ITEMS = {
-  navItems: [
-    {
-      icon: <img className="scale" src="/images/rocket.svg" />,
-      path: "/dash",
-      title: "¡Empieza ya!",
-      end: true,
-      index: 9,
-    },
-    {
-      icon: <img className="scale" src="/images/stats.svg" />,
-      path: "/dash/estadisticas",
-      title: "Estadísticas",
-      index: 8,
-    },
-    {
-      icon: <img className="scale" src="/images/assets.svg" />,
-      path: "/dash/assets",
-      title: "Assets",
-      index: 7,
-    },
-    {
-      icon: <img className="scale" src="/images/website.svg" />,
-      path: "/dash/tienda",
-      title: "Mi tienda",
-      index: 6,
-    },
-    {
-      icon: <img className="scale" src="/images/money.svg" />,
-      path: "/dash/ventas",
-      title: "Ventas",
-      index: 5,
-    },
-    {
-      icon: <img className="scale" src="/images/clients.svg" />,
-      path: "/dash/clientes",
-      title: "Clientes",
-      index: 4,
-    },
-  ],
+import type { ReactNode } from "react";
 
-  sectionItems: [
+export interface SidebarItem {
+  icon: ReactNode;
+  path: string;
+  title: string;
+  end?: boolean;
+  index?: number;
+}
+
+export interface SidebarSection {
+  label: string;
+  items: SidebarItem[];
+}
+
+export const ITEMS = {
+  /** Primer ítem suelto — el "home" del dash */
+  inicioItem: {
+    icon: <img className="scale" src="/images/rocket.svg" />,
+    path: "/dash",
+    title: "Inicio",
+    end: true,
+  } as SidebarItem,
+
+  /** Secciones agrupadas con micro-label */
+  sections: [
     {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" />
-          <path d="M8 21h8" />
-          <path d="M12 17v4" />
-        </svg>
-      ),
-      path: "/dash/presentations",
-      title: "Presentaciones",
-      index: 5,
+      label: "Crear",
+      items: [
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          ),
+          path: "/dash/documents",
+          title: "Documentos",
+        },
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M9 21V9" />
+            </svg>
+          ),
+          path: "/dash/landings4",
+          title: "Landings",
+        },
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8" />
+              <path d="M12 17v4" />
+            </svg>
+          ),
+          path: "/dash/presentations",
+          title: "Presentaciones",
+        },
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" />
+            </svg>
+          ),
+          path: "/dash/videos",
+          title: "Videos",
+        },
+      ],
     },
     {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <path d="M3 9h18" />
-          <path d="M9 21V9" />
-        </svg>
-      ),
-      path: "/dash/landings4",
-      title: "Landings",
-      index: 4,
+      label: "Biblioteca",
+      items: [
+        {
+          icon: <img className="scale" src="/images/storage.svg" />,
+          path: "/dash/archivos",
+          title: "Archivos",
+        },
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+            </svg>
+          ),
+          path: "/dash/characters",
+          title: "Personajes",
+        },
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="13.5" cy="6.5" r="2.5" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="16" r="2" />
+              <path d="M15.5 8.5L17 14" />
+              <path d="M8.5 13.5L12 16" />
+            </svg>
+          ),
+          path: "/dash/brand-kits",
+          title: "Brand Kits",
+        },
+
+      ],
     },
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-          <polyline points="10 9 9 9 8 9" />
-        </svg>
-      ),
-      path: "/dash/documents",
-      title: "Documentos",
-      index: 3.3,
-    },
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polygon points="23 7 16 12 23 17 23 7" />
-          <rect x="1" y="5" width="15" height="14" rx="2" />
-        </svg>
-      ),
-      path: "/dash/videos",
-      title: "Videos",
-      index: 3.25,
-    },
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-        </svg>
-      ),
-      path: "/dash/characters",
-      title: "Personajes",
-      index: 3.22,
-    },
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="13.5" cy="6.5" r="2.5" />
-          <circle cx="6" cy="12" r="3" />
-          <circle cx="18" cy="16" r="2" />
-          <path d="M15.5 8.5L17 14" />
-          <path d="M8.5 13.5L12 16" />
-        </svg>
-      ),
-      path: "/dash/brand-kits",
-      title: "Brand Kits",
-      index: 3.2,
-    },
-    {
-      icon: <img className="scale" src="/images/storage.svg" />,
-      path: "/dash/archivos",
-      title: "Archivos",
-      index: 3,
-    },
+
+  ] as SidebarSection[],
+
+  /** Ítems sueltos entre las secciones y el bottom — cuenta + tools */
+  middleItems: [
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -128,42 +121,12 @@ export const ITEMS = {
       ),
       path: "/dash/packs",
       title: "Créditos AI",
-      index: 2.5,
     },
     {
-      icon: <img className="scale" src="/images/bag.svg" />,
-      path: "/dash/compras",
-      title: "Compras",
-      index: 2,
+      icon: <img className="scale" src="/images/stats.svg" />,
+      path: "/dash/estadisticas",
+      title: "Estadísticas",
     },
-  ],
-
-  adminItem: {
-    icon: (
-      <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
-    ),
-    path: "/dash/admin",
-    title: "Admin",
-    index: 3,
-  },
-
-  externalItems: [
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-        </svg>
-      ),
-      path: "https://mailmask.studio",
-      title: "Email",
-      index: 0,
-    },
-  ],
-
-  bottomItems: [
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -173,19 +136,41 @@ export const ITEMS = {
       ),
       path: "/dash/developer",
       title: "Developer",
-      index: 2,
     },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </svg>
+      ),
+      path: "https://mailmask.studio",
+      title: "Email",
+    },
+  ] as SidebarItem[],
+
+  /** Admin — se inserta al inicio de middleItems cuando el usuario es admin */
+  adminItem: {
+    icon: (
+      <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+    path: "/dash/admin",
+    title: "Admin",
+  } as SidebarItem,
+
+  /** Ítems fijos al fondo */
+  bottomItems: [
     {
       icon: <img className="scale" src="/images/profile.svg" />,
       path: "/dash/perfil",
       title: "Perfil",
-      index: 1,
     },
     {
       icon: <img className="scale" src="/images/out.svg" />,
       path: "/logout",
       title: "Cerrar Sesión",
-      index: 0,
     },
-  ],
+  ] as SidebarItem[],
 };

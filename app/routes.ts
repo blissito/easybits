@@ -50,7 +50,7 @@ export default [
     route("compras/:assetId", "routes/purchase_detail.tsx"),
     route("compras/:assetSlug/review", "routes/assets/ReviewAsset.tsx"),
     layout("components/DashLayout/DashLayout.tsx", [
-      index("routes/start.tsx"),
+      index("routes/dash-redirect.tsx"),
       route("estadisticas", "routes/stats.tsx"),
       ...prefix("assets", [
         index("routes/assets/assets.tsx"),

@@ -222,6 +222,15 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
   const totalAvailable = limit !== null ? limit + bonus : null;
   const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
 
+  // aiGenerationsResetAt es la fecha del último reset. El próximo es +30 días.
+  const nextReset = user.aiGenerationsResetAt
+    ? (() => {
+        const last = new Date(user.aiGenerationsResetAt);
+        const next = new Date(last.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return next;
+      })()
+    : null;
+
   return (
     <article className="border-2 border-black rounded-xl bg-white p-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3">
       {/* Header: avatar + info + switch */}
@@ -323,10 +332,15 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
         <GensControls userId={user.id} />
       </div>
 
-      {/* Footer: date + plan */}
+      {/* Footer: date + reset + plan */}
       <div className="flex items-center justify-between text-[10px] text-gray-400">
         <span title={`Creado: ${new Date(user.createdAt).toLocaleDateString()}`}>
           Último acceso: {new Date(user.updatedAt).toLocaleDateString()}
+        </span>
+        <span title="Próximo reseteo de créditos mensuales (último reset + 30 días)">
+          Reset: {nextReset
+            ? new Date(nextReset).toLocaleDateString("es-MX", { day: "numeric", month: "short" })
+            : "—"}
         </span>
         <span className="uppercase font-bold tracking-wider">{plan}</span>
       </div>
