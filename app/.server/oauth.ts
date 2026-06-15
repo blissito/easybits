@@ -48,6 +48,55 @@ export function issueAccessToken(userId: string, scope = "mcp"): {
   return { token, expiresIn: ACCESS_TOKEN_TTL_SEC };
 }
 
+const REFRESH_TOKEN_TTL_SEC = 60 * 60 * 24 * 90; // 90d
+
+/**
+ * Issue an opaque refresh token. Only its sha256 hash is stored, so the DB
+ * never holds the secret. Returned plaintext goes to the client once.
+ */
+export async function issueRefreshToken(
+  userId: string,
+  clientId: string,
+  scope = "mcp"
+): Promise<string> {
+  const raw = randomToken(32);
+  await db.oAuthRefreshToken.create({
+    data: {
+      tokenHash: sha256(raw),
+      clientId,
+      userId,
+      scope,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SEC * 1000),
+    },
+  });
+  return raw;
+}
+
+/**
+ * Rotate a refresh token: verify it, revoke it, and mint a fresh access +
+ * refresh pair. Returns null if invalid/expired/revoked. One-time-use rotation
+ * limits the blast radius of a leaked refresh token.
+ */
+export async function rotateRefreshToken(
+  raw: string,
+  clientId: string
+): Promise<{ access: string; refresh: string; expiresIn: number; scope: string } | null> {
+  const row = await db.oAuthRefreshToken.findUnique({
+    where: { tokenHash: sha256(raw) },
+  });
+  if (!row || row.revoked || row.clientId !== clientId || row.expiresAt < new Date()) {
+    return null;
+  }
+  await db.oAuthRefreshToken.update({
+    where: { id: row.id },
+    data: { revoked: true },
+  });
+  const scope = row.scope || "mcp";
+  const { token, expiresIn } = issueAccessToken(row.userId, scope);
+  const refresh = await issueRefreshToken(row.userId, clientId, scope);
+  return { access: token, refresh, expiresIn, scope };
+}
+
 /**
  * Attempt to verify a Bearer token as an OAuth-issued JWT.
  * Returns the associated User or null if the token is not a valid JWT.

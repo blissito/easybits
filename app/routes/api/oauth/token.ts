@@ -1,6 +1,8 @@
 import { db } from "~/.server/db";
 import {
   issueAccessToken,
+  issueRefreshToken,
+  rotateRefreshToken,
   sha256,
   verifyPkceS256,
 } from "~/.server/oauth";
@@ -19,6 +21,26 @@ export async function action({ request }: { request: Request }) {
   const clientId = String(form.get("client_id") || "");
   const codeVerifier = String(form.get("code_verifier") || "");
   const clientSecret = form.get("client_secret");
+
+  // Refresh grant: cambia un refresh token (rotándolo) por un nuevo par
+  // access+refresh. Permite reconectar sin reabrir el navegador.
+  if (grantType === "refresh_token") {
+    const refreshToken = String(form.get("refresh_token") || "");
+    if (!refreshToken || !clientId) {
+      return Response.json({ error: "invalid_request" }, { status: 400 });
+    }
+    const rotated = await rotateRefreshToken(refreshToken, clientId);
+    if (!rotated) {
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    }
+    return Response.json({
+      access_token: rotated.access,
+      token_type: "Bearer",
+      expires_in: rotated.expiresIn,
+      refresh_token: rotated.refresh,
+      scope: rotated.scope,
+    });
+  }
 
   if (grantType !== "authorization_code") {
     return Response.json({ error: "unsupported_grant_type" }, { status: 400 });
@@ -56,12 +78,15 @@ export async function action({ request }: { request: Request }) {
     data: { used: true },
   });
 
-  const { token, expiresIn } = issueAccessToken(authCode.userId, authCode.scope || "mcp");
+  const scope = authCode.scope || "mcp";
+  const { token, expiresIn } = issueAccessToken(authCode.userId, scope);
+  const refreshToken = await issueRefreshToken(authCode.userId, clientId, scope);
 
   return Response.json({
     access_token: token,
     token_type: "Bearer",
     expires_in: expiresIn,
-    scope: authCode.scope || "mcp",
+    refresh_token: refreshToken,
+    scope,
   });
 }

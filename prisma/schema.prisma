@@ -287,6 +287,17 @@ model OAuthAuthCode {
   createdAt           DateTime @default(now())
 }
 
+model OAuthRefreshToken {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tokenHash   String   @unique
+  clientId    String
+  userId      String   @db.ObjectId
+  scope       String?
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
 enum FileStatus {
   PENDING
   WORKING
