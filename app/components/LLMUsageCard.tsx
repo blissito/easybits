@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { BrutalButton } from "~/components/common/BrutalButton";
 
 export interface LlmUsageProps {
   /** Tokens usados en este ciclo */
@@ -31,16 +30,16 @@ export function LlmUsageBar({ used, planLimit, bonus, plan, resetAt }: LlmUsageP
   const isLow = pct > 80;
 
   return (
-    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-5 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
+    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-4">
+      <div className="flex items-center justify-between mb-2">
         <div>
-          <h3 className="text-lg font-bold">Tokens LLM</h3>
-          <p className="text-xs text-iron mt-0.5">
+          <h3 className="text-base font-bold">Tokens LLM</h3>
+          <p className="text-xs text-iron">
             Plan {plan} · {formatTokens(planLimit)}/mes
           </p>
         </div>
         <span
-          className={`text-xs px-2 py-1 rounded-full border font-bold ${
+          className={`text-xs px-2 py-0.5 rounded-full border font-bold ${
             remaining > 0
               ? "border-green-400 bg-green-50 text-green-700"
               : "border-red-400 bg-red-50 text-red-700"
@@ -50,59 +49,35 @@ export function LlmUsageBar({ used, planLimit, bonus, plan, resetAt }: LlmUsageP
         </span>
       </div>
 
-      {/* Barra de uso */}
-      <div className="mb-3">
-        <div className="flex justify-between text-xs text-iron mb-1">
-          <span>{formatTokens(used)} usados</span>
-          <span>{formatTokens(remaining)} restantes</span>
-        </div>
-        <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              isLow ? "bg-red-500" : pct > 60 ? "bg-yellow-500" : "bg-green-500"
-            }`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-[10px] text-iron/60 mt-0.5">
-          <span>0</span>
-          <span>{formatTokens(total)}</span>
-        </div>
+      <div className="flex justify-between text-xs text-iron mb-1">
+        <span>{formatTokens(used)} usados</span>
+        <span>{formatTokens(remaining)} restantes</span>
+      </div>
+      <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            isLow ? "bg-red-500" : pct > 60 ? "bg-yellow-500" : "bg-green-500"
+          }`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {[
-          { label: "Plan", value: formatTokens(planLimit) },
-          { label: "Recargas", value: formatTokens(bonus) },
-          { label: "Total", value: formatTokens(total) },
-        ].map((s) => (
-          <div key={s.label} className="text-center border border-gray-200 rounded-lg py-2">
-            <div className="text-xs text-iron">{s.label}</div>
-            <div className="text-sm font-bold">{s.value}</div>
-          </div>
-        ))}
+      <div className="flex items-center justify-between mt-2 text-xs flex-wrap gap-x-2">
+        <span className="text-iron">
+          Plan <b className="text-black">{formatTokens(planLimit)}</b> · Recargas{" "}
+          <b className="text-black">{formatTokens(bonus)}</b> · Total{" "}
+          <b className="text-black">{formatTokens(total)}</b>
+        </span>
+        {resetAt && (
+          <span className="text-[10px] text-iron/50">
+            Renueva{" "}
+            {new Date(resetAt).toLocaleDateString("es-MX", {
+              day: "numeric",
+              month: "short",
+            })}
+          </span>
+        )}
       </div>
-
-      {/* Reset info */}
-      {resetAt && (
-        <p className="text-[10px] text-iron/50 mb-3 text-center">
-          Renueva{" "}
-          {new Date(resetAt).toLocaleDateString("es-MX", {
-            day: "numeric",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </p>
-      )}
-
-      {/* Recarga CTA */}
-      <a href="/dash/packs?tab=tokens" className="mt-auto">
-        <BrutalButton className="w-full text-sm" containerClassName="w-full">
-          Comprar tokens
-        </BrutalButton>
-      </a>
     </div>
   );
 }
