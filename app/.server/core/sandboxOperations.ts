@@ -437,6 +437,7 @@ export async function createSandbox(
     timeoutSeconds?: number;
     name?: string;
     metadata?: Record<string, string>;
+    persistent?: boolean;
   }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
@@ -444,7 +445,10 @@ export async function createSandbox(
   // Templates persistentes (agentes de marca) opt-in al flag persistent → el host
   // les salta el reaper. Son deliberados/pagados, NO sandboxes efímeras: por eso
   // NO cuentan contra el cap anti-runaway ni contra el TTL por plan.
+  // `params.persistent` permite a un caller (p.ej. Ghosty Launch) pedir una VM
+  // always-on para hostear una app web sobre un template genérico (node/bun/etc).
   const persistent =
+    params.persistent === true ||
     params.template === "ghostyclaw" ||
     params.template === "ghosty-lite" ||
     params.template === "open-ghosty" ||

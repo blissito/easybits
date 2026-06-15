@@ -19,6 +19,9 @@ export const SandboxCreateBody = z.object({
   timeoutSeconds: z.number().int().min(30).max(3600).optional(),
   name: z.string().max(64).optional(),
   metadata: z.record(z.string()).optional(),
+  // Opt-in a VM always-on (el host salta el reaper). Combina con la lista de
+  // templates de agente persistentes en createSandbox.
+  persistent: z.boolean().optional(),
 });
 
 export const SandboxExecBody = z.object({
