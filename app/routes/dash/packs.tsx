@@ -77,7 +77,8 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
   const showSuccess = searchParams.get("success") === "1";
 
   return (
-    <section className="p-6 max-w-6xl mx-auto">
+    <section className="w-full md:pl-20 pt-14 md:pt-0">
+      <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div>
@@ -163,6 +164,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
 
       {/* Referral section */}
       <ReferralSection referralLink={referralLink} stats={referralStats} />
+      </div>
     </section>
   );
 }
