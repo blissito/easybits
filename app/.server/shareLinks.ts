@@ -7,6 +7,8 @@ const SHARE_COOKIE = "eb_share";
 
 const DEFAULT_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
 const MAX_EXPIRY_SECONDS = 30 * 24 * 60 * 60;
+// Embed links live in third-party sites and shouldn't rotate monthly.
+const EMBED_MAX_EXPIRY_SECONDS = 365 * 24 * 60 * 60;
 
 export type ShareResourceType = "document" | "landing";
 export type SharePermission = "view" | "edit" | "download";
@@ -58,10 +60,13 @@ export async function createShareLink(input: {
   ownerId: string;
   expiresIn?: number;
   source?: ShareSource;
+  allowedOrigins?: string[];
 }) {
+  const allowedOrigins = (input.allowedOrigins ?? []).filter(Boolean);
+  const isEmbed = allowedOrigins.length > 0;
   const expiresIn = Math.min(
     Math.max(input.expiresIn ?? DEFAULT_EXPIRY_SECONDS, 60),
-    MAX_EXPIRY_SECONDS
+    isEmbed ? EMBED_MAX_EXPIRY_SECONDS : MAX_EXPIRY_SECONDS
   );
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
@@ -74,6 +79,7 @@ export async function createShareLink(input: {
       permission: input.permission,
       ownerId: input.ownerId,
       source: input.source ?? "mcp",
+      allowedOrigins,
       expiresAt,
     },
   });

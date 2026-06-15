@@ -18,6 +18,13 @@ export const meta = () => [
   { name: "robots", content: "noindex" },
 ];
 
+// RRv7 doesn't propagate loader Response headers to the document render (only
+// Set-Cookie is merged). Forward the embed CSP (frame-ancestors) set in the loader.
+export function headers({ loaderHeaders }: Route.HeadersArgs) {
+  const csp = loaderHeaders.get("Content-Security-Policy");
+  return csp ? { "Content-Security-Policy": csp } : {};
+}
+
 const REASON_MESSAGES: Record<string, string> = {
   invalid: "Este link no es válido.",
   expired: "Este link ha expirado.",
@@ -40,9 +47,11 @@ function errorPage(reason: string) {
   );
 }
 
-export const loader = async ({ params }: Route.LoaderArgs) => {
+export const loader = async ({ params, request }: Route.LoaderArgs) => {
   const token = params.token;
   if (!token) throw errorPage("invalid");
+
+  const embed = new URL(request.url).searchParams.get("embed") === "1";
 
   const result = await verifyShareToken(token);
   if (!result.ok) throw errorPage(result.reason);
@@ -76,6 +85,16 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
   const headers = new Headers();
   headers.append("Set-Cookie", buildShareCookie(token, link.expiresAt));
 
+  // Embed mode: restrict which third-party origins may iframe this editor.
+  // The persistence fetch runs same-origin inside the iframe, so frame-ancestors
+  // (not CORS) is the control surface here. No allowedOrigins → not embeddable.
+  if (embed && link.allowedOrigins.length > 0) {
+    headers.set(
+      "Content-Security-Policy",
+      `frame-ancestors ${link.allowedOrigins.join(" ")}`
+    );
+  }
+
   return new Response(
     JSON.stringify({
       landingId: landing.id,
@@ -87,6 +106,7 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
       ownerEmail: owner.email,
       token,
       expiresAt: link.expiresAt.toISOString(),
+      embed,
     }),
     { headers: { ...Object.fromEntries(headers), "Content-Type": "application/json" } }
   );
@@ -103,6 +123,7 @@ export default function ShareDocumentRoute({ loaderData }: Route.ComponentProps)
     ownerEmail: string;
     token: string;
     expiresAt: string;
+    embed: boolean;
   };
   return <DocumentShareEditor {...data} />;
 }

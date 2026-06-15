@@ -564,6 +564,7 @@ model ShareLink {
   ownerId      String    @db.ObjectId
   owner        User      @relation(fields: [ownerId], references: [id])
   source       String    // "mcp" | "ui" | "sdk"
+  allowedOrigins String[] @default([]) // embed: origins allowed to iframe this link (CSP frame-ancestors). Empty = not embeddable.
   expiresAt    DateTime
   revokedAt    DateTime?
   lastUsedAt   DateTime?

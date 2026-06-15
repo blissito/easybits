@@ -545,12 +545,13 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "create_share_link",
-    "Create a magic share link to a document or landing with granular permissions. The recipient opens the URL and accesses the resource without logging in (guest session). Returns `{ url, token, expiresAt, permission, shareLinkId }`.\n\n- permission='view': read-only PDF snapshot (renders inline, no editor).\n- permission='edit': full editor; the visitor's changes save as the owner. Heads up: AI generations consume the owner's credits.\n- permission='download': PDF download (attachment).\n\nDefault expiry is 7 days. Min 60s, max 30 days (clamped). Token is JWT-signed and DB-backed (revocable via revoke_share_link).",
+    "Create a magic share link to a document or landing with granular permissions. The recipient opens the URL and accesses the resource without logging in (guest session). Returns `{ url, token, expiresAt, permission, shareLinkId }`.\n\n- permission='view': read-only PDF snapshot (renders inline, no editor).\n- permission='edit': full editor; the visitor's changes save as the owner. Heads up: AI generations consume the owner's credits.\n- permission='download': PDF download (attachment).\n\nDefault expiry is 7 days. Min 60s, max 30 days (clamped). Token is JWT-signed and DB-backed (revocable via revoke_share_link).\n\n**Embed**: pass `allowedOrigins` (e.g. [\"https://acme.com\"]) with permission='edit' to make an embeddable editor. Those origins may iframe it (enforced via CSP frame-ancestors); expiry cap rises to 1 year. The response then includes `embedUrl` and `embedSnippet` (an <iframe> tag) to drop into the third-party site.",
     {
       resourceType: z.enum(["document", "landing"]).describe("Type of resource being shared"),
       resourceId: z.string().describe("ID of the document or landing"),
       permission: z.enum(["view", "edit", "download"]).describe("Permission level granted to anyone with the link"),
-      expiresIn: z.number().int().optional().describe("Lifetime in seconds (default 604800 = 7 days, min 60, max 2592000 = 30 days)"),
+      expiresIn: z.number().int().optional().describe("Lifetime in seconds (default 604800 = 7 days, min 60, max 2592000 = 30 days; up to 1 year when allowedOrigins is set)"),
+      allowedOrigins: z.array(z.string()).optional().describe("Origins allowed to embed this editor in an iframe, e.g. [\"https://acme.com\"]. Requires permission='edit'. Makes the link embeddable and returns embedUrl + embedSnippet."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -562,7 +563,17 @@ How to embed safely (the only reliable rule):
         ownerId: ctx.user.id,
         expiresIn: params.expiresIn,
         source: "mcp",
+        allowedOrigins: params.allowedOrigins,
       });
+      // The embeddable iframe editor lives at /share/document/:token and only
+      // serves documents with edit permission.
+      const isEmbed =
+        (params.allowedOrigins?.length ?? 0) > 0 &&
+        params.resourceType === "document" &&
+        params.permission === "edit";
+      const embedUrl = isEmbed
+        ? `${result.url.split("/share/")[0]}/share/document/${result.token}?embed=1`
+        : undefined;
       return {
         content: [
           {
@@ -574,6 +585,12 @@ How to embed safely (the only reliable rule):
                 expiresAt: result.expiresAt,
                 permission: params.permission,
                 shareLinkId: result.shareLink.id,
+                ...(embedUrl
+                  ? {
+                      embedUrl,
+                      embedSnippet: `<iframe src="${embedUrl}" style="width:100%;height:100%;border:0" title="Editor"></iframe>`,
+                    }
+                  : {}),
               },
               null,
               2

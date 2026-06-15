@@ -27,6 +27,8 @@ interface Props {
   ownerEmail: string;
   token: string;
   expiresAt: string;
+  // Embed mode (third-party iframe): hide the EasyBits chrome (white-label).
+  embed?: boolean;
 }
 
 type SaveState = "idle" | "saving" | "error";
@@ -40,6 +42,7 @@ export default function DocumentShareEditor({
   format,
   ownerEmail,
   token,
+  embed = false,
 }: Props) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [pdfState, setPdfState] = useState<"idle" | "loading" | "error">("idle");
@@ -115,6 +118,7 @@ export default function DocumentShareEditor({
 
   return (
     <article className="flex flex-col h-screen w-full bg-gray-100">
+      {!embed && (
       <header className="flex items-center justify-between gap-3 px-4 py-2 bg-brand-50 border-b-2 border-black text-xs sm:text-sm shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-black uppercase tracking-wide">EasyBits</span>
@@ -148,6 +152,7 @@ export default function DocumentShareEditor({
           </span>
         </div>
       </header>
+      )}
 
       <div className="flex-1 relative overflow-hidden">
         <DocumentCanvas {...ed.canvasProps} />
