@@ -22,7 +22,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const plan = normalizePlan((user.metadata as any)?.plan);
 
   const body = await request.json();
-  const { packId, packType = "credits" } = body;
+  const { packId, packType = "credits", autoTopup = false } = body;
 
   // Look up in the right pack array
   if (packType === "tokens") {
@@ -38,6 +38,7 @@ export async function action({ request }: ActionFunctionArgs) {
       tokens: pack.tokens,
       priceMxn: pack.price,
       type: "llm_token_pack",
+      autoTopup: !!autoTopup,
     });
 
     return data({ url });
@@ -55,6 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
     packId: pack.id,
     generations: pack.generations,
     priceMxn: pack.promoPrice ?? pack.prices[plan],
+    autoTopup: !!autoTopup,
   });
 
   return data({ url });

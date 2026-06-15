@@ -7,7 +7,58 @@ import type { StripeSession } from "~/.server/types/stripe";
 import type { ActionFunctionArgs } from "~/.server/types/react-router";
 import Stripe from "stripe";
 import { isPaidPlan, normalizePlan, GENERATION_PACKS } from "~/lib/plans";
-import { createOrder } from "~/.server/getters";
+import { creditPack } from "~/.server/core/creditPack";
+
+/**
+ * Persist auto-topup config after a pack checkout where the user opted in.
+ * Reads the saved payment method from the session's PaymentIntent and stores
+ * customer + PM + config so future off-session charges can run.
+ */
+async function saveAutoTopupFromSession(session, userId, packId) {
+  try {
+    const customer =
+      typeof session.customer === "string" ? session.customer : null;
+    let paymentMethod: string | null = null;
+    const piId =
+      typeof session.payment_intent === "string" ? session.payment_intent : null;
+    if (piId) {
+      const pi = await getStripe().paymentIntents.retrieve(piId);
+      paymentMethod =
+        typeof pi.payment_method === "string" ? pi.payment_method : null;
+    }
+    // Preservar chargeEpoch al reactivar: NO resetear a 0. Si un intento previo
+    // falló con epoch=N, reusar epoch=N produciría una idempotency key colisionada
+    // (Stripe devolvería el decline cacheado). El epoch es monotónico por usuario.
+    const existing = await db.user.findUnique({
+      where: { id: userId },
+      select: { autoTopup: true },
+    });
+    const chargeEpoch = existing?.autoTopup?.chargeEpoch ?? 0;
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        ...(customer && { customer }),
+        autoTopup: {
+          enabled: true,
+          packId,
+          paymentMethod,
+          charging: false,
+          chargeEpoch,
+          lastTopupAt: null,
+          failedAt: null,
+          lastError: null,
+        },
+      },
+    });
+    logger.info("Auto-topup enabled", { userId, packId, hasPM: !!paymentMethod });
+  } catch (e) {
+    logger.error("saveAutoTopupFromSession failed", {
+      userId,
+      packId,
+      error: String(e),
+    });
+  }
+}
 
 const PLAN_ROLES = ["Byte", "Mega", "Tera", "Spark", "Flow", "Studio"];
 
@@ -199,104 +250,32 @@ export async function action({ request }: ActionFunctionArgs) {
       case "checkout.session.completed":
         const session = event.data.object as StripeSession;
 
-        // Handle generation pack purchase
-        if (session.metadata?.type === "generation_pack") {
-          const generations = parseInt(session.metadata.generations || "0", 10);
+        // Handle pack purchase (generation OR llm token) — unified path.
+        if (
+          session.metadata?.type === "generation_pack" ||
+          session.metadata?.type === "llm_token_pack"
+        ) {
           const packUserId = session.metadata.userId;
           const packId = session.metadata.packId;
-          if (generations > 0 && packUserId) {
-            await db.user.update({
-              where: { id: packUserId },
-              data: { aiGenerationsBonus: { increment: generations } },
-            });
-            // Credit ledger: how many bonus credits were granted (admin stats).
-            db.aiGenerationLog.create({
-              data: {
-                userId: packUserId,
-                type: "pack_purchase",
-                product: "admin",
-                pageCount: generations, // reuse pageCount to store amount
-                source: "bonus",
-              },
-            }).catch(() => {});
-            // Sales ledger: the purchase itself, as a generic (assetless) Order.
-            const price = session.amount_total != null ? session.amount_total / 100 : 0;
-            const currency = session.currency || "mxn";
-            const packEmail =
-              session.customer_details?.email || session.customer_email || "";
-            createOrder({
-              type: "credit_pack",
-              customer_email: packEmail,
-              customerId: packUserId,
-              price,
-              currency,
-              total: `$ ${price.toFixed(2)} ${currency.toUpperCase()}`,
-              status: "Paid",
-              productId: packId,
-              note: `Generation pack: ${packId}`,
-              items: [
-                {
-                  kind: "credit_pack",
-                  refId: packId,
-                  label: `${packId} — ${generations} créditos`,
-                  quantity: 1,
-                  unitPrice: price,
-                },
-              ],
-            }).catch((e) =>
-              logger.error("Pack order create failed", { packUserId, packId, error: String(e) })
-            );
-            logger.info("Generation pack credited", {
+          const packEmail =
+            session.customer_details?.email || session.customer_email || "";
+          const price =
+            session.amount_total != null ? session.amount_total / 100 : undefined;
+          if (packUserId && packId) {
+            await creditPack({
               userId: packUserId,
-              generations,
               packId,
+              email: packEmail,
+              pricePaid: price,
+              currency: session.currency || "mxn",
+              channel: "purchase",
             });
-          }
-          break;
-        }
 
-        // Handle LLM token pack purchase
-        if (session.metadata?.type === "llm_token_pack") {
-          const tokens = parseInt(session.metadata.tokens || "0", 10);
-          const packUserId = session.metadata.userId;
-          const packId = session.metadata.packId;
-          if (tokens > 0 && packUserId) {
-            await db.user.update({
-              where: { id: packUserId },
-              data: { llmTokensBonus: { increment: tokens } },
-            });
-            // Sales ledger
-            const price = session.amount_total != null ? session.amount_total / 100 : 0;
-            const currency = session.currency || "mxn";
-            const packEmail =
-              session.customer_details?.email || session.customer_email || "";
-            createOrder({
-              type: "credit_pack",
-              customer_email: packEmail,
-              customerId: packUserId,
-              price,
-              currency,
-              total: `$ ${price.toFixed(2)} ${currency.toUpperCase()}`,
-              status: "Paid",
-              productId: packId,
-              note: `LLM token pack: ${packId}`,
-              items: [
-                {
-                  kind: "llm_token_pack",
-                  refId: packId,
-                  label: `${packId} — ${tokens.toLocaleString("es-MX")} tokens LLM`,
-                  quantity: 1,
-                  unitPrice: price,
-                },
-              ],
-            }).catch((e) =>
-              logger.error("LLM pack order create failed", { packUserId, packId, error: String(e) })
-            );
-            logger.info("LLM token pack credited", {
-              userId: packUserId,
-              tokens,
-              packId,
-            });
+            // Opt-in to auto-topup: persist saved card + config. The PaymentIntent
+            // saved the card off-session (setup_future_usage); read its PM here.
+            if (session.metadata.autoTopup === "1") {
+              await saveAutoTopupFromSession(session, packUserId, packId);
+            }
           }
           break;
         }

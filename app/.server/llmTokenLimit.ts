@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
+import { maybeAutoTopup } from "./core/autoTopup";
 
 /**
  * Límite de tokens LLM separado de créditos de documentos.
@@ -36,6 +37,7 @@ export async function checkLLMTokenLimit(
       llmTokensUsed: true,
       llmTokensResetAt: true,
       llmTokensBonus: true,
+      autoTopup: true,
     },
   });
   if (!user) throw new Error("User not found");
@@ -64,6 +66,11 @@ export async function checkLLMTokenLimit(
 
   const limit = planLimit + bonus;
   const remaining = Math.max(0, limit - used);
+
+  // Saldo de tokens agotado: dispara recarga automática si está activa.
+  if (remaining === 0 && user.autoTopup?.enabled) {
+    maybeAutoTopup(userId, "tokens").catch(() => {});
+  }
 
   return {
     allowed: remaining > 0,

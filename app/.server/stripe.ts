@@ -71,6 +71,7 @@ export const createPackCheckout = async ({
   tokens,
   priceMxn,
   type = "generation_pack",
+  autoTopup = false,
 }: {
   userId: string;
   email: string;
@@ -80,6 +81,8 @@ export const createPackCheckout = async ({
   priceMxn: number;
   /** "generation_pack" (default) | "llm_token_pack" */
   type?: "generation_pack" | "llm_token_pack";
+  /** Si true: guarda la tarjeta off-session y activa auto-topup tras la compra. */
+  autoTopup?: boolean;
 }) => {
   const isLlm = type === "llm_token_pack";
   const tokenCount = tokens ?? 0;
@@ -99,11 +102,18 @@ export const createPackCheckout = async ({
   } else {
     metadata.generations = String(creditCount);
   }
+  if (autoTopup) metadata.autoTopup = "1";
 
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     customer_email: email,
     metadata,
+    // Para auto-topup: crear un Customer reutilizable y guardar la tarjeta
+    // para cobros off-session futuros.
+    ...(autoTopup && {
+      customer_creation: "always",
+      payment_intent_data: { setup_future_usage: "off_session" },
+    }),
     line_items: [
       {
         price_data: {

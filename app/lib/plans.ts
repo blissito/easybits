@@ -297,6 +297,46 @@ export interface LlmTokenPack {
   description?: string;
 }
 
+/**
+ * Resolved pack descriptor — unified view over GENERATION_PACKS / LLM_TOKEN_PACKS.
+ * `bucket` is derived here so callers (auto-topup) never store it.
+ */
+export interface ResolvedPack {
+  id: string;
+  bucket: "credits" | "tokens";
+  /** Stripe metadata type */
+  type: "generation_pack" | "llm_token_pack";
+  /** Amount credited to the matching bonus bucket (créditos escalados o tokens). */
+  amount: number;
+  /** Precio plano en MXN (sin diferenciación por plan). */
+  priceMxn: number;
+}
+
+/** Look up a pack across both arrays. Returns null if the id is unknown. */
+export function findPackById(packId: string): ResolvedPack | null {
+  const credit = GENERATION_PACKS.find((p) => p.id === packId);
+  if (credit) {
+    return {
+      id: credit.id,
+      bucket: "credits",
+      type: "generation_pack",
+      amount: credit.generations,
+      priceMxn: credit.promoPrice ?? credit.prices.Byte,
+    };
+  }
+  const token = LLM_TOKEN_PACKS.find((p) => p.id === packId);
+  if (token) {
+    return {
+      id: token.id,
+      bucket: "tokens",
+      type: "llm_token_pack",
+      amount: token.tokens,
+      priceMxn: token.price,
+    };
+  }
+  return null;
+}
+
 export const LLM_TOKEN_PACKS: LlmTokenPack[] = [
   {
     id: "llm_5m",

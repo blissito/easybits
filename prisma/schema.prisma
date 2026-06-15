@@ -137,6 +137,22 @@ type Notifications {
   newsletter Boolean @default(true)
 }
 
+// Recarga automática de saldo (auto-topup). Al alcanzar el límite, re-compra
+// `packId` off-session con la tarjeta guardada. Un solo intento, sin insistir:
+// si falla, enabled=false hasta reactivación manual. El bucket (créditos vs
+// tokens) se deriva de packId — no se guarda. `charging` es el lock atómico
+// compare-and-set; `chargeEpoch` hace única la idempotency key por ciclo.
+type AutoTopup {
+  enabled       Boolean   @default(false)
+  packId        String
+  paymentMethod String?
+  charging      Boolean   @default(false)
+  chargeEpoch   Int       @default(0)
+  lastTopupAt   DateTime?
+  failedAt      DateTime?
+  lastError     String?
+}
+
 type StoreConfig {
   metadata                  Json?
   colorMode                 String  @default("light")
@@ -218,6 +234,7 @@ model User {
   llmTokensUsed        Int        @default(0)
   llmTokensResetAt     DateTime?
   llmTokensBonus       Int        @default(0)
+  autoTopup            AutoTopup?
   brandKits            BrandKit[]
   formConfigs          FormConfig[]
   mcpTemplates         McpTemplate[]

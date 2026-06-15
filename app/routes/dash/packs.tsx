@@ -55,11 +55,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     llmLimit,
     referralStats,
     referralLink: `https://www.easybits.cloud/login?ref=${user.publicKey}`,
+    autoTopup: user.autoTopup ?? null,
   };
 };
 
 export default function PacksPage({ loaderData }: Route.ComponentProps) {
-  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink } =
+  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup } =
     loaderData;
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,6 +100,9 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
       )}
+
+      {/* Auto-topup status banner */}
+      <AutoTopupStatus autoTopup={autoTopup} />
 
       {/* Usage bars: side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
@@ -160,6 +164,64 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
       {/* Referral section */}
       <ReferralSection referralLink={referralLink} stats={referralStats} />
     </section>
+  );
+}
+
+// ─── Auto-topup status ─────────────────────────────────────────────────────
+
+function AutoTopupStatus({
+  autoTopup,
+}: {
+  autoTopup: {
+    enabled: boolean;
+    packId: string;
+    failedAt: Date | string | null;
+    lastTopupAt: Date | string | null;
+  } | null;
+}) {
+  // Mostrar solo si hay algo que comunicar: activa, o desactivada por fallo.
+  if (!autoTopup) return null;
+  const failed = !autoTopup.enabled && autoTopup.failedAt;
+  if (!autoTopup.enabled && !failed) return null;
+
+  return (
+    <div
+      className={`mb-6 border-2 rounded-xl p-4 flex items-center gap-3 ${
+        autoTopup.enabled
+          ? "border-brand-500 bg-brand-50"
+          : "border-red-400 bg-red-50"
+      }`}
+    >
+      <span className="text-2xl">{autoTopup.enabled ? "🔄" : "⚠️"}</span>
+      <div className="text-sm">
+        {autoTopup.enabled ? (
+          <>
+            <p className="font-bold">Recarga automática activa</p>
+            <p className="text-iron">
+              Al agotarse tu saldo, recompramos{" "}
+              <strong>{autoTopup.packId}</strong> automáticamente.
+              {autoTopup.lastTopupAt && (
+                <>
+                  {" "}Última:{" "}
+                  {new Date(autoTopup.lastTopupAt).toLocaleDateString("es-MX", {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="font-bold text-red-700">Recarga automática desactivada</p>
+            <p className="text-iron">
+              No pudimos procesar el último cobro. Compra un pack con la casilla
+              de recarga automática para reactivarla con una tarjeta nueva.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -281,10 +343,11 @@ function CreditPackCard({
 }) {
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
+  const [autoTopup, setAutoTopup] = useState(false);
 
   const handleBuy = () => {
     fetcher.submit(
-      { packId: pack.id },
+      { packId: pack.id, autoTopup },
       {
         method: "POST",
         action: "/api/v2/generation-packs",
@@ -347,6 +410,15 @@ function CreditPackCard({
             <p className="text-xs text-iron mt-2">{pack.description}</p>
           )}
         </div>
+        <label className="flex items-center gap-2 text-xs text-iron mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoTopup}
+            onChange={(e) => setAutoTopup(e.target.checked)}
+            className="rounded border-2 border-black"
+          />
+          🔄 Recargar automáticamente al agotarse
+        </label>
         <BrutalButton
           onClick={handleBuy}
           isLoading={isLoading}
@@ -365,10 +437,11 @@ function CreditPackCard({
 function LlmPackCard({ pack }: { pack: LlmTokenPack }) {
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
+  const [autoTopup, setAutoTopup] = useState(false);
 
   const handleBuy = () => {
     fetcher.submit(
-      { packId: pack.id, packType: "tokens" },
+      { packId: pack.id, packType: "tokens", autoTopup },
       {
         method: "POST",
         action: "/api/v2/generation-packs",
@@ -420,6 +493,15 @@ function LlmPackCard({ pack }: { pack: LlmTokenPack }) {
             <p className="text-xs text-iron mt-2">{pack.description}</p>
           )}
         </div>
+        <label className="flex items-center gap-2 text-xs text-iron mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoTopup}
+            onChange={(e) => setAutoTopup(e.target.checked)}
+            className="rounded border-2 border-black"
+          />
+          🔄 Recargar automáticamente al agotarse
+        </label>
         <BrutalButton
           onClick={handleBuy}
           isLoading={isLoading}

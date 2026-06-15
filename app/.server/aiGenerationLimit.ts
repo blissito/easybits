@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
+import { maybeAutoTopup } from "./core/autoTopup";
 
 /**
  * Legacy types kept for backward compatibility. New code should pass any
@@ -38,6 +39,7 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
       aiGenerationsCount: true,
       aiGenerationsResetAt: true,
       aiGenerationsBonus: true,
+      autoTopup: true,
     },
   });
   if (!user) throw new Response("User not found", { status: 404 });
@@ -70,6 +72,10 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
     // Monthly limit reached — check bonus
     if (bonus > 0) {
       return { allowed: true, used: count, limit, bonus, resetAt: user.aiGenerationsResetAt || now };
+    }
+    // Saldo agotado: dispara recarga automática si está activa (fire-and-forget).
+    if (user.autoTopup?.enabled) {
+      maybeAutoTopup(userId, "credits").catch(() => {});
     }
     return { allowed: false, used: count, limit, bonus, resetAt: user.aiGenerationsResetAt || now };
   }
