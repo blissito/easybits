@@ -118,7 +118,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         cta={
           allFiles.length > 0 && (
             <BrutalButton
-              isDisabled={PLANS[plan as PlanKey]?.storageGB ?? 1 < total}
+              isDisabled={(PLANS[plan as PlanKey]?.storageGB ?? 1) < total}
               onClick={open}
               containerClassName="block md:mt-0 md:ml-auto "
             >
