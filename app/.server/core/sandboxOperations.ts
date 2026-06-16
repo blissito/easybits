@@ -579,7 +579,13 @@ export async function waitUntilRunning(
 }
 
 export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {
-  requireScope(ctx, "DELETE");
+  // WRITE (no DELETE): destruir una caja efímera es simétrico con crearla
+  // (sandbox_create también es WRITE), y el host es owner-scoped — un agente
+  // solo puede matar SUS propias cajas. Esto deja que un agente con token WRITE
+  // (embed agt_* o key WRITE) administre sus N cajas concurrentes a placer:
+  // sandbox_destroy + agent_run_destroy (que delega aquí) ya no dan 403.
+  // El destroy de agentes PERSISTENTES sigue gateado con DELETE en destroyAgent().
+  requireScope(ctx, "WRITE");
   // eb.compute: revocar las virtual keys del sandbox (fire-and-forget).
   void revokeSandboxKeys(sandboxId);
   return callHost<{ ok: true }>("DELETE", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
