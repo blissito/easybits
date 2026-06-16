@@ -430,6 +430,20 @@ async function callHost<T>(
   throw lastErr;
 }
 
+// Clase de tamaño → recursos crudos que entiende el host. "s" = default del
+// template (no enviamos overrides). El host clampa por seguridad (1-8 vCPU,
+// ≤8192 MB, ≤24576 MB disco). diskMb adjunta un volumen ext4 en /app.
+const SIZE_RESOURCES: Record<
+  "s" | "m" | "l" | "xl",
+  { vcpus?: number; memoryMb?: number; diskMb?: number }
+> = {
+  s: {},
+  m: { vcpus: 2, memoryMb: 2048, diskMb: 4096 },
+  l: { vcpus: 4, memoryMb: 4096, diskMb: 12288 },
+  xl: { vcpus: 8, memoryMb: 8192, diskMb: 24576 },
+};
+const SIZE_ORDER = ["s", "m", "l", "xl"] as const;
+
 export async function createSandbox(
   ctx: AuthContext,
   params: {
@@ -438,10 +452,27 @@ export async function createSandbox(
     name?: string;
     metadata?: Record<string, string>;
     persistent?: boolean;
+    size?: "s" | "m" | "l" | "xl";
   }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
   const plan = PLANS[getUserPlan(ctx.user)];
+
+  // Gate de tamaño por plan (aplica también a persistentes — una VM grande
+  // cuesta independientemente del reaper). "s" siempre permitido.
+  const size = params.size ?? "s";
+  if (SIZE_ORDER.indexOf(size) > SIZE_ORDER.indexOf(plan.maxSandboxSize)) {
+    throw new Response(
+      JSON.stringify({
+        error: "SandboxSizeExceeded",
+        message: `Tu plan permite VMs hasta tamaño "${plan.maxSandboxSize}". Sube de plan para usar "${size}".`,
+        requested: size,
+        max: plan.maxSandboxSize,
+      }),
+      { status: 403, headers: { "content-type": "application/json" } }
+    );
+  }
+  const resources = SIZE_RESOURCES[size];
   // Templates persistentes (agentes de marca) opt-in al flag persistent → el host
   // les salta el reaper. Son deliberados/pagados, NO sandboxes efímeras: por eso
   // NO cuentan contra el cap anti-runaway ni contra el TTL por plan.
@@ -501,6 +532,7 @@ export async function createSandbox(
       metadata: params.metadata,
       persistent,
       maxTtlSeconds: plan.maxSandboxTtlSeconds,
+      ...resources,
     },
     ctx.user.id
   );

@@ -1222,6 +1222,7 @@ How to embed safely (the only reliable rule):
       timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
+      size: z.enum(["s", "m", "l", "xl"]).optional().describe("VM size class (default s). s=1vCPU/512MB · m=2/2GB+4GB disk · l=4/4GB+12GB disk · xl=8/8GB+24GB disk. Bigger needed for heavy installs/builds (vite/RRv7). Gated by plan."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;

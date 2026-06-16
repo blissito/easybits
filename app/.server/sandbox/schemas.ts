@@ -22,6 +22,9 @@ export const SandboxCreateBody = z.object({
   // Opt-in a VM always-on (el host salta el reaper). Combina con la lista de
   // templates de agente persistentes en createSandbox.
   persistent: z.boolean().optional(),
+  // Clase de tamaño de la VM. Mapea a vcpus/memoryMb/diskMb en createSandbox
+  // y se gatea por plan. Omitido → "s" (el default del template).
+  size: z.enum(["s", "m", "l", "xl"]).optional(),
 });
 
 export const SandboxExecBody = z.object({

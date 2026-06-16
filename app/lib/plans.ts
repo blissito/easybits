@@ -33,6 +33,8 @@ export interface PlanConfig {
   concurrentSandboxes: number;
   /** Max sandbox session length in seconds (TTL window). Mega 1h, Tera 24h. Enforced in create/extend. */
   maxSandboxTtlSeconds: number;
+  /** Max VM size class allowed (s<m<l<xl). Bigger = more RAM/CPU/disk. Enforced in createSandbox. */
+  maxSandboxSize: "s" | "m" | "l" | "xl";
   /** Stripe intent key (null for free) */
   stripeIntent: string | null;
   /** Features list for pricing cards */
@@ -48,6 +50,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     llmTokensFreePerMonth: 5_000_000, // 5M tokens gratis/mes
     concurrentSandboxes: 2,
     maxSandboxTtlSeconds: 3600,
+    maxSandboxSize: "s",
     stripeIntent: null,
     features: [
       "100 MB de almacenamiento",
@@ -70,6 +73,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     llmTokensFreePerMonth: 50_000_000, // 50M tokens/mes incluidos
     concurrentSandboxes: 3,
     maxSandboxTtlSeconds: 3600,
+    maxSandboxSize: "l",
     stripeIntent: "flow_plan",
     features: [
       "10 GB de almacenamiento",
@@ -93,6 +97,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     llmTokensFreePerMonth: 250_000_000, // 250M tokens/mes incluidos
     concurrentSandboxes: 10,
     maxSandboxTtlSeconds: 86400,
+    maxSandboxSize: "xl",
     stripeIntent: "studio_plan",
     features: [
       "100 GB de almacenamiento",
