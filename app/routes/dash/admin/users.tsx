@@ -8,6 +8,7 @@ import type { Route } from "./+types/users";
 import { useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { PLANS, normalizePlan } from "~/lib/plans";
+import { formatTokens } from "~/components/LLMUsageCard";
 
 export const meta = () => [
   { title: "Usuarios — EasyBits" },
@@ -222,6 +223,14 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
   const totalAvailable = limit !== null ? limit + bonus : null;
   const remaining = totalAvailable !== null ? Math.max(0, totalAvailable - used) : null;
 
+  // Tokens LLM (proxy DeepSeek/GhostyCode) — bucket separado de los créditos AI.
+  const llmLimit = PLANS[plan].llmTokensIncluded;
+  const llmUsed = user.llmTokensUsed ?? 0;
+  const llmBonus = user.llmTokensBonus ?? 0;
+  const llmTotal = llmLimit + llmBonus;
+  const llmRemaining = Math.max(0, llmTotal - llmUsed);
+  const llmPeriod = plan === "Byte" ? "una sola vez" : "/mes";
+
   // aiGenerationsResetAt es la fecha del último reset. El próximo es +30 días.
   const nextReset = user.aiGenerationsResetAt
     ? (() => {
@@ -311,6 +320,7 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
       {/* Gens + controls */}
       <div className="border-t border-gray-200 pt-2 flex items-center justify-between gap-2">
         <div>
+          <div className="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Créditos AI</div>
           <span className={`text-xl font-bold ${remaining !== null && remaining <= 0 ? "text-red-500" : "text-green-600"}`}>
             {remaining ?? "∞"}
           </span>
@@ -330,6 +340,18 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
           )}
         </div>
         <GensControls userId={user.id} />
+      </div>
+
+      {/* Tokens LLM (proxy DeepSeek/GhostyCode) — bucket separado */}
+      <div className="border-t border-gray-200 pt-2">
+        <div className="text-[10px] text-gray-400 uppercase tracking-wide font-bold">Tokens LLM</div>
+        <span className={`text-lg font-bold ${llmRemaining <= 0 ? "text-red-500" : "text-green-600"}`}>
+          {formatTokens(llmRemaining)}
+        </span>
+        <span className="text-xs text-gray-400 ml-1">restantes</span>
+        <div className="text-[10px] text-gray-400">
+          {formatTokens(llmUsed)}/{formatTokens(llmTotal)} ({formatTokens(llmLimit)} plan {llmPeriod} + {formatTokens(llmBonus)} bonus)
+        </div>
       </div>
 
       {/* Footer: date + reset + plan */}

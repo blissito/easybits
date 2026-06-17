@@ -4,14 +4,16 @@ import { maybeAutoTopup } from "./core/autoTopup";
 
 /**
  * Límite de tokens LLM separado de créditos de documentos.
- * Reset semanal para Byte, mensual para Mega/Tera.
+ * Byte = grant promocional de 5M (solo junio 2026, one-time, NO recarga).
+ * Mega/Tera = reset mensual.
  *
- * Soporta "recargas" vía llmTokensBonus: tokens extra comprados
- * que se consumen después del límite del plan.
+ * Soporta "recargas" vía llmTokensBonus: tokens extra comprados que se
+ * consumen después del límite del plan y PERSISTEN entre ciclos.
  */
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+/** Cierre de la promo de 5M gratis para Byte. Tras esta fecha, Byte nuevo recibe 0. */
+const BYTE_PROMO_END = new Date("2026-07-01T00:00:00Z");
 
 export interface LLMTokenLimit {
   allowed: boolean;
@@ -24,6 +26,8 @@ export interface LLMTokenLimit {
   limit: number;
   remaining: number;
   resetAt: Date | null;
+  /** Plan del usuario — Byte es one-time, Mega/Tera mensual. */
+  plan: PlanKey;
 }
 
 export async function checkLLMTokenLimit(
@@ -44,23 +48,53 @@ export async function checkLLMTokenLimit(
 
   const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
   const config = PLANS[plan];
-  const planLimit = config.llmTokensFreePerMonth;
+  const planLimit = config.llmTokensIncluded;
   const used = user.llmTokensUsed || 0;
   const bonus = user.llmTokensBonus || 0;
   const resetAt = user.llmTokensResetAt;
   const now = new Date();
 
-  const resetWindow = plan === "Byte" ? WEEK_MS : MONTH_MS;
+  if (plan === "Byte") {
+    // Promo de lanzamiento: los 5M gratis solo se otorgan durante junio 2026.
+    // Se "reclama" sellando resetAt una sola vez. Quien ya reclamó conserva su
+    // saldo de por vida; quien no reclamó antes del cierre ya no recibe el grant.
+    const claimed = !!resetAt;
+    const justClaimed = !claimed && now < BYTE_PROMO_END;
+    if (justClaimed) {
+      await db.user.update({
+        where: { id: userId },
+        data: { llmTokensResetAt: now },
+      });
+    }
+    const hasGrant = claimed || justClaimed;
+    const grantedLimit = hasGrant ? planLimit : 0;
+    const limit = grantedLimit + bonus;
+    const remaining = Math.max(0, limit - used);
+    if (remaining === 0 && user.autoTopup?.enabled) {
+      maybeAutoTopup(userId, "tokens").catch(() => {});
+    }
+    return {
+      allowed: remaining > 0,
+      used,
+      planLimit: grantedLimit,
+      bonus,
+      limit,
+      remaining,
+      resetAt: hasGrant ? (resetAt ?? now) : null,
+      plan,
+    };
+  }
 
-  if (!resetAt || now.getTime() - resetAt.getTime() > resetWindow) {
+  // Mega/Tera: reset mensual del consumo. El bonus comprado PERSISTE.
+  if (!resetAt || now.getTime() - resetAt.getTime() > MONTH_MS) {
     await db.user.update({
       where: { id: userId },
-      data: { llmTokensUsed: 0, llmTokensResetAt: now, llmTokensBonus: 0 },
+      data: { llmTokensUsed: 0, llmTokensResetAt: now },
     });
-    const limit = planLimit; // bonus resetea con el ciclo
+    const limit = planLimit + bonus;
     return {
-      allowed: used < limit, used: 0, planLimit, bonus: 0,
-      limit, remaining: limit, resetAt: now,
+      allowed: limit > 0, used: 0, planLimit, bonus,
+      limit, remaining: limit, resetAt: now, plan,
     };
   }
 
@@ -80,6 +114,7 @@ export async function checkLLMTokenLimit(
     limit,
     remaining,
     resetAt,
+    plan,
   };
 }
 

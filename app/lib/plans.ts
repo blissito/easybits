@@ -27,8 +27,8 @@ export interface PlanConfig {
   storageGB: number;
   /** AI generations per month (null = unlimited) */
   aiGenerationsPerMonth: number | null;
-  /** LLM proxy tokens free per month (GhostyCode). Byte=5M, Mega=50M, Tera=250M. */
-  llmTokensFreePerMonth: number;
+  /** LLM proxy tokens incluidos (GhostyCode). Byte=5M promo junio 2026 (one-time, no recarga); Mega=10M/mes, Tera=50M/mes. */
+  llmTokensIncluded: number;
   /** Max concurrent ACTIVE sandboxes (running/starting). Enforced in createSandbox. */
   concurrentSandboxes: number;
   /** Max sandbox session length in seconds (TTL window). Mega 1h, Tera 24h. Enforced in create/extend. */
@@ -47,7 +47,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 0,
     storageGB: 0.1,
     aiGenerationsPerMonth: PLAN_CREDITS.Byte,
-    llmTokensFreePerMonth: 5_000_000, // 5M tokens gratis/mes
+    llmTokensIncluded: 5_000_000, // 5M tokens gratis — promo junio 2026, una sola vez (no recarga). Cierre: BYTE_PROMO_END en llmTokenLimit.ts
     concurrentSandboxes: 2,
     maxSandboxTtlSeconds: 3600,
     maxSandboxSize: "s",
@@ -70,7 +70,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 299,
     storageGB: 10,
     aiGenerationsPerMonth: PLAN_CREDITS.Mega,
-    llmTokensFreePerMonth: 50_000_000, // 50M tokens/mes incluidos
+    llmTokensIncluded: 10_000_000, // 10M tokens/mes — ~39% del precio a costo real DeepSeek
     concurrentSandboxes: 3,
     maxSandboxTtlSeconds: 3600,
     maxSandboxSize: "l",
@@ -94,7 +94,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price: 1499,
     storageGB: 100,
     aiGenerationsPerMonth: PLAN_CREDITS.Tera,
-    llmTokensFreePerMonth: 250_000_000, // 250M tokens/mes incluidos
+    llmTokensIncluded: 50_000_000, // 50M tokens/mes — ~39% del precio a costo real DeepSeek
     concurrentSandboxes: 10,
     maxSandboxTtlSeconds: 86400,
     maxSandboxSize: "xl",
@@ -286,9 +286,9 @@ export const GENERATION_PACKS: GenerationPack[] = [
 ];
 
 // ─── LLM Token Packs ─────────────────────────────────────────────────────
-// Precios a 10x sobre costo blended DeepSeek V4 Pro (~$5.51 MXN/1M tokens).
-// Curva plana — el margen se mantiene constante porque DeepSeek no da
-// descuento por volumen en su API pública.
+// Costo real DeepSeek V4 Pro (oficial post-31-may-2026): $0.435 in / $0.870 out
+// USD/1M ≈ $11.7 MXN/1M blended 50/50 (a 18 MXN/USD). Curva plana — DeepSeek no
+// da descuento por volumen, así que el margen se mantiene constante por pack.
 
 export interface LlmTokenPack {
   id: string;

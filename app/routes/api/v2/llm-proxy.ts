@@ -2,6 +2,7 @@ import type { Route } from "./+types/llm-proxy";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { checkLLMTokenLimit, incrementLLMTokens, formatTokens } from "~/.server/llmTokenLimit";
+import { logAiUsage } from "~/.server/aiGenerationLimit";
 import { RateLimiter } from "~/.server/rateLimiter";
 
 // ─── LLM Proxy — OpenAI-compatible → DeepSeek ─────────────────────────────
@@ -118,7 +119,7 @@ export async function action({ request }: Route.ActionArgs) {
 
     // ── Non-streaming ───────────────────────────────────────────────────
     const data = await upstream.json();
-    bill(data, userId);
+    bill(data, userId, model);
     return Response.json(
       { ...data, model, proxy: "easybits.cloud" },
       { headers: { ...CORS, "x-ratelimit-remaining-requests": String(remaining), "x-llm-tokens-remaining": String(budget.remaining) } },
@@ -134,7 +135,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 // ─── Streaming pipe + billing on close ────────────────────────────────────
 
-function streaming(body: ReadableStream<Uint8Array>, userId: string, _model: string, remaining: number): Response {
+function streaming(body: ReadableStream<Uint8Array>, userId: string, model: string, remaining: number): Response {
   const decoder = new TextDecoder();
   let last = "";
 
@@ -146,7 +147,7 @@ function streaming(body: ReadableStream<Uint8Array>, userId: string, _model: str
       }
     },
     flush() {
-      try { const p = JSON.parse(last); if (p?.usage) bill({ usage: p.usage }, userId); } catch {}
+      try { const p = JSON.parse(last); if (p?.usage) bill({ usage: p.usage }, userId, model); } catch {}
     },
   });
 
@@ -164,9 +165,21 @@ function streaming(body: ReadableStream<Uint8Array>, userId: string, _model: str
 
 // ─── Billing ──────────────────────────────────────────────────────────────
 
-function bill(data: { usage?: any }, userId: string): void {
+export function bill(data: { usage?: any }, userId: string, model: string): void {
   const u = data?.usage;
   if (!u) return;
-  const total = (u.prompt_tokens || 0) + (u.completion_tokens || 0);
-  if (total > 0) incrementLLMTokens(userId, total);
+  const inTok = u.prompt_tokens || 0;
+  const outTok = u.completion_tokens || 0;
+  const total = inTok + outTok;
+  if (total === 0) return;
+  // Cobro real: cuota de tokens del usuario (llmTokensUsed).
+  incrementLLMTokens(userId, total);
+  // Analítica per-call (paridad con compute.chat). NO toca cuota de créditos.
+  logAiUsage(userId, {
+    type: "llm.proxy",
+    product: "compute",
+    modelId: model,
+    inputTokens: inTok,
+    outputTokens: outTok,
+  });
 }

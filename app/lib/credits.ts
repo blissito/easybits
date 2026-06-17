@@ -188,19 +188,19 @@ export interface LLMProxyConfig {
   defaultModel: string;
   /** RPM por usuario (rate limit). */
   rpmPerUser: number;
-  /** Tokens free por mes para cuentas Byte (se pisan con PlanConfig). */
-  freeTokensPerMonth: number;
-  /** USD por 1M tokens (margen incluido — 10x DeepSeek por default). */
+  /** USD por 1M tokens (margen incluido). La cuota incluida vive en PlanConfig.llmTokensIncluded. */
   rates: Record<string, { in: number; out: number }>;
 }
 
+// Costo real DeepSeek V4 Pro (oficial post-31-may-2026): $0.435 in / $0.870 out USD/1M.
+// Markup actual del proxy ≈ 3.2x sobre ese costo (sigue rentable; muy por encima
+// del piso de $5 MXN/crédito). Para subir el margen, cambiar precios aparte.
 export const LLM_PROXY_DEFAULTS: LLMProxyConfig = {
   usdToMxn: 18,
   defaultModel: "deepseek-chat",
   rpmPerUser: 30,
-  freeTokensPerMonth: 5_000_000,
   rates: {
-    "deepseek-chat": { in: 1.40, out: 2.80 },     // 10x DeepSeek V4 Pro
+    "deepseek-chat": { in: 1.40, out: 2.80 },     // ≈3.2x sobre costo real ($0.435/$0.870)
     "deepseek-reasoner": { in: 0.55, out: 2.19 },   // R1 — mantiene precio original
   },
 };

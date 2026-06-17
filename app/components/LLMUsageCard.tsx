@@ -28,6 +28,8 @@ export function LlmUsageBar({ used, planLimit, bonus, plan, resetAt }: LlmUsageP
   const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
   const remaining = Math.max(0, total - used);
   const isLow = pct > 80;
+  // Byte = grant único (no recarga). Mega/Tera = cuota mensual con renovación.
+  const isOneTime = plan === "Byte";
 
   return (
     <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-4">
@@ -35,7 +37,8 @@ export function LlmUsageBar({ used, planLimit, bonus, plan, resetAt }: LlmUsageP
         <div>
           <h3 className="text-base font-bold">Tokens LLM</h3>
           <p className="text-xs text-iron">
-            Plan {plan} · {formatTokens(planLimit)}/mes
+            Plan {plan} · {formatTokens(planLimit)}
+            {isOneTime ? " una sola vez" : "/mes"}
           </p>
         </div>
         <span
@@ -68,7 +71,7 @@ export function LlmUsageBar({ used, planLimit, bonus, plan, resetAt }: LlmUsageP
           <b className="text-black">{formatTokens(bonus)}</b> · Total{" "}
           <b className="text-black">{formatTokens(total)}</b>
         </span>
-        {resetAt && (
+        {resetAt && !isOneTime && (
           <span className="text-[10px] text-iron/50">
             Renueva{" "}
             {new Date(resetAt).toLocaleDateString("es-MX", {
@@ -100,7 +103,7 @@ export function LLMUsageCard() {
             used: Number(b.used),
             planLimit: Number(b.granted_balance),
             bonus: Number(b.topped_up_balance),
-            plan: "",
+            plan: json.plan ?? "",
             resetAt: b.reset_at ? new Date(b.reset_at) : null,
           });
         }
