@@ -35,7 +35,7 @@ export async function authenticateRequest(
     const { tryVerifyOAuthJwt } = await import("./oauth");
     const jwtUser = await tryVerifyOAuthJwt(raw);
     if (jwtUser) {
-      return { user: jwtUser, scopes: ["ADMIN"] };
+      return { user: jwtUser, scopes: ["READ", "WRITE", "DELETE"] };
     }
 
     const apiKey = await validateApiKey(raw);

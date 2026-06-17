@@ -3,7 +3,13 @@ import jwt from "jsonwebtoken";
 import { db } from "./db";
 import type { User } from "@prisma/client";
 
-const SECRET = process.env.JWT_SECRET || "dev-secret";
+const SECRET =
+  process.env.JWT_SECRET ||
+  (process.env.NODE_ENV === "production"
+    ? (() => {
+        throw new Error("JWT_SECRET is required in production");
+      })()
+    : "dev-secret");
 const ISSUER = "https://www.easybits.cloud";
 const AUDIENCE = "easybits-mcp";
 const ACCESS_TOKEN_TTL_SEC = 60 * 60; // 1h
