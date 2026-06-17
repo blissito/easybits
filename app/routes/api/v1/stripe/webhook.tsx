@@ -315,11 +315,18 @@ export async function action({ request }: ActionFunctionArgs) {
           const newStripeIds = (planUser.stripeIds || []).includes(planCustomerId)
             ? planUser.stripeIds
             : [...(planUser.stripeIds || []), planCustomerId];
+          // Escribir también metadata.plan (merge, no pisar el resto) para que el
+          // plan no viva SOLO en roles[]. getUserPlan honra ambos.
+          const newMetadata = {
+            ...((planUser.metadata as Record<string, unknown>) || {}),
+            plan: planKey,
+          };
 
           await db.user.update({
             where: { id: planUser.id },
             data: {
               roles: newRoles,
+              metadata: newMetadata,
               customer: planCustomerId,
               stripeIds: newStripeIds,
             },
@@ -350,18 +357,25 @@ export async function action({ request }: ActionFunctionArgs) {
         const custId = subscriptionEvent.customer as string;
         const subscriptionUser = await db.user.findFirst({
           where: { stripeIds: { has: custId } },
-          select: { id: true, email: true, roles: true },
+          select: { id: true, email: true, roles: true, metadata: true },
         });
         if (!subscriptionUser) return new Response("User not found", { status: 404 });
 
-        // On cancellation/failure, remove plan roles so user falls back to Byte
+        // On cancellation/failure, remove plan roles AND reset metadata.plan so
+        // both sources fall back to Byte consistentemente.
         if (
           event.type === "customer.subscription.deleted" ||
           event.type === "invoice.payment_failed"
         ) {
           await db.user.update({
             where: { id: subscriptionUser.id },
-            data: { roles: stripPlanRoles(subscriptionUser.roles || []) },
+            data: {
+              roles: stripPlanRoles(subscriptionUser.roles || []),
+              metadata: {
+                ...((subscriptionUser.metadata as Record<string, unknown>) || {}),
+                plan: "Byte",
+              },
+            },
           });
         }
         break;
