@@ -3,13 +3,20 @@ import jwt from "jsonwebtoken";
 import { db } from "./db";
 import type { User } from "@prisma/client";
 
-const SECRET =
-  process.env.JWT_SECRET ||
-  (process.env.NODE_ENV === "production"
-    ? (() => {
-        throw new Error("JWT_SECRET is required in production");
-      })()
-    : "dev-secret");
+// Lazy: resolver el secreto en el PRIMER uso, no al importar el módulo. Si se
+// evalúa al importar, el paso de prerender del build (NODE_ENV=production, sin
+// JWT_SECRET en el entorno de build) revienta y tumba el deploy. El requisito
+// en producción se mantiene — solo se difiere al runtime real.
+let _secret: string | undefined;
+function getSecret(): string {
+  if (_secret) return _secret;
+  const s =
+    process.env.JWT_SECRET ||
+    (process.env.NODE_ENV === "production" ? undefined : "dev-secret");
+  if (!s) throw new Error("JWT_SECRET is required in production");
+  _secret = s;
+  return _secret;
+}
 const ISSUER = "https://www.easybits.cloud";
 const AUDIENCE = "easybits-mcp";
 const ACCESS_TOKEN_TTL_SEC = 60 * 60; // 1h
@@ -44,7 +51,7 @@ export function issueAccessToken(userId: string, scope = "mcp"): {
 } {
   const token = jwt.sign(
     { sub: userId, scope, typ: "oauth" },
-    SECRET,
+    getSecret(),
     {
       issuer: ISSUER,
       audience: AUDIENCE,
@@ -111,7 +118,7 @@ export async function rotateRefreshToken(
  */
 export async function tryVerifyOAuthJwt(raw: string): Promise<User | null> {
   try {
-    const payload = jwt.verify(raw, SECRET, {
+    const payload = jwt.verify(raw, getSecret(), {
       issuer: ISSUER,
       audience: AUDIENCE,
     }) as jwt.JwtPayload;
