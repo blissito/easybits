@@ -1,8 +1,8 @@
 import type { Route } from "./+types/llm-proxy";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { getSecretValue } from "~/.server/core/secretOperations";
-import { checkLLMTokenLimit, incrementLLMTokens, formatTokens } from "~/.server/llmTokenLimit";
-import { logAiUsage } from "~/.server/aiGenerationLimit";
+import { checkLLMTokenLimit, formatTokens } from "~/.server/llmTokenLimit";
+import { bill } from "~/.server/llmProxyBilling";
 import { RateLimiter } from "~/.server/rateLimiter";
 
 // ─── LLM Proxy — OpenAI-compatible → DeepSeek ─────────────────────────────
@@ -160,26 +160,5 @@ function streaming(body: ReadableStream<Uint8Array>, userId: string, model: stri
       "connection": "keep-alive",
       "x-ratelimit-remaining-requests": String(remaining),
     },
-  });
-}
-
-// ─── Billing ──────────────────────────────────────────────────────────────
-
-export function bill(data: { usage?: any }, userId: string, model: string): void {
-  const u = data?.usage;
-  if (!u) return;
-  const inTok = u.prompt_tokens || 0;
-  const outTok = u.completion_tokens || 0;
-  const total = inTok + outTok;
-  if (total === 0) return;
-  // Cobro real: cuota de tokens del usuario (llmTokensUsed).
-  incrementLLMTokens(userId, total);
-  // Analítica per-call (paridad con compute.chat). NO toca cuota de créditos.
-  logAiUsage(userId, {
-    type: "llm.proxy",
-    product: "compute",
-    modelId: model,
-    inputTokens: inTok,
-    outputTokens: outTok,
   });
 }

@@ -15,7 +15,7 @@ vi.mock("~/.server/aiGenerationLimit", () => ({
   incrementAiGeneration: (...a: any[]) => mockIncrementAiGen(...a),
 }));
 
-const { bill } = await import("~/routes/api/v2/llm-proxy");
+const { bill } = await import("~/.server/llmProxyBilling");
 
 beforeEach(() => vi.clearAllMocks());
 
