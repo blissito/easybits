@@ -3,6 +3,7 @@ import { sqldQuery, sqldCreateNamespace } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
+import { getSesTransport } from "../emails/sendgridTransport";
 
 interface FormField {
   name: string;
@@ -17,7 +18,8 @@ interface FormField {
 export async function createFormConfig(
   ctx: AuthContext,
   opts: {
-    websiteId: string;
+    websiteId?: string; // raw-HTML Website, OR...
+    landingId?: string; // ...a Landing (editor landings/documents)
     name?: string;
     fields: FormField[];
     submitLabel?: string;
@@ -29,20 +31,40 @@ export async function createFormConfig(
 ) {
   requireScope(ctx, "WRITE");
 
-  // Validate website belongs to user
-  const website = await db.website.findUnique({ where: { id: opts.websiteId } });
-  if (!website || website.ownerId !== ctx.user.id) {
-    throw new Response(JSON.stringify({ error: "Website not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+  // Exactly one parent (website OR landing) must be provided
+  if (!opts.websiteId === !opts.landingId) {
+    throw new Response(
+      JSON.stringify({ error: "Provide exactly one of websiteId or landingId" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate parent belongs to user
+  if (opts.websiteId) {
+    const website = await db.website.findUnique({ where: { id: opts.websiteId } });
+    if (!website || website.ownerId !== ctx.user.id) {
+      throw new Response(JSON.stringify({ error: "Website not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  } else {
+    const landing = await db.landing.findUnique({ where: { id: opts.landingId } });
+    if (!landing || landing.ownerId !== ctx.user.id) {
+      throw new Response(JSON.stringify({ error: "Landing not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 
   const formName = opts.name || "Contacto";
 
-  // Check if a form with the same name already exists on this website — reuse its DB
+  // Check if a form with the same name already exists on this parent — reuse its DB
   const existingForm = await db.formConfig.findFirst({
-    where: { websiteId: opts.websiteId, name: formName, ownerId: ctx.user.id },
+    where: opts.websiteId
+      ? { websiteId: opts.websiteId, name: formName, ownerId: ctx.user.id }
+      : { landingId: opts.landingId, name: formName, ownerId: ctx.user.id },
   });
 
   let dbId: string;
@@ -89,7 +111,8 @@ export async function createFormConfig(
 
   const formConfig = await db.formConfig.create({
     data: {
-      websiteId: opts.websiteId,
+      websiteId: opts.websiteId ?? null,
+      landingId: opts.landingId ?? null,
       name: formName,
       fields: opts.fields as any,
       successMessage: opts.successMessage || "¡Gracias! Te contactaremos pronto.",
@@ -237,8 +260,14 @@ export async function handleFormSubmission(
   dispatchWebhooks(formConfig.ownerId, "form.submitted", {
     formId,
     websiteId: formConfig.websiteId,
+    landingId: formConfig.landingId,
     data: cleanData,
   });
+
+  // Notify the form owner by email (fire-and-forget — never fails the submission)
+  notifyOwnerOfSubmission(formConfig.ownerId, formConfig.name, cleanData).catch(
+    (err) => console.error("Form owner email failed:", err)
+  );
 
   const result: { ok: true; deliveryUrl?: string } = { ok: true };
   if (formConfig.deliveryUrl) {
@@ -308,6 +337,34 @@ export async function enrichRecentFormSubmission(
   }
 
   return { ok: true };
+}
+
+// ─── Owner notification ────────────────────────────────────────
+async function notifyOwnerOfSubmission(
+  ownerId: string,
+  formName: string,
+  data: Record<string, string>
+): Promise<void> {
+  const owner = await db.user.findUnique({ where: { id: ownerId } });
+  if (!owner?.email) return;
+
+  const rows = Object.entries(data)
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:600">${escapeHtml(k)}</td><td style="padding:6px 12px;border:1px solid #eee">${escapeHtml(v)}</td></tr>`
+    )
+    .join("");
+
+  await getSesTransport().sendMail({
+    from: "EasyBits@easybits.cloud",
+    subject: `📬 Nueva respuesta — ${formName}`,
+    bcc: [owner.email],
+    html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto">
+  <h2 style="font-size:18px">Nueva respuesta en "${escapeHtml(formName)}"</h2>
+  <table style="border-collapse:collapse;width:100%;font-size:14px">${rows}</table>
+  <p style="margin-top:16px;font-size:12px;color:#999">Documento generado con EasyBits.cloud</p>
+</div>`,
+  });
 }
 
 // ─── Helpers ───────────────────────────────────────────────────

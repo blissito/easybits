@@ -856,7 +856,8 @@ model VideoGeneration {
 
 model FormConfig {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  websiteId      String   @db.ObjectId
+  websiteId      String?  @db.ObjectId // raw-HTML Website this form lives on
+  landingId      String?  @db.ObjectId // OR a Landing (editor: landings v3/v5, documents v4) — form is inserted as a section and survives re-deploy
   name           String   @default("Contacto")
   fields         Json     // FormField[] — [{name, type, label, required, placeholder, options}]
   dbId           String?  // EasyBits DB ID to insert submissions
@@ -869,6 +870,7 @@ model FormConfig {
   updatedAt      DateTime @updatedAt
 
   @@index([websiteId])
+  @@index([landingId])
   @@index([ownerId])
 }
 
