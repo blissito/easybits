@@ -48,6 +48,26 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **Republicar `@easybits.cloud/mcp` solo si cambia el proxy** (transport, auth, CLI flags, RC file). Bump de versión NO es necesario para nuevas tools.
 - **Debug "no aparece mi tool"**: (1) ¿deployó Fly? `curl -X POST https://www.easybits.cloud/api/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`. (2) ¿Está en el group allowlist que el cliente usa (design/core/all)? (3) ¿El cliente tiene el conector configurado? (4) **Cache de sesión**: los clientes MCP piden `tools/list` al arrancar la sesión y no la refrescan. Tras un deploy hay que reiniciar Claude Code / abrir chat nuevo en Claude.ai para que aparezcan las tools nuevas.
 
+### Response & error contract (helpers en `app/.server/mcp/responses.ts`)
+- **Forma única** para las 158 tools — un agente siempre parsea lo mismo. NO construir `{ content: [...] }` a mano en tools nuevas; usar los helpers:
+  - `ok(data)` — éxito (`{ content:[text(JSON)], structuredContent }`).
+  - `fail(message, extra?)` — error: `{ error, ...extra }` + `isError:true`. Toda excepción lanzada en un handler ya pasa por `fail()` vía `wrapHandler`, así que lo normal es `throw` y dejar que lo atrape.
+  - `failService(e, label)` — mapea errores del catálogo de servicios (créditos/config/provider) a `fail()`; devuelve `null` si no es de servicio (entonces `throw e`).
+  - `paginate(items, { nextCursor?, total? })` — envelope ÚNICO de toda lista: `{ items, nextCursor, hasMore, total? }`. `hasMore` se deriva de `nextCursor`. Todo `list_*` devuelve `ok(paginate(...))`. Para listas offset (`list_documents`, `list_websites`) el handler calcula `nextCursor` = siguiente offset.
+- **Contract tests**: `test/mcp-contracts.test.ts` congela estas formas (in-process vía `getRegisteredTools(createMcpServer(["all"]))`). Correr `npx vitest run test/mcp-contracts.test.ts` tras tocar la capa MCP.
+- **Helpers de cursor en `core/operations.ts`** (`listFiles`/`listShareTokens`/`listWebsiteFiles`/`listDeletedFiles`) ya devuelven `hasMore` — REST API v2 y SDK lo heredan.
+
+## EasyBits DB (libSQL / sqld)
+- **Servidor**: `infra/easybits-db/` — Fly app `easybits-db` (región `dfw`). Es la imagen oficial `ghcr.io/tursodatabase/libsql-server:latest` con flags; no hay código propietario.
+  - Dockerfile CMD: `sqld --http-listen-addr 0.0.0.0:8080 --admin-listen-addr 0.0.0.0:9090 --db-path /data/sqld --enable-namespaces`
+  - **Puertos**: `:8080` = pipeline API (queries), `:9090` = admin API (crear/borrar namespaces). Solo accesibles por red interna Fly.
+  - **VM**: `shared-cpu-1x` / 512 MB, scale-to-zero (`min_machines_running=0`, auto start/stop) → ~$0 en idle. Cuello de botella = disco, no CPU/RAM.
+  - **Persistencia**: volumen Fly `easybits_db_data` → `/data` (tamaño se fijó al crear con `fly volumes create`; ver con `fly volumes list -a easybits-db`).
+  - **Multi-tenant**: un namespace por cliente/recurso vía header `x-namespace` (`--enable-namespaces`).
+- **Cliente**: `app/.server/sqld.ts` — thin HTTP client del pipeline API. Lee `SQLD_URL` (:8080) y `SQLD_ADMIN_URL` (:9090). Funciones: `sqldCreateNamespace`, `sqldDeleteNamespace`, `sqldQuery`, `sqldExec`.
+- **MCP**: tools `db_create`/`db_query`/`db_list`/`db_exec` consumen este cliente.
+- **Clonar sobre sandbox-host**: la arquitectura mapea 1:1 (es sqld puro) — correr el mismo binario `sqld` en microVM Firecracker o en el host KS-5, disco montado en `/data`, exponer `:8080` (y `:9090` solo interno). Decisión pendiente: sqld central (namespaces = tenants, como hoy en Fly) vs sqld por sandbox (DB embebida por microVM, más aislamiento, sin pooling).
+
 ## Admin Access
 - `ADMIN_EMAILS` env var: comma-separated superuser emails
 - `Admin` role in DB: managed from the admin panel itself

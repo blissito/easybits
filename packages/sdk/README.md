@@ -221,7 +221,26 @@ console.log(`${stats.counts.files} files, ${stats.counts.webhooks} webhooks`);
 const copy = await eb.duplicateFile("abc123", "photo-backup.jpg");
 ```
 
+## Pagination
+
+Every paginated list returns one envelope: `{ items, nextCursor, hasMore }` (some
+also include `total`). When `hasMore` is `true`, pass `nextCursor` back as `cursor`
+to fetch the next page:
+
+```ts
+let cursor: string | undefined;
+do {
+  const { items, nextCursor, hasMore } = await eb.listFiles({ limit: 50, cursor });
+  process(items);
+  cursor = nextCursor ?? undefined;
+  if (!hasMore) break;
+} while (cursor);
+```
+
 ## Error Handling
+
+All errors share one shape: a JSON body `{ "error": "message" }`, sometimes with
+extra fields like `code` or `status`.
 
 ```ts
 import { EasybitsError } from "@easybits.cloud/sdk";

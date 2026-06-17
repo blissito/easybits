@@ -534,8 +534,8 @@ try {
                 { name: "cursor", type: "string", desc: "Pagination cursor" },
                 { name: "status", type: "string", desc: "Set to 'DELETED' to list deleted files" },
               ]}
-              response={`{ "items": [...], "nextCursor": "..." }`}
-              sdk={`const { items, nextCursor } = await eb.listFiles({ limit: 10 });`}
+              response={`{ "items": [...], "nextCursor": "...", "hasMore": true }`}
+              sdk={`const { items, nextCursor, hasMore } = await eb.listFiles({ limit: 10 });`}
             />
 
             <Endpoint
@@ -1101,7 +1101,10 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                 </table>
               </div>
               <p className="text-gray-600">
-                All error responses include a JSON body: <code className="bg-gray-100 px-1 rounded">{`{"error": "message"}`}</code>
+                All error responses share one shape: a JSON body <code className="bg-gray-100 px-1 rounded">{`{ "error": "message" }`}</code>, optionally with extra fields (e.g. <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">status</code>). Over MCP the same payload is returned with <code className="bg-gray-100 px-1 rounded">isError: true</code>.
+              </p>
+              <p className="text-gray-600">
+                Every list endpoint returns the same envelope: <code className="bg-gray-100 px-1 rounded">{`{ items, nextCursor, hasMore, total? }`}</code>. When <code className="bg-gray-100 px-1 rounded">hasMore</code> is true, pass <code className="bg-gray-100 px-1 rounded">nextCursor</code> back as <code className="bg-gray-100 px-1 rounded">cursor</code> (or <code className="bg-gray-100 px-1 rounded">offset</code> for documents/websites) to fetch the next page.
               </p>
               <p className="text-gray-600">
                 Rate limits: 100 requests per 15 minutes for all plans.

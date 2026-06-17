@@ -42,7 +42,9 @@ export interface ListFilesParams {
 export interface ListFilesResponse {
   items: EasybitsFile[];
   nextCursor?: string | null;
-  total: number;
+  /** True when more pages exist — pass `nextCursor` as `cursor` to fetch them. */
+  hasMore?: boolean;
+  total?: number;
 }
 
 export interface UploadFileParams {
@@ -138,6 +140,7 @@ export interface ListShareTokensParams {
 export interface ListShareTokensResponse {
   items: (ShareToken & { file?: { name: string } })[];
   nextCursor?: string | null;
+  hasMore?: boolean;
 }
 
 export interface DeletedFile extends EasybitsFile {
@@ -153,6 +156,7 @@ export interface ListDeletedFilesParams {
 export interface ListDeletedFilesResponse {
   items: DeletedFile[];
   nextCursor?: string | null;
+  hasMore?: boolean;
 }
 
 export interface Website {

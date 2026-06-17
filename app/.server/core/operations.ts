@@ -58,7 +58,7 @@ export async function listFiles(
   const items = hasMore ? files.slice(0, limit) : files;
   const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-  return { items, nextCursor };
+  return { items, nextCursor, hasMore };
 }
 
 // --- Get File ---
@@ -520,7 +520,7 @@ export async function listShareTokens(
   }));
   const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-  return { items, nextCursor };
+  return { items, nextCursor, hasMore };
 }
 
 // --- Website Operations ---
@@ -1052,7 +1052,7 @@ export async function listWebsiteFiles(
   const items = hasMore ? files.slice(0, limit) : files;
   const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-  return { items, nextCursor };
+  return { items, nextCursor, hasMore };
 }
 
 // --- Upload Website File ---
@@ -1328,5 +1328,5 @@ export async function listDeletedFiles(
   });
   const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-  return { items, nextCursor };
+  return { items, nextCursor, hasMore };
 }

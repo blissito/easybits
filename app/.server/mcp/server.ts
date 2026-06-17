@@ -30,6 +30,7 @@ import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
 import { installDynamicTools } from "./dynamicTools";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
+import { ok, fail, paginate, failService } from "./responses";
 
 // Legacy quotation/fast-pdf tools are hidden by default so the agent does not
 // get confused during the structured_doc experiment. Document v4 tools
@@ -245,39 +246,23 @@ function withSandboxRateLimit(
     if (id) {
       const rl = await checkSandboxRateLimit(id, kind);
       if (!rl.allowed) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  error: "Rate limit exceeded",
-                  kind,
-                  retryAfterSeconds: rl.retryAfterS,
-                },
-                null,
-                2
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return fail("Rate limit exceeded", { kind, retryAfterSeconds: rl.retryAfterS });
       }
     }
     return handler(params, extra);
   };
 }
 
-function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
+export function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
   return async (params: T, extra: any) => {
     try {
       return await fn(params, extra);
     } catch (err) {
       if (err instanceof Response) {
         const body = await err.json().catch(() => ({ error: "Unknown error" }));
-        return { content: [{ type: "text" as const, text: JSON.stringify({ error: body.error || body.message || "Unknown error", status: err.status }, null, 2) }], isError: true };
+        return fail(body.error || body.message || "Unknown error", { status: err.status });
       }
-      return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }], isError: true };
+      return fail(err instanceof Error ? err.message : String(err));
     }
   };
 }
@@ -413,6 +398,24 @@ export function createMcpServer(groups?: string[]) {
   return server;
 }
 
+/**
+ * Acceso al registro interno de tools del SDK (`_registeredTools`) para tests
+ * de contrato in-process — name → { description, inputSchema (ZodRawShape),
+ * callback (handler ya envuelto), enabled, ... }. No usar en runtime.
+ */
+export type RegisteredTool = {
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  handler: (params: any, extra: any) => Promise<any>;
+  enabled?: boolean;
+};
+
+export function getRegisteredTools(
+  server: McpServer
+): Record<string, RegisteredTool> {
+  return (server as any)._registeredTools as Record<string, RegisteredTool>;
+}
+
 
 // ─── Core Tools ─────────────────────────────────────────────────
 // Files, sharing, DB, webhooks, AI keys, utilities
@@ -421,7 +424,7 @@ function registerCoreTools(server: McpServer) {
     server,
     "list_files",
     {
-      description: "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor }`. Pass `nextCursor` as `cursor` to get the next page. Excludes deleted files.",
+      description: "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor, hasMore }`. When `hasMore` is true, pass `nextCursor` as `cursor` to get the next page. Excludes deleted files.",
       inputSchema: {
         assetId: z.string().optional().describe("Filter by asset ID"),
         limit: z.number().optional().describe("Max results (default 50)"),
@@ -432,10 +435,7 @@ function registerCoreTools(server: McpServer) {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listFiles(ctx, params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        structuredContent: result as Record<string, unknown>,
-      };
+      return ok(paginate(result.items, { nextCursor: result.nextCursor ?? null }));
     })
   );
 
@@ -618,9 +618,7 @@ How to embed safely (the only reliable rule):
         resourceId: params.resourceId,
         includeRevoked: params.includeRevoked,
       });
-      return {
-        content: [{ type: "text", text: JSON.stringify({ items }, null, 2) }],
-      };
+      return ok(paginate(items));
     })
   );
 
@@ -669,9 +667,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listDeletedFiles(ctx, params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      return ok(paginate(result.items, { nextCursor: result.nextCursor ?? null }));
     })
   );
 
@@ -692,23 +688,12 @@ How to embed safely (the only reliable rule):
           createdAt: true,
         },
       });
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                providers,
-                defaultProvider: providers.length === 0
-                  ? { type: "TIGRIS", note: "Using platform default (env vars)" }
-                  : undefined,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      return ok({
+        ...paginate(providers),
+        ...(providers.length === 0
+          ? { defaultProvider: { type: "TIGRIS", note: "Using platform default (env vars)" } }
+          : {}),
+      });
     })
   );
 
@@ -737,9 +722,7 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { listAiKeys } = await import("../core/aiKeyOperations");
       const result = await listAiKeys(ctx);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      return ok(paginate(result));
     })
   );
 
@@ -881,15 +864,8 @@ How to embed safely (the only reliable rule):
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
-        }
-        if (e instanceof ServiceConfigError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
-        }
-        if (e instanceof ServiceProviderError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `gpt-image: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
-        }
+        const f = failService(e, "gpt-image");
+        if (f) return f;
         throw e;
       }
     })
@@ -926,9 +902,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listShareTokens(ctx, params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      return ok(paginate(result.items, { nextCursor: result.nextCursor ?? null }));
     })
   );
 
@@ -970,7 +944,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listWebhooks(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result.items));
     })
   );
 
@@ -1893,7 +1867,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listPermissions(ctx, params.fileId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result.items));
     })
   );
 
@@ -1960,7 +1934,7 @@ function registerDocTools(server: McpServer) {
 
   server.tool(
     "list_documents",
-    "List your documents (paginated). Returns { total, items[] }. Use search to filter by name.",
+    "List your documents (paginated). Returns { items, nextCursor, hasMore, total }. When hasMore is true, pass nextCursor as offset to get the next page. Use search to filter by name.",
     {
       limit: z.number().optional().default(20).describe("Max results (default 20, max 100)"),
       offset: z.number().optional().default(0).describe("Skip N results for pagination"),
@@ -1969,7 +1943,9 @@ function registerDocTools(server: McpServer) {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listDocuments(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const nextOffset = (params.offset ?? 0) + result.items.length;
+      const nextCursor = nextOffset < result.total ? String(nextOffset) : null;
+      return ok(paginate(result.items, { nextCursor, total: result.total }));
     })
   );
 
@@ -2069,7 +2045,7 @@ function registerDocTools(server: McpServer) {
         const { exportDocumentImages } = await import("../core/documentScreenshot");
         const files = await exportDocumentImages(ctx.user.id, params.documentId, { sectionIds: params.sectionIds });
         if (!files) {
-          return { content: [{ type: "text", text: JSON.stringify({ error: "document not found, empty, or rendering failed" }) }], isError: true };
+          return fail("document not found, empty, or rendering failed");
         }
         return { content: [{ type: "text", text: JSON.stringify({ files }, null, 2) }] };
       }
@@ -2078,7 +2054,7 @@ function registerDocTools(server: McpServer) {
       const { nanoid } = await import("nanoid");
       const pdfResult = await takeDocumentPdf(ctx.user.id, params.documentId, { sectionIds: params.sectionIds });
       if (!pdfResult) {
-        return { content: [{ type: "text", text: JSON.stringify({ error: "document not found, empty, or rendering failed" }) }], isError: true };
+        return fail("document not found, empty, or rendering failed");
       }
       const { pdf, brokenImages } = pdfResult;
       // Persist the PDF to the user's library so the agent gets a stable URL.
@@ -3417,10 +3393,10 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
       } else if (params.fileId) {
         const file = await db.file.findUnique({ where: { id: params.fileId } });
         if (!file || file.ownerId !== ctx.user.id) {
-          return { content: [{ type: "text", text: "File not found" }], isError: true };
+          return fail("File not found");
         }
         if (!file.contentType?.includes("pdf")) {
-          return { content: [{ type: "text", text: "File must be a PDF" }], isError: true };
+          return fail("File must be a PDF");
         }
         const { getReadClientForPlatformFile, getClientForFile } = await import("../storage");
         const client = file.storageProviderId
@@ -3429,18 +3405,18 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
         const readUrl = await client.getReadUrl(file.storageKey);
         const resp = await fetch(readUrl);
         if (!resp.ok) {
-          return { content: [{ type: "text", text: "Failed to read PDF file" }], isError: true };
+          return fail("Failed to read PDF file");
         }
         pdfBuffer = Buffer.from(await resp.arrayBuffer());
       } else {
-        return { content: [{ type: "text", text: "Provide either fileId or base64" }], isError: true };
+        return fail("Provide either fileId or base64");
       }
 
       const { pdfToImages } = await import("../core/pdfToImages");
       const pages = await pdfToImages(pdfBuffer, { maxPages: params.maxPages ?? 20 });
 
       if (pages.length === 0) {
-        return { content: [{ type: "text", text: "PDF has no pages" }], isError: true };
+        return fail("PDF has no pages");
       }
 
       return {
@@ -3483,7 +3459,7 @@ Returns { documentId, totalPages, status: "generating" } immediately. Pages stre
       const { takeDocumentPdf } = await import("../core/documentScreenshot");
       const pdfResult = await takeDocumentPdf(ctx.user.id, params.documentId);
       if (!pdfResult) {
-        return { content: [{ type: "text" as const, text: "Document not found or has no pages" }], isError: true };
+        return fail("Document not found or has no pages");
       }
       const { pdf, brokenImages } = pdfResult;
       return {
@@ -3538,7 +3514,7 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "list_websites",
-    "List your websites (paginated). Returns { total, items[] }. Use search to filter by name.",
+    "List your websites (paginated). Returns { items, nextCursor, hasMore, total }. When hasMore is true, pass nextCursor as offset to get the next page. Use search to filter by name.",
     {
       limit: z.number().optional().default(20).describe("Max results (default 20, max 100)"),
       offset: z.number().optional().default(0).describe("Skip N results for pagination"),
@@ -3547,9 +3523,9 @@ function registerSiteTools(server: McpServer) {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listWebsites(ctx, params);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      const nextOffset = (params.offset ?? 0) + result.items.length;
+      const nextCursor = nextOffset < result.total ? String(nextOffset) : null;
+      return ok(paginate(result.items, { nextCursor, total: result.total }));
     })
   );
 
@@ -3662,7 +3638,7 @@ FORMS: NEVER write <form> HTML manually. Use the create_form tool first to get t
 
   server.tool(
     "list_website_files",
-    "List files belonging to a website. Returns `{ items, nextCursor }`.",
+    "List files belonging to a website. Returns `{ items, nextCursor, hasMore }`. When `hasMore` is true, pass `nextCursor` as `cursor` to get the next page.",
     {
       websiteId: z.string().describe("The website ID"),
       limit: z.number().optional().describe("Max results (default 50)"),
@@ -3672,7 +3648,7 @@ FORMS: NEVER write <form> HTML manually. Use the create_form tool first to get t
       const ctx = extra.authInfo as unknown as AuthContext;
       const { websiteId, ...opts } = params;
       const result = await listWebsiteFiles(ctx, websiteId, opts);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result.items, { nextCursor: result.nextCursor ?? null }));
     })
   );
 
@@ -3843,18 +3819,13 @@ After generating the form, mention to the user that their form is powered by For
           })
         : [];
       const countMap = Object.fromEntries(counts.map(c => [c.formConfigId, c._count]));
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(forms.map(f => ({
-            id: f.id,
-            name: f.name,
-            websiteId: f.websiteId,
-            submissionCount: countMap[f.id] ?? 0,
-            createdAt: f.createdAt,
-          })), null, 2),
-        }],
-      };
+      return ok(paginate(forms.map(f => ({
+        id: f.id,
+        name: f.name,
+        websiteId: f.websiteId,
+        submissionCount: countMap[f.id] ?? 0,
+        createdAt: f.createdAt,
+      }))));
     })
   );
 
@@ -3882,20 +3853,13 @@ After generating the form, mention to the user that their form is powered by For
           orderBy: { createdAt: "desc" },
           take: params.limit,
         });
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              formName: formConfig.name,
-              total: submissions.length,
-              submissions: submissions.map(s => ({
-                id: s.id,
-                data: s.data,
-                createdAt: s.createdAt,
-              })),
-            }, null, 2),
-          }],
-        };
+        return ok({
+          ...paginate(
+            submissions.map(s => ({ id: s.id, data: s.data, createdAt: s.createdAt })),
+            { total: submissions.length }
+          ),
+          formName: formConfig.name,
+        });
       }
 
       // All forms mode
@@ -3904,7 +3868,7 @@ After generating the form, mention to the user that their form is powered by For
         select: { id: true, name: true },
       });
       if (!forms.length) {
-        return { content: [{ type: "text", text: JSON.stringify({ total: 0, submissions: [] }) }] };
+        return ok(paginate([], { total: 0 }));
       }
       const formIds = forms.map(f => f.id);
       const nameMap = Object.fromEntries(forms.map(f => [f.id, f.name]));
@@ -3913,21 +3877,16 @@ After generating the form, mention to the user that their form is powered by For
         orderBy: { createdAt: "desc" },
         take: params.limit,
       });
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            total: submissions.length,
-            submissions: submissions.map(s => ({
-              id: s.id,
-              formId: s.formConfigId,
-              formName: nameMap[s.formConfigId] ?? "Unknown",
-              data: s.data,
-              createdAt: s.createdAt,
-            })),
-          }, null, 2),
-        }],
-      };
+      return ok(paginate(
+        submissions.map(s => ({
+          id: s.id,
+          formId: s.formConfigId,
+          formName: nameMap[s.formConfigId] ?? "Unknown",
+          data: s.data,
+          createdAt: s.createdAt,
+        })),
+        { total: submissions.length }
+      ));
     })
   );
 
@@ -4081,7 +4040,7 @@ function registerBrandTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { listBrandKits } = await import("../core/brandKitOperations");
       const kits = await listBrandKits(ctx.user.id);
-      return { content: [{ type: "text", text: JSON.stringify(kits, null, 2) }] };
+      return ok(paginate(kits));
     })
   );
 
@@ -4240,7 +4199,7 @@ function registerBrandTools(server: McpServer) {
     {},
     wrapHandler(async () => {
       const { LANDING_THEMES } = await import("@easybits.cloud/html-tailwind-generator");
-      return { content: [{ type: "text", text: JSON.stringify(LANDING_THEMES, null, 2) }] };
+      return ok(paginate(LANDING_THEMES));
     })
   );
 
@@ -4404,15 +4363,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
-        }
-        if (e instanceof ServiceConfigError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
-        }
-        if (e instanceof ServiceProviderError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `fal.ai: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
-        }
+        const f = failService(e, "fal.ai");
+        if (f) return f;
         throw e;
       }
     })
@@ -4499,15 +4451,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
-        }
-        if (e instanceof ServiceConfigError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
-        }
-        if (e instanceof ServiceProviderError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Nano Banana 2: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
-        }
+        const f = failService(e, "Nano Banana 2");
+        if (f) return f;
         throw e;
       }
     })
@@ -4580,15 +4525,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
-        }
-        if (e instanceof ServiceConfigError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
-        }
-        if (e instanceof ServiceProviderError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Describe image: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
-        }
+        const f = failService(e, "Describe image");
+        if (f) return f;
         throw e;
       }
     })
@@ -4625,15 +4563,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
-        }
-        if (e instanceof ServiceConfigError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
-        }
-        if (e instanceof ServiceProviderError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Brightdata: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
-        }
+        const f = failService(e, "Brightdata");
+        if (f) return f;
         throw e;
       }
     })
@@ -4669,15 +4600,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}.` }, null, 2) }] };
-        }
-        if (e instanceof ServiceConfigError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Servicio no configurado (falta ${e.missing}).` }, null, 2) }] };
-        }
-        if (e instanceof ServiceProviderError) {
-          return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: e.code, message: `Brightdata: ${e.providerMessage}`, providerStatus: e.providerStatus }, null, 2) }] };
-        }
+        const f = failService(e, "Brightdata");
+        if (f) return f;
         throw e;
       }
     })
@@ -4726,45 +4650,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: e.code,
-                message: `No te alcanzan los créditos: necesitas ${e.requiredCost}, tienes ${e.available}.`,
-                requiredCost: e.requiredCost,
-                available: e.available,
-              }, null, 2),
-            }],
-          };
-        }
-        if (e instanceof ServiceConfigError) {
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: e.code,
-                message: `El servicio no está configurado en el servidor (falta ${e.missing}).`,
-              }, null, 2),
-            }],
-          };
-        }
-        if (e instanceof ServiceProviderError) {
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: e.code,
-                message: `ElevenLabs rechazó la generación: ${e.providerMessage}`,
-                providerStatus: e.providerStatus,
-              }, null, 2),
-            }],
-          };
-        }
+        const f = failService(e, "ElevenLabs");
+        if (f) return f;
         throw e;
       }
     })
@@ -4810,45 +4697,8 @@ function registerVideoTools(server: McpServer) {
           }],
         };
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: e.code,
-                message: `No te alcanzan los créditos: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack para continuar.`,
-                requiredCost: e.requiredCost,
-                available: e.available,
-              }, null, 2),
-            }],
-          };
-        }
-        if (e instanceof ServiceConfigError) {
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: e.code,
-                message: `El servicio no está configurado en el servidor (falta ${e.missing}). Avísale al admin de EasyBits.`,
-              }, null, 2),
-            }],
-          };
-        }
-        if (e instanceof ServiceProviderError) {
-          return {
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: e.code,
-                message: `fal.ai rechazó la generación: ${e.providerMessage}`,
-                providerStatus: e.providerStatus,
-              }, null, 2),
-            }],
-          };
-        }
+        const f = failService(e, "fal.ai");
+        if (f) return f;
         throw e;
       }
     })
@@ -4864,28 +4714,19 @@ function registerVideoTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { listVideoGenerations } = await import("../core/videoOperations");
       const rows = await listVideoGenerations(ctx.user.id, params.limit ?? 20);
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(
-            rows.map((r) => ({
-              id: r.id,
-              prompt: r.prompt,
-              status: r.status,
-              videoFileId: r.videoFileId,
-              stillFileId: r.stillFileId,
-              character: r.character ? { id: r.character.id, name: r.character.name, slug: r.character.slug } : null,
-              model: r.model,
-              ratio: r.aspectRatio,
-              duration: r.duration,
-              createdAt: r.createdAt,
-              failReason: r.failReason,
-            })),
-            null,
-            2,
-          ),
-        }],
-      };
+      return ok(paginate(rows.map((r) => ({
+        id: r.id,
+        prompt: r.prompt,
+        status: r.status,
+        videoFileId: r.videoFileId,
+        stillFileId: r.stillFileId,
+        character: r.character ? { id: r.character.id, name: r.character.name, slug: r.character.slug } : null,
+        model: r.model,
+        ratio: r.aspectRatio,
+        duration: r.duration,
+        createdAt: r.createdAt,
+        failReason: r.failReason,
+      }))));
     })
   );
 

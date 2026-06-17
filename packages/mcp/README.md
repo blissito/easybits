@@ -140,6 +140,23 @@ Payloads are signed with HMAC SHA-256 via `X-Easybits-Signature` header. Webhook
 | `update_website` | Update website name or status |
 | `delete_website` | Delete website and soft-delete associated files |
 
+## Response & error contract
+
+Every tool follows the same conventions, so an agent always parses the same shapes:
+
+- **Success** returns the result as JSON text (and `structuredContent` when applicable).
+- **Errors** return `isError: true` with a JSON body `{ "error": "message" }`, sometimes
+  with extra fields like `code`, `status`, or `providerStatus`.
+- **Lists** (`list_*`) all return one envelope:
+
+  ```json
+  { "items": [ ... ], "nextCursor": "abc" , "hasMore": true }
+  ```
+
+  Some lists also include `total`. When `hasMore` is `true`, pass `nextCursor` back as
+  `cursor` (or as `offset` for `list_documents` / `list_websites`) to fetch the next page.
+  When there are no more results, `nextCursor` is `null` and `hasMore` is `false`.
+
 ## Configuration
 
 | Variable | Description | Required |
