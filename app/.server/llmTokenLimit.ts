@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
+import { PLANS, normalizePlan, getUserPlan, type PlanKey } from "~/lib/plans";
 import { maybeAutoTopup } from "./core/autoTopup";
 
 /**
@@ -38,6 +38,7 @@ export async function checkLLMTokenLimit(
     where: { id: userId },
     select: {
       metadata: true,
+      roles: true,
       llmTokensUsed: true,
       llmTokensResetAt: true,
       llmTokensBonus: true,
@@ -46,7 +47,9 @@ export async function checkLLMTokenLimit(
   });
   if (!user) throw new Error("User not found");
 
-  const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
+  // El plan vive en roles[] (lo escribe el webhook de Stripe), con metadata.plan
+  // como fallback. getUserPlan honra ambos — no usar normalizePlan(metadata) solo.
+  const plan = userPlan ? normalizePlan(userPlan) : getUserPlan(user);
   const config = PLANS[plan];
   const planLimit = config.llmTokensIncluded;
   const used = user.llmTokensUsed || 0;
@@ -132,7 +135,7 @@ export async function recargarLLMTokens(
 ): Promise<LLMTokenLimit> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { llmTokensBonus: true, metadata: true },
+    select: { llmTokensBonus: true },
   });
   if (!user) throw new Error("User not found");
 
@@ -142,7 +145,8 @@ export async function recargarLLMTokens(
     data: { llmTokensBonus: currentBonus + tokens },
   });
 
-  return checkLLMTokenLimit(userId, (user.metadata as any)?.plan);
+  // Sin pasar plan: checkLLMTokenLimit lo resuelve vía getUserPlan (roles + metadata).
+  return checkLLMTokenLimit(userId);
 }
 
 export function formatTokens(n: number): string {

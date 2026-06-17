@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { PLANS, normalizePlan, type PlanKey } from "~/lib/plans";
+import { PLANS, normalizePlan, getUserPlan, type PlanKey } from "~/lib/plans";
 import { maybeAutoTopup } from "./core/autoTopup";
 
 /**
@@ -36,6 +36,7 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
     where: { id: userId },
     select: {
       metadata: true,
+      roles: true,
       aiGenerationsCount: true,
       aiGenerationsResetAt: true,
       aiGenerationsBonus: true,
@@ -44,7 +45,9 @@ export async function checkAiGenerationLimit(userId: string, userPlan?: string) 
   });
   if (!user) throw new Response("User not found", { status: 404 });
 
-  const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
+  // El plan vive en roles[] (lo escribe el webhook de Stripe), con metadata.plan
+  // como fallback. getUserPlan honra ambos — no usar normalizePlan(metadata) solo.
+  const plan = userPlan ? normalizePlan(userPlan) : getUserPlan(user);
   const config = PLANS[plan];
   const limit = config.aiGenerationsPerMonth;
   const bonus = user.aiGenerationsBonus || 0;
@@ -141,13 +144,14 @@ export async function incrementAiGeneration(
     where: { id: userId },
     select: {
       metadata: true,
+      roles: true,
       aiGenerationsCount: true,
       aiGenerationsBonus: true,
     },
   });
   if (!user) return;
 
-  const plan = normalizePlan(userPlan || (user.metadata as any)?.plan);
+  const plan = userPlan ? normalizePlan(userPlan) : getUserPlan(user);
   const config = PLANS[plan];
   const limit = config.aiGenerationsPerMonth;
   const count = user.aiGenerationsCount || 0;

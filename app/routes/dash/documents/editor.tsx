@@ -30,7 +30,7 @@ import { sectionsToHtml } from "~/lib/landing4/sectionsToGrapes";
 import { buildSingleThemeCss, buildCustomTheme, type CustomColors } from "@easybits.cloud/html-tailwind-generator";
 import { parseFiles, combineContent } from "~/lib/documents/parseFiles";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
-import { normalizePlan } from "~/lib/plans";
+import { getUserPlan } from "~/lib/plans";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import toast from "react-hot-toast";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
@@ -320,9 +320,8 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const sourceContent = meta.sourceContent as string | undefined;
   const logoUrl = meta.logoUrl as string | undefined;
   const direction = meta.direction as Record<string, unknown> | undefined;
-  // AI generation usage
-  const userMeta = (user.metadata as Record<string, unknown>) || {};
-  const userPlan = normalizePlan(userMeta.plan as string);
+  // AI generation usage — plan vive en roles[], usar getUserPlan (no metadata.plan solo).
+  const userPlan = getUserPlan(user);
   const genLimit = await checkAiGenerationLimit(user.id, userPlan);
   const aiGenUsed = genLimit.used;
   const aiGenLimit = genLimit.limit;

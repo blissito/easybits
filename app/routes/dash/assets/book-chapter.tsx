@@ -24,7 +24,7 @@ import {
 import { useUndoStack } from "@easybits.cloud/html-tailwind-generator/components";
 import { playTone, warmAudio } from "~/hooks/useNotificationSound";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
-import { normalizePlan } from "~/lib/plans";
+import { getUserPlan } from "~/lib/plans";
 import toast from "react-hot-toast";
 import type { Route } from "./+types/book-chapter";
 
@@ -71,8 +71,7 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     orderBy: { order: "asc" },
     select: { id: true, title: true, order: true },
   });
-  const userMeta = (user.metadata as Record<string, unknown>) || {};
-  const userPlan = normalizePlan(userMeta.plan as string);
+  const userPlan = getUserPlan(user);
   const genLimit = await checkAiGenerationLimit(user.id, userPlan);
   return {
     chapter,

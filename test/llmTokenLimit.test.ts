@@ -155,4 +155,19 @@ describe("checkLLMTokenLimit — Mega (reset mensual, bonus persiste)", () => {
     expect(r.remaining).toBe(MEGA - 4_000_000);
     expect(mockUpdate).not.toHaveBeenCalled();
   });
+
+  it("resuelve plan por ROL aunque metadata.plan esté vacío (bug Brenda)", async () => {
+    // El webhook de Stripe escribe el rol, no metadata.plan. getUserPlan honra roles.
+    userWith({
+      metadata: {},
+      roles: ["Enrolled", "Mega"],
+      llmTokensUsed: 4_200_000,
+      llmTokensBonus: 0,
+      llmTokensResetAt: new Date(Date.now() - 5 * DAY),
+    });
+    const r = await checkLLMTokenLimit("u1");
+    expect(r.plan).toBe("Mega");
+    expect(r.planLimit).toBe(MEGA); // 10M, NO el grant Byte de 5M
+    expect(r.remaining).toBe(MEGA - 4_200_000);
+  });
 });

@@ -7,7 +7,7 @@ import { TablePagination } from "~/components/common/pagination/TablePagination"
 import type { Route } from "./+types/users";
 import { useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { PLANS, normalizePlan } from "~/lib/plans";
+import { PLANS, getUserPlan } from "~/lib/plans";
 import { formatTokens } from "~/components/LLMUsageCard";
 
 export const meta = () => [
@@ -216,7 +216,7 @@ function UserCard({ user, stats }: { user: any; stats?: { monthly: number; bonus
   const [newRole, setNewRole] = useState("");
   const busy = fetcher.state !== "idle";
 
-  const plan = normalizePlan((user.metadata as any)?.plan);
+  const plan = getUserPlan(user);
   const limit = PLANS[plan].aiGenerationsPerMonth;
   const used = user.aiGenerationsCount ?? 0;
   const bonus = user.aiGenerationsBonus ?? 0;

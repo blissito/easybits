@@ -2,11 +2,11 @@ import { data } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { createPackCheckout } from "~/.server/stripe";
-import { GENERATION_PACKS, LLM_TOKEN_PACKS, normalizePlan } from "~/lib/plans";
+import { GENERATION_PACKS, LLM_TOKEN_PACKS, getUserPlan } from "~/lib/plans";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUserOrRedirect(request);
-  const plan = normalizePlan((user.metadata as any)?.plan);
+  const plan = getUserPlan(user);
 
   const packs = GENERATION_PACKS.map((pack) => ({
     id: pack.id,
@@ -19,7 +19,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const user = await getUserOrRedirect(request);
-  const plan = normalizePlan((user.metadata as any)?.plan);
+  const plan = getUserPlan(user);
 
   const body = await request.json();
   const { packId, packType = "credits", autoTopup = false } = body;
