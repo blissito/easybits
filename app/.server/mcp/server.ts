@@ -1436,7 +1436,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_domain_add",
-    "Attach a custom domain (CNAME) to a sandbox port, served over HTTPS at https://<domain> with an auto-issued TLS cert — instead of the default sb-<id>-<port>.sandboxes.easybits.cloud URL. Returns the `cname` target the customer must point their DNS at. Expose/serve the port first; one domain maps to one sandbox. Only subdomains (app.cliente.com), not apex. After the customer sets the CNAME, use sandbox_domain_verify to confirm it's live.",
+    "Attach a custom domain to a sandbox port, served over HTTPS at https://<domain> with an auto-issued TLS cert — instead of the default sb-<id>-<port>.sandboxes.easybits.cloud URL. Works for BOTH subdomains (app.cliente.com → CNAME) and apex/root domains (cliente.com → A record). The response's `dns` field tells you the EXACT record to create (type/name/value): apex returns an A record, subdomains a CNAME. Expose/serve the port first; one domain maps to one sandbox. After the customer sets the DNS record, use sandbox_domain_verify to confirm it's live.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       domain: z.string().describe("Custom subdomain, e.g. app.cliente.com (no scheme, no port)"),

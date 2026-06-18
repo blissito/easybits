@@ -848,16 +848,39 @@ export interface SandboxDomain {
   port: number;
 }
 
+// DNS targets the customer points their record at. Override via env if the
+// edge IP / branded CNAME host ever change.
+const SANDBOX_PUBLIC_IP = process.env.SANDBOX_PUBLIC_IP || "54.38.94.14";
+const SANDBOX_CNAME_TARGET =
+  process.env.SANDBOX_CNAME_TARGET || "cname.sandboxes.easybits.cloud";
+
+export interface DomainDnsRecord {
+  type: "A" | "CNAME"; // apex → A, subdomain → CNAME
+  name: string; // the record name (the domain itself)
+  value: string; // IP (A) or branded host (CNAME)
+  note: string;
+}
+
 export interface AddDomainResult {
   domain: string;
   port: number;
   url: string;
-  cname: string; // CNAME target the customer points their DNS at
+  cname: string; // legacy: branded CNAME target (kept for back-compat)
+  dns: DomainDnsRecord; // the exact record the customer must create
 }
 
-// Attach a custom domain to a sandbox port. The customer creates a CNAME from
-// their domain to the returned `cname` target; Caddy then mints the TLS cert
-// on-demand and serves the sandbox at https://<domain>. One domain → one sandbox.
+// A domain is "apex/root" if it has only two labels (e.g. fancyfiles.app).
+// Apex can't use a CNAME (DNS rule), so it needs an A record. Subdomains
+// (app.cliente.com) use a CNAME. NOTE: this 2-label heuristic doesn't cover
+// multi-part TLDs like co.uk — refine with the public-suffix list if needed.
+function isApex(domain: string): boolean {
+  return domain.split(".").filter(Boolean).length <= 2;
+}
+
+// Attach a custom domain to a sandbox port. Returns the exact DNS record the
+// customer must create (`dns`): A→IP for apex, CNAME→branded host for a
+// subdomain. Caddy then mints the TLS cert on-demand and serves the sandbox at
+// https://<domain>. One domain → one sandbox.
 export async function addSandboxDomain(
   ctx: AuthContext,
   sandboxId: string,
@@ -865,12 +888,27 @@ export async function addSandboxDomain(
   port: number
 ): Promise<AddDomainResult> {
   requireScope(ctx, "WRITE");
-  return callHost<AddDomainResult>(
+  domain = domain.toLowerCase().trim();
+  const r = await callHost<{ domain: string; port: number; url: string; cname: string }>(
     "POST",
     `/v1/sandbox/${sandboxId}/domain`,
     { domain, port },
     ctx.user.id
   );
+  const dns: DomainDnsRecord = isApex(domain)
+    ? {
+        type: "A",
+        name: domain,
+        value: SANDBOX_PUBLIC_IP,
+        note: "Dominio raíz (apex): crea un registro A. El apex no admite CNAME.",
+      }
+    : {
+        type: "CNAME",
+        name: domain,
+        value: SANDBOX_CNAME_TARGET,
+        note: "Subdominio: crea un registro CNAME.",
+      };
+  return { ...r, dns };
 }
 
 // Detach a custom domain from a sandbox.
