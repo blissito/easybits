@@ -434,6 +434,19 @@ Body: \`{ port }\`
 MCP: \`sandbox_expose_port({ sandboxId, port })\`
 Retorna URL HTTPS pública (viva mientras el sandbox exista).
 
+### Dominios personalizados (custom domain + HTTPS automático)
+Sirve un puerto del sandbox bajo TU dominio (\`app.cliente.com\` o \`cliente.com\`) en vez de la URL \`sb-…\`. El cert TLS se emite solo en el primer acceso (sin egress fees, sin config extra). Un dominio → un sandbox.
+
+\`POST /sandboxes/:id/domain-add\` · Body: \`{ domain, port }\`
+MCP: \`sandbox_domain_add({ sandboxId, domain, port })\` · SDK: \`sb.addDomain(domain, port)\`
+Devuelve en \`dns\` el registro EXACTO a crear: **subdominio → CNAME** a \`cname.sandboxes.easybits.cloud\`; **raíz/apex → A** a la IP del edge (apex no admite CNAME).
+
+\`POST /sandboxes/:id/domain-remove\` · Body: \`{ domain }\` — MCP: \`sandbox_domain_remove\` · SDK: \`sb.removeDomain(domain)\`
+\`POST /sandboxes/:id/domain-list\` — MCP: \`sandbox_domain_list\` · SDK: \`sb.listDomains()\`
+\`POST /sandboxes/:id/domain-verify\` · Body: \`{ domain }\` — MCP: \`sandbox_domain_verify\` · SDK: \`sb.verifyDomain(domain)\` — confirma DNS + cert TLS
+
+Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-verify\`. Crea el registro en tu DNS **autoritativo** (si tu registrador delega los nameservers a otro proveedor, edítalo ahí).
+
 ### Archivos
 - \`sandbox_files_write({ sandboxId, path, content })\` — escribir archivo
 - \`sandbox_files_read({ sandboxId, path })\` — leer archivo

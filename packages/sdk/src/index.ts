@@ -1456,6 +1456,30 @@ export class Sandbox {
   exposePort(port: number): Promise<ExposedPort> {
     return this.post("/expose", { port });
   }
+
+  /**
+   * Attach a custom domain to a port, served over HTTPS with an auto-issued
+   * TLS cert. Returns the exact DNS record to create (`dns`): subdomain → CNAME,
+   * apex/root → A. Create that record in your DNS, then call verifyDomain().
+   */
+  addDomain(domain: string, port: number): Promise<AddDomainResult> {
+    return this.post("/domain-add", { domain, port });
+  }
+
+  /** Detach a custom domain from this sandbox. */
+  removeDomain(domain: string): Promise<{ ok: boolean }> {
+    return this.post("/domain-remove", { domain });
+  }
+
+  /** List the custom domains attached to this sandbox. */
+  listDomains(): Promise<SandboxDomain[]> {
+    return this.post("/domain-list", {});
+  }
+
+  /** Check that a custom domain resolves and serves over TLS ("ya quedó"). */
+  verifyDomain(domain: string): Promise<DomainVerification> {
+    return this.post("/domain-verify", { domain });
+  }
 }
 
 /** Filesystem sub-API for a Sandbox (sbx.files.*). */
@@ -1587,6 +1611,34 @@ export interface ExposedPort {
   url: string;
   host: string;
   port: number;
+}
+
+export interface DomainDnsRecord {
+  type: "A" | "CNAME"; // apex → A, subdomain → CNAME
+  name: string;
+  value: string;
+  note: string;
+}
+
+export interface AddDomainResult {
+  domain: string;
+  port: number;
+  url: string;
+  cname: string;
+  dns: DomainDnsRecord; // the exact DNS record the customer must create
+}
+
+export interface SandboxDomain {
+  domain: string;
+  port: number;
+}
+
+export interface DomainVerification {
+  domain: string;
+  ready: boolean;
+  dns: { resolved: boolean; cname?: string[] };
+  https: { ok: boolean; status?: number; error?: string };
+  hint: string;
 }
 
 export interface BgStartResult {

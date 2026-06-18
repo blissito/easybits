@@ -1120,7 +1120,7 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
-              <strong>22 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
+              <strong>26 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
               Agrega <code className="bg-gray-100 px-1 rounded">--tools sandbox</code> para habilitarlas.{" "}
               <a href="#tool-groups" className="underline">Ver tool groups</a>.
             </div>
@@ -1222,6 +1222,36 @@ await eb.sandboxExecBackground(sb.sandboxId, {
 const { url } = await eb.sandboxExposePort(sb.sandboxId, 3000);
 console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
 
+            <h3 className="text-lg font-bold mt-8 mb-3">Dominio personalizado (custom domain + HTTPS automático)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Sirve un puerto del sandbox bajo <strong>tu propio dominio</strong> con certificado TLS emitido automáticamente — sin egress fees, sin configurar nada de TLS. Funciona con subdominios (<code className="bg-gray-100 px-1 rounded">app.cliente.com</code>) y dominios raíz (<code className="bg-gray-100 px-1 rounded">cliente.com</code>).
+            </p>
+            <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-sm">
+              <strong>Flujo (3 pasos):</strong>
+              <ol className="list-decimal ml-5 mt-2 space-y-1">
+                <li><code className="bg-gray-100 px-1 rounded">sandbox_domain_add</code> → te devuelve en <code className="bg-gray-100 px-1 rounded">dns</code> el registro EXACTO a crear.</li>
+                <li>Crea ese registro en tu DNS: <strong>subdominio → CNAME</strong> a <code className="bg-gray-100 px-1 rounded">cname.sandboxes.easybits.cloud</code>; <strong>raíz/apex → A</strong> a la IP del edge (apex no admite CNAME).</li>
+                <li><code className="bg-gray-100 px-1 rounded">sandbox_domain_verify</code> → confirma que ya resuelve y sirve con TLS. El cert se emite solo en el primer acceso.</li>
+              </ol>
+            </div>
+            <CodeExample title="SDK" code={`const sb = await eb.sandboxes.create({ template: "ubuntu" });
+// ...arranca tu server en el puerto 3000...
+
+// Atar un dominio a ese puerto
+const { dns } = await sb.addDomain("app.cliente.com", 3000);
+console.log(dns); // { type: "CNAME", name: "app.cliente.com",
+                  //   value: "cname.sandboxes.easybits.cloud" }
+// (apex como cliente.com devolvería { type: "A", value: "<edge-ip>" })
+
+// Tras crear el registro DNS, confirma que está vivo:
+await sb.verifyDomain("app.cliente.com"); // { ready: true, ... }
+
+await sb.listDomains();                    // dominios del sandbox
+await sb.removeDomain("app.cliente.com");`} />
+            <p className="text-gray-500 text-xs mb-2">
+              Nota: crea el registro en tu DNS <strong>autoritativo</strong>. Si tu registrador delega los nameservers a otro proveedor (ej. Google Cloud DNS, Route53), edítalo ahí — no en el panel del registrador.
+            </p>
+
             <h3 className="text-lg font-bold mt-8 mb-3">Kernel persistente (code-interpreter)</h3>
             <p className="text-gray-600 text-sm mb-3">
               El template <code className="bg-gray-100 px-1 rounded">code-interpreter</code> mantiene un kernel Jupyter con estado entre celdas. Variables, imports y gráficas (matplotlib) sobreviven.
@@ -1292,6 +1322,10 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_files_read", "sandboxId, path", "Leer archivo del sandbox"],
                 ["sandbox_files_list", "sandboxId, path", "Listar directorio"],
                 ["sandbox_expose_port", "sandboxId, port", "Exponer puerto como URL pública HTTPS"],
+                ["sandbox_domain_add", "sandboxId, domain, port", "Atar dominio propio (devuelve el registro DNS: CNAME o A)"],
+                ["sandbox_domain_remove", "sandboxId, domain", "Quitar dominio personalizado"],
+                ["sandbox_domain_list", "sandboxId", "Listar dominios del sandbox"],
+                ["sandbox_domain_verify", "domain", "Confirmar DNS + cert TLS del dominio"],
                 ["agent_create", "template", "Crear agente persistente (endpoint HTTP)"],
                 ["agent_list", "—", "Listar agentes persistentes"],
                 ["agent_message", "agentId, content", "Enviar mensaje a un agente"],

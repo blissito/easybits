@@ -15,6 +15,10 @@ import {
   runCell,
   kernelRestart,
   exposeSandboxPort,
+  addSandboxDomain,
+  removeSandboxDomain,
+  listSandboxDomains,
+  verifySandboxDomain,
 } from "~/.server/core/sandboxOperations";
 import { computeEnvFor } from "~/.server/compute/gateway";
 
@@ -23,7 +27,8 @@ const invalid = (issues: unknown) =>
 
 // POST /api/v2/sandboxes/:id/:action
 // action ∈ extend | suspend | resume | exec | run-code | run-cell |
-//          kernel-restart | expose
+//          kernel-restart | expose | domain-add | domain-remove |
+//          domain-list | domain-verify
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -70,6 +75,22 @@ export async function action({ request, params }: Route.ActionArgs) {
       if (typeof body.port !== "number")
         return Response.json({ error: "port required" }, { status: 400 });
       return Response.json(await exposeSandboxPort(ctx, id, body.port));
+    case "domain-add":
+      if (typeof body.domain !== "string" || !body.domain.trim())
+        return Response.json({ error: "domain required" }, { status: 400 });
+      if (typeof body.port !== "number")
+        return Response.json({ error: "port required" }, { status: 400 });
+      return Response.json(await addSandboxDomain(ctx, id, body.domain, body.port));
+    case "domain-remove":
+      if (typeof body.domain !== "string" || !body.domain.trim())
+        return Response.json({ error: "domain required" }, { status: 400 });
+      return Response.json(await removeSandboxDomain(ctx, id, body.domain));
+    case "domain-list":
+      return Response.json(await listSandboxDomains(ctx, id));
+    case "domain-verify":
+      if (typeof body.domain !== "string" || !body.domain.trim())
+        return Response.json({ error: "domain required" }, { status: 400 });
+      return Response.json(await verifySandboxDomain(ctx, body.domain));
     default:
       return Response.json(
         { error: `unknown action '${params.action}'` },
