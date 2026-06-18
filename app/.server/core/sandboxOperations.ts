@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { promises as dns } from "node:dns";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
@@ -838,6 +839,121 @@ export async function exposeSandboxPort(
     { port },
     ctx.user.id
   );
+}
+
+// ─────────────── Custom domains (CNAME) ───────────────
+
+export interface SandboxDomain {
+  domain: string;
+  port: number;
+}
+
+export interface AddDomainResult {
+  domain: string;
+  port: number;
+  url: string;
+  cname: string; // CNAME target the customer points their DNS at
+}
+
+// Attach a custom domain to a sandbox port. The customer creates a CNAME from
+// their domain to the returned `cname` target; Caddy then mints the TLS cert
+// on-demand and serves the sandbox at https://<domain>. One domain → one sandbox.
+export async function addSandboxDomain(
+  ctx: AuthContext,
+  sandboxId: string,
+  domain: string,
+  port: number
+): Promise<AddDomainResult> {
+  requireScope(ctx, "WRITE");
+  return callHost<AddDomainResult>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/domain`,
+    { domain, port },
+    ctx.user.id
+  );
+}
+
+// Detach a custom domain from a sandbox.
+export async function removeSandboxDomain(
+  ctx: AuthContext,
+  sandboxId: string,
+  domain: string
+): Promise<{ ok: boolean }> {
+  requireScope(ctx, "WRITE");
+  return callHost<{ ok: boolean }>(
+    "DELETE",
+    `/v1/sandbox/${sandboxId}/domain`,
+    { domain },
+    ctx.user.id
+  );
+}
+
+// List the custom domains attached to a sandbox (read from its metadata).
+export async function listSandboxDomains(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<SandboxDomain[]> {
+  requireScope(ctx, "READ");
+  const sb = await callHost<SandboxRecord>(
+    "GET",
+    `/v1/sandbox/${sandboxId}`,
+    undefined,
+    ctx.user.id
+  );
+  const md = sb.metadata ?? {};
+  return Object.entries(md)
+    .filter(([k]) => k.startsWith("domain:"))
+    .map(([k, v]) => ({ domain: k.slice("domain:".length), port: parseInt(v, 10) }));
+}
+
+export interface DomainVerification {
+  domain: string;
+  ready: boolean; // true once it resolves AND serves over TLS
+  dns: { resolved: boolean; cname?: string[] };
+  https: { ok: boolean; status?: number; error?: string };
+  hint: string;
+}
+
+// Verify a custom domain after the customer set their CNAME: checks DNS resolves
+// and that https://<domain> serves with a valid cert (which also confirms Caddy
+// minted the on-demand cert and routing works). Lets the agent tell the user
+// "ya quedó" vs "falta el CNAME / espera la propagación".
+export async function verifySandboxDomain(
+  ctx: AuthContext,
+  domain: string
+): Promise<DomainVerification> {
+  requireScope(ctx, "READ");
+  domain = domain.toLowerCase().trim();
+
+  let resolved = false;
+  let cname: string[] | undefined;
+  try {
+    resolved = (await dns.resolve4(domain).catch(() => [])).length > 0;
+    cname = await dns.resolveCname(domain).catch(() => undefined);
+    if (cname?.length) resolved = true;
+  } catch {
+    /* resolved stays false */
+  }
+
+  let https: DomainVerification["https"] = { ok: false };
+  try {
+    const res = await fetch(`https://${domain}/`, {
+      signal: AbortSignal.timeout(8000),
+      redirect: "manual",
+    });
+    https = { ok: true, status: res.status };
+  } catch (e) {
+    https = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  const ready = https.ok;
+  const hint = ready
+    ? "El dominio ya sirve correctamente."
+    : !resolved
+      ? "El DNS no resuelve aún: crea el CNAME hacia cname.sandboxes.easybits.cloud y espera la propagación (puede tardar minutos)."
+      : "El DNS resuelve pero aún no sirve: el certificado TLS se emite en el primer acceso. Reintenta en ~30s y verifica que el sandbox esté running con el puerto sirviendo.";
+
+  return { domain, ready, dns: { resolved, cname }, https, hint };
 }
 
 // ─────────────── Background processes ───────────────

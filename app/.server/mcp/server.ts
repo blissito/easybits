@@ -102,6 +102,10 @@ import {
   moveFile as sandboxMoveFile,
   mkdir as sandboxMkdir,
   exposeSandboxPort,
+  addSandboxDomain,
+  removeSandboxDomain,
+  listSandboxDomains,
+  verifySandboxDomain,
   execBackground,
   execBackgroundStatus,
   execBackgroundKill,
@@ -220,6 +224,10 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_files_move: "op",
   sandbox_files_mkdir: "op",
   sandbox_expose_port: "op",
+  sandbox_domain_add: "op",
+  sandbox_domain_remove: "op",
+  sandbox_domain_list: "op",
+  sandbox_domain_verify: "op",
   sandbox_exec_background: "op",
   sandbox_exec_status: "op",
   sandbox_exec_kill: "op",
@@ -1422,6 +1430,61 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await exposeSandboxPort(ctx, params.sandboxId, params.port);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_domain_add",
+    "Attach a custom domain (CNAME) to a sandbox port, served over HTTPS at https://<domain> with an auto-issued TLS cert — instead of the default sb-<id>-<port>.sandboxes.easybits.cloud URL. Returns the `cname` target the customer must point their DNS at. Expose/serve the port first; one domain maps to one sandbox. Only subdomains (app.cliente.com), not apex. After the customer sets the CNAME, use sandbox_domain_verify to confirm it's live.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      domain: z.string().describe("Custom subdomain, e.g. app.cliente.com (no scheme, no port)"),
+      port: z.number().int().min(1).max(65535).describe("Port the service listens on inside the sandbox"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await addSandboxDomain(ctx, params.sandboxId, params.domain, params.port);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_domain_remove",
+    "Detach a custom domain from a sandbox.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      domain: z.string().describe("The custom domain to remove"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await removeSandboxDomain(ctx, params.sandboxId, params.domain);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_domain_list",
+    "List the custom domains attached to a sandbox.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listSandboxDomains(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_domain_verify",
+    "Check whether a custom domain is live: confirms DNS resolves and that https://<domain> serves with a valid TLS cert. Use after the customer sets the CNAME to tell them whether it's ready or what's still missing.",
+    {
+      domain: z.string().describe("The custom domain to verify"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await verifySandboxDomain(ctx, params.domain);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
