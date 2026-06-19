@@ -246,6 +246,7 @@ model User {
   secrets              Secret[]
   agents               Agent[]
   computeKeys          ComputeKey[]
+  sandboxes            Sandbox[]
 }
 
 model Secret {
@@ -930,6 +931,31 @@ model Agent {
   // this is mirrored on every status/link/unlink call so the dash can show
   // last-known state without a roundtrip.
   whatsapp Json?
+
+  @@index([ownerId])
+}
+
+// Local registry row for a sandbox we track in Mongo. ONE model, keyed by the
+// host's stable `sandboxId` — same id whether ephemeral or permanent (Fly-style).
+// Today a row exists ONLY for PERMANENT (billed always-on) sandboxes; ephemeral
+// ones stay host-only. Forward-compatible: to track all sandboxes later, just
+// start writing rows for ephemeral ones too (set persistent=false) — no migration.
+// `persistent`/`tier`/`cpuMode`/`stripeSubItemId` are fields; "permanent" = the flag.
+model Sandbox {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId         String   @db.ObjectId
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sandboxId       String   @unique // host VM id — the single handle (1 sandbox = 1 row)
+  persistent      Boolean  @default(true)
+  tier            String   // catalog key: "nano".."performance-4x"
+  cpuMode         String   @default("shared") // "shared" | "reserved"
+  diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100
+  name            String?
+  status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed
+  // Single Stripe subscription item per permanent sandbox (tier + disk combined).
+  stripeSubItemId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([ownerId])
 }

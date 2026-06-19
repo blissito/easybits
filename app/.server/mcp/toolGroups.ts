@@ -20,6 +20,7 @@ export type ToolGroupKey =
   | "magnet"
   | "video"
   | "sandbox"
+  | "hosting"
   | "public-safe"
   | "all";
 
@@ -90,6 +91,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Sandbox",
     description: "MicroVMs Firecracker para correr agentes y código aislado. Ciclo de vida (spawn/extend/suspend/resume/destroy), exec (sync + background), run-code, kernel Jupyter persistente (run_cell con estado + charts), archivos (write/read/list/delete/move/mkdir), expose_port (URL pública) + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
     toolCount: 22,
+  },
+  {
+    key: "hosting",
+    label: "Hosting",
+    description:
+      "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir. El plan da acceso; cada máquina factura flat al mes. Ideal para hostear apps, bots y servicios persistentes.",
+    toolCount: 5,
   },
   {
     key: "public-safe",
@@ -354,6 +362,19 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * Hosting — always-on machines (máquinas permanentes). MVP surface:
+ * catalog + create/list/get/destroy. resize_machine / add_machine_disk join
+ * once the host contract (reserved CPU floor, live resize) lands.
+ */
+export const HOSTING_ALLOWLIST = new Set<string>([
+  "list_machine_tiers",
+  "create_machine",
+  "make_permanent",
+  "list_machines",
+  "release_machine",
+]);
+
+/**
  * Public-safe toolset — minimal surface for B2C / WhatsApp customer-facing
  * agents. Just 3 tools: store a user's attachment, mint a share link for it,
  * and query a known catalog DB read-only. db_select is hard-locked to
@@ -405,5 +426,6 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   magnet: MAGNET_ALLOWLIST,
   video: VIDEO_ALLOWLIST,
   sandbox: SANDBOX_ALLOWLIST,
+  hosting: HOSTING_ALLOWLIST,
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
 };

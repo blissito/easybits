@@ -27,6 +27,35 @@ export const SandboxCreateBody = z.object({
   size: z.enum(["s", "m", "l", "xl"]).optional(),
 });
 
+// ── Hosting (always-on machines) ──────────────────────────────────────────
+// Tier keys mirror HOSTING_CATALOG (app/lib/hostingCatalog.ts). Kept as a flat
+// enum here to validate at the edge without importing the catalog into zod.
+export const MACHINE_TIERS = [
+  "nano", "micro", "mini", "lite", "base",
+  "plus", "pro", "focus", "performance", "performance-4x",
+] as const;
+
+export const MachineCreateBody = z.object({
+  tier: z.enum(MACHINE_TIERS),
+  cpuMode: z.enum(["shared", "reserved"]).optional(),
+  diskAddonsGB: z.number().int().min(0).max(2000).multipleOf(100).optional(),
+  template: z.enum(SANDBOX_TEMPLATES).optional(),
+  name: z.string().max(64).optional(),
+  // When set, PROMOTE this existing (ephemeral) sandbox to permanent instead
+  // of provisioning a fresh VM. The sandbox keeps its resources; `tier` is the
+  // billed price.
+  fromSandboxId: z.string().optional(),
+});
+
+export const MachineResizeBody = z.object({
+  tier: z.enum(MACHINE_TIERS).optional(),
+  cpuMode: z.enum(["shared", "reserved"]).optional(),
+});
+
+export const MachineDiskBody = z.object({
+  addGB: z.number().int().positive().max(2000).multipleOf(100),
+});
+
 export const SandboxExecBody = z.object({
   command: z.string().min(1),
   cwd: z.string().optional(),

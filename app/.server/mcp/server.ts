@@ -120,6 +120,18 @@ import {
   destroyAgent,
 } from "../core/sandboxOperations";
 import {
+  createPermanent,
+  makePermanent,
+  listPermanent,
+  releasePermanent,
+} from "../core/machineOperations";
+import {
+  HOSTING_CATALOG,
+  TIER_ORDER,
+  DISK_ADDON_GB,
+  DISK_ADDON_PRICE,
+} from "../../lib/hostingCatalog";
+import {
   destroyAgentRun,
   enqueueAgentRun,
   getAgentRunStatus,
@@ -206,6 +218,10 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   ghosty_spawn: "create",
   goose_spawn: "create",
   agent_run: "create",
+  create_machine: "create",
+  make_permanent: "create",
+  list_machines: "op",
+  release_machine: "op",
   // Ops (120/min)
   sandbox_list: "op",
   sandbox_status: "op",
@@ -1221,6 +1237,85 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listSandboxes(ctx);
       return ok(paginate(result, { total: result.length }));
+    })
+  );
+
+  // --- Hosting Tools (máquinas permanentes / always-on VMs) ---
+
+  server.tool(
+    "list_machine_tiers",
+    "List the always-on hosting catalog: tiers (nano…performance-4x) with vCPU/RAM/NVMe and flat MXN/month price (shared + reserved where available), plus the disk add-on price. Use to quote a machine before create_machine.",
+    {},
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (_params) => {
+      return ok({
+        tiers: TIER_ORDER.map((k) => HOSTING_CATALOG[k]),
+        diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
+        currency: "MXN",
+      });
+    })
+  );
+
+  server.tool(
+    "create_machine",
+    "Provision an ALWAYS-ON machine (permanent VM, billed flat MXN/month as a subscription item on top of your plan). Requires a paid plan (Mega/Tera). Addressed by sandboxId. Returns the record (sandboxId, tier, monthlyMxn, status). Reserved CPU and performance-4x are by-request until enabled.",
+    {
+      tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).describe("Catalog tier key (see list_machine_tiers)"),
+      cpuMode: z.enum(["shared", "reserved"]).optional().describe("shared (default, best-effort) or reserved (guaranteed CPU floor, only focus+)"),
+      diskAddonsGB: z.number().int().min(0).max(2000).optional().describe("Extra NVMe in multiples of 100GB (+$99/mo each)"),
+      template: z.string().optional().describe("Base image template (default 'ubuntu')"),
+      name: z.string().max(64).optional().describe("Human-friendly label"),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createPermanent(ctx, params as Parameters<typeof createPermanent>[1]);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "make_permanent",
+    "Promote an existing (ephemeral) sandbox to an always-on machine: keeps the SAME sandboxId, disarms the host reaper, and starts flat MXN/month billing for the chosen tier. The 'spin up, then keep it' flow.",
+    {
+      sandboxId: z.string().describe("Sandbox ID (from sandbox_create) to make permanent"),
+      tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).describe("Catalog tier to bill (see list_machine_tiers)"),
+      cpuMode: z.enum(["shared", "reserved"]).optional(),
+      diskAddonsGB: z.number().int().min(0).max(2000).optional(),
+      name: z.string().max(64).optional(),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await makePermanent(ctx, sandboxId, rest as Parameters<typeof makePermanent>[2]);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "list_machines",
+    "List all always-on machines (permanent sandboxes) owned by the current account, with tier + monthlyMxn (status self-healed against the host).",
+    {},
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listPermanent(ctx);
+      return ok(paginate(result, { total: result.length }));
+    })
+  );
+
+  server.tool(
+    "release_machine",
+    "Release an always-on machine by sandboxId: removes its Stripe billing item (prorated) and destroys the VM. Idempotent.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine to release"),
+    },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await releasePermanent(ctx, params.sandboxId);
+      return ok(result);
     })
   );
 

@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: "websites", label: "Sitios web" },
   { id: "documents", label: "Documentos" },
   { id: "agents", label: "Agentes & Sandboxes" },
+  { id: "hosting", label: "Máquinas permanentes" },
   { id: "account", label: "Cuenta & Uso" },
   { id: "errors", label: "Errores & Límites" },
   { id: "tool-groups", label: "Tool Groups" },
@@ -50,25 +51,28 @@ export default function DocsPage() {
 
   // Scrollspy: highlight whichever section is currently in view, so the sidebar
   // stays in sync on deep-links (/docs#agents) and while the user scrolls.
+  // Deterministic scroll-based pick (the prior IntersectionObserver band left
+  // tall sections with no intersecting entry, so it got stuck on "quickstart").
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const top = entries
-          .filter((e) => e.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
-          )[0];
-        if (top) setActiveSection(top.target.id);
-      },
-      // Offset the top by the sticky navbar; a section counts as active once it
-      // reaches the upper third of the viewport.
-      { rootMargin: "-57px 0px -70% 0px" }
-    );
-    SECTIONS.forEach((s) => {
-      const el = document.getElementById(s.id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+    const ids = SECTIONS.map((s) => s.id);
+    const OFFSET = 120; // sticky navbar + a little breathing room
+
+    const onScroll = () => {
+      let current = ids[0];
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= OFFSET) current = id;
+      }
+      // At the very bottom, the last section may never cross OFFSET — force it.
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+        current = ids[ids.length - 1];
+      }
+      setActiveSection(current);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
@@ -1362,6 +1366,111 @@ console.log(status.result);  // resultado final del agente`} />
 
             <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min, max 60 min).
+            </div>
+          </section>
+
+          {/* Máquinas permanentes (hosting) */}
+          <section id="hosting" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Máquinas permanentes</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Un sandbox efímero se auto-destruye al TTL. Una <strong>máquina permanente</strong> corre 24/7 y se cobra <strong>flat en MXN/mes</strong> como item de suscripción encima de tu plan. Mismo recurso, mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code> — "permanente" es solo un flag + cobro. La operas igual que cualquier sandbox (exec, archivos, expose_port, dominios).
+            </p>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              <strong>5 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">hosting</code>.{" "}
+              Agrega <code className="bg-gray-100 px-1 rounded">--tools hosting</code> para habilitarlas.{" "}
+              Requiere plan de pago (Mega/Tera) — el plan es el gate de acceso.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Catálogo de tiers</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Tier</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">vCPU / RAM / NVMe</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Shared</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Reserved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["nano", "1 / 512MB / 2GB", "$49", "—"],
+                    ["micro", "1 / 1GB / 4GB", "$99", "—"],
+                    ["mini", "2 / 1GB / 8GB", "$149", "—"],
+                    ["lite", "1 / 2GB / 6GB", "$129", "—"],
+                    ["base", "2 / 2GB / 16GB", "$249", "—"],
+                    ["plus", "2 / 4GB / 24GB", "$299", "—"],
+                    ["pro", "4 / 4GB / 32GB", "$449", "—"],
+                    ["focus", "4 / 8GB / 64GB", "$690", "$1,725"],
+                    ["performance", "8 / 16GB / 128GB", "$1,290", "$3,225"],
+                    ["performance-4x", "16 / 32GB / 256GB", "por solicitud", "por solicitud"],
+                  ].map(([tier, specs, shared, reserved], i) => (
+                    <tr key={tier} className={`border-t border-gray-200 ${i % 2 ? "bg-gray-50" : ""}`}>
+                      <td className="px-4 py-2 font-mono text-xs font-bold">{tier}</td>
+                      <td className="px-4 py-2 text-xs text-gray-600">{specs}</td>
+                      <td className="px-4 py-2 text-xs">{shared}</td>
+                      <td className="px-4 py-2 text-xs text-gray-500">{reserved}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-gray-600 text-sm mb-6">
+              Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. <code className="bg-gray-100 px-1 rounded">performance-4x</code> (enterprise) se aprovisiona por solicitud.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3">Crear una máquina permanente</h3>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// Cotiza con el catálogo
+const { tiers } = await eb.machines.tiers();
+
+// Crea una máquina always-on (cobra flat al mes)
+const m = await eb.sandboxes.createPermanent({ tier: "focus" });
+console.log(m.sandboxId, m.tier, m.monthlyMxn); // operas la VM por sandboxId
+await m.exec("apt-get install -y nginx");` },
+                { label: "REST", code: `# Catálogo
+GET /api/v2/machines/tiers
+
+# Crear permanente
+POST /api/v2/machines
+{ "tier": "focus", "cpuMode": "shared", "diskAddonsGB": 0 }
+# → { sandboxId, tier, monthlyMxn, status, ... }
+
+# Listar / liberar
+GET    /api/v2/machines
+DELETE /api/v2/machines/:sandboxId` },
+                { label: "MCP", code: `list_machine_tiers()                 // catálogo + precios
+create_machine({ tier: "focus" })   // crea always-on, cobra flat/mes
+list_machines()                     // tus máquinas + monthlyMxn
+release_machine({ sandboxId })      // quita cobro + destruye VM` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Promover un efímero a permanente</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Levanta un sandbox, pruébalo, y si quieres conservarlo conviértelo en máquina — <strong>conserva el mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code></strong>, desarma el reaper y arranca el cobro.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const sb = await eb.sandboxes.create({ template: "node" }); // efímero
+// ...instala, configura, déjalo listo...
+await sb.makePermanent("pro"); // ahora always-on, mismo sandboxId
+// Para liberar (corta cobro + destruye):
+await sb.release();` },
+                { label: "REST", code: `# Promover (mismo sandboxId)
+POST /api/v2/machines
+{ "fromSandboxId": "sb_abc123", "tier": "pro" }` },
+                { label: "MCP", code: `make_permanent({ sandboxId: "sb_abc123", tier: "pro" })` },
+              ]}
+            />
+
+            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
+              <strong>Cobro:</strong> el plan da acceso; cada máquina factura aparte (flat MXN/mes, prorrateado). <code className="bg-gray-100 px-1 rounded">release_machine</code> es <strong>destructiva</strong> (quita el cobro y destruye la VM). Si tu plan se cancela, tus máquinas se suspenden.
             </div>
           </section>
 

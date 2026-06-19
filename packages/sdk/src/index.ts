@@ -1306,6 +1306,51 @@ export class EasybitsClient {
         const rec = await req<SandboxRecord>(`/sandboxes/${sandboxId}`);
         return new Sandbox(rec, req);
       },
+      /**
+       * Provision a PERMANENT (always-on) machine, billed flat MXN/month on top
+       * of your plan. Requires a paid plan. Returns a Sandbox you operate by id.
+       */
+      createPermanent: async (params: CreatePermanentParams): Promise<Sandbox> => {
+        const rec = await req<SandboxRecord>("/machines", {
+          method: "POST",
+          body: JSON.stringify(params),
+        });
+        const sbx = new Sandbox(rec, req);
+        if (params.waitForReady !== false) await sbx.waitUntilReady();
+        return sbx;
+      },
+      /** List the caller's permanent machines. */
+      listPermanent: async (): Promise<Sandbox[]> => {
+        const { machines } = await req<{ machines: SandboxRecord[] }>("/machines");
+        return machines.map((r) => new Sandbox(r, req));
+      },
+    };
+  }
+
+  /**
+   * Convenience view over always-on machines (permanent sandboxes). Same
+   * resources as `eb.sandboxes.*` — machines are addressed by sandboxId.
+   */
+  get machines() {
+    const req = <T>(path: string, opts?: RequestInit) => this.request<T>(path, opts);
+    return {
+      /** The hosting catalog: tiers + disk add-on pricing. */
+      tiers: () => req<MachineTiers>("/machines/tiers"),
+      /** List the caller's permanent machines. */
+      list: async (): Promise<Sandbox[]> => {
+        const { machines } = await req<{ machines: SandboxRecord[] }>("/machines");
+        return machines.map((r) => new Sandbox(r, req));
+      },
+      /** Provision a permanent machine (alias of eb.sandboxes.createPermanent). */
+      create: async (params: CreatePermanentParams): Promise<Sandbox> => {
+        const rec = await req<SandboxRecord>("/machines", {
+          method: "POST",
+          body: JSON.stringify(params),
+        });
+        const sbx = new Sandbox(rec, req);
+        if (params.waitForReady !== false) await sbx.waitUntilReady();
+        return sbx;
+      },
     };
   }
 }
@@ -1325,6 +1370,11 @@ export class Sandbox {
   createdAt: string;
   expiresAt: string;
   metadata?: Record<string, string>;
+  /** Always-on machine fields (set when this sandbox is permanent). */
+  persistent?: boolean;
+  tier?: string;
+  cpuMode?: "shared" | "reserved";
+  monthlyMxn?: number;
   private req: SandboxReq;
   /** Filesystem operations inside the sandbox. */
   readonly files: SandboxFiles;
@@ -1336,8 +1386,21 @@ export class Sandbox {
     this.createdAt = record.createdAt;
     this.expiresAt = record.expiresAt;
     this.metadata = record.metadata;
+    this.persistent = record.persistent;
+    this.tier = record.tier;
+    this.cpuMode = record.cpuMode;
+    this.monthlyMxn = record.monthlyMxn;
     this.req = req;
     this.files = new SandboxFiles(record.sandboxId, req);
+  }
+
+  private applyMachine(rec: SandboxRecord): this {
+    this.status = rec.status;
+    this.persistent = rec.persistent;
+    this.tier = rec.tier;
+    this.cpuMode = rec.cpuMode;
+    this.monthlyMxn = rec.monthlyMxn;
+    return this;
   }
 
   private base() {
@@ -1387,6 +1450,27 @@ export class Sandbox {
   /** Destroy the microVM. */
   destroy(): Promise<{ ok: true }> {
     return this.req(this.base(), { method: "DELETE" });
+  }
+
+  // ── Always-on (permanent machine) ──
+  /**
+   * Promote this (ephemeral) sandbox to a PERMANENT machine: keeps the same
+   * sandboxId, disarms the host reaper, and starts flat MXN/month billing for
+   * the chosen tier. The "spin it up, then keep it" flow.
+   */
+  async makePermanent(
+    tier: string,
+    opts?: { cpuMode?: "shared" | "reserved"; diskAddonsGB?: number; name?: string },
+  ): Promise<this> {
+    const rec = await this.req<SandboxRecord>("/machines", {
+      method: "POST",
+      body: JSON.stringify({ fromSandboxId: this.sandboxId, tier, ...opts }),
+    });
+    return this.applyMachine(rec);
+  }
+  /** Release a permanent machine: stops billing (prorated) and destroys the VM. */
+  release(): Promise<{ ok: true }> {
+    return this.req(`/machines/${this.sandboxId}`, { method: "DELETE" });
   }
 
   // ── Execution ──
@@ -1576,6 +1660,40 @@ export interface SandboxRecord {
   expiresAt: string;
   ownerId: string;
   metadata?: Record<string, string>;
+  // Present when the sandbox is a permanent ("always-on") machine.
+  persistent?: boolean;
+  tier?: string;
+  cpuMode?: "shared" | "reserved";
+  monthlyMxn?: number;
+}
+
+// ─── Hosting (always-on machines) ────────────────────────────────
+
+export interface MachineTier {
+  key: string;
+  vcpus: number;
+  memoryMb: number;
+  diskMb: number;
+  priceShared: number;
+  priceReserved: number | null;
+  minPlan: "Byte" | "Mega" | "Tera";
+}
+
+export interface MachineTiers {
+  tiers: MachineTier[];
+  diskAddon: { gb: number; price: number };
+}
+
+export interface CreatePermanentParams {
+  /** Catalog tier key (see eb.machines.tiers()). */
+  tier: string;
+  cpuMode?: "shared" | "reserved";
+  /** Extra NVMe in multiples of 100GB (+$99/mo each). */
+  diskAddonsGB?: number;
+  template?: SandboxTemplate;
+  name?: string;
+  /** Wait until running before returning (default true). */
+  waitForReady?: boolean;
 }
 
 export interface ExecResult {

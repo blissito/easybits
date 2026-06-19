@@ -377,6 +377,15 @@ export async function action({ request }: ActionFunctionArgs) {
               },
             },
           });
+          // Plan lapsed → pause the owner's always-on machines (their billing
+          // items ride on this subscription). Best-effort, non-blocking.
+          const { suspendOwnerSandboxes } = await import("~/.server/core/machineOperations");
+          await suspendOwnerSandboxes(subscriptionUser.id).catch((e) =>
+            logger.error("suspendOwnerSandboxes failed", {
+              userId: subscriptionUser.id,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          );
         }
         break;
     }

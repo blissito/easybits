@@ -539,6 +539,74 @@ export async function createSandbox(
   );
 }
 
+// Lower-level create for ALWAYS-ON machines (hosting product). Bypasses the
+// per-plan size/TTL/concurrency gates — machines have their own gate (paid
+// plan + Stripe item, enforced in machineOperations.createMachine) — and
+// passes explicit {vcpus, memoryMb, diskMb} from HOSTING_CATALOG instead of
+// the s/m/l/xl enum. Always persistent (no reaper). `cpuMode` is forwarded to
+// the host for the reserved-CPU cgroup floor (host honors it when supported;
+// ignored for shared).
+export async function createSandboxRaw(
+  ctx: AuthContext,
+  params: {
+    template: SandboxTemplate;
+    name?: string;
+    metadata?: Record<string, string>;
+    vcpus: number;
+    memoryMb: number;
+    diskMb: number;
+    cpuMode?: "shared" | "reserved";
+  }
+): Promise<SandboxRecord> {
+  return callHost<SandboxRecord>(
+    "POST",
+    "/v1/sandbox",
+    {
+      template: params.template,
+      name: params.name,
+      metadata: params.metadata,
+      persistent: true,
+      vcpus: params.vcpus,
+      memoryMb: params.memoryMb,
+      diskMb: params.diskMb,
+      cpuMode: params.cpuMode ?? "shared",
+    },
+    ctx.user.id
+  );
+}
+
+// Promote an existing (ephemeral) sandbox to always-on: clears the host reaper
+// so the VM survives past its TTL. This is the host capability that makes
+// "spin up, then keep it permanent" safe — without it, billing a flat machine
+// over an ephemeral box would let the reaper destroy a VM we're charging for.
+// Returns the updated record. Host endpoint: POST /v1/sandbox/:id/persist.
+export async function persistSandbox(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<SandboxRecord> {
+  requireScope(ctx, "WRITE");
+  return callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/persist`,
+    {},
+    ctx.user.id
+  );
+}
+
+// Server-to-server suspend (no AuthContext) — used by the Stripe webhook to
+// pause a delinquent owner's machines. Owner-scoped on the host via the header.
+export async function suspendSandboxRaw(
+  ownerId: string,
+  sandboxId: string
+): Promise<SandboxRecord> {
+  return callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/suspend`,
+    {},
+    ownerId
+  );
+}
+
 export async function listSandboxes(ctx: AuthContext): Promise<SandboxRecord[]> {
   requireScope(ctx, "READ");
   return callHost<SandboxRecord[]>("GET", `/v1/sandbox?owner=${ctx.user.id}`, undefined, ctx.user.id);

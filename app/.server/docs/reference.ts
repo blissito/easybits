@@ -479,6 +479,36 @@ MCP: \`agent_run_destroy({ jobId })\` — liberar sandbox
 Rate limits: 10 spawns/min, 120 ops/min. Sandboxes se auto-destruyen al TTL.
 `,
 
+  hosting: `## Hosting — Máquinas permanentes (always-on)
+
+Un sandbox efímero se auto-destruye al TTL. Una **máquina permanente** corre 24/7 y se cobra **flat en MXN/mes** como item de suscripción encima de tu plan. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Requiere plan de pago (Mega/Tera). Grupo MCP: \`hosting\` (5 tools).
+
+### Catálogo de tiers
+\`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`
+Tiers (vCPU/RAM/NVMe → MXN/mes shared):
+- nano 1/512MB/2GB → $49 · micro 1/1GB/4GB → $99 · mini 2/1GB/8GB → $149 · lite 1/2GB/6GB → $129
+- base 2/2GB/16GB → $249 · plus 2/4GB/24GB → $299 · pro 4/4GB/32GB → $449
+- focus 4/8GB/64GB → $690 (reserved $1,725) · performance 8/16GB/128GB → $1,290 (reserved $3,225)
+- performance-4x 16/32GB/256GB → **por solicitud** (enterprise, lo aprovisiona el equipo)
+Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus — próximamente.
+
+### Crear máquina permanente
+\`POST /machines\` · Body: \`{ tier, cpuMode?, diskAddonsGB?, template?, name? }\`
+MCP: \`create_machine({ tier })\` · SDK: \`eb.sandboxes.createPermanent({ tier })\` (o \`eb.machines.create({ tier })\`)
+Devuelve el record con \`sandboxId\`, \`tier\`, \`monthlyMxn\`, \`status\`. Lo operas igual que cualquier sandbox (exec, files, expose_port, dominios) por su \`sandboxId\`.
+
+### Promover un efímero a permanente
+\`POST /machines\` · Body: \`{ fromSandboxId, tier }\`
+MCP: \`make_permanent({ sandboxId, tier })\` · SDK: \`sb.makePermanent(tier)\`
+Conserva el MISMO \`sandboxId\`, desarma el reaper y arranca el cobro.
+
+### Listar / liberar
+MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus máquinas permanentes con \`tier\` + \`monthlyMxn\`.
+\`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro (prorrateado) y destruye la VM. **Destructiva**, idempotente.
+
+El plan es el gate de acceso; cada máquina factura aparte. Si tu plan se cancela, tus máquinas se suspenden.
+`,
+
   databases: `## Databases (SQLite-as-a-Service)
 
 Create isolated SQLite databases for your agents and apps. Powered by sqld (libsql-server).

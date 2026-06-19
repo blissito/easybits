@@ -180,6 +180,10 @@ export default [
     route("sandboxes/:id/bg/:execId", "routes/api/v2/sandbox-bg-detail.ts"),
     route("sandboxes/:id/files/:op", "routes/api/v2/sandbox-files.ts"),
     route("sandboxes/:id/:action", "routes/api/v2/sandbox-action.ts"),
+    // Always-on hosting (máquinas permanentes) — backs eb.machines.*
+    route("machines/tiers", "routes/api/v2/machines-tiers.ts"),
+    route("machines", "routes/api/v2/machines-collection.ts"),
+    route("machines/:id", "routes/api/v2/machine.ts"),
     // eb.compute — gateway OpenAI-compatible (LLM managed dentro de sandboxes)
     route("compute/v1/chat/completions", "routes/api/v2/compute-chat.ts"),
     // eb.llm — proxy OpenAI→DeepSeek + balance + recargas
