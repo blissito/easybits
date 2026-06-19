@@ -7,13 +7,12 @@ const formRateLimiter = new RateLimiter({
   maxRequests: 20,
 });
 
-function corsHeaders(request: Request): Record<string, string> {
-  const origin = request.headers.get("Origin") || "";
-  const allowed =
-    /^https:\/\/[\w-]+\.easybits\.cloud$/.test(origin) ||
-    /^https:\/\/[\w-]+\.t3\.storage\.dev$/.test(origin);
+function corsHeaders(_request: Request): Record<string, string> {
+  // Form widgets are public (no cookies/credentials) and meant to be embedded
+  // on arbitrary customer domains — including sandbox custom domains. Allow any
+  // origin so the snippet works wherever it's pasted.
   return {
-    "Access-Control-Allow-Origin": allowed ? origin : "",
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
