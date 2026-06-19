@@ -48,6 +48,29 @@ export default function DocsPage() {
     }
   }, [location.hash]);
 
+  // Scrollspy: highlight whichever section is currently in view, so the sidebar
+  // stays in sync on deep-links (/docs#agents) and while the user scrolls.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const top = entries
+          .filter((e) => e.isIntersecting)
+          .sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
+          )[0];
+        if (top) setActiveSection(top.target.id);
+      },
+      // Offset the top by the sticky navbar; a section counts as active once it
+      // reaches the upper third of the viewport.
+      { rootMargin: "-57px 0px -70% 0px" }
+    );
+    SECTIONS.forEach((s) => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section className="min-h-screen bg-white">
       {/* JSON-LD: WebAPI + SoftwareApplication for LLM/search discovery */}
@@ -168,7 +191,7 @@ export default function DocsPage() {
 
         {/* Content */}
         {/* TODO(bliss): terminar traducción — Files, Bulk, Images, Sharing, Webhooks, Websites, Documents, Account y Errors siguen en inglés. Solo sidebar + Quick Start + Auth + Ghosty Code + Tool Groups están en español. */}
-        <main className="flex-1 min-w-0 px-6 md:px-12 py-10 max-w-4xl">
+        <main className="flex-1 min-w-0 px-6 md:px-12 py-10 max-w-4xl [&_section[id]]:scroll-mt-20">
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
             <h1 className="text-3xl font-bold mb-2">Documentación de la API</h1>
