@@ -633,9 +633,9 @@ export async function extendSandbox(
   );
 }
 
-// Snapshot the sandbox to disk and free its CPU/IP. The TTL is NOT paused —
-// after resume, call extendSandbox to refresh the deadline. Resume with
-// resumeSandbox.
+// Snapshot the sandbox to disk and free its CPU/IP. The TTL is PAUSED while
+// suspended — the host saves the remaining lifetime and restores it on resume,
+// so no extendSandbox call is needed afterward. Resume with resumeSandbox.
 export async function suspendSandbox(
   ctx: AuthContext,
   sandboxId: string
@@ -650,6 +650,8 @@ export async function suspendSandbox(
 }
 
 // Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes).
+// The host restores the lifetime that remained at suspend time and re-arms the
+// auto-destroy timer, returning the record with the refreshed expiresAt.
 export async function resumeSandbox(
   ctx: AuthContext,
   sandboxId: string

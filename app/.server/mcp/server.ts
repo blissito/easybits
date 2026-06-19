@@ -1220,7 +1220,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listSandboxes(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result, { total: result.length }));
     })
   );
 
@@ -1266,7 +1266,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_suspend",
-    "Snapshot a sandbox to disk and free its CPU/IP — the box stops billing compute but keeps its state. NOTE: the TTL is NOT paused; after sandbox_resume call sandbox_extend to refresh the deadline. Restore with sandbox_resume.",
+    "Snapshot a sandbox to disk and free its CPU/IP — the box stops billing compute but keeps its state. The TTL is PAUSED while suspended: the remaining lifetime is saved and restored on sandbox_resume, so you do NOT need to call sandbox_extend afterward. Restore with sandbox_resume.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
     },
@@ -1279,7 +1279,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_resume",
-    "Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes). Pair with sandbox_extend afterward since the TTL kept counting while suspended.",
+    "Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes). The lifetime that remained when it was suspended is restored and the auto-destroy timer is re-armed — no need to call sandbox_extend. Returns the updated record with the new expiresAt.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
     },
@@ -1369,7 +1369,7 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { sandboxId, ...rest } = params;
       const result = await sandboxListFiles(ctx, sandboxId, rest);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result.entries, { total: result.entries.length }));
     })
   );
 
@@ -1472,7 +1472,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listSandboxDomains(ctx, params.sandboxId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result, { total: result.length }));
     })
   );
 
@@ -1643,7 +1643,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listTemplates(ctx, params);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result, { total: result.length }));
     })
   );
 
@@ -1716,7 +1716,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listAgents(ctx);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result, { total: result.length }));
     })
   );
 
@@ -1824,7 +1824,7 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listRecordings(ctx, params.agentId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(paginate(result, { total: result.length }));
     })
   );
 

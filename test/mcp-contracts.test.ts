@@ -1,5 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ok, fail, paginate, failService } from "../app/.server/mcp/responses";
+
+// Stub the sandbox ops so the sandbox_list handler can run end-to-end without a
+// live host or auth context — we only care that it wraps the result in the
+// unified ok(paginate(...)) envelope, not where the data comes from.
+vi.mock("../app/.server/core/sandboxOperations", async (importActual) => ({
+  ...(await importActual<object>()),
+  listSandboxes: vi.fn(async () => [
+    { sandboxId: "sb_1", template: "python", status: "running" },
+    { sandboxId: "sb_2", template: "node", status: "running" },
+  ]),
+}));
+
 import { createMcpServer, getRegisteredTools, wrapHandler } from "../app/.server/mcp/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,6 +125,19 @@ describe("registry smoke — createMcpServer('all')", () => {
     const res = await tools["list_themes"].handler({}, {});
     const body = parseText(res);
     expect(Array.isArray(body.items)).toBe(true);
+    expect(body).toHaveProperty("nextCursor");
+    expect(typeof body.hasMore).toBe("boolean");
+    expect(res.isError).toBeUndefined();
+  });
+
+  it("sandbox_list returns the unified paginate envelope (not a raw array)", async () => {
+    // sandbox_list is in the 'sandbox' group; its underlying op is mocked above
+    // so this exercises the handler's ok(paginate(...)) wrapping in isolation.
+    const tools = getRegisteredTools(createMcpServer(["sandbox"]));
+    const res = await tools["sandbox_list"].handler({}, { authInfo: { user: { id: "u1" }, scopes: ["READ"] } });
+    const body = parseText(res);
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items).toHaveLength(2);
     expect(body).toHaveProperty("nextCursor");
     expect(typeof body.hasMore).toBe("boolean");
     expect(res.isError).toBeUndefined();

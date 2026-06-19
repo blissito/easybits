@@ -459,8 +459,8 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 - \`sandbox_list()\` — listar sandboxes activos
 - \`sandbox_status({ sandboxId })\` — estado (starting/running/stopped/error/lost/suspended)
 - \`sandbox_extend({ sandboxId, extendSeconds? })\` — extender TTL (máx 60 min)
-- \`sandbox_suspend({ sandboxId })\` — snapshot a disco
-- \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot
+- \`sandbox_suspend({ sandboxId })\` — snapshot a disco; pausa el TTL mientras está suspendido
+- \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot; restaura el TTL restante (no hace falta sandbox_extend)
 - \`sandbox_destroy({ sandboxId })\` — destruir y liberar
 
 ### Agentes persistentes (agent_create)

@@ -1375,11 +1375,12 @@ export class Sandbox {
   extend(extendSeconds?: number): Promise<SandboxRecord> {
     return this.post("/extend", { extendSeconds });
   }
-  /** Snapshot to disk and free CPU/IP. TTL keeps counting. */
+  /** Snapshot to disk and free CPU/IP. The TTL is paused while suspended. */
   suspend(): Promise<SandboxRecord> {
     return this.post("/suspend");
   }
-  /** Restore a suspended sandbox. */
+  /** Restore a suspended sandbox; the remaining lifetime is restored and the
+   *  auto-destroy timer re-armed (no extend needed). */
   resume(): Promise<SandboxRecord> {
     return this.post("/resume");
   }
