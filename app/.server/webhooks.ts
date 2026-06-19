@@ -10,7 +10,9 @@ export type WebhookEvent =
   | "website.deleted"
   | "database.created"
   | "database.deleted"
-  | "form.submitted";
+  | "form.submitted"
+  | "payment.paid"
+  | "broadcast.sent";
 
 const MAX_FAIL_COUNT = 5;
 const TIMEOUT_MS = 10_000;

@@ -13,6 +13,9 @@ const VALID_EVENTS: WebhookEvent[] = [
   "website.deleted",
   "database.created",
   "database.deleted",
+  "form.submitted",
+  "payment.paid",
+  "broadcast.sent",
 ];
 
 export async function listWebhooks(ctx: AuthContext) {

@@ -13,6 +13,7 @@ const tabs = [
   { to: "/dash/developer/databases", label: "Databases" },
   { to: "/dash/developer/domains", label: "Dominios" },
   { to: "/dash/developer/secrets", label: "Secretos" },
+  { to: "/dash/developer/payments", label: "Pagos" },
   { to: "/dash/developer/setup", label: "Setup" },
   { to: "/dash/developer/mcp", label: "Claude.ai" },
 ];

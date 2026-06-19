@@ -21,6 +21,8 @@ export type ToolGroupKey =
   | "video"
   | "sandbox"
   | "hosting"
+  | "payments"
+  | "email"
   | "public-safe"
   | "all";
 
@@ -98,6 +100,20 @@ export const TOOL_GROUPS: ToolGroup[] = [
     description:
       "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir. El plan da acceso; cada máquina factura flat al mes. Ideal para hostear apps, bots y servicios persistentes.",
     toolCount: 5,
+  },
+  {
+    key: "payments",
+    label: "Payments",
+    description:
+      "Links de pago con MercadoPago (BYO): conecta tu cuenta y genera cobros. El dinero va directo a tu MP; EasyBits no retiene fondos. Ideal para que un agente cierre la venta.",
+    toolCount: 2,
+  },
+  {
+    key: "email",
+    label: "Email & Broadcasts",
+    description:
+      "Email transaccional + audiencia + newsletters one-shot. send_email, contactos con tags, y broadcasts con unsubscribe automático. La capa de nurturing del funnel.",
+    toolCount: 6,
   },
   {
     key: "public-safe",
@@ -374,6 +390,26 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "release_machine",
 ]);
 
+/** Payments toolset — MercadoPago BYO payment links. */
+export const PAYMENTS_ALLOWLIST = new Set<string>([
+  "create_payment_link",
+  "list_payment_links",
+]);
+
+/**
+ * Email toolset — transactional send + audience + broadcasts. Includes
+ * create_payment_link so an agent can nurture and sell in one flow.
+ */
+export const EMAIL_ALLOWLIST = new Set<string>([
+  "send_email",
+  "add_contact",
+  "list_contacts",
+  "create_broadcast",
+  "send_broadcast",
+  "list_broadcasts",
+  "create_payment_link",
+]);
+
 /**
  * Public-safe toolset — minimal surface for B2C / WhatsApp customer-facing
  * agents. Just 3 tools: store a user's attachment, mint a share link for it,
@@ -427,5 +463,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   video: VIDEO_ALLOWLIST,
   sandbox: SANDBOX_ALLOWLIST,
   hosting: HOSTING_ALLOWLIST,
+  payments: PAYMENTS_ALLOWLIST,
+  email: EMAIL_ALLOWLIST,
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
 };

@@ -23,6 +23,8 @@ const SECTIONS = [
   { id: "images", label: "Imágenes" },
   { id: "sharing", label: "Compartir" },
   { id: "webhooks", label: "Webhooks" },
+  { id: "payments", label: "Pagos" },
+  { id: "email", label: "Email & Broadcasts" },
   { id: "websites", label: "Sitios web" },
   { id: "documents", label: "Documentos" },
   { id: "agents", label: "Agentes & Sandboxes" },
@@ -811,7 +813,7 @@ console.log(result.savings); // "75%"`}
 
             <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
               <strong>Events:</strong>{" "}
-              <code>file.created</code>, <code>file.updated</code>, <code>file.deleted</code>, <code>file.restored</code>, <code>website.created</code>, <code>website.deleted</code>
+              <code>file.created</code>, <code>file.updated</code>, <code>file.deleted</code>, <code>file.restored</code>, <code>website.created</code>, <code>website.deleted</code>, <code>form.submitted</code>, <code>payment.paid</code>, <code>broadcast.sent</code>
             </div>
 
             <Endpoint
@@ -897,6 +899,106 @@ const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
     "access": "private"
   }
 }`}
+            />
+          </section>
+
+          {/* Pagos */}
+          <section id="payments" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Pagos</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Genera links de pago con <strong>MercadoPago</strong> (Checkout Pro).
+              Conecta tu cuenta en{" "}
+              <a href="/dash/developer/payments" className="underline font-medium">
+                Dashboard → Pagos
+              </a>{" "}
+              (pega tu access token). El dinero va <strong>directo a tu cuenta de
+              MercadoPago</strong> — EasyBits no retiene fondos. Tools del grupo MCP{" "}
+              <code className="bg-gray-100 px-1 rounded">payments</code>.
+            </p>
+
+            <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
+              <strong>Tools MCP:</strong>{" "}
+              <code>create_payment_link</code>, <code>list_payment_links</code>. Cuando
+              el pago se aprueba, se dispara el webhook <code>payment.paid</code>.
+            </div>
+
+            <h3 className="text-lg font-bold mt-6 mb-4">Crear un link de pago</h3>
+            <CodeExample
+              title="MCP (Claude)"
+              code={`// El agente llama la tool create_payment_link
+create_payment_link({
+  title: "Consultoría 1h",
+  amount: 499.00,        // unidades mayores (MXN)
+  currency: "MXN"        // opcional, default MXN
+})
+
+// → { id, title, amount, currency, initPoint, status: "pending" }
+// Comparte el initPoint con tu cliente para que pague.`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Webhook payment.paid</h3>
+            <CodeExample
+              title="JSON"
+              code={`{
+  "event": "payment.paid",
+  "timestamp": "2026-06-19T12:00:00.000Z",
+  "data": {
+    "id": "paylink_id",
+    "title": "Consultoría 1h",
+    "amount": 499,
+    "currency": "MXN",
+    "payerEmail": "cliente@correo.com"
+  }
+}`}
+            />
+          </section>
+
+          {/* Email & Broadcasts */}
+          <section id="email" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Email & Broadcasts</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Email transaccional, audiencia con tags y newsletters one-shot — todo
+              desde MCP. Los broadcasts agregan un pie de <em>cancelar suscripción</em>{" "}
+              automáticamente y saltan a los contactos dados de baja. Tools del grupo
+              MCP <code className="bg-gray-100 px-1 rounded">email</code>.
+            </p>
+
+            <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
+              <strong>Tools MCP:</strong>{" "}
+              <code>send_email</code>, <code>add_contact</code>, <code>list_contacts</code>,{" "}
+              <code>create_broadcast</code>, <code>send_broadcast</code>,{" "}
+              <code>list_broadcasts</code>. Al terminar un envío se dispara el webhook{" "}
+              <code>broadcast.sent</code>.
+            </div>
+
+            <h3 className="text-lg font-bold mt-6 mb-4">Email transaccional</h3>
+            <CodeExample
+              title="MCP (Claude)"
+              code={`send_email({
+  to: "cliente@correo.com",
+  subject: "Tu recibo",
+  html: "<h1>Gracias por tu compra</h1>"
+})
+// → { messageId }`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">Audiencia + newsletter</h3>
+            <CodeExample
+              title="MCP (Claude)"
+              code={`// 1) Agrega contactos con un tag
+add_contact({ email: "ana@correo.com", name: "Ana", tags: ["clientes"] })
+
+// 2) Crea el broadcast (HTML)
+create_broadcast({
+  subject: "Novedades de junio",
+  html: "<h1>Hola 👋</h1><p>Esto es lo nuevo…</p>",
+  audienceTag: "clientes"   // omite para enviar a todos los suscritos
+})
+// → { id, subject, status: "draft" }
+
+// 3) Envíalo
+send_broadcast({ broadcastId: "<id>" })
+// → { id, status: "sent", total, sent, failed }`}
             />
           </section>
 
@@ -1518,6 +1620,8 @@ POST /api/v2/machines
                     ["docs", "~33", "Documentos: generación AI, refine, screenshots, structured docs"],
                     ["sites", "~8", "Sitios web: CRUD, upload, deploy"],
                     ["brand", "~8", "Brand kits, plantillas, temas"],
+                    ["payments", "2", "Links de pago con MercadoPago (BYO): create_payment_link, list_payment_links"],
+                    ["email", "6", "Email transaccional + contactos + broadcasts (send_email, add_contact, create_broadcast…)"],
                     ["all", "~104", "Todo (incluye slides y agentes)"],
                   ].map(([group, count, desc]) => (
                     <tr key={group} className="border-t border-gray-200">

@@ -77,6 +77,17 @@ import {
   deleteWebhookById,
 } from "../core/webhookOperations";
 import {
+  createPaymentLink,
+  listPaymentLinks,
+} from "../core/paymentOperations";
+import { addContact, listContacts } from "../core/contactOperations";
+import {
+  createBroadcast,
+  sendBroadcast,
+  listBroadcasts,
+} from "../core/broadcastOperations";
+import { sendTransactional } from "../emails/sendTransactional";
+import {
   listDatabases,
   createDatabase,
   getDatabase,
@@ -182,6 +193,7 @@ import {
 import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
+import { requireScope } from "../apiAuth";
 import { checkSandboxRateLimit } from "../rateLimiter";
 
 type AutoDeployInfo =
@@ -974,10 +986,10 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "create_webhook",
-    "Create a webhook to receive event notifications. Returns the webhook with its secret (shown only once). Events: file.created, file.updated, file.deleted, file.restored, website.created, website.deleted.",
+    "Create a webhook to receive event notifications. Returns the webhook with its secret (shown only once). Events: file.created, file.updated, file.deleted, file.restored, website.created, website.deleted, form.submitted, payment.paid, broadcast.sent.",
     {
       url: z.string().describe("HTTPS URL to receive POST notifications"),
-      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted"])).describe("Events to subscribe to"),
+      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted","form.submitted","payment.paid","broadcast.sent"])).describe("Events to subscribe to"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -992,7 +1004,7 @@ How to embed safely (the only reliable rule):
     {
       webhookId: z.string().describe("The webhook ID"),
       url: z.string().optional().describe("New HTTPS URL"),
-      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted"])).optional().describe("New events list"),
+      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted","form.submitted","payment.paid","broadcast.sent"])).optional().describe("New events list"),
       status: z.enum(["ACTIVE", "PAUSED"]).optional().describe("Set status"),
     },
     wrapHandler(async (params, extra) => {
@@ -1018,6 +1030,142 @@ How to embed safely (the only reliable rule):
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
+
+  // --- Payment Tools (MercadoPago — BYO) ---
+
+  server.tool(
+    "create_payment_link",
+    "Create a MercadoPago payment link (Checkout Pro). Returns a shareable initPoint URL. Requires the user to have connected their MercadoPago account at /dash/developer/payments. Money goes directly to the user's MP account; EasyBits never holds funds.",
+    {
+      title: z.string().describe("What the customer is paying for"),
+      amount: z.number().positive().describe("Amount in major units (e.g. 199.00)"),
+      currency: z.string().optional().describe("ISO currency, default MXN"),
+      payerEmail: z.string().optional().describe("Optional prefilled payer email"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "WRITE");
+      const result = await createPaymentLink(ctx, params);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "list_payment_links",
+    "List your payment links (id, title, amount, status pending/paid, initPoint, payerEmail).",
+    {
+      limit: z.number().optional().describe("Max items (default 50)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "READ");
+      const result = await listPaymentLinks(ctx, params.limit);
+      return ok(paginate(result));
+    })
+  );
+
+  // --- Email & Broadcast Tools ---
+
+  server.tool(
+    "send_email",
+    "Send a transactional email (HTML) from EasyBits. For one-off messages — use create_broadcast/send_broadcast for newsletters to a list.",
+    {
+      to: z.string().describe("Recipient email (or comma-separated list)"),
+      subject: z.string().describe("Email subject"),
+      html: z.string().describe("HTML body"),
+      replyTo: z.string().optional().describe("Optional Reply-To address"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "WRITE");
+      const to = params.to.includes(",")
+        ? params.to.split(",").map((s) => s.trim())
+        : params.to;
+      const result = await sendTransactional({
+        to,
+        subject: params.subject,
+        html: params.html,
+        replyTo: params.replyTo,
+      });
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "add_contact",
+    "Add (or update) a contact in your audience. Tags let you target broadcasts. Upserts by email.",
+    {
+      email: z.string().describe("Contact email"),
+      name: z.string().optional().describe("Optional display name"),
+      tags: z.array(z.string()).optional().describe("Optional tags for segmentation"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "WRITE");
+      const result = await addContact(ctx, params);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "list_contacts",
+    "List your contacts (email, name, tags, status subscribed/unsubscribed/bounced). Optionally filter by tag.",
+    {
+      tag: z.string().optional().describe("Filter to contacts with this tag"),
+      limit: z.number().optional().describe("Max items (default 100)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "READ");
+      const result = await listContacts(ctx, params);
+      return ok(paginate(result));
+    })
+  );
+
+  server.tool(
+    "create_broadcast",
+    "Create a draft broadcast (newsletter) to send to your audience. Returns the broadcast id — send it with send_broadcast.",
+    {
+      subject: z.string().describe("Email subject"),
+      html: z.string().describe("HTML body (an unsubscribe footer is appended automatically)"),
+      audienceTag: z.string().optional().describe("Only send to contacts with this tag (omit = all subscribed)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "WRITE");
+      const result = await createBroadcast(ctx, params);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "send_broadcast",
+    "Send a draft broadcast to all subscribed contacts (filtered by its audienceTag). Skips unsubscribed/bounced contacts. Returns sent/failed counts.",
+    {
+      broadcastId: z.string().describe("The broadcast id from create_broadcast"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "WRITE");
+      const result = await sendBroadcast(ctx, params.broadcastId);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "list_broadcasts",
+    "List your broadcasts (subject, status draft/sending/sent, total/sent/failed counts).",
+    {
+      limit: z.number().optional().describe("Max items (default 50)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "READ");
+      const result = await listBroadcasts(ctx, params.limit);
+      return ok(paginate(result));
+    })
+  );
+
   // --- Database Tools ---
 
   server.tool(

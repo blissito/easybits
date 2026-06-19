@@ -237,6 +237,10 @@ model User {
   autoTopup            AutoTopup?
   brandKits            BrandKit[]
   formConfigs          FormConfig[]
+  paymentProviders     PaymentProvider[]
+  paymentLinks         PaymentLink[]
+  contacts             Contact[]
+  broadcasts           Broadcast[]
   mcpTemplates         McpTemplate[]
   mcpStructuredDocs    McpStructuredDoc[]
   oauthAuthCodes       OAuthAuthCode[]
@@ -502,6 +506,82 @@ model UserAiKey {
   updatedAt DateTime   @updatedAt
 
   @@unique([userId, provider])
+}
+
+// ─── Funnel: pagos (MercadoPago BYO) + email/broadcasts ────────────────────────
+
+enum PaymentProviderType {
+  MERCADOPAGO
+}
+
+/// BYO credentials del usuario para su propia pasarela (espejo de UserAiKey).
+/// v1: solo MercadoPago. accessToken se guarda enmascarado al devolverse.
+model PaymentProvider {
+  id            String              @id @default(auto()) @map("_id") @db.ObjectId
+  provider      PaymentProviderType @default(MERCADOPAGO)
+  accessToken   String
+  publicKey     String?
+  webhookSecret String?
+  isDefault     Boolean             @default(true)
+  userId        String              @db.ObjectId
+  user          User                @relation(fields: [userId], references: [id])
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([userId, provider])
+}
+
+/// Link de pago one-time creado vía Checkout Pro (preference → init_point).
+model PaymentLink {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String    @db.ObjectId
+  user              User      @relation(fields: [userId], references: [id])
+  title             String
+  amountCents       Int
+  currency          String    @default("MXN")
+  mpPreferenceId    String?
+  initPoint         String?
+  externalReference String    @unique
+  status            String    @default("pending") // pending | paid
+  payerEmail        String?
+  createdAt         DateTime  @default(now())
+  paidAt            DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+/// Contacto/audiencia del usuario. `status` cubre suppression sin tabla aparte.
+model Contact {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  email     String
+  name      String?
+  tags      String[] @default([])
+  status    String   @default("subscribed") // subscribed | unsubscribed | bounced
+  createdAt DateTime @default(now())
+
+  @@unique([userId, email])
+  @@index([userId, status])
+}
+
+/// Envío one-shot (newsletter) a una audiencia filtrada por tag.
+model Broadcast {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  user        User      @relation(fields: [userId], references: [id])
+  subject     String
+  html        String
+  audienceTag String?
+  status      String    @default("draft") // draft | sending | sent
+  total       Int       @default(0)
+  sent        Int       @default(0)
+  failed      Int       @default(0)
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  @@index([userId])
 }
 
 model Website {
