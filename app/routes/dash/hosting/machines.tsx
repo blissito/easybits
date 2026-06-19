@@ -233,9 +233,13 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                     ) : (
                       <IconBtn title="Suspender" onClick={() => submit({ intent: "suspend", sandboxId: s.sandboxId })}><LuPause size={16} /></IconBtn>
                     )}
-                    {paid && (
-                      <IconBtn title="Hacer permanente" onClick={() => setModal({ promoteId: s.sandboxId })}><LuRocket size={16} /></IconBtn>
-                    )}
+                    <button
+                      type="button" title="Hacer permanente (cobro flat al mes)"
+                      onClick={() => { if (paid) setModal({ promoteId: s.sandboxId }); else window.location.assign("/planes"); }}
+                      className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-brand-500 text-white text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
+                    >
+                      <LuRocket size={14} /> Permanente
+                    </button>
                     <IconBtn title="Destruir" danger
                       onClick={() => setConfirm({ intent: "destroy", id: s.sandboxId, title: "Destruir sandbox", message: "Se elimina la VM y sus datos. No se puede deshacer." })}>
                       <LuTrash2 size={16} />
