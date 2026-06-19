@@ -212,8 +212,20 @@ export async function createPermanent(
       cpuMode: mode,
     });
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // Host admission control rejected a reserved box (no reserved-vCPU capacity
+    // on this box). Surface a clean 409 — NO Stripe item was created, so the
+    // user is never charged premium for a VM we couldn't deliver.
+    if (/CapacityExceeded|reserved vCPU cap/i.test(msg)) {
+      fail(409, "MachineCapacityExceeded",
+        "No hay capacidad de CPU reservada disponible en este box ahora mismo. Usa shared o intenta más tarde.");
+    }
+    if (/CapacityReached|RAM cap/i.test(msg)) {
+      fail(503, "HostCapacityReached",
+        "El host no tiene capacidad disponible ahora mismo. Intenta más tarde.");
+    }
     fail(502, "MachineProvisionFailed",
-      `No se pudo aprovisionar la VM: ${e instanceof Error ? e.message : String(e)}`);
+      `No se pudo aprovisionar la VM: ${msg}`);
   }
 
   const row = await db.sandbox.create({
