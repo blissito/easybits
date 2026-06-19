@@ -2,7 +2,7 @@ import { HiOutlineInformationCircle } from "react-icons/hi";
 import { cn } from "~/utils/cn";
 import { useAnimate } from "motion/react";
 import { StorageBar } from "~/components/common/StorageBar";
-import { PLANS, NEXT_PLAN, formatPrice, type PlanKey } from "~/lib/plans";
+import { PLANS, NEXT_PLAN, formatPrice, effectivePrice, type PlanKey } from "~/lib/plans";
 import { Link } from "react-router";
 import LineChart from "~/components/charts/LineChart";
 
@@ -56,7 +56,7 @@ export default function StatsComponent({ data }: { data: StatsData }) {
             Hola, {user.displayName || user.email?.split("@")[0]}
           </h1>
           <p className="text-gray-500 mt-1">
-            Plan <strong>{planKey}</strong> — {plan?.price ? `${formatPrice(plan.price)} MXN/mes` : "Gratis"}
+            Plan <strong>{planKey}</strong> — {plan?.price ? `${formatPrice(effectivePrice(planKey as PlanKey))} MXN/mes` : "Gratis"}
             {nextPlan && (
               <Link to="/planes" className="ml-3 text-xs underline text-brand-500">
                 Upgrade a {nextPlan}

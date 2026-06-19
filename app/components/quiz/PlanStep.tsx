@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { GENERATION_PACKS, PLANS, type PlanKey } from "~/lib/plans";
+import { GENERATION_PACKS, PLANS, effectivePrice, hasPromo, type PlanKey } from "~/lib/plans";
 import {
   COST_DOC,
   COST_REEL_30S,
@@ -97,7 +97,9 @@ export const PlanStep = ({
             const plan = PLANS[key];
             const isSelected = selectedPlan === key;
             const isFree = plan.price === 0;
-            const annualPrice = isFree ? 0 : computeAnnualFromMonthly(plan.price);
+            const monthly = isFree ? 0 : effectivePrice(key);
+            const promo = hasPromo(key);
+            const annualPrice = isFree ? 0 : computeAnnualFromMonthly(monthly);
             return (
               <button
                 key={key}
@@ -129,7 +131,18 @@ export const PlanStep = ({
                   </div>
                   <div className="text-right">
                     <span className="text-xl md:text-2xl font-black text-black tabular-nums">
-                      {isFree ? "Gratis" : `${formatMxn(plan.price)}/mes`}
+                      {isFree ? (
+                        "Gratis"
+                      ) : (
+                        <>
+                          {promo && (
+                            <span className="text-black/40 font-bold line-through mr-1.5">
+                              {formatMxn(plan.price)}
+                            </span>
+                          )}
+                          {`${formatMxn(monthly)}/mes`}
+                        </>
+                      )}
                     </span>
                     {!isFree && (
                       <span className="block text-[11px] font-mono text-black/50 mt-0.5">

@@ -13,7 +13,7 @@ import {
   serializeSelections,
   SETUP_BASE_MXN,
 } from "~/lib/quiz/pricing";
-import { PLANS, type PlanKey } from "~/lib/plans";
+import { PLANS, effectivePrice, type PlanKey } from "~/lib/plans";
 
 type PlanBilling = "monthly" | "annual";
 
@@ -118,7 +118,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
   let planChargedMxn = 0;
   if (planKey !== "Byte") {
-    const monthly = plan.price;
+    // Effective price (promo if active) — NOT plan.price (the struck list price).
+    // Otherwise this checkout would charge Mega at $499 instead of the $299 promo.
+    const monthly = effectivePrice(planKey);
     if (planBilling === "annual") {
       planChargedMxn = computeAnnualFromMonthly(monthly);
       lineItems.push({

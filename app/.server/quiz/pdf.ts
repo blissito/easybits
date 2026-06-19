@@ -12,7 +12,7 @@ import {
   SETUP_BASE_MXN,
   type BillingMode,
 } from "~/lib/quiz/pricing";
-import { PLANS, type PlanKey } from "~/lib/plans";
+import { PLANS, effectivePrice, type PlanKey } from "~/lib/plans";
 
 export type QuizPdfLead = {
   name: string;
@@ -69,7 +69,8 @@ export const buildQuizPdfHtml = (
   const planSupportsAnnual = planKey !== "Byte" && plan.price > 0;
   const billingMode = payload.planBilling ?? payload.billingMode;
   const isAnnual = planSupportsAnnual && billingMode === "annual";
-  const planMonthly = plan.price;
+  // Quote the EFFECTIVE price (promo if active), so the PDF matches checkout.
+  const planMonthly = effectivePrice(planKey);
   const planAnnualTotal = planSupportsAnnual
     ? computeAnnualFromMonthly(planMonthly)
     : 0;
