@@ -507,6 +507,9 @@ MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus máquinas perman
 \`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro (prorrateado) y destruye la VM. **Destructiva**, idempotente.
 
 El plan es el gate de acceso; cada máquina factura aparte. Si tu plan se cancela, tus máquinas se suspenden.
+
+### Dashboard (UI)
+También se administran desde \`/dash/hosting\`: crear (con precio en vivo), ver estado, promover un sandbox efímero a permanente, y liberar. Lista permanentes (cobradas) y sandboxes efímeros en secciones separadas.
 `,
 
   databases: `## Databases (SQLite-as-a-Service)

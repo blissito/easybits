@@ -114,6 +114,8 @@ export default [
       route("archivos", "routes/files.tsx"),
       route("chime-poc", "routes/dash/chime-poc.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
+      // Hosting — máquinas permanentes + sandboxes
+      route("hosting", "routes/dash/hosting/machines.tsx"),
       // Developer dashboard
       layout("routes/dash/developer/developer.tsx", [
         ...prefix("developer", [
@@ -128,6 +130,7 @@ export default [
           route("databases", "routes/dash/developer/databases.tsx"),
           route("domains", "routes/dash/developer/domains.tsx"),
           route("secrets", "routes/dash/developer/secrets.tsx"),
+          route("payments", "routes/dash/developer/payments.tsx"),
         ]),
       ]),
       // Admin dashboard
@@ -150,6 +153,10 @@ export default [
   // Cron
   route("api/cron/purge-files", "routes/api/cron/purge-files.ts"),
   route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
+  // Webhooks (inbound from external providers)
+  route("api/webhooks/mercadopago", "routes/api/webhooks/mercadopago.ts"),
+  // Unsubscribe (public)
+  route("u/unsubscribe", "routes/u.unsubscribe.tsx"),
   // Health
   route("api/health", "routes/api/health.ts"),
   // v2

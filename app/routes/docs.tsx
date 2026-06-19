@@ -56,23 +56,37 @@ export default function DocsPage() {
   useEffect(() => {
     const ids = SECTIONS.map((s) => s.id);
     const OFFSET = 120; // sticky navbar + a little breathing room
+    let raf = 0;
 
-    const onScroll = () => {
+    const compute = () => {
+      raf = 0;
       let current = ids[0];
       for (const id of ids) {
         const el = document.getElementById(id);
         if (el && el.getBoundingClientRect().top <= OFFSET) current = id;
       }
       // At the very bottom, the last section may never cross OFFSET — force it.
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      if (Math.ceil(window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - 4) {
         current = ids[ids.length - 1];
       }
       setActiveSection(current);
     };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(compute); };
 
-    onScroll();
+    compute();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll);
+    // Re-measure after layout settles (async syntax highlighting, fonts, images
+    // shift section offsets — otherwise the initial measure sticks on quickstart).
+    const t1 = setTimeout(compute, 300);
+    const t2 = setTimeout(compute, 1200);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
@@ -181,6 +195,7 @@ export default function DocsPage() {
                 key={s.id}
                 href={`#${s.id}`}
                 onClick={() => setActiveSection(s.id)}
+                aria-current={activeSection === s.id ? "true" : undefined}
                 className={`block px-3 py-1.5 rounded-lg text-sm ${
                   activeSection === s.id
                     ? "bg-black text-white font-bold"
@@ -1380,6 +1395,11 @@ console.log(status.result);  // resultado final del agente`} />
               <strong>5 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">hosting</code>.{" "}
               Agrega <code className="bg-gray-100 px-1 rounded">--tools hosting</code> para habilitarlas.{" "}
               Requiere plan de pago (Mega/Tera) — el plan es el gate de acceso.
+            </div>
+
+            <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
+              ¿Prefieres UI? Administra tus máquinas y sandboxes desde el dashboard en{" "}
+              <a href="/dash/hosting" className="underline font-medium">/dash/hosting</a> — crear, ver estado, promover un sandbox a permanente, y liberar.
             </div>
 
             <h3 className="text-lg font-bold mb-3">Catálogo de tiers</h3>
