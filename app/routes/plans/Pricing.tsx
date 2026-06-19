@@ -3,7 +3,7 @@ import { useFetcher, Link } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
 import { cn } from "~/utils/cn";
-import { PLANS } from "~/lib/plans";
+import { PLANS, effectivePrice } from "~/lib/plans";
 
 export const Pricing = () => {
   return (
@@ -40,7 +40,9 @@ export const Pricing = () => {
         <PlanCard
           badge="/home/rocket.svg"
           planName={PLANS.Mega.name}
-          price={PLANS.Mega.price}
+          price={effectivePrice("Mega")}
+          listPrice={PLANS.Mega.price}
+          promoLabel={PLANS.Mega.promoLabel}
           classNameButton="bg-[#A1CCE5] w-full"
           perks={PLANS.Mega.features}
           className="lg:-mt-6"
@@ -96,6 +98,8 @@ export const PlanCard = ({
   badge,
   planName,
   price,
+  listPrice,
+  promoLabel,
   perks = [],
   classNameButton,
   className,
@@ -104,11 +108,16 @@ export const PlanCard = ({
   badge: string;
   planName: string;
   price?: number;
+  /** Regular list price shown struck-through when a promo is active (listPrice > price). */
+  listPrice?: number;
+  /** Promo badge label (e.g. "Promoción"). */
+  promoLabel?: string;
   perks: string[];
   classNameButton?: string;
   className?: string;
   cta?: ReactNode;
 }) => {
+  const showPromo = listPrice != null && price != null && listPrice > price;
   const button = cta || (
     <Link to="/login">
       <BrutalButton
@@ -125,8 +134,20 @@ export const PlanCard = ({
       <div className={cn("bg-white border-2 border-black rounded-xl py-6 text-left shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all h-full flex flex-col", className)}>
         <div className="px-6 border-b-2 border-black pb-4">
           <img alt="foco" src={badge} />
-          <h3 className="text-2xl font-semibold mt-4 mb-2">{planName}</h3>
+          <div className="flex items-center gap-2 mt-4 mb-2">
+            <h3 className="text-2xl font-semibold">{planName}</h3>
+            {showPromo && (
+              <span className="text-xs font-bold bg-[#9870ED] text-white px-2 py-0.5 rounded-full">
+                {promoLabel || "Promoción"}
+              </span>
+            )}
+          </div>
           <p className="text-black text-4xl font-bold">
+            {showPromo && (
+              <span className="text-iron text-2xl font-normal line-through mr-2">
+                ${listPrice}
+              </span>
+            )}
             ${price ? price : "0"} mxn{" "}
             <span className="text-base text-iron font-light">/ mes</span>{" "}
           </p>

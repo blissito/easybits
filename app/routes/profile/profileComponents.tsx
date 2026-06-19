@@ -42,7 +42,7 @@ export const SuscriptionCard = ({
             {customer?.subscription || "Plan " + plan}
           </h3>
           <span className={cn("text-xl font-semibold", "md:text-2xl")}>
-            ${PLANS[plan as PlanKey]?.price ?? 0} mxn/mes
+            ${PLANS[plan as PlanKey]?.promoPrice ?? PLANS[plan as PlanKey]?.price ?? 0} mxn/mes
           </span>
         </div>
         <PerkItem perk="Hasta 1 asset en venta" />
@@ -52,7 +52,7 @@ export const SuscriptionCard = ({
         <PerkItem perk={`Hasta ${PLANS[plan as PlanKey]?.storageGB ?? 1} GB de almacenamiento`} />
       </div>
       <hr className={cn("bg-black h-[1px] border-none  w-full")} />
-      <StorageBar current={used} plan={{ max: PLANS[plan as PlanKey]?.storageGB ?? 1, price: PLANS[plan as PlanKey]?.price ?? 0 }} />
+      <StorageBar current={used} plan={{ max: PLANS[plan as PlanKey]?.storageGB ?? 1, price: PLANS[plan as PlanKey]?.promoPrice ?? PLANS[plan as PlanKey]?.price ?? 0 }} />
 
       <hr className={cn("bg-black h-[1px] border-none w-full")} />
       <div

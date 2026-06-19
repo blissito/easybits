@@ -2,9 +2,9 @@ import { Link } from "react-router";
 import type { Route } from "./+types/developers";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Footer } from "~/components/common/Footer";
-import { PLANS, formatPrice } from "~/lib/plans";
+import { PLANS, formatPrice, effectivePrice } from "~/lib/plans";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 export const meta = () =>
   getBasicMetaTags({
@@ -330,13 +330,20 @@ ghosty`}
             />
             <PricingCard
               title={PLANS.Mega.name}
-              price={`${formatPrice(PLANS.Mega.price)} mxn/mes`}
+              price={
+                <>
+                  <span className="text-iron text-xl font-normal line-through mr-2">
+                    {formatPrice(PLANS.Mega.price)}
+                  </span>
+                  {formatPrice(effectivePrice("Mega"))} mxn/mes
+                </>
+              }
               features={PLANS.Mega.features}
               highlighted
             />
             <PricingCard
               title={PLANS.Tera.name}
-              price={`${formatPrice(PLANS.Tera.price)} mxn/mes`}
+              price={`${formatPrice(effectivePrice("Tera"))} mxn/mes`}
               features={PLANS.Tera.features}
             />
           </div>
@@ -409,7 +416,7 @@ function PricingCard({
   highlighted,
 }: {
   title: string;
-  price: string;
+  price: ReactNode;
   features: string[];
   highlighted?: boolean;
 }) {

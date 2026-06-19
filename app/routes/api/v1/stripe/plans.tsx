@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 import { getStripe } from "~/.server/stripe";
-import { PLANS, type PlanKey } from "~/lib/plans";
+import { PLANS, effectivePrice, type PlanKey } from "~/lib/plans";
 import { config } from "~/.server/config";
 import type { Route } from "./+types/plans";
 
@@ -27,7 +27,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
           currency: "mxn",
           recurring: { interval: "month" },
           product_data: { name: `EasyBits ${plan.name}` },
-          unit_amount: plan.price * 100,
+          // Charge the EFFECTIVE price (promo if active). Mega = $299 promo
+          // while plan.price ($499) is only the struck-through list price.
+          unit_amount: effectivePrice(planKey) * 100,
         },
         quantity: 1,
       },

@@ -21,8 +21,12 @@ export type PlanKey = "Byte" | "Mega" | "Tera";
 export interface PlanConfig {
   /** Display name */
   name: string;
-  /** Monthly price in MXN */
+  /** Monthly LIST price in MXN (the "regular" price shown struck-through when a promo is active). */
   price: number;
+  /** Optional promo price in MXN — what the user actually pays/checks out at while the promo runs. */
+  promoPrice?: number;
+  /** Short label for the promo badge (e.g. "Promoción", "Lanzamiento"). */
+  promoLabel?: string;
   /** Max storage in GB */
   storageGB: number;
   /** AI generations per month (null = unlimited) */
@@ -67,7 +71,9 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   },
   Mega: {
     name: "Mega",
-    price: 299,
+    price: 499,
+    promoPrice: 299,
+    promoLabel: "Promoción",
     storageGB: 10,
     aiGenerationsPerMonth: PLAN_CREDITS.Mega,
     llmTokensIncluded: 10_000_000, // 10M tokens/mes — ~39% del precio a costo real DeepSeek
@@ -84,6 +90,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Subidas ilimitadas",
       "Sin branding en landings",
       "Websites estáticos",
+      "Dominios custom",
       "Streaming HLS",
       "Transformación de imágenes",
       "Packs de créditos desde $39",
@@ -91,7 +98,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   },
   Tera: {
     name: "Tera",
-    price: 1499,
+    price: 2490,
     storageGB: 100,
     aiGenerationsPerMonth: PLAN_CREDITS.Tera,
     llmTokensIncluded: 50_000_000, // 50M tokens/mes — ~39% del precio a costo real DeepSeek
@@ -106,7 +113,6 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "20 bases de datos",
       "Sandboxes: 10 simultáneos · sesiones de 24h",
       "Proveedores custom",
-      "Dominios custom",
       "Soporte prioritario",
       "Packs de créditos desde $39",
       "RAG as a Service (próximamente)",
@@ -145,9 +151,26 @@ export function isPaidPlan(plan: PlanKey): boolean {
 /** Next plan for upsell (null if highest) */
 export const NEXT_PLAN: Partial<Record<PlanKey, PlanKey>> = { Byte: "Mega", Mega: "Tera" };
 
+/**
+ * Effective monthly price the user actually pays/checks out at: the promo
+ * price while a promo is active, otherwise the list price. Use this for
+ * checkout amounts and "what you pay" copy; use `.price` for the struck-through
+ * list price.
+ */
+export function effectivePrice(plan: PlanKey): number {
+  const p = PLANS[plan];
+  return p.promoPrice ?? p.price;
+}
+
+/** Is this plan currently running a promo (list price > what you pay)? */
+export function hasPromo(plan: PlanKey): boolean {
+  const p = PLANS[plan];
+  return p.promoPrice != null && p.promoPrice < p.price;
+}
+
 /** Legacy lookup for profile storage bar (key: plan name, value: { price, max }) */
 export const plansLegacy: Record<string, Record<string, number>> = Object.fromEntries(
-  Object.entries(PLANS).map(([key, p]) => [key, { price: p.price, max: p.storageGB }])
+  Object.entries(PLANS).map(([key, p]) => [key, { price: p.promoPrice ?? p.price, max: p.storageGB }])
 );
 
 /** Format price for display: "$199 mxn" or "$0" */
