@@ -19,6 +19,7 @@ import { HOSTING_CATALOG, TIER_ORDER, DISK_ADDON_GB, DISK_ADDON_PRICE } from "~/
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
+import { ThankYouModal } from "~/components/common/ThankYouModal";
 import {
   LuServer, LuCpu, LuMemoryStick, LuHardDrive, LuTrash2,
   LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert,
@@ -128,6 +129,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
   const busy = fetcher.state !== "idle";
   const [modal, setModal] = useState<null | { promoteId?: string }>(null);
   const [confirm, setConfirm] = useState<null | { intent: string; id: string; title: string; message: string }>(null);
+  const [thanks, setThanks] = useState(false);
 
   // ESC cierra modal/confirm
   useEffect(() => {
@@ -136,8 +138,13 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // cerrar modal al terminar un create/promote OK
-  useEffect(() => { if (fetcher.state === "idle" && fetcher.data && "ok" in fetcher.data) setModal(null); }, [fetcher.state, fetcher.data]);
+  // cerrar modal al terminar un create/promote OK; agradecer si fue un create
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data && "ok" in fetcher.data) {
+      setModal(null);
+      if ("created" in fetcher.data && fetcher.data.created) setThanks(true);
+    }
+  }, [fetcher.state, fetcher.data]);
 
   const submit = (fields: Record<string, string>) => fetcher.submit(fields, { method: "post" });
   const err = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
@@ -258,6 +265,8 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
           busy={busy} onClose={() => setModal(null)} onSubmit={submit}
         />
       )}
+
+      {thanks && <ThankYouModal kind="machine" onClose={() => setThanks(false)} />}
 
       <ConfirmDialog
         isOpen={!!confirm}

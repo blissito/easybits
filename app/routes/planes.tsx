@@ -8,6 +8,8 @@ import { Footer } from "~/components/common/Footer";
 import type { Route } from "./+types/planes";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { FloatingChat } from "~/components/ai/FloatingChat";
+import { ThankYouModal } from "~/components/common/ThankYouModal";
+import { useSearchParams } from "react-router";
 
 export const clientLoader = async () => {
   const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
@@ -22,8 +24,16 @@ export const meta = () =>
 
 export default function Planes({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
+  const [params, setParams] = useSearchParams();
+  const justPaid = params.get("success") === "1";
+  const dismissThanks = () => {
+    const next = new URLSearchParams(params);
+    next.delete("success");
+    setParams(next, { replace: true });
+  };
   return (
     <section className="overflow-hidden">
+      {justPaid && <ThankYouModal kind="plan" onClose={dismissThanks} />}
       <AuthNav user={user} />
       <Pricing />
       <BasicGallery
