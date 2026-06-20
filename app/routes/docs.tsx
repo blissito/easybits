@@ -52,64 +52,39 @@ export default function DocsPage() {
     }
   }, [location.hash]);
 
-  // Scrollspy: highlight whichever section is currently in view, so the sidebar
-  // stays in sync on deep-links (/docs#agents) and while the user scrolls.
-  // Deterministic scroll-based pick (the prior IntersectionObserver band left
-  // tall sections with no intersecting entry, so it got stuck on "quickstart").
+  // Scrollspy a prueba de contenedor: un loop requestAnimationFrame que SONDEA
+  // la posición de las secciones y solo recalcula cuando algo se movió. No
+  // depende de eventos de scroll (no disparan si el scroll vive en un contenedor
+  // anidado) ni de IntersectionObserver (se atora en secciones altas). La sección
+  // activa es aquella cuyo rango [top, bottom] cruza la LÍNEA de activación; en
+  // los huecos entre secciones, la más cercana por arriba. Elección por posición
+  // REAL en el DOM, así que es independiente del orden del array SECTIONS.
   useEffect(() => {
-    const ids = SECTIONS.map((s) => s.id);
-    const OFFSET = 120; // sticky navbar + a little breathing room
-    let raf = 0;
+    const LINE = 100; // px desde el tope del viewport
+    let raf = 0, lastProbe = NaN, stop = false;
 
-    const compute = () => {
-      raf = 0;
-      // Elegir por POSICIÓN REAL en el DOM, no por el orden del array SECTIONS:
-      // el sidebar y el DOM no siempre coinciden (ej. "errors" está antes que
-      // "agents"/"hosting" en el documento), así que iterar en orden de array
-      // marcaba la sección equivocada. La activa es la que tiene el top más alto
-      // que aún esté por encima del offset (la que estamos atravesando).
-      let current = ids[0];
-      let bestTop = -Infinity;          // top más cercano al offset desde arriba
-      let lastId = ids[0], lastTop = -Infinity;  // sección más abajo en el DOM
-      for (const id of ids) {
-        const el = document.getElementById(id);
+    const pick = () => {
+      let inSpan: string | null = null;
+      let aboveBest: string | null = null, aboveTop = -Infinity;
+      for (const s of SECTIONS) {
+        const el = document.getElementById(s.id);
         if (!el) continue;
-        const top = el.getBoundingClientRect().top;
-        if (top <= OFFSET && top > bestTop) { bestTop = top; current = id; }
-        if (top > lastTop) { lastTop = top; lastId = id; }
+        const r = el.getBoundingClientRect();
+        if (r.top <= LINE && r.bottom > LINE) inSpan = s.id;            // la línea cae dentro
+        if (r.top <= LINE && r.top > aboveTop) { aboveTop = r.top; aboveBest = s.id; } // más cercana por arriba
       }
-      // At the very bottom, the last section may never cross OFFSET — force it
-      // (la última POR DOM, no la última del array).
-      if (Math.ceil(window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - 4) {
-        current = lastId;
-      }
-      setActiveSection(current);
+      setActiveSection(inSpan ?? aboveBest ?? SECTIONS[0].id);
     };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(compute); };
 
-    compute();
-    // capture:true atrapa el scroll aunque venga de un contenedor anidado (no
-    // solo window) — si no, el scrollspy se quedaba pegado en la sección inicial.
-    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
-    window.addEventListener("resize", onScroll);
-    // IntersectionObserver como DISPARADOR redundante: se activa cuando cualquier
-    // sección entra/sale del viewport, garantizando que compute() corra en cada
-    // scroll pase lo que pase (deep-links, scroll programático, etc.). La elección
-    // la sigue haciendo compute() por posición; el IO solo lo dispara.
-    const io = new IntersectionObserver(onScroll, { rootMargin: "0px", threshold: [0, 1] });
-    SECTIONS.forEach((s) => { const el = document.getElementById(s.id); if (el) io.observe(el); });
-    // Re-measure after layout settles (async syntax highlighting, fonts, images
-    // shift section offsets — otherwise the initial measure sticks on quickstart).
-    const t1 = setTimeout(compute, 300);
-    const t2 = setTimeout(compute, 1200);
-    return () => {
-      window.removeEventListener("scroll", onScroll, { capture: true } as any);
-      window.removeEventListener("resize", onScroll);
-      io.disconnect();
-      clearTimeout(t1);
-      clearTimeout(t2);
-      if (raf) cancelAnimationFrame(raf);
+    const loop = () => {
+      if (stop) return;
+      // Sondea el top de la 1ª sección: si cambió, algo se movió → recalcula.
+      const probe = document.getElementById(SECTIONS[0].id)?.getBoundingClientRect().top ?? 0;
+      if (probe !== lastProbe) { lastProbe = probe; pick(); }
+      raf = requestAnimationFrame(loop);
     };
+    raf = requestAnimationFrame(loop);
+    return () => { stop = true; cancelAnimationFrame(raf); };
   }, []);
 
   return (
@@ -391,7 +366,9 @@ const eb = await createClientFromEnv();` },
             <TabbedCode
               tabs={[
                 { label: "ghosty mcp", code: `# 1. Agregar el servidor con tu key (esto lo activa)
-ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp?tools=all" --bearer TU_EASYBITS_API_KEY
+ghosty mcp add easybits \\
+  --url "https://www.easybits.cloud/api/mcp?tools=all" \\
+  --bearer TU_EASYBITS_API_KEY
 
 # 2. Verifica
 ghosty mcp list

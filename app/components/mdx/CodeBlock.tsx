@@ -56,7 +56,7 @@ export function CodeBlock({
     return (
       <div className="relative">
         <div
-          className="overflow-hidden [&_pre]:!m-0 [&_pre]:!p-4 [&_pre]:!rounded-none [&_pre]:text-sm [&_pre]:font-mono"
+          className="[&_pre]:!m-0 [&_pre]:!p-4 [&_pre]:!rounded-none [&_pre]:text-sm [&_pre]:font-mono [&_pre]:overflow-x-auto"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </div>
