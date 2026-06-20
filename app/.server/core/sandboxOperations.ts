@@ -673,7 +673,7 @@ export async function getFleetStats(): Promise<FleetStats> {
 
 // Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on
 // persistent boxes (host returns { persistent, noop }). The remaining-lifetime
-// window is the per-plan max (Mega 1h, Tera 24h), enforced by the host via the
+// window is the per-plan max (Mega 4h, Tera 24h), enforced by the host via the
 // maxTtlSeconds we pass; asking for a bigger window than the plan allows → 403.
 export async function extendSandbox(
   ctx: AuthContext,

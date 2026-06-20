@@ -4,6 +4,7 @@ import {
   SandboxExecBody,
   SandboxRunCellBody,
 } from "~/.server/sandbox/schemas";
+import { MAX_SANDBOX_TTL_SECONDS } from "~/lib/plans";
 
 describe("sandbox schemas (fuente única de validación REST)", () => {
   it("create rechaza template inválido y acepta uno válido", () => {
@@ -16,9 +17,12 @@ describe("sandbox schemas (fuente única de validación REST)", () => {
     expect(SandboxCreateBody.safeParse({ template: "cagent-ghosty" }).success).toBe(true);
   });
 
-  it("create rechaza timeout fuera de rango [30,3600]", () => {
+  it("create rechaza timeout fuera de rango [30, MAX_SANDBOX_TTL_SECONDS]", () => {
     expect(SandboxCreateBody.safeParse({ template: "node", timeoutSeconds: 10 }).success).toBe(false);
-    expect(SandboxCreateBody.safeParse({ template: "node", timeoutSeconds: 99999 }).success).toBe(false);
+    // El cap de borde deriva del plan con mayor TTL (Tera 24h); el enforcement
+    // real por plan vive en createSandbox. Aquí solo validamos la cota de cordura.
+    expect(SandboxCreateBody.safeParse({ template: "node", timeoutSeconds: MAX_SANDBOX_TTL_SECONDS }).success).toBe(true);
+    expect(SandboxCreateBody.safeParse({ template: "node", timeoutSeconds: MAX_SANDBOX_TTL_SECONDS + 1 }).success).toBe(false);
   });
 
   it("exec rechaza command vacío (el hueco que cerramos)", () => {

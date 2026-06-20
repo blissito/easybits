@@ -22,6 +22,7 @@ import {
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { GROUP_ALLOWLISTS, DYNAMIC_ONLY_TOOLS, type ToolGroupKey } from "./toolGroups";
@@ -1362,10 +1363,10 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_create",
-    "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Base templates: ubuntu, python, node, bun. Agent/harness templates: node-agent, claude-code, goose, ghostyclaw, openclaw, chat-openai, chat-anthropic (for the chat-* persistent runtimes prefer agent_create). Call templates_list for the full catalog with required env. Default timeout 300s, max 3600s — sandbox auto-destroys when timeout elapses (extend with sandbox_extend).",
+    "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Base templates: ubuntu, python, node, bun. Agent/harness templates: node-agent, claude-code, goose, ghostyclaw, openclaw, chat-openai, chat-anthropic (for the chat-* persistent runtimes prefer agent_create). Call templates_list for the full catalog with required env. Default timeout 300s; max session length depends on your plan (Byte 1h · Mega 4h · Tera 24h) — sandbox auto-destroys when timeout elapses (extend with sandbox_extend).",
     {
       template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "ghostyclaw", "openclaw", "chat-openai", "chat-anthropic", "code-interpreter"]).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
-      timeoutSeconds: z.number().int().min(30).max(3600).optional().describe("Auto-destroy after N seconds (default 300, max 3600)"),
+      timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300). Max depends on your plan: Byte 3600 (1h) · Mega 14400 (4h) · Tera 86400 (24h)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
       size: z.enum(["s", "m", "l", "xl"]).optional().describe("VM size class (default s). s=1vCPU/512MB · m=2/2GB+4GB disk · l=4/4GB+12GB disk · xl=8/8GB+24GB disk. Bigger needed for heavy installs/builds (vite/RRv7). Gated by plan."),
@@ -1495,10 +1496,10 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_extend",
-    "Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on persistent boxes (returns { persistent, noop }). The host clamps total remaining lifetime to 3600s from now.",
+    "Refresh a sandbox's TTL before the auto-destroy reaper fires. No-op on persistent boxes (returns { persistent, noop }). Total remaining lifetime is capped by your plan's max session length (Byte 1h · Mega 4h · Tera 24h).",
     {
       sandboxId: z.string().describe("Sandbox ID"),
-      extendSeconds: z.number().int().min(1).optional().describe("Seconds to add to the current deadline (default 300, total capped at 3600s from now)"),
+      extendSeconds: z.number().int().min(1).optional().describe("Seconds to add to the current deadline (default 300; total capped by your plan: Byte 3600 · Mega 14400 · Tera 86400)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1897,7 +1898,7 @@ How to embed safely (the only reliable rule):
       template: z.enum(["rust-ghosty", "computer-ghosty", "computer-ghosty-gemini", "ghostyclaw"]).default("rust-ghosty").describe("Agent template. DEFAULT y principal = 'rust-ghosty' = Ghosty (cerebro CodeWhale/Rust + web SSE/WhatsApp + búsqueda web BrightData + catálogo easybits), zero-config (env inyectado del vault del dueño). 'computer-ghosty'/'computer-ghosty-gemini' = workstation computer-use (escritorio noVNC + terminal). 'ghostyclaw' = daemon nanoclaw always-on (WhatsApp/Slack/Telegram)."),
       env: z.record(z.string()).default({}).describe("Environment variables for the agent. Para 'rust-ghosty' déjalo VACÍO ({}): easybits inyecta DeepSeek/runtime/easybits/admin del vault del dueño. Para 'computer-ghosty'/'computer-ghosty-gemini' (Anthropic/Google) y 'ghostyclaw' las keys salen del vault salvo override aquí."),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
-      timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),
+      timeoutSeconds: z.number().int().min(60).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300; max depends on plan: Byte 3600 · Mega 14400 · Tera 86400)"),
       port: z.number().int().min(1).max(65535).optional().describe("Override agent port (default 3000 for chat-*)"),
       healthPath: z.string().optional().describe("Override health probe path (default /health)"),
     },
@@ -1914,7 +1915,7 @@ How to embed safely (the only reliable rule):
     {
       name: z.string().max(64).optional().describe("Optional human-friendly label (default 'ghosty')"),
       systemPrompt: z.string().optional().describe("Override Ghosty's default system prompt"),
-      timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),
+      timeoutSeconds: z.number().int().min(60).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300; max depends on plan: Byte 3600 · Mega 14400 · Tera 86400)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1928,7 +1929,7 @@ How to embed safely (the only reliable rule):
     "Spawn THE managed Goose agent — zero configuration. Block's open-source coding agent running as ACP server (JSON-RPC over SSE) inside a Firecracker microVM. Uses EasyBits' managed Anthropic credentials (Haiku 4.5). Returns { sandboxId, agentUrl, healthUrl, agentId, embedToken }. systemPrompt is currently ignored for Goose (uses Goose default).",
     {
       name: z.string().max(64).optional().describe("Optional human-friendly label (default 'Goose')"),
-      timeoutSeconds: z.number().int().min(60).max(3600).optional().describe("Auto-destroy after N seconds (default 300)"),
+      timeoutSeconds: z.number().int().min(60).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300; max depends on plan: Byte 3600 · Mega 14400 · Tera 86400)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;

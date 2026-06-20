@@ -35,7 +35,7 @@ export interface PlanConfig {
   llmTokensIncluded: number;
   /** Max concurrent ACTIVE sandboxes (running/starting). Enforced in createSandbox. */
   concurrentSandboxes: number;
-  /** Max sandbox session length in seconds (TTL window). Mega 1h, Tera 24h. Enforced in create/extend. */
+  /** Max sandbox session length in seconds (TTL window). Mega 4h, Tera 24h. Enforced in create/extend. */
   maxSandboxTtlSeconds: number;
   /** Max VM size class allowed (s<m<l<xl). Bigger = more RAM/CPU/disk. Enforced in createSandbox. */
   maxSandboxSize: "s" | "m" | "l" | "xl";
@@ -78,7 +78,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     aiGenerationsPerMonth: PLAN_CREDITS.Mega,
     llmTokensIncluded: 10_000_000, // 10M tokens/mes — ~39% del precio a costo real DeepSeek
     concurrentSandboxes: 3,
-    maxSandboxTtlSeconds: 3600,
+    maxSandboxTtlSeconds: 14400,
     maxSandboxSize: "l",
     stripeIntent: "flow_plan",
     features: [
@@ -86,7 +86,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       `${formatCredits(PLAN_CREDITS.Mega)} créditos AI/mes incluidos`,
       "Todo lo de Byte",
       "10 bases de datos",
-      "Sandboxes: 3 simultáneos · kernel Python + URLs públicas",
+      "Sandboxes: 3 simultáneos · sesiones de 4h · kernel Python + URLs públicas",
       "Subidas ilimitadas",
       "Sin branding en landings",
       "Websites estáticos",
@@ -119,6 +119,12 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     ],
   },
 };
+
+/** Mayor TTL de sandbox entre todos los planes. Cap de borde en los validadores
+ *  zod (REST + MCP). Deriva de PLANS → un solo lugar para A/B la duración. */
+export const MAX_SANDBOX_TTL_SECONDS = Math.max(
+  ...Object.values(PLANS).map((p) => p.maxSandboxTtlSeconds)
+);
 
 /** Map old DB names → new keys (backwards compat) */
 const PLAN_ALIASES: Record<string, PlanKey> = { Spark: "Byte", Flow: "Mega", Studio: "Tera" };

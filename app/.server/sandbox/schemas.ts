@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 
 // Fuente única de validación de payloads de sandbox para las rutas REST
 // (.safeParse del body). NO incluye `sandboxId` — viene del URL param.
@@ -16,7 +17,7 @@ export type SandboxTemplate = (typeof SANDBOX_TEMPLATES)[number];
 
 export const SandboxCreateBody = z.object({
   template: z.enum(SANDBOX_TEMPLATES),
-  timeoutSeconds: z.number().int().min(30).max(3600).optional(),
+  timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional(),
   name: z.string().max(64).optional(),
   metadata: z.record(z.string()).optional(),
   // Opt-in a VM always-on (el host salta el reaper). Combina con la lista de

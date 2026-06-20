@@ -1482,7 +1482,7 @@ console.log(status.result);  // resultado final del agente`} />
             </div>
 
             <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
-              <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min, max 60 min).
+              <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
             </div>
           </section>
 

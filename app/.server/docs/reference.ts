@@ -458,7 +458,7 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 ### Ciclo de vida
 - \`sandbox_list()\` — listar sandboxes activos
 - \`sandbox_status({ sandboxId })\` — estado (starting/running/stopped/error/lost/suspended)
-- \`sandbox_extend({ sandboxId, extendSeconds? })\` — extender TTL (máx 60 min)
+- \`sandbox_extend({ sandboxId, extendSeconds? })\` — extender TTL (máx según plan: Byte 1h · Mega 4h · Tera 24h)
 - \`sandbox_suspend({ sandboxId })\` — snapshot a disco; pausa el TTL mientras está suspendido
 - \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot; restaura el TTL restante (no hace falta sandbox_extend)
 - \`sandbox_destroy({ sandboxId })\` — destruir y liberar
@@ -476,7 +476,7 @@ MCP: \`agent_run({ prompt, model?, maxTurns? })\` — agente Claude asíncrono
 MCP: \`agent_run_status({ jobId })\` — consultar estado
 MCP: \`agent_run_destroy({ jobId })\` — liberar sandbox
 
-Rate limits: 10 spawns/min, 120 ops/min. Sandboxes se auto-destruyen al TTL.
+Rate limits: 10 spawns/min, 120 ops/min. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
 `,
 
   hosting: `## Hosting — Máquinas permanentes (always-on)
