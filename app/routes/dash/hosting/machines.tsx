@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher, data } from "react-router";
+import { AnimatePresence, motion } from "motion/react";
 import type { Route } from "./+types/machines";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
@@ -8,6 +9,7 @@ import {
   suspendSandbox,
   resumeSandbox,
   destroySandbox,
+  exposeSandboxPort,
 } from "~/.server/core/sandboxOperations";
 import {
   listPermanent,
@@ -22,7 +24,7 @@ import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import { ThankYouModal } from "~/components/common/ThankYouModal";
 import {
   LuServer, LuCpu, LuMemoryStick, LuHardDrive, LuTrash2,
-  LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert,
+  LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert, LuExternalLink, LuLoader,
 } from "react-icons/lu";
 
 export const meta = () => [{ title: "Máquinas — EasyBits" }, { name: "robots", content: "noindex" }];
@@ -35,9 +37,19 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     listSandboxes(ctx).catch(() => []),
   ]);
   const permIds = new Set(permanents.map((p) => p.sandboxId));
-  const ephemerals = (Array.isArray(hostList) ? hostList : [])
-    .filter((s) => !permIds.has(s.sandboxId))
-    .map((s) => ({ sandboxId: s.sandboxId, template: s.template, status: s.status as string, expiresAt: s.expiresAt }));
+  const rawEphemerals = (Array.isArray(hostList) ? hostList : []).filter((s) => !permIds.has(s.sandboxId));
+
+  // For running livekit-svc sandboxes, call exposeSandboxPort to get (or re-register) the real URL.
+  const ephemerals = await Promise.all(
+    rawEphemerals.map(async (s) => {
+      let studioUrl: string | null = null;
+      if (s.template === "livekit-svc" && s.status === "running") {
+        const ep = await exposeSandboxPort(ctx, s.sandboxId, 8088).catch(() => null);
+        if (ep) studioUrl = ep.url.endsWith("/") ? ep.url : ep.url + "/";
+      }
+      return { sandboxId: s.sandboxId, template: s.template, status: s.status as string, expiresAt: s.expiresAt, studioUrl };
+    })
+  );
   const plan = getUserPlan(user);
   const tiers = TIER_ORDER.map((k) => {
     const t = HOSTING_CATALOG[k];
@@ -46,10 +58,14 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       priceShared: t.priceShared, priceReserved: t.priceReserved, byRequest: t.vcpus > 8,
     };
   });
+  const { PLANS: plansMap } = await import("~/lib/plans");
+  const sandboxLimit = plansMap[plan]?.concurrentSandboxes ?? 2;
+  const activeSandboxes = ephemerals.filter((s) => s.status === "running" || s.status === "starting").length;
   return {
     permanents, ephemerals, plan, paid: isPaidPlan(plan),
     reservedEnabled: process.env.HOSTING_RESERVED_ENABLED === "1",
     tiers, diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
+    sandboxLimit, activeSandboxes,
   };
 };
 
@@ -124,12 +140,16 @@ const monthly = (t: Tier, mode: "shared" | "reserved", diskGB: number, diskPrice
 };
 
 export default function HostingMachines({ loaderData }: Route.ComponentProps) {
-  const { permanents, ephemerals, paid, reservedEnabled, tiers, diskAddon } = loaderData;
+  const { permanents, ephemerals, paid, reservedEnabled, tiers, diskAddon, sandboxLimit, activeSandboxes } = loaderData;
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const [modal, setModal] = useState<null | { promoteId?: string }>(null);
   const [confirm, setConfirm] = useState<null | { intent: string; id: string; title: string; message: string }>(null);
   const [thanks, setThanks] = useState(false);
+  // IDs being destroyed/released so we can animate them out
+  const [destroyingIds, setDestroyingIds] = useState<Set<string>>(new Set());
+  // IDs being suspended/resumed
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   // ESC cierra modal/confirm
   useEffect(() => {
@@ -142,16 +162,41 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data && "ok" in fetcher.data) {
       setModal(null);
+      setDestroyingIds(new Set());
+      setLoadingIds(new Set());
       if ("created" in fetcher.data && fetcher.data.created) setThanks(true);
+    }
+    if (fetcher.state === "idle" && fetcher.data && "error" in fetcher.data) {
+      setDestroyingIds(new Set());
+      setLoadingIds(new Set());
     }
   }, [fetcher.state, fetcher.data]);
 
-  const submit = (fields: Record<string, string>) => fetcher.submit(fields, { method: "post" });
+  const submit = (fields: Record<string, string>) => {
+    const intent = fields.intent;
+    const id = fields.sandboxId;
+    if (id && (intent === "destroy" || intent === "release")) {
+      setDestroyingIds((s) => new Set(s).add(id));
+    } else if (id && (intent === "suspend" || intent === "resume")) {
+      setLoadingIds((s) => new Set(s).add(id));
+    }
+    fetcher.submit(fields, { method: "post" });
+  };
   const err = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
 
   return (
-    <article className="pt-20 px-6 md:px-8 pb-24 md:pl-36 w-full max-w-5xl">
-      <header className="flex items-center justify-between mb-2 flex-wrap gap-3">
+    <motion.article
+      className="pt-20 px-6 md:px-8 pb-24 md:pl-36 w-full max-w-5xl"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+    >
+      <motion.header
+        className="flex items-center justify-between mb-2 flex-wrap gap-3"
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+      >
         <h1 className="text-3xl font-black tracking-tight uppercase flex items-center gap-2">
           <LuServer /> Máquinas
         </h1>
@@ -160,70 +205,134 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
             <span className="flex items-center gap-1"><LuPlus /> Nueva máquina</span>
           </BrutalButton>
         )}
-      </header>
-      <p className="text-iron text-sm mb-8">VMs always-on con cobro flat al mes, y tus sandboxes efímeros.</p>
+      </motion.header>
+      <motion.p
+        className="text-iron text-sm mb-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+      >
+        VMs always-on con cobro flat al mes, y tus sandboxes efímeros.
+      </motion.p>
 
-      {err && (
-        <div className="mb-6 p-3 bg-brand-red/10 border-2 border-brand-red rounded-xl text-sm font-bold text-brand-red">{err}</div>
-      )}
+      <AnimatePresence>
+        {err && (
+          <motion.div
+            key="error"
+            className="mb-6 p-3 bg-brand-red/10 border-2 border-brand-red rounded-xl text-sm font-bold text-brand-red"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.2 }}
+          >
+            {err}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!paid && (
-        <div className="mb-8 p-6 bg-brand-100 border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <motion.div
+          className="mb-8 p-6 bg-brand-100 border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.15 }}
+        >
           <p className="font-bold mb-1">Las máquinas permanentes requieren plan Mega o Tera.</p>
           <p className="text-sm text-iron mb-4">El plan es tu acceso; cada máquina factura flat al mes.</p>
           <a href="/planes"><BrutalButton size="chip" className="text-sm px-4 py-2">Ver planes</BrutalButton></a>
-        </div>
+        </motion.div>
       )}
 
       {/* Permanentes */}
-      <section className="mb-10">
+      <motion.section
+        className="mb-10"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.15 }}
+      >
         <h2 className="text-sm font-black uppercase tracking-wider text-iron mb-3">Máquinas permanentes</h2>
-        {permanents.length === 0 ? (
-          <Empty>Aún no tienes máquinas permanentes.</Empty>
-        ) : (
-          <div className="grid gap-3">
-            {permanents.map((m) => (
-              <Card key={m.sandboxId} status={m.status}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold truncate">{m.name || m.sandboxId}</span>
-                    <StatusPill status={m.status} />
-                    {m.cpuMode === "reserved" && (
-                      <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
+        <AnimatePresence mode="popLayout">
+          {permanents.length === 0 ? (
+            <motion.div key="empty-perm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <Empty>Aún no tienes máquinas permanentes.</Empty>
+            </motion.div>
+          ) : permanents.map((m, i) => {
+            const isDestroying = destroyingIds.has(m.sandboxId);
+            return (
+              <motion.div
+                key={m.sandboxId}
+                layout
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
+                exit={{ opacity: 0, x: 60, scale: 0.93, transition: { duration: 0.28, ease: "easeIn" } }}
+                transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
+                className="mb-3"
+              >
+                <Card status={m.status}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold truncate">{m.name || m.sandboxId}</span>
+                      <StatusPill status={m.status} />
+                      {m.cpuMode === "reserved" && (
+                        <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
+                      )}
+                    </div>
+                    <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
+                    <p className="text-sm font-black mt-1">${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span></p>
+                    {m.status === "lost" && (
+                      <p className="mt-2 text-xs font-bold text-brand-red flex items-center gap-1">
+                        <LuTriangleAlert /> Se perdió pero sigue cobrando — libérala.
+                      </p>
                     )}
                   </div>
-                  <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
-                  <p className="text-sm font-black mt-1">${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span></p>
-                  {m.status === "lost" && (
-                    <p className="mt-2 text-xs font-bold text-brand-red flex items-center gap-1">
-                      <LuTriangleAlert /> Se perdió pero sigue cobrando — libérala.
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <IconBtn title="Liberar (corta cobro + destruye)" danger
-                    onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina", message: "Se corta el cobro y se destruye la VM. No se puede deshacer." })}>
-                    <LuTrash2 size={16} />
-                  </IconBtn>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isDestroying ? (
+                      <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
+                    ) : (
+                      <IconBtn title="Liberar (corta cobro + destruye)" danger
+                        onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina", message: "Se corta el cobro y se destruye la VM. No se puede deshacer." })}>
+                        <LuTrash2 size={16} />
+                      </IconBtn>
+                    )}
+                  </div>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </motion.section>
 
       {/* Efímeros */}
-      <section>
-        <h2 className="text-sm font-black uppercase tracking-wider text-iron mb-3">Sandboxes</h2>
-        {ephemerals.length === 0 ? (
-          <Empty>Sin sandboxes activos. Tus agentes los crean por SDK/MCP.</Empty>
-        ) : (
-          <div className="grid gap-3">
-            {ephemerals.map((s) => {
-              const t = ttl(s.expiresAt);
-              const suspended = s.status === "suspended";
-              return (
-                <Card key={s.sandboxId} status={s.status}>
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.22 }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-black uppercase tracking-wider text-iron">Sandboxes</h2>
+          <SandboxSlots used={activeSandboxes} total={sandboxLimit} />
+        </div>
+        <AnimatePresence mode="popLayout">
+          {ephemerals.length === 0 ? (
+            <motion.div key="empty-eph" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <Empty>Sin sandboxes activos. Tus agentes los crean por SDK/MCP.</Empty>
+            </motion.div>
+          ) : ephemerals.map((s, i) => {
+            const t = ttl(s.expiresAt);
+            const suspended = s.status === "suspended";
+            const isDestroying = destroyingIds.has(s.sandboxId);
+            const isLoading = loadingIds.has(s.sandboxId);
+            return (
+              <motion.div
+                key={s.sandboxId}
+                layout
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
+                exit={{ opacity: 0, x: 60, scale: 0.93, transition: { duration: 0.28, ease: "easeIn" } }}
+                transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
+                className="mb-3"
+              >
+                <Card status={s.status}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-sm truncate">{s.sandboxId}</span>
@@ -235,7 +344,16 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {suspended ? (
+                    {s.studioUrl && s.status === "running" && (
+                      <a href={s.studioUrl} target="_blank" rel="noopener noreferrer"
+                        title="Abrir sala"
+                        className="flex items-center gap-1 p-2 rounded-lg border-2 border-black bg-white hover:bg-brand-100 transition-all hover:-translate-x-0.5 hover:-translate-y-0.5">
+                        <LuExternalLink size={16} />
+                      </a>
+                    )}
+                    {isLoading ? (
+                      <span className="p-2 text-brand-500 animate-spin"><LuLoader size={16} /></span>
+                    ) : suspended ? (
                       <IconBtn title="Reanudar" onClick={() => submit({ intent: "resume", sandboxId: s.sandboxId })}><LuPlay size={16} /></IconBtn>
                     ) : (
                       <IconBtn title="Suspender" onClick={() => submit({ intent: "suspend", sandboxId: s.sandboxId })}><LuPause size={16} /></IconBtn>
@@ -247,24 +365,31 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                     >
                       <LuRocket size={14} /> Permanente
                     </button>
-                    <IconBtn title="Destruir" danger
-                      onClick={() => setConfirm({ intent: "destroy", id: s.sandboxId, title: "Destruir sandbox", message: "Se elimina la VM y sus datos. No se puede deshacer." })}>
-                      <LuTrash2 size={16} />
-                    </IconBtn>
+                    {isDestroying ? (
+                      <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
+                    ) : (
+                      <IconBtn title="Destruir" danger
+                        onClick={() => setConfirm({ intent: "destroy", id: s.sandboxId, title: "Destruir sandbox", message: "Se elimina la VM y sus datos. No se puede deshacer." })}>
+                        <LuTrash2 size={16} />
+                      </IconBtn>
+                    )}
                   </div>
                 </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </motion.section>
 
-      {modal && (
-        <CreateModal
-          promoteId={modal.promoteId} tiers={tiers} diskAddon={diskAddon} reservedEnabled={reservedEnabled}
-          busy={busy} onClose={() => setModal(null)} onSubmit={submit}
-        />
-      )}
+      <AnimatePresence>
+        {modal && (
+          <CreateModal
+            key="create-modal"
+            promoteId={modal.promoteId} tiers={tiers} diskAddon={diskAddon} reservedEnabled={reservedEnabled}
+            busy={busy} onClose={() => setModal(null)} onSubmit={submit}
+          />
+        )}
+      </AnimatePresence>
 
       {thanks && <ThankYouModal kind="machine" onClose={() => setThanks(false)} />}
 
@@ -277,9 +402,18 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
         onCancel={() => setConfirm(null)}
         onConfirm={() => { if (confirm) submit({ intent: confirm.intent, sandboxId: confirm.id }); setConfirm(null); }}
       />
-    </article>
+    </motion.article>
   );
 }
+
+const SandboxSlots = ({ used, total }: { used: number; total: number }) => (
+  <span className="flex items-center gap-1" title={`${used} de ${total} slots activos`}>
+    {Array.from({ length: total }).map((_, i) => (
+      <span key={i} className={`w-2.5 h-2.5 rounded-sm border border-black ${i < used ? "bg-lime" : "bg-gray-100"}`} />
+    ))}
+    <span className="text-xs text-iron ml-1">{used}/{total}</span>
+  </span>
+);
 
 const Card = ({ status, children }: { status: string; children: React.ReactNode }) => (
   <div className={`flex items-center gap-4 p-4 bg-white border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${status === "lost" || status === "error" ? "border-brand-red" : ""}`}>
@@ -320,9 +454,22 @@ function CreateModal({
   const total = useMemo(() => monthly(tier, canReserve ? mode : "shared", diskGB, diskAddon.price), [tier, mode, diskGB, canReserve, diskAddon.price]);
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white border-2 border-black rounded-xl p-6 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+    <motion.div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      role="dialog" aria-modal="true"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        className="bg-white border-2 border-black rounded-xl p-6 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+      >
         <h3 className="text-lg font-black uppercase mb-4 flex items-center gap-2">
           {promoteId ? <><LuRocket /> Promover a permanente</> : <><LuPlus /> Nueva máquina</>}
         </h3>
@@ -380,8 +527,8 @@ function CreateModal({
             {promoteId ? "Promover" : "Crear"}
           </BrutalButton>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
