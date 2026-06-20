@@ -88,15 +88,24 @@ export default function DocsPage() {
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(compute); };
 
     compute();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    // capture:true atrapa el scroll aunque venga de un contenedor anidado (no
+    // solo window) — si no, el scrollspy se quedaba pegado en la sección inicial.
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
     window.addEventListener("resize", onScroll);
+    // IntersectionObserver como DISPARADOR redundante: se activa cuando cualquier
+    // sección entra/sale del viewport, garantizando que compute() corra en cada
+    // scroll pase lo que pase (deep-links, scroll programático, etc.). La elección
+    // la sigue haciendo compute() por posición; el IO solo lo dispara.
+    const io = new IntersectionObserver(onScroll, { rootMargin: "0px", threshold: [0, 1] });
+    SECTIONS.forEach((s) => { const el = document.getElementById(s.id); if (el) io.observe(el); });
     // Re-measure after layout settles (async syntax highlighting, fonts, images
     // shift section offsets — otherwise the initial measure sticks on quickstart).
     const t1 = setTimeout(compute, 300);
     const t2 = setTimeout(compute, 1200);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll, { capture: true } as any);
       window.removeEventListener("resize", onScroll);
+      io.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
       if (raf) cancelAnimationFrame(raf);
