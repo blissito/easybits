@@ -349,15 +349,25 @@ const eb = await createClientFromEnv();` },
           {/* Ghosty Code */}
           <section id="ghosty-code" className="mb-16">
             <h2 className="text-2xl font-bold mb-2">Ghosty Code</h2>
-            <p className="text-gray-500 mb-4 text-sm">El runtime agéntico con EasyBits preinstalado. Cero configuración.</p>
+            <p className="text-gray-500 mb-3 text-sm">El runtime agéntico con EasyBits preinstalado. Cero configuración.</p>
+
+            <div className="flex flex-wrap gap-3 mb-4 text-sm">
+              <a href="https://www.npmjs.com/package/ghostycode" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 border-2 border-black rounded-lg px-3 py-1.5 font-medium hover:bg-gray-50">
+                <span>📦</span> npm: ghostycode
+              </a>
+              <a href="https://github.com/blissito/ghostycode" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 border-2 border-black rounded-lg px-3 py-1.5 font-medium hover:bg-gray-50">
+                <span>⌥</span> GitHub: blissito/ghostycode
+              </a>
+            </div>
 
             <div className="mb-6 bg-black text-white border-2 border-black rounded-xl p-5">
               <p className="text-sm mb-1 text-gray-300">Ghosty Code v0.0.4+ ya trae EasyBits MCP HTTP preinstalado.</p>
               <p className="text-sm text-gray-400">Solo necesitas tu API key. Nada que instalar, nada que configurar.</p>
             </div>
 
-            <h3 className="text-lg font-bold mb-3">Conexión en 2 pasos</h3>
+            <h3 className="text-lg font-bold mb-3">Conexión en 3 pasos</h3>
             <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6 text-sm">
+              <li>Instala el CLI: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">npm i -g ghostycode</code> (te da el comando <code className="bg-gray-100 px-1 rounded">ghosty</code>)</li>
               <li>Configura tu API key: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY</code></li>
               <li>Ejecuta: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">ghosty</code></li>
             </ol>
