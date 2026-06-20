@@ -255,11 +255,10 @@ export default function DocsPage() {
             </ol>
             <TabbedCode
               tabs={[
-                { label: "Ghosty Code", code: `# Ghosty Code v0.0.4+ ya trae EasyBits preinstalado.
-# Solo configura tu API key:
-
-export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
-ghosty` },
+                { label: "Ghosty Code", code: `# Ghosty Code trae el MCP de EasyBits preconfigurado.
+npm install -g ghostycode
+ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY"
+ghosty --yolo` },
                 { label: "Claude Code", code: `claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY` },
                 { label: "curl", code: `curl -H "Authorization: Bearer eb_sk_live_YOUR_KEY" \\
   https://www.easybits.cloud/api/v2/files` },
@@ -370,34 +369,35 @@ const eb = await createClientFromEnv();` },
             </div>
 
             <div className="mb-6 bg-black text-white border-2 border-black rounded-xl p-5">
-              <p className="text-sm mb-1 text-gray-300">Ghosty Code v0.0.4+ ya trae EasyBits MCP HTTP preinstalado.</p>
-              <p className="text-sm text-gray-400">Solo necesitas tu API key. Nada que instalar, nada que configurar.</p>
+              <p className="text-sm mb-1 text-gray-300">Ghosty Code trae el MCP de EasyBits preconfigurado.</p>
+              <p className="text-sm text-gray-400">Viene desactivado de fábrica hasta que añades tu API key — una instalación nueva nunca falla por falta de credencial.</p>
             </div>
 
             <h3 className="text-lg font-bold mb-3">Conexión en 3 pasos</h3>
-            <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6 text-sm">
-              <li>Instala el CLI: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">npm i -g ghostycode</code> (te da el comando <code className="bg-gray-100 px-1 rounded">ghosty</code>)</li>
-              <li>Configura tu API key: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY</code></li>
-              <li>Ejecuta: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">ghosty</code></li>
+            <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-4 text-sm">
+              <li>Instala el CLI: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">npm install -g ghostycode</code> (o <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">curl -fsSL https://formmy.app/ghosty/install.sh | sh</code>)</li>
+              <li>Autentica con tu key de EasyBits (sirve para LLM + MCP): <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY"</code></li>
+              <li>Ejecuta: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">ghosty --yolo</code></li>
             </ol>
             <p className="text-xs text-gray-400 mb-4">
-              EasyBits aparece como <code className="bg-gray-100 px-1 rounded">easybits</code> en tu lista de MCPs con 100+ herramientas listas para usar.
+              Consigue tu API key en{" "}
+              <a href="/dash/developer" className="underline">/dash/developer</a>. Verifica el setup con <code className="bg-gray-100 px-1 rounded">ghosty doctor</code> y los MCPs con <code className="bg-gray-100 px-1 rounded">ghosty mcp list</code>.
             </p>
 
-            <h3 className="text-lg font-bold mb-3">¿Versión anterior o instalación manual?</h3>
+            <h3 className="text-lg font-bold mb-3">Agregar EasyBits manualmente</h3>
             <p className="text-sm text-gray-600 mb-3">
-              Si usas Ghosty Code v0.0.3 o necesitas agregar EasyBits manualmente:
+              Si necesitas (re)agregar el servidor MCP con tu key:
             </p>
             <TabbedCode
               tabs={[
-                { label: "ghosty mcp", code: `# 1. Agregar el servidor
-ghosty mcp add easybits --url https://www.easybits.cloud/api/mcp?tools=all
+                { label: "ghosty mcp", code: `# 1. Agregar el servidor con tu key (esto lo activa)
+ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp?tools=all" --bearer TU_EASYBITS_API_KEY
 
-# 2. Configurar la key (si no usas EASYBITS_API_KEY)
-export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+# 2. Verifica
+ghosty mcp list
 
 # 3. Listo
-ghosty` },
+ghosty --yolo` },
               ]}
             />
 
@@ -422,8 +422,8 @@ ghosty` },
             </div>
 
             <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm mb-4">
-              <strong>¿Ya usas Ghosty Code?</strong> Actualiza a v0.0.4+ con{" "}
-              <code className="bg-gray-100 px-1 rounded">ghosty update</code> y EasyBits aparece automáticamente.
+              <strong>¿Ya usas Ghosty Code?</strong> Mantén el binario al día con{" "}
+              <code className="bg-gray-100 px-1 rounded">ghosty update</code> — el MCP de EasyBits ya viene preconfigurado.
             </div>
 
             <p className="text-xs text-gray-400">
@@ -1752,9 +1752,10 @@ call_destroy({ sandboxId })   // cierra la sala y libera la VM` },
             <h3 className="text-lg font-bold mb-3">Uso</h3>
             <TabbedCode
               tabs={[
-                { label: "Ghosty Code", code: `# Ghosty Code v0.0.4+ — ya viene preinstalado. Solo:
-export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
-ghosty` },
+                { label: "Ghosty Code", code: `# Ghosty Code — MCP de EasyBits preconfigurado.
+npm install -g ghostycode
+ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY"
+ghosty --yolo` },
                 { label: "Claude Code", code: `# Core + sandboxes + documents
 claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools sandbox,docs
 
