@@ -911,6 +911,35 @@ export async function exposeSandboxPort(
   );
 }
 
+export interface RawForwardResult {
+  hostPort: number;   // unique host port from the pool (49000-49999)
+  guestPort: number;  // the port the service listens on inside the VM
+  protocol: "udp" | "tcp";
+  ok: boolean;
+}
+
+// Expose a raw layer-4 (UDP/TCP) port into the sandbox via iptables DNAT.
+// Allocates a unique host port (49000-49999) → guest port, so multiple VMs
+// can use the same internal port (e.g. all livekit-svc VMs on UDP 7882)
+// without collision. Returns hostPort so callers can tell the service which
+// port to announce externally (e.g. LiveKit node_port for ICE candidates).
+// Capability-gated host-side: only templates that declare raw_ports may call
+// this. Torn down with the VM (fc.ClearForwards on destroy/suspend).
+export async function exposeSandboxRawPort(
+  ctx: AuthContext,
+  sandboxId: string,
+  port: number,
+  protocol: "udp" | "tcp" = "udp"
+): Promise<RawForwardResult> {
+  requireScope(ctx, "WRITE");
+  return callHost<RawForwardResult>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/expose-raw`,
+    { port, protocol },
+    ctx.user.id
+  );
+}
+
 // ─────────────── Custom domains (CNAME) ───────────────
 
 export interface SandboxDomain {
@@ -1415,9 +1444,21 @@ export async function createAgent(
     params.template === "rust-ghosty" ||
     params.template === "cagent-ghosty" ||
     params.template === "computer-ghosty" ||
-    params.template === "computer-ghosty-gemini"
+    params.template === "computer-ghosty-gemini" ||
+    params.template === "livekit-svc"
   ) {
     env.ADMIN_TOKEN = embedToken;
+  }
+  // livekit-svc (self-hosted recording studio): the LiveKit SFU and the box's
+  // own token minting share ONE key pair, both internal to the VM. Generate it
+  // so the studio is one-click — the user never pastes LiveKit creds. Caller
+  // env wins (e.g. to pin a known pair). ADMIN_TOKEN above gates /admin/recording*.
+  if (params.template === "livekit-svc") {
+    if (!env.LK_API_KEY) env.LK_API_KEY = "lk_" + randomBytes(8).toString("hex");
+    if (!env.LK_API_SECRET) env.LK_API_SECRET = randomBytes(32).toString("hex");
+    // Para que el botón "Detener" de la sala suba la grabación a los Files del
+    // dueño (permanente). El box notifica acá con su ADMIN_TOKEN (= embedToken).
+    if (!env.EASYBITS_INGEST_URL) env.EASYBITS_INGEST_URL = "https://www.easybits.cloud/api/v2/studio/ingest";
   }
   // open-ghosty / lang-ghosty / rust-ghosty / cagent-ghosty connect to the easybits MCP
   // (dynamic tools) when they have the user's EasyBits key. Pull it from the vault; without

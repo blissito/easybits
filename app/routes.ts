@@ -167,6 +167,7 @@ export default [
     route("agents/ghosty", "routes/api/v2/agents-ghosty.ts"),
     route("agents/autonomous", "routes/api/v2/agents-autonomous.ts"),
     route("agents/lookup", "routes/api/v2/agents-lookup.ts"),
+    route("studio/ingest", "routes/api/v2/studio-ingest.ts"),
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
     route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),

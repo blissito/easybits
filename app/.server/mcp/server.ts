@@ -156,6 +156,12 @@ import {
   recordTask,
 } from "../core/recordingOperations";
 import {
+  createRoom,
+  startStudioRecording,
+  stopStudioRecording,
+  listStudioRecordings,
+} from "../core/studioOperations";
+import {
   createSecret,
   deleteSecretByName,
   listSecrets,
@@ -269,6 +275,10 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   agent_recording_start: "op",
   agent_recording_stop: "op",
   agent_recording_list: "op",
+  studio_create_room: "op",
+  studio_start_recording: "op",
+  studio_stop_recording: "op",
+  studio_list_recordings: "op",
 };
 
 // Envuelve un handler MCP con el rate limit de sandbox. Fail-open si no hay
@@ -2068,6 +2078,66 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listRecordings(ctx, params.agentId);
+      return ok(paginate(result, { total: result.length }));
+    })
+  );
+
+  // --- Studio (self-hosted recording, template livekit-svc) ---
+  // Zoom-like flow, agent-driven: create a room (join link) → people meet and
+  // share screen → start/stop server-side recording → fetch the MP4. Recording
+  // happens in the VM (chromium+ffmpeg); the MP4 is served from the VM with
+  // Range, live while the sandbox runs (capability = unguessable subdomain).
+
+  server.tool(
+    "studio_create_room",
+    "Create a recording-studio room on a running livekit-svc agent and return the public join link. Exposes the box's three surfaces (control HTTP, LiveKit signaling, and the UDP media port via the raw L4 forward) and returns { room, roomUrl }. Open roomUrl in a browser to join with camera + screen share — share it with a guest for an interview. Then drive recording with studio_start_recording / studio_stop_recording.",
+    {
+      agentId: z.string().describe("agentId of a running livekit-svc agent"),
+      room: z.string().optional().describe("optional room name; a unique one is generated if omitted"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await createRoom(ctx, params.agentId, params.room);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "studio_start_recording",
+    "Start server-side recording of a studio room. A headless chromium joins the room and ffmpeg captures the composed layout (cameras + shared screen) + audio to an mp4 inside the VM. One recording at a time per agent. Returns { recording, id, room, startedAt }; the playable url is returned by studio_stop_recording.",
+    {
+      agentId: z.string().describe("agentId of the running livekit-svc agent"),
+      room: z.string().describe("the room name to record (from studio_create_room)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await startStudioRecording(ctx, params.agentId, params.room);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "studio_stop_recording",
+    "Stop the in-progress studio recording and finalize the mp4. Returns { recording:false, id, file, url } where `url` is a public, Range-capable link to the playable mp4 (live while the sandbox runs) — hand this to the user to download and edit.",
+    {
+      agentId: z.string().describe("agentId of the livekit-svc agent currently recording"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await stopStudioRecording(ctx, params.agentId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "studio_list_recordings",
+    "List the recordings stored on a studio agent's VM. Returns an array of { file, url, size, modifiedAt } sorted newest-first; each `url` is a public Range-capable link to the mp4 (live while the sandbox runs). Use this to answer 'give me the recording of such-and-such call'.",
+    {
+      agentId: z.string().describe("agentId of a livekit-svc agent"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listStudioRecordings(ctx, params.agentId);
       return ok(paginate(result, { total: result.length }));
     })
   );

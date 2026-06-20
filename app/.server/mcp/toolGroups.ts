@@ -373,6 +373,10 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "agent_recording_start",
   "agent_recording_stop",
   "agent_recording_list",
+  "studio_create_room",
+  "studio_start_recording",
+  "studio_stop_recording",
+  "studio_list_recordings",
   "ghosty_spawn",
   "goose_spawn",
 ]);

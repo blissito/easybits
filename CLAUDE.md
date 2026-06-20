@@ -241,13 +241,16 @@ EasyBits se convierte en hosting + DB + forms + actions — un mini Firebase/Sup
 - Audit tracker: `memory/audit-todos.md` — all critical/high items resolved, remaining items marked won't fix
 - **Won't fix**: credentials encryption at rest, storage quota enforcement, persistent rate limiter, API v1 restructure
 - **Planned**: RAG as a Service — allow agents to index and query files via retrieval-augmented generation
-- **Planned**: Video Calls 1:1 + Recording — AWS Chime SDK, llamadas 1:1 entre usuarios, grabación automática que se sube como archivo a EasyBits. Costo estimado ~$0.41 USD/hr (audio+video) + recording pipeline. Ya existe POC en el proyecto.
+- **DONE**: Video Calls 1:1 + Recording — **LiveKit** vía template **ghosty-studio** (estudio de grabación, `sandbox-host/templates/livekit-svc/room.html`). Llamadas + grabación que se sube como archivo a EasyBits. (NO usamos AWS Chime.)
+- **Planned**: Llamadas con Nova Sonic (voz) — reusar el feature de llamadas LiveKit / ghosty-studio (ya existente) para conectar Amazon Nova Sonic como interlocutor de voz. Ghosty debe poder **crear una llamada para hablar con él** (Ghosty agenda/inicia la call), compartiendo el **mismo contexto del grupo de WhatsApp** (memoria/historial del agente). Así el usuario habla por voz con Ghosty/Nova Sonic en lugar de solo texto.
 - **Planned**: YouTube-style "Video Elements" section — reusable dark card/section with action rows, inspired by YouTube Studio
 - **URGENTE — Streaming para presentaciones**: Igual que landings v2, convertir generación de slides a streaming SSE para que el usuario vea slides aparecer una a una en vez de esperar todas
 - **Imagen de referencia para bloques**: El usuario sube/pega una imagen y la AI genera el bloque replicando ese diseño (Claude vision). Aplica a landings y presentaciones
 
 ## Siguiente Foco (Mar 2026) — Clase S antes de features nuevos
 **Estrategia**: Hacer que cada feature existente funcione clase S antes de añadir cosas nuevas. Búsqueda semántica y RAG se posponen — son features de escala, no de early adopters.
+
+**ESTADO (Jun 2026)**: Clase S prácticamente completado. Lo que queda abierto son los bugs puntuales de Documents (ver "## TODOs" arriba) y el AI Theme Creator (P6). El foco siguiente son features nuevos: Llamadas con Nova Sonic, HLS streaming, RAG.
 
 **DONE (Mar 7-10)**:
 - Cert management system (audit, cleanup, admin UI, cron endpoint)
@@ -262,20 +265,7 @@ EasyBits se convierte en hosting + DB + forms + actions — un mini Firebase/Sup
 - **FloatingToolbar mejorado**: tag switcher, size presets (padding/margin/width/text/font-weight/rounded para containers/text/buttons/imgs), dual color rows, delete element. Class replace ahora parent-side (no iframe). Shimmer placeholders para imágenes cargando. Cmd+Z desde iframe forwarded al parent.
 - **Documents editor**: prompt bar removida, undo/redo funciona desde canvas
 
-**Prioridad 1 — Landings v3 / Documents clase S (SIGUIENTE)**:
-- Imagen de referencia: usuario sube imagen → AI replica el diseño como sección
-- FloatingToolbar IMG: diferenciar "subir imagen" (upload/URL) vs "generar imagen con AI" (DALL-E) — actualmente solo hay campo SRC manual y el botón de cámara no distingue entre ambos flujos
-- Streaming para presentaciones (mismo patrón SSE que landings v2)
-- Verificar que color swatches aplican al elemento correcto (bug reportado: bg aplicado a hijo en vez de container)
-- Landings v4: pasar `customColors` al AI en generate/refine/regenerate cuando el tema es "custom" — actualmente solo se manda `themeName`, pero si el usuario eligió colores personalizados el AI no los ve
-
-**Prioridad 2 — Previews de archivos inline (table stakes)**:
-- Imágenes, PDFs, video, audio — preview inline en el dashboard de archivos
-- Sin esto la plataforma se siente como un S3 con UI
-
-**Prioridad 3 — Presentaciones clase S (moat del producto)**:
-- TipTap editor inline (P0) — reemplazar textarea
-- Slide layouts pro (P1) — 8 layouts que eleven la calidad visual
+**Prioridad 1-3 — Clase S (DONE Jun 2026)**: Landings v3/Documents, previews de archivos inline, presentaciones. Queda solo el backlog de bugs de Documents (ver "## TODOs") y refinamientos menores (FloatingToolbar upload vs AI image, customColors al AI en landings v4).
 
 **Prioridad 4 — HLS Streaming (diseñar UI + MCP)**:
 - Auto-transcode: al subir video, FFmpeg genera `.m3u8` + segments en background
@@ -296,3 +286,13 @@ EasyBits se convierte en hosting + DB + forms + actions — un mini Firebase/Sup
 
 **Prioridad 6 — AI Theme Creator**:
 - Creador de temas con IA: el usuario describe el mood/estilo → AI genera paleta completa (12 colores semánticos). Aplica a landings v4, documentos, y presentaciones.
+
+## Brand: logo animado (wordmark "EasyBits" — efecto FlipLetters)
+
+El logo de la marca = **icono de ojitos + wordmark "EasyBits" animado**. Aparece en el sidebar (`app/components/DashLayout/SideBar.tsx`) y en el nav de login (`app/components/login/auth-nav.tsx`). Cualquier agente que necesite "el logo animado de easybits" debe reusar ESTO (no reinventarlo, no usar un gif):
+
+- **Icono (ojitos):** `/logo-purple.svg` (público) — también `/icons/eyes-logo-purple.svg`. Estático.
+- **Animación del wordmark:** componente `app/components/animated/FlipLetters.tsx` (usa `motion/react`: `useAnimate` + `stagger`). Es un **efecto dominó 3D**: dos capas de las mismas letras superpuestas (`perspective: 1000px; transform-style: preserve-3d`); **al hover**, la capa de enfrente voltea hacia arriba (`rotateX: 90deg, y: -40%`) y la de atrás entra (`rotateX: 0`), **staggered 0.05s por letra, duración 0.3s** (`{ duration: 0.3, delay: stagger(0.05) }`). En reposo: front en `rotateX:0`, back en `rotateX:90` (de canto). Variante `type="light"` = texto negro (para fondos claros).
+- **Fuente:** `"Jersey 10"` (Google Font). Import en `app/app.css`: `@import url("https://fonts.googleapis.com/css2?family=Jersey+10&display=swap")`; clase `.font-jersey { font-family: "Jersey 10", serif; }`.
+
+**Transportarlo a HTML plano / contextos sin React (ej. páginas servidas por un box):** usar **Motion One** (`motion` vanilla, misma familia) por CDN — `import { animate, stagger } from "https://cdn.jsdelivr.net/npm/motion@11/+esm"` — y replicar el flip con dos `<div>` de `<span>` por letra + los mismos keyframes (`rotateX`, `y`, `stagger(0.05)`, `duration 0.3`). **Implementación de referencia ya hecha** en `sandbox-host/templates/livekit-svc/room.html` (el estudio de grabación): copiar de ahí el bloque CSS (`#ebWord`/`.ebRow`/`.font-jersey`), el markup (ojitos + dos `.ebRow`) y el `<script type="module">` con Motion One.
