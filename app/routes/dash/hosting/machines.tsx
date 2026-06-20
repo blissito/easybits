@@ -45,7 +45,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       let studioUrl: string | null = null;
       if (s.template === "livekit-svc" && s.status === "running") {
         const ep = await exposeSandboxPort(ctx, s.sandboxId, 8088).catch(() => null);
-        if (ep) studioUrl = ep.url.endsWith("/") ? ep.url : ep.url + "/";
+        if (ep) studioUrl = ep.url.replace(/\/$/, "") + "/room";
       }
       return { sandboxId: s.sandboxId, template: s.template, status: s.status as string, expiresAt: s.expiresAt, studioUrl };
     })
