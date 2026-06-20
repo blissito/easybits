@@ -5,6 +5,7 @@ import {
   openAgentMessageStream,
   exposeSandboxPort,
   exposeSandboxRawPort,
+  type RawForwardResult,
 } from "./sandboxOperations";
 
 // Studio = self-hosted recording box (template livekit-svc). It runs a LiveKit
@@ -31,22 +32,42 @@ interface StudioRow {
   template: string;
 }
 
-async function loadStudioRow(ctx: AuthContext, agentId: string): Promise<StudioRow> {
-  const row = await db.agent.findUnique({ where: { id: agentId } });
-  if (!row || row.ownerId !== ctx.user.id) throw new Error("agent not found");
-  if (!STUDIO_TEMPLATES.has(row.template)) {
-    throw new Error(
-      `studio unavailable for template "${row.template}" — supported: ${[...STUDIO_TEMPLATES].join(", ")}`
-    );
+// Acepta agentId (fila en db.agent) O sandboxId directo (sandbox puro sin
+// agente, como los creados por studio_spawn / spawnStudio). En el caso sandbox
+// puro, ADMIN_TOKEN es el embedToken que sandbox-host inyecta = el sandboxId
+// mismo (con prefijo); usamos el sandboxId como bearer de control.
+async function loadStudioRow(ctx: AuthContext, agentOrSandboxId: string): Promise<StudioRow> {
+  // Solo consulta db.agent si el ID parece un MongoDB ObjectID (24 hex).
+  // Un sandboxId tiene formato distinto (sb_xxx / UUID) y causaría
+  // "malformed ObjectID" si se lo pasamos a Prisma/Mongo.
+  const looksLikeObjectId = /^[0-9a-f]{24}$/.test(agentOrSandboxId);
+  const row = looksLikeObjectId
+    ? await db.agent.findUnique({ where: { id: agentOrSandboxId } })
+    : null;
+  if (row) {
+    if (row.ownerId !== ctx.user.id) throw new Error("agent not found");
+    if (!STUDIO_TEMPLATES.has(row.template)) {
+      throw new Error(
+        `studio unavailable for template "${row.template}" — supported: ${[...STUDIO_TEMPLATES].join(", ")}`
+      );
+    }
+    if (row.status !== "running") throw new Error(`agent is ${row.status}; cannot use studio`);
+    return { id: row.id, ownerId: row.ownerId, sandboxId: row.sandboxId, embedToken: row.embedToken, template: row.template };
   }
-  if (row.status !== "running") throw new Error(`agent is ${row.status}; cannot use studio`);
-  return {
-    id: row.id,
-    ownerId: row.ownerId,
-    sandboxId: row.sandboxId,
-    embedToken: row.embedToken,
-    template: row.template,
-  };
+
+  // No es agente — trata como sandboxId directo (livekit-svc sandbox puro).
+  // El ADMIN_TOKEN del box es su embedToken, que para sandboxes puros
+  // es el token generado por createSandbox (guardado en sandbox metadata).
+  const { getSandbox } = await import("./sandboxOperations");
+  const sb = await getSandbox(ctx, agentOrSandboxId).catch(() => null);
+  if (!sb) throw new Error("sandbox not found or not owned by you");
+  if (!STUDIO_TEMPLATES.has(sb.template)) {
+    throw new Error(`studio unavailable for template "${sb.template}"`);
+  }
+  if (sb.status !== "running") throw new Error(`sandbox is ${sb.status}; cannot use studio`);
+  // Para sandboxes puros el ADMIN_TOKEN es el embedToken guardado en metadata.
+  const embedToken = sb.metadata?.["embedToken"] ?? agentOrSandboxId;
+  return { id: agentOrSandboxId, ownerId: ctx.user.id, sandboxId: agentOrSandboxId, embedToken, template: sb.template };
 }
 
 // Call an /admin/* endpoint on the control port. Bearer = embedToken, which the
@@ -95,6 +116,74 @@ const recUrl = (base: string, file: string): string => `${base}/rec/${file}`;
 export interface StudioRoom {
   room: string;
   roomUrl: string;
+  agentId?: string; // set by spawnStudio
+}
+
+// spawnStudio: crea el sandbox livekit-svc, espera que arranque (~15s) y
+// devuelve el link de sala listo para compartir. Una sola tool para el flujo
+// WhatsApp/chat: "arma una sala" → link. El sandboxId se devuelve para que el
+// agente pueda luego llamar studio_start/stop_recording con él.
+export async function spawnStudio(
+  ctx: AuthContext,
+  room?: string
+): Promise<StudioRoom & { sandboxId: string }> {
+  requireScope(ctx, "WRITE");
+  const { createSandbox, getSandbox } = await import("./sandboxOperations");
+
+  // 1. Generar ADMIN_TOKEN y crear el sandbox livekit-svc (TTL 6h).
+  //    El token viaja como env (el box lo recibe como ADMIN_TOKEN) y se guarda
+  //    en metadata para que loadStudioRow lo recupere en llamadas subsecuentes.
+  const { randomBytes } = await import("node:crypto");
+  const adminToken = "sb_" + randomBytes(24).toString("hex");
+  // LK_API_KEY / LK_API_SECRET son internos al box (LiveKit corre dentro de la VM
+  // aislada). El secret se genera por instancia para que no sea predecible.
+  const lkApiKey = "lkdev";
+  const lkApiSecret = randomBytes(32).toString("hex");
+  const sb = await createSandbox(ctx, {
+    template: "livekit-svc",
+    timeoutSeconds: 6 * 3600,
+    name: room ? `studio-${room}` : "studio",
+    metadata: { embedToken: adminToken },
+  });
+
+  // 2. Esperar a que arranque el microVM (sandbox-agent listo).
+  const start = Date.now();
+  let status: string = sb.status;
+  while (status !== "running" && Date.now() - start < 60_000) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const s = await getSandbox(ctx, sb.sandboxId).catch(() => null);
+    status = s?.status ?? status;
+  }
+  if (status !== "running") throw new Error("studio sandbox did not start in time");
+
+  // 3. Exponer el puerto UDP raw PRIMERO — necesitamos el hostPort para
+  //    pasarlo como NODE_PORT a livekit-start, que escribe el yaml en el
+  //    primer boot. Así LiveKit anuncia el puerto correcto desde el inicio
+  //    y no hay necesidad de reconfigurarlo después.
+  const mediaFwd = await exposeSandboxRawPort(ctx, sb.sandboxId, MEDIA_PORT, "udp");
+
+  // 4. Arrancar el runtime livekit con NODE_PORT ya conocido.
+  //    startAgent escribe /etc/livekit-runtime/.env y hace
+  //    systemctl enable+restart livekit-runtime. Espera /health OK (≤45s).
+  const { startAgent } = await import("./sandboxOperations");
+  await startAgent(ctx, sb.sandboxId, {
+    unit: "livekit-runtime",
+    envFile: "/etc/livekit-runtime/.env",
+    port: CONTROL_PORT,
+    healthPath: "/health",
+    timeoutSeconds: 45,
+    env: {
+      LK_API_KEY: lkApiKey,
+      LK_API_SECRET: lkApiSecret,
+      ADMIN_TOKEN: adminToken,
+      EASYBITS_INGEST_URL: "https://www.easybits.cloud/api/v2/studio/ingest",
+      NODE_PORT: String(mediaFwd.ok ? mediaFwd.hostPort : MEDIA_PORT),
+    },
+  });
+
+  // 5. Exponer puertos HTTP + crear sala (el UDP ya está expuesto arriba).
+  const result = await createRoom(ctx, sb.sandboxId, room, mediaFwd);
+  return { ...result, sandboxId: sb.sandboxId };
 }
 
 // createRoom exposes the three box surfaces (control HTTP, signaling HTTP, media
@@ -103,27 +192,21 @@ export interface StudioRoom {
 export async function createRoom(
   ctx: AuthContext,
   agentId: string,
-  room?: string
+  room?: string,
+  preExposedMedia?: RawForwardResult
 ): Promise<StudioRoom> {
   requireScope(ctx, "WRITE");
   const row = await loadStudioRow(ctx, agentId);
   const roomName = (room && room.trim()) || `studio-${Date.now().toString(36)}`;
-  const [control, , mediaFwd] = await Promise.all([
+  // Expose HTTP ports (control + signal). Media UDP is either pre-exposed by
+  // spawnStudio (NODE_PORT already baked into livekit-start env) or we expose
+  // it now for standalone createRoom calls (e.g. adding rooms to existing VM).
+  const [control] = await Promise.all([
     exposeSandboxPort(ctx, row.sandboxId, CONTROL_PORT),
     exposeSandboxPort(ctx, row.sandboxId, SIGNAL_PORT),
-    exposeSandboxRawPort(ctx, row.sandboxId, MEDIA_PORT, "udp"),
+    preExposedMedia ? Promise.resolve(preExposedMedia) : exposeSandboxRawPort(ctx, row.sandboxId, MEDIA_PORT, "udp"),
   ]);
   const base = control.url.replace(/\/$/, "");
-
-  // Tell LiveKit the public host port it must announce in ICE candidates.
-  // Each VM gets a unique host port (49000-49999) so multiple studios can run
-  // in parallel without colliding on the same UDP port on the host.
-  if (mediaFwd.ok) {
-    await boxAdmin(row, "POST", "/admin/livekit/reconfigure", {
-      nodePort: mediaFwd.hostPort,
-    }).catch((e) => console.warn("livekit reconfigure:", e));
-  }
-
   return { room: roomName, roomUrl: `${base}/room?room=${encodeURIComponent(roomName)}` };
 }
 
@@ -243,4 +326,70 @@ export async function ingestRecording(embedToken: string, file: string, bytes: n
   if (!put.ok) throw new Error("PUT " + put.status);
 
   return { ok: true, fileId: fileRec.id, url: fileRec.url, captionJobId: null };
+}
+
+// ── call_status ──────────────────────────────────────────────────────────────
+// Estado del servidor de llamadas: si está grabando, quién está en la sala.
+export async function getCallStatus(ctx: AuthContext, sandboxId: string) {
+  requireScope(ctx, "READ");
+  const row = await loadStudioRow(ctx, sandboxId);
+  const [recState, participants] = await Promise.all([
+    boxAdmin<{ recording: boolean; id?: string; room?: string; startedAt?: string }>(row, "GET", "/rec/state").catch(() => ({ recording: false } as { recording: boolean; room?: string; startedAt?: string })),
+    boxAdmin<{ participants?: string[] }>(row, "GET", "/participants").catch(() => ({ participants: [] })),
+  ]);
+  return { recording: recState.recording, room: recState.room, startedAt: recState.startedAt, participants: participants.participants ?? [] };
+}
+
+// ── call_files ───────────────────────────────────────────────────────────────
+// Grabaciones y transcripts permanentes en EasyBits Files (source=studio).
+// Filtra directamente en DB — sobreviven aunque la VM ya haya sido destruida.
+export async function listCallFiles(ctx: AuthContext) {
+  requireScope(ctx, "READ");
+  const files = await db.file.findMany({
+    where: { ownerId: ctx.user.id, source: "studio", status: { not: "DELETED" } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: { id: true, name: true, url: true, source: true, createdAt: true, contentType: true },
+  });
+  return files;
+}
+
+// ── call_destroy ─────────────────────────────────────────────────────────────
+// Termina la llamada limpiamente:
+//  1. Para grabación activa si la hay (→ sube MP4 a Files via /admin/recording/stop)
+//  2. Jala TODOS los .mp4 de la VM que aún no estén en Files y los sube
+//  3. Destruye el sandbox
+// El agente debe llamar esto cuando la llamada haya terminado.
+export async function destroyCall(ctx: AuthContext, sandboxId: string) {
+  requireScope(ctx, "WRITE");
+  const { destroySandbox } = await import("./sandboxOperations");
+  const row = await loadStudioRow(ctx, sandboxId);
+
+  // 1. Para grabación activa (sube MP4 via /admin/recording/stop + upload)
+  await stopStudioRecording(ctx, sandboxId).catch(() => {});
+
+  // 2. Jala cualquier .mp4 huérfano de la VM que el botón de sala haya dejado
+  //    (el botón notifica al ingest en fire-and-forget; puede que aún no haya
+  //    terminado). Listamos la VM y subimos los que no tienen fileId.
+  try {
+    const recs = await boxAdmin<{ recordings?: Array<{ file: string; size: number }> }>(row, "GET", "/admin/recordings");
+    const base = await controlBase(ctx, row);
+    const { uploadFile } = await import("./operations");
+    for (const rec of recs.recordings ?? []) {
+      if (!rec.file.endsWith(".mp4")) continue;
+      try {
+        const { file: f, putUrl } = await uploadFile(ctx, { fileName: rec.file, contentType: "video/mp4", size: rec.size || 1, access: "public", source: "studio" });
+        const mp4 = await fetch(`${base}/rec/${rec.file}`);
+        if (mp4.ok) {
+          const buf = Buffer.from(await mp4.arrayBuffer());
+          await fetch(putUrl, { method: "PUT", headers: { "Content-Type": "video/mp4", "Content-Length": String(buf.length) }, body: buf });
+          console.log("call_destroy rescued", rec.file, "→", f.id);
+        }
+      } catch { /* best effort por archivo */ }
+    }
+  } catch { /* si el box ya murió, no hay nada que rescatar */ }
+
+  // 3. Destruir el sandbox
+  await destroySandbox(ctx, sandboxId);
+  return { ok: true };
 }

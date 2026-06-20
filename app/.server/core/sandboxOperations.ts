@@ -454,6 +454,7 @@ export async function createSandbox(
     metadata?: Record<string, string>;
     persistent?: boolean;
     size?: "s" | "m" | "l" | "xl";
+    env?: Record<string, string>;
   }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
@@ -533,6 +534,7 @@ export async function createSandbox(
       metadata: params.metadata,
       persistent,
       maxTtlSeconds: plan.maxSandboxTtlSeconds,
+      env: params.env,
       ...resources,
     },
     ctx.user.id

@@ -1353,6 +1353,44 @@ export class EasybitsClient {
       },
     };
   }
+
+  // ── Calls (videollamadas online con grabación HD) ────────────────
+  //
+  //   const call = await eb.calls.create();
+  //   // comparte call.roomUrl con los participantes
+  //   await eb.calls.record(call.sandboxId, { room: call.room });
+  //   const { url } = await eb.calls.stop(call.sandboxId);
+  //   // url = MP4 permanente en Files (+ transcript .txt)
+  //   await eb.calls.destroy(call.sandboxId);
+  get calls() {
+    const req = <T>(path: string, opts?: RequestInit) => this.request<T>(path, opts);
+    return {
+      /** Crea una videollamada y devuelve el link para compartir (~15s de boot). */
+      create(params?: { room?: string }): Promise<{ sandboxId: string; room: string; roomUrl: string }> {
+        return req("/calls", { method: "POST", body: JSON.stringify(params ?? {}) });
+      },
+      /** Inicia la grabación HD server-side (chromium+ffmpeg). */
+      record(sandboxId: string, params: { room: string }): Promise<{ recording: boolean; startedAt: string }> {
+        return req(`/calls/${sandboxId}/record`, { method: "POST", body: JSON.stringify(params) });
+      },
+      /** Detiene la grabación, sube MP4 + transcript a Files y retorna el link permanente. */
+      stop(sandboxId: string): Promise<{ url: string; fileId: string }> {
+        return req(`/calls/${sandboxId}/stop`, { method: "POST" });
+      },
+      /** Estado del servidor: grabación activa y participantes en la sala. */
+      status(sandboxId: string): Promise<{ recording: boolean; room?: string; startedAt?: string; participants: string[] }> {
+        return req(`/calls/${sandboxId}/status`);
+      },
+      /** Grabaciones y transcripts permanentes en Files (sobreviven al destroy). */
+      files(): Promise<Array<{ id: string; name: string; url: string; source: string; createdAt: string }>> {
+        return req(`/calls/files`);
+      },
+      /** Para grabación activa, rescata archivos huérfanos de la VM y destruye el servidor. */
+      destroy(sandboxId: string): Promise<{ ok: true }> {
+        return req(`/calls/${sandboxId}/destroy`, { method: "POST" });
+      },
+    };
+  }
 }
 
 // ─── Sandbox handle ──────────────────────────────────────────────
@@ -1633,7 +1671,8 @@ export type SandboxTemplate =
   | "openclaw"
   | "chat-openai"
   | "chat-anthropic"
-  | "code-interpreter";
+  | "code-interpreter"
+  | "livekit-svc";
 
 export type SandboxStatus =
   | "starting"

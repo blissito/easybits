@@ -407,7 +407,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 MicroVMs Firecracker para correr agentes y código aislado. 22 herramientas MCP en el grupo \`sandbox\`.
 
 ### Templates
-\`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`computer-ghosty\` (computer-use con escritorio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
+\`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`computer-ghosty\` (computer-use con escritorio), \`livekit-svc\` (sala de videollamada + grabación HD → ver sección Studio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
 
 ### Crear sandbox
 \`POST /sandboxes\`
@@ -477,6 +477,69 @@ MCP: \`agent_run_status({ jobId })\` — consultar estado
 MCP: \`agent_run_destroy({ jobId })\` — liberar sandbox
 
 Rate limits: 10 spawns/min, 120 ops/min. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
+`,
+
+  studio: `## Llamadas online — Videollamadas con grabación (tipo Zoom/Riverside)
+
+Template \`livekit-svc\`: sala de videoconferencia self-hosted con grabación HD server-side. El agente crea la sala, los participantes se unen por navegador (cámara + pantalla compartida), el servidor graba el layout completo en 1080p y al terminar sube el MP4 + transcript a tus Files de EasyBits. Sin servidores de terceros, sin límite de duración.
+
+**MCP tools** (grupo \`sandbox\`):
+
+### Crear llamada — one shot
+\`call_create({ room? })\`
+- Levanta el servidor, espera ~15s, configura WebRTC, retorna \`{ sandboxId, room, roomUrl }\`
+- Comparte \`roomUrl\` con los participantes (abre en cualquier navegador)
+
+### Grabar
+\`call_record({ sandboxId, room })\`
+- Chromium headless + ffmpeg capturan el layout completo en 1080p
+- Retorna \`{ recording: true, startedAt }\`
+
+### Detener → Files + transcript
+\`call_stop({ sandboxId })\`
+- Finaliza MP4, lo sube permanentemente a tus Files, genera transcript Whisper (.txt)
+- Retorna \`{ url, fileId }\` — \`url\` sobrevive a la VM
+
+### Listar grabaciones
+\`call_list({ sandboxId })\`
+- Retorna \`[{ file, url, size, modifiedAt }]\` más reciente primero
+
+**API REST:**
+\`\`\`
+POST /api/v2/calls              body: { room? }      → { sandboxId, room, roomUrl }
+POST /api/v2/calls/:id/record   body: { room }       → { recording: true }
+POST /api/v2/calls/:id/stop                          → { url, fileId }
+GET  /api/v2/calls/:id/list                          → [{ file, url, size }]
+\`\`\`
+
+**SDK:**
+\`\`\`ts
+const call = await eb.calls.create({ room: "entrevista" });
+// comparte call.roomUrl
+await eb.calls.record(call.sandboxId, { room: call.room });
+const { url } = await eb.calls.stop(call.sandboxId);
+// url = MP4 permanente en Files
+\`\`\`
+
+**Flujo WhatsApp/chat (una sola tool):**
+\`\`\`
+call_create()               → { sandboxId, roomUrl }
+[Ghosty manda roomUrl]
+call_record({ sandboxId })  → grabando…
+call_stop({ sandboxId })    → { url }  ← link permanente al MP4
+\`\`\`
+
+**UI en sala:**
+- Green room al entrar (preview + selector de cámara/mic)
+- Pantalla compartida → grande; cámaras → tira lateral; click para destacar
+- Grabación visible para todos (punto rojo + cronómetro)
+- Suena al entrar/salir y al iniciar/detener grabación
+- Funciona en móvil
+
+**Notas:**
+- Una grabación activa por sandbox; para sesiones paralelas usa \`call_create\` por separado
+- Transcript via Whisper de la flota (sin costo extra)
+- MP4 + .txt en Files permanentemente aunque la VM se destruya
 `,
 
   hosting: `## Hosting — Máquinas permanentes (always-on)

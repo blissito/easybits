@@ -275,10 +275,12 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   agent_recording_start: "op",
   agent_recording_stop: "op",
   agent_recording_list: "op",
-  studio_create_room: "op",
-  studio_start_recording: "op",
-  studio_stop_recording: "op",
-  studio_list_recordings: "op",
+  call_create: "op",
+  call_record: "op",
+  call_stop: "op",
+  call_status: "op",
+  call_files: "op",
+  call_destroy: "op",
 };
 
 // Envuelve un handler MCP con el rate limit de sandbox. Fail-open si no hay
@@ -2089,56 +2091,83 @@ How to embed safely (the only reliable rule):
   // Range, live while the sandbox runs (capability = unguessable subdomain).
 
   server.tool(
-    "studio_create_room",
-    "Create a recording-studio room on a running livekit-svc agent and return the public join link. Exposes the box's three surfaces (control HTTP, LiveKit signaling, and the UDP media port via the raw L4 forward) and returns { room, roomUrl }. Open roomUrl in a browser to join with camera + screen share — share it with a guest for an interview. Then drive recording with studio_start_recording / studio_stop_recording.",
+    "call_create",
+    "Crea una videollamada online y devuelve el link para compartir — no necesita nada previo. Levanta el servidor de llamadas, espera ~15s a que arranque, configura los puertos WebRTC y retorna { sandboxId, room, roomUrl }. Comparte roomUrl con los participantes. Usa sandboxId con call_record y call_stop para grabar. Ideal para: 'arma una llamada', 'crea una sala de video', 'quiero hacer una entrevista'.",
     {
-      agentId: z.string().describe("agentId of a running livekit-svc agent"),
-      room: z.string().optional().describe("optional room name; a unique one is generated if omitted"),
+      room: z.string().optional().describe("nombre de la sala (opcional; se genera uno único si se omite)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createRoom(ctx, params.agentId, params.room);
+      const { spawnStudio } = await import("~/.server/core/studioOperations");
+      const result = await spawnStudio(ctx, params.room);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "studio_start_recording",
-    "Start server-side recording of a studio room. A headless chromium joins the room and ffmpeg captures the composed layout (cameras + shared screen) + audio to an mp4 inside the VM. One recording at a time per agent. Returns { recording, id, room, startedAt }; the playable url is returned by studio_stop_recording.",
+    "call_record",
+    "Inicia la grabación de una llamada en curso. Un chromium headless se une como observador invisible y ffmpeg captura el layout completo (cámaras + pantalla compartida) en 1080p. Una grabación activa por sandbox. Retorna { recording: true, id, room, startedAt }.",
     {
-      agentId: z.string().describe("agentId of the running livekit-svc agent"),
-      room: z.string().describe("the room name to record (from studio_create_room)"),
+      sandboxId: z.string().describe("sandboxId devuelto por call_create"),
+      room: z.string().describe("nombre de la sala (devuelto por call_create)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await startStudioRecording(ctx, params.agentId, params.room);
+      const result = await startStudioRecording(ctx, params.sandboxId, params.room);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "studio_stop_recording",
-    "Stop the in-progress studio recording and finalize the mp4. Returns { recording:false, id, file, url } where `url` is a public, Range-capable link to the playable mp4 (live while the sandbox runs) — hand this to the user to download and edit.",
+    "call_stop",
+    "Detiene la grabación, sube el MP4 permanentemente a los Files del usuario y genera un transcript con Whisper. Retorna { url, fileId } — `url` es el enlace permanente al MP4 (sobrevive aunque se destruya la VM). El .txt del transcript también queda en Files.",
     {
-      agentId: z.string().describe("agentId of the livekit-svc agent currently recording"),
+      sandboxId: z.string().describe("sandboxId devuelto por call_create"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await stopStudioRecording(ctx, params.agentId);
+      const result = await stopStudioRecording(ctx, params.sandboxId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
 
   server.tool(
-    "studio_list_recordings",
-    "List the recordings stored on a studio agent's VM. Returns an array of { file, url, size, modifiedAt } sorted newest-first; each `url` is a public Range-capable link to the mp4 (live while the sandbox runs). Use this to answer 'give me the recording of such-and-such call'.",
+    "call_status",
+    "Estado del servidor de llamadas: si hay grabación activa y quiénes están en la sala. Retorna { recording, room, startedAt, participants[] }. Útil para saber si la llamada sigue viva antes de grabar o destruir.",
     {
-      agentId: z.string().describe("agentId of a livekit-svc agent"),
+      sandboxId: z.string().describe("sandboxId devuelto por call_create"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listStudioRecordings(ctx, params.agentId);
-      return ok(paginate(result, { total: result.length }));
+      const { getCallStatus } = await import("~/.server/core/studioOperations");
+      const result = await getCallStatus(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "call_files",
+    "Lista las grabaciones y transcripts de todas las llamadas — archivos permanentes en EasyBits Files, disponibles aunque la VM ya se haya destruido. Retorna [{ id, name, url, source, createdAt }].",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listCallFiles } = await import("~/.server/core/studioOperations");
+      const result = await listCallFiles(ctx);
+      return ok(paginate(result, { total: Array.isArray(result) ? result.length : 0 }));
+    })
+  );
+
+  server.tool(
+    "call_destroy",
+    "Termina una videollamada limpiamente: (1) para la grabación activa si la hay y sube el MP4 a Files, (2) rescata cualquier grabación huérfana en la VM y la sube, (3) destruye el servidor. Llama esto cuando la llamada haya terminado para liberar recursos. Si no se llama, el servidor se auto-destruye al TTL (6h).",
+    {
+      sandboxId: z.string().describe("sandboxId devuelto por call_create"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { destroyCall } = await import("~/.server/core/studioOperations");
+      const result = await destroyCall(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
     })
   );
 
