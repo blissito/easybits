@@ -33,6 +33,11 @@ jobs:
           push: false
           load: true
           tags: easybits:deploy
+          # CACHEBUST = SHA del commit → fuerza recompilar la fuente en cada push
+          # (las deps siguen cacheadas). Sin esto el gha cache a veces servía un
+          # binario viejo y tools nuevas (ej. call_create) "desaparecían".
+          build-args: |
+            CACHEBUST=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

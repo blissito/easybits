@@ -22,6 +22,11 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 # 3. Copy source and build (only this runs on code changes)
+# CACHEBUST = git SHA (pasado por CI). Cambia en cada push → invalida esta capa
+# y el build de abajo SIEMPRE corre fresco, evitando que el gha cache sirva un
+# binario viejo (causaba que call_create "desapareciera" tras un deploy del CI).
+# npm ci / prisma generate quedan ARRIBA de este ARG → siguen cacheados.
+ARG CACHEBUST=0
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
