@@ -8,21 +8,24 @@ export const meta = () =>
   getBasicMetaTags({
     title: "Conecta EasyBits a tu agente — MCP",
     description:
-      "Ghosty Code v0.0.4+ ya trae EasyBits preinstalado. Claude, Cursor y cualquier cliente MCP en un comando. 100+ herramientas para gestionar archivos desde tu agente AI.",
+      "Ghosty Code trae EasyBits preconfigurado. Claude, Cursor y cualquier cliente MCP en un comando. 100+ herramientas para gestionar archivos desde tu agente AI.",
   });
 
-const MCP_COMMAND = "export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY && ghosty";
+const MCP_COMMAND = 'ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY" && ghosty --yolo';
 
 const INSTALL_OPTIONS = [
   {
     id: "ghosty-code",
     label: "Ghosty Code",
-    filename: "Preinstalado — cero configuración",
-    code: `# Ghosty Code v0.0.4+ ya trae EasyBits preinstalado vía HTTP.
-# Solo configura tu API key:
+    filename: "MCP de EasyBits preconfigurado",
+    code: `# Instala el CLI (o: curl -fsSL https://formmy.app/ghosty/install.sh | sh)
+npm install -g ghostycode
 
-export EASYBITS_API_KEY=eb_sk_live_TU_API_KEY
-ghosty
+# Autentica con tu key de EasyBits (sirve para LLM + MCP)
+ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY"
+
+# Listo
+ghosty --yolo
 
 # EasyBits aparece como "easybits" en tu lista de MCPs.`,
   },
