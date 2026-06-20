@@ -200,11 +200,6 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
         <h1 className="text-3xl font-black tracking-tight uppercase flex items-center gap-2">
           <LuServer /> Máquinas
         </h1>
-        {paid && (
-          <BrutalButton size="chip" onClick={() => setModal({})} className="text-sm px-4 py-2">
-            <span className="flex items-center gap-1"><LuPlus /> Nueva máquina</span>
-          </BrutalButton>
-        )}
       </motion.header>
       <motion.p
         className="text-iron text-sm mb-8"
@@ -230,156 +225,163 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
         )}
       </AnimatePresence>
 
-      {!paid && (
-        <motion.div
-          className="mb-8 p-6 bg-brand-100 border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-          initial={{ opacity: 0, y: 8 }}
+      {/* Two-column bento layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+
+        {/* LEFT — Sandboxes (efímeros) */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.15 }}
         >
-          <p className="font-bold mb-1">Las máquinas permanentes requieren plan Mega o Tera.</p>
-          <p className="text-sm text-iron mb-4">El plan es tu acceso; cada máquina factura flat al mes.</p>
-          <a href="/planes"><BrutalButton size="chip" className="text-sm px-4 py-2">Ver planes</BrutalButton></a>
-        </motion.div>
-      )}
-
-      {/* Permanentes */}
-      <motion.section
-        className="mb-10"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.15 }}
-      >
-        <h2 className="text-sm font-black uppercase tracking-wider text-iron mb-3">Máquinas permanentes</h2>
-        <AnimatePresence mode="popLayout">
-          {permanents.length === 0 ? (
-            <motion.div key="empty-perm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <Empty>Aún no tienes máquinas permanentes.</Empty>
-            </motion.div>
-          ) : permanents.map((m, i) => {
-            const isDestroying = destroyingIds.has(m.sandboxId);
-            return (
-              <motion.div
-                key={m.sandboxId}
-                layout
-                initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
-                exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
-                transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
-                className="mb-3"
-              >
-                <Card status={m.status}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold truncate">{m.name || m.sandboxId}</span>
-                      <StatusPill status={m.status} />
-                      {m.cpuMode === "reserved" && (
-                        <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-black uppercase tracking-wider text-iron">Sandboxes</h2>
+            <SandboxSlots used={activeSandboxes} total={sandboxLimit} />
+          </div>
+          <AnimatePresence mode="popLayout">
+            {ephemerals.length === 0 ? (
+              <motion.div key="empty-eph" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <Empty>Sin sandboxes activos. Tus agentes los crean por SDK/MCP.</Empty>
+              </motion.div>
+            ) : ephemerals.map((s, i) => {
+              const t = ttl(s.expiresAt);
+              const suspended = s.status === "suspended";
+              const isDestroying = destroyingIds.has(s.sandboxId);
+              const isLoading = loadingIds.has(s.sandboxId);
+              return (
+                <motion.div
+                  key={s.sandboxId}
+                  layout
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                  animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
+                  exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
+                  transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
+                  className="mb-3"
+                >
+                  <Card status={s.status}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-sm truncate">{s.sandboxId}</span>
+                        <StatusPill status={s.status} />
+                      </div>
+                      <p className="text-sm text-iron mt-1 flex items-center gap-3 flex-wrap">
+                        <span>{s.template}</span>
+                        {t && <span className="flex items-center gap-1"><LuClock size={13} /> {t}</span>}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {s.studioUrl && s.status === "running" && (
+                        <a href={s.studioUrl} target="_blank" rel="noopener noreferrer"
+                          title="Abrir sala"
+                          className="flex items-center gap-1 p-2 rounded-lg border-2 border-black bg-white hover:bg-brand-100 transition-all hover:-translate-x-0.5 hover:-translate-y-0.5">
+                          <LuExternalLink size={16} />
+                        </a>
+                      )}
+                      {isLoading ? (
+                        <span className="p-2 text-brand-500 animate-spin"><LuLoader size={16} /></span>
+                      ) : suspended ? (
+                        <IconBtn title="Reanudar" onClick={() => submit({ intent: "resume", sandboxId: s.sandboxId })}><LuPlay size={16} /></IconBtn>
+                      ) : (
+                        <IconBtn title="Suspender" onClick={() => submit({ intent: "suspend", sandboxId: s.sandboxId })}><LuPause size={16} /></IconBtn>
+                      )}
+                      <button
+                        type="button" title="Hacer permanente (cobro flat al mes)"
+                        onClick={() => { if (paid) setModal({ promoteId: s.sandboxId }); else window.location.assign("/planes"); }}
+                        className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-brand-500 text-white text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
+                      >
+                        <LuRocket size={14} /> Permanente
+                      </button>
+                      {isDestroying ? (
+                        <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
+                      ) : (
+                        <IconBtn title="Destruir" danger
+                          onClick={() => setConfirm({ intent: "destroy", id: s.sandboxId, title: "Destruir sandbox", message: "Se elimina la VM y sus datos. No se puede deshacer." })}>
+                          <LuTrash2 size={16} />
+                        </IconBtn>
                       )}
                     </div>
-                    <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
-                    <p className="text-sm font-black mt-1">${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span></p>
-                    {m.status === "lost" && (
-                      <p className="mt-2 text-xs font-bold text-brand-red flex items-center gap-1">
-                        <LuTriangleAlert /> Se perdió pero sigue cobrando — libérala.
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isDestroying ? (
-                      <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
-                    ) : (
-                      <IconBtn title="Liberar (corta cobro + destruye)" danger
-                        onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina", message: "Se corta el cobro y se destruye la VM. No se puede deshacer." })}>
-                        <LuTrash2 size={16} />
-                      </IconBtn>
-                    )}
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </motion.section>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.section>
 
-      {/* Efímeros */}
-      <motion.section
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.22 }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-black uppercase tracking-wider text-iron">Sandboxes</h2>
-          <SandboxSlots used={activeSandboxes} total={sandboxLimit} />
-        </div>
-        <AnimatePresence mode="popLayout">
-          {ephemerals.length === 0 ? (
-            <motion.div key="empty-eph" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <Empty>Sin sandboxes activos. Tus agentes los crean por SDK/MCP.</Empty>
-            </motion.div>
-          ) : ephemerals.map((s, i) => {
-            const t = ttl(s.expiresAt);
-            const suspended = s.status === "suspended";
-            const isDestroying = destroyingIds.has(s.sandboxId);
-            const isLoading = loadingIds.has(s.sandboxId);
-            return (
-              <motion.div
-                key={s.sandboxId}
-                layout
-                initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
-                exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
-                transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
-                className="mb-3"
-              >
-                <Card status={s.status}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm truncate">{s.sandboxId}</span>
-                      <StatusPill status={s.status} />
-                    </div>
-                    <p className="text-sm text-iron mt-1 flex items-center gap-3 flex-wrap">
-                      <span>{s.template}</span>
-                      {t && <span className="flex items-center gap-1"><LuClock size={13} /> {t}</span>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {s.studioUrl && s.status === "running" && (
-                      <a href={s.studioUrl} target="_blank" rel="noopener noreferrer"
-                        title="Abrir sala"
-                        className="flex items-center gap-1 p-2 rounded-lg border-2 border-black bg-white hover:bg-brand-100 transition-all hover:-translate-x-0.5 hover:-translate-y-0.5">
-                        <LuExternalLink size={16} />
-                      </a>
-                    )}
-                    {isLoading ? (
-                      <span className="p-2 text-brand-500 animate-spin"><LuLoader size={16} /></span>
-                    ) : suspended ? (
-                      <IconBtn title="Reanudar" onClick={() => submit({ intent: "resume", sandboxId: s.sandboxId })}><LuPlay size={16} /></IconBtn>
-                    ) : (
-                      <IconBtn title="Suspender" onClick={() => submit({ intent: "suspend", sandboxId: s.sandboxId })}><LuPause size={16} /></IconBtn>
-                    )}
-                    <button
-                      type="button" title="Hacer permanente (cobro flat al mes)"
-                      onClick={() => { if (paid) setModal({ promoteId: s.sandboxId }); else window.location.assign("/planes"); }}
-                      className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-brand-500 text-white text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
-                    >
-                      <LuRocket size={14} /> Permanente
-                    </button>
-                    {isDestroying ? (
-                      <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
-                    ) : (
-                      <IconBtn title="Destruir" danger
-                        onClick={() => setConfirm({ intent: "destroy", id: s.sandboxId, title: "Destruir sandbox", message: "Se elimina la VM y sus datos. No se puede deshacer." })}>
-                        <LuTrash2 size={16} />
-                      </IconBtn>
-                    )}
-                  </div>
-                </Card>
+        {/* RIGHT — Permanentes */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.22 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-black uppercase tracking-wider text-iron">Permanentes</h2>
+            {paid && (
+              <button type="button" onClick={() => setModal({})}
+                className="text-xs font-bold text-brand-500 hover:underline flex items-center gap-1">
+                <LuPlus size={13} /> Nueva
+              </button>
+            )}
+          </div>
+
+          {!paid && (
+            <div className="p-4 bg-brand-100 border-2 border-black rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mb-3">
+              <p className="font-bold text-sm mb-1">Requiere plan Mega o Tera.</p>
+              <a href="/planes" className="text-xs font-bold text-brand-500 hover:underline">Ver planes →</a>
+            </div>
+          )}
+
+          <AnimatePresence mode="popLayout">
+            {permanents.length === 0 ? (
+              <motion.div key="empty-perm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <Empty>Sin máquinas permanentes.</Empty>
               </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </motion.section>
+            ) : permanents.map((m, i) => {
+              const isDestroying = destroyingIds.has(m.sandboxId);
+              return (
+                <motion.div
+                  key={m.sandboxId}
+                  layout
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                  animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
+                  exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
+                  transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
+                  className="mb-3"
+                >
+                  <Card status={m.status}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm truncate">{m.name || m.sandboxId}</span>
+                        <StatusPill status={m.status} />
+                        {m.cpuMode === "reserved" && (
+                          <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
+                        )}
+                      </div>
+                      <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
+                      <p className="text-xs font-black mt-1">${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span></p>
+                      {m.status === "lost" && (
+                        <p className="mt-1 text-xs font-bold text-brand-red flex items-center gap-1">
+                          <LuTriangleAlert size={12} /> Libérala para cortar el cobro.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isDestroying ? (
+                        <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
+                      ) : (
+                        <IconBtn title="Liberar (corta cobro + destruye)" danger
+                          onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina", message: "Se corta el cobro y se destruye la VM. No se puede deshacer." })}>
+                          <LuTrash2 size={16} />
+                        </IconBtn>
+                      )}
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.section>
+
+      </div>
 
       <AnimatePresence>
         {modal && (
