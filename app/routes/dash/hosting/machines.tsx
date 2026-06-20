@@ -264,7 +264,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                 layout
                 initial={{ opacity: 0, y: 16, scale: 0.97 }}
                 animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
-                exit={{ opacity: 0, x: 60, scale: 0.93, transition: { duration: 0.28, ease: "easeIn" } }}
+                exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
                 transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
                 className="mb-3"
               >
@@ -328,7 +328,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                 layout
                 initial={{ opacity: 0, y: 16, scale: 0.97 }}
                 animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
-                exit={{ opacity: 0, x: 60, scale: 0.93, transition: { duration: 0.28, ease: "easeIn" } }}
+                exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
                 transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
                 className="mb-3"
               >
