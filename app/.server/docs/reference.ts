@@ -500,16 +500,26 @@ Template \`livekit-svc\`: sala de videoconferencia self-hosted con grabación HD
 - Finaliza MP4, lo sube permanentemente a tus Files, genera transcript Whisper (.txt)
 - Retorna \`{ url, fileId }\` — \`url\` sobrevive a la VM
 
+### Estado de la sala
+\`call_status({ sandboxId })\`
+- Retorna \`{ recording, room?, startedAt?, participants[] }\` — si está grabando y quién está conectado
+
 ### Listar grabaciones
-\`call_list({ sandboxId })\`
-- Retorna \`[{ file, url, size, modifiedAt }]\` más reciente primero
+\`call_files()\`
+- Retorna \`[{ id, name, url, source, createdAt }]\` — las grabaciones en tus Files (source: "studio")
+
+### Cerrar la llamada
+\`call_destroy({ sandboxId })\`
+- Sube grabaciones pendientes, las rescata de la VM y destruye el servidor. Si no se llama, la sala se auto-destruye al TTL (3h)
 
 **API REST:**
 \`\`\`
 POST /api/v2/calls              body: { room? }      → { sandboxId, room, roomUrl }
 POST /api/v2/calls/:id/record   body: { room }       → { recording: true }
 POST /api/v2/calls/:id/stop                          → { url, fileId }
-GET  /api/v2/calls/:id/list                          → [{ file, url, size }]
+GET  /api/v2/calls/:id/status                        → { recording, room?, startedAt?, participants[] }
+GET  /api/v2/calls/files                             → [{ id, name, url, source, createdAt }]
+POST /api/v2/calls/:id/destroy                       → cierra la sala (sube pendientes + destruye)
 \`\`\`
 
 **SDK:**
@@ -519,6 +529,9 @@ const call = await eb.calls.create({ room: "entrevista" });
 await eb.calls.record(call.sandboxId, { room: call.room });
 const { url } = await eb.calls.stop(call.sandboxId);
 // url = MP4 permanente en Files
+const st = await eb.calls.status(call.sandboxId);  // { recording, participants[] }
+const recs = await eb.calls.files();               // grabaciones en Files
+await eb.calls.destroy(call.sandboxId);            // cierra la sala
 \`\`\`
 
 **Flujo WhatsApp/chat (una sola tool):**

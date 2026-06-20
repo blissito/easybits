@@ -29,6 +29,7 @@ const SECTIONS = [
   { id: "documents", label: "Documentos" },
   { id: "agents", label: "Agentes & Sandboxes" },
   { id: "hosting", label: "Máquinas permanentes" },
+  { id: "calls", label: "Llamadas" },
   { id: "account", label: "Cuenta & Uso" },
   { id: "errors", label: "Errores & Límites" },
   { id: "tool-groups", label: "Tool Groups" },
@@ -62,14 +63,25 @@ export default function DocsPage() {
 
     const compute = () => {
       raf = 0;
+      // Elegir por POSICIÓN REAL en el DOM, no por el orden del array SECTIONS:
+      // el sidebar y el DOM no siempre coinciden (ej. "errors" está antes que
+      // "agents"/"hosting" en el documento), así que iterar en orden de array
+      // marcaba la sección equivocada. La activa es la que tiene el top más alto
+      // que aún esté por encima del offset (la que estamos atravesando).
       let current = ids[0];
+      let bestTop = -Infinity;          // top más cercano al offset desde arriba
+      let lastId = ids[0], lastTop = -Infinity;  // sección más abajo en el DOM
       for (const id of ids) {
         const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top <= OFFSET) current = id;
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top <= OFFSET && top > bestTop) { bestTop = top; current = id; }
+        if (top > lastTop) { lastTop = top; lastId = id; }
       }
-      // At the very bottom, the last section may never cross OFFSET — force it.
+      // At the very bottom, the last section may never cross OFFSET — force it
+      // (la última POR DOM, no la última del array).
       if (Math.ceil(window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - 4) {
-        current = ids[ids.length - 1];
+        current = lastId;
       }
       setActiveSection(current);
     };
@@ -1593,6 +1605,91 @@ POST /api/v2/machines
 
             <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
               <strong>Cobro:</strong> el plan da acceso; cada máquina factura aparte (flat MXN/mes, prorrateado). <code className="bg-gray-100 px-1 rounded">release_machine</code> es <strong>destructiva</strong> (quita el cobro y destruye la VM). Si tu plan se cancela, tus máquinas se suspenden.
+            </div>
+          </section>
+
+          {/* Llamadas */}
+          <section id="calls" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Llamadas</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Salas de videollamada con <strong>grabación en HD</strong>, self-hosted (template <code className="bg-gray-100 px-1 rounded">livekit-svc</code>). Tu agente crea la sala, los participantes se unen <strong>desde el navegador</strong> (cámara + pantalla compartida, sin instalar nada), y el servidor graba el layout completo en 1080p. Al terminar, el MP4 se sube a tus <a href="#files" className="underline font-medium">Files</a>. Sin servidores de terceros, sin límite de duración.
+            </p>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              <strong>6 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>:{" "}
+              <code className="bg-gray-100 px-1 rounded">call_create</code>, <code className="bg-gray-100 px-1 rounded">call_record</code>, <code className="bg-gray-100 px-1 rounded">call_stop</code>, <code className="bg-gray-100 px-1 rounded">call_status</code>, <code className="bg-gray-100 px-1 rounded">call_files</code>, <code className="bg-gray-100 px-1 rounded">call_destroy</code>.{" "}
+              Las llaves del servidor de video se <strong>generan solas</strong> — no necesitas cuenta en ningún proveedor ni pasar secrets.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Crear una llamada y grabar</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              <code className="bg-gray-100 px-1 rounded">create</code> levanta la sala y devuelve <code className="bg-gray-100 px-1 rounded">roomUrl</code> — compártelo con los participantes. La sala se auto-destruye a las <strong>3 horas</strong> si no la cierras antes.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// 1. Crear la sala (devuelve el link para compartir)
+const call = await eb.calls.create({ room: "entrevista" });
+console.log(call.roomUrl); // https://...sandboxes.easybits.cloud/room?room=entrevista
+
+// 2. Iniciar grabación server-side
+await eb.calls.record(call.sandboxId, { room: call.room });
+
+// 3. Detener — sube el MP4 a Files y devuelve el link
+const { url, fileId } = await eb.calls.stop(call.sandboxId);` },
+                { label: "REST", code: `# 1. Crear la sala
+POST /api/v2/calls                 { "room": "entrevista" }
+# → { sandboxId, room, roomUrl }
+
+# 2. Grabar
+POST /api/v2/calls/:id/record      { "room": "entrevista" }
+# → { recording: true }
+
+# 3. Detener (sube el MP4 a Files)
+POST /api/v2/calls/:id/stop
+# → { url, fileId }` },
+                { label: "MCP", code: `call_create({ room: "entrevista" })   // → { sandboxId, room, roomUrl }
+call_record({ sandboxId, room })      // inicia grabación HD
+call_stop({ sandboxId })              // → { url, fileId } (MP4 en Files)` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Estado, archivos y cierre</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              <code className="bg-gray-100 px-1 rounded">status</code> reporta si está grabando y quién está conectado; <code className="bg-gray-100 px-1 rounded">files</code> lista las grabaciones; <code className="bg-gray-100 px-1 rounded">destroy</code> cierra la sala limpiamente (sube grabaciones pendientes y libera la VM).
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `// Estado en vivo de la sala
+const st = await eb.calls.status(call.sandboxId);
+// → { recording, room, startedAt, participants: ["Ana", "Beto"] }
+
+// Listar las grabaciones (en tus Files, source: "studio")
+const recs = await eb.calls.files();
+// → [{ id, name, url, source, createdAt }]
+
+// Cerrar la llamada (sube lo pendiente + destruye la VM)
+await eb.calls.destroy(call.sandboxId);` },
+                { label: "REST", code: `# Estado en vivo
+GET  /api/v2/calls/:id/status
+# → { recording, room, startedAt, participants[] }
+
+# Grabaciones (en Files)
+GET  /api/v2/calls/files
+# → [{ id, name, url, source, createdAt }]
+
+# Cerrar (sube pendientes + destruye)
+POST /api/v2/calls/:id/destroy` },
+                { label: "MCP", code: `call_status({ sandboxId })    // ¿grabando? ¿quién está conectado?
+call_files()                  // lista las grabaciones en Files
+call_destroy({ sandboxId })   // cierra la sala y libera la VM` },
+              ]}
+            />
+
+            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
+              <strong>Privacidad:</strong> cada sala corre en su propia microVM aislada con llaves generadas por instancia. Los participantes eligen entrar con cámara/mic apagados (el dispositivo se suelta de verdad, sin parpadeo). Si no llamas <code className="bg-gray-100 px-1 rounded">call_destroy</code>, la sala se apaga sola al TTL de 3 horas.
             </div>
           </section>
 
