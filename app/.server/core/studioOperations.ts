@@ -130,7 +130,7 @@ export async function spawnStudio(
   requireScope(ctx, "WRITE");
   const { createSandbox, getSandbox } = await import("./sandboxOperations");
 
-  // 1. Generar ADMIN_TOKEN y crear el sandbox livekit-svc (TTL 6h).
+  // 1. Generar ADMIN_TOKEN y crear el sandbox livekit-svc (TTL 3h).
   //    El token viaja como env (el box lo recibe como ADMIN_TOKEN) y se guarda
   //    en metadata para que loadStudioRow lo recupere en llamadas subsecuentes.
   const { randomBytes } = await import("node:crypto");
@@ -141,7 +141,7 @@ export async function spawnStudio(
   const lkApiSecret = randomBytes(32).toString("hex");
   const sb = await createSandbox(ctx, {
     template: "livekit-svc",
-    timeoutSeconds: 6 * 3600,
+    timeoutSeconds: 3 * 3600,
     name: room ? `studio-${room}` : "studio",
     metadata: { embedToken: adminToken },
   });

@@ -106,12 +106,34 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
 // ── helpers ──
 const gb = (mb: number) => (mb >= 1024 ? `${Math.round(mb / 1024)} GB` : `${mb} MB`);
-const ttl = (iso: string | null) => {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
+// Formatea ms restantes como cuenta regresiva con segundos: "2h 59m 58s",
+// "12m 33s", "45s". Mostrar los segundos hace evidente que es un contador que
+// se agota (no la edad de la máquina).
+const fmtLeft = (ms: number) => {
   if (ms <= 0) return "expirando…";
-  const m = Math.round(ms / 60000);
-  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (h > 0) return `${h}h ${pad(m)}m ${pad(sec)}s`;
+  if (m > 0) return `${m}m ${pad(sec)}s`;
+  return `${sec}s`;
+};
+
+// Contador vivo: re-renderiza cada segundo para que el TTL baje a la vista.
+const Countdown = ({ expiresAt }: { expiresAt: string | null }) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!expiresAt) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime() - now;
+  return (
+    <span className="flex items-center gap-1 tabular-nums" title="Se auto-destruye al llegar a 0">
+      <LuClock size={13} /> {fmtLeft(ms)}
+    </span>
+  );
 };
 
 const PILL: Record<string, string> = {
@@ -244,7 +266,6 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                 <Empty>Sin sandboxes activos. Tus agentes los crean por SDK/MCP.</Empty>
               </motion.div>
             ) : ephemerals.map((s, i) => {
-              const t = ttl(s.expiresAt);
               const suspended = s.status === "suspended";
               const isDestroying = destroyingIds.has(s.sandboxId);
               const isLoading = loadingIds.has(s.sandboxId);
@@ -266,7 +287,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                       </div>
                       <p className="text-sm text-iron mt-1 flex items-center gap-3 flex-wrap">
                         <span>{s.template}</span>
-                        {t && <span className="flex items-center gap-1"><LuClock size={13} /> {t}</span>}
+                        {!suspended && <Countdown expiresAt={s.expiresAt} />}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
