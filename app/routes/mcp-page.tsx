@@ -140,7 +140,7 @@ export default function McpPage() {
 
       {/* Content */}
       <div className="flex-1 flex items-center justify-center px-6 py-20">
-        <div className="w-full max-w-xl">
+        <div className="w-full max-w-3xl">
           <div className="border-2 border-black rounded-xl bg-white p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <h1 className="text-2xl md:text-3xl font-bold mb-2">
               Conecta EasyBits a tu agente
