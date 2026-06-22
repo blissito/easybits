@@ -4,6 +4,7 @@ import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
+import { createApiKey } from "../iam";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { PLANS, getUserPlan } from "../../lib/plans";
@@ -487,6 +488,7 @@ export async function createSandbox(
     params.template === "open-ghosty" ||
     params.template === "lang-ghosty" ||
     params.template === "rust-ghosty" ||
+    params.template === "ghosty-gc" ||
     params.template === "cagent-ghosty";
 
   // Anti-runaway SOLO para efímeras: tope de cajas activas concurrentes por plan
@@ -1395,6 +1397,7 @@ export interface CreatedAgent {
 // mostrarles un comando de chat por terminal sería engañoso.
 const SSE_CHAT_TEMPLATES = new Set<string>([
   "rust-ghosty",
+  "ghosty-gc",
   "open-ghosty",
   "lang-ghosty",
   "cagent-ghosty",
@@ -1444,6 +1447,7 @@ export async function createAgent(
     params.template === "open-ghosty" ||
     params.template === "lang-ghosty" ||
     params.template === "rust-ghosty" ||
+    params.template === "ghosty-gc" ||
     params.template === "cagent-ghosty" ||
     params.template === "computer-ghosty" ||
     params.template === "computer-ghosty-gemini" ||
@@ -1520,6 +1524,35 @@ export async function createAgent(
       const dsBase = await getSecretValue(ctx.user.id, "DEEPSEEK_API_BASE")
         .catch(() => null);
       if (dsBase) env.DEEPSEEK_API_BASE = dsBase;
+    }
+  }
+  // ghosty-gc (cerebro ghostycode) reemplaza a rust-ghosty: el LLM va por el PROXY MEDIDO
+  // de EasyBits (provider "easybits" en ~/.ghosty/config.toml), así el gasto cae en el plan
+  // del dueño (llmTokensUsed) y el agente entra al embudo. Por eso EASYBITS_API_KEY es
+  // OBLIGATORIA y es a la vez la llave del LLM y del MCP. Si el dueño no tiene una en el
+  // vault, minteamos una PERSISTENTE (el agente es always-on) con sus scopes → cobra a su plan.
+  //   - DEEPSEEK_RUNTIME_TOKEN: auth interna Node(server.js)↔Rust(ghosty serve --http). Box-only.
+  //   - DEEPSEEK_API_KEY (opcional, BYOK): si el dueño la tiene, puede cambiar a provider
+  //     deepseek (off-meter, su cuenta); el default sigue siendo easybits (medido).
+  if (params.template === "ghosty-gc") {
+    if (!env.DEEPSEEK_RUNTIME_TOKEN) {
+      env.DEEPSEEK_RUNTIME_TOKEN = "dsr_" + randomBytes(32).toString("hex");
+    }
+    if (!env.EASYBITS_API_KEY) {
+      const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
+      if (ebKey) {
+        env.EASYBITS_API_KEY = ebKey;
+      } else {
+        const minted = await createApiKey(ctx.user.id, {
+          name: `ghosty-gc-${params.name || "agent"}`,
+          scopes: ctx.scopes,
+        });
+        env.EASYBITS_API_KEY = minted.raw;
+      }
+    }
+    if (!env.DEEPSEEK_API_KEY) {
+      const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
+      if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
     }
   }
   // NOTA: la GOOGLE key (visión Gemini) NO se inyecta aquí — las credenciales de provider
