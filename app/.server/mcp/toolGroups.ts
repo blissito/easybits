@@ -207,8 +207,6 @@ export const CORE_ALLOWLIST = new Set<string>([
   "fast_pdf",
   "edit_fast_pdf",
   "structured_doc",
-  "create_tournament_schedule",
-  "edit_tournament_schedule",
   "get_usage_stats",
   "create_form",
   "list_forms",
