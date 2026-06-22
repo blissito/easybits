@@ -54,8 +54,25 @@ export async function validateApiKey(raw: string) {
 export async function revokeApiKey(keyId: string, userId: string) {
   return db.apiKey.updateMany({
     where: { id: keyId, userId },
-    data: { status: "REVOKED" },
+    data: { status: "REVOKED", revokedAt: new Date() },
   });
+}
+
+// Permanently delete API keys revoked more than 7 days ago.
+// Legacy keys revoked before `revokedAt` existed have it null — fall back to
+// `updatedAt`, which was stamped when the key's status flipped to REVOKED.
+export async function purgeRevokedApiKeys() {
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const result = await db.apiKey.deleteMany({
+    where: {
+      status: "REVOKED",
+      OR: [
+        { revokedAt: { lt: cutoff } },
+        { revokedAt: null, updatedAt: { lt: cutoff } },
+      ],
+    },
+  });
+  return { purged: result.count };
 }
 
 export async function listApiKeys(userId: string) {

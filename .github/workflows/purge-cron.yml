@@ -17,3 +17,8 @@ jobs:
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://easybits.cloud/api/cron/purge-certs
+      - name: Purge revoked API keys
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/purge-keys

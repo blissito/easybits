@@ -460,6 +460,7 @@ model ApiKey {
   scopes    ApiKeyScope[]
   status    ApiKeyStatus @default(ACTIVE)
   expiresAt DateTime?
+  revokedAt DateTime?
   userId    String       @db.ObjectId
   user      User         @relation(fields: [userId], references: [id])
   createdAt DateTime     @default(now())
