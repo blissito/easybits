@@ -249,6 +249,7 @@ export async function createPermanent(
       sandboxId: sandbox.sandboxId,
       persistent: true,
       tier: tier.key,
+      template,
       cpuMode: mode,
       diskAddonsGB,
       name: params.name ?? null,

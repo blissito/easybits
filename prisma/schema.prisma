@@ -1048,6 +1048,8 @@ model Sandbox {
   sandboxId       String   @unique // host VM id — the single handle (1 sandbox = 1 row)
   persistent      Boolean  @default(true)
   tier            String   // catalog key: "nano".."performance-4x"
+  template        String?  // host template (e.g. "ghostyclaw"). Gates the admin
+                           // passthrough (pairing/CLAUDE.md) to flagship agents.
   cpuMode         String   @default("shared") // "shared" | "reserved"
   diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100
   name            String?

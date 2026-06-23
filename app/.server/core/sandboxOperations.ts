@@ -1487,11 +1487,17 @@ export async function provisionRuntime(
   }
 }
 
-// Generic admin passthrough to a permanent Sandbox's in-VM admin API (:8787) —
-// the Sandbox-surface twin of agent-admin.ts, for WhatsApp pairing
-// (/admin/whatsapp/*) + CLAUDE.md CRUD on machine-hosted runtimes (ghostyclaw).
-// Authz via effectiveOwnerId (owner OR "machines" delegate → 404 otherwise);
-// Bearer = the box's persisted adminToken. Whitelisted to /admin/*.
+// Flagship agent templates that expose an in-VM admin API (:8787) and thus
+// support the admin passthrough (WhatsApp pairing, CLAUDE.md CRUD). This is an
+// agent-runtime capability — NOT a generic machine feature. Extend as new
+// flagship agents land (rust-ghosty, etc.). A plain machine (ubuntu/node/…) has
+// no admin API and is rejected even if it somehow carries an adminToken.
+const ADMIN_PASSTHROUGH_TEMPLATES = new Set<string>(["ghostyclaw"]);
+
+// Admin passthrough to a flagship agent machine's in-VM admin API (:8787) — the
+// Sandbox-surface twin of agent-admin.ts, for WhatsApp pairing (/admin/whatsapp/*)
+// + CLAUDE.md CRUD. Gated to ADMIN_PASSTHROUGH_TEMPLATES. Authz via
+// effectiveOwnerId (owner OR "machines" delegate → 404). Bearer = box adminToken.
 export async function sandboxAdmin(
   ctx: AuthContext,
   sandboxId: string,
@@ -1507,8 +1513,14 @@ export async function sandboxAdmin(
   const ownerId = await effectiveOwnerId(ctx, sandboxId); // owner or delegate, else 404
   const row = await db.sandbox.findUnique({
     where: { sandboxId },
-    select: { adminToken: true },
+    select: { adminToken: true, template: true },
   });
+  if (!row?.template || !ADMIN_PASSTHROUGH_TEMPLATES.has(row.template)) {
+    throw new Response(
+      JSON.stringify({ error: "AdminNotSupported", message: "Esta máquina no es un agente insignia con admin API (pairing/CLAUDE.md no aplican)." }),
+      { status: 403, headers: { "content-type": "application/json" } }
+    );
+  }
   if (!row?.adminToken) {
     throw new Response(
       JSON.stringify({ error: "NoAdminToken", message: "Esta máquina no tiene admin token (no es un runtime gestionado)." }),
