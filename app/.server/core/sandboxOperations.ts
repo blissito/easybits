@@ -1469,6 +1469,12 @@ export async function provisionRuntime(
 ): Promise<void> {
   const tpl = await resolveTemplate(ctx, template);
   if (!tpl.agent) return; // plain machine, no managed runtime to start
+  // The admin API (:8787) MUST bind 0.0.0.0, not its 127.0.0.1 default — else the
+  // host-side admin passthrough (pairing/CLAUDE.md) can't reach it. Force it for
+  // ghostyclaw so a fresh machine is pairable without manual fixup.
+  if (template === "ghostyclaw" && !env.NANOCLAW_ADMIN_HOST) {
+    env.NANOCLAW_ADMIN_HOST = "0.0.0.0";
+  }
   validateRequiredEnv(tpl, env);
   await waitUntilRunning(ctx, sandboxId, { timeoutMs: 60_000 });
   await startAgent(ctx, sandboxId, {

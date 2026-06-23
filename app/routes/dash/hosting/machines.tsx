@@ -165,18 +165,19 @@ const StatusPill = ({ status }: { status: string }) => (
   </span>
 );
 
-// Managed-runtime readiness (ghostyclaw etc.): starting → ready | error.
-const RUNTIME_PILL: Record<string, string> = {
-  starting: "bg-amber-200",
-  ready: "bg-green-200",
-  error: "bg-red-200",
+// Managed-runtime readiness (ghostyclaw etc.). Only surface the transient/bad
+// states — once "ready", the green "running" pill already says it's up, so we
+// hide it to keep the card clean.
+const RUNTIME_PILL: Record<string, { label: string; cls: string }> = {
+  starting: { label: "preparando…", cls: "bg-amber-200" },
+  error: { label: "error de agente", cls: "bg-red-200" },
 };
-const RuntimePill = ({ status }: { status: string | null }) =>
-  status ? (
-    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border-2 border-black ${RUNTIME_PILL[status] || "bg-gray-200"}`}>
-      runtime: {status}
-    </span>
+const RuntimePill = ({ status }: { status: string | null }) => {
+  const p = status ? RUNTIME_PILL[status] : null;
+  return p ? (
+    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border-2 border-black ${p.cls}`}>{p.label}</span>
   ) : null;
+};
 
 const IconBtn = ({ title, danger, onClick, children }: { title: string; danger?: boolean; onClick: () => void; children: React.ReactNode }) => (
   <button
@@ -411,7 +412,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                           <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
                         )}
                         {m.shared && (
-                          <span className="text-[10px] font-bold bg-black text-white px-1.5 py-0.5 rounded-full">COMPARTIDA</span>
+                          <span className="text-[10px] font-bold bg-white text-black border-2 border-black px-1.5 py-0.5 rounded-full">compartida</span>
                         )}
                         {m.status !== "pending_deletion" && <RuntimePill status={m.runtimeStatus} />}
                       </div>
