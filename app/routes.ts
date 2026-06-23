@@ -116,6 +116,7 @@ export default [
       route("perfil", "routes/profile/profile.tsx"),
       // Hosting — máquinas permanentes + sandboxes
       route("hosting", "routes/dash/hosting/machines.tsx"),
+      route("hosting/wa/:id", "routes/dash/hosting/wa.tsx"),
       // Email — audiencia + newsletters
       route("email", "routes/dash/email/email.tsx"),
       // Developer dashboard

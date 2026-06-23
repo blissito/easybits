@@ -19,12 +19,13 @@ import {
 } from "~/.server/core/machineOperations";
 import { HOSTING_CATALOG, TIER_ORDER, DISK_ADDON_GB, DISK_ADDON_PRICE } from "~/lib/hostingCatalog";
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
+import { WaPanel } from "./WaPanel";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import { ThankYouModal } from "~/components/common/ThankYouModal";
 import {
   LuServer, LuCpu, LuMemoryStick, LuHardDrive, LuTrash2,
-  LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert, LuExternalLink, LuLoader,
+  LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert, LuExternalLink, LuLoader, LuMessageCircle,
 } from "react-icons/lu";
 
 export const meta = () => [{ title: "Máquinas — EasyBits" }, { name: "robots", content: "noindex" }];
@@ -146,6 +147,19 @@ const StatusPill = ({ status }: { status: string }) => (
   </span>
 );
 
+// Managed-runtime readiness (ghostyclaw etc.): starting → ready | error.
+const RUNTIME_PILL: Record<string, string> = {
+  starting: "bg-amber-200",
+  ready: "bg-green-200",
+  error: "bg-red-200",
+};
+const RuntimePill = ({ status }: { status: string | null }) =>
+  status ? (
+    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border-2 border-black ${RUNTIME_PILL[status] || "bg-gray-200"}`}>
+      runtime: {status}
+    </span>
+  ) : null;
+
 const IconBtn = ({ title, danger, onClick, children }: { title: string; danger?: boolean; onClick: () => void; children: React.ReactNode }) => (
   <button
     type="button" title={title} aria-label={title} onClick={onClick}
@@ -172,6 +186,8 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
   const [destroyingIds, setDestroyingIds] = useState<Set<string>>(new Set());
   // IDs being suspended/resumed
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  // sandboxId whose WhatsApp pairing panel is open (flagship agents only)
+  const [waOpen, setWaOpen] = useState<string | null>(null);
 
   // ESC cierra modal/confirm
   useEffect(() => {
@@ -376,6 +392,10 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                         {m.cpuMode === "reserved" && (
                           <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
                         )}
+                        {m.shared && (
+                          <span className="text-[10px] font-bold bg-black text-white px-1.5 py-0.5 rounded-full">COMPARTIDA</span>
+                        )}
+                        <RuntimePill status={m.runtimeStatus} />
                       </div>
                       <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
                       <p className="text-xs font-black mt-1">${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span></p>
@@ -386,16 +406,23 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {isDestroying ? (
+                      {m.template === "ghostyclaw" && (
+                        <IconBtn title="WhatsApp" onClick={() => setWaOpen(waOpen === m.sandboxId ? null : m.sandboxId)}>
+                          <LuMessageCircle size={16} />
+                        </IconBtn>
+                      )}
+                      {/* release: owner-only on the server; a delegate (shared) gets 404, so hide it */}
+                      {!m.shared && (isDestroying ? (
                         <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
                       ) : (
                         <IconBtn title="Liberar (corta cobro + destruye)" danger
                           onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina", message: "Se corta el cobro y se destruye la VM. No se puede deshacer." })}>
                           <LuTrash2 size={16} />
                         </IconBtn>
-                      )}
+                      ))}
                     </div>
                   </Card>
+                  {waOpen === m.sandboxId && <WaPanel sandboxId={m.sandboxId} />}
                 </motion.div>
               );
             })}
