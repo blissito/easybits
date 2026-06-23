@@ -1272,7 +1272,7 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
-              <strong>26 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
+              <strong>30 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
               Agrega <code className="bg-gray-100 px-1 rounded">--tools sandbox</code> para habilitarlas.{" "}
               <a href="#tool-groups" className="underline">Ver tool groups</a>.
             </div>
@@ -1473,6 +1473,10 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_files_write", "sandboxId, path, content", "Escribir archivo en el sandbox"],
                 ["sandbox_files_read", "sandboxId, path", "Leer archivo del sandbox"],
                 ["sandbox_files_list", "sandboxId, path", "Listar directorio"],
+                ["sandbox_files_edit", "sandboxId, path, oldString, newString", "Edición quirúrgica in-place (sin escaping de shell)"],
+                ["sandbox_logs", "sandboxId, unit?, lines?, since?, grep?", "Logs journald nativos del daemon"],
+                ["sandbox_runtime", "sandboxId, action, unit?, buildCommand?", "systemd status/restart/rebuild del daemon"],
+                ["sandbox_apply_patch", "sandboxId, edits[], rebuild?, restart?", "Hotfix atómico: edita → rebuild → restart"],
                 ["sandbox_expose_port", "sandboxId, port", "Exponer puerto como URL pública HTTPS"],
                 ["sandbox_domain_add", "sandboxId, domain, port", "Atar dominio propio (devuelve el registro DNS: CNAME o A)"],
                 ["sandbox_domain_remove", "sandboxId, domain", "Quitar dominio personalizado"],
