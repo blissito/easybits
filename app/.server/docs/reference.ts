@@ -454,6 +454,12 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 - \`sandbox_files_delete({ sandboxId, path })\` — eliminar
 - \`sandbox_files_move({ sandboxId, from, to })\` — mover/renombrar
 - \`sandbox_files_mkdir({ sandboxId, path })\` — crear directorio
+- \`sandbox_files_edit({ sandboxId, path, oldString, newString, replaceAll? })\` — edición quirúrgica in-place (read→replace→write). Usa esto en vez de exec+sed: evita el escaping de shell. Reemplaza todas las ocurrencias por defecto; \`replaceAll:false\` = solo la primera. SDK: \`sb.files.edit(path, old, new)\`
+
+### Logs & runtime del daemon
+- \`sandbox_logs({ sandboxId, unit?, lines?, since?, grep? })\` — logs journald nativos (sin pipear journalctl por exec). \`unit\` filtra un servicio systemd (ej. \`ghosty-gc-runtime\`, convención \`<template>-runtime\`); omítelo para el journal completo. Sin follow/streaming. SDK: \`sb.logs({ unit, lines, since, grep })\`
+- \`sandbox_runtime({ sandboxId, action, unit?, buildCommand?, cwd? })\` — control vía systemd. \`status\` (estado del unit) · \`restart\` (unit requerido) · \`rebuild\` (corre buildCommand en cwd y reinicia unit). SDK: \`sb.runtime(action, { unit, buildCommand, cwd })\`
+- \`sandbox_apply_patch({ sandboxId, edits[], rebuild?, restart? })\` — hotfix atómico: aplica N edits → rebuild opcional → restart opcional, en una llamada. Si el build falla NO reinicia (el daemon vivo se queda). SDK: \`sb.applyPatch({ edits, rebuild, restart })\`
 
 ### Ciclo de vida
 - \`sandbox_list()\` — listar sandboxes activos

@@ -76,3 +76,39 @@ export const SandboxRunCellBody = z.object({
   code: z.string().min(1),
   timeoutSeconds: z.number().int().min(1).max(600).optional(),
 });
+
+export const SandboxEditBody = z.object({
+  path: z.string().min(1),
+  oldString: z.string(),
+  newString: z.string(),
+  replaceAll: z.boolean().optional(),
+});
+
+export const SandboxLogsBody = z.object({
+  unit: z.string().optional(),
+  lines: z.number().int().min(1).max(5000).optional(),
+  since: z.string().optional(),
+  grep: z.string().optional(),
+});
+
+export const SandboxRuntimeBody = z.object({
+  action: z.enum(["restart", "rebuild", "status"]),
+  unit: z.string().optional(),
+  buildCommand: z.string().optional(),
+  cwd: z.string().optional(),
+});
+
+export const SandboxApplyPatchBody = z.object({
+  edits: z
+    .array(
+      z.object({
+        path: z.string().min(1),
+        oldString: z.string(),
+        newString: z.string(),
+        replaceAll: z.boolean().optional(),
+      })
+    )
+    .min(1),
+  rebuild: z.object({ buildCommand: z.string().min(1), cwd: z.string().optional() }).optional(),
+  restart: z.object({ unit: z.string().min(1) }).optional(),
+});

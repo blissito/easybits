@@ -972,6 +972,181 @@ export async function mkdir(
   );
 }
 
+// Single-quote a string for safe interpolation into a /bin/sh command line.
+// Wraps in '…' and escapes embedded single quotes as '\'' — the standard trick.
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+// Surgical in-place edit: read the file, replace oldString → newString, write it
+// back. Pure app-side composition of readFile + writeFile — no host primitive
+// needed. Avoids the shell-escaping hell of patching files through exec. By
+// default replaces ALL occurrences; pass replaceAll:false to touch only the
+// first (and to fail when oldString is ambiguous). Throws if oldString is absent.
+export async function editFile(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { path: string; oldString: string; newString: string; replaceAll?: boolean }
+): Promise<{ ok: true; path: string; replacements: number; bytes: number }> {
+  requireScope(ctx, "WRITE");
+  if (params.oldString === params.newString) {
+    throw new Error("oldString and newString are identical — nothing to change");
+  }
+  const current = await readFile(ctx, sandboxId, { path: params.path, encoding: "utf8" });
+  const text = current.content;
+  const occurrences = text.split(params.oldString).length - 1;
+  if (occurrences === 0) {
+    throw new Error(`oldString not found in ${params.path}`);
+  }
+  if (occurrences > 1 && params.replaceAll === false) {
+    throw new Error(
+      `oldString found ${occurrences}× in ${params.path} — pass replaceAll:true to replace all, or give a more specific oldString`
+    );
+  }
+  const replaceAll = params.replaceAll !== false;
+  const next = replaceAll
+    ? text.split(params.oldString).join(params.newString)
+    : text.replace(params.oldString, params.newString);
+  const replacements = replaceAll ? occurrences : 1;
+  const w = await writeFile(ctx, sandboxId, { path: params.path, content: next, encoding: "utf8" });
+  return { ok: true, path: params.path, replacements, bytes: w.bytes };
+}
+
+// Read recent journald logs from inside the VM. There is no host /logs route —
+// this runs journalctl over the existing exec primitive, so it's a convenience
+// wrapper, not new host plumbing. READ-scoped (uses execSandboxRaw to bypass the
+// WRITE gate that exec normally enforces, since reading logs is non-mutating).
+// `unit` filters to one systemd service (e.g. "ghosty-gc-runtime"); omit for the
+// whole journal. `follow`/streaming is intentionally NOT supported here.
+export async function readLogs(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { unit?: string; lines?: number; since?: string; grep?: string }
+): Promise<{ unit: string | null; command: string; output: string; exitCode: number }> {
+  requireScope(ctx, "READ");
+  const lines = Math.min(Math.max(params.lines ?? 200, 1), 5000);
+  const parts = ["journalctl", "--no-pager", "-n", String(lines)];
+  if (params.unit) parts.push("-u", shQuote(params.unit));
+  if (params.since) parts.push("--since", shQuote(params.since));
+  let command = parts.join(" ");
+  if (params.grep) command += ` | grep -- ${shQuote(params.grep)}`;
+  const owner = await effectiveOwnerId(ctx, sandboxId);
+  const res = await execSandboxRaw(owner, sandboxId, command, 30);
+  return { unit: params.unit ?? null, command, output: res.stdout || res.stderr, exitCode: res.exitCode };
+}
+
+// Control the service daemon running inside the VM via systemctl, plus a
+// build-then-restart "rebuild". Convenience over exec — no host route.
+//  - status:  systemctl status <unit> (READ) | running-units list if no unit
+//  - restart: systemctl restart <unit> (WRITE) — unit required
+//  - rebuild: run buildCommand in cwd, then restart <unit> if given (WRITE)
+export async function runtimeControl(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { action: "restart" | "rebuild" | "status"; unit?: string; buildCommand?: string; cwd?: string }
+): Promise<{ action: string; unit: string | null; output: string; exitCode: number; buildOutput?: string }> {
+  const unit = params.unit ?? null;
+  if (params.action === "status") {
+    requireScope(ctx, "READ");
+    const owner = await effectiveOwnerId(ctx, sandboxId);
+    const command = unit
+      ? `systemctl status ${shQuote(unit)} --no-pager -l || systemctl is-active ${shQuote(unit)}`
+      : `systemctl list-units --type=service --state=running --no-pager`;
+    const res = await execSandboxRaw(owner, sandboxId, command, 20);
+    return { action: "status", unit, output: res.stdout || res.stderr, exitCode: res.exitCode };
+  }
+  requireScope(ctx, "WRITE");
+  if (params.action === "rebuild") {
+    if (!params.buildCommand) {
+      throw new Error("buildCommand is required for action 'rebuild' (e.g. 'npm run build')");
+    }
+    const prefix = params.cwd ? `cd ${shQuote(params.cwd)} && ` : "";
+    const build = await execCommand(ctx, sandboxId, {
+      command: `${prefix}${params.buildCommand}`,
+      timeoutSeconds: 600,
+    });
+    let output = "";
+    let exitCode = build.exitCode;
+    if (unit && build.exitCode === 0) {
+      const r = await execCommand(ctx, sandboxId, {
+        command: `systemctl restart ${shQuote(unit)} && systemctl is-active ${shQuote(unit)}`,
+        timeoutSeconds: 60,
+      });
+      output = (r.stdout || r.stderr).trim();
+      exitCode = r.exitCode;
+    }
+    return { action: "rebuild", unit, buildOutput: build.stdout || build.stderr, output, exitCode };
+  }
+  // restart
+  if (!unit) {
+    throw new Error("unit is required for action 'restart' (e.g. 'ghosty-gc-runtime')");
+  }
+  const r = await execCommand(ctx, sandboxId, {
+    command: `systemctl restart ${shQuote(unit)} && systemctl is-active ${shQuote(unit)}`,
+    timeoutSeconds: 60,
+  });
+  return { action: "restart", unit, output: (r.stdout || r.stderr).trim(), exitCode: r.exitCode };
+}
+
+// Atomic hotfix: apply N surgical edits, then optionally rebuild and restart the
+// service — in one call. The build is skipped-onto-restart guard: if the build
+// exits non-zero we do NOT restart (you keep the running daemon). Edits are
+// applied first and sequentially; a failing edit aborts before any build/restart.
+export async function applyPatch(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: {
+    edits: Array<{ path: string; oldString: string; newString: string; replaceAll?: boolean }>;
+    rebuild?: { buildCommand: string; cwd?: string };
+    restart?: { unit: string };
+  }
+): Promise<{
+  applied: Array<{ path: string; replacements: number }>;
+  buildOutput?: string;
+  buildExitCode?: number;
+  restarted?: boolean;
+  status?: string;
+}> {
+  requireScope(ctx, "WRITE");
+  if (!params.edits?.length) {
+    throw new Error("edits[] must contain at least one edit");
+  }
+  const applied: Array<{ path: string; replacements: number }> = [];
+  for (const e of params.edits) {
+    const r = await editFile(ctx, sandboxId, e);
+    applied.push({ path: e.path, replacements: r.replacements });
+  }
+  const out: {
+    applied: typeof applied;
+    buildOutput?: string;
+    buildExitCode?: number;
+    restarted?: boolean;
+    status?: string;
+  } = { applied };
+  if (params.rebuild) {
+    const prefix = params.rebuild.cwd ? `cd ${shQuote(params.rebuild.cwd)} && ` : "";
+    const build = await execCommand(ctx, sandboxId, {
+      command: `${prefix}${params.rebuild.buildCommand}`,
+      timeoutSeconds: 600,
+    });
+    out.buildOutput = build.stdout || build.stderr;
+    out.buildExitCode = build.exitCode;
+    if (build.exitCode !== 0) {
+      out.restarted = false; // build failed — leave the running daemon untouched
+      return out;
+    }
+  }
+  if (params.restart) {
+    const r = await execCommand(ctx, sandboxId, {
+      command: `systemctl restart ${shQuote(params.restart.unit)} && systemctl is-active ${shQuote(params.restart.unit)}`,
+      timeoutSeconds: 60,
+    });
+    out.restarted = r.exitCode === 0;
+    out.status = (r.stdout || r.stderr).trim();
+  }
+  return out;
+}
+
 export interface ExposedPort {
   url: string;
   host: string;

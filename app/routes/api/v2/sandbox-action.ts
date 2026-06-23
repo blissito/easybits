@@ -5,6 +5,9 @@ import {
   SandboxExecBody,
   SandboxRunCodeBody,
   SandboxRunCellBody,
+  SandboxLogsBody,
+  SandboxRuntimeBody,
+  SandboxApplyPatchBody,
 } from "~/.server/sandbox/schemas";
 import {
   extendSandbox,
@@ -19,6 +22,9 @@ import {
   removeSandboxDomain,
   listSandboxDomains,
   verifySandboxDomain,
+  readLogs,
+  runtimeControl,
+  applyPatch,
 } from "~/.server/core/sandboxOperations";
 import { computeEnvFor } from "~/.server/compute/gateway";
 
@@ -27,8 +33,8 @@ const invalid = (issues: unknown) =>
 
 // POST /api/v2/sandboxes/:id/:action
 // action ∈ extend | suspend | resume | exec | run-code | run-cell |
-//          kernel-restart | expose | domain-add | domain-remove |
-//          domain-list | domain-verify
+//          kernel-restart | logs | runtime | apply-patch | expose |
+//          domain-add | domain-remove | domain-list | domain-verify
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -71,6 +77,21 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
     case "kernel-restart":
       return Response.json(await kernelRestart(ctx, id));
+    case "logs": {
+      const p = SandboxLogsBody.safeParse(body);
+      if (!p.success) return invalid(p.error.issues);
+      return Response.json(await readLogs(ctx, id, p.data));
+    }
+    case "runtime": {
+      const p = SandboxRuntimeBody.safeParse(body);
+      if (!p.success) return invalid(p.error.issues);
+      return Response.json(await runtimeControl(ctx, id, p.data));
+    }
+    case "apply-patch": {
+      const p = SandboxApplyPatchBody.safeParse(body);
+      if (!p.success) return invalid(p.error.issues);
+      return Response.json(await applyPatch(ctx, id, p.data));
+    }
     case "expose":
       if (typeof body.port !== "number")
         return Response.json({ error: "port required" }, { status: 400 });

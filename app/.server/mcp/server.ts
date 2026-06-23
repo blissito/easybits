@@ -113,6 +113,10 @@ import {
   deleteFile as sandboxDeleteFile,
   moveFile as sandboxMoveFile,
   mkdir as sandboxMkdir,
+  editFile as sandboxEditFile,
+  readLogs as sandboxReadLogs,
+  runtimeControl as sandboxRuntimeControl,
+  applyPatch as sandboxApplyPatch,
   exposeSandboxPort,
   addSandboxDomain,
   removeSandboxDomain,
@@ -1778,6 +1782,93 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { sandboxId, ...rest } = params;
       const result = await sandboxMkdir(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_files_edit",
+    "Surgically edit a file inside the sandbox: replace oldString with newString in place (read → replace → write). Use this instead of sandbox_exec + sed/echo — it sidesteps shell-escaping entirely. By default replaces ALL occurrences and returns the count; pass replaceAll=false to change only the first match (and to fail when oldString is ambiguous). Errors if oldString is not found.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      path: z.string().describe("Absolute path inside sandbox (e.g. /opt/ghosty-gc/server.js)"),
+      oldString: z.string().describe("Exact substring to find (verbatim, including whitespace)"),
+      newString: z.string().describe("Replacement text"),
+      replaceAll: z.boolean().optional().describe("Replace every occurrence (default true). false = first match only, errors if ambiguous."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxEditFile(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_logs",
+    "Read recent journald (systemd) logs from inside the sandbox — native log access instead of piping journalctl through sandbox_exec. Filter to one service with unit (e.g. 'ghosty-gc-runtime'); omit it for the whole journal. lines tails the last N (default 200, max 5000), since accepts a journalctl time spec (e.g. '10 min ago', '2026-06-23 12:00'), grep filters lines. Streaming/follow is NOT supported.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      unit: z.string().optional().describe("systemd unit to filter, e.g. 'ghosty-gc-runtime' (templates emit '<template>-runtime')"),
+      lines: z.number().int().min(1).max(5000).optional().describe("Tail the last N lines (default 200)"),
+      since: z.string().optional().describe("journalctl time spec, e.g. '10 min ago'"),
+      grep: z.string().optional().describe("Only return lines containing this string"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxReadLogs(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_runtime",
+    "Control the service daemon running inside the sandbox via systemd — no manual systemctl/npm through sandbox_exec. action='status' shows a unit's state (or lists running services if unit omitted); 'restart' restarts a unit (unit required); 'rebuild' runs buildCommand in cwd then restarts unit (if given). Build runs with a 10-min timeout.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      action: z.enum(["restart", "rebuild", "status"]).describe("status (read) | restart | rebuild"),
+      unit: z.string().optional().describe("systemd unit, e.g. 'ghosty-gc-runtime'. Required for restart."),
+      buildCommand: z.string().optional().describe("Build command for rebuild, e.g. 'npm run build'. Required for rebuild."),
+      cwd: z.string().optional().describe("Working directory for the build, e.g. /opt/ghosty-gc"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxRuntimeControl(ctx, sandboxId, rest);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_apply_patch",
+    "Atomic hotfix in one call: apply N surgical edits, then optionally rebuild and restart the service. Edits run first and sequentially (a failing edit aborts before any build). If rebuild is given and the build exits non-zero, the restart is SKIPPED so your running daemon stays up. Returns { applied, buildOutput, buildExitCode, restarted, status }. Use this to ship a fix to a running box without juggling write+exec+restart yourself.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      edits: z
+        .array(
+          z.object({
+            path: z.string().describe("Absolute path inside sandbox"),
+            oldString: z.string().describe("Exact substring to find"),
+            newString: z.string().describe("Replacement text"),
+            replaceAll: z.boolean().optional().describe("Replace all occurrences (default true)"),
+          })
+        )
+        .min(1)
+        .describe("Edits applied in order before any rebuild/restart"),
+      rebuild: z
+        .object({ buildCommand: z.string().describe("e.g. 'npm run build'"), cwd: z.string().optional() })
+        .optional()
+        .describe("Run a build after edits; restart is skipped if the build fails"),
+      restart: z
+        .object({ unit: z.string().describe("systemd unit, e.g. 'ghosty-gc-runtime'") })
+        .optional()
+        .describe("Restart this unit after a successful build (or right after edits if no rebuild)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const result = await sandboxApplyPatch(ctx, sandboxId, rest);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

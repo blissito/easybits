@@ -8,6 +8,7 @@ import {
   deleteFile,
   moveFile,
   mkdir,
+  editFile,
 } from "~/.server/core/sandboxOperations";
 
 // GET /api/v2/sandboxes/:id/files/:op   (op: read | list, path via ?path=)
@@ -84,6 +85,20 @@ export async function action({ request, params }: Route.ActionArgs) {
       if (!body.path)
         return Response.json({ error: "path required" }, { status: 400 });
       return Response.json(await mkdir(ctx, id, { path: body.path }));
+    case "edit":
+      if (!body.path || typeof body.oldString !== "string" || typeof body.newString !== "string")
+        return Response.json(
+          { error: "path, oldString and newString required" },
+          { status: 400 }
+        );
+      return Response.json(
+        await editFile(ctx, id, {
+          path: body.path,
+          oldString: body.oldString,
+          newString: body.newString,
+          replaceAll: body.replaceAll,
+        })
+      );
     default:
       return Response.json(
         { error: `unknown op '${params.op}'` },

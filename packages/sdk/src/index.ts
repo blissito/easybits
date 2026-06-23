@@ -1555,6 +1555,47 @@ export class Sandbox {
     return this.post("/kernel-restart");
   }
 
+  // ── Service / hotfix ──
+  /**
+   * Read recent journald logs from inside the VM. Filter to one systemd unit
+   * (e.g. "ghosty-gc-runtime") or omit `unit` for the whole journal. `lines`
+   * tails the last N (default 200), `since` takes a journalctl time spec
+   * ("10 min ago"), `grep` filters lines. No streaming/follow.
+   */
+  logs(
+    opts?: { unit?: string; lines?: number; since?: string; grep?: string },
+  ): Promise<{ unit: string | null; command: string; output: string; exitCode: number }> {
+    return this.post("/logs", opts ?? {});
+  }
+  /**
+   * Control the service daemon via systemd. action "status" reports a unit's
+   * state, "restart" restarts it (unit required), "rebuild" runs buildCommand
+   * in cwd then restarts the unit if given.
+   */
+  runtime(
+    action: "restart" | "rebuild" | "status",
+    opts?: { unit?: string; buildCommand?: string; cwd?: string },
+  ): Promise<{ action: string; unit: string | null; output: string; exitCode: number; buildOutput?: string }> {
+    return this.post("/runtime", { action, ...opts });
+  }
+  /**
+   * Atomic hotfix: apply surgical edits, then optionally rebuild + restart in
+   * one call. If the build fails the restart is skipped (running daemon stays up).
+   */
+  applyPatch(opts: {
+    edits: Array<{ path: string; oldString: string; newString: string; replaceAll?: boolean }>;
+    rebuild?: { buildCommand: string; cwd?: string };
+    restart?: { unit: string };
+  }): Promise<{
+    applied: Array<{ path: string; replacements: number }>;
+    buildOutput?: string;
+    buildExitCode?: number;
+    restarted?: boolean;
+    status?: string;
+  }> {
+    return this.post("/apply-patch", opts);
+  }
+
   // ── Background processes ──
   /** Start a long-running command. Returns an execId to poll. */
   execBackground(
@@ -1649,6 +1690,23 @@ export class SandboxFiles {
     return this.req(`${this.base()}/mkdir`, {
       method: "POST",
       body: JSON.stringify({ path }),
+    });
+  }
+  /**
+   * Surgical in-place edit: replace oldString → newString. Sidesteps shell
+   * escaping (unlike exec + sed). Replaces all occurrences by default; pass
+   * replaceAll:false for first-match-only (errors if ambiguous). Throws if
+   * oldString is absent.
+   */
+  edit(
+    path: string,
+    oldString: string,
+    newString: string,
+    opts?: { replaceAll?: boolean },
+  ): Promise<{ ok: true; path: string; replacements: number; bytes: number }> {
+    return this.req(`${this.base()}/edit`, {
+      method: "POST",
+      body: JSON.stringify({ path, oldString, newString, ...opts }),
     });
   }
 }
