@@ -34,11 +34,32 @@ async function statusPayload(ctx: AuthContext, sandboxId: string) {
     const qrDataUrl = await QRCode.toDataURL(status.qr, { margin: 1, width: 320 }).catch(() => undefined);
     return { ...status, qrDataUrl };
   }
-  // Once linked, rasterize the main group's invite link so the operator can
-  // share/scan it to join the admin group.
-  if (status?.state === "linked" && status.mainGroup?.inviteUrl) {
-    const mainGroupQrDataUrl = await QRCode.toDataURL(status.mainGroup.inviteUrl, { margin: 1, width: 240 }).catch(() => undefined);
-    return { ...status, mainGroupQrDataUrl };
+  // The status endpoint only reports {state,phone,name} — it does NOT carry the
+  // main group. Once linked, resolve the main (admin) group from the agent
+  // registry and its invite link ourselves, so the panel can show the invite
+  // instead of forever offering "Crear grupo main".
+  if (status?.state === "linked") {
+    try {
+      const agents = (await sandboxAdmin(ctx, sandboxId, {
+        method: "GET",
+        path: "/admin/agents",
+      })) as Array<{ jid?: string; name?: string; isMain?: boolean }>;
+      const main = Array.isArray(agents) ? agents.find((a) => a?.isMain && a.jid) : null;
+      if (main?.jid) {
+        const inv = (await sandboxAdmin(ctx, sandboxId, {
+          method: "GET",
+          path: `/admin/agents/${encodeURIComponent(main.jid)}/invite-link`,
+        }).catch(() => null)) as { invite_link?: string | null } | null;
+        const inviteUrl = inv?.invite_link ?? null;
+        const mainGroup = { jid: main.jid, name: main.name, inviteUrl };
+        const mainGroupQrDataUrl = inviteUrl
+          ? await QRCode.toDataURL(inviteUrl, { margin: 1, width: 240 }).catch(() => undefined)
+          : undefined;
+        return { ...status, mainGroup, mainGroupQrDataUrl };
+      }
+    } catch {
+      // Registry not ready / box starting — fall through with bare status.
+    }
   }
   return status;
 }
