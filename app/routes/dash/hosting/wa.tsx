@@ -20,6 +20,7 @@ type WaStatus = {
   code?: string;
   pairingCode?: string;
   phone?: string;
+  mainGroup?: { jid?: string; name?: string; inviteUrl?: string | null } | null;
   error?: string | null;
   [k: string]: unknown;
 };
@@ -30,10 +31,14 @@ async function statusPayload(ctx: AuthContext, sandboxId: string) {
     path: "/admin/whatsapp/status",
   })) as WaStatus;
   if (status?.state === "qr" && status.qr) {
-    const qrDataUrl = await QRCode.toDataURL(status.qr, { margin: 1, width: 320 }).catch(
-      () => undefined
-    );
+    const qrDataUrl = await QRCode.toDataURL(status.qr, { margin: 1, width: 320 }).catch(() => undefined);
     return { ...status, qrDataUrl };
+  }
+  // Once linked, rasterize the main group's invite link so the operator can
+  // share/scan it to join the admin group.
+  if (status?.state === "linked" && status.mainGroup?.inviteUrl) {
+    const mainGroupQrDataUrl = await QRCode.toDataURL(status.mainGroup.inviteUrl, { margin: 1, width: 240 }).catch(() => undefined);
+    return { ...status, mainGroupQrDataUrl };
   }
   return status;
 }
@@ -71,6 +76,13 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         path: "/admin/whatsapp/link",
         body: { method, phone },
       });
+      return data(await statusPayload(ctx, params.id));
+    }
+    if (intent === "create-group") {
+      const name = String(fd.get("name") ?? "").trim();
+      if (!name) return data({ error: "nombre del grupo requerido" }, { status: 400 });
+      // nanoclaw convention: POST /admin/agents {name} → groupCreate + invite link.
+      await sandboxAdmin(ctx, params.id, { method: "POST", path: "/admin/agents", body: { name } });
       return data(await statusPayload(ctx, params.id));
     }
     return data({ error: "intent inválido" }, { status: 400 });

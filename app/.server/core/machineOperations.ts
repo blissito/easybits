@@ -23,6 +23,8 @@ import {
   getSandbox,
   persistSandbox,
   provisionRuntime,
+  suspendSandbox,
+  resumeSandbox,
   suspendSandboxRaw,
   type SandboxRecord,
 } from "./sandboxOperations";
@@ -72,6 +74,8 @@ export interface PermanentSandbox {
   shared: boolean;
   /** managed-runtime readiness: "starting" | "ready" | "error" | null (plain machine). */
   runtimeStatus: string | null;
+  /** soft-delete: when set, the machine is suspended + scheduled to hard-delete 7d after this. */
+  deletionScheduledAt: string | null;
 }
 
 interface SandboxRow {
@@ -85,6 +89,7 @@ interface SandboxRow {
   status: string;
   createdAt: Date;
   runtimeStatus?: string | null;
+  deletionScheduledAt?: Date | null;
 }
 
 function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): PermanentSandbox {
@@ -111,6 +116,7 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): Per
     expiresAt: host?.expiresAt ?? null,
     shared,
     runtimeStatus: row.runtimeStatus ?? null,
+    deletionScheduledAt: row.deletionScheduledAt ? new Date(row.deletionScheduledAt).toISOString() : null,
   };
 }
 
@@ -422,23 +428,74 @@ export async function getPermanent(ctx: AuthContext, sandboxId: string): Promise
   return toPermanent(healed, host, row.ownerId !== ctx.user.id);
 }
 
-export async function releasePermanent(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {
+// SOFT-DELETE. Owner-only. Releasing a permanent machine does NOT destroy it —
+// it stops billing + suspends (snapshot to disk, data 100% intact) and schedules
+// hard-deletion 7 days out. Fully restorable within the window via restoreMachine.
+// The actual destroy happens in purgeExpiredMachines (cron) after the grace period.
+export async function releasePermanent(ctx: AuthContext, sandboxId: string): Promise<{ ok: true; deletionScheduledAt: Date }> {
   requireScope(ctx, "DELETE");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
     fail(404, "MachineNotFound", "Máquina no encontrada.");
   }
+  // Stop the meter immediately — the owner asked to release it.
   if (row.stripeSubItemId) {
     await removeMachineSubscriptionItem(row.stripeSubItemId).catch(() => undefined);
   }
-  // Deliberate owner-initiated release (DELETE scope) → operator token so the
-  // protection lock set at create/make time doesn't block the legitimate teardown.
-  await destroySandbox(ctx, sandboxId, { asOperator: true }).catch(() => undefined);
+  // Suspend (snapshot + free CPU/RAM) instead of destroy → data survives for the
+  // 7-day grace. Best-effort: a lost/error box just gets marked.
+  await suspendSandbox(ctx, sandboxId).catch(() => undefined);
+  const deletionScheduledAt = new Date();
   await db.sandbox.update({
     where: { sandboxId },
-    data: { status: "destroyed", stripeSubItemId: null },
+    data: { status: "pending_deletion", stripeSubItemId: null, deletionScheduledAt },
   });
-  return { ok: true };
+  return { ok: true, deletionScheduledAt };
+}
+
+// Restore a soft-deleted machine within the 7-day grace: resume the VM + re-bill.
+// Owner-only. Throws if not pending_deletion or already hard-purged.
+export async function restoreMachine(ctx: AuthContext, sandboxId: string): Promise<PermanentSandbox> {
+  requireScope(ctx, "WRITE");
+  const row = await db.sandbox.findUnique({ where: { sandboxId } });
+  if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
+    fail(404, "MachineNotFound", "Máquina no encontrada.");
+  }
+  if (row.status !== "pending_deletion") {
+    fail(409, "NotPendingDeletion", "Esta máquina no está programada para borrado.");
+  }
+  const tier = resolveTier(row.tier);
+  if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);
+  const mode = (row.cpuMode === "reserved" ? "reserved" : "shared") as CpuMode;
+  // Resume the VM from its snapshot (data intact), then re-attach billing.
+  await resumeSandbox(ctx, sandboxId).catch(() => undefined);
+  const cleared = await db.sandbox.update({
+    where: { sandboxId },
+    data: { status: "running", deletionScheduledAt: null },
+  });
+  return attachBilling(ctx, cleared as SandboxRow, tier, mode, row.diskAddonsGB, undefined, async () => {
+    // Billing re-attach failed — leave it running but unbilled; owner can retry.
+  });
+}
+
+// Cron: hard-destroy machines whose 7-day grace has elapsed. Returns a summary.
+const DELETION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+export async function purgeExpiredMachines(): Promise<{ purged: number; ids: string[] }> {
+  const cutoff = new Date(Date.now() - DELETION_GRACE_MS);
+  const due = await db.sandbox.findMany({
+    where: { status: "pending_deletion", deletionScheduledAt: { lt: cutoff } },
+    select: { sandboxId: true, ownerId: true },
+  });
+  const ids: string[] = [];
+  for (const m of due) {
+    const ctx = { user: { id: m.ownerId }, scopes: ["DELETE"] } as AuthContext;
+    await destroySandbox(ctx, m.sandboxId, { asOperator: true }).catch(() => undefined);
+    await db.sandbox
+      .update({ where: { sandboxId: m.sandboxId }, data: { status: "destroyed", deletionScheduledAt: null } })
+      .catch(() => undefined);
+    ids.push(m.sandboxId);
+  }
+  return { purged: ids.length, ids };
 }
 
 // Admin / fleet view — no owner scope. Caller must be admin-gated upstream.

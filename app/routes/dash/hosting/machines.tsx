@@ -15,6 +15,7 @@ import {
   listPermanent,
   createPermanent,
   releasePermanent,
+  restoreMachine,
   makePermanent,
 } from "~/.server/core/machineOperations";
 import { HOSTING_CATALOG, TIER_ORDER, DISK_ADDON_GB, DISK_ADDON_PRICE } from "~/lib/hostingCatalog";
@@ -25,8 +26,16 @@ import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import { ThankYouModal } from "~/components/common/ThankYouModal";
 import {
   LuServer, LuCpu, LuMemoryStick, LuHardDrive, LuTrash2,
-  LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert, LuExternalLink, LuLoader, LuMessageCircle,
+  LuPlay, LuPause, LuRocket, LuPlus, LuClock, LuTriangleAlert, LuExternalLink, LuLoader, LuMessageCircle, LuRotateCcw,
 } from "react-icons/lu";
+
+// Tiny date "DD MMM" + days remaining in the 7-day soft-delete grace.
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
+const daysLeft = (iso: string | null) => {
+  if (!iso) return 7;
+  const purge = new Date(iso).getTime() + 7 * 864e5;
+  return Math.max(0, Math.ceil((purge - Date.now()) / 864e5));
+};
 
 export const meta = () => [{ title: "Máquinas — EasyBits" }, { name: "robots", content: "noindex" }];
 
@@ -62,11 +71,19 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const { PLANS: plansMap } = await import("~/lib/plans");
   const sandboxLimit = plansMap[plan]?.concurrentSandboxes ?? 2;
   const activeSandboxes = ephemerals.filter((s) => s.status === "running" || s.status === "starting").length;
+  // Next charge = the plan subscription's period end (all machines bill on that
+  // same invoice cycle). One Stripe read, only when there are machines billing.
+  let nextChargeAt: string | null = null;
+  if (permanents.some((p) => p.status !== "pending_deletion")) {
+    const { getActivePlanSubscription } = await import("~/.server/stripe_machines");
+    const sub = await getActivePlanSubscription(user).catch(() => null);
+    if (sub?.current_period_end) nextChargeAt = new Date(sub.current_period_end * 1000).toISOString();
+  }
   return {
     permanents, ephemerals, plan, paid: isPaidPlan(plan),
     reservedEnabled: process.env.HOSTING_RESERVED_ENABLED === "1",
     tiers, diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
-    sandboxLimit, activeSandboxes,
+    sandboxLimit, activeSandboxes, nextChargeAt,
   };
 };
 
@@ -91,6 +108,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         await makePermanent(ctx, id, { tier: String(fd.get("tier")) });
         return { ok: true as const };
       case "release": await releasePermanent(ctx, id); return { ok: true as const };
+      case "restore": await restoreMachine(ctx, id); return { ok: true as const };
       case "destroy": await destroySandbox(ctx, id); return { ok: true as const };
       case "suspend": await suspendSandbox(ctx, id); return { ok: true as const };
       case "resume": await resumeSandbox(ctx, id); return { ok: true as const };
@@ -176,7 +194,7 @@ const monthly = (t: Tier, mode: "shared" | "reserved", diskGB: number, diskPrice
 };
 
 export default function HostingMachines({ loaderData }: Route.ComponentProps) {
-  const { permanents, ephemerals, paid, reservedEnabled, tiers, diskAddon, sandboxLimit, activeSandboxes } = loaderData;
+  const { permanents, ephemerals, paid, reservedEnabled, tiers, diskAddon, sandboxLimit, activeSandboxes, nextChargeAt } = loaderData;
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const [modal, setModal] = useState<null | { promoteId?: string }>(null);
@@ -395,34 +413,52 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                         {m.shared && (
                           <span className="text-[10px] font-bold bg-black text-white px-1.5 py-0.5 rounded-full">COMPARTIDA</span>
                         )}
-                        <RuntimePill status={m.runtimeStatus} />
+                        {m.status !== "pending_deletion" && <RuntimePill status={m.runtimeStatus} />}
                       </div>
                       <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
-                      <p className="text-xs font-black mt-1">${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span></p>
-                      {m.status === "lost" && (
+                      {m.status === "pending_deletion" ? (
                         <p className="mt-1 text-xs font-bold text-brand-red flex items-center gap-1">
-                          <LuTriangleAlert size={12} /> Libérala para cortar el cobro.
+                          <LuTriangleAlert size={12} /> Programada para borrado · se elimina en {daysLeft(m.deletionScheduledAt)} días (restaurable).
+                        </p>
+                      ) : (
+                        <p className="text-xs font-black mt-1">
+                          ${m.monthlyMxn.toLocaleString("es-MX")}/mes <span className="font-normal text-iron">· {m.tier}</span>
+                          {nextChargeAt && <span className="block text-[10px] font-normal text-iron mt-0.5">próx. cobro: {fmtDate(nextChargeAt)}</span>}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {m.template === "ghostyclaw" && (
-                        <IconBtn title="WhatsApp" onClick={() => setWaOpen(waOpen === m.sandboxId ? null : m.sandboxId)}>
-                          <LuMessageCircle size={16} />
-                        </IconBtn>
-                      )}
-                      {/* release: owner-only on the server; a delegate (shared) gets 404, so hide it */}
-                      {!m.shared && (isDestroying ? (
-                        <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
+                      {m.status === "pending_deletion" ? (
+                        !m.shared && (
+                          <button type="button"
+                            onClick={() => submit({ intent: "restore", sandboxId: m.sandboxId })}
+                            className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-brand-500 text-white text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5">
+                            <LuRotateCcw size={14} /> Restaurar
+                          </button>
+                        )
                       ) : (
-                        <IconBtn title="Liberar (corta cobro + destruye)" danger
-                          onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina", message: "Se corta el cobro y se destruye la VM. No se puede deshacer." })}>
-                          <LuTrash2 size={16} />
-                        </IconBtn>
-                      ))}
+                        <>
+                          {m.template === "ghostyclaw" && (
+                            <IconBtn title="WhatsApp" onClick={() => setWaOpen(waOpen === m.sandboxId ? null : m.sandboxId)}>
+                              <LuMessageCircle size={16} />
+                            </IconBtn>
+                          )}
+                          {/* Soft-delete: owner-only (a delegate/shared gets 404 → hide). Reversible 7d. */}
+                          {!m.shared && (isDestroying ? (
+                            <span className="p-2 text-iron animate-spin"><LuLoader size={16} /></span>
+                          ) : (
+                            <button type="button" title="Liberar (suspende + borra en 7 días, restaurable)"
+                              onClick={() => setConfirm({ intent: "release", id: m.sandboxId, title: "Liberar máquina",
+                                message: "Se corta el cobro y se suspende (datos intactos). Queda restaurable por 7 días; luego se elimina definitivamente." })}
+                              className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-white hover:bg-red-50 text-brand-red text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5">
+                              <LuTrash2 size={14} /> Liberar
+                            </button>
+                          ))}
+                        </>
+                      )}
                     </div>
                   </Card>
-                  {waOpen === m.sandboxId && <WaPanel sandboxId={m.sandboxId} />}
+                  {waOpen === m.sandboxId && m.status !== "pending_deletion" && <WaPanel sandboxId={m.sandboxId} />}
                 </motion.div>
               );
             })}

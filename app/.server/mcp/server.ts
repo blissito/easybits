@@ -137,6 +137,7 @@ import {
   makePermanent,
   listPermanent,
   releasePermanent,
+  restoreMachine,
 } from "../core/machineOperations";
 import { grantAccess, revokeAccess, listAccess } from "../delegation";
 import {
@@ -243,6 +244,7 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   make_permanent: "create",
   list_machines: "op",
   release_machine: "op",
+  restore_machine: "op",
   grant_access: "op",
   revoke_access: "op",
   list_access: "op",
@@ -1476,7 +1478,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "release_machine",
-    "Release an always-on machine by sandboxId: removes its Stripe billing item (prorated) and destroys the VM. Idempotent.",
+    "Release an always-on machine (SOFT-DELETE): stops billing + suspends it (data kept) and schedules hard-deletion in 7 days. Fully restorable within the grace window via restore_machine. Owner-only. Idempotent.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine to release"),
     },
@@ -1484,6 +1486,20 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await releasePermanent(ctx, params.sandboxId);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "restore_machine",
+    "Restore a machine that was released (soft-deleted) within its 7-day grace: resumes the VM (data intact) and re-attaches billing. Owner-only. Fails if the grace window already elapsed (hard-purged).",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine to restore"),
+    },
+    { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await restoreMachine(ctx, params.sandboxId);
       return ok(result);
     })
   );
@@ -1584,14 +1600,15 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_destroy",
-    "Permanently destroy a sandbox and free its resources. Idempotent.",
+    "Permanently destroy an EPHEMERAL sandbox and free its resources. Idempotent. (Permanent machines are released via release_machine, which soft-deletes.)",
     {
       sandboxId: z.string().describe("Sandbox ID to destroy"),
     },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await destroySandbox(ctx, params.sandboxId);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return ok(result);
     })
   );
 

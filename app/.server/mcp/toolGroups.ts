@@ -393,6 +393,7 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "make_permanent",
   "list_machines",
   "release_machine",
+  "restore_machine",
   "grant_access",
   "revoke_access",
   "list_access",
@@ -477,3 +478,12 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   email: EMAIL_ALLOWLIST,
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
 };
+
+// Keep `toolCount` honest: derive it from the real allowlist size for every
+// group that has one (kills metadata drift — a tool added to an allowlist is
+// reflected automatically). Groups without a curated allowlist keep the manual
+// count set above.
+for (const g of TOOL_GROUPS) {
+  const al = GROUP_ALLOWLISTS[g.key];
+  if (al) g.toolCount = al.size;
+}

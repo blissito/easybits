@@ -22,3 +22,8 @@ jobs:
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://easybits.cloud/api/cron/purge-keys
+      - name: Hard-delete machines past their 7-day soft-delete grace
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/purge-machines

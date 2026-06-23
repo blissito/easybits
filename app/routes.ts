@@ -155,6 +155,7 @@ export default [
   route("api/sse/files", "routes/api/sse/files.ts"),
   // Cron
   route("api/cron/purge-files", "routes/api/cron/purge-files.ts"),
+  route("api/cron/purge-machines", "routes/api/cron/purge-machines.ts"),
   route("api/cron/backup-agents", "routes/api/cron/backup-agents.ts"),
   route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
   route("api/cron/purge-keys", "routes/api/cron/purge-keys.ts"),

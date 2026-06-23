@@ -1064,6 +1064,11 @@ model Sandbox {
   // runtimeStatus: managed-runtime readiness, set by the background provisioning
   // after create ("starting" → "ready" | "error"). Null for plain machines.
   runtimeStatus   String?
+  // Soft-delete: when an owner "releases" a permanent machine we DON'T destroy
+  // it — we stop billing + suspend (snapshot, data intact) and set status
+  // "pending_deletion" + deletionScheduledAt=now. Fully restorable for 7 days;
+  // a cron hard-destroys after the grace window. Null = not scheduled.
+  deletionScheduledAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
