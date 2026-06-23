@@ -151,3 +151,36 @@ describe("registry smoke — createMcpServer('all')", () => {
     expect(res.isError).toBeUndefined();
   });
 });
+
+describe("tools/call — unknown / out-of-group tool speaks the fail() contract", () => {
+  // Invoke the low-level tools/call handler the way the transport does, so we
+  // exercise installUnknownToolGuard (not just the per-tool handler).
+  function callTool(server: unknown, name: string) {
+    const handler = (server as any).server._requestHandlers.get("tools/call");
+    return handler(
+      { method: "tools/call", params: { name, arguments: {} } },
+      { authInfo: { user: { id: "u1" }, scopes: ["READ", "WRITE"] } }
+    );
+  }
+
+  it("unknown tool → fail() envelope (isError:true), code -32601, never a raw -32602 McpError", async () => {
+    const res: any = await callTool(createMcpServer(["core"]), "does_not_exist");
+    expect(res.isError).toBe(true);
+    const body = parseText(res);
+    expect(body.error).toMatch(/unknown/i);
+    expect(body.code).toBe(-32601);
+    expect(body.tool).toBe("does_not_exist");
+    expect(Array.isArray(body.available)).toBe(true);
+    expect(body.availableCount).toBe(body.available.length);
+  });
+
+  it("tool registered but outside the active group → fail() -32601, listed as unavailable", async () => {
+    // sandbox_logs exists but is disabled under the 'core' toolset.
+    const res: any = await callTool(createMcpServer(["core"]), "sandbox_logs");
+    expect(res.isError).toBe(true);
+    const body = parseText(res);
+    expect(body.code).toBe(-32601);
+    expect(body.error).toMatch(/active --tools toolset/i);
+    expect(body.available).not.toContain("sandbox_logs");
+  });
+});

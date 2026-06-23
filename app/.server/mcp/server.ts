@@ -457,7 +457,58 @@ export function createMcpServer(groups?: string[]) {
   // earlier disable pass and stay reachable regardless of the active group.
   installDynamicTools(server);
 
+  // The SDK answers a tools/call for an unknown OR disabled (out-of-group) tool
+  // with a raw McpError(-32602 InvalidParams) — bypassing our fail() contract
+  // and using the wrong JSON-RPC code. Wrap that path so it speaks the same
+  // envelope as the other 158 tools.
+  installUnknownToolGuard(server);
+
   return server;
+}
+
+// JSON-RPC "Method not found" — the correct code for a tool that doesn't exist
+// in the current toolset (the SDK wrongly uses -32602 "Invalid params").
+const METHOD_NOT_FOUND = -32601;
+
+/**
+ * Make the not-callable tools/call path honor the unified contract: a disabled
+ * (outside the active `--tools` groups) or unknown tool returns the standard
+ * `fail()` envelope ({ error, isError:true }) with -32601 semantics and an
+ * actionable message that lists what IS available — instead of the SDK's raw
+ * McpError(-32602). Valid, enabled tools delegate untouched to the SDK handler.
+ */
+function installUnknownToolGuard(server: McpServer) {
+  const low = (server as any).server; // low-level Server (Protocol)
+  const handlers: Map<string, (req: any, extra: any) => unknown> | undefined =
+    low?._requestHandlers;
+  const original = handlers?.get("tools/call");
+  if (!handlers || !original) return; // SDK internals moved — fail open, keep serving
+  handlers.set("tools/call", async (request: any, extra: any) => {
+    const name: string | undefined = request?.params?.name;
+    const registered = (server as any)._registeredTools as Record<
+      string,
+      { enabled?: boolean }
+    >;
+    const tool = name ? registered[name] : undefined;
+    if (tool && tool.enabled !== false) return original(request, extra); // normal path
+    // Not callable: registered-but-disabled (wrong group) or genuinely unknown.
+    const available = Object.entries(registered)
+      .filter(([, t]) => t.enabled !== false)
+      .map(([n]) => n)
+      .sort();
+    const reason = tool
+      ? "registered but not in the active --tools toolset"
+      : "unknown — misspelled, or not deployed yet";
+    return fail(
+      `Tool "${name ?? "(none)"}" is ${reason}. Reconnect with the group that includes it (e.g. --tools sandbox), or call discover_tools/run_tool to reach any tool without reconnecting.`,
+      {
+        code: METHOD_NOT_FOUND,
+        tool: name ?? null,
+        availableCount: available.length,
+        available,
+      }
+    );
+  });
 }
 
 /**
