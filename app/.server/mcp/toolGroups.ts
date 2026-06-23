@@ -98,8 +98,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "hosting",
     label: "Hosting",
     description:
-      "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir. El plan da acceso; cada máquina factura flat al mes. Ideal para hostear apps, bots y servicios persistentes.",
-    toolCount: 5,
+      "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir, y delegar acceso de tu cuenta a otra (grant/revoke/list_access) para co-administración. El plan da acceso; cada máquina factura flat al mes. Ideal para hostear apps, bots y servicios persistentes.",
+    toolCount: 8,
   },
   {
     key: "payments",
@@ -392,6 +392,9 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "make_permanent",
   "list_machines",
   "release_machine",
+  "grant_access",
+  "revoke_access",
+  "list_access",
 ]);
 
 /** Payments toolset — MercadoPago BYO payment links. */

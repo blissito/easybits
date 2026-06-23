@@ -137,6 +137,7 @@ import {
   listPermanent,
   releasePermanent,
 } from "../core/machineOperations";
+import { grantAccess, revokeAccess, listAccess } from "../delegation";
 import {
   HOSTING_CATALOG,
   TIER_ORDER,
@@ -241,6 +242,9 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   make_permanent: "create",
   list_machines: "op",
   release_machine: "op",
+  grant_access: "op",
+  revoke_access: "op",
+  list_access: "op",
   // Ops (120/min)
   sandbox_list: "op",
   sandbox_status: "op",
@@ -1477,6 +1481,47 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await releasePermanent(ctx, params.sandboxId);
       return ok(result);
+    })
+  );
+
+  // ─── Micro-IAM: account delegation (share machines today; files/dbs later) ───
+  server.tool(
+    "grant_access",
+    "Delegate access over YOUR account to another EasyBits account by email. scopes=[\"machines\"] lets them operate (monitor/configure/repair) all your permanent machines from their own account; billing/release stay yours. Idempotent (merges scopes). Reserved scopes: files, dbs.",
+    {
+      email: z.string().email().describe("EasyBits account email to grant access to"),
+      scopes: z.array(z.string()).min(1).describe('Scopes to grant, e.g. ["machines"]'),
+    },
+    { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await grantAccess(ctx, params.email, params.scopes));
+    })
+  );
+
+  server.tool(
+    "revoke_access",
+    "Revoke delegated access from an account by email. Omit scopes to revoke everything; pass scopes to remove only those. Idempotent.",
+    {
+      email: z.string().email().describe("EasyBits account email to revoke"),
+      scopes: z.array(z.string()).optional().describe("Scopes to remove; omit to revoke all"),
+    },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await revokeAccess(ctx, params.email, params.scopes));
+    })
+  );
+
+  server.tool(
+    "list_access",
+    "List the accounts you have delegated YOUR account to, and the scopes each holds.",
+    {},
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listAccess(ctx);
+      return ok(paginate(result, { total: result.length }));
     })
   );
 

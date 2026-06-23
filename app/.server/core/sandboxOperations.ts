@@ -5,12 +5,18 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
 import { createApiKey } from "../iam";
+import { can, SCOPES } from "../delegation";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { PLANS, getUserPlan } from "../../lib/plans";
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
+// Break-glass operator token: lets deliberate platform flows (releasePermanent,
+// billing rollback) destroy/suspend a Protected box. NEVER exposed to agents or
+// user API keys — the MCP-reachable destroy path omits it, so a leaked WRITE key
+// or runaway agent cannot kill a paying client's permanent VM. Server env only.
+const OPERATOR_TOKEN = process.env.SANDBOX_HOST_OPERATOR_TOKEN || "";
 // Default cuando el caller no pasa timeoutSeconds. 30 min: cómodo para una
 // sesión interactiva por MCP/SDK sin morir a media tarea; sigue auto-limpiando
 // cajas olvidadas. Quien quiera más extiende hasta su ventana de plan (Tera 24h).
@@ -373,7 +379,8 @@ async function callHost<T>(
   path: string,
   body?: unknown,
   ownerId?: string,
-  timeoutMs = 120_000
+  timeoutMs = 120_000,
+  asOperator = false
 ): Promise<T> {
   ensureConfigured();
   const url = `${HOST_URL.replace(/\/$/, "")}${path}`;
@@ -382,6 +389,9 @@ async function callHost<T>(
     "Content-Type": "application/json",
   };
   if (ownerId) headers["X-Easybits-Owner"] = ownerId;
+  // Operator break-glass: only deliberate platform flows pass asOperator. The
+  // header is the sole way to destroy/suspend a Protected box on the host.
+  if (asOperator && OPERATOR_TOKEN) headers["X-Operator-Token"] = OPERATOR_TOKEN;
 
   // Solo GET es idempotente → reintentar ante red/5xx. POST/DELETE no se
   // reintentan para evitar doble-spawn de VMs o doble-destroy.
@@ -430,6 +440,28 @@ async function callHost<T>(
     }
   }
   throw lastErr;
+}
+
+// Resolve the OWNER id to send to the host for a box-addressed op, AND authorize
+// the caller in one shot (micro-IAM, see ../delegation):
+//   - no db.sandbox row → ephemeral box → owner is the caller (today's behavior);
+//   - caller IS the owner → owner;
+//   - caller has a "machines" delegation over the owner's account → owner;
+//   - otherwise → 404 (not yours, not delegated → never reaches the host).
+// The host is owner-scoped (X-Easybits-Owner), so a delegate MUST send the
+// owner's id or the box is invisible — this is the single place that decides it.
+export async function effectiveOwnerId(ctx: AuthContext, sandboxId: string): Promise<string> {
+  const row = await db.sandbox.findUnique({
+    where: { sandboxId },
+    select: { ownerId: true },
+  });
+  if (!row) return ctx.user.id; // ephemeral
+  if (row.ownerId === ctx.user.id) return row.ownerId; // owner
+  if (await can(ctx, row.ownerId, SCOPES.MACHINES)) return row.ownerId; // delegated
+  throw new Response(
+    JSON.stringify({ error: "SandboxNotFound", message: "Sandbox no encontrado." }),
+    { status: 404, headers: { "content-type": "application/json" } }
+  );
 }
 
 // Clase de tamaño → recursos crudos que entiende el host. "s" = default del
@@ -560,6 +592,11 @@ export async function createSandboxRaw(
     memoryMb: number;
     diskMb: number;
     cpuMode?: "shared" | "reserved";
+    // protected: lock against destroy/suspend (host requires X-Operator-Token).
+    // Defaults OFF at create so the caller's billing-failure rollback (a normal
+    // destroy) still works; callers lock the box via persistSandbox AFTER
+    // billing is attached. See createPermanent.
+    protected?: boolean;
   }
 ): Promise<SandboxRecord> {
   return callHost<SandboxRecord>(
@@ -570,6 +607,7 @@ export async function createSandboxRaw(
       name: params.name,
       metadata: params.metadata,
       persistent: true,
+      protected: params.protected ?? false,
       vcpus: params.vcpus,
       memoryMb: params.memoryMb,
       diskMb: params.diskMb,
@@ -586,13 +624,14 @@ export async function createSandboxRaw(
 // Returns the updated record. Host endpoint: POST /v1/sandbox/:id/persist.
 export async function persistSandbox(
   ctx: AuthContext,
-  sandboxId: string
+  sandboxId: string,
+  opts?: { protected?: boolean }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
   return callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/persist`,
-    {},
+    { protected: opts?.protected ?? true },
     ctx.user.id
   );
 }
@@ -611,6 +650,25 @@ export async function suspendSandboxRaw(
   );
 }
 
+// Server-to-server exec (no AuthContext) — used by trusted internal jobs such
+// as the backup cron. Owner-scoped on the host via the header. Do NOT expose
+// to user/agent surfaces (no scope check); only call from server-side crons.
+export async function execSandboxRaw(
+  ownerId: string,
+  sandboxId: string,
+  command: string,
+  timeoutSeconds = 120
+): Promise<ExecResult> {
+  const t = Math.min(timeoutSeconds, 600);
+  return callHost<ExecResult>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/exec`,
+    { command, timeoutSeconds: t },
+    ownerId,
+    (t + 15) * 1000
+  );
+}
+
 export async function listSandboxes(ctx: AuthContext): Promise<SandboxRecord[]> {
   requireScope(ctx, "READ");
   return callHost<SandboxRecord[]>("GET", `/v1/sandbox?owner=${ctx.user.id}`, undefined, ctx.user.id);
@@ -618,7 +676,7 @@ export async function listSandboxes(ctx: AuthContext): Promise<SandboxRecord[]> 
 
 export async function getSandbox(ctx: AuthContext, sandboxId: string): Promise<SandboxRecord> {
   requireScope(ctx, "READ");
-  return callHost<SandboxRecord>("GET", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
+  return callHost<SandboxRecord>("GET", `/v1/sandbox/${sandboxId}`, undefined, await effectiveOwnerId(ctx, sandboxId));
 }
 
 export interface WaitUntilRunningOptions {
@@ -651,7 +709,11 @@ export async function waitUntilRunning(
   );
 }
 
-export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {
+export async function destroySandbox(
+  ctx: AuthContext,
+  sandboxId: string,
+  opts?: { asOperator?: boolean }
+): Promise<{ ok: true }> {
   // WRITE (no DELETE): destruir una caja efímera es simétrico con crearla
   // (sandbox_create también es WRITE), y el host es owner-scoped — un agente
   // solo puede matar SUS propias cajas. Esto deja que un agente con token WRITE
@@ -661,7 +723,17 @@ export async function destroySandbox(ctx: AuthContext, sandboxId: string): Promi
   requireScope(ctx, "WRITE");
   // eb.compute: revocar las virtual keys del sandbox (fire-and-forget).
   void revokeSandboxKeys(sandboxId);
-  return callHost<{ ok: true }>("DELETE", `/v1/sandbox/${sandboxId}`, undefined, ctx.user.id);
+  // asOperator: solo flujos deliberados de plataforma (releasePermanent,
+  // rollback de billing) pueden matar una caja Protected. El path MCP/agente
+  // NUNCA pasa asOperator → un agente/leaked key recibe 403 en cajas protegidas.
+  return callHost<{ ok: true }>(
+    "DELETE",
+    `/v1/sandbox/${sandboxId}`,
+    undefined,
+    await effectiveOwnerId(ctx, sandboxId),
+    undefined,
+    opts?.asOperator ?? false
+  );
 }
 
 export interface FleetStats {
@@ -701,7 +773,7 @@ export async function extendSandbox(
     "POST",
     `/v1/sandbox/${sandboxId}/extend`,
     { extendSeconds: extendSeconds ?? 300, maxTtlSeconds: plan.maxSandboxTtlSeconds },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -717,7 +789,7 @@ export async function suspendSandbox(
     "POST",
     `/v1/sandbox/${sandboxId}/suspend`,
     {},
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -733,7 +805,7 @@ export async function resumeSandbox(
     "POST",
     `/v1/sandbox/${sandboxId}/resume`,
     {},
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -780,7 +852,7 @@ export async function execCommand(
       timeoutSeconds,
       env: params.env,
     },
-    ctx.user.id,
+    await effectiveOwnerId(ctx, sandboxId),
     // El host puede tardar hasta timeoutSeconds — dar margen al fetch.
     (timeoutSeconds + 15) * 1000
   );
@@ -801,7 +873,7 @@ export async function runCode(
       lang: params.lang ?? "python",
       timeoutSeconds,
     },
-    ctx.user.id,
+    await effectiveOwnerId(ctx, sandboxId),
     (timeoutSeconds + 15) * 1000
   );
 }
@@ -816,7 +888,7 @@ export async function writeFile(
     "POST",
     `/v1/sandbox/${sandboxId}/files/write`,
     { path: params.path, content: params.content, encoding: params.encoding ?? "utf8" },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -831,7 +903,7 @@ export async function readFile(
     "GET",
     `/v1/sandbox/${sandboxId}/files/read?${qs.toString()}`,
     undefined,
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -846,7 +918,7 @@ export async function listFiles(
     "GET",
     `/v1/sandbox/${sandboxId}/files/list?${qs.toString()}`,
     undefined,
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -860,7 +932,7 @@ export async function deleteFile(
     "POST",
     `/v1/sandbox/${sandboxId}/files/delete`,
     { path: params.path, recursive: params.recursive ?? false },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -874,7 +946,7 @@ export async function moveFile(
     "POST",
     `/v1/sandbox/${sandboxId}/files/move`,
     { from: params.from, to: params.to },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -888,7 +960,7 @@ export async function mkdir(
     "POST",
     `/v1/sandbox/${sandboxId}/files/mkdir`,
     { path: params.path },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -911,7 +983,7 @@ export async function exposeSandboxPort(
     "POST",
     `/v1/sandbox/${sandboxId}/expose`,
     { port },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -940,7 +1012,7 @@ export async function exposeSandboxRawPort(
     "POST",
     `/v1/sandbox/${sandboxId}/expose-raw`,
     { port, protocol },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -996,7 +1068,7 @@ export async function addSandboxDomain(
     "POST",
     `/v1/sandbox/${sandboxId}/domain`,
     { domain, port },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
   const dns: DomainDnsRecord = isApex(domain)
     ? {
@@ -1025,7 +1097,7 @@ export async function removeSandboxDomain(
     "DELETE",
     `/v1/sandbox/${sandboxId}/domain`,
     { domain },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -1039,7 +1111,7 @@ export async function listSandboxDomains(
     "GET",
     `/v1/sandbox/${sandboxId}`,
     undefined,
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
   const md = sb.metadata ?? {};
   return Object.entries(md)
@@ -1125,7 +1197,7 @@ export async function execBackground(
     "POST",
     `/v1/sandbox/${sandboxId}/exec/background`,
     { command: params.command, cwd: params.cwd, env: params.env },
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -1139,7 +1211,7 @@ export async function execBackgroundStatus(
     "GET",
     `/v1/sandbox/${sandboxId}/exec/background/${encodeURIComponent(execId)}`,
     undefined,
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -1153,7 +1225,7 @@ export async function execBackgroundKill(
     "POST",
     `/v1/sandbox/${sandboxId}/exec/background/${encodeURIComponent(execId)}/kill`,
     {},
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 
@@ -1185,7 +1257,7 @@ export async function runCell(
     "POST",
     `/v1/sandbox/${sandboxId}/run-cell`,
     { code: params.code, timeoutSeconds },
-    ctx.user.id,
+    await effectiveOwnerId(ctx, sandboxId),
     (timeoutSeconds + 15) * 1000
   );
 }
@@ -1199,7 +1271,7 @@ export async function kernelRestart(
     "POST",
     `/v1/sandbox/${sandboxId}/kernel/restart`,
     {},
-    ctx.user.id
+    await effectiveOwnerId(ctx, sandboxId)
   );
 }
 

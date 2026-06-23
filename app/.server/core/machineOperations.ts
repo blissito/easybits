@@ -40,6 +40,7 @@ import {
 } from "../../lib/hostingCatalog";
 import { getUserPlan, isPaidPlan, type PlanKey } from "../../lib/plans";
 import type { SandboxTemplate } from "../sandbox/schemas";
+import { can, delegatedAccountIds, SCOPES } from "../delegation";
 
 // Host clamp today is 8 vCPU; performance-4x (16) is by-request (human provisions).
 const BIG_TIERS_ENABLED = process.env.HOSTING_BIG_TIERS_ENABLED === "1";
@@ -66,6 +67,8 @@ export interface PermanentSandbox {
   /** From the host record (when available) so the SDK can build a full Sandbox. */
   template: string | null;
   expiresAt: string | null;
+  /** true when this machine is owned by another account that delegated it to me. */
+  shared: boolean;
 }
 
 interface SandboxRow {
@@ -80,7 +83,7 @@ interface SandboxRow {
   createdAt: Date;
 }
 
-function toPermanent(row: SandboxRow, host?: SandboxRecord): PermanentSandbox {
+function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): PermanentSandbox {
   const tier = resolveTier(row.tier);
   const mode = (row.cpuMode === "reserved" ? "reserved" : "shared") as CpuMode;
   const res = tier
@@ -102,6 +105,7 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord): PermanentSandbox {
     createdAt: row.createdAt,
     template: host?.template ?? null,
     expiresAt: host?.expiresAt ?? null,
+    shared,
   };
 }
 
@@ -241,9 +245,14 @@ export async function createPermanent(
     },
   });
 
-  return attachBilling(ctx, row as SandboxRow, tier, mode, diskAddonsGB, sandbox, async () => {
+  const result = await attachBilling(ctx, row as SandboxRow, tier, mode, diskAddonsGB, sandbox, async () => {
     await destroySandbox(ctx, sandbox.sandboxId).catch(() => undefined);
   });
+  // Billing attached → lock the box against destroy/suspend. Done AFTER billing
+  // so the rollback above (a normal destroy) still works on failure. Only the
+  // operator token can override the lock now (releasePermanent uses it).
+  await persistSandbox(ctx, sandbox.sandboxId, { protected: true }).catch(() => undefined);
+  return result;
 }
 
 /**
@@ -279,8 +288,10 @@ export async function makePermanent(
   }
 
   // Disarm the reaper BEFORE billing — never charge for a VM that can be reaped.
+  // Not protected yet (protected:false) so a failed promotion stays releasable
+  // via the normal path; we lock it only after billing is attached (below).
   try {
-    await persistSandbox(ctx, sandboxId);
+    await persistSandbox(ctx, sandboxId, { protected: false });
   } catch (e) {
     fail(502, "PersistFailed",
       `No se pudo volver permanente la VM: ${e instanceof Error ? e.message : String(e)}`);
@@ -309,9 +320,12 @@ export async function makePermanent(
     },
   });
 
-  return attachBilling(ctx, row as SandboxRow, tier, mode, diskAddonsGB, host, async () => {
+  const result = await attachBilling(ctx, row as SandboxRow, tier, mode, diskAddonsGB, host, async () => {
     // Billing failed — the VM stays as the user's persistent sandbox, unbilled.
   });
+  // Billing attached → lock against destroy/suspend (operator override only).
+  await persistSandbox(ctx, sandboxId, { protected: true }).catch(() => undefined);
+  return result;
 }
 
 // Map a sandbox status to our status. 404 / lost → "lost".
@@ -345,22 +359,34 @@ async function selfHeal(ctx: AuthContext, row: SandboxRow): Promise<{ row: Sandb
 
 export async function listPermanent(ctx: AuthContext): Promise<PermanentSandbox[]> {
   requireScope(ctx, "READ");
+  // Owned machines + machines of accounts that delegated "machines" to me.
+  const delegatedOwners = await delegatedAccountIds(ctx, SCOPES.MACHINES);
   const rows = await db.sandbox.findMany({
-    where: { ownerId: ctx.user.id, status: { not: "destroyed" } },
+    where: {
+      status: { not: "destroyed" },
+      ownerId: { in: [ctx.user.id, ...delegatedOwners] },
+    },
     orderBy: { createdAt: "desc" },
   });
   const healed = await Promise.all(rows.map((r) => selfHeal(ctx, r as SandboxRow)));
-  return healed.map(({ row, host }) => toPermanent(row, host));
+  return healed.map(({ row, host }) =>
+    toPermanent(row, host, row.ownerId !== ctx.user.id)
+  );
 }
 
 export async function getPermanent(ctx: AuthContext, sandboxId: string): Promise<PermanentSandbox> {
   requireScope(ctx, "READ");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
-  if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
+  // Owner OR a "machines" delegate of the owner's account may see it.
+  const allowed =
+    !!row &&
+    row.status !== "destroyed" &&
+    (row.ownerId === ctx.user.id || (await can(ctx, row.ownerId, SCOPES.MACHINES)));
+  if (!row || !allowed) {
     fail(404, "MachineNotFound", "Máquina no encontrada.");
   }
   const { row: healed, host } = await selfHeal(ctx, row as SandboxRow);
-  return toPermanent(healed, host);
+  return toPermanent(healed, host, row.ownerId !== ctx.user.id);
 }
 
 export async function releasePermanent(ctx: AuthContext, sandboxId: string): Promise<{ ok: true }> {
@@ -372,7 +398,9 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
   if (row.stripeSubItemId) {
     await removeMachineSubscriptionItem(row.stripeSubItemId).catch(() => undefined);
   }
-  await destroySandbox(ctx, sandboxId).catch(() => undefined);
+  // Deliberate owner-initiated release (DELETE scope) → operator token so the
+  // protection lock set at create/make time doesn't block the legitimate teardown.
+  await destroySandbox(ctx, sandboxId, { asOperator: true }).catch(() => undefined);
   await db.sandbox.update({
     where: { sandboxId },
     data: { status: "destroyed", stripeSubItemId: null },

@@ -130,6 +130,14 @@ describe("registry smoke — createMcpServer('all')", () => {
     expect(res.isError).toBeUndefined();
   });
 
+  it("hosting group registers the micro-IAM delegation tools", () => {
+    const tools = getRegisteredTools(createMcpServer(["hosting"]));
+    for (const name of ["grant_access", "revoke_access", "list_access"]) {
+      expect(tools[name]).toBeDefined();
+      expect(typeof tools[name].handler).toBe("function");
+    }
+  });
+
   it("sandbox_list returns the unified paginate envelope (not a raw array)", async () => {
     // sandbox_list is in the 'sandbox' group; its underlying op is mocked above
     // so this exercises the handler's ok(paginate(...)) wrapping in isolation.

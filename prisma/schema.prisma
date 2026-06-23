@@ -484,6 +484,23 @@ model Permission {
   updatedAt    DateTime @updatedAt
 }
 
+// Micro-IAM: account-level delegation. An owner (accountId) grants another
+// account (granteeId) a set of scopes over their account. Today: "machines"
+// (operate all the owner's permanent machines). Extensible: "files", "dbs".
+// Scalar ObjectIds (no @relation) on purpose — keeps it standalone, no User
+// model changes. Lookups by granteeId (what's shared with me) + accountId
+// (who I shared with). See app/.server/iam.ts (`can`/grant/revoke/list).
+model Delegation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  accountId String   @db.ObjectId
+  granteeId String   @db.ObjectId
+  scopes    String[]
+  createdAt DateTime @default(now())
+
+  @@index([granteeId])
+  @@index([accountId])
+}
+
 model StorageProvider {
   id        String              @id @default(auto()) @map("_id") @db.ObjectId
   name      String
