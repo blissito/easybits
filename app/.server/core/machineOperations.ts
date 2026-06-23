@@ -22,6 +22,7 @@ import {
   destroySandbox,
   getSandbox,
   persistSandbox,
+  provisionRuntime,
   suspendSandboxRaw,
   type SandboxRecord,
 } from "./sandboxOperations";
@@ -192,6 +193,11 @@ export async function createPermanent(
     diskAddonsGB?: number;
     template?: SandboxTemplate;
     name?: string;
+    // env: runtime config for a managed-runtime template (e.g. ghostyclaw needs
+    // ANTHROPIC_API_KEY/NANOCLAW_ADMIN_TOKEN). When present, after billing we
+    // inject it + start the runtime (provisionRuntime) — so a permanent Sandbox
+    // hosts a configured agent WITHOUT the deprecated db.agent flow.
+    env?: Record<string, string>;
   }
 ): Promise<PermanentSandbox> {
   requireScope(ctx, "WRITE");
@@ -252,6 +258,16 @@ export async function createPermanent(
   // so the rollback above (a normal destroy) still works on failure. Only the
   // operator token can override the lock now (releasePermanent uses it).
   await persistSandbox(ctx, sandbox.sandboxId, { protected: true }).catch(() => undefined);
+
+  // Managed-runtime templates (ghostyclaw, etc.): inject env + start the runtime
+  // in the background (ghostyclaw readiness can take minutes — don't block the
+  // create response). This is what lets a permanent Sandbox BE a configured
+  // agent without a db.agent row. Best-effort: failure logs; the box stays.
+  if (params.env && Object.keys(params.env).length) {
+    void provisionRuntime(ctx, sandbox.sandboxId, template, params.env).catch((e) =>
+      console.error(`provisionRuntime failed for ${sandbox.sandboxId}:`, e)
+    );
+  }
   return result;
 }
 

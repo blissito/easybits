@@ -451,18 +451,26 @@ async function callHost<T>(
 // The host is owner-scoped (X-Easybits-Owner), so a delegate MUST send the
 // owner's id or the box is invisible — this is the single place that decides it.
 export async function effectiveOwnerId(ctx: AuthContext, sandboxId: string): Promise<string> {
-  const row = await db.sandbox.findUnique({
-    where: { sandboxId },
-    select: { ownerId: true },
-  });
-  if (!row) return ctx.user.id; // ephemeral
-  if (row.ownerId === ctx.user.id) return row.ownerId; // owner
-  if (await can(ctx, row.ownerId, SCOPES.MACHINES)) return row.ownerId; // delegated
+  // Unified surface: a box is owned via db.sandbox (permanent machine) OR
+  // db.agent (autonomous agent). Resolve the owner from whichever tracks it, so
+  // delegation works the same whether the box is a machine or an agent.
+  let ownerId = (
+    await db.sandbox.findUnique({ where: { sandboxId }, select: { ownerId: true } })
+  )?.ownerId;
+  if (!ownerId) {
+    ownerId = (
+      await db.agent.findFirst({ where: { sandboxId }, select: { ownerId: true } })
+    )?.ownerId;
+  }
+  if (!ownerId) return ctx.user.id; // not tracked → ephemeral, caller owns it
+  if (ownerId === ctx.user.id) return ownerId; // owner
+  if (await can(ctx, ownerId, SCOPES.MACHINES)) return ownerId; // delegated
   throw new Response(
     JSON.stringify({ error: "SandboxNotFound", message: "Sandbox no encontrado." }),
     { status: 404, headers: { "content-type": "application/json" } }
   );
 }
+
 
 // Clase de tamaño → recursos crudos que entiende el host. "s" = default del
 // template (no enviamos overrides). El host clampa por seguridad (1-8 vCPU,
@@ -1444,6 +1452,39 @@ export async function startAgent(
     },
     ctx.user.id
   );
+}
+
+// Provision a runtime template (e.g. ghostyclaw) on a box that was created via
+// the MACHINE path (createPermanent), giving it the same env-injection +
+// runtime-start that the Agent path does — so a permanent Sandbox can host a
+// configured agent runtime WITHOUT a db.agent row. Waits for the VM, writes the
+// env file + starts the unit (host /agent/start), and for ghostyclaw polls
+// /chat/ready. Throws on failure (caller logs / marks status). Templates without
+// an `agent` spec are a no-op.
+export async function provisionRuntime(
+  ctx: AuthContext,
+  sandboxId: string,
+  template: SandboxTemplate,
+  env: Record<string, string>
+): Promise<void> {
+  const tpl = await resolveTemplate(ctx, template);
+  if (!tpl.agent) return; // plain machine, no managed runtime to start
+  validateRequiredEnv(tpl, env);
+  await waitUntilRunning(ctx, sandboxId, { timeoutMs: 60_000 });
+  await startAgent(ctx, sandboxId, {
+    env,
+    port: tpl.agent.port,
+    healthPath: tpl.agent.health_path,
+    unit: tpl.agent.unit,
+    envFile: tpl.agent.env_file,
+  });
+  if (template === "ghostyclaw") {
+    const token = env.NANOCLAW_ADMIN_TOKEN || "";
+    const ready = await pollGhostyclawReady(ctx, sandboxId, token);
+    if (!ready) {
+      throw new Error("ghostyclaw not ready after 10min (agent image build likely failed)");
+    }
+  }
 }
 
 // High-level: spawn sandbox + wait running + start agent runtime + persist Agent

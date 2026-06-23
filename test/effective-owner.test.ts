@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // X-Easybits-Owner. effectiveOwnerId is the single place that decides it.
 
 let sandboxRow: any = null;
+let agentRow: any = null;
 const mockDb = {
   sandbox: { findUnique: vi.fn(async () => sandboxRow) },
+  agent: { findFirst: vi.fn(async () => agentRow) },
 };
 vi.mock("~/.server/db", () => ({ db: mockDb }));
 
@@ -21,6 +23,7 @@ const ctx = (id: string) => ({ user: { id }, scopes: ["WRITE"] } as any);
 
 beforeEach(() => {
   sandboxRow = null;
+  agentRow = null;
   canResult = false;
   vi.clearAllMocks();
 });
@@ -48,5 +51,12 @@ describe("effectiveOwnerId (host owner-scoping + authz)", () => {
     await expect(effectiveOwnerId(ctx("stranger"), "sb_x")).rejects.toMatchObject({
       status: 404,
     });
+  });
+
+  it("unified: agent box (no sandbox row, db.agent owns it) → delegate resolves agent owner", async () => {
+    sandboxRow = null;          // not a permanent machine
+    agentRow = { ownerId: "owner1" }; // tracked as an agent
+    canResult = true;           // delegate
+    expect(await effectiveOwnerId(ctx("delegate1"), "sb_agent")).toBe("owner1");
   });
 });
