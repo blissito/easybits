@@ -91,15 +91,15 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "sandbox",
     label: "Sandbox",
-    description: "MicroVMs Firecracker para correr agentes y código aislado. Ciclo de vida (spawn/extend/suspend/resume/destroy), exec (sync + background), run-code, kernel Jupyter persistente (run_cell con estado + charts), archivos (write/read/list/delete/move/mkdir), expose_port (URL pública) + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
-    toolCount: 22,
+    description: "MicroVMs Firecracker para correr agentes y código aislado. Ciclo de vida (spawn/extend/suspend/resume/destroy), exec (sync + background), run-code, kernel Jupyter persistente (run_cell con estado + charts), archivos (write/read/list/delete/move/mkdir), expose_port (URL pública), sandbox_admin (passthrough admin :8787) + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
+    toolCount: 23,
   },
   {
     key: "hosting",
     label: "Hosting",
     description:
-      "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir, y delegar acceso de tu cuenta a otra (grant/revoke/list_access) para co-administración. El plan da acceso; cada máquina factura flat al mes. Ideal para hostear apps, bots y servicios persistentes.",
-    toolCount: 8,
+      "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir, delegar acceso de tu cuenta a otra (grant/revoke/list_access) para co-administración, descubrir templates+env (list_machine_templates) y admin passthrough al box (sandbox_admin: pairing WhatsApp, CLAUDE.md). El plan da acceso; cada máquina factura flat al mes.",
+    toolCount: 10,
   },
   {
     key: "payments",
@@ -379,6 +379,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "call_destroy",
   "ghosty_spawn",
   "goose_spawn",
+  "sandbox_admin",
 ]);
 
 /**
@@ -395,6 +396,8 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "grant_access",
   "revoke_access",
   "list_access",
+  "list_machine_templates",
+  "sandbox_admin",
 ]);
 
 /** Payments toolset — MercadoPago BYO payment links. */

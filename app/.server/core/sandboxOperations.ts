@@ -1487,6 +1487,44 @@ export async function provisionRuntime(
   }
 }
 
+// Generic admin passthrough to a permanent Sandbox's in-VM admin API (:8787) —
+// the Sandbox-surface twin of agent-admin.ts, for WhatsApp pairing
+// (/admin/whatsapp/*) + CLAUDE.md CRUD on machine-hosted runtimes (ghostyclaw).
+// Authz via effectiveOwnerId (owner OR "machines" delegate → 404 otherwise);
+// Bearer = the box's persisted adminToken. Whitelisted to /admin/*.
+export async function sandboxAdmin(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { method?: string; path: string; body?: unknown }
+): Promise<unknown> {
+  requireScope(ctx, "WRITE");
+  if (!params.path || !params.path.startsWith("/admin/")) {
+    throw new Response(JSON.stringify({ error: "path must start with /admin/" }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  const ownerId = await effectiveOwnerId(ctx, sandboxId); // owner or delegate, else 404
+  const row = await db.sandbox.findUnique({
+    where: { sandboxId },
+    select: { adminToken: true },
+  });
+  if (!row?.adminToken) {
+    throw new Response(
+      JSON.stringify({ error: "NoAdminToken", message: "Esta máquina no tiene admin token (no es un runtime gestionado)." }),
+      { status: 400, headers: { "content-type": "application/json" } }
+    );
+  }
+  const proxyBody = {
+    port: 8787,
+    path: params.path,
+    method: params.method ?? "GET",
+    headers: { Authorization: `Bearer ${row.adminToken}`, Accept: "application/json" },
+    rawBody: params.body !== undefined ? params.body : "",
+  };
+  return callHost<unknown>("POST", `/v1/sandbox/${sandboxId}/agent/message`, proxyBody, ownerId);
+}
+
 // High-level: spawn sandbox + wait running + start agent runtime + persist Agent
 // row + return public handles. Distinct from `agent_run` (Claude one-shot
 // managed) — this returns a long-lived agent reachable at agentUrl + an

@@ -491,11 +491,13 @@ model Permission {
 // model changes. Lookups by granteeId (what's shared with me) + accountId
 // (who I shared with). See app/.server/iam.ts (`can`/grant/revoke/list).
 model Delegation {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  accountId String   @db.ObjectId
-  granteeId String   @db.ObjectId
-  scopes    String[]
-  createdAt DateTime @default(now())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  accountId   String   @db.ObjectId
+  granteeId   String   @db.ObjectId
+  grantedById String   @db.ObjectId // who created the grant (audit)
+  scopes      String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([granteeId])
   @@index([accountId])
@@ -1052,6 +1054,14 @@ model Sandbox {
   status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed
   // Single Stripe subscription item per permanent sandbox (tier + disk combined).
   stripeSubItemId String?
+  // adminToken: Bearer for the box's in-VM admin API (:8787), persisted at
+  // create when a managed-runtime template (ghostyclaw) is provisioned with env.
+  // Used by the sandbox admin passthrough (/api/v2/sandbox/:id/admin) for
+  // WhatsApp pairing + CLAUDE.md CRUD. Parallel to Agent.embedToken.
+  adminToken      String?
+  // runtimeStatus: managed-runtime readiness, set by the background provisioning
+  // after create ("starting" → "ready" | "error"). Null for plain machines.
+  runtimeStatus   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

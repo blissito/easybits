@@ -70,6 +70,8 @@ export interface PermanentSandbox {
   expiresAt: string | null;
   /** true when this machine is owned by another account that delegated it to me. */
   shared: boolean;
+  /** managed-runtime readiness: "starting" | "ready" | "error" | null (plain machine). */
+  runtimeStatus: string | null;
 }
 
 interface SandboxRow {
@@ -82,6 +84,7 @@ interface SandboxRow {
   name: string | null;
   status: string;
   createdAt: Date;
+  runtimeStatus?: string | null;
 }
 
 function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): PermanentSandbox {
@@ -107,6 +110,7 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): Per
     template: host?.template ?? null,
     expiresAt: host?.expiresAt ?? null,
     shared,
+    runtimeStatus: row.runtimeStatus ?? null,
   };
 }
 
@@ -238,6 +242,7 @@ export async function createPermanent(
       `No se pudo aprovisionar la VM: ${msg}`);
   }
 
+  const hasRuntime = !!(params.env && Object.keys(params.env).length);
   const row = await db.sandbox.create({
     data: {
       ownerId: ctx.user.id,
@@ -248,6 +253,10 @@ export async function createPermanent(
       diskAddonsGB,
       name: params.name ?? null,
       status: sandbox.status === "running" ? "running" : "provisioning",
+      // Admin Bearer for the box's :8787 API (pairing/CLAUDE.md via sandbox-admin
+      // passthrough). Persisted from env, parallel to Agent.embedToken.
+      adminToken: params.env?.NANOCLAW_ADMIN_TOKEN ?? null,
+      runtimeStatus: hasRuntime ? "starting" : null,
     },
   });
 
@@ -263,10 +272,17 @@ export async function createPermanent(
   // in the background (ghostyclaw readiness can take minutes — don't block the
   // create response). This is what lets a permanent Sandbox BE a configured
   // agent without a db.agent row. Best-effort: failure logs; the box stays.
-  if (params.env && Object.keys(params.env).length) {
-    void provisionRuntime(ctx, sandbox.sandboxId, template, params.env).catch((e) =>
-      console.error(`provisionRuntime failed for ${sandbox.sandboxId}:`, e)
-    );
+  if (hasRuntime) {
+    void provisionRuntime(ctx, sandbox.sandboxId, template, params.env!)
+      .then(() =>
+        db.sandbox.update({ where: { sandboxId: sandbox.sandboxId }, data: { runtimeStatus: "ready" } })
+      )
+      .catch(async (e) => {
+        console.error(`provisionRuntime failed for ${sandbox.sandboxId}:`, e);
+        await db.sandbox
+          .update({ where: { sandboxId: sandbox.sandboxId }, data: { runtimeStatus: "error" } })
+          .catch(() => undefined);
+      });
   }
   return result;
 }

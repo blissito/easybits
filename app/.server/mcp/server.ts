@@ -130,6 +130,7 @@ import {
   spawnGhosty,
   listAgents,
   destroyAgent,
+  sandboxAdmin,
 } from "../core/sandboxOperations";
 import {
   createPermanent,
@@ -245,6 +246,8 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   grant_access: "op",
   revoke_access: "op",
   list_access: "op",
+  list_machine_templates: "op",
+  sandbox_admin: "op",
   // Ops (120/min)
   sandbox_list: "op",
   sandbox_status: "op",
@@ -1491,7 +1494,7 @@ How to embed safely (the only reliable rule):
     "Delegate access over YOUR account to another EasyBits account by email. scopes=[\"machines\"] lets them operate (monitor/configure/repair) all your permanent machines from their own account; billing/release stay yours. Idempotent (merges scopes). Reserved scopes: files, dbs.",
     {
       email: z.string().email().describe("EasyBits account email to grant access to"),
-      scopes: z.array(z.string()).min(1).describe('Scopes to grant, e.g. ["machines"]'),
+      scopes: z.array(z.enum(["machines", "files", "dbs"])).min(1).describe('Scopes to grant. "machines" = operate all your permanent machines. files/dbs reserved.'),
     },
     { destructiveHint: false, idempotentHint: true, openWorldHint: false },
     wrapHandler(async (params, extra) => {
@@ -1505,7 +1508,7 @@ How to embed safely (the only reliable rule):
     "Revoke delegated access from an account by email. Omit scopes to revoke everything; pass scopes to remove only those. Idempotent.",
     {
       email: z.string().email().describe("EasyBits account email to revoke"),
-      scopes: z.array(z.string()).optional().describe("Scopes to remove; omit to revoke all"),
+      scopes: z.array(z.enum(["machines", "files", "dbs"])).optional().describe("Scopes to remove; omit to revoke all"),
     },
     { destructiveHint: true, idempotentHint: true, openWorldHint: false },
     wrapHandler(async (params, extra) => {
@@ -1523,6 +1526,46 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listAccess(ctx);
       return ok(paginate(result, { total: result.length }));
+    })
+  );
+
+  server.tool(
+    "list_machine_templates",
+    "List machine templates with their required env, so you know what `env` to pass to create_machine. Managed-runtime templates (e.g. ghostyclaw) list the keys they need (ANTHROPIC_API_KEY, NANOCLAW_ADMIN_TOKEN, …).",
+    {},
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const tpls = await listTemplates(ctx);
+      const items = tpls.map((t) => ({
+        name: t.name,
+        display: t.display ?? null,
+        tier: t.tier ?? null,
+        managedRuntime: !!t.agent,
+        requiredEnv: (t.requiredEnv ?? []).map((e) => ({ name: e.name, required: !!e.required, secret: !!e.secret })),
+      }));
+      return ok(paginate(items, { total: items.length }));
+    })
+  );
+
+  server.tool(
+    "sandbox_admin",
+    "Admin passthrough to a permanent machine's in-VM admin API (:8787) — WhatsApp pairing (/admin/whatsapp/status|link|unlink) + CLAUDE.md CRUD for managed-runtime machines (ghostyclaw). Owner OR a 'machines' delegate. `path` must start with /admin/.",
+    {
+      sandboxId: z.string().describe("Machine sandboxId"),
+      path: z.string().describe("Admin path, must start with /admin/ (e.g. /admin/whatsapp/status)"),
+      method: z.enum(["GET", "POST", "PATCH", "DELETE"]).optional().describe("HTTP method (default GET)"),
+      body: z.any().optional().describe("Request body for POST/PATCH"),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await sandboxAdmin(ctx, params.sandboxId, {
+        method: params.method,
+        path: params.path,
+        body: params.body,
+      });
+      return ok(result);
     })
   );
 

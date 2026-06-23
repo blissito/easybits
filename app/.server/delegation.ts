@@ -14,6 +14,7 @@
  */
 import type { AuthContext } from "./apiAuth";
 import { db } from "./db";
+import logger from "./logger";
 
 export const SCOPES = {
   MACHINES: "machines",
@@ -82,11 +83,13 @@ export async function grantAccess(ctx: AuthContext, email: string, scopes: strin
   if (existing) {
     const merged = [...new Set([...existing.scopes, ...wanted])];
     await db.delegation.update({ where: { id: existing.id }, data: { scopes: merged } });
+    logger.info(`[delegation] grant updated account=${ctx.user.id} grantee=${grantee.id} email=${email} scopes=${merged.join(",")}`);
     return { ok: true as const, email, scopes: merged };
   }
   await db.delegation.create({
-    data: { accountId: ctx.user.id, granteeId: grantee.id, scopes: wanted },
+    data: { accountId: ctx.user.id, granteeId: grantee.id, grantedById: ctx.user.id, scopes: wanted },
   });
+  logger.info(`[delegation] grant created account=${ctx.user.id} grantee=${grantee.id} email=${email} scopes=${wanted.join(",")}`);
   return { ok: true as const, email, scopes: wanted };
 }
 
@@ -100,15 +103,18 @@ export async function revokeAccess(ctx: AuthContext, email: string, scopes?: str
   if (!grant) return { ok: true as const };
   if (!scopes || !scopes.length) {
     await db.delegation.delete({ where: { id: grant.id } });
+    logger.info(`[delegation] revoke(all) account=${ctx.user.id} grantee=${grantee.id} email=${email}`);
     return { ok: true as const, scopes: [] as string[] };
   }
   const drop = new Set(scopes.map((s) => s.trim().toLowerCase()));
   const remaining = grant.scopes.filter((s) => !drop.has(s));
   if (!remaining.length) {
     await db.delegation.delete({ where: { id: grant.id } });
+    logger.info(`[delegation] revoke(empty) account=${ctx.user.id} grantee=${grantee.id} email=${email}`);
     return { ok: true as const, scopes: [] as string[] };
   }
   await db.delegation.update({ where: { id: grant.id }, data: { scopes: remaining } });
+  logger.info(`[delegation] revoke account=${ctx.user.id} grantee=${grantee.id} email=${email} remaining=${remaining.join(",")}`);
   return { ok: true as const, scopes: remaining };
 }
 

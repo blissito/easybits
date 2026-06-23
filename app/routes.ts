@@ -193,6 +193,7 @@ export default [
     route("agents/:id/skills/import", "routes/api/v2/agent-skills-import.ts"),
     route("agents/:id/mcps", "routes/api/v2/agent-mcps.ts"),
     route("agents/:id/admin", "routes/api/v2/agent-admin.ts"),
+    route("sandbox/:id/admin", "routes/api/v2/sandbox-admin.ts"),
     // Raw sandboxes (microVMs) — backs @easybits.cloud/sdk eb.sandboxes.*
     route("sandboxes", "routes/api/v2/sandboxes-collection.ts"),
     route("sandboxes/:id", "routes/api/v2/sandbox.ts"),
