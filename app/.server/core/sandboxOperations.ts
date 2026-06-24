@@ -548,13 +548,19 @@ export async function createSandbox(
     const active = (Array.isArray(list) ? list : []).filter(
       (s) => s.status === "running" || s.status === "starting"
     ).length;
-    if (active >= plan.concurrentSandboxes) {
+    // Budget = plan.concurrentSandboxes + add-ons reservados. MISMO denominador
+    // que el pool (spawnVm) y el HUD ("X/N sandboxes") — sin esto, comprar add-ons
+    // no subía este límite (quedaba en 3 aunque el HUD dijera 5).
+    const { getReservedCapacity } = await import("./sandboxReservations");
+    const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
+    const sandboxBudget = plan.concurrentSandboxes + reserved.machines;
+    if (active >= sandboxBudget) {
       throw new Response(
         JSON.stringify({
           error: "SandboxLimitReached",
-          message: `Límite de ${plan.concurrentSandboxes} cajas activas alcanzado. Suspende o borra una, o sube de plan.`,
+          message: `Límite de ${sandboxBudget} cajas activas alcanzado. Suspende o borra una, o sube de plan.`,
           active,
-          max: plan.concurrentSandboxes,
+          max: sandboxBudget,
         }),
         { status: 403, headers: { "content-type": "application/json" } }
       );

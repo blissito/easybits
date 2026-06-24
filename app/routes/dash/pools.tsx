@@ -45,7 +45,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
         where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, sandboxId: true },
       });
       // Ghosty = cerebro claude-worker → en las cajitas los agentes se dibujan
       // como fantasmitas; cualquier otro template usa los ojitos genéricos.
@@ -53,6 +53,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const machines = await Promise.all(
         workers.map(async (w) => ({
           id: w.id,
+          sandboxId: w.sandboxId,
           status: w.status,
           ghosty,
           slots: await db.poolRoute.count({ where: { agentId: w.id } }),
@@ -78,18 +79,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Reserved capacity bought in /dash/packs raises the budget on top of the
   // plan: +1 machine slot and +`agents` agent slots per active reservation.
   const reserved = await getReservedCapacity(user.id);
-  // Sandboxes de SISTEMA (llamadas livekit / voz kokoro): ocupan budget del host
-  // pero NO atienden agentes. Se surfacean del host y se pintan AZUL en el HUD.
+  // TODAS las sandboxes del owner en el host se muestran en el HUD, categorizadas:
+  // las de SISTEMA (llamadas livekit / voz kokoro) en azul, y cualquier otra
+  // (custom: code-interpreter, etc.) en gris con su template. Dedup contra los
+  // worker del pool (ya están en `machines`). Consistente con el gate de budget.
   const { listSandboxes } = await import("~/.server/core/sandboxOperations");
-  const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamada" };
+  const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamadas" };
+  const workerSandboxIds = new Set(machines.map((m) => m.sandboxId).filter(Boolean) as string[]);
   const hostVms = await listSandboxes({ user, scopes: ["READ"] } as any).catch(() => [] as any[]);
-  const systemMachines = (hostVms as any[])
-    .filter((v) => SYSTEM_TEMPLATES[v.template] && (v.status === "running" || v.status === "starting"))
-    .map((v) => ({ id: v.sandboxId, status: v.status as string, sysLabel: SYSTEM_TEMPLATES[v.template] }));
+  const extraMachines = (hostVms as any[])
+    .filter((v) => !workerSandboxIds.has(v.sandboxId) && (v.status === "running" || v.status === "starting"))
+    .map((v) =>
+      SYSTEM_TEMPLATES[v.template]
+        ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template] }
+        : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string }
+    );
   const capacity = {
     machines,
-    systemMachines,
-    vms: machines.length + systemMachines.length,
+    extraMachines,
+    vms: machines.length + extraMachines.length,
     maxMachines: planCfg.concurrentSandboxes + reserved.machines,
     plan,
     planName: planCfg.name,
@@ -102,10 +110,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Agents running RIGHT NOW = sum of workers inside active VMs (coherent with
     // "VMs contain agents"); idle/detached routes don't count until re-spawned.
     agentsActive: machines.reduce((s, m) => s + m.slots, 0),
-    // LINEAL y uniforme: cada sandbox (de plan o add-on) corre maxWorkersPerVm
-    // agentes. agentsMax = total sandboxes × agentes-por-sandbox. Sin densidades
+    // LINEAL y uniforme: cada sandbox DISPONIBLE PARA AGENTES corre maxWorkersPerVm.
+    // Los sandboxes ocupados por sistema (llamadas/voz) o custom NO están libres
+    // para agentes → se descuentan del budget. Ej: 5 sandboxes − 3 llamadas = 2
+    // libres × 4 = 8 agentes máx. agentsMax = total sandboxes × agentes-por-sandbox. Sin densidades
     // mixtas por tier — un add-on = +1 sandbox del MISMO tamaño.
-    agentsMax: (planCfg.concurrentSandboxes + reserved.machines) * maxWorkersPerVm,
+    agentsMax: Math.max(0, planCfg.concurrentSandboxes + reserved.machines - extraMachines.length) * maxWorkersPerVm,
   };
   return { secretNames, pools, capacity };
 }
@@ -180,7 +190,7 @@ function Spinner() {
 
 type Capacity = {
   machines: { id: string; status: string; slots: number; ghosty?: boolean }[];
-  systemMachines: { id: string; status: string; sysLabel: string }[];
+  extraMachines: { id: string; status: string; kind: "system" | "custom"; label: string }[];
   vms: number; maxMachines: number; plan: string; planName: string;
   nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number; vcpus: number;
   reservedMachines: number; agentsActive: number; agentsMax: number;
@@ -220,51 +230,60 @@ function GhostyMascot({ className = "", blink = true }: { className?: string; bl
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
 // building pulses yellow; an unspawned slot is a dashed "mount" ready on demand.
-function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; addon?: boolean; kind?: "system"; sysLabel?: string }) {
+function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string }) {
   const system = kind === "system";
+  const custom = kind === "custom";
+  const extra = system || custom;
   const full = slots >= max;
   const frame =
     system ? "border-blue-500 bg-blue-50"
+    : custom ? "border-slate-400 bg-slate-50"
     : status === "building" ? "border-yellow-500 bg-yellow-50 animate-pulse"
     : status == null ? (addon ? "border-brand-500 border-dashed bg-brand-500/5" : "border-gray-200 border-dashed bg-gray-50/40")
     : full ? "border-amber-500 bg-amber-50"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
-  const label = system ? (sysLabel ?? "sistema") : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "boot" : `${slots}/${max} agentes`;
+  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "boot" : `${slots}/${max} agentes`;
+  // motion SOLO para entrada/salida (aparecer/desaparecer). SIN `layout` y el
+  // AnimatePresence va SIN popLayout → no hay jitter en cada poll, solo se anima
+  // cuando una caja realmente nace o muere.
   return (
     <motion.div
-      layout {...SPAWN}
+      {...SPAWN}
+      whileHover={{ scale: 1.04, y: -2 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      whileHover={status == null && !system ? { scale: 1.02 } : { scale: 1.05, y: -3 }}
-      title={system ? `Sandbox de sistema (${sysLabel ?? "servicio"}) — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : `Sandbox ${status} · ${slots}/${max} agentes`}
-      className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-3 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] transition-shadow ${frame}`}
+      title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : `Sandbox ${status} · ${slots}/${max} agentes`}
+      className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-3 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] ${frame}`}
     >
       {system ? (
         <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
         </svg>
+      ) : custom ? (
+        <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
+        </svg>
       ) : (
         <div className="grid grid-cols-2 gap-2.5 place-items-center">
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
-              <motion.div key={`a${j}`} className="w-10 h-10 flex items-center justify-center"
-                initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 600, damping: 18, delay: j * 0.05 }}>
+              <div key={`a${j}`} className="w-10 h-10 flex items-center justify-center">
                 {ghosty ? <GhostyMascot className="w-8 h-10" blink={false} /> : <img src="/logo-purple.svg" alt="" className="w-10 h-10" />}
-              </motion.div>
+              </div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
             )
           )}
         </div>
       )}
-      <span className={`font-jersey text-base leading-none ${system ? "text-blue-600 font-bold" : addon && status == null ? "text-brand-500 font-bold" : "text-gray-500"}`}>{label}</span>
+      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-600 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-500 font-bold" : "text-gray-500"}`}>{label}</span>
     </motion.div>
   );
 }
 
 function CapacityHud({ capacity }: { capacity: Capacity }) {
-  const usedSlots = capacity.machines.length + capacity.systemMachines.length;
+  const usedSlots = capacity.machines.length + capacity.extraMachines.length;
   const freeSlots = Math.max(0, capacity.maxMachines - usedSlots);
   return (
     <div className="border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in bg-white">
@@ -282,23 +301,23 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence>
           {/* Las últimas `reservedMachines` cajitas (de maxMachines) son add-ons
               comprados — se marcan en morado para que el cliente VEA lo que paga. */}
           {capacity.machines.map((m, i) => (
             <VmBox key={m.id} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty}
               addon={i >= capacity.maxMachines - capacity.reservedMachines} />
           ))}
-          {/* Sandboxes de sistema (llamadas/voz) — azules, ocupan slot pero no agentes */}
-          {capacity.systemMachines.map((s) => (
-            <VmBox key={s.id} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind="system" sysLabel={s.sysLabel} />
+          {/* Sandboxes extra del host: sistema (llamadas/voz, azul) y custom (gris) */}
+          {capacity.extraMachines.map((s) => (
+            <VmBox key={s.id} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} />
           ))}
           {Array.from({ length: freeSlots }).map((_, i) => (
             <VmBox key={`free-${i}`} id={`free-${i}`} status={null} slots={0} max={capacity.maxWorkersPerVm}
-              addon={capacity.machines.length + capacity.systemMachines.length + i >= capacity.maxMachines - capacity.reservedMachines} />
+              addon={capacity.machines.length + capacity.extraMachines.length + i >= capacity.maxMachines - capacity.reservedMachines} />
           ))}
           {/* Añadir capacidad — sube de plan para más sandboxes */}
-          <motion.a key="add" layout {...SPAWN} href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
+          <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
             whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
             className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-500 hover:bg-brand-500/5">
             <span className="text-2xl leading-none">+</span>
@@ -325,6 +344,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const { secretNames, pools, capacity } = loaderData;
   const fetcher = useFetcher();
   const rev = useRevalidator();
+  const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [oauthChoice, setOauthChoice] = useState(secretNames.includes(DEFAULT_OAUTH) ? DEFAULT_OAUTH : secretNames[0] ?? "__new__");
   const [newOauth, setNewOauth] = useState("");
@@ -365,13 +385,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           (llena), amarillo si está booteando. Capacidad = plan de la cuenta. */}
       <CapacityHud capacity={capacity} />
 
-      {/* Nuevo agente — Ghosty es el agente INSIGNIA que se despliega por default */}
+      {/* Nuevo agente — colapsada: solo Ghosty + descripción + botón sutil. El form
+          se abre bajo demanda (lo trabajamos a fondo después). */}
       <div className="border-2 border-black rounded-xl p-4 animate-fade-in bg-white">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3">
           <div className="shrink-0 w-16 h-16 rounded-xl bg-brand-500/10 border-2 border-black flex items-center justify-center">
             <GhostyMascot className="w-10 h-12" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-lg leading-none">Ghosty</span>
               <a href="https://formmy.app/ghosty" target="_blank" rel="noopener noreferrer"
@@ -381,8 +402,15 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
             </div>
             <p className="text-xs text-gray-500 leading-snug mt-1">Tu agente de WhatsApp. Atiende grupos, crea documentos y sube archivos — se levanta bajo demanda.</p>
           </div>
+          {!showForm && (
+            <button type="button" onClick={() => setShowForm(true)}
+              className="shrink-0 text-sm font-semibold text-brand-500 border-2 border-brand-500/30 rounded-lg px-3 py-2 hover:bg-brand-500/5 transition-colors">
+              + Crear
+            </button>
+          )}
         </div>
-        <fetcher.Form method="post" className="flex flex-col gap-3">
+        {!showForm ? null : (
+        <fetcher.Form method="post" className="flex flex-col gap-3 mt-4">
           <input type="hidden" name="intent" value="create" />
           <input name="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Atención a cliente"
             className="border-2 border-black rounded-lg px-3 py-2" />
@@ -406,10 +434,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
             </div>
           )}
 
-          <button disabled={isBusy("create")} className="self-start bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60">
-            {isBusy("create") ? <Spinner /> : "+ Crear Agente"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button disabled={isBusy("create")} className="self-start bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60">
+              {isBusy("create") ? <Spinner /> : "+ Crear Agente"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-gray-400 hover:text-gray-600">Cancelar</button>
+          </div>
         </fetcher.Form>
+        )}
       </div>
 
       {pools.length === 0 && <p className="lg:col-span-2 text-gray-400">Aún no tienes agentes.</p>}

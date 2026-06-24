@@ -22,8 +22,11 @@ import {
   execCommand,
   readFile,
   writeFile,
+  listSandboxes,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
+import { getReservedCapacity } from "~/.server/core/sandboxReservations";
+import { getUserPlan, PLANS } from "~/lib/plans";
 import { getPlatformDefaultClient } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
@@ -241,11 +244,22 @@ function workersOnVm(agentId: string): Promise<number> {
 
 // Spawn a fresh VM for the pool, branded from persona, RAM-gated.
 async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null }) {
-  const live = await db.agent.count({
-    where: { poolId: pool.id, status: { in: ["running", "suspended", "building"] } },
-  });
-  if (live >= pool.maxVms) {
-    throw new PoolAtCapacity(`pool ${pool.id} at maxVms (${pool.maxVms})`);
+  // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
+  // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
+  // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
+  // canal, llamadas livekit, custom, permanentes — no solo los de este pool. Por
+  // eso contamos vía listSandboxes (todo el host del owner), no db.agent. El pool
+  // NO puede pasarse de aquí: el "X/N sandboxes" del HUD es real, no solo display.
+  // (pickHost sigue como gate FÍSICO de RAM; este es el gate LÓGICO de plan.)
+  const plan = getUserPlan(ctx.user);
+  const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
+  const budget = (PLANS[plan]?.concurrentSandboxes ?? 2) + reserved.machines;
+  const hostVms = await listSandboxes(ctx).catch(() => null);
+  const inUse = hostVms
+    ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
+    : await db.agent.count({ where: { poolId: pool.id, status: { in: ["running", "suspended", "building"] } } });
+  if (inUse >= Math.min(budget, pool.maxVms)) {
+    throw new PoolAtCapacity(`account at sandbox budget (${inUse}/${budget})`);
   }
   // RAM gate, multi-box aware: pick the box with the most free RAM that fits the
   // VM. null = no box has room → queue. (The host also rejects at create as a
