@@ -1074,10 +1074,14 @@ model Pool {
   oauthSecretName String?
   // Scaling knobs. Hierarchy: VM (sandboxId) hosts N workers; worker = 1
   // conversation = 1 sessionId. When a VM hits maxWorkersPerVm, spawn another VM.
-  maxWorkersPerVm Int  @default(8)    // conversations (workers) per VM
-  vmMemMb         Int  @default(2048) // RAM gate: free >= this to spawn a VM
-  maxVms          Int  @default(6)    // hard cap on pool's own VMs
-  idleSuspendMin     Int  @default(5)    // suspend a worker after N idle min
+  maxWorkersPerVm Int  @default(2)    // conversations (workers) per VM (512MB ≈ 2)
+  vmMemMb         Int  @default(512)  // RAM gate: free >= this to spawn a VM
+  maxVms          Int  @default(10)   // hard cap on pool's own VMs
+  idleSuspendMin     Int  @default(5)    // suspend a worker after N idle min (memory backed up first)
+  // Destroy a suspended worker after N idle min to reclaim host disk. Its
+  // conversation memory is externalized to storage at suspend, so the next
+  // message restores it onto a fresh VM. Must be > idleSuspendMin.
+  destroyIdleMin     Int  @default(10)
   // Baileys pairing state mirror (same shape as Agent.whatsapp).
   baileys       Json?
   // Persisted Baileys auth (creds + signal keys) so the socket survives app
@@ -1120,7 +1124,13 @@ model PoolRoute {
   // UUID format, and it keys the per-conversation .jsonl transcript. groupId is
   // for routing; sessionUuid is the worker's resume handle.
   sessionUuid   String
-  agentId       String   @db.ObjectId // the worker Agent.id
+  // The worker Agent.id currently serving this conversation. NULLABLE: when the
+  // idle reaper DESTROYS the VM, the route is kept (it's the handle to the
+  // externalized memory blob, keyed by sessionUuid) but agentId is cleared and
+  // detachedAt stamped. The next message restores the blob onto a fresh VM and
+  // re-points agentId. Null + detachedAt = "cold but resumable".
+  agentId       String?  @db.ObjectId
+  detachedAt    DateTime?
   createdAt     DateTime @default(now())
   lastMessageAt DateTime @default(now())
 

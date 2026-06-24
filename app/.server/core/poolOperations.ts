@@ -19,14 +19,107 @@ import {
   resumeSandbox,
   destroySandbox,
   openAgentChunkStream,
+  execCommand,
+  readFile,
+  writeFile,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
+import { getPlatformDefaultClient } from "~/.server/storage";
+import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
 export class PoolAtCapacity extends Error {
   constructor(msg: string) {
     super(msg);
     this.name = "PoolAtCapacity";
   }
+}
+
+// A chatty group exceeded its per-(pool,group) rate limit. The Baileys surface
+// catches this and sends one brief "saturado" notice instead of spawning work.
+export class PoolRateLimited extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "PoolRateLimited";
+  }
+}
+
+// ── In-process placement mutex ────────────────────────────────────────────────
+// The Baileys surface is single-instance (accepted constraint), so an in-memory
+// lock is a correct serialization point. Used to serialize the capacity decision
+// (pick free VM / spawn / assign route) per pool so concurrent inbound messages
+// from DIFFERENT groups can't both grab the last slot (overcommit → OOM) or
+// exceed maxVms. Same Map<key, tail-of-chain> pattern the worker uses internally.
+const placeLocks = new Map<string, Promise<unknown>>();
+function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = placeLocks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  const tail = next.catch(() => undefined);
+  placeLocks.set(key, tail);
+  tail.then(() => {
+    if (placeLocks.get(key) === tail) placeLocks.delete(key);
+  });
+  return next;
+}
+
+// ── Externalized conversation memory (S3/Tigris) ─────────────────────────────
+// A worker's memory (Agent SDK .jsonl transcript + resume continuation) lives in
+// its self-contained workspace dir on the VM disk (/data/workspaces/<sessionUuid>).
+// That disk dies when the idle reaper DESTROYS the VM. To make the VM disposable,
+// we tar that dir to durable storage on suspend (keyed by sessionUuid) and untar
+// it back onto a fresh VM on cold-spawn — so the conversation resumes its memory.
+const MEM_PREFIX = "pool-memory/";
+const memKey = (poolId: string, sessionUuid: string) => `${poolId}/${sessionUuid}.tgz`;
+const memClient = () => getPlatformDefaultClient({ prefix: MEM_PREFIX });
+
+// Tar the conversation's workspace on the VM → upload to storage. Best-effort;
+// the caller logs failures (a lost backup just means that conversation starts
+// fresh after a destroy — degraded, not broken). Requires the VM running.
+async function backupConversation(
+  ctx: AuthContext,
+  vm: { sandboxId: string },
+  poolId: string,
+  sessionUuid: string
+): Promise<void> {
+  const tgz = `/tmp/${sessionUuid}.tgz`;
+  // Two deterministic paths hold the conversation's memory: its workspace dir
+  // (cwd + continuation) and the SDK transcript project dir, whose name is the
+  // cwd with "/"→"-" (Claude Code convention): /data/workspaces/<uuid> →
+  // .claude/projects/-data-workspaces-<uuid>. Tar both, relative to /data.
+  const projDir = `.claude/projects/-data-workspaces-${sessionUuid}`;
+  await execCommand(ctx, vm.sandboxId, {
+    command:
+      `cd /data && P="workspaces/${sessionUuid}"; ` +
+      `[ -d "${projDir}" ] && P="$P ${projDir}"; ` +
+      `tar czf ${tgz} $P 2>/dev/null || true`,
+    timeoutSeconds: 60,
+  });
+  const { content } = await readFile(ctx, vm.sandboxId, { path: tgz, encoding: "base64" });
+  if (!content) return; // nothing to back up (workspace not created yet)
+  await memClient().putObject(memKey(poolId, sessionUuid), Buffer.from(content, "base64"), "application/gzip");
+  await execCommand(ctx, vm.sandboxId, { command: `rm -f ${tgz}`, timeoutSeconds: 15 }).catch(() => {});
+}
+
+// Download the conversation's memory blob (if any) and untar it into the VM's
+// /data. No-op (returns false) when no blob exists — a brand-new conversation.
+async function restoreConversation(
+  ctx: AuthContext,
+  vm: { sandboxId: string },
+  poolId: string,
+  sessionUuid: string
+): Promise<boolean> {
+  const url = await memClient().getReadUrl(memKey(poolId, sessionUuid)).catch(() => null);
+  if (!url) return false;
+  const res = await fetch(url).catch(() => null);
+  if (!res || !res.ok) return false; // missing → fresh conversation
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (!buf.length) return false;
+  const tgz = `/tmp/${sessionUuid}.tgz`;
+  await writeFile(ctx, vm.sandboxId, { path: tgz, content: buf.toString("base64"), encoding: "base64" });
+  await execCommand(ctx, vm.sandboxId, {
+    command: `mkdir -p /data/workspaces && tar xzf ${tgz} -C /data && rm -f ${tgz}`,
+    timeoutSeconds: 60,
+  });
+  return true;
 }
 
 // ── Multi-box seam ──────────────────────────────────────────────────────────
@@ -188,51 +281,87 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
   return waitAgentRunning(created.agentId); // returns the running row
 }
 
-// Resolve the VM that should host the worker for `groupId`: sticky route if any
-// (resuming a suspended VM), else a VM with a free worker slot, else spawn a VM.
-async function pickOrSpawn(ctx: AuthContext, pool: Awaited<ReturnType<typeof db.pool.findUniqueOrThrow>>, groupId: string) {
-  const ensureRunning = async (agent: NonNullable<Awaited<ReturnType<typeof db.agent.findUnique>>>) => {
-    if (agent.status === "running") return agent;
-    if (agent.status === "suspended") {
-      await resumeSandbox(ctx, agent.sandboxId);
-      await db.agent.update({ where: { id: agent.id }, data: { status: "running" } });
-      return waitAgentRunning(agent.id);
-    }
-    if (agent.status === "building") return waitAgentRunning(agent.id);
-    return null; // error/destroyed → caller drops it
-  };
+type PoolRow = Awaited<ReturnType<typeof db.pool.findUniqueOrThrow>>;
+type AgentRow = NonNullable<Awaited<ReturnType<typeof db.agent.findUnique>>>;
 
-  type AgentRow = NonNullable<Awaited<ReturnType<typeof db.agent.findUnique>>>;
-  const assign = async (vm: AgentRow) => {
-    const sessionUuid = randomUUID();
-    await db.poolRoute.create({ data: { poolId: pool.id, groupId, agentId: vm.id, sessionUuid } });
-    return { vm, sessionUuid };
-  };
-
-  // 1. Sticky route — reuse its worker + sessionUuid (resume handle).
-  const route = await db.poolRoute.findUnique({
-    where: { poolId_groupId: { poolId: pool.id, groupId } },
-  });
-  if (route) {
-    const agent = await db.agent.findUnique({ where: { id: route.agentId } });
-    const ready = agent ? await ensureRunning(agent) : null;
-    if (ready) return { vm: ready, sessionUuid: route.sessionUuid };
-    await db.poolRoute.delete({ where: { id: route.id } }); // stale worker, re-route
+async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRow | null> {
+  if (agent.status === "running") return agent;
+  if (agent.status === "suspended") {
+    await resumeSandbox(ctx, agent.sandboxId);
+    await db.agent.update({ where: { id: agent.id }, data: { status: "running" } });
+    return waitAgentRunning(agent.id);
   }
+  if (agent.status === "building") return waitAgentRunning(agent.id);
+  return null; // error/destroyed → caller restores onto a fresh VM
+}
 
-  // 2. A VM of this pool with a free worker slot.
+// Capacity-safe VM placement: a running VM of this pool with a free worker slot,
+// else spawn one (RAM-gated). MUST run under the per-pool placement lock so two
+// concurrent placements can't both claim the last slot / exceed maxVms.
+async function placeVm(ctx: AuthContext, pool: PoolRow): Promise<AgentRow> {
   const vms = await db.agent.findMany({
     where: { poolId: pool.id, status: { in: ["running", "suspended"] } },
   });
   for (const vm of vms) {
     if ((await workersOnVm(vm.id)) >= pool.maxWorkersPerVm) continue;
-    const ready = await ensureRunning(vm);
-    if (ready) return assign(ready);
+    const ready = await ensureRunning(ctx, vm);
+    if (ready) return ready;
+  }
+  return spawnVm(ctx, pool); // throws PoolAtCapacity if no room
+}
+
+// Resolve the VM that should host the worker for `groupId`. Sticky per group:
+//   - warm path (route + live agent): resume it, no lock needed.
+//   - cold path (new group, or detached/stale route after a destroy): serialize
+//     under the placement lock, then place a VM and restore the conversation's
+//     externalized memory (keyed by the route's stable sessionUuid).
+async function pickOrSpawn(ctx: AuthContext, pool: PoolRow, groupId: string) {
+  const key = { poolId_groupId: { poolId: pool.id, groupId } };
+
+  // 1. Warm path — route with a live worker. No placement decision → no lock.
+  const route = await db.poolRoute.findUnique({ where: key });
+  if (route?.agentId) {
+    const agent = await db.agent.findUnique({ where: { id: route.agentId } });
+    const ready = agent ? await ensureRunning(ctx, agent) : null;
+    if (ready) return { vm: ready, sessionUuid: route.sessionUuid };
   }
 
-  // 3. Scale out: spawn another VM (RAM-gated). Throws PoolAtCapacity if no room.
-  const vm = await spawnVm(ctx, pool);
-  return assign(vm);
+  // 2. Cold path — serialize placement per pool (capacity-safe; single-instance).
+  return withLock(`place:${pool.id}`, async () => {
+    // Re-read inside the lock: a prior waiter may have placed this group already.
+    const fresh = await db.poolRoute.findUnique({ where: key });
+    if (fresh?.agentId) {
+      const a = await db.agent.findUnique({ where: { id: fresh.agentId } });
+      const ready = a ? await ensureRunning(ctx, a) : null;
+      if (ready) return { vm: ready, sessionUuid: fresh.sessionUuid };
+    }
+
+    const vm = await placeVm(ctx, pool);
+
+    // Detached/stale route → restore its memory onto the fresh VM, keep sessionUuid.
+    if (fresh) {
+      await restoreConversation(ctx, vm, pool.id, fresh.sessionUuid).catch((e) =>
+        console.error(`pool restore ${fresh.sessionUuid} failed:`, e)
+      );
+      await db.poolRoute.update({ where: { id: fresh.id }, data: { agentId: vm.id, detachedAt: null } });
+      return { vm, sessionUuid: fresh.sessionUuid };
+    }
+
+    // Brand-new conversation — fresh memory.
+    const sessionUuid = randomUUID();
+    try {
+      await db.poolRoute.create({ data: { poolId: pool.id, groupId, agentId: vm.id, sessionUuid } });
+    } catch {
+      // Unique collision (shouldn't happen under the lock) — adopt the winner.
+      const won = await db.poolRoute.findUnique({ where: key });
+      if (won?.agentId) {
+        const a = await db.agent.findUniqueOrThrow({ where: { id: won.agentId } });
+        return { vm: a, sessionUuid: won.sessionUuid };
+      }
+      throw new Error(`pool route race for ${groupId} left no winner`);
+    }
+    return { vm, sessionUuid };
+  });
 }
 
 // Compose the prompt for the worker. Group context: prefix the sender so the
@@ -250,6 +379,14 @@ function formatContent(msg: InboundMessage): string {
 export async function routeMessage(poolId: string, msg: InboundMessage): Promise<string> {
   const pool = await db.pool.findUniqueOrThrow({ where: { id: poolId } });
   const ctx = await ctxForOwner(pool.ownerId);
+
+  // Per-(pool, group) rate limit so one chatty group can't drain the fleet. This
+  // covers BOTH entrypoints (in-process Baileys + HTTP surface) since both land
+  // here. The surface turns PoolRateLimited into one brief "saturado" notice.
+  const rl = await checkSandboxRateLimit(`${poolId}:${msg.groupId}`, "op");
+  if (!rl.allowed) {
+    throw new PoolRateLimited(`group ${msg.groupId} rate limited (retry ${rl.retryAfterS}s)`);
+  }
 
   await db.poolMessage.create({
     data: { poolId: pool.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
@@ -287,22 +424,62 @@ export async function routeMessage(poolId: string, msg: InboundMessage): Promise
   return reply;
 }
 
-// Idle reaper — suspend workers with no activity for idleSuspendMin (warm window).
-// Disk (incl. .jsonl transcripts) is preserved by suspend; next message resumes.
-// Call from a cron/interval. Returns how many were suspended.
-export async function reapIdlePools(): Promise<number> {
+// Idle reaper — two stages per worker VM:
+//   1. idle ≥ idleSuspendMin → back up each conversation's memory to storage,
+//      then SUSPEND (warm window; fast resume, disk preserved).
+//   2. idle ≥ destroyIdleMin → DESTROY the VM to reclaim host disk. Its routes
+//      are kept but detached (agentId=null) — the externalized memory blob lets
+//      the next message restore the conversation onto a fresh VM.
+// Order matters: destroy first (clears long-idle VMs), then suspend the 5–10min
+// band that remains. Call from a cron/interval. Returns {suspended, destroyed}.
+export async function reapIdlePools(): Promise<{ suspended: number; destroyed: number }> {
   let suspended = 0;
+  let destroyed = 0;
+  const now = Date.now();
   const pools = await db.pool.findMany();
   for (const pool of pools) {
-    const cutoff = new Date(Date.now() - pool.idleSuspendMin * 60_000);
-    const idle = await db.agent.findMany({
-      where: { poolId: pool.id, status: "running", lastMessageAt: { lt: cutoff } },
-    });
-    if (!idle.length) continue;
+    const suspendCutoff = new Date(now - pool.idleSuspendMin * 60_000);
+    const destroyCutoff = new Date(now - pool.destroyIdleMin * 60_000);
     const ctx = await ctxForOwner(pool.ownerId).catch(() => null);
     if (!ctx) continue;
-    for (const w of idle) {
+
+    // Stage 2 — destroy long-idle VMs (running or already-suspended).
+    const toDestroy = await db.agent.findMany({
+      where: { poolId: pool.id, status: { in: ["running", "suspended"] }, lastMessageAt: { lt: destroyCutoff } },
+    });
+    for (const w of toDestroy) {
       try {
+        // A still-running VM may hold un-backed-up turns since its last suspend —
+        // back up before destroying. Suspended VMs were backed up at suspend.
+        if (w.status === "running") {
+          const routes = await db.poolRoute.findMany({ where: { agentId: w.id } });
+          for (const r of routes) {
+            await backupConversation(ctx, w, pool.id, r.sessionUuid).catch((e) =>
+              console.error(`pool reaper: backup ${r.sessionUuid} failed:`, e)
+            );
+          }
+        }
+        await db.poolRoute.updateMany({ where: { agentId: w.id }, data: { agentId: null, detachedAt: new Date() } });
+        await destroySandbox(ctx, w.sandboxId);
+        await db.agent.delete({ where: { id: w.id } }).catch(() => {});
+        destroyed++;
+      } catch (e) {
+        console.error(`pool reaper: destroy ${w.sandboxId} failed:`, e);
+      }
+    }
+
+    // Stage 1 — suspend the 5–10min idle band (running VMs not just destroyed).
+    const toSuspend = await db.agent.findMany({
+      where: { poolId: pool.id, status: "running", lastMessageAt: { lt: suspendCutoff } },
+    });
+    for (const w of toSuspend) {
+      try {
+        const routes = await db.poolRoute.findMany({ where: { agentId: w.id } });
+        for (const r of routes) {
+          await backupConversation(ctx, w, pool.id, r.sessionUuid).catch((e) =>
+            console.error(`pool reaper: backup ${r.sessionUuid} failed:`, e)
+          );
+        }
         await suspendSandbox(ctx, w.sandboxId);
         await db.agent.update({ where: { id: w.id }, data: { status: "suspended" } });
         suspended++;
@@ -311,7 +488,7 @@ export async function reapIdlePools(): Promise<number> {
       }
     }
   }
-  return suspended;
+  return { suspended, destroyed };
 }
 
 // Delete a pool: destroy its worker VMs (best-effort), then remove its routes,
@@ -322,8 +499,20 @@ export async function deletePool(ctx: AuthContext, poolId: string): Promise<void
   if (!pool || pool.ownerId !== ctx.user.id) throw new Error("pool not found");
   const workers = await db.agent.findMany({ where: { poolId } });
   for (const w of workers) {
-    await destroySandbox(ctx, w.sandboxId).catch(() => {});
-    await db.agent.delete({ where: { id: w.id } }).catch(() => {});
+    try {
+      await destroySandbox(ctx, w.sandboxId);
+      await db.agent.delete({ where: { id: w.id } }).catch(() => {});
+    } catch (e) {
+      // Don't drop the Agent row if the host VM survived — leave it for
+      // reconciliation instead of orphaning a live VM on the box.
+      console.error(`deletePool: destroy ${w.sandboxId} failed, keeping row:`, e);
+      await db.agent.update({ where: { id: w.id }, data: { status: "error" } }).catch(() => {});
+    }
+  }
+  // Best-effort: drop the externalized memory blobs so they don't orphan.
+  const routes = await db.poolRoute.findMany({ where: { poolId }, select: { sessionUuid: true } });
+  for (const r of routes) {
+    await memClient().deleteObject(memKey(poolId, r.sessionUuid)).catch(() => {});
   }
   await db.poolMessage.deleteMany({ where: { poolId } });
   await db.pool.delete({ where: { id: poolId } }); // PoolRoute cascades
@@ -354,6 +543,7 @@ export async function createPool(
     vmMemMb?: number;
     maxVms?: number;
     idleSuspendMin?: number;
+    destroyIdleMin?: number;
   } = {}
 ) {
   return db.pool.create({
@@ -369,6 +559,7 @@ export async function createPool(
       vmMemMb: opts.vmMemMb ?? 512,
       maxVms: opts.maxVms ?? 10,
       idleSuspendMin: opts.idleSuspendMin ?? 5,
+      destroyIdleMin: opts.destroyIdleMin ?? 10,
     },
   });
 }

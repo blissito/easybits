@@ -7,6 +7,14 @@
 //   - a per-sessionId lock serializes turns so two POSTs for the same conversation
 //     never race the same .jsonl. Different sessionIds run fully concurrently
 //     (each its own claude subprocess), bounded by VM vCPU.
+//
+// SELF-CONTAINED MEMORY: the resume continuation is persisted PER WORKSPACE
+// (/data/workspaces/<uuid>/continuation) rather than in a shared sessions.json.
+// That keeps everything a conversation needs to resume under its own dir, so the
+// Pool can tar a single conversation's memory to durable storage and restore it
+// onto a fresh VM (see poolOperations.backupConversation). The SDK .jsonl
+// transcript still lives at /data/.claude/projects/-data-workspaces-<uuid>/ — a
+// deterministic path the Pool backs up alongside the workspace.
 import fs from 'fs';
 import path from 'path';
 
@@ -14,35 +22,7 @@ import { ClaudeProvider } from './provider.js';
 import type { McpServerConfig, ProviderEvent, ProviderOptions } from './types.js';
 
 const DATA_DIR = process.env.CLAUDE_WORKER_DATA_DIR || '/data';
-const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const WORKSPACES_DIR = path.join(DATA_DIR, 'workspaces');
-
-// uuid (Pool sessionId) → SDK session id (resume handle). Persisted to /data so
-// it survives suspend/resume.
-type SessionMap = Record<string, string>;
-
-function loadSessions(): SessionMap {
-  try {
-    return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
-  } catch {
-    return {};
-  }
-}
-
-function saveContinuation(sessionId: string, continuation: string): void {
-  const map = loadSessions();
-  if (map[sessionId] === continuation) return;
-  map[sessionId] = continuation;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(map, null, 2));
-}
-
-function clearContinuation(sessionId: string): void {
-  const map = loadSessions();
-  if (!(sessionId in map)) return;
-  delete map[sessionId];
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(map, null, 2));
-}
 
 function workspaceFor(sessionId: string): string {
   // sessionId is a UUID from the Pool; keep the dir name filesystem-safe.
@@ -50,6 +30,32 @@ function workspaceFor(sessionId: string): string {
   const cwd = path.join(WORKSPACES_DIR, safe);
   fs.mkdirSync(cwd, { recursive: true });
   return cwd;
+}
+
+// SDK session id (resume handle) persisted inside the conversation's workspace.
+function continuationFile(sessionId: string): string {
+  return path.join(workspaceFor(sessionId), 'continuation');
+}
+
+function loadContinuation(sessionId: string): string | undefined {
+  try {
+    return fs.readFileSync(continuationFile(sessionId), 'utf-8').trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveContinuation(sessionId: string, continuation: string): void {
+  if (loadContinuation(sessionId) === continuation) return;
+  fs.writeFileSync(continuationFile(sessionId), continuation);
+}
+
+function clearContinuation(sessionId: string): void {
+  try {
+    fs.rmSync(continuationFile(sessionId));
+  } catch {
+    /* already gone */
+  }
 }
 
 // Per-sessionId serialization. Map<sessionId, tail-of-promise-chain>.
@@ -108,7 +114,7 @@ async function collectTurn(
   isRetry: boolean,
 ): Promise<ProviderEvent[]> {
   const cwd = workspaceFor(sessionId);
-  const continuation = loadSessions()[sessionId];
+  const continuation = loadContinuation(sessionId);
   const provider = buildProvider(cfg);
   const out: ProviderEvent[] = [];
 

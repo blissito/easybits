@@ -24,9 +24,13 @@ import makeWASocket, {
   type AuthenticationState,
 } from "@whiskeysockets/baileys";
 import { db } from "~/.server/db";
-import { routeMessage, PoolAtCapacity } from "~/.server/core/poolOperations";
+import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
 
 const MAX_RECONNECT = 5;
+// Cooldown so a rate-limited (spamming) group gets the "saturado" notice at most
+// once a minute — the notice itself must not become spam. keyed by `${poolId}:${jid}`.
+const NOTICE_COOLDOWN_MS = 60_000;
+const lastNoticeAt = new Map<string, number>();
 const silent: any = { level: "silent", child: () => silent };
 for (const m of ["trace", "debug", "info", "warn", "error", "fatal"]) silent[m] = () => {};
 
@@ -228,8 +232,20 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
           log(poolId, `replied in ${jid}`);
         }
       } catch (e) {
-        if (e instanceof PoolAtCapacity) {
-          await sock.sendMessage(jid, { text: "Estamos a tope ahora, dame un momento. 🙏" }).catch(() => {});
+        // Brief notice on backpressure. Stamp the assistantName prefix on shared
+        // numbers so our own notice isn't mistaken for a user message next round.
+        const notice =
+          e instanceof PoolAtCapacity ? "Estamos a tope ahora, dame un momento. 🙏"
+          : e instanceof PoolRateLimited ? "Voy un poco saturado, dame un momento. 🙏"
+          : null;
+        if (notice) {
+          const noticeKey = `${poolId}:${jid}`;
+          const last = lastNoticeAt.get(noticeKey) ?? 0;
+          if (Date.now() - last >= NOTICE_COOLDOWN_MS) {
+            lastNoticeAt.set(noticeKey, Date.now());
+            const out = hasOwnNumber ? notice : `${assistantName}: ${notice}`;
+            await sock.sendMessage(jid, { text: out }).catch(() => {});
+          }
         }
         log(poolId, `route failed in ${jid}: ${e}`);
       }

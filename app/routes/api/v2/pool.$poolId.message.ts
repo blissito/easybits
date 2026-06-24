@@ -1,7 +1,6 @@
 import type { Route } from "./+types/pool.$poolId.message";
 import { db } from "~/.server/db";
-import { applySandboxRateLimit } from "~/.server/rateLimiter";
-import { routeMessage, PoolAtCapacity } from "~/.server/core/poolOperations";
+import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
 
 // POST /api/v2/pool/:poolId/message
 //
@@ -35,10 +34,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "groupId and text required" }, { status: 400, headers: CORS });
   }
 
-  // Rate-limit per (pool, group) so one chatty group can't drain the fleet.
-  const limited = await applySandboxRateLimit(`${poolId}:${groupId}`, "op");
-  if (limited) return new Response(limited.body, { status: limited.status, headers: CORS });
-
+  // Rate-limit lives in routeMessage now (per (pool, group)) so it covers both
+  // this HTTP surface and the in-process Baileys path. PoolRateLimited → 429.
   try {
     const reply = await routeMessage(poolId, {
       groupId,
@@ -48,6 +45,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     });
     return Response.json({ reply }, { headers: CORS });
   } catch (e) {
+    if (e instanceof PoolRateLimited) {
+      return Response.json(
+        { error: "rate_limited", message: e.message },
+        { status: 429, headers: { ...CORS, "Retry-After": "10" } }
+      );
+    }
     if (e instanceof PoolAtCapacity) {
       // Surface should queue/retry — no worker available right now.
       return Response.json(
