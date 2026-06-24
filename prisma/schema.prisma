@@ -1088,6 +1088,10 @@ model Pool {
   // ANTI-SPAM allowlist: the pool only answers in these group jids. Empty = OFF
   // everywhere (safe default — never auto-replies in all the owner's groups).
   enabledGroups String[] @default([])
+  // Groups DISCOVERED from inbound messages (jid → subject), independent of the
+  // allowlist. Lets the UI surface a group to enable as soon as it has activity,
+  // even before WhatsApp's metadata sync lists it. Merged with groupFetchAll.
+  seenGroups    Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

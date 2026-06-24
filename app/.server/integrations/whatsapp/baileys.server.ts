@@ -13,10 +13,12 @@
 //   - ANTI-SPAM: only answers in Pool.enabledGroups (empty = silent everywhere).
 import { Boom } from "@hapi/boom";
 import makeWASocket, {
-  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   DisconnectReason,
   initAuthCreds,
+  makeCacheableSignalKeyStore,
   BufferJSON,
+  Browsers,
   proto,
   type WASocket,
   type AuthenticationState,
@@ -51,27 +53,39 @@ async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationSt
   const creds = de(row?.authCreds) ?? initAuthCreds();
   const keys: Record<string, Record<string, unknown>> = de(row?.authKeys) ?? {};
 
-  const saveKeys = () => db.pool.update({ where: { id: poolId }, data: { authKeys: ser(keys) } }).then(() => {});
+  // Debounce key persistence: during the pairing handshake Baileys fires dozens
+  // of keys.set in a burst. Writing the whole blob to Mongo on each one would
+  // stall/break the handshake — coalesce into one flush per 600ms instead.
+  let flushTimer: NodeJS.Timeout | null = null;
+  const flushKeys = () => {
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      db.pool.update({ where: { id: poolId }, data: { authKeys: ser(keys) } }).catch(() => {});
+    }, 600);
+    if (typeof flushTimer.unref === "function") flushTimer.unref();
+  };
+  const rawKeys = {
+    get: (type: string, ids: string[]) => {
+      const out: Record<string, unknown> = {};
+      for (const id of ids) {
+        let v = keys[type]?.[id];
+        if (type === "app-state-sync-key" && v) v = proto.Message.AppStateSyncKeyData.fromObject(v as any);
+        if (v !== undefined) out[id] = v;
+      }
+      return out as any;
+    },
+    set: (data: any) => {
+      for (const type in data) {
+        keys[type] = keys[type] || {};
+        Object.assign(keys[type], data[type]);
+      }
+      flushKeys();
+    },
+  };
   const state: AuthenticationState = {
     creds,
-    keys: {
-      get: (type, ids) => {
-        const out: Record<string, unknown> = {};
-        for (const id of ids) {
-          let v = keys[type]?.[id];
-          if (type === "app-state-sync-key" && v) v = proto.Message.AppStateSyncKeyData.fromObject(v as any);
-          if (v !== undefined) out[id] = v;
-        }
-        return out as any;
-      },
-      set: async (data) => {
-        for (const type in data) {
-          keys[type] = keys[type] || {};
-          Object.assign(keys[type], (data as any)[type]);
-        }
-        await saveKeys();
-      },
-    },
+    keys: makeCacheableSignalKeyStore(rawKeys as any, silent),
   };
   const saveCreds = () => db.pool.update({ where: { id: poolId }, data: { authCreds: ser(creds) } }).then(() => {});
   return { state, saveCreds };
@@ -95,13 +109,19 @@ export async function connectPool(poolId: string): Promise<void> {
   let auth, version;
   try {
     auth = await useDBAuthState(poolId);
-    ({ version } = await fetchLatestBaileysVersion());
+    ({ version } = await fetchLatestWaWebVersion({}).catch(() => ({ version: undefined })));
   } catch (e) {
     log(poolId, `init failed: ${e}`);
     await setStatus(poolId, "failed", { reason: "init_error" });
     throw e;
   }
-  const sock = makeWASocket({ version, auth: auth.state, logger: silent, browser: ["EasyBits Pool", "Chrome", "1.0"] });
+  const sock = makeWASocket({
+    version,
+    auth: auth.state,
+    logger: silent,
+    printQRInTerminal: false,
+    browser: Browsers.macOS("Chrome"),
+  });
   sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true });
   sock.ev.on("creds.update", auth.saveCreds);
 
@@ -145,7 +165,11 @@ export async function connectPool(poolId: string): Promise<void> {
     const enabled = new Set(fresh?.enabledGroups ?? []);
     for (const m of messages) {
       const jid = m.key.remoteJid;
-      if (!jid || m.key.fromMe || !jid.endsWith("@g.us")) continue; // groups only
+      if (!jid || !jid.endsWith("@g.us")) continue; // groups only
+      // DISCOVERY (independent of the allowlist): record any group with activity
+      // so the UI can surface it to enable — even fromMe and even before sync.
+      await recordSeenGroup(poolId, sock, jid);
+      if (m.key.fromMe) continue;
       const text = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? "";
       if (!text.trim()) continue;
       if (!enabled.has(jid)) { log(poolId, `msg in ${jid} ignored (group not enabled)`); continue; }
@@ -163,24 +187,49 @@ export async function connectPool(poolId: string): Promise<void> {
   });
 }
 
-// List the WhatsApp groups the connected account participates in, flagged by
-// whether the pool answers there. Needs a live socket (returns [] otherwise).
+// Record a group discovered from an inbound message (jid → subject), so the UI
+// can offer it to enable even if WhatsApp's metadata sync hasn't listed it yet.
+async function recordSeenGroup(poolId: string, sock: WASocket, jid: string) {
+  try {
+    const row = await db.pool.findUnique({ where: { id: poolId }, select: { seenGroups: true } });
+    const seen = (row?.seenGroups as Record<string, string> | null) ?? {};
+    if (seen[jid]) return; // already known
+    let subject = jid;
+    try { subject = (await sock.groupMetadata(jid)).subject || jid; } catch {}
+    seen[jid] = subject;
+    await db.pool.update({ where: { id: poolId }, data: { seenGroups: seen } });
+  } catch {}
+}
+
+// List the WhatsApp groups to offer in the UI: the union of (a) groups the
+// account participates in (groupFetchAllParticipating, authoritative subjects)
+// and (b) groups discovered from inbound messages (seenGroups). Flagged by
+// whether the pool currently answers there. Live socket preferred; falls back
+// to seenGroups so a group with activity always shows up.
 export async function listPoolGroups(
   poolId: string
 ): Promise<Array<{ id: string; subject: string; enabled: boolean }>> {
-  const cur = sockets.get(poolId);
-  if (!cur) return [];
-  const pool = await db.pool.findUnique({ where: { id: poolId }, select: { enabledGroups: true } });
+  const pool = await db.pool.findUnique({
+    where: { id: poolId },
+    select: { enabledGroups: true, seenGroups: true },
+  });
   const enabled = new Set(pool?.enabledGroups ?? []);
-  try {
-    const groups = await cur.sock.groupFetchAllParticipating();
-    return Object.values(groups)
-      .map((g: any) => ({ id: g.id as string, subject: (g.subject as string) || g.id, enabled: enabled.has(g.id) }))
-      .sort((a, b) => a.subject.localeCompare(b.subject));
-  } catch (e) {
-    log(poolId, `groupFetch failed: ${e}`);
-    return [];
+  const merged = new Map<string, string>(); // jid → subject
+  const cur = sockets.get(poolId);
+  if (cur) {
+    try {
+      const groups = await cur.sock.groupFetchAllParticipating();
+      for (const g of Object.values(groups) as any[]) merged.set(g.id, g.subject || g.id);
+    } catch (e) {
+      log(poolId, `groupFetch failed: ${e}`);
+    }
   }
+  for (const [jid, subject] of Object.entries((pool?.seenGroups as Record<string, string>) ?? {})) {
+    if (!merged.has(jid)) merged.set(jid, subject);
+  }
+  return [...merged.entries()]
+    .map(([id, subject]) => ({ id, subject, enabled: enabled.has(id) }))
+    .sort((a, b) => a.subject.localeCompare(b.subject));
 }
 
 export function isPoolLive(poolId: string): boolean {

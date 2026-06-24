@@ -30,7 +30,9 @@ export async function loader({ request }: Route.LoaderArgs) {
       const live = isPoolLive(p.id);
       const qrDataUrl =
         status === "qr_pending" && b.qr ? await QRCode.toDataURL(b.qr).catch(() => null) : null;
-      const groups = status === "connected" && live ? await listPoolGroups(p.id) : [];
+      // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
+      // activity even if metadata sync hasn't listed them yet.
+      const groups = await listPoolGroups(p.id);
       const [vms, conversations] = await Promise.all([
         db.agent.count({ where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } } }),
         db.poolRoute.count({ where: { poolId: p.id } }),
@@ -180,7 +182,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </div>
               )}
 
-              {p.status === "connected" && p.live && (
+              {(p.groups.length > 0 || (p.status === "connected" && p.live)) && (
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-sm">Grupos que atiende</span>
