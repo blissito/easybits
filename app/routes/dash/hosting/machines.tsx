@@ -405,8 +405,8 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                 >
                   <Card status={m.status}>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm truncate">{m.name || m.sandboxId}</span>
+                      <span className="font-bold text-sm truncate block">{m.name || m.sandboxId}</span>
+                      <div className="flex items-center gap-2 flex-wrap mt-1">
                         <StatusPill status={m.status} />
                         {m.cpuMode === "reserved" && (
                           <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
