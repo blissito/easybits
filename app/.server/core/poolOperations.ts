@@ -178,6 +178,8 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
     env,
     name: persona.name ?? `${pool.name ?? "pool"}-worker`,
     seedFiles: persona.seedFiles,
+    memoryMb: pool.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
+    vcpus: pool.vmMemMb <= 512 ? 1 : 2,
   });
   await db.agent.update({
     where: { id: created.agentId },
@@ -327,6 +329,19 @@ export async function deletePool(ctx: AuthContext, poolId: string): Promise<void
   await db.pool.delete({ where: { id: poolId } }); // PoolRoute cascades
 }
 
+// Default identity for pool workers: Ghosty, español, con tools de EasyBits vía
+// MCP (la llave EASYBITS_API_KEY la inyecta createAgent → el runtime arma el
+// server `easybits`). Va como SYSTEM_PROMPT en persona.env (el claude-worker lo
+// lee). Equivale al rol de un CLAUDE.md. Solidificar el default en el template
+// (CLAUDE.md propio) es follow-up; por ahora el pool lo inyecta.
+const GHOSTY_SYSTEM = [
+  "Eres Ghosty, el asistente de EasyBits que atiende por WhatsApp.",
+  "Responde SIEMPRE en español, claro y breve, con tono cálido y directo.",
+  "Tienes acceso a las herramientas de EasyBits vía MCP (server `easybits`): puedes crear y editar documentos, generar imágenes, subir/leer archivos, crear sitios y más. Úsalas cuando ayuden; no inventes que no puedes.",
+  "Si te piden algo fuera de tu alcance, dilo con honestidad y ofrece la mejor alternativa.",
+].join(" ");
+const GHOSTY_PERSONA = { name: "Ghosty", env: { ASSISTANT_NAME: "Ghosty", SYSTEM_PROMPT: GHOSTY_SYSTEM } };
+
 // Create a pool for an owner. token is the bearer the Baileys surface presents.
 export async function createPool(
   ctx: AuthContext,
@@ -347,11 +362,12 @@ export async function createPool(
       name: opts.name,
       token: "pool_" + randomBytes(24).toString("hex"),
       workerTemplate: opts.workerTemplate ?? "claude-worker",
-      persona: opts.persona ?? undefined,
+      persona: opts.persona ?? GHOSTY_PERSONA,
+      assistantName: "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
-      maxWorkersPerVm: opts.maxWorkersPerVm ?? 8,
-      vmMemMb: opts.vmMemMb ?? 2048,
-      maxVms: opts.maxVms ?? 6,
+      maxWorkersPerVm: opts.maxWorkersPerVm ?? 2, // 512MB VM ≈ 2 claude concurrentes
+      vmMemMb: opts.vmMemMb ?? 512,
+      maxVms: opts.maxVms ?? 10,
       idleSuspendMin: opts.idleSuspendMin ?? 5,
     },
   });

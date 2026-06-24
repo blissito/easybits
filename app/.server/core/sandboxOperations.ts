@@ -495,6 +495,11 @@ export async function createSandbox(
     metadata?: Record<string, string>;
     persistent?: boolean;
     size?: "s" | "m" | "l" | "xl";
+    // Explicit resource override (wins over `size`/template default). Used by the
+    // pool to size workers per channel (e.g. 512MB tiny VMs). Firecracker sets RAM
+    // at boot — not hot-resizable; to "grow" you spawn a bigger/another VM.
+    memoryMb?: number;
+    vcpus?: number;
     env?: Record<string, string>;
   }
 ): Promise<SandboxRecord> {
@@ -515,7 +520,11 @@ export async function createSandbox(
       { status: 403, headers: { "content-type": "application/json" } }
     );
   }
-  const resources = SIZE_RESOURCES[size];
+  const resources = { ...SIZE_RESOURCES[size] };
+  // Explicit override (pool worker sizing). Sent to the host, which honors
+  // memoryMb/vcpus over the template default.
+  if (params.memoryMb) resources.memoryMb = params.memoryMb;
+  if (params.vcpus) resources.vcpus = params.vcpus;
   // Templates persistentes (agentes de marca) opt-in al flag persistent → el host
   // les salta el reaper. Son deliberados/pagados, NO sandboxes efímeras: por eso
   // NO cuentan contra el cap anti-runaway ni contra el TTL por plan.
@@ -1767,6 +1776,9 @@ export async function createAgent(
     timeoutSeconds?: number;
     /** Archivos de conocimiento (base64) a sembrar en /data/workspace tras el boot. */
     seedFiles?: Array<{ name: string; contentBase64: string }>;
+    /** Override explícito de recursos de la VM (pool worker sizing). */
+    memoryMb?: number;
+    vcpus?: number;
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
@@ -1813,6 +1825,21 @@ export async function createAgent(
     if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
       const oauth = await getSecretValue(ctx.user.id, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => null);
       if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
+    }
+    // EASYBITS_API_KEY = la llave que le da al worker las tools de EasyBits vía MCP
+    // (el runtime arma el server `easybits` cuando esta var existe). Del vault del
+    // dueño; si no hay, se mintea una persistente con sus scopes (como ghosty-gc).
+    if (!env.EASYBITS_API_KEY) {
+      const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
+      if (ebKey) {
+        env.EASYBITS_API_KEY = ebKey;
+      } else {
+        const minted = await createApiKey(ctx.user.id, {
+          name: `claude-worker-${params.name || "pool"}`,
+          scopes: ctx.scopes,
+        });
+        env.EASYBITS_API_KEY = minted.raw;
+      }
     }
   }
   // livekit-svc (self-hosted recording studio): the LiveKit SFU and the box's
@@ -1934,6 +1961,8 @@ export async function createAgent(
     template: params.template,
     timeoutSeconds: params.timeoutSeconds,
     name: params.name,
+    memoryMb: params.memoryMb,
+    vcpus: params.vcpus,
   });
 
   // 3. Insert Agent row IMMEDIATELY with status="building" so the UI can
