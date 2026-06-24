@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { useFetcher, useSearchParams, data } from "react-router";
+import { useFetcher, useSearchParams } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { LuMemoryStick, LuCpu, LuHardDrive } from "react-icons/lu";
 import { HOSTING_CATALOG, TIER_ORDER } from "~/lib/hostingCatalog";
-import { createPermanent } from "~/.server/core/machineOperations";
-import type { AuthContext } from "~/.server/apiAuth";
 import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
@@ -55,7 +53,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // 3 tiers que mapean a las clases de agente (Texto/Navegador/Estudio).
   const CURATED: Record<string, { clase: string; desc: string; legend: string; featured?: boolean }> = {
     nano: { clase: "Texto", desc: "Atención y respuestas", legend: "Nunca se calla. 💬" },
-    lite: { clase: "Navegador", desc: "Chromium para ver/capturar webs", legend: "Chismea webs por ti. 🕵️", featured: true },
+    lite: { clase: "Navegador", desc: "Chromium para ver/capturar webs", legend: "Chismea webs por ti. 🕵️" },
     plus: { clase: "Estudio", desc: "Multimedia pesado (video/imágenes)", legend: "Suda pixeles, no tú. 🎬" },
   };
   const agentsFor = (mb: number) => Math.max(2, Math.round(mb / 410)); // densidad estimada claude-worker
@@ -86,21 +84,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   };
 };
 
-export const action = async ({ request }: Route.ActionArgs) => {
-  const user = await getUserOrRedirect(request);
-  const fd = await request.formData();
-  if (String(fd.get("intent")) !== "buy-sandbox") {
-    return data({ error: "intent inválido" }, { status: 400 });
-  }
-  const ctx = { user, scopes: ["ADMIN"] } as AuthContext;
-  try {
-    const m = await createPermanent(ctx, { tier: String(fd.get("tier")) });
-    return data({ ok: true, sandboxId: m.sandboxId });
-  } catch (e) {
-    return data({ error: e instanceof Error ? e.message : "No se pudo crear el sandbox" }, { status: 400 });
-  }
-};
-
 export default function PacksPage({ loaderData }: Route.ComponentProps) {
   const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup, sandboxTiers, canBuyAddon } =
     loaderData;
@@ -117,7 +100,12 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
     setSearchParams(t === "credits" ? {} : { tab: t }, { replace: true });
   };
   const [showAllTiers, setShowAllTiers] = useState(true);
-  const shownTiers = showAllTiers ? sandboxTiers : sandboxTiers.filter((t) => t.curated);
+  // Destacado distinto por vista: en las 3 clases → Estudio (plus, 10 agentes);
+  // en las 10 tiers → focus (20 agentes).
+  const featuredKey = showAllTiers ? "focus" : "plus";
+  const shownTiers = (showAllTiers ? sandboxTiers : sandboxTiers.filter((t) => t.curated)).map(
+    (t) => ({ ...t, featured: t.key === featuredKey }),
+  );
 
   const showSuccess = searchParams.get("success") === "1";
 
@@ -499,7 +487,7 @@ function SandboxAddonCard({
   tier: { key: string; clase: string; desc: string; featured: boolean; curated: boolean; memoryMb: number; vcpus: number; diskMb: number; price: number; agents: number; legend: string };
   canBuy: boolean;
 }) {
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<{ url?: string; error?: string }>();
   const isLoading = fetcher.state !== "idle";
   const ramGB = tier.memoryMb / 1024;
   const ramLabel = ramGB < 1 ? `${tier.memoryMb}MB` : `${ramGB}GB`;
@@ -507,6 +495,10 @@ function SandboxAddonCard({
   const shown = Math.min(tier.agents, 10); // cap visual; el texto muestra el real
   const rows = shown <= 5 ? 1 : 2;
   const cols = Math.ceil(shown / rows); // filas balanceadas: 6→3+3, 10→5+5
+
+  if (fetcher.data?.url) {
+    window.location.href = fetcher.data.url;
+  }
 
   return (
     <div
@@ -541,22 +533,23 @@ function SandboxAddonCard({
           </p>
           {tier.legend && <p className="text-xs text-iron mt-1.5">{tier.legend}</p>}
         </div>
-        {fetcher.data && "ok" in fetcher.data ? (
-          <p className="text-sm text-center text-green-700 font-bold">✅ Sandbox encendido — verlo en <a href="/dash/hosting" className="underline">Hosting</a></p>
-        ) : (
-          <>
-            {fetcher.data && "error" in fetcher.data && <p className="text-xs text-red-600 mb-2 text-center">{fetcher.data.error}</p>}
-            <BrutalButton
-              onClick={() => fetcher.submit({ intent: "buy-sandbox", tier: tier.key }, { method: "POST" })}
-              isLoading={isLoading}
-              isDisabled={!canBuy}
-              className={`w-full ${tier.featured ? "bg-brand-500 text-white" : "bg-white"}`}
-              containerClassName="w-full"
-            >
-              {canBuy ? "Comprar" : "Desde Mega"}
-            </BrutalButton>
-          </>
+        {fetcher.data?.error && (
+          <p className="text-xs text-red-600 mb-2 text-center">{fetcher.data.error}</p>
         )}
+        <BrutalButton
+          onClick={() =>
+            fetcher.submit(
+              { tier: tier.key },
+              { method: "POST", action: "/api/v2/sandbox-reservations", encType: "application/json" },
+            )
+          }
+          isLoading={isLoading}
+          isDisabled={!canBuy}
+          className={`w-full ${tier.featured ? "bg-brand-500 text-white" : "bg-white"}`}
+          containerClassName="w-full"
+        >
+          {canBuy ? "Comprar" : "Desde Mega"}
+        </BrutalButton>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { PLANS, getUserPlan, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { createPool, deletePool } from "~/.server/core/poolOperations";
+import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import {
   connectPool,
@@ -70,19 +71,23 @@ export async function loader({ request }: Route.LoaderArgs) {
   const plan = getUserPlan(user);
   const planCfg = PLANS[plan];
   const maxWorkersPerVm = pools[0]?.maxWorkersPerVm ?? 2;
+  // Reserved capacity bought in /dash/packs raises the budget on top of the
+  // plan: +1 machine slot and +`agents` agent slots per active reservation.
+  const reserved = await getReservedCapacity(user.id);
   const capacity = {
     machines,
     vms: machines.length,
-    maxMachines: planCfg.concurrentSandboxes,
+    maxMachines: planCfg.concurrentSandboxes + reserved.machines,
     plan,
     planName: planCfg.name,
     nextPlan: NEXT_PLAN[plan] ?? null,
     maxWorkersPerVm,
     vmMemMb: pools[0]?.vmMemMb ?? 512,
+    reservedMachines: reserved.machines,
     // Agents running RIGHT NOW = sum of workers inside active VMs (coherent with
     // "VMs contain agents"); idle/detached routes don't count until re-spawned.
     agentsActive: machines.reduce((s, m) => s + m.slots, 0),
-    agentsMax: planCfg.concurrentSandboxes * maxWorkersPerVm,
+    agentsMax: planCfg.concurrentSandboxes * maxWorkersPerVm + reserved.agents,
   };
   return { secretNames, pools, capacity };
 }

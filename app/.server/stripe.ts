@@ -132,6 +132,52 @@ export const createPackCheckout = async ({
   return session.url || "/404";
 };
 
+/**
+ * Recurring monthly Checkout for a RESERVED pool sandbox (packs → Sandboxes tab).
+ *
+ * subscription mode → a dedicated subscription per reservation, so cancelling it
+ * cleanly frees the capacity without touching the user's plan subscription. The
+ * `type: reserved_sandbox` metadata (on BOTH the session and the subscription)
+ * is what the webhook keys off to record/cancel the reservation.
+ */
+export const createSandboxReservationCheckout = async ({
+  userId,
+  email,
+  tier,
+  label,
+  priceMxn,
+  agents,
+}: {
+  userId: string;
+  email: string;
+  tier: string;
+  label: string;
+  priceMxn: number;
+  agents: number;
+}) => {
+  const metadata = { type: "reserved_sandbox", userId, tier, agents: String(agents) };
+  const session = await getStripe().checkout.sessions.create({
+    mode: "subscription",
+    customer_email: email,
+    metadata,
+    subscription_data: { metadata },
+    line_items: [
+      {
+        price_data: {
+          currency: "mxn",
+          product_data: { name: `Sandbox reservado — ${label} (${agents} agentes)` },
+          recurring: { interval: "month" },
+          unit_amount: priceMxn * 100, // centavos
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${location}/dash/packs?success=1&tab=sandboxes`,
+    cancel_url: `${location}/dash/packs?cancelled=1&tab=sandboxes`,
+  });
+  return session.url || "/404";
+};
+
 /*
  * create account session
  */

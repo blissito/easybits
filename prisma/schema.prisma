@@ -1194,3 +1194,23 @@ model Sandbox {
 
   @@index([ownerId])
 }
+
+// Reserved pool capacity bought from /dash/packs (Sandboxes tab). Each ACTIVE
+// row raises the owner's elastic-pool budget: +1 machine slot and +`agents`
+// agent slots (see pools.tsx capacity HUD). Created by the Stripe webhook on
+// `checkout.session.completed` (type=reserved_sandbox); flipped to "cancelled"
+// when its dedicated subscription is deleted. NOT a host VM — it's a capacity
+// grant the pool consumes on demand (distinct from the standalone permanent
+// machines in the Sandbox model / /dash/hosting).
+model SandboxReservation {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId              String   @db.ObjectId
+  tier                 String   // catalog key: "nano".."performance-4x"
+  agents               Int      // agent slots this reservation grants
+  stripeSubscriptionId String   @unique // the dedicated monthly subscription
+  status               String   @default("active") // active | cancelled
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([ownerId])
+}

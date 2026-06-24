@@ -291,6 +291,7 @@ export default [
     route("svc-usage", "routes/api/v2/svc-usage.ts"),
     route("svc-instances", "routes/api/v2/svc-instances.ts"),
     route("generation-packs", "routes/api/v2/generation-packs.ts"),
+    route("sandbox-reservations", "routes/api/v2/sandbox-reservations.ts"),
     route("docs", "routes/api/v2/docs.ts"),
     route("domains", "routes/api/v2/domains.ts"),
     route("domains/:domainId/verify", "routes/api/v2/domain-verify.ts"),

@@ -280,6 +280,34 @@ export async function action({ request }: ActionFunctionArgs) {
           break;
         }
 
+        // Handle reserved pool sandbox (subscription mode). Records the
+        // capacity grant; the pool consumes it on demand. Keyed off the
+        // session metadata set by createSandboxReservationCheckout.
+        if (session.metadata?.type === "reserved_sandbox") {
+          const resOwnerId = session.metadata.userId;
+          const resTier = session.metadata.tier;
+          const resAgents = parseInt(session.metadata.agents || "0", 10) || 0;
+          const subId =
+            typeof session.subscription === "string" ? session.subscription : null;
+          if (resOwnerId && resTier && subId) {
+            const { recordReservation } = await import(
+              "~/.server/core/sandboxReservations"
+            );
+            await recordReservation({
+              ownerId: resOwnerId,
+              tier: resTier,
+              agents: resAgents,
+              stripeSubscriptionId: subId,
+            });
+            logger.info("Sandbox reservation recorded", {
+              sessionId: session.id,
+              userId: resOwnerId,
+              tier: resTier,
+            });
+          }
+          break;
+        }
+
         // Handle plan upgrade (subscription mode). The session is the only
         // event with both metadata.plan AND customer_details.email — older
         // code tried to read these from customer.subscription.created (which
@@ -354,6 +382,23 @@ export async function action({ request }: ActionFunctionArgs) {
       case "customer.subscription.deleted":
       case "customer.subscription.updated":
         const subscriptionEvent = event.data.object as Stripe.Subscription;
+
+        // Reserved-sandbox subscriptions ride their OWN subscription (not the
+        // plan). Deleting one frees the capacity grant — and must NOT strip the
+        // user's plan roles, so short-circuit before the plan handling below.
+        if (subscriptionEvent.metadata?.type === "reserved_sandbox") {
+          if (event.type === "customer.subscription.deleted") {
+            const { cancelReservationBySubscription } = await import(
+              "~/.server/core/sandboxReservations"
+            );
+            await cancelReservationBySubscription(subscriptionEvent.id);
+            logger.info("Sandbox reservation cancelled", {
+              subscriptionId: subscriptionEvent.id,
+            });
+          }
+          break;
+        }
+
         const custId = subscriptionEvent.customer as string;
         const subscriptionUser = await db.user.findFirst({
           where: { stripeIds: { has: custId } },
