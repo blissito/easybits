@@ -19,6 +19,7 @@ import {
   resumeSandbox,
   openAgentChunkStream,
 } from "~/.server/core/sandboxOperations";
+import { getSecretValue } from "~/.server/core/secretOperations";
 
 export class PoolAtCapacity extends Error {
   constructor(msg: string) {
@@ -145,7 +146,7 @@ function workersOnVm(agentId: string): Promise<number> {
 }
 
 // Spawn a fresh VM for the pool, branded from persona, RAM-gated.
-async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number }) {
+async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null }) {
   const live = await db.agent.count({
     where: { poolId: pool.id, status: { in: ["running", "suspended", "building"] } },
   });
@@ -160,11 +161,20 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
     throw new PoolAtCapacity(`no box has ${pool.vmMemMb}MB free`);
   }
   const persona = (pool.persona ?? {}) as Persona;
+  const env = { ...(persona.env ?? {}) };
+  // Resolve the channel's Claude OAuth from the chosen vault secret (default
+  // CLAUDE_CODE_OAUTH_TOKEN) and inject it for claude-worker. Lets different
+  // channels use different Max accounts. persona.env wins if it already set it.
+  if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
+    const secretName = pool.oauthSecretName || "CLAUDE_CODE_OAUTH_TOKEN";
+    const oauth = await getSecretValue(ctx.user.id, secretName).catch(() => null);
+    if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
+  }
   // TODO(multi-box): target.url must drive createSandbox/callHost; today it uses
   // the single SANDBOX_HOST_URL, so target is recorded but not yet routed.
   const created = await createAgent(ctx, {
     template: pool.workerTemplate as SandboxTemplate,
-    env: persona.env ?? {},
+    env,
     name: persona.name ?? `${pool.name ?? "pool"}-worker`,
     seedFiles: persona.seedFiles,
   });
@@ -308,6 +318,7 @@ export async function createPool(
     name?: string;
     workerTemplate?: string;
     persona?: Persona;
+    oauthSecretName?: string;
     maxWorkersPerVm?: number;
     vmMemMb?: number;
     maxVms?: number;
@@ -321,6 +332,7 @@ export async function createPool(
       token: "pool_" + randomBytes(24).toString("hex"),
       workerTemplate: opts.workerTemplate ?? "claude-worker",
       persona: opts.persona ?? undefined,
+      oauthSecretName: opts.oauthSecretName ?? null,
       maxWorkersPerVm: opts.maxWorkersPerVm ?? 8,
       vmMemMb: opts.vmMemMb ?? 2048,
       maxVms: opts.maxVms ?? 6,

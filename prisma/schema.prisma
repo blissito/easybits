@@ -1068,6 +1068,10 @@ model Pool {
   //     seedFiles?: Array<{ name: string; contentBase64: string }> }
   // Passed straight to createAgent so every VM boots branded.
   persona       Json?
+  // Which vault secret holds the Claude OAuth for this channel's workers. Lets
+  // different channels use different Max accounts (reselling). null = default
+  // "CLAUDE_CODE_OAUTH_TOKEN". spawnVm resolves it → injects into the worker.
+  oauthSecretName String?
   // Scaling knobs. Hierarchy: VM (sandboxId) hosts N workers; worker = 1
   // conversation = 1 sessionId. When a VM hits maxWorkersPerVm, spawn another VM.
   maxWorkersPerVm Int  @default(8)    // conversations (workers) per VM
@@ -1076,6 +1080,11 @@ model Pool {
   idleSuspendMin     Int  @default(5)    // suspend a worker after N idle min
   // Baileys pairing state mirror (same shape as Agent.whatsapp).
   baileys       Json?
+  // Persisted Baileys auth (creds + signal keys) so the socket survives app
+  // redeploys/restarts WITHOUT re-scanning the QR. Written on every creds/keys
+  // update; read at boot rehydration. BufferJSON-serialized.
+  authCreds     Json?
+  authKeys      Json?
   // ANTI-SPAM allowlist: the pool only answers in these group jids. Empty = OFF
   // everywhere (safe default — never auto-replies in all the owner's groups).
   enabledGroups String[] @default([])
