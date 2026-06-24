@@ -9,7 +9,7 @@ import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 export const SANDBOX_TEMPLATES = [
   "ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose",
   "ghostyclaw", "ghosty-lite", "open-ghosty", "lang-ghosty", "rust-ghosty",
-  "ghosty-gc",
+  "ghosty-gc", "claude-worker",
   "cagent-ghosty", "openclaw", "chat-openai", "chat-anthropic",
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",
   "livekit-svc",

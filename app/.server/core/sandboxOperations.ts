@@ -747,6 +747,10 @@ export async function destroySandbox(
 export interface FleetStats {
   totalStarted: number;
   running: number;
+  /** Sum of MemMB of running/starting VMs the host knows about. */
+  memUsedMb: number;
+  /** Host-wide RAM cap the box admits (SANDBOX_MAX_TOTAL_MEM_MB / detected). */
+  memMaxMb: number;
 }
 
 // Fleet-wide counters from the host (no user scope — server-to-server with the
@@ -1792,12 +1796,24 @@ export async function createAgent(
     params.template === "lang-ghosty" ||
     params.template === "rust-ghosty" ||
     params.template === "ghosty-gc" ||
+    params.template === "claude-worker" ||
     params.template === "cagent-ghosty" ||
     params.template === "computer-ghosty" ||
     params.template === "computer-ghosty-gemini" ||
     params.template === "livekit-svc"
   ) {
     env.ADMIN_TOKEN = embedToken;
+  }
+  // claude-worker (cerebro Claude Agent SDK, tarifa plana con OAuth Max del DUEÑO,
+  // no proxy medido). El OAuth llega por pool.persona.env (CLAUDE_CODE_OAUTH_TOKEN);
+  // si no viene, se resuelve del vault del dueño. GOTCHA: el Claude CLI corre como
+  // root dentro de la VM → exige IS_SANDBOX=1 o sale exit 1.
+  if (params.template === "claude-worker") {
+    if (!env.IS_SANDBOX) env.IS_SANDBOX = "1";
+    if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
+      const oauth = await getSecretValue(ctx.user.id, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => null);
+      if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
+    }
   }
   // livekit-svc (self-hosted recording studio): the LiveKit SFU and the box's
   // own token minting share ONE key pair, both internal to the VM. Generate it

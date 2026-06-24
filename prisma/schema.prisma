@@ -251,6 +251,7 @@ model User {
   agents               Agent[]
   computeKeys          ComputeKey[]
   sandboxes            Sandbox[]
+  pools                Pool[]
 }
 
 model Secret {
@@ -1032,7 +1033,91 @@ model Agent {
   // last-known state without a roundtrip.
   whatsapp Json?
 
+  // Pool membership: when set, this Agent is an EPHEMERAL worker spawned by a
+  // Pool (not a standalone always-on agent). The pool manager picks/spawns/
+  // suspends these by RAM budget. null = standalone agent (legacy 1:1).
+  poolId        String?   @db.ObjectId
+  // Last time a message was dispatched to this worker — drives the idle reaper
+  // (suspend after Pool.idleSuspendMin of silence). Null until first message.
+  lastMessageAt DateTime?
+  // Which box (sandbox-host base URL) this VM lives on. Null = the default
+  // SANDBOX_HOST_URL. Multi-box seam: dispatch/suspend resolve the host from here.
+  host          String?
+
   @@index([ownerId])
+  @@index([poolId])
+}
+
+// A Pool is the always-on SURFACE (Baileys/WhatsApp) for one owner that routes
+// inbound group messages to a fleet of ephemeral worker Agents. Workers are
+// spawned on demand, multiplex conversations by sessionId=groupId, scale out
+// when full (RAM-gated), and suspend when idle (warm window). The conversation
+// branding/personality is injected per spawn from `persona`.
+model Pool {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId       String   @db.ObjectId
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name          String?
+  // Bearer the Baileys surface presents on POST /api/v2/pool/:id/message.
+  token         String   @unique
+  // VM template to spawn. Default is "claude-worker" (Claude Agent SDK + OAuth,
+  // native .jsonl transcript resume); interchangeable with "ghosty-gc".
+  workerTemplate String  @default("claude-worker")
+  // Per-spawn branding/personality. Shape:
+  //   { name?: string, env?: Record<string,string>,
+  //     seedFiles?: Array<{ name: string; contentBase64: string }> }
+  // Passed straight to createAgent so every VM boots branded.
+  persona       Json?
+  // Scaling knobs. Hierarchy: VM (sandboxId) hosts N workers; worker = 1
+  // conversation = 1 sessionId. When a VM hits maxWorkersPerVm, spawn another VM.
+  maxWorkersPerVm Int  @default(8)    // conversations (workers) per VM
+  vmMemMb         Int  @default(2048) // RAM gate: free >= this to spawn a VM
+  maxVms          Int  @default(6)    // hard cap on pool's own VMs
+  idleSuspendMin     Int  @default(5)    // suspend a worker after N idle min
+  // Baileys pairing state mirror (same shape as Agent.whatsapp).
+  baileys       Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  routes        PoolRoute[]
+
+  @@index([ownerId])
+}
+
+// Sticky mapping: a conversation (WhatsApp group/jid) → the worker Agent that
+// serves it. Sticky so in-VM memory (preserved across suspend/resume) stays
+// coherent. unique(poolId, groupId).
+model PoolRoute {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  poolId        String   @db.ObjectId
+  pool          Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  groupId       String   // WhatsApp group jid / conversation key (human-readable)
+  // Stable UUID handed to the worker as sessionId — Claude CLI --resume requires
+  // UUID format, and it keys the per-conversation .jsonl transcript. groupId is
+  // for routing; sessionUuid is the worker's resume handle.
+  sessionUuid   String
+  agentId       String   @db.ObjectId // the worker Agent.id
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  @@unique([poolId, groupId])
+  @@index([agentId])
+}
+
+// Durable conversation log — SOURCE OF TRUTH for messages, independent of the
+// worker. The Agent SDK's own .jsonl transcript (on the worker volume) drives
+// native resume + auto-compact; this table is the portable record (audit,
+// funnel, stateless-replay fallback). One row per inbound/outbound turn.
+model PoolMessage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  poolId    String   @db.ObjectId
+  groupId   String
+  role      String   // "user" | "agent"
+  sender    String?  // WhatsApp sender (for "user" rows)
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([poolId, groupId])
 }
 
 // Local registry row for a sandbox we track in Mongo. ONE model, keyed by the

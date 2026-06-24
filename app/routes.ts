@@ -117,6 +117,8 @@ export default [
       // Hosting — máquinas permanentes + sandboxes
       route("hosting", "routes/dash/hosting/machines.tsx"),
       route("hosting/wa/:id", "routes/dash/hosting/wa.tsx"),
+      // Pools de WhatsApp ("Líneas") — superficie Baileys + workers efímeros
+      route("pools", "routes/dash/pools.tsx"),
       // Email — audiencia + newsletters
       route("email", "routes/dash/email/email.tsx"),
       // Developer dashboard
@@ -189,6 +191,10 @@ export default [
     route("agents/:id/whatsapp/status", "routes/api/v2/agent-whatsapp-status.ts"),
     route("agents/:id/whatsapp/link", "routes/api/v2/agent-whatsapp-link.ts"),
     route("agents/:id/whatsapp/unlink", "routes/api/v2/agent-whatsapp-unlink.ts"),
+    // Pool — superficie WhatsApp always-on que rutea a workers efímeros
+    route("pools", "routes/api/v2/pools.ts"),
+    route("pool/:poolId/message", "routes/api/v2/pool.$poolId.message.ts"),
+    route("pool/:poolId/connect", "routes/api/v2/pool.$poolId.connect.ts"),
     // WhatsApp Business Cloud API (Meta) — webhook de verificación + eventos
     route("whatsapp/webhook", "routes/api/v2/whatsapp-webhook.ts"),
     route("agents/:id/skills", "routes/api/v2/agent-skills.ts"),

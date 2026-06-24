@@ -63,6 +63,7 @@
     "@types/lru-cache": "^7.10.9",
     "@types/qrcode": "^1.5.6",
     "@uiw/react-md-editor": "^4.0.5",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
     "agenda": "^5.0.0",
     "ai": "^6.0.100",
     "amazon-chime-sdk-js": "^3.30.0",
