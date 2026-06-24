@@ -98,9 +98,13 @@ export async function connectPool(poolId: string): Promise<void> {
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
+    // ANTI-SPAM: reload the allowlist per batch; only enabled groups get answered.
+    const fresh = await db.pool.findUnique({ where: { id: poolId }, select: { enabledGroups: true } });
+    const enabled = new Set(fresh?.enabledGroups ?? []);
     for (const m of messages) {
       const jid = m.key.remoteJid;
       if (!jid || m.key.fromMe || !jid.endsWith("@g.us")) continue; // groups only
+      if (!enabled.has(jid)) continue; // group not activated → ignore (no spam)
       const text =
         m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? "";
       if (!text.trim()) continue;
@@ -118,6 +122,27 @@ export async function connectPool(poolId: string): Promise<void> {
       }
     }
   });
+}
+
+// List the WhatsApp groups the connected account participates in, flagged with
+// whether the pool currently answers there (Pool.enabledGroups). Needs a live
+// socket (returns [] if the pool isn't connected in this process).
+export async function listPoolGroups(
+  poolId: string
+): Promise<Array<{ id: string; subject: string; enabled: boolean }>> {
+  const cur = sockets.get(poolId);
+  if (!cur) return [];
+  const pool = await db.pool.findUnique({ where: { id: poolId }, select: { enabledGroups: true } });
+  const enabled = new Set(pool?.enabledGroups ?? []);
+  try {
+    const groups = await cur.sock.groupFetchAllParticipating();
+    return Object.values(groups)
+      .map((g: any) => ({ id: g.id as string, subject: (g.subject as string) || g.id, enabled: enabled.has(g.id) }))
+      .sort((a, b) => a.subject.localeCompare(b.subject));
+  } catch (e) {
+    console.error(`baileys ${poolId} groupFetch failed:`, e);
+    return [];
+  }
 }
 
 export async function disconnectPool(poolId: string): Promise<void> {

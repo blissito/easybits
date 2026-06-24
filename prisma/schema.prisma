@@ -1076,6 +1076,9 @@ model Pool {
   idleSuspendMin     Int  @default(5)    // suspend a worker after N idle min
   // Baileys pairing state mirror (same shape as Agent.whatsapp).
   baileys       Json?
+  // ANTI-SPAM allowlist: the pool only answers in these group jids. Empty = OFF
+  // everywhere (safe default — never auto-replies in all the owner's groups).
+  enabledGroups String[] @default([])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

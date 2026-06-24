@@ -5,35 +5,49 @@ import QRCode from "qrcode";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { createPool } from "~/.server/core/poolOperations";
-import { connectPool, disconnectPool } from "~/.server/integrations/whatsapp/baileys.server";
+import { listSecrets, createSecret } from "~/.server/core/secretOperations";
+import {
+  connectPool,
+  disconnectPool,
+  listPoolGroups,
+} from "~/.server/integrations/whatsapp/baileys.server";
 
-// Minimal dashboard for WhatsApp Pools ("Líneas"): create a pool with the owner's
-// Claude OAuth, connect Baileys (QR pairing), see status. POC surface.
+const OAUTH_SECRET = "CLAUDE_CODE_OAUTH_TOKEN";
+
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await getUserOrRedirect(request);
-  const pools = await db.pool.findMany({
+  const secrets = await listSecrets(user.id);
+  const oauthSaved = secrets.some((s) => s.name === OAUTH_SECRET);
+
+  const rows = await db.pool.findMany({
     where: { ownerId: user.id },
     orderBy: { createdAt: "desc" },
   });
-  // Render any pending QR to a data URL so the client can show it directly.
-  const withQr = await Promise.all(
-    pools.map(async (p) => {
+  const pools = await Promise.all(
+    rows.map(async (p) => {
       const b = (p.baileys ?? {}) as { status?: string; qr?: string };
-      let qrDataUrl: string | null = null;
-      if (b.status === "qr_pending" && b.qr) {
-        qrDataUrl = await QRCode.toDataURL(b.qr).catch(() => null);
-      }
+      const status = b.status ?? "disconnected";
+      const qrDataUrl =
+        status === "qr_pending" && b.qr ? await QRCode.toDataURL(b.qr).catch(() => null) : null;
+      const groups = status === "connected" ? await listPoolGroups(p.id) : [];
+      const [vms, conversations] = await Promise.all([
+        db.agent.count({ where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } } }),
+        db.poolRoute.count({ where: { poolId: p.id } }),
+      ]);
       return {
         id: p.id,
         name: p.name,
-        token: p.token,
         workerTemplate: p.workerTemplate,
-        status: b.status ?? "disconnected",
+        status,
         qrDataUrl,
+        groups,
+        enabledCount: p.enabledGroups.length,
+        vms,
+        conversations,
       };
     })
   );
-  return { pools: withQr };
+  return { oauthSaved, pools };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -42,20 +56,23 @@ export async function action({ request }: Route.ActionArgs) {
   const fd = await request.formData();
   const intent = String(fd.get("intent") || "");
 
+  if (intent === "save-oauth") {
+    const value = String(fd.get("oauth") || "").trim();
+    if (!value) return data({ error: "Pega tu OAuth" }, { status: 400 });
+    await createSecret(user.id, { name: OAUTH_SECRET, value });
+    return data({ ok: true, saved: "oauth" });
+  }
   if (intent === "create") {
     const name = String(fd.get("name") || "").trim() || undefined;
-    const oauth = String(fd.get("oauth") || "").trim();
-    const persona = oauth ? { env: { CLAUDE_CODE_OAUTH_TOKEN: oauth } } : undefined;
-    const pool = await createPool(ctx, { name, persona });
+    const pool = await createPool(ctx, { name });
     return data({ ok: true, poolId: pool.id });
   }
+
   const poolId = String(fd.get("poolId") || "");
   const pool = poolId ? await db.pool.findUnique({ where: { id: poolId } }) : null;
   if (!pool || pool.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
 
   if (intent === "connect") {
-    // connectPool reflects its own status (connecting/qr_pending/failed) in
-    // Pool.baileys; never let a connect error 500 the action — the UI polls state.
     await connectPool(poolId).catch((e) => console.error("connectPool failed", e));
     return data({ ok: true });
   }
@@ -63,32 +80,46 @@ export async function action({ request }: Route.ActionArgs) {
     await disconnectPool(poolId);
     return data({ ok: true });
   }
+  if (intent === "toggle-group") {
+    const groupId = String(fd.get("groupId") || "");
+    const on = String(fd.get("on") || "") === "1";
+    const set = new Set(pool.enabledGroups);
+    if (on) set.add(groupId);
+    else set.delete(groupId);
+    await db.pool.update({ where: { id: poolId }, data: { enabledGroups: [...set] } });
+    return data({ ok: true });
+  }
   return data({ error: "intent inválido" }, { status: 400 });
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  connected: "Conectada",
-  qr_pending: "Escanea el QR",
-  connecting: "Conectando…",
-  failed: "Falló",
-  disconnected: "Desconectada",
-};
+const STATUS = {
+  connected: { label: "Conectada", dot: "bg-green-500" },
+  qr_pending: { label: "Escanea el QR", dot: "bg-yellow-500" },
+  connecting: { label: "Conectando…", dot: "bg-yellow-500 animate-pulse" },
+  failed: { label: "Falló", dot: "bg-red-500" },
+  disconnected: { label: "Desconectada", dot: "bg-gray-300" },
+} as const;
+
+function Spinner() {
+  return (
+    <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-[-2px]" />
+  );
+}
 
 export default function Pools({ loaderData }: Route.ComponentProps) {
-  const { pools } = loaderData;
+  const { oauthSaved, pools } = loaderData;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [name, setName] = useState("");
   const [oauth, setOauth] = useState("");
 
-  // What's currently submitting (to show per-button spinners).
   const busy = fetcher.state !== "idle";
-  const busyIntent = fetcher.formData?.get("intent") as string | undefined;
-  const busyPoolId = fetcher.formData?.get("poolId") as string | undefined;
+  const bIntent = fetcher.formData?.get("intent") as string | undefined;
+  const bPool = fetcher.formData?.get("poolId") as string | undefined;
   const isBusy = (intent: string, poolId?: string) =>
-    busy && busyIntent === intent && (poolId === undefined || busyPoolId === poolId);
+    busy && bIntent === intent && (poolId === undefined || bPool === poolId);
 
-  // Poll while any pool is pairing/connecting so the QR + status refresh.
+  // Poll while any line is pairing/connecting so QR + status refresh live.
   const polling = pools.some((p) => p.status === "qr_pending" || p.status === "connecting");
   useEffect(() => {
     if (!polling) return;
@@ -97,72 +128,143 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   }, [polling, rev]);
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-1">Líneas (Pool de WhatsApp)</h1>
       <p className="text-gray-500 mb-6">
-        Cada línea conecta un WhatsApp y atiende sus grupos con agentes que se levantan bajo demanda.
+        Conecta un WhatsApp y atiende sus grupos con agentes que se levantan bajo demanda.
       </p>
 
-      <fetcher.Form method="post" className="border-2 border-black rounded-xl p-4 mb-8 flex flex-col gap-3">
-        <input type="hidden" name="intent" value="create" />
-        <label className="text-sm font-semibold">Nombre</label>
-        <input
-          name="name" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="Atención a cliente" className="border-2 border-black rounded-lg px-3 py-2"
-        />
-        <label className="text-sm font-semibold">Tu OAuth de Claude (cuenta Max)</label>
-        <input
-          name="oauth" value={oauth} onChange={(e) => setOauth(e.target.value)}
-          placeholder="sk-ant-oat..." className="border-2 border-black rounded-lg px-3 py-2 font-mono text-sm"
-        />
-        <button className="self-start bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold">
-          + Crear línea
-        </button>
-      </fetcher.Form>
+      {/* PASO 1 — Conectar cuenta Claude (vault) */}
+      <div className="border-2 border-black rounded-xl p-4 mb-6 animate-fade-in">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="font-bold">1 · Tu cuenta Claude (OAuth Max)</span>
+          {oauthSaved && (
+            <span className="text-sm font-semibold text-green-600">✓ Guardada</span>
+          )}
+        </div>
+        <fetcher.Form method="post" className="flex gap-2 items-center">
+          <input type="hidden" name="intent" value="save-oauth" />
+          <input
+            name="oauth" value={oauth} onChange={(e) => setOauth(e.target.value)} type="password"
+            placeholder={oauthSaved ? "•••••••• (actualizar)" : "sk-ant-oat..."}
+            className="flex-1 border-2 border-black rounded-lg px-3 py-2 font-mono text-sm"
+          />
+          <button disabled={isBusy("save-oauth")}
+            className="bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60 whitespace-nowrap">
+            {isBusy("save-oauth") ? <Spinner /> : oauthSaved ? "Actualizar" : "Guardar"}
+          </button>
+        </fetcher.Form>
+        <p className="text-xs text-gray-400 mt-2">
+          Se guarda cifrada en Secretos como {OAUTH_SECRET}. La usan todas tus líneas.
+        </p>
+      </div>
 
+      {/* PASO 2 — Crear línea */}
+      <div className="border-2 border-black rounded-xl p-4 mb-8 animate-fade-in">
+        <span className="font-bold block mb-2">2 · Nueva línea</span>
+        <fetcher.Form method="post" className="flex gap-2">
+          <input type="hidden" name="intent" value="create" />
+          <input
+            name="name" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Atención a cliente"
+            className="flex-1 border-2 border-black rounded-lg px-3 py-2"
+          />
+          <button disabled={!oauthSaved || isBusy("create")}
+            title={oauthSaved ? "" : "Guarda tu OAuth primero"}
+            className="bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60 whitespace-nowrap">
+            {isBusy("create") ? <Spinner /> : "+ Crear"}
+          </button>
+        </fetcher.Form>
+      </div>
+
+      {/* Líneas */}
       <div className="flex flex-col gap-4">
         {pools.length === 0 && <p className="text-gray-400">Aún no tienes líneas.</p>}
-        {pools.map((p) => (
-          <div key={p.id} className="border-2 border-black rounded-xl p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-bold">{p.name || "Sin nombre"}</div>
-                <div className="text-sm text-gray-500">{p.workerTemplate}</div>
+        {pools.map((p) => {
+          const st = STATUS[p.status as keyof typeof STATUS] ?? STATUS.disconnected;
+          return (
+            <div key={p.id} className="border-2 border-black rounded-xl p-4 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-bold">{p.name || "Sin nombre"}</div>
+                  <div className="text-xs text-gray-400">{p.workerTemplate}</div>
+                </div>
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <span className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />
+                  {st.label}
+                </span>
               </div>
-              <span className="text-sm font-semibold px-2 py-1 rounded-lg bg-gray-100">
-                {STATUS_LABEL[p.status] ?? p.status}
-              </span>
-            </div>
 
-            {p.qrDataUrl && (
-              <div className="mt-4 flex flex-col items-center">
-                <img src={p.qrDataUrl} alt="QR de WhatsApp" className="w-56 h-56" />
-                <p className="text-sm text-gray-500 mt-2">
-                  WhatsApp → Dispositivos vinculados → Vincular dispositivo
-                </p>
+              {/* QR (paso vincular) */}
+              {p.qrDataUrl && (
+                <div className="mt-4 flex flex-col items-center">
+                  <img src={p.qrDataUrl} alt="QR de WhatsApp" className="w-56 h-56" />
+                  <p className="text-sm text-gray-500 mt-2">
+                    WhatsApp → Dispositivos vinculados → Vincular dispositivo
+                  </p>
+                </div>
+              )}
+
+              {/* PASO 3 — Grupos (opt-in anti-spam) */}
+              {p.status === "connected" && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-sm">3 · Grupos que atiende</span>
+                    <span className="text-xs text-gray-400">
+                      {p.vms} VM{p.vms !== 1 ? "s" : ""} · {p.conversations} conv.
+                    </span>
+                  </div>
+                  {p.groups.length === 0 && (
+                    <p className="text-xs text-gray-400">
+                      No se ven grupos aún (o ninguno). Solo responde en los que actives aquí.
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-1.5">
+                    {p.groups.map((g) => (
+                      <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox" checked={g.enabled}
+                          disabled={isBusy("toggle-group", p.id)}
+                          onChange={(e) =>
+                            fetcher.submit(
+                              { intent: "toggle-group", poolId: p.id, groupId: g.id, on: e.target.checked ? "1" : "0" },
+                              { method: "post" }
+                            )
+                          }
+                        />
+                        <span className={g.enabled ? "font-semibold" : ""}>{g.subject}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {p.enabledCount === 0 && p.groups.length > 0 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      ⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-4 flex gap-2">
+                {p.status !== "connected" && p.status !== "connecting" && p.status !== "qr_pending" && (
+                  <button
+                    disabled={isBusy("connect", p.id)}
+                    onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
+                    className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                    {isBusy("connect", p.id) ? <Spinner /> : "Conectar"}
+                  </button>
+                )}
+                {(p.status === "connected" || p.status === "connecting" || p.status === "qr_pending") && (
+                  <button
+                    disabled={isBusy("disconnect", p.id)}
+                    onClick={() => fetcher.submit({ intent: "disconnect", poolId: p.id }, { method: "post" })}
+                    className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                    {isBusy("disconnect", p.id) ? <Spinner /> : "Desconectar"}
+                  </button>
+                )}
               </div>
-            )}
-
-            <div className="mt-4 flex gap-2">
-              {p.status !== "connected" && (
-                <button
-                  onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
-                  className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold"
-                >
-                  Conectar
-                </button>
-              )}
-              {(p.status === "connected" || p.status === "connecting" || p.status === "qr_pending") && (
-                <button
-                  onClick={() => fetcher.submit({ intent: "disconnect", poolId: p.id }, { method: "post" })}
-                  className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold"
-                >
-                  Desconectar
-                </button>
-              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
