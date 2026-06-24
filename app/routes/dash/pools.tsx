@@ -227,7 +227,7 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
             <VmBox key={`free-${i}`} id={`free-${i}`} status={null} slots={0} max={capacity.maxWorkersPerVm} />
           ))}
           {/* Añadir capacidad — sube de plan para más sandboxes */}
-          <motion.a key="add" layout {...SPAWN} href="/dash/packs" title="Añadir capacidad"
+          <motion.a key="add" layout {...SPAWN} href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
             whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
             className="w-20 shrink-0 rounded-lg border-2 border-dashed border-brand-500 text-brand-500 flex flex-col items-center justify-center gap-0.5 hover:bg-brand-500/10">
             <span className="text-2xl leading-none">+</span>
