@@ -30,6 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const live = isPoolLive(p.id);
       const qrDataUrl =
         status === "qr_pending" && b.qr ? await QRCode.toDataURL(b.qr).catch(() => null) : null;
+      const pairingCode = status === "pairing" ? ((b as any).pairingCode as string | undefined) ?? null : null;
       // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
       // activity even if metadata sync hasn't listed them yet.
       const groups = await listPoolGroups(p.id);
@@ -37,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         db.agent.count({ where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } } }),
         db.poolRoute.count({ where: { poolId: p.id } }),
       ]);
-      return { id: p.id, name: p.name, status, live, qrDataUrl, groups, enabledCount: p.enabledGroups.length, vms, conversations };
+      return { id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups, enabledCount: p.enabledGroups.length, vms, conversations };
     })
   );
   return { secretNames, pools };
@@ -72,8 +73,9 @@ export async function action({ request }: Route.ActionArgs) {
     // Non-blocking: flip status to "connecting" so the UI starts polling, then
     // fire connectPool in the background. Awaiting it could hang the action on
     // the WhatsApp version fetch / socket setup → spinner stuck forever.
+    const phone = String(fd.get("phone") || "").trim() || undefined; // pairing-code method if set
     await db.pool.update({ where: { id: poolId }, data: { baileys: { status: "connecting", at: new Date().toISOString() } } });
-    void connectPool(poolId).catch((e) => console.error("connectPool failed", e));
+    void connectPool(poolId, { pairingPhone: phone }).catch((e) => console.error("connectPool failed", e));
     return data({ ok: true });
   }
   if (intent === "disconnect") {
@@ -100,6 +102,7 @@ export async function action({ request }: Route.ActionArgs) {
 const STATUS = {
   connected: { label: "Conectado", dot: "bg-green-500" },
   qr_pending: { label: "Escanea el QR", dot: "bg-yellow-500" },
+  pairing: { label: "Teclea el código", dot: "bg-yellow-500" },
   connecting: { label: "Conectando…", dot: "bg-yellow-500 animate-pulse" },
   failed: { label: "Falló", dot: "bg-red-500" },
   disconnected: { label: "Desconectado", dot: "bg-gray-300" },
@@ -124,7 +127,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const bPool = fetcher.formData?.get("poolId") as string | undefined;
   const isBusy = (intent: string, poolId?: string) => busy && bIntent === intent && (poolId === undefined || bPool === poolId);
 
-  const polling = pools.some((p) => p.status === "qr_pending" || p.status === "connecting");
+  const polling = pools.some((p) => p.status === "qr_pending" || p.status === "pairing" || p.status === "connecting");
+  const [phones, setPhones] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!polling) return;
     const t = setInterval(() => rev.revalidate(), 2500);
@@ -190,6 +194,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   <p className="text-sm text-gray-500 mt-2">WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
                 </div>
               )}
+              {p.pairingCode && (
+                <div className="mt-4 flex flex-col items-center">
+                  <div className="text-3xl font-mono font-bold tracking-widest border-2 border-black rounded-lg px-4 py-3">{p.pairingCode}</div>
+                  <p className="text-sm text-gray-500 mt-2 text-center">WhatsApp → Dispositivos vinculados → Vincular con número de teléfono → teclea este código</p>
+                </div>
+              )}
 
               {(p.groups.length > 0 || (p.status === "connected" && p.live)) && (
                 <div className="mt-4">
@@ -213,14 +223,24 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </div>
               )}
 
-              <div className="mt-4 flex gap-2">
-                {p.status !== "connecting" && p.status !== "qr_pending" && !(p.status === "connected" && p.live) && (
-                  <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
-                    className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
-                    {isBusy("connect", p.id) ? <Spinner /> : "Conectar"}
-                  </button>
+              <div className="mt-4 flex flex-wrap gap-2 items-center">
+                {p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
+                  <>
+                    <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
+                      className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                      {isBusy("connect", p.id) ? <Spinner /> : "Conectar con QR"}
+                    </button>
+                    <span className="text-xs text-gray-400">o</span>
+                    <input value={phones[p.id] ?? ""} onChange={(e) => setPhones((s) => ({ ...s, [p.id]: e.target.value }))}
+                      placeholder="52155..." className="border-2 border-black rounded-lg px-2 py-1.5 text-sm w-32 font-mono" />
+                    <button disabled={isBusy("connect", p.id) || !(phones[p.id] ?? "").trim()}
+                      onClick={() => fetcher.submit({ intent: "connect", poolId: p.id, phone: phones[p.id] }, { method: "post" })}
+                      className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-40">
+                      Vincular con número
+                    </button>
+                  </>
                 )}
-                {(p.live || p.status === "connecting" || p.status === "qr_pending") && (
+                {(p.live || p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing") && (
                   <button disabled={isBusy("disconnect", p.id)} onClick={() => fetcher.submit({ intent: "disconnect", poolId: p.id }, { method: "post" })}
                     className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
                     {isBusy("disconnect", p.id) ? <Spinner /> : "Desconectar"}

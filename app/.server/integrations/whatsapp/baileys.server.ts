@@ -37,7 +37,7 @@ function log(poolId: string, msg: string) {
   console.log(`[pool ${poolId}] ${msg}`);
 }
 
-type BaileysStatus = "qr_pending" | "connecting" | "connected" | "failed" | "disconnected";
+type BaileysStatus = "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
 async function setStatus(poolId: string, status: BaileysStatus, extra: Record<string, unknown> = {}) {
   await db.pool
     .update({ where: { id: poolId }, data: { baileys: { status, at: new Date().toISOString(), ...extra } } })
@@ -93,7 +93,8 @@ async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationSt
 
 // Start (or restart) the socket for a pool. Idempotent while connecting. Always
 // ends a prior socket first. UI polls Pool.baileys for {status, qr}.
-export async function connectPool(poolId: string): Promise<void> {
+export async function connectPool(poolId: string, opts: { pairingPhone?: string } = {}): Promise<void> {
+  const pairingPhone = opts.pairingPhone?.replace(/[^0-9]/g, "") || undefined;
   const existing = sockets.get(poolId);
   if (existing?.connecting) return;
   if (existing) {
@@ -130,9 +131,27 @@ export async function connectPool(poolId: string): Promise<void> {
   sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true });
   sock.ev.on("creds.update", auth.saveCreds);
 
+  // Pairing-code method: instead of (or alongside) the QR, request an 8-char
+  // code the owner types on the phone ("Vincular con número de teléfono"). Only
+  // when not already registered. Same device-link mechanism as the QR, so it
+  // hits the same WhatsApp throttle — it's an alternative input, not a bypass.
+  if (pairingPhone && !auth.state.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(pairingPhone);
+        log(poolId, `pairing code ${code}`);
+        await setStatus(poolId, "pairing", { pairingCode: code, phone: pairingPhone });
+      } catch (e) {
+        log(poolId, `requestPairingCode failed: ${e}`);
+        await setStatus(poolId, "failed", { reason: "pairing_code_error" });
+      }
+    }, 1500);
+  }
+
   sock.ev.on("connection.update", async (u) => {
     const cur = sockets.get(poolId);
-    if (u.qr) { log(poolId, "QR ready"); await setStatus(poolId, "qr_pending", { qr: u.qr }); }
+    // In pairing-code mode don't clobber the code with the rotating QR.
+    if (u.qr && !pairingPhone) { log(poolId, "QR ready"); await setStatus(poolId, "qr_pending", { qr: u.qr }); }
     if (u.connection === "open") {
       if (cur) { cur.attempts = 0; cur.connecting = false; }
       log(poolId, "connected");
