@@ -17,6 +17,7 @@ import {
   createAgent,
   suspendSandbox,
   resumeSandbox,
+  destroySandbox,
   openAgentChunkStream,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
@@ -309,6 +310,21 @@ export async function reapIdlePools(): Promise<number> {
     }
   }
   return suspended;
+}
+
+// Delete a pool: destroy its worker VMs (best-effort), then remove its routes,
+// messages and the pool row. Caller must disconnect the Baileys socket first
+// (disconnectPool) — kept out of here to avoid a circular import.
+export async function deletePool(ctx: AuthContext, poolId: string): Promise<void> {
+  const pool = await db.pool.findUnique({ where: { id: poolId } });
+  if (!pool || pool.ownerId !== ctx.user.id) throw new Error("pool not found");
+  const workers = await db.agent.findMany({ where: { poolId } });
+  for (const w of workers) {
+    await destroySandbox(ctx, w.sandboxId).catch(() => {});
+    await db.agent.delete({ where: { id: w.id } }).catch(() => {});
+  }
+  await db.poolMessage.deleteMany({ where: { poolId } });
+  await db.pool.delete({ where: { id: poolId } }); // PoolRoute cascades
 }
 
 // Create a pool for an owner. token is the bearer the Baileys surface presents.

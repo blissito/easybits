@@ -109,7 +109,12 @@ export async function connectPool(poolId: string): Promise<void> {
   let auth, version;
   try {
     auth = await useDBAuthState(poolId);
-    ({ version } = await fetchLatestWaWebVersion({}).catch(() => ({ version: undefined })));
+    // Network fetch — race a 5s timeout so a hang can't stall the connect
+    // (makeWASocket falls back to its bundled version when undefined).
+    version = await Promise.race([
+      fetchLatestWaWebVersion({}).then((r) => r.version).catch(() => undefined),
+      new Promise<undefined>((res) => setTimeout(() => res(undefined), 5000)),
+    ]);
   } catch (e) {
     log(poolId, `init failed: ${e}`);
     await setStatus(poolId, "failed", { reason: "init_error" });

@@ -4,7 +4,7 @@ import { useFetcher, useRevalidator, data } from "react-router";
 import QRCode from "qrcode";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
-import { createPool } from "~/.server/core/poolOperations";
+import { createPool, deletePool } from "~/.server/core/poolOperations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import {
   connectPool,
@@ -69,12 +69,21 @@ export async function action({ request }: Route.ActionArgs) {
   if (!pool || pool.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
 
   if (intent === "connect") {
-    await connectPool(poolId).catch((e) => console.error("connectPool failed", e));
+    // Non-blocking: flip status to "connecting" so the UI starts polling, then
+    // fire connectPool in the background. Awaiting it could hang the action on
+    // the WhatsApp version fetch / socket setup → spinner stuck forever.
+    await db.pool.update({ where: { id: poolId }, data: { baileys: { status: "connecting", at: new Date().toISOString() } } });
+    void connectPool(poolId).catch((e) => console.error("connectPool failed", e));
     return data({ ok: true });
   }
   if (intent === "disconnect") {
     await disconnectPool(poolId);
     return data({ ok: true });
+  }
+  if (intent === "delete") {
+    await disconnectPool(poolId).catch(() => {});
+    await deletePool(ctx, poolId);
+    return data({ ok: true, deleted: true });
   }
   if (intent === "toggle-group") {
     const groupId = String(fd.get("groupId") || "");
@@ -217,6 +226,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     {isBusy("disconnect", p.id) ? <Spinner /> : "Desconectar"}
                   </button>
                 )}
+                <button disabled={isBusy("delete", p.id)}
+                  onClick={() => { if (confirm(`¿Borrar el canal "${p.name || "Sin nombre"}"? Se destruyen sus VMs y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
+                  className="ml-auto border-2 border-red-300 text-red-600 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                  {isBusy("delete", p.id) ? <Spinner /> : "Borrar"}
+                </button>
               </div>
             </div>
           );

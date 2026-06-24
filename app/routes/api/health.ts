@@ -12,6 +12,16 @@ export async function loader() {
     dbStatus = "error";
   }
 
+  // Auto-relevantar los pools de WhatsApp tras un reinicio del app: Fly pega
+  // este endpoint cada 30s, así que reconectamos los sockets Baileys (creds en
+  // DB) ~30s después de cada deploy SIN que nadie abra el dashboard. Idempotente
+  // (singleton interno) y fire-and-forget para no demorar el health check.
+  if (dbStatus === "connected") {
+    import("~/.server/integrations/whatsapp/baileys.server")
+      .then((m) => m.ensureRehydrated())
+      .catch(() => {});
+  }
+
   const status = dbStatus === "connected" ? "ok" : "degraded";
 
   return Response.json(
