@@ -28,9 +28,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       const b = (p.baileys ?? {}) as { status?: string; qr?: string };
       const status = b.status ?? "disconnected";
       const live = isPoolLive(p.id);
+      // Show QR / pairing code by PRESENCE (they persist across transient status
+      // changes via the merge in setStatus) — hide only once actually connected.
+      const connectedNow = status === "connected";
       const qrDataUrl =
-        status === "qr_pending" && b.qr ? await QRCode.toDataURL(b.qr).catch(() => null) : null;
-      const pairingCode = status === "pairing" ? ((b as any).pairingCode as string | undefined) ?? null : null;
+        !connectedNow && b.qr ? await QRCode.toDataURL(b.qr).catch(() => null) : null;
+      const pairingCode = !connectedNow ? ((b as any).pairingCode as string | undefined) ?? null : null;
       // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
       // activity even if metadata sync hasn't listed them yet.
       const groups = await listPoolGroups(p.id);

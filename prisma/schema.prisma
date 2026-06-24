@@ -1088,6 +1088,14 @@ model Pool {
   // ANTI-SPAM allowlist: the pool only answers in these group jids. Empty = OFF
   // everywhere (safe default — never auto-replies in all the owner's groups).
   enabledGroups String[] @default([])
+  // Loop-prevention strategy (surface layer, nanoclaw pattern):
+  //  - hasOwnNumber=true  → dedicated WhatsApp line; the bot's own output is the
+  //    only fromMe → skip fromMe. Owner can't self-test; replies to others only.
+  //  - hasOwnNumber=false → personal/shared number (owner uses it too); fromMe is
+  //    ambiguous, so the bot tags replies with "assistantName:" and skips only
+  //    those → the owner's own messages DO get answered (good for testing).
+  hasOwnNumber  Boolean  @default(false)
+  assistantName String?  // prefix stamped on replies when !hasOwnNumber (default "Asistente")
   // Groups DISCOVERED from inbound messages (jid → subject), independent of the
   // allowlist. Lets the UI surface a group to enable as soon as it has activity,
   // even before WhatsApp's metadata sync lists it. Merged with groupFetchAll.

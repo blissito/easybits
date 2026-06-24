@@ -30,7 +30,7 @@ const MAX_RECONNECT = 5;
 const silent: any = { level: "silent", child: () => silent };
 for (const m of ["trace", "debug", "info", "warn", "error", "fatal"]) silent[m] = () => {};
 
-type ConnState = { sock: WASocket; attempts: number; connecting: boolean };
+type ConnState = { sock: WASocket; attempts: number; connecting: boolean; pairingPhone?: string };
 const sockets = new Map<string, ConnState>();
 
 function log(poolId: string, msg: string) {
@@ -38,10 +38,18 @@ function log(poolId: string, msg: string) {
 }
 
 type BaileysStatus = "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
+// MERGE the baileys blob so a transient status change (e.g. a reconnect flipping
+// to "connecting") doesn't wipe an already-issued pairingCode/qr — the UI keeps
+// showing it until we actually connect. Terminal states clear the artifacts.
 async function setStatus(poolId: string, status: BaileysStatus, extra: Record<string, unknown> = {}) {
-  await db.pool
-    .update({ where: { id: poolId }, data: { baileys: { status, at: new Date().toISOString(), ...extra } } })
-    .catch(() => {});
+  const terminal = status === "connected" || status === "disconnected" || status === "failed";
+  const cur = terminal
+    ? {}
+    : ((await db.pool.findUnique({ where: { id: poolId }, select: { baileys: true } }).catch(() => null))?.baileys as
+        | Record<string, unknown>
+        | null) ?? {};
+  const next = { ...cur, status, at: new Date().toISOString(), ...extra };
+  await db.pool.update({ where: { id: poolId }, data: { baileys: next } }).catch(() => {});
 }
 
 // ── DB-backed Baileys auth (creds + signal keys persisted on the Pool row) ────
@@ -128,7 +136,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
     printQRInTerminal: false,
     browser: Browsers.macOS("Chrome"),
   });
-  sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true });
+  sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true, pairingPhone });
   sock.ev.on("creds.update", auth.saveCreds);
 
   // Pairing-code method: instead of (or alongside) the QR, request an 8-char
@@ -164,7 +172,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       // immediately and don't count it as a failure.
       if (code === DisconnectReason.restartRequired) {
         log(poolId, "restart required → reconnecting");
-        setTimeout(() => void connectPool(poolId).catch(() => {}), 500);
+        setTimeout(() => void connectPool(poolId, { pairingPhone: cur?.pairingPhone }).catch(() => {}), 500);
         return;
       }
       const loggedOut = code === DisconnectReason.loggedOut;
@@ -179,28 +187,46 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       const backoffMs = Math.min(30_000, 1000 * 2 ** attempts);
       log(poolId, `closed → retry ${attempts}/${MAX_RECONNECT} in ${backoffMs}ms`);
       await setStatus(poolId, "connecting", { attempt: attempts });
-      setTimeout(() => void connectPool(poolId).catch(() => {}), backoffMs);
+      setTimeout(() => void connectPool(poolId, { pairingPhone: cur?.pairingPhone }).catch(() => {}), backoffMs);
     }
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
-    const fresh = await db.pool.findUnique({ where: { id: poolId }, select: { enabledGroups: true } });
+    const fresh = await db.pool.findUnique({
+      where: { id: poolId },
+      select: { enabledGroups: true, hasOwnNumber: true, assistantName: true },
+    });
     const enabled = new Set(fresh?.enabledGroups ?? []);
+    const hasOwnNumber = fresh?.hasOwnNumber ?? false;
+    const assistantName = fresh?.assistantName || "Asistente";
     for (const m of messages) {
       const jid = m.key.remoteJid;
       if (!jid || !jid.endsWith("@g.us")) continue; // groups only
       // DISCOVERY (independent of the allowlist): record any group with activity
-      // so the UI can surface it to enable — even fromMe and even before sync.
+      // so the UI can surface it to enable — even before WhatsApp's sync.
       await recordSeenGroup(poolId, sock, jid);
-      if (m.key.fromMe) continue;
       const text = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? "";
       if (!text.trim()) continue;
+      // Loop prevention WITHOUT blocking the owner (nanoclaw pattern): detect the
+      // bot's OWN output and skip only that — not every fromMe.
+      //  - hasOwnNumber (dedicated line): fromMe IS the bot → skip fromMe.
+      //  - shared/personal number: owner & bot share fromMe, so detect the bot by
+      //    the "Nombre:" prefix we stamp on replies → owner's own msgs DO get answered.
+      const fromMe = m.key.fromMe || false;
+      const isBotMessage = hasOwnNumber ? fromMe : text.startsWith(`${assistantName}:`);
+      if (isBotMessage) continue;
       if (!enabled.has(jid)) { log(poolId, `msg in ${jid} ignored (group not enabled)`); continue; }
-      log(poolId, `msg in ${jid} from ${m.key.participant ?? "?"}: "${text.slice(0, 40)}"`);
+      log(poolId, `msg in ${jid} from ${m.key.participant ?? (fromMe ? "owner" : "?")}: "${text.slice(0, 40)}"`);
       try {
         const reply = await routeMessage(poolId, { groupId: jid, sender: m.key.participant ?? undefined, text });
-        if (reply) { await sock.sendMessage(jid, { text: reply }); log(poolId, `replied in ${jid}`); }
+        if (reply) {
+          // Stamp the name prefix on shared-number lines so our own reply is
+          // recognized as a bot message next round (no self-reply loop).
+          const out = hasOwnNumber ? reply : `${assistantName}: ${reply}`;
+          await sock.sendMessage(jid, { text: out });
+          log(poolId, `replied in ${jid}`);
+        }
       } catch (e) {
         if (e instanceof PoolAtCapacity) {
           await sock.sendMessage(jid, { text: "Estamos a tope ahora, dame un momento. 🙏" }).catch(() => {});
