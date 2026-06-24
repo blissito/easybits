@@ -74,7 +74,7 @@ const memClient = () => getPlatformDefaultClient({ prefix: MEM_PREFIX });
 // Tar the conversation's workspace on the VM → upload to storage. Best-effort;
 // the caller logs failures (a lost backup just means that conversation starts
 // fresh after a destroy — degraded, not broken). Requires the VM running.
-async function backupConversation(
+export async function backupConversation(
   ctx: AuthContext,
   vm: { sandboxId: string },
   poolId: string,
@@ -101,7 +101,7 @@ async function backupConversation(
 
 // Download the conversation's memory blob (if any) and untar it into the VM's
 // /data. No-op (returns false) when no blob exists — a brand-new conversation.
-async function restoreConversation(
+export async function restoreConversation(
   ctx: AuthContext,
   vm: { sandboxId: string },
   poolId: string,
@@ -567,8 +567,12 @@ export async function createPool(
       maxWorkersPerVm: opts.maxWorkersPerVm ?? 2, // 512MB VM ≈ 2 claude concurrentes
       vmMemMb: opts.vmMemMb ?? 512,
       maxVms: opts.maxVms ?? 10,
-      idleSuspendMin: opts.idleSuspendMin ?? 5,
-      destroyIdleMin: opts.destroyIdleMin ?? 20,
+      // Destroy agresivo: el disco es el cuello de botella del box, y la memoria
+      // de cada conversación se externaliza a S3 (backup en suspend, restore en
+      // cold-spawn) — round-trip probado byte-a-byte (scripts/pool-memory-roundtrip.ts).
+      // suspend@2min (resume rápido, RAM liberada) → destroy@3min (recupera disco).
+      idleSuspendMin: opts.idleSuspendMin ?? 2,
+      destroyIdleMin: opts.destroyIdleMin ?? 3,
     },
   });
 }

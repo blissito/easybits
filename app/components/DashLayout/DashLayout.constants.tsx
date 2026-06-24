@@ -116,6 +116,22 @@ export const ITEMS = {
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="8" width="16" height="12" rx="2" />
+          <path d="M12 4v4" />
+          <circle cx="12" cy="3" r="1" />
+          <path d="M2 13h2" />
+          <path d="M20 13h2" />
+          <circle cx="9" cy="13" r="1" />
+          <circle cx="15" cy="13" r="1" />
+          <path d="M9 17h6" />
+        </svg>
+      ),
+      path: "/dash/pools",
+      title: "Agentes",
+    },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
         </svg>
       ),
