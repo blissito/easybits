@@ -12,13 +12,19 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-  let body: { file?: string; bytes?: number } = {};
+  let body: { file?: string; bytes?: number; ownerId?: string; sandboxId?: string } = {};
   try { body = await request.json(); } catch { /* empty */ }
   if (!token || !body.file) {
     return Response.json({ error: "token + file required" }, { status: 400 });
   }
   try {
-    const r = await ingestRecording(token, String(body.file), Number(body.bytes) || 0);
+    const r = await ingestRecording(
+      token,
+      String(body.file),
+      Number(body.bytes) || 0,
+      body.ownerId ? String(body.ownerId) : undefined,
+      body.sandboxId ? String(body.sandboxId) : undefined,
+    );
     return Response.json(r);
   } catch (e) {
     return Response.json({ error: String((e as Error).message || e) }, { status: 500 });

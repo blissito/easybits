@@ -177,6 +177,11 @@ export async function spawnStudio(
       LK_API_SECRET: lkApiSecret,
       ADMIN_TOKEN: adminToken,
       EASYBITS_INGEST_URL: "https://www.easybits.cloud/api/v2/studio/ingest",
+      // Salas efímeras (call_create) NO tienen fila en la DB de easybits, así que
+      // el ingest no puede resolver al dueño por embedToken. El box reenvía estos
+      // dos en el payload del ingest; el embedToken sigue siendo la capability.
+      EASYBITS_OWNER: ctx.user.id,
+      EASYBITS_SANDBOX_ID: sb.sandboxId,
       NODE_PORT: String(mediaFwd.ok ? mediaFwd.hostPort : MEDIA_PORT),
     },
   });
@@ -252,7 +257,7 @@ export async function stopStudioRecording(
       fileName: r.file,
       contentType: "video/mp4",
       size: r.bytes && r.bytes > 0 ? r.bytes : 1,
-      access: "public",
+      access: "private",
       source: "studio",
     });
     await boxAdmin(row, "POST", "/admin/recording/upload", {
@@ -292,12 +297,29 @@ export async function listStudioRecordings(
 // resuelve al dueño, sube el MP4 a sus Files (permanente, sobrevive a la VM) y
 // encola el transcript/captions (best-effort). Así la grabación es una
 // GENERACIÓN más en Files, sin exponer la API key del dueño en el box.
-export async function ingestRecording(embedToken: string, file: string, bytes: number) {
+export async function ingestRecording(
+  embedToken: string,
+  file: string,
+  bytes: number,
+  ownerHint?: string,
+  sandboxHint?: string
+) {
   if (!/^[\w.-]+\.(mp4|txt)$/.test(file)) throw new Error("bad file");
+
+  // Resolver dueño + sandbox. (1) Studio basado en agente (db.agent) — camino
+  // histórico, embedToken en la DB. (2) Sala efímera (call_create) sin fila en
+  // la DB: el box reenvía EASYBITS_OWNER/EASYBITS_SANDBOX_ID en el payload; el
+  // embedToken sigue siendo la capability (solo este box lo conoce).
   const agent = await db.agent.findUnique({ where: { embedToken } });
-  if (!agent) throw new Error("agent not found");
-  if (agent.template !== "livekit-svc") throw new Error("not a studio agent");
-  const owner = await db.user.findUnique({ where: { id: agent.ownerId } });
+  let ownerId: string, sandboxId: string;
+  if (agent) {
+    if (agent.template !== "livekit-svc") throw new Error("not a studio agent");
+    ownerId = agent.ownerId; sandboxId = agent.sandboxId;
+  } else {
+    if (!ownerHint || !sandboxHint) throw new Error("studio not found");
+    ownerId = ownerHint; sandboxId = sandboxHint;
+  }
+  const owner = await db.user.findUnique({ where: { id: ownerId } });
   if (!owner) throw new Error("owner not found");
   const ctx = { user: owner, scopes: ["READ", "WRITE"] } as AuthContext;
 
@@ -305,16 +327,17 @@ export async function ingestRecording(embedToken: string, file: string, bytes: n
   const contentType = isTxt ? "text/plain" : "video/mp4";
 
   // URL del archivo en el box (control port sirve /rec/<file>).
-  const exposed = await exposeSandboxPort(ctx, agent.sandboxId, CONTROL_PORT);
+  const exposed = await exposeSandboxPort(ctx, sandboxId, CONTROL_PORT);
   const boxUrl = exposed.url.replace(/\/$/, "") + "/rec/" + file;
 
   // Crear el File + presigned PUT, jalar el contenido del box y subirlo.
+  // PRIVADO: la grabación no debe ser pública en la web (se accede por link firmado).
   const { uploadFile } = await import("./operations");
   const { file: fileRec, putUrl } = await uploadFile(ctx, {
     fileName: file,
     contentType,
     size: bytes > 0 ? bytes : 1,
-    access: isTxt ? "private" : "public",
+    access: "private",
     source: "studio",
   });
   const resp = await fetch(boxUrl);
@@ -325,7 +348,14 @@ export async function ingestRecording(embedToken: string, file: string, bytes: n
   });
   if (!put.ok) throw new Error("PUT " + put.status);
 
-  return { ok: true, fileId: fileRec.id, url: fileRec.url, captionJobId: null };
+  // Link privado firmado (1h) para abrir/descargar la grabación.
+  let url: string | null = null;
+  try {
+    const { getReadClientForPlatformFile } = await import("../storage");
+    url = await getReadClientForPlatformFile(fileRec).getReadUrl((fileRec as { storageKey: string }).storageKey);
+  } catch { /* best-effort: el File queda en Files aunque no se firme el link */ }
+
+  return { ok: true, fileId: fileRec.id, url, access: "private", captionJobId: null };
 }
 
 // ── call_status ──────────────────────────────────────────────────────────────
@@ -378,7 +408,7 @@ export async function destroyCall(ctx: AuthContext, sandboxId: string) {
     for (const rec of recs.recordings ?? []) {
       if (!rec.file.endsWith(".mp4")) continue;
       try {
-        const { file: f, putUrl } = await uploadFile(ctx, { fileName: rec.file, contentType: "video/mp4", size: rec.size || 1, access: "public", source: "studio" });
+        const { file: f, putUrl } = await uploadFile(ctx, { fileName: rec.file, contentType: "video/mp4", size: rec.size || 1, access: "private", source: "studio" });
         const mp4 = await fetch(`${base}/rec/${rec.file}`);
         if (mp4.ok) {
           const buf = Buffer.from(await mp4.arrayBuffer());
