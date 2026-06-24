@@ -203,7 +203,7 @@ const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, 
 // /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
 function GhostyMascot({ className = "", blink = true }: { className?: string; blink?: boolean }) {
   const Blink = blink ? (
-    <animate attributeName="ry" values="11;11;1.5;11;11" dur="5s" repeatCount="indefinite" keyTimes="0;0.92;0.95;0.98;1" />
+    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur="5s" repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
   ) : null;
   return (
     <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -269,7 +269,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
               <div key={`a${j}`} className="w-10 h-10 flex items-center justify-center">
-                {ghosty ? <GhostyMascot className="w-8 h-10" blink={false} /> : <img src="/logo-purple.svg" alt="" className="w-10 h-10" />}
+                {ghosty ? <GhostyMascot className="w-8 h-10" /> : <img src="/logo-purple.svg" alt="" className="w-10 h-10" />}
               </div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
