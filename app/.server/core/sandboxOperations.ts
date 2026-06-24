@@ -1835,7 +1835,11 @@ export async function createAgent(
     (params.template === "open-ghosty" ||
       params.template === "lang-ghosty" ||
       params.template === "rust-ghosty" ||
-      params.template === "cagent-ghosty") &&
+      params.template === "cagent-ghosty" ||
+      // claude-worker wires the easybits MCP (upload_file, docs, DBs) over stdio
+      // when EASYBITS_API_KEY is present; pull it from the owner's vault so the
+      // pool's workers get the catalog without persona.env having to carry it.
+      params.template === "claude-worker") &&
     !env.EASYBITS_API_KEY
   ) {
     const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);

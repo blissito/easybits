@@ -1,0 +1,136 @@
+// claude-worker dispatcher. HTTP :3000, POST /message {content, sessionId} → SSE.
+// Routes each sessionId to its own Agent SDK session (resume on /data). See
+// docs/claude-worker-contract.md.
+import http from 'http';
+
+import { runTurn, type WorkerConfig } from './worker.js';
+import type { McpServerConfig } from './types.js';
+
+const PORT = Number(process.env.PORT || 3000);
+const MESSAGE_PATH = process.env.MESSAGE_PATH || '/message';
+// HOME drives where the Agent SDK writes ~/.claude/projects/<...>.jsonl transcripts.
+// Point it at the persistent volume so resume survives suspend/resume.
+const WORKER_HOME = process.env.CLAUDE_WORKER_HOME || process.env.CLAUDE_WORKER_DATA_DIR || '/data';
+
+function log(msg: string): void {
+  console.error(`[claude-worker] ${msg}`);
+}
+
+// OAuth Max token of the pool owner. Claude Code reads CLAUDE_CODE_OAUTH_TOKEN
+// natively for Max-plan (flat-rate) auth; the worker just forwards it to the
+// claude subprocess. Shared across all conversations on this VM (same owner).
+const OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN || '';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+function buildMcpServers(): Record<string, McpServerConfig> {
+  const servers: Record<string, McpServerConfig> = {};
+  const easybitsKey = process.env.EASYBITS_API_KEY;
+  if (easybitsKey) {
+    servers.easybits = {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@easybits.cloud/mcp'],
+      env: { EASYBITS_API_KEY: easybitsKey },
+    };
+  }
+  return servers;
+}
+
+const config: WorkerConfig = {
+  assistantName: process.env.ASSISTANT_NAME,
+  systemPrompt: process.env.SYSTEM_PROMPT,
+  mcpServers: buildMcpServers(),
+  childEnv: {
+    ...process.env,
+    HOME: WORKER_HOME,
+    // We run as root inside a Firecracker microVM. Claude Code refuses
+    // --dangerously-skip-permissions as root unless IS_SANDBOX is set — which is
+    // exactly true here. Without this the claude subprocess exits 1.
+    IS_SANDBOX: '1',
+    ...(OAUTH_TOKEN ? { CLAUDE_CODE_OAUTH_TOKEN: OAUTH_TOKEN } : {}),
+    ...(ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY } : {}),
+  },
+};
+
+function sse(res: http.ServerResponse, obj: unknown): void {
+  res.write(`data: ${JSON.stringify(obj)}\n\n`);
+}
+
+async function readBody(req: http.IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
+async function handleMessage(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  let body: { content?: string; sessionId?: string };
+  try {
+    body = JSON.parse(await readBody(req));
+  } catch {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid JSON body' }));
+    return;
+  }
+
+  const content = typeof body.content === 'string' ? body.content : '';
+  const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+  if (!content || !sessionId) {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'content and sessionId are required' }));
+    return;
+  }
+
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+
+  let streamedAny = false;
+  try {
+    for await (const ev of runTurn(config, sessionId, content)) {
+      if (ev.type === 'token') {
+        streamedAny = true;
+        sse(res, { type: 'token', value: ev.value });
+      } else if (ev.type === 'error') {
+        sse(res, { type: 'error', message: ev.message });
+        res.end();
+        return;
+      } else if (ev.type === 'result') {
+        // Fallback: if partial streaming yielded nothing, emit the final text once.
+        if (!streamedAny && ev.text) sse(res, { type: 'token', value: ev.text });
+      }
+      // init / activity / progress are internal — not part of the wire contract.
+    }
+    sse(res, { type: 'done' });
+  } catch (err) {
+    sse(res, { type: 'error', message: err instanceof Error ? err.message : String(err) });
+  } finally {
+    res.end();
+  }
+}
+
+const server = http.createServer((req, res) => {
+  if (req.method === 'GET' && req.url === '/health') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, oauth: Boolean(OAUTH_TOKEN) }));
+    return;
+  }
+  if (req.method === 'POST' && req.url === MESSAGE_PATH) {
+    handleMessage(req, res).catch((err) => {
+      log(`handler error: ${err instanceof Error ? err.message : String(err)}`);
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    });
+    return;
+  }
+  res.writeHead(404, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ error: 'not found' }));
+});
+
+server.listen(PORT, () => {
+  log(`listening on :${PORT}${MESSAGE_PATH} (HOME=${WORKER_HOME}, oauth=${Boolean(OAUTH_TOKEN)})`);
+  if (!OAUTH_TOKEN && !ANTHROPIC_API_KEY) {
+    log('WARNING: neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY set — the Agent SDK will fail to auth.');
+  }
+});
