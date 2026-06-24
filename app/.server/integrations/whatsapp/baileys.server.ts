@@ -334,6 +334,15 @@ let rehydrated = false;
 let rehydrating: Promise<void> | null = null;
 export function ensureRehydrated(): Promise<void> {
   if (rehydrated) return Promise.resolve();
+  // Never auto-reconnect prod pools (or run the reaper) from a LOCAL dev server —
+  // npm run dev points at the prod DB, so rehydrating here opens a SECOND Baileys
+  // socket to the same WhatsApp account as Fly and they fight over the single web
+  // session (connect→close flapping), and the local reaper would suspend/destroy
+  // prod worker VMs. Explicit connect (the UI button) still works in dev.
+  if (process.env.NODE_ENV !== "production") {
+    rehydrated = true;
+    return Promise.resolve();
+  }
   if (rehydrating) return rehydrating;
   rehydrating = (async () => {
     try {

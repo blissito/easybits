@@ -1,7 +1,10 @@
 import type { Route } from "./+types/pools";
 import { useEffect, useState } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
+import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
+import { Switch } from "~/components/forms/Switch";
+import { PLANS, getUserPlan, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { createPool, deletePool } from "~/.server/core/poolOperations";
@@ -45,6 +48,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       });
       const machines = await Promise.all(
         workers.map(async (w) => ({
+          id: w.id,
           status: w.status,
           slots: await db.poolRoute.count({ where: { agentId: w.id } }),
         }))
@@ -60,12 +64,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Capacity is per ACCOUNT (one fleet, any number of channels) — aggregate every
   // channel's worker VMs into a single general view instead of per-card cajitas.
   const machines = pools.flatMap((p) => p.machines);
+  // Account capacity = the plan's concurrent-sandbox budget. A pool worker VM IS
+  // a sandbox, so "Mega = 3 máquinas" maps 1:1. Each VM holds maxWorkersPerVm
+  // agents (workers), so agent capacity = maxMachines × maxWorkersPerVm.
+  const plan = getUserPlan(user);
+  const planCfg = PLANS[plan];
+  const maxWorkersPerVm = pools[0]?.maxWorkersPerVm ?? 2;
   const capacity = {
     machines,
     vms: machines.length,
-    conversations: pools.reduce((s, p) => s + p.conversations, 0),
-    maxWorkersPerVm: pools[0]?.maxWorkersPerVm ?? 2,
+    maxMachines: planCfg.concurrentSandboxes,
+    plan,
+    planName: planCfg.name,
+    nextPlan: NEXT_PLAN[plan] ?? null,
+    maxWorkersPerVm,
     vmMemMb: pools[0]?.vmMemMb ?? 512,
+    // Agents running RIGHT NOW = sum of workers inside active VMs (coherent with
+    // "VMs contain agents"); idle/detached routes don't count until re-spawned.
+    agentsActive: machines.reduce((s, m) => s + m.slots, 0),
+    agentsMax: planCfg.concurrentSandboxes * maxWorkersPerVm,
   };
   return { secretNames, pools, capacity };
 }
@@ -138,6 +155,97 @@ function Spinner() {
   return <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-[-2px]" />;
 }
 
+type Capacity = {
+  machines: { id: string; status: string; slots: number }[];
+  vms: number; maxMachines: number; plan: string; planName: string;
+  nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number;
+  agentsActive: number; agentsMax: number;
+};
+
+const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, opacity: 1, y: 0 }, exit: { scale: 0.4, opacity: 0, y: 8 } };
+
+// One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
+// Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
+// building pulses yellow; an unspawned slot is a dashed "mount" ready on demand.
+function VmBox({ id, status, slots, max }: { id: string; status: string | null; slots: number; max: number }) {
+  const full = slots >= max;
+  const frame =
+    status === "building" ? "border-yellow-500 bg-yellow-50 animate-pulse"
+    : status == null ? "border-gray-200 border-dashed bg-gray-50/40"
+    : full ? "border-amber-500 bg-amber-50"
+    : slots > 0 ? "border-green-500 bg-green-50"
+    : "border-gray-300 bg-gray-50";
+  const label = status == null ? "libre" : status === "building" ? "boot" : `${slots}/${max} agentes`;
+  return (
+    <motion.div
+      layout {...SPAWN}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      whileHover={status == null ? { scale: 1.02 } : { scale: 1.05, y: -3 }}
+      style={{ flexGrow: max, flexBasis: max * 56 }}
+      title={status == null ? "Sandbox disponible — se levanta bajo demanda" : `Sandbox ${status} · ${slots}/${max} agentes`}
+      className={`min-w-[100px] h-20 rounded-lg border-2 flex flex-col items-center justify-center gap-1.5 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] transition-shadow ${frame}`}
+    >
+      <div className="flex gap-1.5 items-center flex-wrap justify-center px-2">
+        {Array.from({ length: max }).map((_, j) =>
+          j < slots ? (
+            <motion.img key={`a${j}`} src="/logo-purple.svg" alt="" className="w-6 h-6"
+              initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 600, damping: 18, delay: j * 0.05 }} />
+          ) : (
+            <span key={`e${j}`} className="w-3 h-3 rounded-full border border-gray-300 bg-white/70" />
+          )
+        )}
+      </div>
+      <span className="font-jersey text-[13px] leading-none text-gray-500">{label}</span>
+    </motion.div>
+  );
+}
+
+function CapacityHud({ capacity }: { capacity: Capacity }) {
+  const freeSlots = Math.max(0, capacity.maxMachines - capacity.machines.length);
+  return (
+    <div className="border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="font-jersey text-3xl leading-none tracking-wide">CAPACIDAD</span>
+          <motion.span whileHover={{ scale: 1.08, rotate: -2 }}
+            className="font-jersey text-lg leading-none px-2 py-1 bg-brand-500 text-white border-2 border-black rounded-md cursor-default">
+            {capacity.planName.toUpperCase()}
+          </motion.span>
+        </div>
+        <span className="font-jersey text-xl leading-none text-gray-500">
+          {capacity.vms}/{capacity.maxMachines} SANDBOXES · {capacity.agentsActive}/{capacity.agentsMax} AGENTES
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-stretch">
+        <AnimatePresence mode="popLayout">
+          {capacity.machines.map((m) => (
+            <VmBox key={m.id} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} />
+          ))}
+          {Array.from({ length: freeSlots }).map((_, i) => (
+            <VmBox key={`free-${i}`} id={`free-${i}`} status={null} slots={0} max={capacity.maxWorkersPerVm} />
+          ))}
+          {/* Añadir capacidad — sube de plan para más sandboxes */}
+          <motion.a key="add" layout {...SPAWN} href="/dash/packs" title="Añadir capacidad"
+            whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
+            className="w-20 shrink-0 rounded-lg border-2 border-dashed border-brand-500 text-brand-500 flex flex-col items-center justify-center gap-0.5 hover:bg-brand-500/10">
+            <span className="text-2xl leading-none">+</span>
+            <span className="font-jersey text-[12px] leading-none">MÁS</span>
+          </motion.a>
+        </AnimatePresence>
+      </div>
+
+      <p className="text-xs text-gray-400 mt-2">
+        {capacity.vms === 0
+          ? `Sin sandboxes activos — se levantan bajo demanda al llegar un mensaje. Tu plan ${capacity.planName} da ${capacity.maxMachines} sandbox${capacity.maxMachines !== 1 ? "es" : ""} (${capacity.agentsMax} agentes simultáneos).`
+          : `${capacity.vmMemMb}MB por sandbox · cada uno contiene hasta ${capacity.maxWorkersPerVm} agentes.`}
+        {capacity.nextPlan && <> Sube a <span className="font-semibold text-brand-500">{capacity.nextPlan}</span> para más capacidad.</>}
+      </p>
+    </div>
+  );
+}
+
 export default function Pools({ loaderData }: Route.ComponentProps) {
   const { secretNames, pools, capacity } = loaderData;
   const fetcher = useFetcher();
@@ -156,9 +264,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const polling = pools.some(
     (p) =>
       p.status === "qr_pending" || p.status === "pairing" || p.status === "connecting" ||
-      (p.machines?.length ?? 0) > 0 // live capacity view while VMs exist
+      p.status === "connected" || // live: ver VMs aparecer/apagarse sin refrescar
+      (p.machines?.length ?? 0) > 0
   );
   const [phones, setPhones] = useState<Record<string, string>>({});
+  const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!polling) return;
     const t = setInterval(() => rev.revalidate(), 2500);
@@ -166,37 +276,23 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   }, [polling, rev]);
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-1">Canales (Pool de WhatsApp)</h1>
-      <p className="text-gray-500 mb-6">Conecta un WhatsApp y atiende sus grupos con agentes que se levantan bajo demanda.</p>
+    <div className="max-w-5xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-1">Agentes de WhatsApp</h1>
+      <p className="text-gray-500 mb-6">Crea un agente, conéctalo a WhatsApp y atiende tus grupos. Se levanta bajo demanda.</p>
 
-      {/* Capacidad de la cuenta — un solo fleet para todos los canales. Las
-          cajitas viven aquí (no por canal) para no escrolear con listas largas. */}
-      {capacity.vms > 0 && (
-        <div className="border-2 border-black rounded-xl p-4 mb-8 animate-fade-in">
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-bold">Capacidad</span>
-            <span className="text-xs text-gray-400">
-              {capacity.vms} máquina{capacity.vms !== 1 ? "s" : ""} · {capacity.vmMemMb}MB c/u · {capacity.conversations} conv.
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {capacity.machines.map((m, i) => (
-              <div key={i} title={`${m.status} · ${m.slots}/${capacity.maxWorkersPerVm} conversaciones`}
-                className={`w-10 h-10 rounded-md border-2 flex items-center justify-center text-[11px] font-bold ${
-                  m.status === "running" ? "border-green-500 bg-green-50 text-green-700"
-                  : m.status === "building" ? "border-yellow-500 bg-yellow-50 text-yellow-700 animate-pulse"
-                  : "border-gray-300 bg-gray-50 text-gray-400"}`}>
-                {m.slots}/{capacity.maxWorkersPerVm}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Bento responsive: Capacidad a todo lo ancho arriba; luego Nuevo agente y
+          los agentes fluyen en 2 columnas (desktop) y se apilan en mobile. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
-      {/* Nuevo canal */}
-      <div className="border-2 border-black rounded-xl p-4 mb-8 animate-fade-in">
-        <span className="font-bold block mb-3">Nuevo canal</span>
+      {/* Capacidad — HUD estilo videojuego. Las VMs son CONTENEDORES; dentro
+          viven los agentes (workers, render = ojitos de la marca). El color de
+          cada VM sube según ocupación: gris (vacía) → morado (a medias) → verde
+          (llena), amarillo si está booteando. Capacidad = plan de la cuenta. */}
+      <CapacityHud capacity={capacity} />
+
+      {/* Nuevo agente */}
+      <div className="border-2 border-black rounded-xl p-4 animate-fade-in">
+        <span className="font-bold block mb-3">Nuevo agente</span>
         <fetcher.Form method="post" className="flex flex-col gap-3">
           <input type="hidden" name="intent" value="create" />
           <input name="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Atención a cliente"
@@ -222,13 +318,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           )}
 
           <button disabled={isBusy("create")} className="self-start bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60">
-            {isBusy("create") ? <Spinner /> : "+ Crear canal"}
+            {isBusy("create") ? <Spinner /> : "+ Crear Agente"}
           </button>
         </fetcher.Form>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {pools.length === 0 && <p className="text-gray-400">Aún no tienes canales.</p>}
+      {pools.length === 0 && <p className="lg:col-span-2 text-gray-400">Aún no tienes agentes.</p>}
         {pools.map((p) => {
           const st = STATUS[p.status as keyof typeof STATUS] ?? STATUS.disconnected;
           const stale = p.status === "connected" && !p.live;
@@ -262,15 +357,34 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     <span className="text-xs text-gray-400">{p.conversations} conv.</span>
                   </div>
                   {p.groups.length === 0 && <p className="text-xs text-gray-400">No se ven grupos aún. Solo responde en los que actives.</p>}
-                  <div className="flex flex-col gap-1.5">
-                    {p.groups.map((g) => (
-                      <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" checked={g.enabled} disabled={isBusy("toggle-group", p.id)}
-                          onChange={(e) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: e.target.checked ? "1" : "0" }, { method: "post" })} />
-                        <span className={g.enabled ? "font-semibold" : ""}>{g.subject}</span>
-                      </label>
-                    ))}
-                  </div>
+                  {(() => {
+                    const active = p.groups.filter((g) => g.enabled);
+                    const others = p.groups.filter((g) => !g.enabled);
+                    const open = showAllGroups[p.id] ?? false;
+                    const GroupRow = (g: { id: string; subject: string; enabled: boolean }) => (
+                      <motion.div key={g.id} layout
+                        initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 34 }}>
+                        <Switch value={g.enabled} label={g.subject}
+                          className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
+                          onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
+                      </motion.div>
+                    );
+                    return (
+                      <div className="flex flex-col gap-1.5">
+                        <AnimatePresence mode="popLayout" initial={false}>
+                          {active.map(GroupRow)}
+                          {open && others.map(GroupRow)}
+                        </AnimatePresence>
+                        {others.length > 0 && (
+                          <button type="button" onClick={() => setShowAllGroups((s) => ({ ...s, [p.id]: !open }))}
+                            className="self-start text-xs text-brand-500 font-semibold mt-1 hover:underline">
+                            {open ? "Ocultar grupos no activos" : `+ ${others.length} grupo${others.length !== 1 ? "s" : ""} no activo${others.length !== 1 ? "s" : ""}`}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {p.enabledCount === 0 && p.groups.length > 0 && (
                     <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
                   )}
@@ -301,7 +415,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </button>
                 )}
                 <button disabled={isBusy("delete", p.id)}
-                  onClick={() => { if (confirm(`¿Borrar el canal "${p.name || "Sin nombre"}"? Se destruyen sus VMs y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
+                  onClick={() => { if (confirm(`¿Borrar el agente "${p.name || "Sin nombre"}"? Se destruyen sus sandboxes y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
                   className="ml-auto border-2 border-red-300 text-red-600 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
                   {isBusy("delete", p.id) ? <Spinner /> : "Borrar"}
                 </button>

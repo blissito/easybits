@@ -1,6 +1,10 @@
 import { useState } from "react";
-import { useFetcher, useSearchParams } from "react-router";
+import { useFetcher, useSearchParams, data } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { LuMemoryStick, LuCpu, LuHardDrive } from "react-icons/lu";
+import { HOSTING_CATALOG, TIER_ORDER } from "~/lib/hostingCatalog";
+import { createPermanent } from "~/.server/core/machineOperations";
+import type { AuthContext } from "~/.server/apiAuth";
 import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
@@ -47,6 +51,27 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     nextPlanPrice: nextPlan ? pack.prices[nextPlan] : null,
   }));
 
+  // Sandboxes reservados (always-on) = add-ons equivalentes a máquinas permanentes.
+  // 3 tiers que mapean a las clases de agente (Texto/Navegador/Estudio).
+  const CURATED: Record<string, { clase: string; desc: string; legend: string; featured?: boolean }> = {
+    nano: { clase: "Texto", desc: "Atención y respuestas", legend: "Nunca se calla. 💬" },
+    lite: { clase: "Navegador", desc: "Chromium para ver/capturar webs", legend: "Chismea webs por ti. 🕵️", featured: true },
+    plus: { clase: "Estudio", desc: "Multimedia pesado (video/imágenes)", legend: "Suda pixeles, no tú. 🎬" },
+  };
+  const agentsFor = (mb: number) => Math.max(2, Math.round(mb / 410)); // densidad estimada claude-worker
+  const sandboxTiers = TIER_ORDER.map((key) => {
+    const t = HOSTING_CATALOG[key];
+    const c = CURATED[key];
+    return {
+      key, curated: !!c, featured: c?.featured ?? false,
+      clase: c?.clase ?? key.toUpperCase(),
+      desc: c?.desc ?? `${t.vcpus} vCPU · ${Math.round(t.diskMb / 1024)}GB`,
+      legend: c?.legend ?? "",
+      memoryMb: t.memoryMb, vcpus: t.vcpus, diskMb: t.diskMb,
+      price: t.priceShared, agents: agentsFor(t.memoryMb),
+    };
+  });
+
   return {
     packs,
     llmPacks: LLM_TOKEN_PACKS,
@@ -56,23 +81,43 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     referralStats,
     referralLink: `https://www.easybits.cloud/login?ref=${user.publicKey}`,
     autoTopup: user.autoTopup ?? null,
+    sandboxTiers,
+    canBuyAddon: plan !== "Byte", // tiers minPlan: Mega
   };
 };
 
+export const action = async ({ request }: Route.ActionArgs) => {
+  const user = await getUserOrRedirect(request);
+  const fd = await request.formData();
+  if (String(fd.get("intent")) !== "buy-sandbox") {
+    return data({ error: "intent inválido" }, { status: 400 });
+  }
+  const ctx = { user, scopes: ["ADMIN"] } as AuthContext;
+  try {
+    const m = await createPermanent(ctx, { tier: String(fd.get("tier")) });
+    return data({ ok: true, sandboxId: m.sandboxId });
+  } catch (e) {
+    return data({ error: e instanceof Error ? e.message : "No se pudo crear el sandbox" }, { status: 400 });
+  }
+};
+
 export default function PacksPage({ loaderData }: Route.ComponentProps) {
-  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup } =
+  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup, sandboxTiers, canBuyAddon } =
     loaderData;
 
+  type Tab = "credits" | "tokens" | "sandboxes";
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const [tab, setTab] = useState<"credits" | "tokens">(
-    tabParam === "tokens" ? "tokens" : "credits",
+  const [tab, setTab] = useState<Tab>(
+    tabParam === "tokens" ? "tokens" : tabParam === "sandboxes" ? "sandboxes" : "credits",
   );
 
-  const switchTab = (t: "credits" | "tokens") => {
+  const switchTab = (t: Tab) => {
     setTab(t);
-    setSearchParams(t === "tokens" ? { tab: "tokens" } : {}, { replace: true });
+    setSearchParams(t === "credits" ? {} : { tab: t }, { replace: true });
   };
+  const [showAllTiers, setShowAllTiers] = useState(true);
+  const shownTiers = showAllTiers ? sandboxTiers : sandboxTiers.filter((t) => t.curated);
 
   const showSuccess = searchParams.get("success") === "1";
 
@@ -145,6 +190,16 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
         >
           🧠 Tokens LLM
         </button>
+        <button
+          onClick={() => switchTab("sandboxes")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
+            tab === "sandboxes"
+              ? "bg-black text-white border-black"
+              : "bg-gray-100 text-iron border-gray-300 hover:bg-gray-200"
+          }`}
+        >
+          📦 Sandboxes
+        </button>
       </div>
 
       {/* Pack grid */}
@@ -154,11 +209,29 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
             <CreditPackCard key={pack.id} pack={pack} />
           ))}
         </div>
-      ) : (
+      ) : tab === "tokens" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
           {llmPacks.map((pack) => (
             <LlmPackCard key={pack.id} pack={pack} />
           ))}
+        </div>
+      ) : (
+        <div className="mb-12">
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <p className="text-sm text-iron">
+              Reserva capacidad dedicada para tus agentes. Elige el tamaño según lo que harán —
+              cada sandbox corre varios agentes a la vez.
+            </p>
+            <button onClick={() => setShowAllTiers((v) => !v)}
+              className="shrink-0 text-xs font-bold border-2 border-black rounded-lg px-3 py-1.5 hover:bg-gray-100">
+              {showAllTiers ? "← Ver 3 clases" : "Ver las 10 tiers →"}
+            </button>
+          </div>
+          <div className={`grid gap-4 ${showAllTiers ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-1 sm:grid-cols-3"}`}>
+            {shownTiers.map((t) => (
+              <SandboxAddonCard key={t.key} tier={t} canBuy={canBuyAddon} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -412,6 +485,78 @@ function CreditPackCard({
         >
           Comprar
         </BrutalButton>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sandbox Add-on Card (máquina permanente / always-on) ───────────────────
+
+function SandboxAddonCard({
+  tier,
+  canBuy,
+}: {
+  tier: { key: string; clase: string; desc: string; featured: boolean; curated: boolean; memoryMb: number; vcpus: number; diskMb: number; price: number; agents: number; legend: string };
+  canBuy: boolean;
+}) {
+  const fetcher = useFetcher<typeof action>();
+  const isLoading = fetcher.state !== "idle";
+  const ramGB = tier.memoryMb / 1024;
+  const ramLabel = ramGB < 1 ? `${tier.memoryMb}MB` : `${ramGB}GB`;
+  const diskGB = Math.round(tier.diskMb / 1024);
+  const shown = Math.min(tier.agents, 10); // cap visual; el texto muestra el real
+  const rows = shown <= 5 ? 1 : 2;
+  const cols = Math.ceil(shown / rows); // filas balanceadas: 6→3+3, 10→5+5
+
+  return (
+    <div
+      className={`border-2 rounded-xl bg-white hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative h-full ${
+        tier.featured
+          ? "border-brand-500 ring-2 ring-brand-500 shadow-[4px_4px_0px_0px_#9870ED] hover:shadow-[6px_6px_0px_0px_#9870ED]"
+          : "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+      }`}
+    >
+      <div className={`p-4 border-b-2 text-center ${tier.featured ? "border-brand-500 bg-brand-50" : "border-black"}`}>
+        <p className="text-[11px] uppercase tracking-widest font-black text-black/70 mb-2">{tier.clase}</p>
+        <div className="flex items-center justify-center min-h-[3.25rem] mb-2">
+          <div className="grid gap-1 justify-center" style={{ gridTemplateColumns: `repeat(${cols}, auto)` }}>
+            {Array.from({ length: shown }).map((_, i) => (
+              <img key={i} src="/logo-purple.svg" alt="" className="w-6 h-6" />
+            ))}
+          </div>
+        </div>
+        <p className="text-lg font-bold leading-tight">{tier.agents} agentes</p>
+        <p className="mt-0.5 text-xs font-black uppercase tracking-wide text-brand-500">simultáneos</p>
+        <div className="flex items-center justify-center gap-2 text-[11px] text-iron mt-2 flex-wrap">
+          <span className="flex items-center gap-0.5" title="RAM"><LuMemoryStick size={12} /> {ramLabel}</span>
+          <span className="flex items-center gap-0.5" title="CPU"><LuCpu size={12} /> {tier.vcpus} vCPU</span>
+          <span className="flex items-center gap-0.5" title="Disco"><LuHardDrive size={12} /> {diskGB}GB</span>
+        </div>
+        {tier.curated && <p className="text-[11px] text-iron/70 italic mt-1.5 leading-tight">{tier.desc}</p>}
+      </div>
+      <div className="p-4 flex flex-col flex-1 justify-between">
+        <div className="text-center mb-4">
+          <p className={`text-2xl font-bold ${tier.featured ? "text-brand-500" : ""}`}>
+            ${tier.price} <span className="text-sm text-iron font-normal">mxn/mes</span>
+          </p>
+          {tier.legend && <p className="text-xs text-iron mt-1.5">{tier.legend}</p>}
+        </div>
+        {fetcher.data && "ok" in fetcher.data ? (
+          <p className="text-sm text-center text-green-700 font-bold">✅ Sandbox encendido — verlo en <a href="/dash/hosting" className="underline">Hosting</a></p>
+        ) : (
+          <>
+            {fetcher.data && "error" in fetcher.data && <p className="text-xs text-red-600 mb-2 text-center">{fetcher.data.error}</p>}
+            <BrutalButton
+              onClick={() => fetcher.submit({ intent: "buy-sandbox", tier: tier.key }, { method: "POST" })}
+              isLoading={isLoading}
+              isDisabled={!canBuy}
+              className={`w-full ${tier.featured ? "bg-brand-500 text-white" : "bg-white"}`}
+              containerClassName="w-full"
+            >
+              {canBuy ? "Comprar" : "Desde Mega"}
+            </BrutalButton>
+          </>
+        )}
       </div>
     </div>
   );

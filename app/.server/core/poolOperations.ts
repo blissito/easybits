@@ -568,7 +568,7 @@ export async function createPool(
       vmMemMb: opts.vmMemMb ?? 512,
       maxVms: opts.maxVms ?? 10,
       idleSuspendMin: opts.idleSuspendMin ?? 5,
-      destroyIdleMin: opts.destroyIdleMin ?? 10,
+      destroyIdleMin: opts.destroyIdleMin ?? 20,
     },
   });
 }
