@@ -98,7 +98,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "hosting",
     label: "Hosting",
     description:
-      "Máquinas permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir, delegar acceso de tu cuenta a otra (grant/revoke/list_access) para co-administración, descubrir templates+env (list_machine_templates) y admin passthrough al box (sandbox_admin: pairing WhatsApp, CLAUDE.md). El plan da acceso; cada máquina factura flat al mes.",
+      "Sandboxes permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir, delegar acceso de tu cuenta a otra (grant/revoke/list_access) para co-administración, descubrir templates+env (list_machine_templates) y admin passthrough al box (sandbox_admin: pairing WhatsApp, CLAUDE.md). El plan da acceso; cada sandbox factura flat al mes.",
     toolCount: 10,
   },
   {
@@ -387,7 +387,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
 ]);
 
 /**
- * Hosting — always-on machines (máquinas permanentes). MVP surface:
+ * Hosting — always-on machines (sandboxes permanentes). MVP surface:
  * catalog + create/list/get/destroy. resize_machine / add_machine_disk join
  * once the host contract (reserved CPU floor, live resize) lands.
  */

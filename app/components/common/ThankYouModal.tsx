@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 /**
  * "Heartfelt thanks from the founder" modal — estilo Basecamp.
- * Aparece al comprar plan o al montar una máquina permanente.
+ * Aparece al comprar plan o al montar un sandbox permanente.
  *
  * TODO(bliss): reemplazar `FOUNDER.photo` y `FOUNDER.signature` con los assets
  * reales (foto del fundador + imagen de la firma). Confirmar `name` y `email`.
@@ -59,7 +59,7 @@ export function ThankYouModal({
             <p>
               Somos una empresa independiente, sostenida por nuestros usuarios — no por inversionistas.
               {kind === "machine"
-                ? " Cada máquina que enciendes nos ayuda a seguir construyendo."
+                ? " Cada sandbox que enciendes nos ayuda a seguir construyendo."
                 : " Tu suscripción hace posible EasyBits."}
             </p>
             <p>
@@ -86,7 +86,7 @@ export function ThankYouModal({
           type="button" onClick={onClose}
           className="w-full bg-brand-500 text-white font-bold py-4 border-t-2 border-black hover:bg-brand-500/90 transition-colors"
         >
-          {kind === "machine" ? "¡Genial, ver mi máquina!" : "¡Genial, volver a EasyBits!"}
+          {kind === "machine" ? "¡Genial, ver mi sandbox!" : "¡Genial, volver a EasyBits!"}
         </button>
       </div>
     </div>

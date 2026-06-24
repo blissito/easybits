@@ -1711,13 +1711,13 @@ export async function sandboxAdmin(
   });
   if (!row?.template || !ADMIN_PASSTHROUGH_TEMPLATES.has(row.template)) {
     throw new Response(
-      JSON.stringify({ error: "AdminNotSupported", message: "Esta máquina no es un agente insignia con admin API (pairing/CLAUDE.md no aplican)." }),
+      JSON.stringify({ error: "AdminNotSupported", message: "Este sandbox no es un agente insignia con admin API (pairing/CLAUDE.md no aplican)." }),
       { status: 403, headers: { "content-type": "application/json" } }
     );
   }
   if (!row?.adminToken) {
     throw new Response(
-      JSON.stringify({ error: "NoAdminToken", message: "Esta máquina no tiene admin token (no es un runtime gestionado)." }),
+      JSON.stringify({ error: "NoAdminToken", message: "Este sandbox no tiene admin token (no es un runtime gestionado)." }),
       { status: 400, headers: { "content-type": "application/json" } }
     );
   }

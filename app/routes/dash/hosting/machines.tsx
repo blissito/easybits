@@ -37,7 +37,7 @@ const daysLeft = (iso: string | null) => {
   return Math.max(0, Math.ceil((purge - Date.now()) / 864e5));
 };
 
-export const meta = () => [{ title: "Máquinas — EasyBits" }, { name: "robots", content: "noindex" }];
+export const meta = () => [{ title: "Sandboxes — EasyBits" }, { name: "robots", content: "noindex" }];
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -69,7 +69,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     };
   });
   const { PLANS: plansMap } = await import("~/lib/plans");
-  const sandboxLimit = plansMap[plan]?.concurrentSandboxes ?? 2;
+  // Total concurrent-sandbox budget = plan + add-ons reservados (mismos add-ons
+  // que el pool). Así hosting y pools muestran el MISMO número (no 3 vs 5).
+  const { getReservedCapacity } = await import("~/.server/core/sandboxReservations");
+  const reserved = await getReservedCapacity(user.id);
+  const sandboxLimit = (plansMap[plan]?.concurrentSandboxes ?? 2) + reserved.machines;
   const activeSandboxes = ephemerals.filter((s) => s.status === "running" || s.status === "starting").length;
   // Next charge = the plan subscription's period end (all machines bill on that
   // same invoice cycle). One Stripe read, only when there are machines billing.
@@ -255,7 +259,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
         transition={{ duration: 0.3, delay: 0.05 }}
       >
         <h1 className="text-3xl font-black tracking-tight uppercase flex items-center gap-2">
-          <LuServer /> Máquinas
+          <LuServer /> Sandboxes
         </h1>
       </motion.header>
       <motion.p
@@ -264,7 +268,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3, delay: 0.1 }}
       >
-        VMs always-on con cobro flat al mes, y tus sandboxes efímeros.
+        Sandboxes dedicados con cobro flat al mes, y tus efímeros bajo demanda.
       </motion.p>
 
       <AnimatePresence>
@@ -389,7 +393,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
           <AnimatePresence mode="popLayout">
             {permanents.length === 0 ? (
               <motion.div key="empty-perm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Empty>Sin máquinas permanentes.</Empty>
+                <Empty>Sin sandboxes permanentes.</Empty>
               </motion.div>
             ) : permanents.map((m, i) => {
               const isDestroying = destroyingIds.has(m.sandboxId);

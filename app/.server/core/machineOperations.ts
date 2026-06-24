@@ -1,5 +1,5 @@
 /**
- * Always-on VM hosting ("máquinas permanentes") — orchestration layer.
+ * Always-on VM hosting ("sandboxes permanentes") — orchestration layer.
  *
  * ONE model, ONE id: the host's `sandboxId` is the single handle. A `Sandbox`
  * Mongo row exists only for PERMANENT (billed) sandboxes — `persistent`/`tier`/
@@ -132,7 +132,7 @@ function assertCanProvision(ctx: AuthContext, tier: HostingTier, mode: CpuMode):
   const plan = getUserPlan(ctx.user);
   if (!isPaidPlan(plan)) {
     fail(403, "MachineSubscriptionRequired",
-      "Necesitas un plan de pago (Mega o Tera) para crear máquinas permanentes.");
+      "Necesitas un plan de pago (Mega o Tera) para crear sandboxes permanentes.");
   }
   if (PLAN_RANK[plan] < PLAN_RANK[tier.minPlan]) {
     fail(403, "MachinePlanRequired",
@@ -170,7 +170,7 @@ async function attachBilling(
   if (!subscription) {
     await onRollback();
     fail(403, "MachineSubscriptionRequired",
-      "No encontramos una suscripción de plan activa. Suscríbete a un plan para crear máquinas.");
+      "No encontramos una suscripción de plan activa. Suscríbete a un plan para crear sandboxes.");
   }
   const monthlyMxn = machineMonthly(tier, mode, diskAddonsGB);
   try {
@@ -190,7 +190,7 @@ async function attachBilling(
     await db.sandbox.delete({ where: { sandboxId: row.sandboxId } }).catch(() => undefined);
     await onRollback();
     fail(502, "MachineBillingFailed",
-      `No se pudo crear el cobro de la máquina: ${e instanceof Error ? e.message : String(e)}`);
+      `No se pudo crear el cobro de el sandbox: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -315,7 +315,7 @@ export async function makePermanent(
 
   const existing = await db.sandbox.findUnique({ where: { sandboxId } });
   if (existing && existing.status !== "destroyed") {
-    fail(409, "AlreadyPermanent", "Este sandbox ya es una máquina permanente.");
+    fail(409, "AlreadyPermanent", "Este sandbox ya es un sandbox permanente.");
   }
 
   // Confirm it exists + belongs to the caller (host is owner-scoped).
@@ -422,7 +422,7 @@ export async function getPermanent(ctx: AuthContext, sandboxId: string): Promise
     row.status !== "destroyed" &&
     (row.ownerId === ctx.user.id || (await can(ctx, row.ownerId, SCOPES.MACHINES)));
   if (!row || !allowed) {
-    fail(404, "MachineNotFound", "Máquina no encontrada.");
+    fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
   const { row: healed, host } = await selfHeal(ctx, row as SandboxRow);
   return toPermanent(healed, host, row.ownerId !== ctx.user.id);
@@ -436,7 +436,7 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
   requireScope(ctx, "DELETE");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
-    fail(404, "MachineNotFound", "Máquina no encontrada.");
+    fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
   // Stop the meter immediately — the owner asked to release it.
   if (row.stripeSubItemId) {
@@ -459,10 +459,10 @@ export async function restoreMachine(ctx: AuthContext, sandboxId: string): Promi
   requireScope(ctx, "WRITE");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
-    fail(404, "MachineNotFound", "Máquina no encontrada.");
+    fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
   if (row.status !== "pending_deletion") {
-    fail(409, "NotPendingDeletion", "Esta máquina no está programada para borrado.");
+    fail(409, "NotPendingDeletion", "Este sandbox no está programada para borrado.");
   }
   const tier = resolveTier(row.tier);
   if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);

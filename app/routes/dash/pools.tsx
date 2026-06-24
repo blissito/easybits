@@ -47,10 +47,14 @@ export async function loader({ request }: Route.LoaderArgs) {
         where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } },
         select: { id: true, status: true },
       });
+      // Ghosty = cerebro claude-worker → en las cajitas los agentes se dibujan
+      // como fantasmitas; cualquier otro template usa los ojitos genéricos.
+      const ghosty = p.workerTemplate === "claude-worker";
       const machines = await Promise.all(
         workers.map(async (w) => ({
           id: w.id,
           status: w.status,
+          ghosty,
           slots: await db.poolRoute.count({ where: { agentId: w.id } }),
         }))
       );
@@ -74,20 +78,34 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Reserved capacity bought in /dash/packs raises the budget on top of the
   // plan: +1 machine slot and +`agents` agent slots per active reservation.
   const reserved = await getReservedCapacity(user.id);
+  // Sandboxes de SISTEMA (llamadas livekit / voz kokoro): ocupan budget del host
+  // pero NO atienden agentes. Se surfacean del host y se pintan AZUL en el HUD.
+  const { listSandboxes } = await import("~/.server/core/sandboxOperations");
+  const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamada" };
+  const hostVms = await listSandboxes({ user, scopes: ["READ"] } as any).catch(() => [] as any[]);
+  const systemMachines = (hostVms as any[])
+    .filter((v) => SYSTEM_TEMPLATES[v.template] && (v.status === "running" || v.status === "starting"))
+    .map((v) => ({ id: v.sandboxId, status: v.status as string, sysLabel: SYSTEM_TEMPLATES[v.template] }));
   const capacity = {
     machines,
-    vms: machines.length,
+    systemMachines,
+    vms: machines.length + systemMachines.length,
     maxMachines: planCfg.concurrentSandboxes + reserved.machines,
     plan,
     planName: planCfg.name,
     nextPlan: NEXT_PLAN[plan] ?? null,
     maxWorkersPerVm,
     vmMemMb: pools[0]?.vmMemMb ?? 512,
+    // vCPU por sandbox — misma regla que spawnVm (≤512MB → 1, si no 2).
+    vcpus: (pools[0]?.vmMemMb ?? 512) <= 512 ? 1 : 2,
     reservedMachines: reserved.machines,
     // Agents running RIGHT NOW = sum of workers inside active VMs (coherent with
     // "VMs contain agents"); idle/detached routes don't count until re-spawned.
     agentsActive: machines.reduce((s, m) => s + m.slots, 0),
-    agentsMax: planCfg.concurrentSandboxes * maxWorkersPerVm + reserved.agents,
+    // LINEAL y uniforme: cada sandbox (de plan o add-on) corre maxWorkersPerVm
+    // agentes. agentsMax = total sandboxes × agentes-por-sandbox. Sin densidades
+    // mixtas por tier — un add-on = +1 sandbox del MISMO tamaño.
+    agentsMax: (planCfg.concurrentSandboxes + reserved.machines) * maxWorkersPerVm,
   };
   return { secretNames, pools, capacity };
 }
@@ -161,53 +179,93 @@ function Spinner() {
 }
 
 type Capacity = {
-  machines: { id: string; status: string; slots: number }[];
+  machines: { id: string; status: string; slots: number; ghosty?: boolean }[];
+  systemMachines: { id: string; status: string; sysLabel: string }[];
   vms: number; maxMachines: number; plan: string; planName: string;
-  nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number;
-  agentsActive: number; agentsMax: number;
+  nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number; vcpus: number;
+  reservedMachines: number; agentsActive: number; agentsMax: number;
 };
 
 const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, opacity: 1, y: 0 }, exit: { scale: 0.4, opacity: 0, y: 8 } };
 
+// Ghosty — la mascota de la marca (fantasma morado + lentes), el agente INSIGNIA
+// que el pool ofrece por default. Inline SVG (no hay asset suelto del fantasma;
+// /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
+function GhostyMascot({ className = "", blink = true }: { className?: string; blink?: boolean }) {
+  const Blink = blink ? (
+    <animate attributeName="ry" values="11;11;1.5;11;11" dur="5s" repeatCount="indefinite" keyTimes="0;0.92;0.95;0.98;1" />
+  ) : null;
+  return (
+    <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      {/* cuerpo */}
+      <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill="#9870ED" />
+      {/* blush */}
+      <ellipse cx="23" cy="50" rx="5" ry="3" fill="#B79BF2" />
+      <ellipse cx="61" cy="50" rx="5" ry="3" fill="#B79BF2" />
+      {/* patas de los lentes */}
+      <path d="M16 37 L4 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
+      <path d="M68 37 L80 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
+      {/* puente */}
+      <path d="M37 36 Q42 32 47 36" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" fill="none" />
+      {/* lentes oscuros */}
+      <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+      <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+      {/* marcos */}
+      <circle cx="29" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
+      <circle cx="55" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
+    </svg>
+  );
+}
+
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
 // building pulses yellow; an unspawned slot is a dashed "mount" ready on demand.
-function VmBox({ id, status, slots, max }: { id: string; status: string | null; slots: number; max: number }) {
+function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; addon?: boolean; kind?: "system"; sysLabel?: string }) {
+  const system = kind === "system";
   const full = slots >= max;
   const frame =
-    status === "building" ? "border-yellow-500 bg-yellow-50 animate-pulse"
-    : status == null ? "border-gray-200 border-dashed bg-gray-50/40"
+    system ? "border-blue-500 bg-blue-50"
+    : status === "building" ? "border-yellow-500 bg-yellow-50 animate-pulse"
+    : status == null ? (addon ? "border-brand-500 border-dashed bg-brand-500/5" : "border-gray-200 border-dashed bg-gray-50/40")
     : full ? "border-amber-500 bg-amber-50"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
-  const label = status == null ? "libre" : status === "building" ? "boot" : `${slots}/${max} agentes`;
+  const label = system ? (sysLabel ?? "sistema") : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "boot" : `${slots}/${max} agentes`;
   return (
     <motion.div
       layout {...SPAWN}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      whileHover={status == null ? { scale: 1.02 } : { scale: 1.05, y: -3 }}
-      style={{ flexGrow: max, flexBasis: max * 56 }}
-      title={status == null ? "Sandbox disponible — se levanta bajo demanda" : `Sandbox ${status} · ${slots}/${max} agentes`}
-      className={`min-w-[100px] h-20 rounded-lg border-2 flex flex-col items-center justify-center gap-1.5 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] transition-shadow ${frame}`}
+      whileHover={status == null && !system ? { scale: 1.02 } : { scale: 1.05, y: -3 }}
+      title={system ? `Sandbox de sistema (${sysLabel ?? "servicio"}) — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : `Sandbox ${status} · ${slots}/${max} agentes`}
+      className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-3 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] transition-shadow ${frame}`}
     >
-      <div className="flex gap-1.5 items-center flex-wrap justify-center px-2">
-        {Array.from({ length: max }).map((_, j) =>
-          j < slots ? (
-            <motion.img key={`a${j}`} src="/logo-purple.svg" alt="" className="w-6 h-6"
-              initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 600, damping: 18, delay: j * 0.05 }} />
-          ) : (
-            <span key={`e${j}`} className="w-3 h-3 rounded-full border border-gray-300 bg-white/70" />
-          )
-        )}
-      </div>
-      <span className="font-jersey text-[13px] leading-none text-gray-500">{label}</span>
+      {system ? (
+        <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+        </svg>
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5 place-items-center">
+          {Array.from({ length: max }).map((_, j) =>
+            j < slots ? (
+              <motion.div key={`a${j}`} className="w-10 h-10 flex items-center justify-center"
+                initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 600, damping: 18, delay: j * 0.05 }}>
+                {ghosty ? <GhostyMascot className="w-8 h-10" blink={false} /> : <img src="/logo-purple.svg" alt="" className="w-10 h-10" />}
+              </motion.div>
+            ) : (
+              <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
+            )
+          )}
+        </div>
+      )}
+      <span className={`font-jersey text-base leading-none ${system ? "text-blue-600 font-bold" : addon && status == null ? "text-brand-500 font-bold" : "text-gray-500"}`}>{label}</span>
     </motion.div>
   );
 }
 
 function CapacityHud({ capacity }: { capacity: Capacity }) {
-  const freeSlots = Math.max(0, capacity.maxMachines - capacity.machines.length);
+  const usedSlots = capacity.machines.length + capacity.systemMachines.length;
+  const freeSlots = Math.max(0, capacity.maxMachines - usedSlots);
   return (
     <div className="border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in bg-white">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
@@ -219,22 +277,30 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
           </motion.span>
         </div>
         <span className="font-jersey text-xl leading-none text-gray-500">
-          {capacity.vms}/{capacity.maxMachines} SANDBOXES · {capacity.agentsActive}/{capacity.agentsMax} AGENTES
+          <span className="text-black">{capacity.agentsActive}/{capacity.agentsMax} AGENTES</span> · {capacity.vms}/{capacity.maxMachines} sandboxes
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-stretch">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <AnimatePresence mode="popLayout">
-          {capacity.machines.map((m) => (
-            <VmBox key={m.id} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} />
+          {/* Las últimas `reservedMachines` cajitas (de maxMachines) son add-ons
+              comprados — se marcan en morado para que el cliente VEA lo que paga. */}
+          {capacity.machines.map((m, i) => (
+            <VmBox key={m.id} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty}
+              addon={i >= capacity.maxMachines - capacity.reservedMachines} />
+          ))}
+          {/* Sandboxes de sistema (llamadas/voz) — azules, ocupan slot pero no agentes */}
+          {capacity.systemMachines.map((s) => (
+            <VmBox key={s.id} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind="system" sysLabel={s.sysLabel} />
           ))}
           {Array.from({ length: freeSlots }).map((_, i) => (
-            <VmBox key={`free-${i}`} id={`free-${i}`} status={null} slots={0} max={capacity.maxWorkersPerVm} />
+            <VmBox key={`free-${i}`} id={`free-${i}`} status={null} slots={0} max={capacity.maxWorkersPerVm}
+              addon={capacity.machines.length + capacity.systemMachines.length + i >= capacity.maxMachines - capacity.reservedMachines} />
           ))}
           {/* Añadir capacidad — sube de plan para más sandboxes */}
           <motion.a key="add" layout {...SPAWN} href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
             whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
-            className="w-20 shrink-0 rounded-lg border-2 border-dashed border-brand-500 text-brand-500 flex flex-col items-center justify-center gap-0.5 hover:bg-brand-500/10">
+            className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-500 hover:bg-brand-500/5">
             <span className="text-2xl leading-none">+</span>
             <span className="font-jersey text-[12px] leading-none">MÁS</span>
           </motion.a>
@@ -242,10 +308,14 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
       </div>
 
       <p className="text-xs text-gray-400 mt-2">
-        {capacity.vms === 0
-          ? `Sin sandboxes activos — se levantan bajo demanda al llegar un mensaje. Tu plan ${capacity.planName} da ${capacity.maxMachines} sandbox${capacity.maxMachines !== 1 ? "es" : ""} (${capacity.agentsMax} agentes simultáneos).`
-          : `${capacity.vmMemMb}MB por sandbox · cada uno contiene hasta ${capacity.maxWorkersPerVm} agentes.`}
-        {capacity.nextPlan && <> Sube a <span className="font-semibold text-brand-500">{capacity.nextPlan}</span> para más capacidad.</>}
+        {capacity.maxMachines} sandbox{capacity.maxMachines !== 1 ? "es" : ""}
+        {capacity.reservedMachines > 0
+          ? ` (${capacity.maxMachines - capacity.reservedMachines} ${capacity.planName} + ${capacity.reservedMachines} add-on${capacity.reservedMachines !== 1 ? "s" : ""})`
+          : ` · plan ${capacity.planName}`}
+        {` · ${(capacity.vmMemMb / 1024).toFixed(capacity.vmMemMb % 1024 ? 1 : 0)}GB · ${capacity.vcpus} vCPU · ${capacity.maxWorkersPerVm} agentes c/u. `}
+        {capacity.nextPlan
+          ? <a href="/planes" className="font-semibold text-brand-500 hover:underline">Sube a {capacity.nextPlan} ↗</a>
+          : <a href="/dash/packs?tab=sandboxes" className="font-semibold text-brand-500 hover:underline">Añade capacidad ↗</a>}
       </p>
     </div>
   );
@@ -295,9 +365,23 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           (llena), amarillo si está booteando. Capacidad = plan de la cuenta. */}
       <CapacityHud capacity={capacity} />
 
-      {/* Nuevo agente */}
-      <div className="border-2 border-black rounded-xl p-4 animate-fade-in">
-        <span className="font-bold block mb-3">Nuevo agente</span>
+      {/* Nuevo agente — Ghosty es el agente INSIGNIA que se despliega por default */}
+      <div className="border-2 border-black rounded-xl p-4 animate-fade-in bg-white">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="shrink-0 w-16 h-16 rounded-xl bg-brand-500/10 border-2 border-black flex items-center justify-center">
+            <GhostyMascot className="w-10 h-12" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-lg leading-none">Ghosty</span>
+              <a href="https://formmy.app/ghosty" target="_blank" rel="noopener noreferrer"
+                className="text-xs font-semibold text-brand-500 bg-brand-500/10 px-2 py-0.5 rounded-full hover:bg-brand-500/20 transition-colors whitespace-nowrap">
+                Powered by Formmy ↗
+              </a>
+            </div>
+            <p className="text-xs text-gray-500 leading-snug mt-1">Tu agente de WhatsApp. Atiende grupos, crea documentos y sube archivos — se levanta bajo demanda.</p>
+          </div>
+        </div>
         <fetcher.Form method="post" className="flex flex-col gap-3">
           <input type="hidden" name="intent" value="create" />
           <input name="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Atención a cliente"

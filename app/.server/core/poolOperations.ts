@@ -568,11 +568,11 @@ export async function createPool(
       // la consume el TURNO ACTIVO (subproceso claude). Entre turnos el subproceso
       // sale → una ruta dormida cuesta ~0 RAM (solo disco). Medición real 2026-06-24
       // (scripts/pool-vm-rss-probe.ts): baseline VM 182MB + ~221MB por turno LIGERO
-      // (sin tools); presupuesta ~450MB/turno para turnos con MCP/tool calls. Por eso
-      // 512MB NO alcanza para claude (un turno con tools ya roza el OOM). Default 2GB:
-      // 182 + 2-3 turnos concurrentes con holgura. Bajar a 512MB solo con cerebro
-      // ligero (ghosty-gc/deepseek) o turnos serializados (concurrencia=1).
-      maxWorkersPerVm: opts.maxWorkersPerVm ?? 2,
+      // (sin tools); presupuesta ~450MB/turno con MCP/tool calls. 4 turnos ligeros
+      // concurrentes = 1059MB (53% de 2GB); 4 pesados ≈ 1982MB ≈ 99% (al borde →
+      // semáforo encola el 5º). Densidad ~512MB/agente, en pares: 1GB→2, 2GB→4,
+      // 4GB→8. 512MB NO alcanza ni para 1 turno con tools.
+      maxWorkersPerVm: opts.maxWorkersPerVm ?? 4,
       vmMemMb: opts.vmMemMb ?? 2048,
       maxVms: opts.maxVms ?? 10,
       // Destroy agresivo: el disco es el cuello de botella del box, y la memoria

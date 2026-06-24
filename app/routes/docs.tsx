@@ -28,7 +28,7 @@ const SECTIONS = [
   { id: "websites", label: "Sitios web" },
   { id: "documents", label: "Documentos" },
   { id: "agents", label: "Agentes & Sandboxes" },
-  { id: "hosting", label: "Máquinas permanentes" },
+  { id: "hosting", label: "Sandboxes permanentes" },
   { id: "calls", label: "Llamadas" },
   { id: "account", label: "Cuenta & Uso" },
   { id: "errors", label: "Errores & Límites" },
@@ -1498,11 +1498,11 @@ console.log(status.result);  // resultado final del agente`} />
             </div>
           </section>
 
-          {/* Máquinas permanentes (hosting) */}
+          {/* Sandboxes permanentes (hosting) */}
           <section id="hosting" className="mb-16">
-            <h2 className="text-2xl font-bold mb-4">Máquinas permanentes</h2>
+            <h2 className="text-2xl font-bold mb-4">Sandboxes permanentes</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              Un sandbox efímero se auto-destruye al TTL. Una <strong>máquina permanente</strong> corre 24/7 y se cobra <strong>flat en MXN/mes</strong> como item de suscripción encima de tu plan. Mismo recurso, mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code> — "permanente" es solo un flag + cobro. La operas igual que cualquier sandbox (exec, archivos, expose_port, dominios).
+              Un sandbox efímero se auto-destruye al TTL. Una <strong>sandbox permanente</strong> corre 24/7 y se cobra <strong>flat en MXN/mes</strong> como item de suscripción encima de tu plan. Mismo recurso, mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code> — "permanente" es solo un flag + cobro. La operas igual que cualquier sandbox (exec, archivos, expose_port, dominios).
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
@@ -1512,7 +1512,7 @@ console.log(status.result);  // resultado final del agente`} />
             </div>
 
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
-              ¿Prefieres UI? Administra tus máquinas y sandboxes desde el dashboard en{" "}
+              ¿Prefieres UI? Administra tus sandboxes desde el dashboard en{" "}
               <a href="/dash/hosting" className="underline font-medium">/dash/hosting</a> — crear, ver estado, promover un sandbox a permanente, y liberar.
             </div>
 
@@ -1554,7 +1554,7 @@ console.log(status.result);  // resultado final del agente`} />
               Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. <code className="bg-gray-100 px-1 rounded">performance-4x</code> (enterprise) se aprovisiona por solicitud.
             </p>
 
-            <h3 className="text-lg font-bold mb-3">Crear una máquina permanente</h3>
+            <h3 className="text-lg font-bold mb-3">Crear un sandbox permanente</h3>
             <TabbedCode
               tabs={[
                 { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
@@ -1563,7 +1563,7 @@ const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
 // Cotiza con el catálogo
 const { tiers } = await eb.machines.tiers();
 
-// Crea una máquina always-on (cobra flat al mes)
+// Crea un sandbox permanente (cobra flat al mes)
 const m = await eb.sandboxes.createPermanent({ tier: "focus" });
 console.log(m.sandboxId, m.tier, m.monthlyMxn); // operas la VM por sandboxId
 await m.exec("apt-get install -y nginx");` },
@@ -1580,14 +1580,14 @@ GET    /api/v2/machines
 DELETE /api/v2/machines/:sandboxId` },
                 { label: "MCP", code: `list_machine_tiers()                 // catálogo + precios
 create_machine({ tier: "focus" })   // crea always-on, cobra flat/mes
-list_machines()                     // tus máquinas + monthlyMxn
+list_machines()                     // tus sandboxes + monthlyMxn
 release_machine({ sandboxId })      // quita cobro + destruye VM` },
               ]}
             />
 
             <h3 className="text-lg font-bold mb-3 mt-8">Promover un efímero a permanente</h3>
             <p className="text-gray-600 text-sm mb-3">
-              Levanta un sandbox, pruébalo, y si quieres conservarlo conviértelo en máquina — <strong>conserva el mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code></strong>, desarma el reaper y arranca el cobro.
+              Levanta un sandbox, pruébalo, y si quieres conservarlo hazlo permanente — <strong>conserva el mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code></strong>, desarma el reaper y arranca el cobro.
             </p>
             <TabbedCode
               tabs={[
@@ -1604,7 +1604,7 @@ POST /api/v2/machines
             />
 
             <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
-              <strong>Cobro:</strong> el plan da acceso; cada máquina factura aparte (flat MXN/mes, prorrateado). <code className="bg-gray-100 px-1 rounded">release_machine</code> es <strong>destructiva</strong> (quita el cobro y destruye la VM). Si tu plan se cancela, tus máquinas se suspenden.
+              <strong>Cobro:</strong> el plan da acceso; cada sandbox factura aparte (flat MXN/mes, prorrateado). <code className="bg-gray-100 px-1 rounded">release_machine</code> es <strong>destructiva</strong> (quita el cobro y destruye la VM). Si tu plan se cancela, tus sandboxes se suspenden.
             </div>
           </section>
 

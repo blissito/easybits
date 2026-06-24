@@ -561,9 +561,9 @@ call_stop({ sandboxId })    → { url }  ← link permanente al MP4
 - MP4 + .txt en Files permanentemente aunque la VM se destruya
 `,
 
-  hosting: `## Hosting — Máquinas permanentes (always-on)
+  hosting: `## Hosting — Sandboxes permanentes (always-on)
 
-Un sandbox efímero se auto-destruye al TTL. Una **máquina permanente** corre 24/7 y se cobra **flat en MXN/mes** como item de suscripción encima de tu plan. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Requiere plan de pago (Mega/Tera). Grupo MCP: \`hosting\` (5 tools).
+Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24/7 y se cobra **flat en MXN/mes** como item de suscripción encima de tu plan. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Requiere plan de pago (Mega/Tera). Grupo MCP: \`hosting\` (5 tools).
 
 ### Catálogo de tiers
 \`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`
@@ -574,7 +574,7 @@ Tiers (vCPU/RAM/NVMe → MXN/mes shared):
 - performance-4x 16/32GB/256GB → **por solicitud** (enterprise, lo aprovisiona el equipo)
 Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus — próximamente.
 
-### Crear máquina permanente
+### Crear sandbox permanente
 \`POST /machines\` · Body: \`{ tier, cpuMode?, diskAddonsGB?, template?, name? }\`
 MCP: \`create_machine({ tier })\` · SDK: \`eb.sandboxes.createPermanent({ tier })\` (o \`eb.machines.create({ tier })\`)
 Devuelve el record con \`sandboxId\`, \`tier\`, \`monthlyMxn\`, \`status\`. Lo operas igual que cualquier sandbox (exec, files, expose_port, dominios) por su \`sandboxId\`.
@@ -585,10 +585,10 @@ MCP: \`make_permanent({ sandboxId, tier })\` · SDK: \`sb.makePermanent(tier)\`
 Conserva el MISMO \`sandboxId\`, desarma el reaper y arranca el cobro.
 
 ### Listar / liberar
-MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus máquinas permanentes con \`tier\` + \`monthlyMxn\`.
+MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus sandboxes permanentes con \`tier\` + \`monthlyMxn\`.
 \`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro (prorrateado) y destruye la VM. **Destructiva**, idempotente.
 
-El plan es el gate de acceso; cada máquina factura aparte. Si tu plan se cancela, tus máquinas se suspenden.
+El plan es el gate de acceso; cada sandbox factura aparte. Si tu plan se cancela, tus sandboxes se suspenden.
 
 ### Dashboard (UI)
 También se administran desde \`/dash/hosting\`: crear (con precio en vivo), ver estado, promover un sandbox efímero a permanente, y liberar. Lista permanentes (cobradas) y sandboxes efímeros en secciones separadas.

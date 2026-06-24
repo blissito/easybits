@@ -114,6 +114,20 @@ export const ITEMS = {
   /** Ítems sueltos entre las secciones y el bottom — cuenta + tools */
   middleItems: [
     {
+      icon: <img className="scale" src="/images/stats.svg" />,
+      path: "/dash/estadisticas",
+      title: "Estadísticas",
+    },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+      ),
+      path: "/dash/packs",
+      title: "Créditos AI",
+    },
+    {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="4" y="8" width="16" height="12" rx="2" />
@@ -132,38 +146,13 @@ export const ITEMS = {
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-        </svg>
-      ),
-      path: "/dash/packs",
-      title: "Créditos AI",
-    },
-    {
-      icon: <img className="scale" src="/images/stats.svg" />,
-      path: "/dash/estadisticas",
-      title: "Estadísticas",
-    },
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="16 18 22 12 16 6" />
-          <polyline points="8 6 2 12 8 18" />
-        </svg>
-      ),
-      path: "/dash/developer",
-      title: "Developer",
-    },
-    {
-      icon: (
-        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
-          <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
-          <line x1="6" y1="6" x2="6.01" y2="6" />
-          <line x1="6" y1="18" x2="6.01" y2="18" />
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
         </svg>
       ),
       path: "/dash/hosting",
-      title: "Máquinas",
+      title: "Sandboxes",
     },
     {
       icon: (
@@ -174,6 +163,16 @@ export const ITEMS = {
       ),
       path: "/dash/email",
       title: "Email",
+    },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg>
+      ),
+      path: "/dash/developer",
+      title: "Developer",
     },
   ] as SidebarItem[],
 
