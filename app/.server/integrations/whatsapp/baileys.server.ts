@@ -47,10 +47,21 @@ export async function connectPool(poolId: string): Promise<void> {
   const pool = await db.pool.findUnique({ where: { id: poolId } });
   if (!pool) throw new Error(`pool ${poolId} not found`);
 
+  // Reflect "connecting" synchronously so the UI starts polling immediately —
+  // the QR arrives a beat later via connection.update, and without this the
+  // status would stay "disconnected" and polling would never kick in.
+  await setStatus(poolId, "connecting");
   startReaper(); // lazy singleton — first connected pool arms the idle reaper
 
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, poolId));
-  const { version } = await fetchLatestBaileysVersion();
+  let state, saveCreds, version;
+  try {
+    ({ state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, poolId)));
+    ({ version } = await fetchLatestBaileysVersion());
+  } catch (e) {
+    console.error(`baileys ${poolId} init failed:`, e);
+    await setStatus(poolId, "failed", { reason: "init_error", detail: String(e) });
+    throw e;
+  }
   const sock = makeWASocket({
     version,
     auth: state,

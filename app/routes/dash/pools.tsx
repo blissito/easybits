@@ -54,7 +54,9 @@ export async function action({ request }: Route.ActionArgs) {
   if (!pool || pool.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
 
   if (intent === "connect") {
-    await connectPool(poolId);
+    // connectPool reflects its own status (connecting/qr_pending/failed) in
+    // Pool.baileys; never let a connect error 500 the action — the UI polls state.
+    await connectPool(poolId).catch((e) => console.error("connectPool failed", e));
     return data({ ok: true });
   }
   if (intent === "disconnect") {
@@ -78,6 +80,13 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const rev = useRevalidator();
   const [name, setName] = useState("");
   const [oauth, setOauth] = useState("");
+
+  // What's currently submitting (to show per-button spinners).
+  const busy = fetcher.state !== "idle";
+  const busyIntent = fetcher.formData?.get("intent") as string | undefined;
+  const busyPoolId = fetcher.formData?.get("poolId") as string | undefined;
+  const isBusy = (intent: string, poolId?: string) =>
+    busy && busyIntent === intent && (poolId === undefined || busyPoolId === poolId);
 
   // Poll while any pool is pairing/connecting so the QR + status refresh.
   const polling = pools.some((p) => p.status === "qr_pending" || p.status === "connecting");
