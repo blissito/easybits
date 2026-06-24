@@ -31,6 +31,9 @@ const MAX_RECONNECT = 5;
 // once a minute — the notice itself must not become spam. keyed by `${poolId}:${jid}`.
 const NOTICE_COOLDOWN_MS = 60_000;
 const lastNoticeAt = new Map<string, number>();
+// Cache for listPoolGroups' groupFetchAllParticipating (rate-limited by WhatsApp).
+const GROUP_CACHE_MS = 60_000;
+const groupListCache = new Map<string, { at: number; groups: Array<[string, string]> }>();
 const silent: any = { level: "silent", child: () => silent };
 for (const m of ["trace", "debug", "info", "warn", "error", "fatal"]) silent[m] = () => {};
 
@@ -283,11 +286,23 @@ export async function listPoolGroups(
   const merged = new Map<string, string>(); // jid → subject
   const cur = sockets.get(poolId);
   if (cur) {
-    try {
-      const groups = await cur.sock.groupFetchAllParticipating();
-      for (const g of Object.values(groups) as any[]) merged.set(g.id, g.subject || g.id);
-    } catch (e) {
-      log(poolId, `groupFetch failed: ${e}`);
+    // Cache groupFetchAllParticipating: the dashboard polls every ~2.5s and
+    // hammering this IQ makes WhatsApp return rate-overlimit (and can degrade the
+    // link). One fetch per 60s is plenty — seenGroups covers gaps in between.
+    const cached = groupListCache.get(poolId);
+    if (cached && Date.now() - cached.at < GROUP_CACHE_MS) {
+      for (const [id, subject] of cached.groups) merged.set(id, subject);
+    } else {
+      try {
+        const groups = await cur.sock.groupFetchAllParticipating();
+        const list: Array<[string, string]> = [];
+        for (const g of Object.values(groups) as any[]) list.push([g.id, g.subject || g.id]);
+        groupListCache.set(poolId, { at: Date.now(), groups: list });
+        for (const [id, subject] of list) merged.set(id, subject);
+      } catch (e) {
+        log(poolId, `groupFetch failed: ${e}`);
+        if (cached) for (const [id, subject] of cached.groups) merged.set(id, subject); // serve stale
+      }
     }
   }
   for (const [jid, subject] of Object.entries((pool?.seenGroups as Record<string, string>) ?? {})) {

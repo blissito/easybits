@@ -57,7 +57,17 @@ export async function loader({ request }: Route.LoaderArgs) {
       };
     })
   );
-  return { secretNames, pools };
+  // Capacity is per ACCOUNT (one fleet, any number of channels) — aggregate every
+  // channel's worker VMs into a single general view instead of per-card cajitas.
+  const machines = pools.flatMap((p) => p.machines);
+  const capacity = {
+    machines,
+    vms: machines.length,
+    conversations: pools.reduce((s, p) => s + p.conversations, 0),
+    maxWorkersPerVm: pools[0]?.maxWorkersPerVm ?? 2,
+    vmMemMb: pools[0]?.vmMemMb ?? 512,
+  };
+  return { secretNames, pools, capacity };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -129,7 +139,7 @@ function Spinner() {
 }
 
 export default function Pools({ loaderData }: Route.ComponentProps) {
-  const { secretNames, pools } = loaderData;
+  const { secretNames, pools, capacity } = loaderData;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [name, setName] = useState("");
@@ -159,6 +169,30 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-1">Canales (Pool de WhatsApp)</h1>
       <p className="text-gray-500 mb-6">Conecta un WhatsApp y atiende sus grupos con agentes que se levantan bajo demanda.</p>
+
+      {/* Capacidad de la cuenta — un solo fleet para todos los canales. Las
+          cajitas viven aquí (no por canal) para no escrolear con listas largas. */}
+      {capacity.vms > 0 && (
+        <div className="border-2 border-black rounded-xl p-4 mb-8 animate-fade-in">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold">Capacidad</span>
+            <span className="text-xs text-gray-400">
+              {capacity.vms} máquina{capacity.vms !== 1 ? "s" : ""} · {capacity.vmMemMb}MB c/u · {capacity.conversations} conv.
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {capacity.machines.map((m, i) => (
+              <div key={i} title={`${m.status} · ${m.slots}/${capacity.maxWorkersPerVm} conversaciones`}
+                className={`w-10 h-10 rounded-md border-2 flex items-center justify-center text-[11px] font-bold ${
+                  m.status === "running" ? "border-green-500 bg-green-50 text-green-700"
+                  : m.status === "building" ? "border-yellow-500 bg-yellow-50 text-yellow-700 animate-pulse"
+                  : "border-gray-300 bg-gray-50 text-gray-400"}`}>
+                {m.slots}/{capacity.maxWorkersPerVm}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Nuevo canal */}
       <div className="border-2 border-black rounded-xl p-4 mb-8 animate-fade-in">
@@ -225,7 +259,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-sm">Grupos que atiende</span>
-                    <span className="text-xs text-gray-400">{p.vms} VM{p.vms !== 1 ? "s" : ""} · {p.conversations} conv.</span>
+                    <span className="text-xs text-gray-400">{p.conversations} conv.</span>
                   </div>
                   {p.groups.length === 0 && <p className="text-xs text-gray-400">No se ven grupos aún. Solo responde en los que actives.</p>}
                   <div className="flex flex-col gap-1.5">
@@ -240,26 +274,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   {p.enabledCount === 0 && p.groups.length > 0 && (
                     <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
                   )}
-                </div>
-              )}
-
-              {/* Cajitas de capacidad: una por VM, slots usados / max, color por estado */}
-              {p.machines.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-xs text-gray-400 mb-1">
-                    Máquinas: {p.vms} · {p.vmMemMb}MB c/u · {p.conversations} conv.
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {p.machines.map((m, i) => (
-                      <div key={i} title={`${m.status} · ${m.slots}/${p.maxWorkersPerVm} conversaciones`}
-                        className={`w-10 h-10 rounded-md border-2 flex items-center justify-center text-[11px] font-bold ${
-                          m.status === "running" ? "border-green-500 bg-green-50 text-green-700"
-                          : m.status === "building" ? "border-yellow-500 bg-yellow-50 text-yellow-700 animate-pulse"
-                          : "border-gray-300 bg-gray-50 text-gray-400"}`}>
-                        {m.slots}/{p.maxWorkersPerVm}
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 

@@ -274,11 +274,13 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
     memoryMb: pool.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
     vcpus: pool.vmMemMb <= 512 ? 1 : 2,
   });
-  await db.agent.update({
+  // Return the BUILDING row immediately — the caller waits for it to come up
+  // OUTSIDE the placement lock (so concurrent cold conversations boot in
+  // parallel, not serialized behind each other's ~boot time).
+  return db.agent.update({
     where: { id: created.agentId },
     data: { poolId: pool.id, lastMessageAt: new Date(), host: target.url },
   });
-  return waitAgentRunning(created.agentId); // returns the running row
 }
 
 type PoolRow = Awaited<ReturnType<typeof db.pool.findUniqueOrThrow>>;
@@ -295,73 +297,80 @@ async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRo
   return null; // error/destroyed → caller restores onto a fresh VM
 }
 
-// Capacity-safe VM placement: a running VM of this pool with a free worker slot,
-// else spawn one (RAM-gated). MUST run under the per-pool placement lock so two
-// concurrent placements can't both claim the last slot / exceed maxVms.
-async function placeVm(ctx: AuthContext, pool: PoolRow): Promise<AgentRow> {
-  const vms = await db.agent.findMany({
-    where: { poolId: pool.id, status: { in: ["running", "suspended"] } },
+// Reserve a VM for `groupId` and claim its slot — the FAST decision only (DB +
+// host create-call). Runs under the per-pool placement lock so concurrent cold
+// conversations can't both grab the last slot or exceed maxVms. The slow boot
+// (waitAgentRunning) and memory restore happen OUTSIDE the lock in pickOrSpawn,
+// so N cold conversations boot in parallel instead of serializing.
+//   - Counts "building" VMs as candidates so two concurrent placements SHARE a
+//     booting VM (up to maxWorkersPerVm) rather than each spawning its own.
+type Reservation = { agentId: string; sessionUuid: string; needsRestore: boolean };
+async function reserveVm(ctx: AuthContext, pool: PoolRow, groupId: string): Promise<Reservation> {
+  const key = { poolId_groupId: { poolId: pool.id, groupId } };
+  return withLock(`place:${pool.id}`, async () => {
+    const fresh = await db.poolRoute.findUnique({ where: key });
+
+    // Find a VM with a free slot — include "building" so concurrent placements
+    // pack onto a booting VM instead of over-spawning. Prefer the route's
+    // current VM if it still has a slot (no churn).
+    const vms = await db.agent.findMany({
+      where: { poolId: pool.id, status: { in: ["running", "building", "suspended"] } },
+    });
+    let target: AgentRow | null = null;
+    if (fresh?.agentId) target = vms.find((v) => v.id === fresh.agentId) ?? null;
+    if (!target) {
+      for (const vm of vms) {
+        if ((await workersOnVm(vm.id)) >= pool.maxWorkersPerVm) continue;
+        target = vm;
+        break;
+      }
+    }
+    if (!target) target = await spawnVm(ctx, pool); // building row; throws PoolAtCapacity if no room
+
+    // Claim/refresh the route to point at the target, reserving the slot.
+    if (fresh) {
+      const moved = fresh.agentId !== target.id;
+      if (moved) {
+        await db.poolRoute.update({ where: { id: fresh.id }, data: { agentId: target.id, detachedAt: null } });
+      }
+      // Restore when the route was detached (cold) or moved to a different VM.
+      return { agentId: target.id, sessionUuid: fresh.sessionUuid, needsRestore: !fresh.agentId || moved };
+    }
+    const sessionUuid = randomUUID();
+    try {
+      await db.poolRoute.create({ data: { poolId: pool.id, groupId, agentId: target.id, sessionUuid } });
+    } catch {
+      const won = await db.poolRoute.findUnique({ where: key }); // adopt the winner
+      if (won) return { agentId: won.agentId ?? target.id, sessionUuid: won.sessionUuid, needsRestore: !won.agentId };
+      throw new Error(`pool route race for ${groupId} left no winner`);
+    }
+    return { agentId: target.id, sessionUuid, needsRestore: false };
   });
-  for (const vm of vms) {
-    if ((await workersOnVm(vm.id)) >= pool.maxWorkersPerVm) continue;
-    const ready = await ensureRunning(ctx, vm);
-    if (ready) return ready;
-  }
-  return spawnVm(ctx, pool); // throws PoolAtCapacity if no room
 }
 
 // Resolve the VM that should host the worker for `groupId`. Sticky per group:
-//   - warm path (route + live agent): resume it, no lock needed.
-//   - cold path (new group, or detached/stale route after a destroy): serialize
-//     under the placement lock, then place a VM and restore the conversation's
-//     externalized memory (keyed by the route's stable sessionUuid).
+//   - warm path (route + running agent): return it, no lock, no wait.
+//   - cold path: reserve under the lock (fast), then boot + restore OUTSIDE the
+//     lock so concurrent cold conversations come up in parallel.
 async function pickOrSpawn(ctx: AuthContext, pool: PoolRow, groupId: string) {
-  const key = { poolId_groupId: { poolId: pool.id, groupId } };
-
-  // 1. Warm path — route with a live worker. No placement decision → no lock.
-  const route = await db.poolRoute.findUnique({ where: key });
+  // 1. Warm path — route with an already-running worker.
+  const route = await db.poolRoute.findUnique({ where: { poolId_groupId: { poolId: pool.id, groupId } } });
   if (route?.agentId) {
     const agent = await db.agent.findUnique({ where: { id: route.agentId } });
-    const ready = agent ? await ensureRunning(ctx, agent) : null;
-    if (ready) return { vm: ready, sessionUuid: route.sessionUuid };
+    if (agent?.status === "running") return { vm: agent, sessionUuid: route.sessionUuid };
   }
 
-  // 2. Cold path — serialize placement per pool (capacity-safe; single-instance).
-  return withLock(`place:${pool.id}`, async () => {
-    // Re-read inside the lock: a prior waiter may have placed this group already.
-    const fresh = await db.poolRoute.findUnique({ where: key });
-    if (fresh?.agentId) {
-      const a = await db.agent.findUnique({ where: { id: fresh.agentId } });
-      const ready = a ? await ensureRunning(ctx, a) : null;
-      if (ready) return { vm: ready, sessionUuid: fresh.sessionUuid };
-    }
-
-    const vm = await placeVm(ctx, pool);
-
-    // Detached/stale route → restore its memory onto the fresh VM, keep sessionUuid.
-    if (fresh) {
-      await restoreConversation(ctx, vm, pool.id, fresh.sessionUuid).catch((e) =>
-        console.error(`pool restore ${fresh.sessionUuid} failed:`, e)
-      );
-      await db.poolRoute.update({ where: { id: fresh.id }, data: { agentId: vm.id, detachedAt: null } });
-      return { vm, sessionUuid: fresh.sessionUuid };
-    }
-
-    // Brand-new conversation — fresh memory.
-    const sessionUuid = randomUUID();
-    try {
-      await db.poolRoute.create({ data: { poolId: pool.id, groupId, agentId: vm.id, sessionUuid } });
-    } catch {
-      // Unique collision (shouldn't happen under the lock) — adopt the winner.
-      const won = await db.poolRoute.findUnique({ where: key });
-      if (won?.agentId) {
-        const a = await db.agent.findUniqueOrThrow({ where: { id: won.agentId } });
-        return { vm: a, sessionUuid: won.sessionUuid };
-      }
-      throw new Error(`pool route race for ${groupId} left no winner`);
-    }
-    return { vm, sessionUuid };
-  });
+  // 2. Cold path — fast reservation under the lock; slow boot/restore outside it.
+  const res = await reserveVm(ctx, pool, groupId);
+  const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
+  const vm = await ensureRunning(ctx, reserved); // waits for boot/resume — in PARALLEL across groups
+  if (!vm) throw new Error(`pool worker ${res.agentId} failed to start`);
+  if (res.needsRestore) {
+    await restoreConversation(ctx, vm, pool.id, res.sessionUuid).catch((e) =>
+      console.error(`pool restore ${res.sessionUuid} failed:`, e)
+    );
+  }
+  return { vm, sessionUuid: res.sessionUuid };
 }
 
 // Compose the prompt for the worker. Group context: prefix the sender so the
