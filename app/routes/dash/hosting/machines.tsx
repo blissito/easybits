@@ -396,7 +396,7 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
               return (
                 <motion.div
                   key={m.sandboxId}
-                  layout
+                  layout="position"
                   initial={{ opacity: 0, y: 16, scale: 0.97 }}
                   animate={{ opacity: isDestroying ? 0.45 : 1, y: 0, scale: isDestroying ? 0.98 : 1 }}
                   exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)", transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } }}
@@ -459,7 +459,20 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
                   </Card>
-                  {waOpen === m.sandboxId && m.status !== "pending_deletion" && <WaPanel sandboxId={m.sandboxId} />}
+                  <AnimatePresence initial={false}>
+                    {waOpen === m.sandboxId && m.status !== "pending_deletion" && (
+                      <motion.div
+                        key="wa"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                        style={{ overflow: "hidden" }}
+                      >
+                        <WaPanel sandboxId={m.sandboxId} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               );
             })}
