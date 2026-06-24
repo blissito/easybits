@@ -4,6 +4,7 @@
 import http from 'http';
 
 import { runTurn, type WorkerConfig } from './worker.js';
+import { startFallbackProxy } from './proxy.js';
 import type { McpServerConfig } from './types.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -11,6 +12,7 @@ const MESSAGE_PATH = process.env.MESSAGE_PATH || '/message';
 // HOME drives where the Agent SDK writes ~/.claude/projects/<...>.jsonl transcripts.
 // Point it at the persistent volume so resume survives suspend/resume.
 const WORKER_HOME = process.env.CLAUDE_WORKER_HOME || process.env.CLAUDE_WORKER_DATA_DIR || '/data';
+const PROXY_PORT = Number(process.env.CLAUDE_WORKER_PROXY_PORT || 8788);
 
 function log(msg: string): void {
   console.error(`[claude-worker] ${msg}`);
@@ -21,6 +23,12 @@ function log(msg: string): void {
 // claude subprocess. Shared across all conversations on this VM (same owner).
 const OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN || '';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+// OAuth→API-key fallback (nanoclaw parity): when BOTH an OAuth token and an API
+// key exist, route the claude subprocess through a local proxy that retries on
+// 429/529 with the API key + fallback model. With only one credential there's
+// nothing to fall back to, so we skip the proxy and let the SDK auth directly.
+const FALLBACK_ENABLED = Boolean(OAUTH_TOKEN && ANTHROPIC_API_KEY);
 
 function buildMcpServers(): Record<string, McpServerConfig> {
   const servers: Record<string, McpServerConfig> = {};
@@ -36,20 +44,32 @@ function buildMcpServers(): Record<string, McpServerConfig> {
   return servers;
 }
 
+const childEnv: Record<string, string | undefined> = {
+  ...process.env,
+  HOME: WORKER_HOME,
+  // We run as root inside a Firecracker microVM. Claude Code refuses
+  // --dangerously-skip-permissions as root unless IS_SANDBOX is set — which is
+  // exactly true here. Without this the claude subprocess exits 1.
+  IS_SANDBOX: '1',
+  ...(OAUTH_TOKEN ? { CLAUDE_CODE_OAUTH_TOKEN: OAUTH_TOKEN } : {}),
+};
+
+if (FALLBACK_ENABLED) {
+  // Route the subprocess through the local fallback proxy. The proxy holds the
+  // API key for the 429/529 retry, so the subprocess uses OAuth only — keep the
+  // key OUT of its env so the CLI doesn't prefer it.
+  childEnv.ANTHROPIC_BASE_URL = `http://127.0.0.1:${PROXY_PORT}`;
+  delete childEnv.ANTHROPIC_API_KEY;
+} else if (ANTHROPIC_API_KEY) {
+  // No OAuth — the subprocess authenticates with the API key directly.
+  childEnv.ANTHROPIC_API_KEY = ANTHROPIC_API_KEY;
+}
+
 const config: WorkerConfig = {
   assistantName: process.env.ASSISTANT_NAME,
   systemPrompt: process.env.SYSTEM_PROMPT,
   mcpServers: buildMcpServers(),
-  childEnv: {
-    ...process.env,
-    HOME: WORKER_HOME,
-    // We run as root inside a Firecracker microVM. Claude Code refuses
-    // --dangerously-skip-permissions as root unless IS_SANDBOX is set — which is
-    // exactly true here. Without this the claude subprocess exits 1.
-    IS_SANDBOX: '1',
-    ...(OAUTH_TOKEN ? { CLAUDE_CODE_OAUTH_TOKEN: OAUTH_TOKEN } : {}),
-    ...(ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY } : {}),
-  },
+  childEnv,
 };
 
 function sse(res: http.ServerResponse, obj: unknown): void {
@@ -113,7 +133,7 @@ async function handleMessage(req: http.IncomingMessage, res: http.ServerResponse
 const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, oauth: Boolean(OAUTH_TOKEN) }));
+    res.end(JSON.stringify({ ok: true, oauth: Boolean(OAUTH_TOKEN), fallback: FALLBACK_ENABLED }));
     return;
   }
   if (req.method === 'POST' && req.url === MESSAGE_PATH) {
@@ -128,9 +148,22 @@ const server = http.createServer((req, res) => {
   res.end(JSON.stringify({ error: 'not found' }));
 });
 
-server.listen(PORT, () => {
-  log(`listening on :${PORT}${MESSAGE_PATH} (HOME=${WORKER_HOME}, oauth=${Boolean(OAUTH_TOKEN)})`);
-  if (!OAUTH_TOKEN && !ANTHROPIC_API_KEY) {
-    log('WARNING: neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY set — the Agent SDK will fail to auth.');
+async function main(): Promise<void> {
+  if (FALLBACK_ENABLED) {
+    // Start the proxy BEFORE listening so the first turn's ANTHROPIC_BASE_URL works.
+    await startFallbackProxy(PROXY_PORT, ANTHROPIC_API_KEY);
   }
+  server.listen(PORT, () => {
+    log(
+      `listening on :${PORT}${MESSAGE_PATH} (HOME=${WORKER_HOME}, oauth=${Boolean(OAUTH_TOKEN)}, fallback=${FALLBACK_ENABLED})`,
+    );
+    if (!OAUTH_TOKEN && !ANTHROPIC_API_KEY) {
+      log('WARNING: neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY set — the Agent SDK will fail to auth.');
+    }
+  });
+}
+
+main().catch((err) => {
+  log(`fatal: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
 });
