@@ -37,11 +37,24 @@ export async function loader({ request }: Route.LoaderArgs) {
       // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
       // activity even if metadata sync hasn't listed them yet.
       const groups = await listPoolGroups(p.id);
-      const [vms, conversations] = await Promise.all([
-        db.agent.count({ where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } } }),
-        db.poolRoute.count({ where: { poolId: p.id } }),
-      ]);
-      return { id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups, enabledCount: p.enabledGroups.length, vms, conversations };
+      // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
+      // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
+      const workers = await db.agent.findMany({
+        where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } },
+        select: { id: true, status: true },
+      });
+      const machines = await Promise.all(
+        workers.map(async (w) => ({
+          status: w.status,
+          slots: await db.poolRoute.count({ where: { agentId: w.id } }),
+        }))
+      );
+      const conversations = await db.poolRoute.count({ where: { poolId: p.id } });
+      return {
+        id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
+        enabledCount: p.enabledGroups.length, machines, vms: machines.length,
+        conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
+      };
     })
   );
   return { secretNames, pools };
@@ -130,7 +143,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const bPool = fetcher.formData?.get("poolId") as string | undefined;
   const isBusy = (intent: string, poolId?: string) => busy && bIntent === intent && (poolId === undefined || bPool === poolId);
 
-  const polling = pools.some((p) => p.status === "qr_pending" || p.status === "pairing" || p.status === "connecting");
+  const polling = pools.some(
+    (p) =>
+      p.status === "qr_pending" || p.status === "pairing" || p.status === "connecting" ||
+      (p.machines?.length ?? 0) > 0 // live capacity view while VMs exist
+  );
   const [phones, setPhones] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!polling) return;
@@ -223,6 +240,26 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   {p.enabledCount === 0 && p.groups.length > 0 && (
                     <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
                   )}
+                </div>
+              )}
+
+              {/* Cajitas de capacidad: una por VM, slots usados / max, color por estado */}
+              {p.machines.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs text-gray-400 mb-1">
+                    Máquinas: {p.vms} · {p.vmMemMb}MB c/u · {p.conversations} conv.
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {p.machines.map((m, i) => (
+                      <div key={i} title={`${m.status} · ${m.slots}/${p.maxWorkersPerVm} conversaciones`}
+                        className={`w-10 h-10 rounded-md border-2 flex items-center justify-center text-[11px] font-bold ${
+                          m.status === "running" ? "border-green-500 bg-green-50 text-green-700"
+                          : m.status === "building" ? "border-yellow-500 bg-yellow-50 text-yellow-700 animate-pulse"
+                          : "border-gray-300 bg-gray-50 text-gray-400"}`}>
+                        {m.slots}/{p.maxWorkersPerVm}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
