@@ -564,8 +564,16 @@ export async function createPool(
       persona: opts.persona ?? GHOSTY_PERSONA,
       assistantName: "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
-      maxWorkersPerVm: opts.maxWorkersPerVm ?? 2, // 512MB VM ≈ 2 claude concurrentes
-      vmMemMb: opts.vmMemMb ?? 512,
+      // OJO: maxWorkersPerVm cuenta RUTAS pegajosas (conversaciones), pero la RAM
+      // la consume el TURNO ACTIVO (subproceso claude). Entre turnos el subproceso
+      // sale → una ruta dormida cuesta ~0 RAM (solo disco). Medición real 2026-06-24
+      // (scripts/pool-vm-rss-probe.ts): baseline VM 182MB + ~221MB por turno LIGERO
+      // (sin tools); presupuesta ~450MB/turno para turnos con MCP/tool calls. Por eso
+      // 512MB NO alcanza para claude (un turno con tools ya roza el OOM). Default 2GB:
+      // 182 + 2-3 turnos concurrentes con holgura. Bajar a 512MB solo con cerebro
+      // ligero (ghosty-gc/deepseek) o turnos serializados (concurrencia=1).
+      maxWorkersPerVm: opts.maxWorkersPerVm ?? 2,
+      vmMemMb: opts.vmMemMb ?? 2048,
       maxVms: opts.maxVms ?? 10,
       // Destroy agresivo: el disco es el cuello de botella del box, y la memoria
       // de cada conversación se externaliza a S3 (backup en suspend, restore en

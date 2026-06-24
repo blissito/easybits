@@ -7,12 +7,43 @@
 La pregunta "¿de qué tamaño levanto LA VM del agente?" es la equivocada. En un RTS
 no le pones lanzallamas a cada aldeano por si algún día hay que quemar algo. Separa:
 
-- **VM-cerebro (claude-worker)** = unidad barata. Liviana (512MB), atiende N agentes
-  (conversaciones). Se dimensiona por **concurrencia**, no por capacidades. Nunca
-  carga Chromium.
+- **VM-cerebro (claude-worker)** = unidad barata. Se dimensiona por **concurrencia**,
+  no por capacidades. Nunca carga Chromium.
 - **Capacidades pesadas** (Chromium-snapshot, ffmpeg, GPU, jupyter) = **taller
   compartido**. No viven en el agente: fleet aparte, on-demand, scale-to-zero, que
   cualquier cerebro liviano invoca. Un Chromium sirve a 50 agentes.
+
+## Medición real (2026-06-24) — rutas ≠ turnos concurrentes
+> `scripts/pool-vm-rss-probe.ts` contra el host OVH, claude-worker @ 2GB/2vCPU.
+
+| Métrica | Valor |
+|---|---|
+| baseline VM idle (kernel + node dispatcher + runtime) | **182 MB** |
+| 2 turnos LIGEROS concurrentes (texto puro, sin tools), pico total | **624 MB** |
+| incremento por turno ligero | **~221 MB** |
+| presupuesto recomendado por turno con MCP/tool calls | **~450 MB** |
+
+**La distinción que faltaba:** el costo de RAM lo paga el **TURNO ACTIVO** (subproceso
+`claude`), no la conversación. Entre turnos el subproceso `claude` SALE → una ruta
+pegajosa dormida cuesta ~0 RAM (solo su dir en disco). Entonces:
+- Una VM puede **GUARDAR** muchas conversaciones (rutas pegajosas, baratas en disco).
+- Pero solo puede **CORRER** K turnos a la vez (RAM = 182 + K×~450 + holgura).
+
+Hoy `maxWorkersPerVm` mezcla ambas: cuenta **rutas**, pero el OOM es por **turnos
+concurrentes** (ráfaga = varios grupos responden a la vez). Con 512MB y
+`maxWorkersPerVm=3`, una ráfaga de 3 respuestas pide 182+3×~250 ≈ 930MB → OOM y los
+workers no responden. **Por eso `claude-worker` NO cabe en 512MB.**
+
+**Fix correcto (pendiente):** separar las dos perillas — `maxRoutesPerVm` (pegajosidad,
+alta, p.ej. 10-20, barata en disco) vs `maxConcurrentTurnsPerVm` (RAM, baja, 2-3 por
+2GB), esta última hecha cumplir DENTRO del worker (`services/claude-worker`) con un
+semáforo + cola (timeout para que WhatsApp no cuelgue). Así una VM chica aloja muchas
+conversaciones pero acota el pico de RAM. Regla de tamaño:
+`vmMemMb ≈ 182 + turnos_concurrentes×450 + 256` → 1GB≈1-2 turnos, 2GB≈3, 4GB≈7.
+
+> La tabla de clases abajo decía Texto=512MB; la medición la corrige a **1GB mínimo**
+> para claude (1 turno con tools + holgura). 512MB queda para cerebro ligero
+> (ghosty-gc/deepseek) o turnos estrictamente serializados (concurrencia=1).
 
 ## La regla de oro (dónde vive cada cosa) — frecuencia × peso
 - **Frecuente + liviano** → horneado en el cerebro (su kit base de MCP/texto).
@@ -26,7 +57,7 @@ El tamaño es **propiedad del Agente**, declarada al crearlo (editable después)
 
 | Clase       | RAM    | Para qué                                   |
 |-------------|--------|--------------------------------------------|
-| **Texto**   | 512MB  | atiende y responde con tools de EasyBits. El 90%. (default) |
+| **Texto**   | 1GB    | atiende y responde con tools de EasyBits. El 90%. (default) — medido: 1 turno con tools + holgura. 512MB se queda corto para claude. |
 | **Navegador** | 2GB  | necesita ver/capturar webs, llenar forms (Chromium baked) |
 | **Estudio** | 4GB    | multimedia pesado (video/imágenes)         |
 
