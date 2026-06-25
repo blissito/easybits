@@ -749,7 +749,7 @@ export async function destroySandbox(
   // asOperator: solo flujos deliberados de plataforma (releasePermanent,
   // rollback de billing) pueden matar una caja Protected. El path MCP/agente
   // NUNCA pasa asOperator → un agente/leaked key recibe 403 en cajas protegidas.
-  return callHost<{ ok: true }>(
+  const result = await callHost<{ ok: true }>(
     "DELETE",
     `/v1/sandbox/${sandboxId}`,
     undefined,
@@ -757,6 +757,14 @@ export async function destroySandbox(
     undefined,
     opts?.asOperator ?? false
   );
+  // Propaga el destroy al registro Agent (worker de pool o agente persistente):
+  // el router del pool NO corre la reconciliación de la UI (getAgent/listAgents),
+  // así que sin esto el Agent se queda en "running" y routeMessage sigue
+  // entregando tráfico a una caja muerta. "lost" es el mismo estado terminal que
+  // produce probeRealStatus en un 404 — el cold path de pickOrSpawn lo excluye y
+  // re-spawnea un worker limpio.
+  await db.agent.updateMany({ where: { sandboxId }, data: { status: "lost" } }).catch(() => {});
+  return result;
 }
 
 export interface FleetStats {
