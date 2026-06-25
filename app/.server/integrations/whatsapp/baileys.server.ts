@@ -78,6 +78,103 @@ function sendNoticeOnce(sock: WASocket, poolId: string, jid: string, text: strin
   sock.sendMessage(jid, { text }).catch(() => {});
 }
 
+// ── Per-group message coalescing (debounce) ─────────────────────────────────
+// WhatsApp users fire several messages in a row before the agent answers. Each
+// would otherwise become its own concurrent turn on the SAME sessionId — which
+// the Agent SDK can't run in parallel (it stalls) and which produces one reply
+// PER message (spam). So we buffer per group, wait a short debounce for the
+// burst to settle, then run ONE turn over the combined text → ONE reply. If more
+// messages arrive while a turn runs, we re-drain after it (nanoclaw GroupQueue
+// pattern, edge-side). In-memory is correct here: single-instance edge, same as
+// sentMsgIds/busyVms. Keyed `${poolId}:${jid}`.
+type InboundItem = {
+  content: NonNullable<Awaited<ReturnType<typeof extractInboundContent>>>;
+  m: proto.IWebMessageInfo;
+  sender?: string;
+};
+type GroupBuffer = { items: InboundItem[]; timer: ReturnType<typeof setTimeout> | null; running: boolean };
+const groupBuffers = new Map<string, GroupBuffer>();
+const COALESCE_DEBOUNCE_MS = 1500;
+
+function enqueueInbound(sock: WASocket, poolId: string, jid: string, item: InboundItem) {
+  const key = `${poolId}:${jid}`;
+  let buf = groupBuffers.get(key);
+  if (!buf) { buf = { items: [], timer: null, running: false }; groupBuffers.set(key, buf); }
+  buf.items.push(item);
+  if (buf.running) return; // a turn is in flight; it re-drains itself on finish
+  if (buf.timer) clearTimeout(buf.timer);
+  buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, COALESCE_DEBOUNCE_MS);
+}
+
+// Run ONE coalesced turn over the whole pending burst for a group, then re-drain
+// anything that arrived while it ran. Pool meta is re-read so config changes apply.
+async function drainGroup(sock: WASocket, poolId: string, jid: string) {
+  const key = `${poolId}:${jid}`;
+  const buf = groupBuffers.get(key);
+  if (!buf || buf.running || buf.items.length === 0) return;
+  buf.timer = null;
+  buf.running = true;
+  const batch = buf.items.splice(0); // claim the whole burst
+
+  const pool = await db.pool.findUnique({
+    where: { id: poolId },
+    select: { hasOwnNumber: true, assistantName: true, ownerId: true },
+  });
+  const hasOwnNumber = pool?.hasOwnNumber ?? false;
+  const assistantName = pool?.assistantName || "Asistente";
+  const ownerId = pool?.ownerId ?? "";
+
+  const last = batch[batch.length - 1];
+  // Combine the burst into one prompt (one person typing several lines, not N
+  // requests). Voice intent = any item asked for / sent voice; userText merged.
+  const combinedText = batch.map((it) => it.content.text).join("\n");
+  const userText = batch.map((it) => it.content.userText).filter(Boolean).join(" ");
+  const wasVoice = batch.some((it) => it.content.wasVoice);
+
+  sock.sendPresenceUpdate("composing", jid).catch(() => {});
+  const typingTimer = setInterval(() => {
+    sock.sendPresenceUpdate("composing", jid).catch(() => {});
+  }, 8000);
+  try {
+    const reply = await routeMessage(
+      poolId,
+      { groupId: jid, sender: last.sender, text: combinedText },
+      { skipRateLimit: true }
+    );
+    if (reply) {
+      const delivered = await deliverFilesFromReply((j, c) => sendTracked(sock, j, c), jid, reply);
+      let body = delivered.text;
+      if (!body && delivered.sent) body = "Ahí te va 👆";
+      if (body) {
+        const ogg = wantsVoiceReply(userText, wasVoice) ? await synthesizeVoiceOgg(body, ownerId) : null;
+        if (ogg) {
+          await sendTracked(sock, jid, { audio: ogg, ptt: true, mimetype: "audio/ogg; codecs=opus" });
+        } else {
+          const out = hasOwnNumber ? body : `${assistantName}: ${body}`;
+          await sendTracked(sock, jid, { text: out });
+        }
+      }
+      if (last.m.key) sock.sendMessage(jid, { react: { text: "✅", key: last.m.key } }).catch(() => {});
+      log(poolId, `replied in ${jid} (batch ${batch.length})${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
+    }
+  } catch (e) {
+    const notice =
+      e instanceof PoolAtCapacity ? "Estamos a tope ahora, dame un momento. 🙏"
+      : e instanceof PoolRateLimited ? "Voy un poco saturado, dame un momento. 🙏"
+      : null;
+    if (notice) sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+    log(poolId, `route failed in ${jid}: ${e}`);
+  } finally {
+    clearInterval(typingTimer);
+    sock.sendPresenceUpdate("paused", jid).catch(() => {});
+    buf.running = false;
+    // Messages that landed during the turn → drain them as the next batch.
+    if (buf.items.length > 0) {
+      buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, COALESCE_DEBOUNCE_MS);
+    }
+  }
+}
+
 type BaileysStatus = "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
 // MERGE the baileys blob so a transient status change (e.g. a reconnect flipping
 // to "connecting") doesn't wipe an already-issued pairingCode/qr — the UI keeps
@@ -284,64 +381,11 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       lastIncoming.set(`${poolId}:${jid}`, m); // for wa MCP quote/react
       const text = content.text;
       log(poolId, `msg in ${jid} from ${m.key.participant ?? (fromMe ? "owner" : "?")}: "${text.slice(0, 40)}"`);
-      // Acknowledge + show typing while the worker thinks (ghosty UX parity).
+      // Ack each message immediately; the actual turn runs COALESCED after a short
+      // debounce (drainGroup) so a burst becomes one turn + one reply, never N
+      // concurrent turns on the same sessionId (which stalls the Agent SDK).
       sock.sendMessage(jid, { react: { text: "👀", key: m.key } }).catch(() => {});
-      sock.sendPresenceUpdate("composing", jid).catch(() => {});
-      // WhatsApp clears the "escribiendo…" bubble after ~10s; refresh it every 8s
-      // so it stays visible across long turns (cold boot ~12s + multi-tool work
-      // like research + image gen + deck). Cleared in finally.
-      const typingTimer = setInterval(() => {
-        sock.sendPresenceUpdate("composing", jid).catch(() => {});
-      }, 8000);
-      try {
-        const reply = await routeMessage(
-          poolId,
-          { groupId: jid, sender: m.key.participant ?? undefined, text },
-          { skipRateLimit: true }
-        );
-        if (reply) {
-          // Deliver any file/PDF/image URLs the agent emitted as real attachments,
-          // stripping them from the text (so PDFs arrive as files, not links).
-          const delivered = await deliverFilesFromReply(
-            (j, c) => sendTracked(sock, j, c),
-            jid,
-            reply
-          );
-          let body = delivered.text;
-          if (!body && delivered.sent) body = "Ahí te va 👆";
-          if (body) {
-            // Voice reply (ElevenLabs → PTT) when the user sent voice or asked for
-            // it. The voice note has no text prefix, but sentMsgIds dedup keeps it
-            // from looping. Falls back to text if synthesis fails.
-            const ogg =
-              wantsVoiceReply(content.userText, !!content.wasVoice) ? await synthesizeVoiceOgg(body, ownerId) : null;
-            if (ogg) {
-              await sendTracked(sock, jid, { audio: ogg, ptt: true, mimetype: "audio/ogg; codecs=opus" });
-            } else {
-              // Stamp the name prefix on shared-number lines so our own reply is
-              // recognized as a bot message next round (no self-reply loop).
-              const out = hasOwnNumber ? body : `${assistantName}: ${body}`;
-              await sendTracked(sock, jid, { text: out });
-            }
-          }
-          sock.sendMessage(jid, { react: { text: "✅", key: m.key } }).catch(() => {});
-          log(poolId, `replied in ${jid}${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
-        }
-      } catch (e) {
-        // Brief notice on backpressure. Stamp the assistantName prefix on shared
-        // numbers so our own notice isn't mistaken for a user message next round.
-        const notice =
-          e instanceof PoolAtCapacity ? "Estamos a tope ahora, dame un momento. 🙏"
-          : e instanceof PoolRateLimited ? "Voy un poco saturado, dame un momento. 🙏"
-          : null;
-        if (notice) {
-          sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
-        }
-        log(poolId, `route failed in ${jid}: ${e}`);
-      } finally {
-        clearInterval(typingTimer);
-        sock.sendPresenceUpdate("paused", jid).catch(() => {});
-      }
+      enqueueInbound(sock, poolId, jid, { content, m, sender: m.key.participant ?? undefined });
     }
   });
 }
