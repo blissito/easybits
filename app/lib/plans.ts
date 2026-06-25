@@ -85,6 +85,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     features: [
       "10 GB de almacenamiento",
       `${formatCredits(PLAN_CREDITS.Mega)} créditos AI/mes incluidos`,
+      "10M tokens LLM/mes para tus agentes",
       "Todo lo de Byte",
       "10 bases de datos",
       "3 cajas · 12 agentes Ghosty simultáneos · sesiones de 4h · kernel Python + URLs públicas",
@@ -94,7 +95,6 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Dominios custom",
       "Streaming HLS",
       "Transformación de imágenes",
-      "Packs de créditos desde $39",
     ],
   },
   Tera: {
@@ -110,12 +110,12 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     features: [
       "100 GB de almacenamiento",
       `${formatCredits(PLAN_CREDITS.Tera)} créditos AI/mes incluidos`,
+      "50M tokens LLM/mes para tus agentes",
       "Todo lo de Mega",
       "20 bases de datos",
       "10 cajas · 40 agentes Ghosty simultáneos · sesiones de 24h",
       "Proveedores custom",
       "Soporte prioritario",
-      "Packs de créditos desde $39",
       "RAG as a Service (próximamente)",
     ],
   },
