@@ -167,7 +167,7 @@ export const PlanCard = ({
 };
 
 export const PerkItem = ({ perk }: { perk?: string }) => {
-  const highlight = !!perk && /sandbox/i.test(perk);
+  const highlight = !!perk && /sandbox|caja/i.test(perk);
   return (
     <div className="flex w-full items-start gap-2 my-2">
       <img alt="bullet" src="/home/bullet.svg" className="mt-[2px]" />
