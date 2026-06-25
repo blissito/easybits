@@ -7,31 +7,66 @@ import { randomUUID } from "crypto";
 import { createHost } from "~/lib/fly_certs/certs_getters";
 import { sendWelcomeEmail } from "./emails/sendWelcome";
 import { getServerDomain } from "./urlUtils";
+import { canImpersonate } from "./delegation";
 
 const throwRedirect = (request: Request) => {
   const url = new URL(request.url);
   return redirect("/login?next=" + url.pathname);
 };
 
+/**
+ * Single choke-point for "current user". Resolves the EFFECTIVE user: the real
+ * operator from `session.email`, unless impersonation (`actAsEmail`) is set AND
+ * the operator is authorized — then the target account. Authorization is
+ * re-verified here every request, so a forged/stale cookie can't impersonate.
+ */
+const resolveEffectiveUser = async (
+  session: Awaited<ReturnType<typeof getSession>>
+): Promise<User | null> => {
+  const email = session.get("email");
+  if (!email) return null;
+  const real = await db.user.findUnique({ where: { email } });
+  if (!real) return null;
+  const actAs = session.get("actAsEmail");
+  if (actAs && actAs !== real.email) {
+    const target = await db.user.findUnique({ where: { email: actAs } });
+    if (target && (await canImpersonate(real.id, target.id))) return target;
+  }
+  return real;
+};
+
 export const getUserOrRedirect = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
-  if (!session.has("email")) throw throwRedirect(request);
-
-  const user = await db.user.findUnique({
-    where: { email: session.get("email") },
-  });
+  const user = await resolveEffectiveUser(session);
   if (!user) throw throwRedirect(request);
   return user;
 };
 
 export const getUserOrNull = async (request: Request) => {
   const session = await getSession(request.headers.get("Cookie"));
-  if (!session.has("email")) return null;
-  const user = await db.user.findUnique({
-    where: { email: session.get("email") },
-  });
-  if (!user) return null;
-  return user;
+  return resolveEffectiveUser(session);
+};
+
+/** The REAL logged-in operator, never impersonated. For the switcher/banner/audit. */
+export const getRealUserOrNull = async (request: Request) => {
+  const session = await getSession(request.headers.get("Cookie"));
+  const email = session.get("email");
+  if (!email) return null;
+  return db.user.findUnique({ where: { email } });
+};
+
+/** Superuser check: ADMIN_EMAILS env OR `Admin` role. Read env at call time (no module-level throw). */
+export const isAdminUser = (
+  user: Pick<User, "email" | "roles"> | null | undefined
+): boolean => {
+  if (!user) return false;
+  const adminEmails = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase());
+  return (
+    adminEmails.includes((user.email || "").toLowerCase()) ||
+    (user.roles || []).includes("Admin")
+  );
 };
 
 export const setSessionCookie = async ({

@@ -1,6 +1,7 @@
 import { data, Outlet, redirect } from "react-router";
 import { HeaderMobile, SideBar } from "./SideBar";
-import { getUserOrNull } from "~/.server/getters";
+import { ImpersonationBanner } from "./ImpersonationBanner";
+import { getRealUserOrNull, getUserOrNull, isAdminUser } from "~/.server/getters";
 import { clearShareCookie, hasValidShareCookie } from "~/.server/shareLinks";
 import type { Route } from "./+types/DashLayout";
 
@@ -16,19 +17,26 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     // pedido y rechazar mismatches.
     const isShareSession = await hasValidShareCookie(request);
     if (isShareSession) {
-      return { isAdmin: false, isShareSession: true };
+      return { isAdmin: false, isShareSession: true, impersonating: null };
     }
     const url = new URL(request.url);
     throw redirect("/login?next=" + url.pathname);
   }
+  // "Operar como": si el usuario efectivo (user) difiere del operador real,
+  // estamos impersonando. El banner y el bypass de onboarding se basan en esto.
+  const realUser = await getRealUserOrNull(request);
+  const impersonating =
+    realUser && realUser.id !== user.id
+      ? { asEmail: user.email, asName: user.displayName }
+      : null;
   if (
-    !user.metadata?.customer_type ||
-    (user.metadata?.asset_types.length || 0) < 1
+    !impersonating &&
+    (!user.metadata?.customer_type ||
+      (user.metadata?.asset_types.length || 0) < 1)
   ) {
     return redirect("/onboarding");
   }
-  const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase());
-  const isAdmin = adminEmails.includes(user.email?.toLowerCase() || "") || user.roles.includes("Admin");
+  const isAdmin = isAdminUser(user);
 
   // Limpieza proactiva: si el user logueado todavía trae cookie de share
   // pegada (de una visita previa al share link), la borramos para que no
@@ -37,16 +45,17 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const cookieHeader = request.headers.get("Cookie") || "";
   if (cookieHeader.includes("eb_share=")) {
     return data(
-      { isAdmin, isShareSession: false },
+      { isAdmin, isShareSession: false, impersonating },
       { headers: { "Set-Cookie": clearShareCookie() } }
     );
   }
-  return { isAdmin, isShareSession: false };
+  return { isAdmin, isShareSession: false, impersonating };
 };
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const isAdmin = loaderData?.isAdmin ?? false;
   const isShareSession = loaderData?.isShareSession ?? false;
+  const impersonating = loaderData?.impersonating ?? null;
   if (isShareSession) {
     return (
       <main className="flex relative min-h-svh bg-pattern">
@@ -55,7 +64,17 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
     );
   }
   return (
-    <main className="flex relative  min-h-svh bg-pattern">
+    <main
+      className={
+        "flex relative min-h-svh bg-pattern" + (impersonating ? " pt-9" : "")
+      }
+    >
+      {impersonating && (
+        <ImpersonationBanner
+          asEmail={impersonating.asEmail}
+          asName={impersonating.asName}
+        />
+      )}
       <HeaderMobile isAdmin={isAdmin} />
       <SideBar isAdmin={isAdmin} />
       <Outlet />

@@ -2,6 +2,9 @@ import { createCookie, createCookieSessionStorage } from "react-router";
 
 interface SessionData {
   email: string;
+  // Impersonation: when set, the dash operates as this account ("operar como").
+  // `email` always stays the real operator (for audit + exit). See getters.ts.
+  actAsEmail?: string;
 }
 
 interface SessionFlashData {

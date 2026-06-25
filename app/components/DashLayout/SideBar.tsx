@@ -33,7 +33,7 @@ export const SideBar = ({ isAdmin = false }: { isAdmin?: boolean }) => {
 const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
   const location = useLocation();
   const middleItems = isAdmin
-    ? [ITEMS.adminItem, ...ITEMS.middleItems]
+    ? [ITEMS.adminItem, ITEMS.cuentasItem, ...ITEMS.middleItems]
     : ITEMS.middleItems;
 
   return (

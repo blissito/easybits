@@ -176,6 +176,20 @@ export const ITEMS = {
     },
   ] as SidebarItem[],
 
+  /** Cuentas de clientes — "operar como"; se inserta para admins junto a Admin */
+  cuentasItem: {
+    icon: (
+      <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+    path: "/dash/cuentas",
+    title: "Cuentas",
+  } as SidebarItem,
+
   /** Admin — se inserta al inicio de middleItems cuando el usuario es admin */
   adminItem: {
     icon: (

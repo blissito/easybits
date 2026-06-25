@@ -23,6 +23,9 @@ export const SCOPES = {
   // Operate the owner's whole AGENT fleet (pools + standalone agents): list,
   // suspend/resume, message, admin. Destroy stays owner-only at its call site.
   AGENTS: "agents",
+  // Full-account impersonation eligibility — the grantee may "operate as" this
+  // account (the whole dash flips context). Used by /dash/cuentas + getters.
+  ACCOUNT: "account",
 } as const;
 export type Scope = (typeof SCOPES)[keyof typeof SCOPES];
 
@@ -139,4 +142,90 @@ export async function listAccess(ctx: AuthContext) {
     scopes: g.scopes,
     createdAt: g.createdAt,
   }));
+}
+
+/* --------------------------------------------------------------------------
+ * Impersonation ("operar como") — built on the same Delegation rows.
+ *
+ * The roster is `Delegation` rows where granteeId = operator and scopes has
+ * `account`. canImpersonate = membership in that roster (re-checked every
+ * request in getters, so a forged cookie can't impersonate). Self-adding a
+ * client (addClientAccount) is admin-gated at the call site since it grants
+ * access without the client's own action.
+ * ------------------------------------------------------------------------ */
+
+/** May `operatorId` operate as `targetId`? (roster membership, scope `account`) */
+export async function canImpersonate(
+  operatorId: string,
+  targetId: string
+): Promise<boolean> {
+  if (!targetId || targetId === operatorId) return false;
+  const grant = await db.delegation.findFirst({
+    where: { accountId: targetId, granteeId: operatorId, scopes: { has: SCOPES.ACCOUNT } },
+    select: { id: true },
+  });
+  return !!grant;
+}
+
+/** Accounts `operatorId` may operate as. Resolved to {id, email, displayName}. */
+export async function listClients(operatorId: string) {
+  const grants = await db.delegation.findMany({
+    where: { granteeId: operatorId, scopes: { has: SCOPES.ACCOUNT } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!grants.length) return [];
+  const users = await db.user.findMany({
+    where: { id: { in: grants.map((g) => g.accountId) } },
+    select: { id: true, email: true, displayName: true },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return grants
+    .map((g) => ({
+      id: g.accountId,
+      email: byId.get(g.accountId)?.email ?? null,
+      displayName: byId.get(g.accountId)?.displayName ?? null,
+    }))
+    .filter((c) => c.email);
+}
+
+/** Operator self-adds `clientEmail` to their roster (grants self `account` over it). Admin-gate at call site. */
+export async function addClientAccount(operatorId: string, clientEmail: string) {
+  const client = await db.user.findUnique({ where: { email: clientEmail }, select: { id: true } });
+  if (!client) fail(400, "ClientNotFound", "No existe una cuenta EasyBits con ese email.");
+  if (client.id === operatorId) fail(400, "CannotAddSelf", "Esa es tu propia cuenta.");
+  const existing = await db.delegation.findFirst({
+    where: { accountId: client.id, granteeId: operatorId },
+  });
+  if (existing) {
+    if (!existing.scopes.includes(SCOPES.ACCOUNT)) {
+      await db.delegation.update({
+        where: { id: existing.id },
+        data: { scopes: [...new Set([...existing.scopes, SCOPES.ACCOUNT])] },
+      });
+    }
+    return { ok: true as const };
+  }
+  await db.delegation.create({
+    data: { accountId: client.id, granteeId: operatorId, grantedById: operatorId, scopes: [SCOPES.ACCOUNT] },
+  });
+  logger.info(`[impersonation] client added operator=${operatorId} client=${client.id} email=${clientEmail}`);
+  return { ok: true as const };
+}
+
+/** Operator removes `clientEmail` from roster (drops only `account` scope; keeps other delegated scopes). */
+export async function removeClientAccount(operatorId: string, clientEmail: string) {
+  const client = await db.user.findUnique({ where: { email: clientEmail }, select: { id: true } });
+  if (!client) return { ok: true as const };
+  const grant = await db.delegation.findFirst({
+    where: { accountId: client.id, granteeId: operatorId },
+  });
+  if (!grant) return { ok: true as const };
+  const remaining = grant.scopes.filter((s) => s !== SCOPES.ACCOUNT);
+  if (remaining.length) {
+    await db.delegation.update({ where: { id: grant.id }, data: { scopes: remaining } });
+  } else {
+    await db.delegation.delete({ where: { id: grant.id } });
+  }
+  logger.info(`[impersonation] client removed operator=${operatorId} client=${client.id} email=${clientEmail}`);
+  return { ok: true as const };
 }
