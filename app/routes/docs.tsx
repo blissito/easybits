@@ -1524,7 +1524,7 @@ console.log(status.result);  // resultado final del agente`} />
               <span className="align-middle text-xs font-bold uppercase tracking-wide bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-1.5 py-0.5">Próximamente</span>
             </h3>
             <p className="text-gray-600 text-sm mb-6">
-              Pronto vas a poder conectar tu <strong>WhatsApp Business API</strong> oficial: solo sigues el wizard de Meta para vincular tu cuenta de WhatsApp Business y tu flota empieza a atender desde tu <strong>número oficial</strong>, sin el riesgo de bloqueo de la vinculación personal. Mismos agentes, mismos grupos — el canal cambia, tu flota no.
+              Pronto vas a poder conectar tu <strong>WhatsApp Business API</strong> oficial: solo sigues el wizard de Meta para vincular tu cuenta de WhatsApp Business y tu flota empieza a atender desde tu <strong>número oficial</strong>, sin el riesgo de bloqueo de la vinculación personal. WABA atiende <strong>conversaciones 1:1</strong> con tus clientes (no grupos) — ideal para soporte y ventas directas.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Cómo funciona: cajas</h3>
