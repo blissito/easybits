@@ -1,7 +1,11 @@
 import type { Route } from "./+types/agent-message";
 import { resolveAgentAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
-import { openAgentChunkStream } from "~/.server/core/sandboxOperations";
+import {
+  openAgentChunkStream,
+  wakeAgentForMessage,
+} from "~/.server/core/sandboxOperations";
+import { markAgentBusy, markAgentIdle } from "~/.server/core/embedAgentReaper";
 
 // CORS: el endpoint /api/v2/agents/:id/message lo consume el browser desde
 // el sitio del cliente (iframe embed) → debe permitir cualquier origen.
@@ -51,6 +55,27 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   }
 
+  // Wake-on-message: si el reaper de idle-suspend (A3) suspendió esta VM, la
+  // revivimos antes de abrir el stream. También bump lastMessageAt → marca la
+  // actividad que el reaper consulta. Si el plan está al tope, propaga el 503.
+  try {
+    await wakeAgentForMessage(auth.agent.agentId);
+  } catch (e) {
+    if (e instanceof Response) {
+      const headers = new Headers(e.headers);
+      for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+      return new Response(e.body, { status: e.status, headers });
+    }
+    return Response.json(
+      { error: e instanceof Error ? e.message : "wake failed" },
+      { status: 502, headers: CORS_HEADERS }
+    );
+  }
+
+  // Marca el agente busy mientras dura el turno → el reaper de idle-suspend no
+  // lo suspende a mitad del stream. Se libera al cerrar/cancelar el stream.
+  markAgentBusy(auth.agent.agentId);
+
   let stream;
   try {
     // sessionId opcional: si no viene (o no es string), omitimos. El daemon
@@ -63,13 +88,41 @@ export async function action({ request, params }: Route.ActionArgs) {
       ...(sessionId ? { sessionId } : {}),
     });
   } catch (e) {
+    markAgentIdle(auth.agent.agentId);
     return Response.json(
       { error: e instanceof Error ? e.message : "upstream error" },
       { status: 502, headers: CORS_HEADERS }
     );
   }
 
-  return new Response(stream, {
+  // Envuelve el stream para liberar el busy-flag cuando termine, falle o el
+  // cliente cancele (el action retorna antes de que el SSE acabe — el turno vive
+  // en el stream). TransformStream.Transformer no tiene `cancel`, así que usamos
+  // un ReadableStream manual que cubre los tres caminos.
+  const agentId = auth.agent.agentId;
+  const reader = stream.getReader();
+  const monitored = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          markAgentIdle(agentId);
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (e) {
+        markAgentIdle(agentId);
+        controller.error(e);
+      }
+    },
+    cancel(reason) {
+      markAgentIdle(agentId);
+      return reader.cancel(reason);
+    },
+  });
+
+  return new Response(monitored, {
     status: 200,
     headers: {
       ...CORS_HEADERS,

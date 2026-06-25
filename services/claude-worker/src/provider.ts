@@ -50,6 +50,10 @@ const TOOL_ALLOWLIST = [
   'Skill',
   'NotebookEdit',
   'mcp__easybits__*',
+  // Per-tenant denik booking tools (only present when DENIK_API_KEY is set on
+  // the agent — see buildMcpServers in server.ts). Without this entry the
+  // Agent SDK silently drops every mcp__denik__* tool.
+  'mcp__denik__*',
 ];
 
 // ── Transcript archiving (PreCompact hook) ──

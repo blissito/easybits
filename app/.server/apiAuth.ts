@@ -82,6 +82,9 @@ export interface AgentAuthInfo {
   agentUrl: string;
   embedToken: string;
   template: string;
+  // VM lifecycle status ("running" | "suspended" | "building" | ...). Lets the
+  // message endpoint wake a suspended embed agent before streaming.
+  status: string;
   // Runtime metadata snapshot (Prisma defaults preserve back-compat).
   protocol: string;
   port: number;
@@ -131,6 +134,7 @@ export async function resolveAgentAuth(
         agentUrl: agent.agentUrl,
         embedToken: agent.embedToken,
         template: agent.template,
+        status: agent.status,
         protocol: agent.protocol,
         port: agent.port,
         unit: agent.unit,
@@ -160,6 +164,7 @@ export async function resolveAgentAuth(
       agentUrl: row.agentUrl,
       embedToken: row.embedToken,
       template: row.template,
+      status: row.status,
       protocol: row.protocol ?? "sse",
       port: row.port ?? 3000,
       unit: row.unit ?? "chat-runtime",

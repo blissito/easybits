@@ -41,6 +41,23 @@ function buildMcpServers(): Record<string, McpServerConfig> {
       env: { EASYBITS_API_KEY: easybitsKey },
     };
   }
+  // Optional per-tenant denik MCP (@denik.me/mcp): a thin stdio client over
+  // denik's REST. The scope (public/admin) is derived from the DENIK_API_KEY
+  // prefix, so a `dnk_pub_…` key scopes this agent to ONE denik org's booking
+  // tools (list_services/get_availability/create_booking). Spawned per-agent
+  // inside the VM; it calls back out to DENIK_BASE_URL/api/mcp/*.
+  const denikKey = process.env.DENIK_API_KEY;
+  if (denikKey) {
+    servers.denik = {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@denik.me/mcp'],
+      env: {
+        DENIK_API_KEY: denikKey,
+        DENIK_BASE_URL: process.env.DENIK_BASE_URL ?? '',
+      },
+    };
+  }
   return servers;
 }
 

@@ -2663,6 +2663,87 @@ export async function resumeAgent(
   return toAgentRecord(updated);
 }
 
+// wakeAgentForMessage: revive un agente embed antes de abrir el stream del
+// mensaje. El endpoint /api/v2/agents/:id/message NO despertaba VMs suspendidas
+// (las dejaba el reaper de idle-suspend, A3) — sin esto el primer mensaje tras
+// el idle fallaba. Idempotente y tolerante a estados intermedios:
+//   - "running"   → bump lastMessageAt y sigue.
+//   - "suspended" → check de cap del plan + resume del host + status="running".
+//   - "building"/"starting" → espera a que la VM termine de bootear.
+//   - otro (lost/error) → throw claro (para agentes denik usamos suspend-only,
+//     así que este caso no debería ocurrir).
+// A diferencia de resumeAgent NO exige ownership por ctx (el embed ya autenticó
+// vía embedToken); opera por la fila del Agent. El resume del host se rutea con
+// el ownerId (callHost resuelve el box desde Agent.host del dueño).
+export async function wakeAgentForMessage(agentId: string): Promise<void> {
+  let row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row) throw new Error("agent not found");
+
+  // Espera de boot si la VM aún está levantando (cold create reciente).
+  if (row.status === "building" || row.status === "starting") {
+    for (let i = 0; i < 30 && (row.status === "building" || row.status === "starting"); i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      row = await db.agent.findUnique({ where: { id: agentId } });
+      if (!row) throw new Error("agent not found");
+    }
+  }
+
+  if (row.status === "running") {
+    await db.agent
+      .update({ where: { id: agentId }, data: { lastMessageAt: new Date() } })
+      .catch(() => {});
+    return;
+  }
+
+  if (row.status !== "suspended") {
+    throw new Error(`agent is ${row.status}; cannot wake for message`);
+  }
+
+  // Cap del plan ANTES de resumir: el resume del host NO pasa por createSandbox,
+  // así que sin este check una avalancha de primeros-mensajes podría sobre-suscribir
+  // la RAM del box. Mismo denominador que createSandbox/spawnVm (plan + add-ons).
+  // fail-open: si no podemos resolver el conteo, dejamos pasar el resume.
+  const owner = await db.user.findUnique({ where: { id: row.ownerId } });
+  if (owner) {
+    try {
+      const plan = PLANS[getUserPlan(owner)];
+      const ctx: AuthContext = { user: owner, scopes: ["WRITE"] };
+      const list = await listSandboxes(ctx).catch(() => [] as SandboxRecord[]);
+      const active = (Array.isArray(list) ? list : []).filter(
+        (s) => s.status === "running" || s.status === "starting"
+      ).length;
+      const { getReservedCapacity } = await import("./sandboxReservations");
+      const reserved = await getReservedCapacity(owner.id).catch(() => ({ machines: 0, agents: 0 }));
+      const budget = plan.concurrentSandboxes + reserved.machines;
+      if (active >= budget) {
+        throw new Response(
+          JSON.stringify({
+            error: "SandboxLimitReached",
+            message: `Límite de ${budget} agentes activos alcanzado; intenta de nuevo en un momento.`,
+            active,
+            max: budget,
+          }),
+          { status: 503, headers: { "content-type": "application/json", "Retry-After": "10" } }
+        );
+      }
+    } catch (e) {
+      if (e instanceof Response) throw e; // cap hit → propaga
+      // cualquier otro fallo del check = fail-open
+    }
+  }
+
+  await callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${row.sandboxId}/resume`,
+    {},
+    row.ownerId
+  );
+  await db.agent.update({
+    where: { id: agentId },
+    data: { status: "running", lastMessageAt: new Date() },
+  });
+}
+
 // markAgentLost: caller (UI loader) ya detectó que el sandbox subyacente
 // no responde (probe HTTP falló). Persiste el estado en Mongo así otros
 // consumidores no ven datos engañosos. Truncate expiresAt a now() para

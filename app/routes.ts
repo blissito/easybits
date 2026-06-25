@@ -161,6 +161,7 @@ export default [
   route("api/cron/backup-agents", "routes/api/cron/backup-agents.ts"),
   route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
   route("api/cron/purge-keys", "routes/api/cron/purge-keys.ts"),
+  route("api/cron/reap-embed-agents", "routes/api/cron/reap-embed-agents.ts"),
   // Webhooks (inbound from external providers)
   route("api/webhooks/mercadopago", "routes/api/webhooks/mercadopago.ts"),
   // Unsubscribe (public)
