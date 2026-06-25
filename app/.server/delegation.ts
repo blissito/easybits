@@ -20,6 +20,9 @@ export const SCOPES = {
   MACHINES: "machines",
   FILES: "files",
   DBS: "dbs",
+  // Operate the owner's whole AGENT fleet (pools + standalone agents): list,
+  // suspend/resume, message, admin. Destroy stays owner-only at its call site.
+  AGENTS: "agents",
 } as const;
 export type Scope = (typeof SCOPES)[keyof typeof SCOPES];
 
