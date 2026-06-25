@@ -537,6 +537,14 @@ function SandboxBoxCard({ canBuy }: { canBuy: boolean }) {
         >
           {canBuy ? `Comprar ${qty} ${qty === 1 ? "caja" : "cajas"}` : "Desde Mega"}
         </BrutalButton>
+        {!canBuy && (
+          <a
+            href="/planes"
+            className="text-xs font-semibold text-brand-500 hover:underline"
+          >
+            Mejora a Mega para comprar cajas ↗
+          </a>
+        )}
       </div>
     </div>
   );
