@@ -229,7 +229,7 @@ function GhostyMascot({ className = "", blink = true }: { className?: string; bl
 
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
-// building pulses yellow; an unspawned slot is a dashed "mount" ready on demand.
+// building pulses violet; an unspawned slot is a dashed "mount" ready on demand.
 function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string }) {
   const system = kind === "system";
   const custom = kind === "custom";
@@ -238,7 +238,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
   const frame =
     system ? "border-blue-500 bg-blue-50"
     : custom ? "border-slate-400 bg-slate-50"
-    : status === "building" ? "border-yellow-500 bg-yellow-50 animate-pulse"
+    : status === "building" ? "border-violet-500 bg-violet-50 animate-pulse"
     : status == null ? (addon ? "border-brand-500 border-dashed bg-brand-500/5" : "border-gray-200 border-dashed bg-gray-50/40")
     : full ? "border-amber-500 bg-amber-50"
     : slots > 0 ? "border-green-500 bg-green-50"
