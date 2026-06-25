@@ -45,7 +45,7 @@ export const Pricing = () => {
           promoLabel={PLANS.Mega.promoLabel}
           classNameButton="bg-[#A1CCE5] w-full"
           perks={PLANS.Mega.features}
-          className="lg:-mt-6"
+          className="lg:-translate-y-6"
           cta={
             <PlanForm
               id="flow_plan"
@@ -130,8 +130,8 @@ export const PlanCard = ({
     </Link>
   );
   return (
-    <section className="h-full rounded-xl group max-w-[340px] md:max-w-none mx-auto">
-      <div className={cn("bg-white border-2 border-black rounded-xl py-6 text-left shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all h-full flex flex-col", className)}>
+    <section className={cn("h-full rounded-xl group max-w-[340px] md:max-w-none mx-auto", className)}>
+      <div className="bg-white border-2 border-black rounded-xl overflow-hidden py-6 text-left shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] group-hover:-translate-x-1 group-hover:-translate-y-1 transition-all h-full flex flex-col">
         <div className="px-6 border-b-2 border-black pb-4">
           <img alt="foco" src={badge} />
           <div className="flex items-center gap-2 mt-4 mb-2">
