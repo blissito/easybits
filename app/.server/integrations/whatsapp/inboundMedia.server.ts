@@ -20,11 +20,27 @@ import {
   type WASocket,
   type WAMessage,
 } from "@whiskeysockets/baileys";
+import { randomBytes } from "node:crypto";
 import { describeImageService } from "~/.server/services/providers/describe";
-import { getPlatformPublicClient, buildPublicAssetUrl } from "~/.server/storage";
+import { getPlatformDefaultClient } from "~/.server/storage";
 
 const GEMINI_MODEL = process.env.WA_MEDIA_MODEL || "gemini-2.5-flash";
 const geminiKey = () => process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "";
+
+// The whole extraction runs inside Baileys' messages.upsert loop, so every fetch/
+// download MUST be bounded — a hung media server or model call would otherwise
+// stall message processing for that conversation.
+const GEMINI_TIMEOUT_MS = 20_000;
+const DOWNLOAD_TIMEOUT_MS = 30_000;
+// Gemini inline (base64) request bodies are capped well under the API's ~20MB.
+const MAX_INLINE_BYTES = 15 * 1024 * 1024;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timeout`)), ms)),
+  ]);
+}
 
 // Minimal pino-shaped logger so Baileys' downloadMediaMessage stays silent.
 const silentLogger: any = { level: "silent", child: () => silentLogger };
@@ -35,19 +51,23 @@ export type InboundContent = {
   text: string;
   /** The user's own words (typed text / transcript / caption), without framing. */
   userText: string;
-  /** Public URL of an inbound image (so the agent can edit/reference it). */
+  /** Signed (private, ~1h) URL of an inbound image so the agent can edit/reference it. */
   refImageUrl?: string;
   /** True when the user's message was a voice note (drives voice-reply choice). */
   wasVoice?: boolean;
 };
 
 function dl(sock: WASocket, m: WAMessage): Promise<Buffer> {
-  return downloadMediaMessage(
-    m,
-    "buffer",
-    {},
-    { logger: silentLogger, reuploadRequest: sock.updateMediaMessage }
-  ) as Promise<Buffer>;
+  return withTimeout(
+    downloadMediaMessage(
+      m,
+      "buffer",
+      {},
+      { logger: silentLogger, reuploadRequest: sock.updateMediaMessage }
+    ) as Promise<Buffer>,
+    DOWNLOAD_TIMEOUT_MS,
+    "media download"
+  );
 }
 
 // One raw Gemini generateContent call with a single inline (base64) part. Used for
@@ -56,6 +76,9 @@ function dl(sock: WASocket, m: WAMessage): Promise<Buffer> {
 async function geminiInline(prompt: string, mimeType: string, data: string): Promise<string> {
   const key = geminiKey();
   if (!key) return "";
+  // Backstop size guard (base64 ≈ 1.33× bytes) so audio/video/PDF over the API's
+  // inline limit degrade to "" instead of a failed call.
+  if (data.length > MAX_INLINE_BYTES * 1.4) return "";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
   const body = { contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType, data } }] }] };
   try {
@@ -63,6 +86,7 @@ async function geminiInline(prompt: string, mimeType: string, data: string): Pro
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     });
     if (!r.ok) return "";
     const d: any = await r.json();
@@ -86,6 +110,9 @@ async function readDocText(buf: Buffer, fileName: string, mimetype?: string): Pr
   const ext = (/\.([a-z0-9]+)$/i.exec(fileName || "")?.[1] || "").toLowerCase();
   const isPdf = ext === "pdf" || /pdf/i.test(mimetype || "");
   if (isPdf) {
+    if (buf.length > MAX_INLINE_BYTES) {
+      return `[documento "${fileName}" demasiado grande para leer (${Math.round(buf.length / 1024 / 1024)}MB); pídele al usuario la sección específica o una versión más chica.]`;
+    }
     const t = await geminiInline(
       "Extrae TODO el texto de este PDF en orden de lectura. Devuelve SOLO el texto, sin comentarios.",
       "application/pdf",
@@ -181,7 +208,9 @@ export async function extractInboundContent(
     } catch {}
   }
 
-  // Image / sticker → vision describe + upload to public storage for editing.
+  // Image / sticker → vision describe + stash in PRIVATE storage, handing the
+  // worker a short-lived SIGNED url (the user's photo must NOT land in a public,
+  // enumerable bucket). The worker consumes it within the turn.
   let imgDesc = "";
   let refImageUrl: string | undefined;
   if (c.imageMessage || c.stickerMessage) {
@@ -197,9 +226,11 @@ export async function extractInboundContent(
       } catch {}
       try {
         const ext = /png/.test(mime) ? "png" : /webp/.test(mime) ? "webp" : "jpg";
-        const key = `wa-media/${opts.ownerId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        await getPlatformPublicClient().putObject(key, buf, mime);
-        refImageUrl = buildPublicAssetUrl(key);
+        // 16 bytes of entropy in the key — not guessable even if the bucket leaked.
+        const key = `wa-media/${opts.ownerId}/${Date.now()}-${randomBytes(16).toString("hex")}.${ext}`;
+        const client = getPlatformDefaultClient();
+        await client.putObject(key, buf, mime);
+        refImageUrl = await client.getReadUrl(key, 3600); // signed, ~1h
       } catch {}
     } catch {}
   }

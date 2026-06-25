@@ -25,6 +25,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { db } from "~/.server/db";
 import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
+import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 import { extractInboundContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
 import { deliverFilesFromReply } from "~/.server/integrations/whatsapp/outboundMedia.server";
 import { wantsVoiceReply, synthesizeVoiceOgg } from "~/.server/integrations/whatsapp/whatsappVoice.server";
@@ -65,6 +66,16 @@ async function sendTracked(sock: WASocket, jid: string, content: Record<string, 
 
 function log(poolId: string, msg: string) {
   console.log(`[pool ${poolId}] ${msg}`);
+}
+
+// Send a backpressure notice at most once per NOTICE_COOLDOWN_MS per (pool, jid)
+// so the notice itself doesn't become spam. Fire-and-forget.
+function sendNoticeOnce(sock: WASocket, poolId: string, jid: string, text: string) {
+  const noticeKey = `${poolId}:${jid}`;
+  const last = lastNoticeAt.get(noticeKey) ?? 0;
+  if (Date.now() - last < NOTICE_COOLDOWN_MS) return;
+  lastNoticeAt.set(noticeKey, Date.now());
+  sock.sendMessage(jid, { text }).catch(() => {});
 }
 
 type BaileysStatus = "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
@@ -251,6 +262,15 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       if (isBotMessage) continue;
       if (!enabled.has(jid)) { log(poolId, `msg in ${jid} ignored (group not enabled)`); continue; }
       if (!ownerId) { log(poolId, `msg in ${jid} skipped (no ownerId)`); continue; }
+      // Rate-limit BEFORE extracting media so a spammy group can't run up Gemini
+      // cost. We pass skipRateLimit to routeMessage to avoid double-counting.
+      const rl = await checkSandboxRateLimit(`${poolId}:${jid}`, "op");
+      if (!rl.allowed) {
+        const notice = "Voy un poco saturado, dame un momento. 🙏";
+        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+        log(poolId, `msg in ${jid} rate limited`);
+        continue;
+      }
       // Media-aware extraction: turn images/voice/video/docs/location/etc. into the
       // text the worker brain will read. null = nothing actionable (noise) → skip.
       let content;
@@ -268,7 +288,11 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       sock.sendMessage(jid, { react: { text: "👀", key: m.key } }).catch(() => {});
       sock.sendPresenceUpdate("composing", jid).catch(() => {});
       try {
-        const reply = await routeMessage(poolId, { groupId: jid, sender: m.key.participant ?? undefined, text });
+        const reply = await routeMessage(
+          poolId,
+          { groupId: jid, sender: m.key.participant ?? undefined, text },
+          { skipRateLimit: true }
+        );
         if (reply) {
           // Deliver any file/PDF/image URLs the agent emitted as real attachments,
           // stripping them from the text (so PDFs arrive as files, not links).
@@ -306,13 +330,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
           : e instanceof PoolRateLimited ? "Voy un poco saturado, dame un momento. 🙏"
           : null;
         if (notice) {
-          const noticeKey = `${poolId}:${jid}`;
-          const last = lastNoticeAt.get(noticeKey) ?? 0;
-          if (Date.now() - last >= NOTICE_COOLDOWN_MS) {
-            lastNoticeAt.set(noticeKey, Date.now());
-            const out = hasOwnNumber ? notice : `${assistantName}: ${notice}`;
-            await sock.sendMessage(jid, { text: out }).catch(() => {});
-          }
+          sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
         }
         log(poolId, `route failed in ${jid}: ${e}`);
       }
@@ -392,6 +410,10 @@ export async function executeWaAction(
   action: string,
   args: Record<string, any>
 ): Promise<{ ok: boolean; result?: string; error?: string }> {
+  // Single-instance assumption: the socket lives in THIS process. If Fly ever runs
+  // >1 machine, the worker's wa-action could land on a machine that doesn't hold
+  // this pool's socket → "not connected". Keep Baileys single-instance (see the
+  // SCALING CAVEAT in poolOperations busyVms).
   const cur = sockets.get(poolId);
   if (!cur) return { ok: false, error: "pool socket not connected" };
   const sock = cur.sock;
@@ -402,7 +424,13 @@ export async function executeWaAction(
         const opts = args?.reply_to_last && last ? { quoted: last } : undefined;
         const caption = typeof args?.caption === "string" ? args.caption : undefined;
         if (args?.url) {
-          const resp = await fetch(String(args.url), { redirect: "follow" });
+          const u = String(args.url);
+          // SSRF guard (same as deliverFilesFromReply): the worker is semi-trusted
+          // and could be prompt-injected to emit an internal URL.
+          if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(u)) {
+            return { ok: false, error: "blocked url" };
+          }
+          const resp = await fetch(u, { redirect: "follow", signal: AbortSignal.timeout(15_000) });
           if (!resp.ok) return { ok: false, error: `fetch ${resp.status}` };
           const ct = (resp.headers.get("content-type") || "").toLowerCase();
           const buf = Buffer.from(await resp.arrayBuffer());

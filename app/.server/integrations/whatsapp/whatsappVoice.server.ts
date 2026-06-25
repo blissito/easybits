@@ -42,6 +42,7 @@ export async function synthesizeVoiceOgg(text: string): Promise<Buffer | null> {
         method: "POST",
         headers: { "xi-api-key": key, "content-type": "application/json", accept: "audio/ogg" },
         body: JSON.stringify({ text: clean.slice(0, 5000), model_id: MODEL }),
+        signal: AbortSignal.timeout(20_000),
       }
     );
     if (!r.ok) return null;

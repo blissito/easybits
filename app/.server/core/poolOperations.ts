@@ -54,6 +54,10 @@ export class PoolRateLimited extends Error {
 // the SSE stream and leaving the user with silence. In-memory is correct here:
 // the Baileys surface + reaper run in the SAME single-instance process (same
 // constraint as placeLocks). Keyed by Agent.id.
+// SCALING CAVEAT: this guard (and executeWaAction's socket lookup) assume ONE Fly
+// machine. Before scaling to >1 machine: the reaper needs a DB-backed busy marker
+// (e.g. Agent.turnStartedAt) / leader election, and the Baileys socket stays
+// single-instance — else machine B's reaper could reap a VM busy on machine A.
 const busyVms = new Set<string>();
 
 // ── In-process placement mutex ────────────────────────────────────────────────
@@ -441,16 +445,23 @@ async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: strin
 
 // MAIN ENTRY — the Baileys surface calls this per inbound group message.
 // Returns the agent's reply text (to send back to the group).
-export async function routeMessage(poolId: string, msg: InboundMessage): Promise<string> {
+export async function routeMessage(
+  poolId: string,
+  msg: InboundMessage,
+  opts: { skipRateLimit?: boolean } = {}
+): Promise<string> {
   const pool = await db.pool.findUniqueOrThrow({ where: { id: poolId } });
   const ctx = await ctxForOwner(pool.ownerId);
 
-  // Per-(pool, group) rate limit so one chatty group can't drain the fleet. This
-  // covers BOTH entrypoints (in-process Baileys + HTTP surface) since both land
-  // here. The surface turns PoolRateLimited into one brief "saturado" notice.
-  const rl = await checkSandboxRateLimit(`${poolId}:${msg.groupId}`, "op");
-  if (!rl.allowed) {
-    throw new PoolRateLimited(`group ${msg.groupId} rate limited (retry ${rl.retryAfterS}s)`);
+  // Per-(pool, group) rate limit so one chatty group can't drain the fleet. The
+  // in-process Baileys edge checks this BEFORE extracting media (to not pay for
+  // Gemini on a spammy group) and passes skipRateLimit so we don't double-count;
+  // the HTTP surface relies on this check. PoolRateLimited → one "saturado" notice.
+  if (!opts.skipRateLimit) {
+    const rl = await checkSandboxRateLimit(`${poolId}:${msg.groupId}`, "op");
+    if (!rl.allowed) {
+      throw new PoolRateLimited(`group ${msg.groupId} rate limited (retry ${rl.retryAfterS}s)`);
+    }
   }
 
   // Session commands — intercept before spawning work / logging.

@@ -22,7 +22,7 @@ export async function deliverFilesFromReply(
     // SSRF guard: never fetch local/private hosts.
     if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(url)) continue;
     try {
-      const resp = await fetch(url, { redirect: "follow" });
+      const resp = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15_000) });
       if (!resp.ok) continue;
       const ct = (resp.headers.get("content-type") || "").toLowerCase();
       // Only real file content-types — a normal webpage (text/html) is left as a link.
