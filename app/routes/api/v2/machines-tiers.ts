@@ -2,7 +2,7 @@ import type { Route } from "./+types/machines-tiers";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import {
   HOSTING_CATALOG,
-  TIER_ORDER,
+  SELLABLE_TIERS,
   DISK_ADDON_GB,
   DISK_ADDON_PRICE,
 } from "~/lib/hostingCatalog";
@@ -11,7 +11,7 @@ import {
 export async function loader({ request }: Route.LoaderArgs) {
   requireAuth(await authenticateRequest(request));
   return Response.json({
-    tiers: TIER_ORDER.map((k) => HOSTING_CATALOG[k]),
+    tiers: SELLABLE_TIERS.map((k) => HOSTING_CATALOG[k]),
     diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
   });
 }

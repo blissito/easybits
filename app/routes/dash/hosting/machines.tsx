@@ -18,7 +18,7 @@ import {
   restoreMachine,
   makePermanent,
 } from "~/.server/core/machineOperations";
-import { HOSTING_CATALOG, TIER_ORDER, DISK_ADDON_GB, DISK_ADDON_PRICE } from "~/lib/hostingCatalog";
+import { HOSTING_CATALOG, SELLABLE_TIERS, DISK_ADDON_GB, DISK_ADDON_PRICE } from "~/lib/hostingCatalog";
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
 import { WaPanel } from "./WaPanel";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -61,7 +61,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     })
   );
   const plan = getUserPlan(user);
-  const tiers = TIER_ORDER.map((k) => {
+  const tiers = SELLABLE_TIERS.map((k) => {
     const t = HOSTING_CATALOG[k];
     return {
       key: t.key, vcpus: t.vcpus, memoryMb: t.memoryMb, diskMb: t.diskMb,
@@ -584,7 +584,7 @@ function CreateModal({
             className="mt-1 block w-full border-2 border-black rounded-lg px-3 py-2 text-sm">
             {sellable.map((t) => (
               <option key={t.key} value={t.key}>
-                {t.key} — {t.vcpus} vCPU / {gb(t.memoryMb)} — ${t.priceShared.toLocaleString("es-MX")}/mes
+                {t.key} — {t.vcpus} vCPU / {gb(t.memoryMb)} / {gb(t.diskMb)} NVMe — ${t.priceShared.toLocaleString("es-MX")}/mes
               </option>
             ))}
           </select>

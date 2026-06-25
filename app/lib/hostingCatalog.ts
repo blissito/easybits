@@ -45,7 +45,7 @@ export const DISK_ADDON_MB = DISK_ADDON_GB * 1024;
  */
 export const TIER_ORDER = [
   "nano", "micro", "mini", "lite", "base",
-  "plus", "pro", "focus", "performance", "performance-4x",
+  "plus", "estandar", "pro", "focus", "performance", "performance-4x",
 ] as const;
 
 export type TierKey = (typeof TIER_ORDER)[number];
@@ -57,6 +57,9 @@ export const HOSTING_CATALOG: Record<TierKey, HostingTier> = {
   lite:            { key: "lite",            vcpus: 1,  memoryMb: 2048,  diskMb: 6144,   priceShared: 129,  priceReserved: null,  minPlan: "Mega" },
   base:            { key: "base",            vcpus: 2,  memoryMb: 2048,  diskMb: 16384,  priceShared: 249,  priceReserved: null,  minPlan: "Mega" },
   plus:            { key: "plus",            vcpus: 2,  memoryMb: 4096,  diskMb: 24576,  priceShared: 299,  priceReserved: null,  minPlan: "Mega" },
+  // "App estándar": disco grande para correr una app 24/7 (migrar desde Fly, etc.).
+  // Premium sobre la caja Flota ($299, agentic efímero) — disco es el diferenciador.
+  estandar:        { key: "estandar",        vcpus: 2,  memoryMb: 2048,  diskMb: 81920,  priceShared: 449,  priceReserved: null,  minPlan: "Mega" },
   pro:             { key: "pro",             vcpus: 4,  memoryMb: 4096,  diskMb: 32768,  priceShared: 449,  priceReserved: null,  minPlan: "Mega" },
   focus:           { key: "focus",           vcpus: 4,  memoryMb: 8192,  diskMb: 65536,  priceShared: 690,  priceReserved: 1725,  minPlan: "Tera" },
   performance:     { key: "performance",     vcpus: 8,  memoryMb: 16384, diskMb: 131072, priceShared: 1290, priceReserved: 3225,  minPlan: "Tera" },
@@ -79,6 +82,24 @@ export const POOL_BOX = {
   priceMxn: 299, // MXN/month per box
   minPlan: "Mega" as PlanKey,
 } as const;
+
+/**
+ * Tiers que NO se ofrecen al público (canibalizan la Flota / hosting barato).
+ * Siguen DEFINIDOS porque respaldan `SIZE_ALIASES` (sandboxes efímeros s/m/l/xl)
+ * y las máquinas ya provisionadas en ellos — solo se ocultan de venta/catálogo.
+ * Fuente única de "¿qué se vende?": todo consumidor público filtra por aquí.
+ */
+export const HIDDEN_TIERS = new Set<TierKey>([
+  // Baratos que canibalizan la Flota / hosting barato.
+  "nano", "micro", "mini", "lite", "base",
+  // plus = $299 (mismo precio que una caja Flota) → canibaliza.
+  "plus",
+  // pro = $449 (colisiona con `estandar`, misma tarifa, distinta forma).
+  "pro",
+]);
+
+/** Tiers ofrecidos al público, en orden. Úsalo en docs, catálogo y selects. */
+export const SELLABLE_TIERS = TIER_ORDER.filter((k) => !HIDDEN_TIERS.has(k));
 
 /** Legacy s/m/l/xl → catalog tier. Kept while migrating sandbox callers. */
 export const SIZE_ALIASES: Record<"s" | "m" | "l" | "xl", TierKey> = {

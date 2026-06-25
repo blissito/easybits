@@ -147,6 +147,7 @@ import { grantAccess, revokeAccess, listAccess } from "../delegation";
 import {
   HOSTING_CATALOG,
   TIER_ORDER,
+  SELLABLE_TIERS,
   DISK_ADDON_GB,
   DISK_ADDON_PRICE,
 } from "../../lib/hostingCatalog";
@@ -1474,7 +1475,7 @@ How to embed safely (the only reliable rule):
     { readOnlyHint: true, openWorldHint: false },
     wrapHandler(async (_params) => {
       return ok({
-        tiers: TIER_ORDER.map((k) => HOSTING_CATALOG[k]),
+        tiers: SELLABLE_TIERS.map((k) => HOSTING_CATALOG[k]),
         diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
         currency: "MXN",
       });

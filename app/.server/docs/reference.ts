@@ -1,5 +1,16 @@
 // EasyBits API Reference — returned by get_docs MCP tool and GET /api/v2/docs
 
+import { HOSTING_CATALOG, SELLABLE_TIERS } from "../../lib/hostingCatalog";
+
+// Catálogo de tiers en Markdown, derivado de la fuente única (hostingCatalog).
+// Un tier nuevo aparece aquí sin editar prosa a mano.
+const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
+const HOSTING_TIERS_MD = SELLABLE_TIERS.map((k) => {
+  const t = HOSTING_CATALOG[k];
+  const res = t.priceReserved != null ? ` (reserved $${t.priceReserved.toLocaleString("en-US")})` : "";
+  return `- ${t.key} ${t.vcpus}/${fmtRam(t.memoryMb)}/${fmtRam(t.diskMb)} → $${t.priceShared.toLocaleString("en-US")}${res}`;
+}).join("\n");
+
 const SECTIONS: Record<string, string> = {
   quickstart: `## Inicio rápido
 
@@ -568,11 +579,8 @@ Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24
 ### Catálogo de tiers
 \`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`
 Tiers (vCPU/RAM/NVMe → MXN/mes shared):
-- nano 1/512MB/2GB → $49 · micro 1/1GB/4GB → $99 · mini 2/1GB/8GB → $149 · lite 1/2GB/6GB → $129
-- base 2/2GB/16GB → $249 · plus 2/4GB/24GB → $299 · pro 4/4GB/32GB → $449
-- focus 4/8GB/64GB → $690 (reserved $1,725) · performance 8/16GB/128GB → $1,290 (reserved $3,225)
-- performance-4x 16/32GB/256GB → **por solicitud** (enterprise, lo aprovisiona el equipo)
-Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus — próximamente.
+${HOSTING_TIERS_MD}
+\`estandar\` trae disco grande (80GB) para correr una app 24/7 (migrar desde Fly/Render). Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus.
 
 ### Crear sandbox permanente
 \`POST /machines\` · Body: \`{ tier, cpuMode?, diskAddonsGB?, template?, name? }\`

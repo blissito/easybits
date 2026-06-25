@@ -3,7 +3,11 @@ import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState, useEffect } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
-import { POOL_BOX } from "~/lib/hostingCatalog";
+import { POOL_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
+
+// Formato humano de specs de un tier (MB → GB/MB legible).
+const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
+const fmtPrice = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString("en-US")}`);
 
 export const meta = () => [
   ...getBasicMetaTags({
@@ -31,6 +35,8 @@ const SECTIONS = [
   { id: "agents", label: "Agentes & Sandboxes" },
   { id: "flota", label: "Flota" },
   { id: "hosting", label: "Sandboxes permanentes" },
+  { id: "databases", label: "Bases de datos" },
+  { id: "secrets", label: "Secretos" },
   { id: "calls", label: "Llamadas" },
   { id: "account", label: "Cuenta & Uso" },
   { id: "errors", label: "Errores & Límites" },
@@ -40,11 +46,12 @@ const SECTIONS = [
 export default function DocsPage() {
   const location = useLocation();
 
-  const [activeSection, setActiveSection] = useState(() => {
-    const hash = location.hash.replace("#", "");
-    if (hash && SECTIONS.some((s) => s.id === hash)) return hash;
-    return "quickstart";
-  });
+  // Estado inicial DETERMINISTA (igual en server y cliente) para no causar un
+  // hydration mismatch: leer location.hash aquí daba "quickstart" en SSR y la
+  // sección real en cliente → React dejaba el <a> de "Inicio rápido" con su
+  // clase activa huérfana (DOS ítems negros en dev). El hash lo aplica el
+  // useEffect([location.hash]) de abajo, ya en cliente.
+  const [activeSection, setActiveSection] = useState("quickstart");
 
   useEffect(() => {
     const hash = location.hash.replace("#", "");
@@ -63,7 +70,7 @@ export default function DocsPage() {
   // REAL en el DOM, así que es independiente del orden del array SECTIONS.
   useEffect(() => {
     const LINE = 100; // px desde el tope del viewport
-    let raf = 0, lastProbe = NaN, stop = false;
+    let raf = 0, lastId: string | null = null, stop = false;
 
     const pick = () => {
       let inSpan: string | null = null;
@@ -75,14 +82,24 @@ export default function DocsPage() {
         if (r.top <= LINE && r.bottom > LINE) inSpan = s.id;            // la línea cae dentro
         if (r.top <= LINE && r.top > aboveTop) { aboveTop = r.top; aboveBest = s.id; } // más cercana por arriba
       }
-      setActiveSection(inSpan ?? aboveBest ?? SECTIONS[0].id);
+      const next = inSpan ?? aboveBest ?? SECTIONS[0].id;
+      // Solo re-render cuando cambia la sección activa (no en cada frame).
+      if (next !== lastId) { lastId = next; setActiveSection(next); }
     };
 
+    // ⚠️ NO "optimices" esto a un trigger/gate (scroll listener, probe del top de
+    // una sección, IntersectionObserver). Ya se intentó varias veces y SIEMPRE
+    // reintroduce el bug "scrollspy pegado en Inicio rápido": al añadir/editar
+    // secciones, el resaltado de código async (CodeBlock), fuentes e imágenes
+    // mueven las secciones DESPUÉS de la medición inicial; si pick() no corre en
+    // ese instante, el highlight se queda atorado. La única versión estable es
+    // medir por posición real en CADA frame. 23 getBoundingClientRect/frame es
+    // trivial y `lastId` evita re-renders. Ver memory/project_docs_scrollspy_fragile.md.
+    // (Requisito extra: el orden del DOM de las <section> DEBE coincidir con el
+    //  orden del array SECTIONS, o el highlight se desincroniza por posición.)
     const loop = () => {
       if (stop) return;
-      // Sondea el top de la 1ª sección: si cambió, algo se movió → recalcula.
-      const probe = document.getElementById(SECTIONS[0].id)?.getBoundingClientRect().top ?? 0;
-      if (probe !== lastProbe) { lastProbe = probe; pick(); }
+      pick();
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -196,13 +213,18 @@ export default function DocsPage() {
                 href={`#${s.id}`}
                 onClick={() => setActiveSection(s.id)}
                 aria-current={activeSection === s.id ? "true" : undefined}
-                className={`block px-3 py-1.5 rounded-lg text-sm ${
+                className={`flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-sm ${
                   activeSection === s.id
                     ? "bg-black text-white font-bold"
                     : "hover:bg-gray-100"
                 }`}
               >
-                {s.label}
+                <span>{s.label}</span>
+                {s.id === "flota" && (
+                  <span className={`text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 leading-none ${
+                    activeSection === s.id ? "bg-white text-black" : "bg-brand-500 text-white"
+                  }`}>Nuevo</span>
+                )}
               </a>
             ))}
           </nav>
@@ -1203,69 +1225,6 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             </div>
           </section>
 
-          {/* Account & Usage */}
-          <section id="account" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Account & Usage</h2>
-
-            <Endpoint
-              method="GET"
-              path="/usage"
-              description="Get account usage statistics: storage, file counts, plan info"
-              response={`{ "plan": "Byte", "storage": { "usedGB": 0.05, "maxGB": 0.1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
-              sdk={`const stats = await eb.getUsageStats();
-console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
-            />
-
-            <Endpoint
-              method="GET"
-              path="/providers"
-              description="List your configured storage providers"
-              response={`{ "providers": [...], "defaultProvider": { "type": "TIGRIS" } }`}
-              sdk={`const { providers } = await eb.listProviders();`}
-            />
-
-            <Endpoint
-              method="GET"
-              path="/keys"
-              description="List your API keys (session auth only)"
-              sdk={`const { keys } = await eb.listKeys();`}
-            />
-          </section>
-
-          {/* Errors */}
-          <section id="errors" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Errors & Rate Limits</h2>
-            <div className="space-y-4 text-sm">
-              <div className="border-2 border-black rounded-xl overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-100 border-b-2 border-black">
-                    <tr>
-                      <th className="px-4 py-2 font-bold">Status</th>
-                      <th className="px-4 py-2 font-bold">Meaning</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    <tr><td className="px-4 py-2 font-mono">400</td><td className="px-4 py-2">Bad request (invalid params)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">401</td><td className="px-4 py-2">Unauthorized (missing/invalid API key)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">403</td><td className="px-4 py-2">Forbidden (insufficient scope)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">404</td><td className="px-4 py-2">Resource not found</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">429</td><td className="px-4 py-2">Rate limited (too many requests)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">500</td><td className="px-4 py-2">Server error</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-gray-600">
-                All error responses share one shape: a JSON body <code className="bg-gray-100 px-1 rounded">{`{ "error": "message" }`}</code>, optionally with extra fields (e.g. <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">status</code>). Over MCP the same payload is returned with <code className="bg-gray-100 px-1 rounded">isError: true</code>.
-              </p>
-              <p className="text-gray-600">
-                Every list endpoint returns the same envelope: <code className="bg-gray-100 px-1 rounded">{`{ items, nextCursor, hasMore, total? }`}</code>. When <code className="bg-gray-100 px-1 rounded">hasMore</code> is true, pass <code className="bg-gray-100 px-1 rounded">nextCursor</code> back as <code className="bg-gray-100 px-1 rounded">cursor</code> (or <code className="bg-gray-100 px-1 rounded">offset</code> for documents/websites) to fetch the next page.
-              </p>
-              <p className="text-gray-600">
-                Rate limits: 100 requests per 15 minutes for all plans.
-              </p>
-            </div>
-          </section>
-
           {/* Agentes & Sandboxes */}
           <section id="agents" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Agentes & Sandboxes</h2>
@@ -1507,6 +1466,19 @@ console.log(status.result);  // resultado final del agente`} />
               Tu <strong>flota</strong> es un grupo de agentes Ghosty que atienden tus grupos de WhatsApp <strong>24/7</strong>. Respondes a tus clientes al instante, sin contratar a nadie y sin dejar a nadie esperando. Conectas tu WhatsApp una vez y eliges en qué grupos contesta.
             </p>
 
+            {/* Captura de la UI de /dash/flota. Si el PNG no existe aún, el <img>
+                se auto-oculta (onError) para no mostrar imagen rota en prod. */}
+            <figure className="mb-6">
+              <img
+                src="/images/flota-ui.png"
+                alt="Panel de Flota en el dashboard: capacidad, agentes conectados y grupos de WhatsApp que atiende cada uno"
+                loading="lazy"
+                onError={(e) => { (e.currentTarget.closest("figure") as HTMLElement).style.display = "none"; }}
+                className="w-full rounded-xl border-2 border-black"
+              />
+              <figcaption className="text-xs text-gray-500 mt-2 text-center">El panel de Flota en <code className="bg-gray-100 px-1 rounded">/dash/flota</code>: capacidad, agentes conectados y los grupos que atiende cada uno.</figcaption>
+            </figure>
+
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
               ¿Prefieres UI? Administra tu flota desde el dashboard en{" "}
               <a href="/dash/flota" className="underline font-medium">/dash/flota</a> — crear agentes, vincular WhatsApp, prender/apagar grupos y desconectar.
@@ -1568,30 +1540,22 @@ console.log(status.result);  // resultado final del agente`} />
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    ["nano", "1 / 512MB / 2GB", "$49", "—"],
-                    ["micro", "1 / 1GB / 4GB", "$99", "—"],
-                    ["mini", "2 / 1GB / 8GB", "$149", "—"],
-                    ["lite", "1 / 2GB / 6GB", "$129", "—"],
-                    ["base", "2 / 2GB / 16GB", "$249", "—"],
-                    ["plus", "2 / 4GB / 24GB", "$299", "—"],
-                    ["pro", "4 / 4GB / 32GB", "$449", "—"],
-                    ["focus", "4 / 8GB / 64GB", "$690", "$1,725"],
-                    ["performance", "8 / 16GB / 128GB", "$1,290", "$3,225"],
-                    ["performance-4x", "16 / 32GB / 256GB", "por solicitud", "por solicitud"],
-                  ].map(([tier, specs, shared, reserved], i) => (
-                    <tr key={tier} className={`border-t border-gray-200 ${i % 2 ? "bg-gray-50" : ""}`}>
-                      <td className="px-4 py-2 font-mono text-xs font-bold">{tier}</td>
-                      <td className="px-4 py-2 text-xs text-gray-600">{specs}</td>
-                      <td className="px-4 py-2 text-xs">{shared}</td>
-                      <td className="px-4 py-2 text-xs text-gray-500">{reserved}</td>
-                    </tr>
-                  ))}
+                  {SELLABLE_TIERS.map((k, i) => {
+                    const t = HOSTING_CATALOG[k];
+                    return (
+                      <tr key={t.key} className={`border-t border-gray-200 ${i % 2 ? "bg-gray-50" : ""}`}>
+                        <td className="px-4 py-2 font-mono text-xs font-bold">{t.key}</td>
+                        <td className="px-4 py-2 text-xs text-gray-600">{`${t.vcpus} / ${fmtRam(t.memoryMb)} / ${fmtRam(t.diskMb)}`}</td>
+                        <td className="px-4 py-2 text-xs">{fmtPrice(t.priceShared)}</td>
+                        <td className="px-4 py-2 text-xs text-gray-500">{fmtPrice(t.priceReserved)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <p className="text-gray-600 text-sm mb-6">
-              Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. <code className="bg-gray-100 px-1 rounded">performance-4x</code> (enterprise) se aprovisiona por solicitud.
+              Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. <code className="bg-gray-100 px-1 rounded">estandar</code> trae disco grande (80GB) para correr una app 24/7 — pensado para migrar desde Fly/Render.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Crear un sandbox permanente</h3>
@@ -1646,6 +1610,102 @@ POST /api/v2/machines
             <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
               <strong>Cobro:</strong> el plan da acceso; cada sandbox factura aparte (flat MXN/mes, prorrateado). <code className="bg-gray-100 px-1 rounded">release_machine</code> es <strong>destructiva</strong> (quita el cobro y destruye la VM). Si tu plan se cancela, tus sandboxes se suspenden.
             </div>
+          </section>
+
+          {/* Bases de datos (SQLite-as-a-Service) */}
+          <section id="databases" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Bases de datos</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Crea bases de datos <strong>SQLite aisladas</strong> para tus agentes y apps — una por cliente, proyecto o recurso. Corren sobre <code className="bg-gray-100 px-1 rounded">sqld</code> (libsql-server), con scale-to-zero: no pagas cómputo cuando nadie consulta. Cada DB es un namespace independiente; tu agente las crea, consulta y llena sin que escribas backend.
+            </p>
+
+            <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
+              Límite por plan: <strong>Byte 3 · Mega 10 · Tera 20</strong> bases de datos. El nombre admite letras, números, guiones y guiones bajos (máx 64 caracteres).
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Crear y consultar</h3>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// Crea una base de datos
+const db = await eb.createDatabase({ name: "leads", description: "Prospectos del sitio" });
+
+// Inserta y consulta
+await eb.db("leads").query(
+  "CREATE TABLE IF NOT EXISTS contactos (id INTEGER PRIMARY KEY, nombre TEXT, email TEXT)"
+);
+await eb.db("leads").query(
+  "INSERT INTO contactos (nombre, email) VALUES (?, ?)",
+  ["Ana", "ana@correo.com"]
+);
+const { rows } = await eb.db("leads").query("SELECT * FROM contactos");` },
+                { label: "REST", code: `# Crear
+POST /api/v2/databases
+{ "name": "leads", "description": "Prospectos del sitio" }
+
+# Consultar
+POST /api/v2/databases/:dbId/query
+{ "sql": "SELECT * FROM contactos WHERE email = ?", "args": ["ana@correo.com"] }
+# → { cols, rows, affected_row_count, last_insert_rowid }` },
+                { label: "MCP", code: `db_create({ name: "leads", description: "Prospectos del sitio" })
+db_query({ dbId: "db_abc", sql: "SELECT * FROM contactos" })
+db_exec({ dbId: "db_abc", statements: [{ sql: "..." }] })   // batch (máx 20)
+db_import({ dbId: "db_abc", table: "contactos", columns: ["nombre","email"], rows: [["Ana","ana@correo.com"]] })  // hasta 10,000 filas` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Herramientas MCP del grupo <code className="bg-gray-100 px-1 rounded">databases</code></h3>
+            <div className="space-y-2 mb-6">
+              {[
+                ["db_list", "—", "Listar tus bases de datos"],
+                ["db_create", "name, description?", "Crear una base de datos aislada"],
+                ["db_get", "dbId", "Obtener una base de datos"],
+                ["db_delete", "dbId", "Eliminar la base de datos y todos sus datos (irreversible)"],
+                ["db_query", "dbId, sql, args?", "Ejecutar una consulta SQL"],
+                ["db_exec", "dbId, statements", "Batch de hasta 20 sentencias"],
+                ["db_import", "dbId, table, columns, rows, onConflict?", "Importar hasta 10,000 filas de una vez"],
+              ].map(([name, params, desc]) => (
+                <McpTool key={name} name={name} params={params} description={desc} />
+              ))}
+            </div>
+
+            <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              Eventos de webhook: <code className="bg-gray-100 px-1 rounded">database.created</code> y <code className="bg-gray-100 px-1 rounded">database.deleted</code>. Combínalos con la sección <a href="#webhooks" className="underline font-medium">Webhooks</a> para notificar sistemas externos.
+            </div>
+          </section>
+
+          {/* Secretos */}
+          <section id="secrets" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Secretos</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Guarda credenciales (API tokens, OAuth, llaves) <strong>cifradas AES-256-GCM</strong> en tu cuenta. Un secreto es <strong>write-only</strong>: una vez guardado, su valor <strong>nunca</strong> se puede volver a leer por API ni MCP — solo se <strong>inyecta como variable de entorno</strong> dentro de un sandbox vía <code className="bg-gray-100 px-1 rounded">agent_run(&#123; secrets: [nombre, ...] &#125;)</code>. Es también donde vive el OAuth que usa tu <a href="#flota" className="underline font-medium">Flota</a>.
+            </p>
+
+            <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
+              Solo disponible vía <strong>MCP</strong> (no hay endpoint REST ni método SDK, por seguridad). Los nombres deben ser estilo variable de entorno: <code className="bg-gray-100 px-1 rounded">[A-Z_][A-Z0-9_]*</code> (mayúsculas, dígitos y guiones bajos).
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Herramientas MCP del grupo <code className="bg-gray-100 px-1 rounded">secrets</code></h3>
+            <div className="space-y-2 mb-6">
+              {[
+                ["secret_set", "name, value", "Crear o sobrescribir un secreto (cifrado; el valor no se devuelve jamás)"],
+                ["secret_list", "—", "Listar nombres, fecha de creación y último uso (nunca valores)"],
+                ["secret_delete", "name", "Eliminar un secreto por nombre"],
+              ].map(([name, params, desc]) => (
+                <McpTool key={name} name={name} params={params} description={desc} />
+              ))}
+            </div>
+
+            <CodeExample
+              title="MCP"
+              code={`secret_set({ name: "BRIGHTDATA_API_TOKEN", value: "bd_..." })
+secret_list()   // → [{ name, createdAt, lastUsedAt }]  (sin valores)
+
+// Inyectar en un sandbox al correr un agente:
+agent_run({ prompt: "scrapea ...", secrets: ["BRIGHTDATA_API_TOKEN"] })`}
+            />
           </section>
 
           {/* Llamadas */}
@@ -1730,6 +1790,69 @@ call_destroy({ sandboxId })   // cierra la sala y libera la VM` },
 
             <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
               <strong>Privacidad:</strong> cada sala corre en su propia microVM aislada con llaves generadas por instancia. Los participantes eligen entrar con cámara/mic apagados (el dispositivo se suelta de verdad, sin parpadeo). Si no llamas <code className="bg-gray-100 px-1 rounded">call_destroy</code>, la sala se apaga sola al TTL de 3 horas.
+            </div>
+          </section>
+
+          {/* Account & Usage */}
+          <section id="account" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Account & Usage</h2>
+
+            <Endpoint
+              method="GET"
+              path="/usage"
+              description="Get account usage statistics: storage, file counts, plan info"
+              response={`{ "plan": "Byte", "storage": { "usedGB": 0.05, "maxGB": 0.1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
+              sdk={`const stats = await eb.getUsageStats();
+console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/providers"
+              description="List your configured storage providers"
+              response={`{ "providers": [...], "defaultProvider": { "type": "TIGRIS" } }`}
+              sdk={`const { providers } = await eb.listProviders();`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/keys"
+              description="List your API keys (session auth only)"
+              sdk={`const { keys } = await eb.listKeys();`}
+            />
+          </section>
+
+          {/* Errors */}
+          <section id="errors" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Errors & Rate Limits</h2>
+            <div className="space-y-4 text-sm">
+              <div className="border-2 border-black rounded-xl overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-100 border-b-2 border-black">
+                    <tr>
+                      <th className="px-4 py-2 font-bold">Status</th>
+                      <th className="px-4 py-2 font-bold">Meaning</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    <tr><td className="px-4 py-2 font-mono">400</td><td className="px-4 py-2">Bad request (invalid params)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">401</td><td className="px-4 py-2">Unauthorized (missing/invalid API key)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">403</td><td className="px-4 py-2">Forbidden (insufficient scope)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">404</td><td className="px-4 py-2">Resource not found</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">429</td><td className="px-4 py-2">Rate limited (too many requests)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">500</td><td className="px-4 py-2">Server error</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-gray-600">
+                All error responses share one shape: a JSON body <code className="bg-gray-100 px-1 rounded">{`{ "error": "message" }`}</code>, optionally with extra fields (e.g. <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">status</code>). Over MCP the same payload is returned with <code className="bg-gray-100 px-1 rounded">isError: true</code>.
+              </p>
+              <p className="text-gray-600">
+                Every list endpoint returns the same envelope: <code className="bg-gray-100 px-1 rounded">{`{ items, nextCursor, hasMore, total? }`}</code>. When <code className="bg-gray-100 px-1 rounded">hasMore</code> is true, pass <code className="bg-gray-100 px-1 rounded">nextCursor</code> back as <code className="bg-gray-100 px-1 rounded">cursor</code> (or <code className="bg-gray-100 px-1 rounded">offset</code> for documents/websites) to fetch the next page.
+              </p>
+              <p className="text-gray-600">
+                Rate limits: 100 requests per 15 minutes for all plans.
+              </p>
             </div>
           </section>
 
