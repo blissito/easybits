@@ -308,7 +308,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
             // it. The voice note has no text prefix, but sentMsgIds dedup keeps it
             // from looping. Falls back to text if synthesis fails.
             const ogg =
-              wantsVoiceReply(content.userText, !!content.wasVoice) ? await synthesizeVoiceOgg(body) : null;
+              wantsVoiceReply(content.userText, !!content.wasVoice) ? await synthesizeVoiceOgg(body, ownerId) : null;
             if (ogg) {
               await sendTracked(sock, jid, { audio: ogg, ptt: true, mimetype: "audio/ogg; codecs=opus" });
             } else {

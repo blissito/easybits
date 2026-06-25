@@ -4,8 +4,18 @@
 //
 // Trigger parity with ghosty: reply with voice when the user sent a voice note OR
 // asked for voice — UNLESS they explicitly asked for text. Off via WA_VOICE_REPLIES=0.
+import { getSecretValue } from "~/.server/core/secretOperations";
+
 const VOICE_ID = process.env.WA_VOICE_ID || process.env.ELEVENLABS_DEFAULT_VOICE || "EXAVITQu4vr4xnSDxMaL";
 const MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
+
+// PER-ACCOUNT key: each pool bills voice to its OWNER's ElevenLabs key (siiqtec's
+// pool ≠ bliss's pool). The owner's vault secret wins; the Fly app-level key is a
+// fallback for owners that haven't set their own.
+async function resolveElevenKey(ownerId: string): Promise<string> {
+  const own = await getSecretValue(ownerId, "ELEVENLABS_API_KEY").catch(() => null);
+  return own || process.env.ELEVENLABS_API_KEY || "";
+}
 
 function voiceRepliesEnabled(): boolean {
   return process.env.WA_VOICE_REPLIES !== "0";
@@ -31,8 +41,8 @@ function stripForVoice(t: string): string {
     .trim();
 }
 
-export async function synthesizeVoiceOgg(text: string): Promise<Buffer | null> {
-  const key = process.env.ELEVENLABS_API_KEY;
+export async function synthesizeVoiceOgg(text: string, ownerId: string): Promise<Buffer | null> {
+  const key = await resolveElevenKey(ownerId);
   const clean = stripForVoice(text);
   if (!key || !clean) return null;
   try {
