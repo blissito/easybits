@@ -73,7 +73,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // que el pool). Así hosting y pools muestran el MISMO número (no 3 vs 5).
   const { getReservedCapacity } = await import("~/.server/core/sandboxReservations");
   const reserved = await getReservedCapacity(user.id);
-  const sandboxLimit = (plansMap[plan]?.concurrentSandboxes ?? 2) + reserved.machines;
+  const sandboxLimit = (plansMap[plan]?.concurrentSandboxes ?? 1) + reserved.machines;
   const activeSandboxes = ephemerals.filter((s) => s.status === "running" || s.status === "starting").length;
   // Next charge = the plan subscription's period end (all machines bill on that
   // same invoice cycle). One Stripe read, only when there are machines billing.
