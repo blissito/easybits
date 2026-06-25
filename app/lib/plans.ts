@@ -66,6 +66,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Preview de archivos",
       "3 bases de datos",
       "1 caja · 4 agentes Ghosty · sesiones de 1h",
+      "7 días de papelera",
       "Packs de créditos desde $39",
     ],
   },
