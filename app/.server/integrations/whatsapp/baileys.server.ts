@@ -330,6 +330,15 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       const attempts = (cur?.attempts ?? 0) + 1;
       if (loggedOut || attempts > MAX_RECONNECT) {
         sockets.delete(poolId);
+        // Dead session: drop the stored creds so the NEXT connect re-pairs fresh.
+        // Baileys leaves creds.registered=true after a logout (optimistic false
+        // positive set when it generated the pairing code), which would otherwise
+        // make the next connect skip requesting a new code (gate at ~L297) and
+        // resume a dead session → instant re-logout loop. Only on loggedOut: a
+        // max_reconnect is a transient close where the creds may still be valid.
+        if (loggedOut) {
+          await db.pool.update({ where: { id: poolId }, data: { authCreds: null, authKeys: null } }).catch(() => {});
+        }
         log(poolId, `stopped (${loggedOut ? "logged_out" : "max_reconnect"})`);
         await setStatus(poolId, "failed", { reason: loggedOut ? "logged_out" : "max_reconnect" });
         return; // STOP — no loop
