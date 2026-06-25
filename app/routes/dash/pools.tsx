@@ -282,7 +282,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     : full ? "border-amber-500 bg-amber-50"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
-  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : status === "suspended" ? `${slots}/${max} 💤` : `${slots}/${max} agentes`;
+  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
   // motion SOLO para entrada/salida (aparecer/desaparecer). SIN `layout` y el
   // AnimatePresence va SIN popLayout → no hay jitter en cada poll, solo se anima
   // cuando una caja realmente nace o muere.
@@ -304,7 +304,10 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
           <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
         </svg>
       ) : (
-        <div className="grid grid-cols-2 gap-2.5 place-items-center">
+        <div className="relative grid grid-cols-2 gap-2.5 place-items-center">
+          {status === "suspended" && slots > 0 && (
+            <span className="pointer-events-none absolute -top-3 -right-2 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</span>
+          )}
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
               <div key={`a${j}`} className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
