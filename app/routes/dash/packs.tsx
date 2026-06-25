@@ -70,12 +70,12 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<Tab>(
-    tabParam === "tokens" ? "tokens" : tabParam === "sandboxes" ? "sandboxes" : "credits",
+    tabParam === "tokens" ? "tokens" : tabParam === "credits" ? "credits" : "sandboxes",
   );
 
   const switchTab = (t: Tab) => {
     setTab(t);
-    setSearchParams(t === "credits" ? {} : { tab: t }, { replace: true });
+    setSearchParams(t === "sandboxes" ? {} : { tab: t }, { replace: true });
   };
   const showSuccess = searchParams.get("success") === "1";
 
@@ -129,6 +129,16 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
       {/* Tab switcher */}
       <div className="flex gap-1 mb-6 border-b-2 border-black">
         <button
+          onClick={() => switchTab("sandboxes")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
+            tab === "sandboxes"
+              ? "bg-black text-white border-black"
+              : "bg-gray-100 text-iron border-gray-300 hover:bg-gray-200"
+          }`}
+        >
+          📦 Sandboxes
+        </button>
+        <button
           onClick={() => switchTab("credits")}
           className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
             tab === "credits"
@@ -147,16 +157,6 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           }`}
         >
           🧠 Tokens LLM
-        </button>
-        <button
-          onClick={() => switchTab("sandboxes")}
-          className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
-            tab === "sandboxes"
-              ? "bg-black text-white border-black"
-              : "bg-gray-100 text-iron border-gray-300 hover:bg-gray-200"
-          }`}
-        >
-          📦 Sandboxes
         </button>
       </div>
 
