@@ -25,6 +25,9 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { db } from "~/.server/db";
 import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
+import { extractInboundContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
+import { deliverFilesFromReply } from "~/.server/integrations/whatsapp/outboundMedia.server";
+import { wantsVoiceReply, synthesizeVoiceOgg } from "~/.server/integrations/whatsapp/whatsappVoice.server";
 
 const MAX_RECONNECT = 5;
 // Cooldown so a rate-limited (spamming) group gets the "saturado" notice at most
@@ -39,6 +42,26 @@ for (const m of ["trace", "debug", "info", "warn", "error", "fatal"]) silent[m] 
 
 type ConnState = { sock: WASocket; attempts: number; connecting: boolean; pairingPhone?: string };
 const sockets = new Map<string, ConnState>();
+
+// Last inbound message per (poolId, jid) — so the worker's `wa` MCP can quote it
+// (reply_to_last) and react to it. Keyed `${poolId}:${jid}`.
+const lastIncoming = new Map<string, proto.IWebMessageInfo>();
+
+// IDs of messages WE sent — so our own outbound media (documents/images, which
+// carry no assistantName text prefix) isn't re-ingested as a new inbound message
+// and looped back to the worker. Same dedup as ghosty-gc's sentIds. Bounded.
+const sentMsgIds = new Set<string>();
+async function sendTracked(sock: WASocket, jid: string, content: Record<string, unknown>, opts?: Record<string, unknown>) {
+  const sent = await sock.sendMessage(jid, content as any, (opts ?? {}) as any);
+  const id = sent?.key?.id;
+  if (id) {
+    sentMsgIds.add(id);
+    if (sentMsgIds.size > 400) {
+      for (const x of sentMsgIds) { sentMsgIds.delete(x); if (sentMsgIds.size <= 200) break; }
+    }
+  }
+  return sent;
+}
 
 function log(poolId: string, msg: string) {
   console.log(`[pool ${poolId}] ${msg}`);
@@ -202,38 +225,79 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
     if (type !== "notify") return;
     const fresh = await db.pool.findUnique({
       where: { id: poolId },
-      select: { enabledGroups: true, hasOwnNumber: true, assistantName: true },
+      select: { enabledGroups: true, hasOwnNumber: true, assistantName: true, ownerId: true },
     });
     const enabled = new Set(fresh?.enabledGroups ?? []);
     const hasOwnNumber = fresh?.hasOwnNumber ?? false;
     const assistantName = fresh?.assistantName || "Asistente";
+    const ownerId = fresh?.ownerId;
     for (const m of messages) {
       const jid = m.key.remoteJid;
       if (!jid || !jid.endsWith("@g.us")) continue; // groups only
+      if (m.key.id && sentMsgIds.has(m.key.id)) continue; // our own outbound media echoed back
       // DISCOVERY (independent of the allowlist): record any group with activity
       // so the UI can surface it to enable — even before WhatsApp's sync.
       await recordSeenGroup(poolId, sock, jid);
-      const text = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? "";
-      if (!text.trim()) continue;
+      // Cheap raw text first — for loop-detection + the enable gate, BEFORE any
+      // media download (which is slow + costs a Gemini call).
+      const rawText = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? "";
       // Loop prevention WITHOUT blocking the owner (nanoclaw pattern): detect the
       // bot's OWN output and skip only that — not every fromMe.
       //  - hasOwnNumber (dedicated line): fromMe IS the bot → skip fromMe.
       //  - shared/personal number: owner & bot share fromMe, so detect the bot by
       //    the "Nombre:" prefix we stamp on replies → owner's own msgs DO get answered.
       const fromMe = m.key.fromMe || false;
-      const isBotMessage = hasOwnNumber ? fromMe : text.startsWith(`${assistantName}:`);
+      const isBotMessage = hasOwnNumber ? fromMe : rawText.startsWith(`${assistantName}:`);
       if (isBotMessage) continue;
       if (!enabled.has(jid)) { log(poolId, `msg in ${jid} ignored (group not enabled)`); continue; }
+      if (!ownerId) { log(poolId, `msg in ${jid} skipped (no ownerId)`); continue; }
+      // Media-aware extraction: turn images/voice/video/docs/location/etc. into the
+      // text the worker brain will read. null = nothing actionable (noise) → skip.
+      let content;
+      try {
+        content = await extractInboundContent(sock, m, { ownerId });
+      } catch (e) {
+        log(poolId, `media extract failed in ${jid}: ${e}`);
+        continue;
+      }
+      if (!content) continue;
+      lastIncoming.set(`${poolId}:${jid}`, m); // for wa MCP quote/react
+      const text = content.text;
       log(poolId, `msg in ${jid} from ${m.key.participant ?? (fromMe ? "owner" : "?")}: "${text.slice(0, 40)}"`);
+      // Acknowledge + show typing while the worker thinks (ghosty UX parity).
+      sock.sendMessage(jid, { react: { text: "👀", key: m.key } }).catch(() => {});
+      sock.sendPresenceUpdate("composing", jid).catch(() => {});
       try {
         const reply = await routeMessage(poolId, { groupId: jid, sender: m.key.participant ?? undefined, text });
         if (reply) {
-          // Stamp the name prefix on shared-number lines so our own reply is
-          // recognized as a bot message next round (no self-reply loop).
-          const out = hasOwnNumber ? reply : `${assistantName}: ${reply}`;
-          await sock.sendMessage(jid, { text: out });
-          log(poolId, `replied in ${jid}`);
+          // Deliver any file/PDF/image URLs the agent emitted as real attachments,
+          // stripping them from the text (so PDFs arrive as files, not links).
+          const delivered = await deliverFilesFromReply(
+            (j, c) => sendTracked(sock, j, c),
+            jid,
+            reply
+          );
+          let body = delivered.text;
+          if (!body && delivered.sent) body = "Ahí te va 👆";
+          if (body) {
+            // Voice reply (ElevenLabs → PTT) when the user sent voice or asked for
+            // it. The voice note has no text prefix, but sentMsgIds dedup keeps it
+            // from looping. Falls back to text if synthesis fails.
+            const ogg =
+              wantsVoiceReply(content.userText, !!content.wasVoice) ? await synthesizeVoiceOgg(body) : null;
+            if (ogg) {
+              await sendTracked(sock, jid, { audio: ogg, ptt: true, mimetype: "audio/ogg; codecs=opus" });
+            } else {
+              // Stamp the name prefix on shared-number lines so our own reply is
+              // recognized as a bot message next round (no self-reply loop).
+              const out = hasOwnNumber ? body : `${assistantName}: ${body}`;
+              await sendTracked(sock, jid, { text: out });
+            }
+          }
+          sock.sendMessage(jid, { react: { text: "✅", key: m.key } }).catch(() => {});
+          log(poolId, `replied in ${jid}${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
         }
+        sock.sendPresenceUpdate("paused", jid).catch(() => {});
       } catch (e) {
         // Brief notice on backpressure. Stamp the assistantName prefix on shared
         // numbers so our own notice isn't mistaken for a user message next round.
@@ -317,6 +381,81 @@ export function isPoolLive(poolId: string): boolean {
   return sockets.has(poolId);
 }
 
+// Execute a worker-requested WhatsApp action on the pool's live socket. Called by
+// the /api/v2/pools/wa-action endpoint after it has authenticated the pool token,
+// resolved sessionId → group, and gated elevated actions by mainGroupJid. `jid`
+// is the target group (the session's own group, or another one for main-group
+// cross-sends). Mirrors ghosty-gc's WA MCP tools.
+export async function executeWaAction(
+  poolId: string,
+  jid: string,
+  action: string,
+  args: Record<string, any>
+): Promise<{ ok: boolean; result?: string; error?: string }> {
+  const cur = sockets.get(poolId);
+  if (!cur) return { ok: false, error: "pool socket not connected" };
+  const sock = cur.sock;
+  const last = lastIncoming.get(`${poolId}:${jid}`);
+  try {
+    switch (action) {
+      case "send_message": {
+        const opts = args?.reply_to_last && last ? { quoted: last } : undefined;
+        const caption = typeof args?.caption === "string" ? args.caption : undefined;
+        if (args?.url) {
+          const resp = await fetch(String(args.url), { redirect: "follow" });
+          if (!resp.ok) return { ok: false, error: `fetch ${resp.status}` };
+          const ct = (resp.headers.get("content-type") || "").toLowerCase();
+          const buf = Buffer.from(await resp.arrayBuffer());
+          if (!buf.length || buf.length > 25 * 1024 * 1024) return { ok: false, error: "file empty or >25MB" };
+          if (/^image\//.test(ct)) {
+            await sendTracked(sock, jid, { image: buf, caption }, opts);
+          } else {
+            const fileName =
+              args.fileName || decodeURIComponent(String(args.url).split("?")[0].split("/").pop() || "archivo");
+            await sendTracked(sock, jid, { document: buf, mimetype: ct.split(";")[0] || "application/octet-stream", fileName, caption }, opts);
+          }
+          return { ok: true, result: "archivo enviado" };
+        }
+        const txt = String(args?.text ?? "").trim();
+        if (!txt) return { ok: false, error: "text or url required" };
+        await sendTracked(sock, jid, { text: txt }, opts);
+        return { ok: true, result: "mensaje enviado" };
+      }
+      case "send_poll": {
+        const name = String(args?.name ?? "").trim();
+        const options = Array.isArray(args?.options) ? args.options.map(String).filter(Boolean) : [];
+        if (!name || options.length < 2) return { ok: false, error: "name + at least 2 options required" };
+        const selectableCount = Math.max(1, Math.min(Number(args?.selectable_count) || 1, options.length));
+        await sendTracked(sock, jid, { poll: { name, values: options, selectableCount } });
+        return { ok: true, result: "encuesta enviada" };
+      }
+      case "react_message": {
+        const emoji = String(args?.emoji ?? "").trim();
+        if (!emoji || !last) return { ok: false, error: "emoji + a recent message to react to required" };
+        await sock.sendMessage(jid, { react: { text: emoji, key: last.key } });
+        return { ok: true, result: "reacción enviada" };
+      }
+      case "send_location": {
+        const lat = Number(args?.latitude);
+        const lon = Number(args?.longitude);
+        if (!isFinite(lat) || !isFinite(lon)) return { ok: false, error: "latitude+longitude required" };
+        await sendTracked(sock, jid, {
+          location: { degreesLatitude: lat, degreesLongitude: lon, name: args?.name, address: args?.address },
+        });
+        return { ok: true, result: "ubicación enviada" };
+      }
+      case "get_invite_link": {
+        const code = await sock.groupInviteCode(jid);
+        return { ok: true, result: code ? `https://chat.whatsapp.com/${code}` : "no disponible" };
+      }
+      default:
+        return { ok: false, error: `unknown action ${action}` };
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function disconnectPool(poolId: string): Promise<void> {
   const cur = sockets.get(poolId);
   if (cur) {
@@ -372,6 +511,14 @@ function startReaper() {
       await reapIdlePools();
     } catch (e) {
       console.error("pool reaper tick failed:", e);
+    }
+    try {
+      // Idle reaper de los call boxes livekit-svc (30min boot / suspende en
+      // llamada / 5min post-llamada). Reusa el mismo heartbeat de 60s.
+      const { reapIdleStudios } = await import("~/.server/core/studioOperations");
+      await reapIdleStudios();
+    } catch (e) {
+      console.error("studio reaper tick failed:", e);
     }
   }, 60_000);
   if (typeof reaperTimer.unref === "function") reaperTimer.unref();

@@ -188,6 +188,15 @@ export async function spawnStudio(
 
   // 5. Exponer puertos HTTP + crear sala (el UDP ya está expuesto arriba).
   const result = await createRoom(ctx, sb.sandboxId, room, mediaFwd);
+
+  // 6. Registrar el box para el idle reaper (reapIdleStudios). lastActiveAt=ahora
+  //    arranca el reloj de gracia de 30 min "esperando primera llamada". Si nadie
+  //    entra, el reaper lo apaga; si entra una llamada, refresca el reloj y al
+  //    colgar baja a 5 min. best-effort: si falla, el box sigue vivo hasta el TTL.
+  await db.studioBox
+    .create({ data: { ownerId: ctx.user.id, sandboxId: sb.sandboxId } })
+    .catch((e) => console.error("studio reaper: register failed:", e));
+
   return { ...result, sandboxId: sb.sandboxId };
 }
 
@@ -419,7 +428,69 @@ export async function destroyCall(ctx: AuthContext, sandboxId: string) {
     }
   } catch { /* si el box ya murió, no hay nada que rescatar */ }
 
-  // 3. Destruir el sandbox
+  // 3. Destruir el sandbox + desregistrar del idle reaper.
   await destroySandbox(ctx, sandboxId);
+  await db.studioBox.deleteMany({ where: { sandboxId } }).catch(() => {});
   return { ok: true };
+}
+
+// ── reapIdleStudios ──────────────────────────────────────────────────────────
+// Idle reaper para los call boxes efímeros (registrados por spawnStudio). Corre
+// en el heartbeat de 60s (junto al reaper de pools). Política por box:
+//   - Llamada activa (participantes>0 o grabando) → refresca lastActiveAt y marca
+//     everHadCall; el contador de apagado queda suspendido toda la llamada.
+//   - Idle y NUNCA tuvo llamada → gracia de 30 min desde el boot.
+//   - Idle y YA tuvo llamada → gracia de 5 min; al cruzarla, destroyCall (que
+//     sube la grabación pendiente y destruye la VM). El ciclo se repite: cada
+//     llamada nueva vuelve a suspender el contador.
+// Si el box ya no existe (lo mató el TTL del host, o error persistente pasado el
+// TTL) se borra la fila huérfana. Devuelve {checked, destroyed}.
+const STUDIO_IDLE_BOOT_MIN = 30; // gracia esperando la primera llamada
+const STUDIO_IDLE_AFTER_CALL_MIN = 5; // gracia tras colgar
+const STUDIO_HOST_TTL_MIN = 3 * 60; // TTL del host (spawnStudio): pasado esto el box ya murió
+
+export async function reapIdleStudios(): Promise<{ checked: number; destroyed: number }> {
+  let destroyed = 0;
+  const now = Date.now();
+  const boxes = await db.studioBox.findMany();
+  for (const box of boxes) {
+    const ctx = await ctxForStudioOwner(box.ownerId).catch(() => null);
+    if (!ctx) continue;
+    try {
+      const st = await getCallStatus(ctx, box.sandboxId);
+      const active = (st.participants?.length ?? 0) > 0 || st.recording;
+      if (active) {
+        // Llamada en curso → suspende el apagado (refresca el reloj) y marca que
+        // ya hubo llamada (a partir de aquí la gracia idle baja a 5 min).
+        await db.studioBox.update({
+          where: { id: box.id },
+          data: { lastActiveAt: new Date(), everHadCall: true },
+        });
+        continue;
+      }
+      const graceMin = box.everHadCall ? STUDIO_IDLE_AFTER_CALL_MIN : STUDIO_IDLE_BOOT_MIN;
+      if (now - box.lastActiveAt.getTime() >= graceMin * 60_000) {
+        await destroyCall(ctx, box.sandboxId); // sube grabación pendiente + destruye + borra la fila
+        destroyed++;
+      }
+    } catch (e) {
+      // getCallStatus falla si el box ya no existe (TTL del host) o no arranca.
+      // Limpia la fila huérfana solo cuando ya pasó el TTL del host — así un error
+      // transitorio no la borra antes de tiempo.
+      if (now - box.createdAt.getTime() >= STUDIO_HOST_TTL_MIN * 60_000) {
+        await db.studioBox.deleteMany({ where: { id: box.id } }).catch(() => {});
+      } else {
+        console.error(`studio reaper: poll ${box.sandboxId} failed:`, (e as Error).message);
+      }
+    }
+  }
+  return { checked: boxes.length, destroyed };
+}
+
+// Background AuthContext para el dueño del box (el reaper corre fuera de cualquier
+// request HTTP). Mismo patrón que ctxForOwner del reaper de pools.
+async function ctxForStudioOwner(ownerId: string): Promise<AuthContext> {
+  const user = await db.user.findUnique({ where: { id: ownerId } });
+  if (!user) throw new Error(`studio owner ${ownerId} not found`);
+  return { user, scopes: ["READ", "WRITE", "DELETE"] };
 }

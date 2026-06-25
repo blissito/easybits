@@ -1093,6 +1093,10 @@ model Pool {
   // ANTI-SPAM allowlist: the pool only answers in these group jids. Empty = OFF
   // everywhere (safe default — never auto-replies in all the owner's groups).
   enabledGroups String[] @default([])
+  // The pool's MAIN group jid — elevated privileges (cross-group send, invite
+  // link, admin tools). Other enabled groups are restricted to their own
+  // conversation. null = no main group. Mirrors nanoclaw's isMain.
+  mainGroupJid  String?
   // Loop-prevention strategy (surface layer, nanoclaw pattern):
   //  - hasOwnNumber=true  → dedicated WhatsApp line; the bot's own output is the
   //    only fromMe → skip fromMe. Owner can't self-test; replies to others only.
@@ -1191,6 +1195,27 @@ model Sandbox {
   deletionScheduledAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+// Tracks an EPHEMERAL livekit-svc call box for the idle reaper (reapIdleStudios).
+// These boxes are pure sandboxes (no Agent/Sandbox row) that the host auto-kills
+// at TTL (3h). This row is the only place easybits remembers them, so the 60s
+// reaper can poll each box's call status and apply the smart idle policy:
+//   - everHadCall=false → 30 min idle-since-boot grace (waiting for a first call)
+//   - active call (participants>0 or recording) → lastActiveAt refreshed (timer
+//     suspended for the whole call)
+//   - everHadCall=true and idle → 5 min grace, then destroyCall
+// Created in spawnStudio, deleted in destroyCall (and by the reaper on cleanup).
+model StudioBox {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId      String   @db.ObjectId
+  sandboxId    String   @unique // host VM id — the box handle
+  lastActiveAt DateTime @default(now()) // last tick we saw an active call (or boot)
+  everHadCall  Boolean  @default(false) // flips true on first participant → 5min grace
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([ownerId])
 }
