@@ -3,6 +3,7 @@ import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState, useEffect } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
+import { POOL_BOX } from "~/lib/hostingCatalog";
 
 export const meta = () => [
   ...getBasicMetaTags({
@@ -28,6 +29,7 @@ const SECTIONS = [
   { id: "websites", label: "Sitios web" },
   { id: "documents", label: "Documentos" },
   { id: "agents", label: "Agentes & Sandboxes" },
+  { id: "flota", label: "Flota" },
   { id: "hosting", label: "Sandboxes permanentes" },
   { id: "calls", label: "Llamadas" },
   { id: "account", label: "Cuenta & Uso" },
@@ -1495,6 +1497,36 @@ console.log(status.result);  // resultado final del agente`} />
 
             <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
+            </div>
+          </section>
+
+          {/* Flota — agentes Ghosty en WhatsApp */}
+          <section id="flota" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Flota</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Tu <strong>flota</strong> es un grupo de agentes Ghosty que atienden tus grupos de WhatsApp <strong>24/7</strong>. Respondes a tus clientes al instante, sin contratar a nadie y sin dejar a nadie esperando. Conectas tu WhatsApp una vez y eliges en qué grupos contesta.
+            </p>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              ¿Prefieres UI? Administra tu flota desde el dashboard en{" "}
+              <a href="/dash/flota" className="underline font-medium">/dash/flota</a> — crear agentes, vincular WhatsApp, prender/apagar grupos y desconectar.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Cómo conectar</h3>
+            <ol className="list-decimal pl-5 text-gray-600 text-sm mb-6 space-y-1.5">
+              <li>Entra a <a href="/dash/flota" className="underline font-medium">/dash/flota</a> y crea un agente.</li>
+              <li>Vincúlalo a tu WhatsApp: escanea el <strong>código QR</strong> (o usa el código con tu número) desde <em>WhatsApp → Dispositivos vinculados → Vincular dispositivo</em>.</li>
+              <li>Prende los grupos que quieras que atienda con los <strong>toggles</strong>. El agente solo responde en los grupos activos — los demás los ignora (anti-spam).</li>
+            </ol>
+
+            <h3 className="text-lg font-bold mb-3">Cómo funciona: cajas</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              La capacidad de tu flota se compra en <strong>cajas</strong>. Cada caja corre <strong>{POOL_BOX.agents} agentes Ghosty</strong> a la vez y cuesta <strong>${POOL_BOX.priceMxn} MXN/mes</strong>. Es <strong>elástico</strong>: las cajas se prenden bajo demanda cuando llegan mensajes y se apagan cuando no hay trabajo — no pagas por agentes inactivos. ¿Necesitas atender más conversaciones al mismo tiempo? Agrega más cajas.
+            </p>
+
+            <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
+              Compra cajas para tu flota en{" "}
+              <a href="/dash/packs" className="underline font-medium">/dash/packs</a> — elige cuántas cajas necesitas y se suman a tu capacidad al instante.
             </div>
           </section>
 
