@@ -492,7 +492,7 @@ async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: strin
 export async function routeMessage(
   poolId: string,
   msg: InboundMessage,
-  opts: { skipRateLimit?: boolean } = {}
+  opts: { skipRateLimit?: boolean; hasMedia?: boolean } = {}
 ): Promise<string> {
   const pool = await db.pool.findUniqueOrThrow({ where: { id: poolId } });
   const ctx = await ctxForOwner(pool.ownerId);
@@ -500,7 +500,8 @@ export async function routeMessage(
     groupId: msg.groupId,
     sender: msg.sender ?? null,
     textLen: msg.text.length,
-    hasMedia: !!msg.mediaUrl,
+    // Truthful flag from the edge's extraction; falls back to mediaUrl presence.
+    hasMedia: opts.hasMedia ?? !!msg.mediaUrl,
   });
 
   // Per-(pool, group) rate limit so one chatty group can't drain the fleet. The

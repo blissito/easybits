@@ -55,6 +55,9 @@ export type InboundContent = {
   refImageUrl?: string;
   /** True when the user's message was a voice note (drives voice-reply choice). */
   wasVoice?: boolean;
+  /** True when ANY non-text modality was present (image/doc/audio/video/etc) —
+   *  even if its extraction failed. Drives the truthful `hasMedia` audit field. */
+  hasMedia?: boolean;
 };
 
 function dl(sock: WASocket, m: WAMessage): Promise<Buffer> {
@@ -222,6 +225,30 @@ export async function extractInboundContent(
   opts: { ownerId: string }
 ): Promise<InboundContent | null> {
   const c: any = normalizeMessageContent(m.message!) || m.message;
+
+  // ── Forward/wrapper diagnostics (POOL_AUDIT_LOG=1) ──────────────────────────
+  // A forwarded captioned image was reaching the worker as TEXT ONLY (no vision
+  // framing) — i.e. `c.imageMessage` undefined. Log the raw vs normalized shape
+  // so we can see whether the media node is in a wrapper normalizeMessageContent
+  // misses, or arrives split. Off unless the flag is set.
+  if (process.env.POOL_AUDIT_LOG === "1") {
+    let kind: string | undefined;
+    try {
+      kind = getContentType(c);
+    } catch {}
+    const ci = getContextInfo(c);
+    console.log(
+      `[pool-audit] inbound.raw ${JSON.stringify({
+        rawKeys: Object.keys(m.message ?? {}),
+        normKeys: Object.keys(c ?? {}),
+        kind,
+        isForwarded: !!ci?.isForwarded,
+        forwardingScore: ci?.forwardingScore ?? 0,
+        hasQuoted: !!ci?.quotedMessage,
+      })}`
+    );
+  }
+
   const docMsg = c.documentMessage;
   let text: string =
     c.conversation || c.extendedTextMessage?.text || c.imageMessage?.caption || c.videoMessage?.caption || docMsg?.caption || "";
@@ -373,5 +400,11 @@ export async function extractInboundContent(
   // Quoted context on top — works alongside a new attachment.
   if (quoted.frame) agentPrompt = `${quoted.frame}\n${agentPrompt}`;
 
-  return { text: agentPrompt, userText, refImageUrl, wasVoice };
+  // Truthful media flag: ANY non-text modality was present, regardless of whether
+  // its extraction succeeded (so a forward whose image we failed to read still
+  // reads as hasMedia:true in the audit, not a misleading false).
+  const hasMedia =
+    hadImage || wasVoice || !!c.audioMessage || !!c.videoMessage || !!locMsg || contacts.length > 0 || !!poll;
+
+  return { text: agentPrompt, userText, refImageUrl, wasVoice, hasMedia };
 }

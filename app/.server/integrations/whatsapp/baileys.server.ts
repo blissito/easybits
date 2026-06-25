@@ -152,7 +152,7 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
     const reply = await routeMessage(
       poolId,
       { groupId: jid, sender: last.sender, text: combinedText },
-      { skipRateLimit: true }
+      { skipRateLimit: true, hasMedia: batch.some((it) => it.content.hasMedia) }
     );
     if (reply) {
       const delivered = await deliverFilesFromReply((j, c) => sendTracked(sock, j, c), jid, reply);
