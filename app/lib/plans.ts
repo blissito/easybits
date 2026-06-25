@@ -52,7 +52,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     storageGB: 0.1,
     aiGenerationsPerMonth: PLAN_CREDITS.Byte,
     llmTokensIncluded: 5_000_000, // 5M tokens gratis — promo junio 2026, una sola vez (no recarga). Cierre: BYTE_PROMO_END en llmTokenLimit.ts
-    concurrentSandboxes: 1, // Byte = 1 sola caja (free tier). Mega=3, Tera=10.
+    concurrentSandboxes: 1, // Byte = 1 sola caja (free tier). Mega=3, Tera=5.
     maxSandboxTtlSeconds: 3600,
     maxSandboxSize: "s",
     stripeIntent: null,
@@ -103,7 +103,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     storageGB: 100,
     aiGenerationsPerMonth: PLAN_CREDITS.Tera,
     llmTokensIncluded: 50_000_000, // 50M tokens/mes — ~39% del precio a costo real DeepSeek
-    concurrentSandboxes: 10,
+    concurrentSandboxes: 5, // 5 cajas / 20 agentes — bajado de 10 para proteger margen (add-on $299/caja para más)
     maxSandboxTtlSeconds: 86400,
     maxSandboxSize: "xl",
     stripeIntent: "studio_plan",
@@ -113,7 +113,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "50M tokens LLM/mes para tus agentes",
       "Todo lo de Mega",
       "20 bases de datos",
-      "10 cajas · 40 agentes Ghosty simultáneos · sesiones de 24h",
+      "5 cajas · 20 agentes Ghosty simultáneos · sesiones de 24h",
       "Conecta tu cuenta Formmy (WhatsApp Business)",
       "Conecta tu propio almacenamiento (S3, R2…)",
       "Soporte prioritario",
