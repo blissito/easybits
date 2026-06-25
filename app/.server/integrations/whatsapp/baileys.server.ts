@@ -151,7 +151,7 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
   try {
     const reply = await routeMessage(
       poolId,
-      { groupId: jid, sender: last.sender, text: combinedText },
+      { groupId: jid, sender: last.sender, text: combinedText, image: batch.map((it) => it.content.image).find(Boolean) },
       { skipRateLimit: true, hasMedia: batch.some((it) => it.content.hasMedia) }
     );
     if (reply) {
@@ -546,6 +546,45 @@ export async function executeWaAction(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+// createPoolGroup: crea un grupo de WhatsApp NUEVO desde el número del pool y
+// devuelve su invite link (chat.whatsapp.com/…). Lo consume el endpoint
+// POST /api/v2/pool/:poolId/group — denik lo llama para el feature "abre el grupo
+// para hablar con el agente". Registra el jid en enabledGroups para que el pool
+// responda ahí. Single-instance (el socket vive en este proceso, ver caveat).
+export async function createPoolGroup(
+  poolId: string,
+  name: string,
+  denikApiKey?: string
+): Promise<{ groupJid: string; inviteUrl: string }> {
+  const cur = sockets.get(poolId);
+  if (!cur) throw new Error("pool socket not connected");
+  const sock = cur.sock;
+  const meta = await sock.groupCreate(name, []); // grupo con solo el número del pool
+  const groupJid = meta.id;
+  const code = await sock.groupInviteCode(groupJid);
+  if (!code) throw new Error("could not get group invite code");
+  // Opt-in: el pool solo responde en enabledGroups → registrar el grupo nuevo.
+  // Y si viene denikApiKey, guardarlo en groupKeys[groupJid] → routeMessage lo
+  // inyecta per-mensaje para scopear el MCP a ESE org (aislamiento per-grupo).
+  const pool = await db.pool.findUnique({
+    where: { id: poolId },
+    select: { enabledGroups: true, groupKeys: true },
+  });
+  const enabled = new Set(pool?.enabledGroups ?? []);
+  enabled.add(groupJid);
+  const data: { enabledGroups: string[]; groupKeys?: Record<string, string> } = {
+    enabledGroups: [...enabled],
+  };
+  if (denikApiKey) {
+    data.groupKeys = {
+      ...((pool?.groupKeys as Record<string, string> | null) ?? {}),
+      [groupJid]: denikApiKey,
+    };
+  }
+  await db.pool.update({ where: { id: poolId }, data });
+  return { groupJid, inviteUrl: `https://chat.whatsapp.com/${code}` };
 }
 
 export async function disconnectPool(poolId: string): Promise<void> {

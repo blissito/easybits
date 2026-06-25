@@ -58,6 +58,10 @@ export type InboundContent = {
   /** True when ANY non-text modality was present (image/doc/audio/video/etc) —
    *  even if its extraction failed. Drives the truthful `hasMedia` audit field. */
   hasMedia?: boolean;
+  /** Raw inbound image bytes (base64) for NATIVE Claude vision: the pool writes
+   *  this into the worker's FS so the agent's Read tool sees it — no Gemini middle
+   *  step. `url` is the signed copy for editing/reusing with image tools. */
+  image?: { base64: string; ext: string; url?: string };
 };
 
 function dl(sock: WASocket, m: WAMessage): Promise<Buffer> {
@@ -316,34 +320,27 @@ export async function extractInboundContent(
     } catch {}
   }
 
-  // Image / sticker → vision describe + stash in PRIVATE storage, handing the
-  // worker a short-lived SIGNED url (the user's photo must NOT land in a public,
-  // enumerable bucket). The worker consumes it within the turn.
-  let imgDesc = "";
+  // Image / sticker → NATIVE Claude vision. We download the bytes and hand them
+  // (base64) to the pool, which writes them onto the worker's disk so the agent's
+  // Read tool SEES the image — no Gemini describe middle step (Claude is already
+  // multimodal). We also stash a short-lived SIGNED url so the agent can edit/reuse
+  // it with image tools (the user's photo must NOT land in a public bucket).
+  let imgDesc = ""; // legacy: solo se llena para imágenes CITADAS (resolveQuotedContext)
   let refImageUrl: string | undefined;
+  let imageData: { base64: string; ext: string; url?: string } | undefined;
   if (c.imageMessage || c.stickerMessage) {
     try {
       const buf = await dl(sock, m);
       const mime = c.imageMessage?.mimetype || c.stickerMessage?.mimetype || (c.stickerMessage ? "image/webp" : "image/jpeg");
+      const ext = /png/.test(mime) ? "png" : /webp/.test(mime) ? "webp" : "jpg";
+      imageData = { base64: buf.toString("base64"), ext };
       try {
-        const res = await describeImageService.execute(
-          { images: [{ data: new Uint8Array(buf), mediaType: mime }], question: text || undefined },
-          { userId: opts.ownerId }
-        );
-        imgDesc = res.data.description;
-      } catch (e) {
-        // Vision falló (config/provider/safety/empty). NO se traga en silencio:
-        // logueamos el motivo para la auditoría — el worker igual recibe la URL.
-        if (process.env.POOL_AUDIT_LOG === "1")
-          console.log(`[pool-audit] describe.fail ${e instanceof Error ? e.message : String(e)}`);
-      }
-      try {
-        const ext = /png/.test(mime) ? "png" : /webp/.test(mime) ? "webp" : "jpg";
         // 16 bytes of entropy in the key — not guessable even if the bucket leaked.
         const key = `wa-media/${opts.ownerId}/${Date.now()}-${randomBytes(16).toString("hex")}.${ext}`;
         const client = getPlatformDefaultClient();
         await client.putObject(key, buf, mime);
         refImageUrl = await client.getReadUrl(key, 3600); // signed, ~1h
+        imageData.url = refImageUrl;
       } catch {}
     } catch {}
   }
@@ -365,7 +362,7 @@ export async function extractInboundContent(
   if (quoted.refImageUrl && !refImageUrl) refImageUrl = quoted.refImageUrl;
 
   // Anti-drop: never silently swallow an attachment — tell the agent what arrived.
-  if (!text.trim() && !imgDesc && !docText && !quoted.frame) {
+  if (!text.trim() && !imgDesc && !docText && !quoted.frame && !imageData) {
     const kind = (() => {
       try {
         return getContentType(c);
@@ -390,17 +387,14 @@ export async function extractInboundContent(
   // Compose the final prompt: media framing first, then prepend quoted context
   // (so a quote accompanying a NEW attachment is preserved, not overwritten).
   let agentPrompt = text;
-  // Una IMAGEN está presente si tenemos descripción de visión O la URL subida.
-  // CLAVE: si la visión (describeImageService) falló pero el upload sí funcionó,
-  // hay que AVISARLE igual al worker que hubo imagen y pasarle la URL — si no, el
-  // adjunto se dropea en silencio y el agente responde "no recibí imagen".
-  if (imgDesc || refImageUrl) {
+  // Imagen NUEVA (con bytes) → la enmarca routeMessage tras escribirla en el FS del
+  // worker (Claude la ve nativo con Read). Aquí solo enmarcamos imágenes CITADAS
+  // (quoted): no traen bytes, pero sí descripción/URL vía resolveQuotedContext.
+  if (!imageData && (imgDesc || refImageUrl)) {
     const urlNote = refImageUrl ? ` Su URL es ${refImageUrl} (pásala a tus tools de imagen/visión para verla o editarla).` : "";
-    const visionNote = imgDesc
-      ? ` Tu visión la describe así: ${imgDesc}.`
-      : ` No pude describirla automáticamente — usa describe_image con esa URL para ver su contenido antes de responder.`;
+    const visionNote = imgDesc ? ` Tu visión la describe así: ${imgDesc}.` : "";
     agentPrompt =
-      `[El usuario envió una IMAGEN.${urlNote}${visionNote}]\n` +
+      `[El usuario citó una IMAGEN.${urlNote}${visionNote}]\n` +
       (text ? `Texto del usuario: ${text}` : "(sin texto adicional)");
   } else if (docText) {
     agentPrompt =
@@ -418,5 +412,5 @@ export async function extractInboundContent(
   const hasMedia =
     hadImage || wasVoice || !!c.audioMessage || !!c.videoMessage || !!locMsg || contacts.length > 0 || !!poll;
 
-  return { text: agentPrompt, userText, refImageUrl, wasVoice, hasMedia };
+  return { text: agentPrompt, userText, refImageUrl, wasVoice, hasMedia, image: imageData };
 }

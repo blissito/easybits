@@ -220,6 +220,9 @@ type InboundMessage = {
   sender?: string;
   text: string;
   mediaUrl?: string;
+  // Inbound image bytes (base64) for NATIVE Claude vision: written onto the
+  // worker's disk so the agent's Read tool sees it (no Gemini middle step).
+  image?: { base64: string; ext: string; url?: string };
 };
 
 // Build a background AuthContext for a pool's owner. Pool dispatch runs outside
@@ -529,8 +532,20 @@ export async function routeMessage(
     data: { poolId: pool.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
   });
 
-  const content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
+  let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
   let placed = await pickOrSpawn(ctx, pool, msg.groupId);
+
+  // NATIVE Claude vision: drop the inbound image onto the worker's disk and tell
+  // the agent to open it with Read (Claude is multimodal — no Gemini describe).
+  // The actual write happens INSIDE the turn loop so a self-heal retry re-writes
+  // it onto the fresh VM. Path is unique per turn to avoid cross-session clobber.
+  let imgPath: string | null = null;
+  if (msg.image && !bareCompact) {
+    imgPath = `/tmp/wa-img-${placed.sessionUuid}-${Date.now()}.${msg.image.ext}`;
+    const urlNote = msg.image.url ? ` (si necesitas editarla/reusarla con tus tools de imagen, su URL es ${msg.image.url})` : "";
+    content = `[El usuario envió una IMAGEN. Está guardada en ${imgPath} — ÁBRELA con la tool Read para verla antes de responder.${urlNote}]\n${content}`;
+  }
+
   let reply = "";
   // Turn loop with self-heal: if the worker's box is DEAD (host unreachable / VM
   // gone via crash/restart/TTL — not a manual delete), mark it "lost" and
@@ -546,6 +561,13 @@ export async function routeMessage(
     busyVms.add(worker.id);
     try {
       await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: new Date() } }).catch(() => {});
+      // Write the inbound image onto THIS worker (re-done on a self-heal retry so
+      // the fresh VM also has it) before the turn opens — so Read finds the file.
+      if (imgPath && msg.image) {
+        await writeFile(ctx, worker.sandboxId, { path: imgPath, content: msg.image.base64, encoding: "base64" }).catch(
+          (e) => console.error(`pool image write ${imgPath} failed:`, e)
+        );
+      }
       const stream = await openAgentChunkStream(
         {
           agentId: worker.id,
