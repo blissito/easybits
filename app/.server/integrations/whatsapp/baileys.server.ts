@@ -131,6 +131,8 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
   const userText = batch.map((it) => it.content.userText).filter(Boolean).join(" ");
   const wasVoice = batch.some((it) => it.content.wasVoice);
 
+  // One 👀 for the WHOLE burst (on the latest message), then typing until done.
+  if (last.m.key) sock.sendMessage(jid, { react: { text: "👀", key: last.m.key } }).catch(() => {});
   sock.sendPresenceUpdate("composing", jid).catch(() => {});
   const typingTimer = setInterval(() => {
     sock.sendPresenceUpdate("composing", jid).catch(() => {});
@@ -381,10 +383,9 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       lastIncoming.set(`${poolId}:${jid}`, m); // for wa MCP quote/react
       const text = content.text;
       log(poolId, `msg in ${jid} from ${m.key.participant ?? (fromMe ? "owner" : "?")}: "${text.slice(0, 40)}"`);
-      // Ack each message immediately; the actual turn runs COALESCED after a short
-      // debounce (drainGroup) so a burst becomes one turn + one reply, never N
-      // concurrent turns on the same sessionId (which stalls the Agent SDK).
-      sock.sendMessage(jid, { react: { text: "👀", key: m.key } }).catch(() => {});
+      // The turn runs COALESCED after a short debounce (drainGroup): a burst
+      // becomes one turn + one reply, with a SINGLE 👀 (on start) + ✅ (on done)
+      // reaction emitted there — not one 👀 per message (spammy).
       enqueueInbound(sock, poolId, jid, { content, m, sender: m.key.participant ?? undefined });
     }
   });
@@ -599,6 +600,14 @@ function startReaper() {
       await reapIdleStudios();
     } catch (e) {
       console.error("studio reaper tick failed:", e);
+    }
+    try {
+      // Idle reaper de los agentes embed standalone (claude-worker sin pool,
+      // ej. los chatbots de denik). Suspende a los idle → wake-on-message.
+      const { reapIdleEmbedAgents } = await import("~/.server/core/embedAgentReaper");
+      await reapIdleEmbedAgents();
+    } catch (e) {
+      console.error("embed-agent reaper tick failed:", e);
     }
   }, 60_000);
   if (typeof reaperTimer.unref === "function") reaperTimer.unref();
