@@ -287,6 +287,12 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       // Acknowledge + show typing while the worker thinks (ghosty UX parity).
       sock.sendMessage(jid, { react: { text: "👀", key: m.key } }).catch(() => {});
       sock.sendPresenceUpdate("composing", jid).catch(() => {});
+      // WhatsApp clears the "escribiendo…" bubble after ~10s; refresh it every 8s
+      // so it stays visible across long turns (cold boot ~12s + multi-tool work
+      // like research + image gen + deck). Cleared in finally.
+      const typingTimer = setInterval(() => {
+        sock.sendPresenceUpdate("composing", jid).catch(() => {});
+      }, 8000);
       try {
         const reply = await routeMessage(
           poolId,
@@ -321,7 +327,6 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
           sock.sendMessage(jid, { react: { text: "✅", key: m.key } }).catch(() => {});
           log(poolId, `replied in ${jid}${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
         }
-        sock.sendPresenceUpdate("paused", jid).catch(() => {});
       } catch (e) {
         // Brief notice on backpressure. Stamp the assistantName prefix on shared
         // numbers so our own notice isn't mistaken for a user message next round.
@@ -333,6 +338,9 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
           sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
         }
         log(poolId, `route failed in ${jid}: ${e}`);
+      } finally {
+        clearInterval(typingTimer);
+        sock.sendPresenceUpdate("paused", jid).catch(() => {});
       }
     }
   });
