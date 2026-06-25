@@ -7,6 +7,7 @@ import { Switch } from "~/components/forms/Switch";
 import { PLANS, getUserPlan, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
+import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
 import { createPool, deletePool } from "~/.server/core/poolOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
@@ -117,7 +118,27 @@ export async function loader({ request }: Route.LoaderArgs) {
     // mixtas por tier — un add-on = +1 sandbox del MISMO tamaño.
     agentsMax: Math.max(0, planCfg.concurrentSandboxes + reserved.machines - extraMachines.length) * maxWorkersPerVm,
   };
-  return { secretNames, pools, capacity };
+  // Flotas compartidas conmigo (delegación scope `agents`) — lista read-only,
+  // separada del HUD de capacidad (que es por cuenta propia). Sólo visibilidad.
+  const delegatedIds = await delegatedAccountIds(
+    { user, scopes: ["READ"] } as any,
+    SCOPES.AGENTS
+  );
+  let sharedPools: Array<{ id: string; name: string | null; status: string; ownerEmail: string | null }> = [];
+  if (delegatedIds.length) {
+    const [sharedRows, owners] = await Promise.all([
+      db.pool.findMany({ where: { ownerId: { in: delegatedIds } }, orderBy: { createdAt: "desc" } }),
+      db.user.findMany({ where: { id: { in: delegatedIds } }, select: { id: true, email: true } }),
+    ]);
+    const emailById = new Map(owners.map((u) => [u.id, u.email]));
+    sharedPools = sharedRows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      status: ((p.baileys ?? {}) as { status?: string }).status ?? "disconnected",
+      ownerEmail: emailById.get(p.ownerId) ?? null,
+    }));
+  }
+  return { secretNames, pools, capacity, sharedPools };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -206,8 +227,8 @@ const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, 
 // Ghosty — la mascota de la marca (fantasma morado + lentes), el agente INSIGNIA
 // que el pool ofrece por default. Inline SVG (no hay asset suelto del fantasma;
 // /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
-function GhostyMascot({ className = "", blink = true }: { className?: string; blink?: boolean }) {
-  const Blink = blink ? (
+function GhostyMascot({ className = "", blink = true, sleeping = false }: { className?: string; blink?: boolean; sleeping?: boolean }) {
+  const Blink = blink && !sleeping ? (
     <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur="5s" repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
   ) : null;
   return (
@@ -222,9 +243,19 @@ function GhostyMascot({ className = "", blink = true }: { className?: string; bl
       <path d="M68 37 L80 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
       {/* puente */}
       <path d="M37 36 Q42 32 47 36" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" fill="none" />
-      {/* lentes oscuros */}
-      <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
-      <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+      {sleeping ? (
+        <>
+          {/* dormido — ojitos cerrados (arcos hacia abajo) */}
+          <path d="M22 41 Q29 47 36 41" stroke="#1C1726" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M48 41 Q55 47 62 41" stroke="#1C1726" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+        </>
+      ) : (
+        <>
+          {/* lentes oscuros (ojitos despiertos) */}
+          <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+          <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+        </>
+      )}
       {/* marcos */}
       <circle cx="29" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
       <circle cx="55" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
@@ -245,10 +276,13 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     : custom ? "border-slate-400 bg-slate-50"
     : status === "building" ? "border-violet-500 bg-violet-50 animate-pulse"
     : status == null ? (addon ? "border-brand-500 border-dashed bg-brand-500/5" : "border-gray-200 border-dashed bg-gray-50/40")
+    // Dormida (suspended): congelada, ~0 CPU/RAM, resume <1s. Se pinta atenuada
+    // para que NO se lea como "ocupada gastando" — es capacidad casi-libre.
+    : status === "suspended" ? "border-indigo-200 bg-indigo-50/50"
     : full ? "border-amber-500 bg-amber-50"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
-  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
+  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : status === "suspended" ? `${slots}/${max} 💤` : `${slots}/${max} agentes`;
   // motion SOLO para entrada/salida (aparecer/desaparecer). SIN `layout` y el
   // AnimatePresence va SIN popLayout → no hay jitter en cada poll, solo se anima
   // cuando una caja realmente nace o muere.
@@ -257,7 +291,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
       {...SPAWN}
       whileHover={{ scale: 1.04, y: -2 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : `Sandbox ${status} · ${slots}/${max} agentes`}
+      title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : status === "suspended" ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria` : `Sandbox ${status} · ${slots}/${max} agentes`}
       className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-3 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] ${frame}`}
     >
       {system ? (
@@ -273,8 +307,8 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
         <div className="grid grid-cols-2 gap-2.5 place-items-center">
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
-              <div key={`a${j}`} className="w-10 h-10 flex items-center justify-center">
-                {ghosty ? <GhostyMascot className="w-8 h-10" /> : <img src="/logo-purple.svg" alt="" className="w-10 h-10" />}
+              <div key={`a${j}`} className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
+                {ghosty ? <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} /> : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
               </div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
@@ -346,7 +380,7 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
 }
 
 export default function Pools({ loaderData }: Route.ComponentProps) {
-  const { secretNames, pools, capacity } = loaderData;
+  const { secretNames, pools, capacity, sharedPools } = loaderData;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [showForm, setShowForm] = useState(false);
@@ -592,6 +626,36 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           );
         })}
       </div>
+
+      {sharedPools.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-semibold text-gray-500 mb-2">
+            Compartidas conmigo
+          </h3>
+          <div className="grid gap-2">
+            {sharedPools.map((p) => {
+              const st = STATUS[p.status as keyof typeof STATUS] ?? STATUS.disconnected;
+              return (
+                <div
+                  key={p.id}
+                  className="border-2 border-black rounded-xl p-3 flex items-center justify-between gap-2 bg-gray-50"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{p.name || "Pool"}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      Compartido por {p.ownerEmail ?? "—"}
+                    </p>
+                  </div>
+                  <span className="text-xs flex items-center gap-1.5 text-gray-600">
+                    <span className={`w-2 h-2 rounded-full ${st.dot}`} />
+                    {st.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
