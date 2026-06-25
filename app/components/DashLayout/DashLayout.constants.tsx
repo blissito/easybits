@@ -140,8 +140,8 @@ export const ITEMS = {
           <path d="M9 17h6" />
         </svg>
       ),
-      path: "/dash/pools",
-      title: "Agentes",
+      path: "/dash/flota",
+      title: "Flota",
     },
     {
       icon: (

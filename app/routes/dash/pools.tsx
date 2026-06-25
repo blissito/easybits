@@ -381,7 +381,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-1">Agentes de WhatsApp</h1>
+      <h1 className="text-2xl font-bold mb-1">Tu flota de agentes</h1>
       <p className="text-gray-500 mb-6">Crea un agente, conéctalo a WhatsApp y atiende tus grupos. Se levanta bajo demanda.</p>
 
       {/* Bento responsive: Capacidad a todo lo ancho arriba; luego Nuevo agente y

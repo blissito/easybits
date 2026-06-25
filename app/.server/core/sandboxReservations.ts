@@ -38,6 +38,14 @@ export async function cancelReservationBySubscription(stripeSubscriptionId: stri
   });
 }
 
+/** An owner's ACTIVE reservation rows (for display under the plan card). */
+export async function getUserReservations(ownerId: string) {
+  return db.sandboxReservation.findMany({
+    where: { ownerId, status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 /** Sum of an owner's ACTIVE reservations → extra machine + agent budget.
  * Capacity is bought in flat boxes (4 agents = 1 pool VM), so a single row may
  * cover several boxes. Machines are derived from agents (ceil ÷ 4) rather than

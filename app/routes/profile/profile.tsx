@@ -6,6 +6,7 @@ import { redirect } from "react-router";
 import { ProfileTabs } from "./ProfileTabs";
 import { db } from "~/.server/db";
 import { getUserPlan } from "~/lib/plans";
+import { getUserReservations } from "~/.server/core/sandboxReservations";
 
 export const loader = async ({ request }: Route.ClientLoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -23,11 +24,14 @@ export const loader = async ({ request }: Route.ClientLoaderArgs) => {
   const total =
     files.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024 / 1024;
 
+  const reservations = await getUserReservations(user.id);
+
   return {
     total,
     plan,
     user,
     customer,
+    reservations,
   };
 };
 
@@ -36,11 +40,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const intent = formData.get("intent");
   if (intent === "redirect_to_portal") {
     const user = await getUserOrRedirect(request);
-    const url = await createPortalSessionURL(user.customer);
-    if (!url) {
+    const session = await createPortalSessionURL(user.customer);
+    if (!session?.url) {
       throw redirect("/planes");
     }
-    throw redirect(url);
+    throw redirect(session.url);
   }
 };
 
@@ -49,14 +53,14 @@ export function HydrateFallback() {
 }
 
 export default function Profile({ loaderData }: Route.ComponentProps) {
-  const { total, user, customer, plan } = loaderData;
+  const { total, user, customer, plan, reservations } = loaderData;
   return (
     <article className=" min-h-svh w-full relative box-border inline-block md:py-10 pt-16 pb-6 px-4 md:pl-28 md:pr-8 2xl:px-0">
       <div className="max-w-7xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-semibold pt-1 md:pt-1">
           Perfil
         </h2>
-        <ProfileTabs used={total} plan={plan} user={user} customer={customer} />
+        <ProfileTabs used={total} plan={plan} user={user} customer={customer} reservations={reservations} />
       </div>
     </article>
   );

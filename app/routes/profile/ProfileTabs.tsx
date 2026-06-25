@@ -2,6 +2,7 @@
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { Fragment } from "react";
 import {
+  AddonsCard,
   Notifications,
   ProfileCard,
   SuscriptionCard,
@@ -16,11 +17,13 @@ export const ProfileTabs = ({
   plan,
   used,
   customer,
+  reservations = [],
 }: {
   used: number;
   plan?: string | null;
   user: User;
   customer: Customer;
+  reservations?: any[];
 }) => {
   return (
     <TabGroup className="mt-10">
@@ -75,6 +78,7 @@ export const ProfileTabs = ({
         <TabPanel>
           <ProfileCard user={user} />
           <SuscriptionCard used={used} customer={customer} plan={plan!} />
+          <AddonsCard reservations={reservations} />
         </TabPanel>
         <TabPanel>
           <Notifications user={user} />{" "}
