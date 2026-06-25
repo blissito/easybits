@@ -1081,8 +1081,9 @@ model Pool {
   // Destroy a suspended worker after N idle min to reclaim host disk. Its
   // conversation memory is externalized to storage at suspend, so the next
   // message restores it onto a fresh VM. Must be > idleSuspendMin. Kept generous
-  // until restore-from-storage is verified end-to-end (warm VM = perfect memory).
-  destroyIdleMin     Int  @default(20)
+  // so suspended VMs stay resumable (~700-950ms snapshot resume vs ~12s cold boot
+  // + restore-from-S3); restore round-trip is verified, so destroy is only deferred.
+  destroyIdleMin     Int  @default(45)
   // Baileys pairing state mirror (same shape as Agent.whatsapp).
   baileys       Json?
   // Persisted Baileys auth (creds + signal keys) so the socket survives app

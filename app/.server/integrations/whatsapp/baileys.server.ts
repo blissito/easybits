@@ -134,8 +134,19 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
   // One 👀 for the WHOLE burst (on the latest message), then typing until done.
   if (last.m.key) sock.sendMessage(jid, { react: { text: "👀", key: last.m.key } }).catch(() => {});
   sock.sendPresenceUpdate("composing", jid).catch(() => {});
+  // Typing bubble keep-alive + a ONE-TIME verbal heads-up. 👀 + the bubble already
+  // say "te leí y estoy en ello" non-verbally; if the turn runs long (~24s, 3 ticks)
+  // we add words once — like nanoclaw's "ahorita lo hago, me toma un momento" — so
+  // a heavy task reads as working-on-it, not stuck. Only one filler per turn.
+  let typingTicks = 0;
+  let sentHeadsUp = false;
   const typingTimer = setInterval(() => {
     sock.sendPresenceUpdate("composing", jid).catch(() => {});
+    if (!sentHeadsUp && ++typingTicks >= 3) {
+      sentHeadsUp = true;
+      const filler = "Voy en esto, dame un momento… 🛠️";
+      sendTracked(sock, jid, { text: hasOwnNumber ? filler : `${assistantName}: ${filler}` }).catch(() => {});
+    }
   }, 8000);
   try {
     const reply = await routeMessage(

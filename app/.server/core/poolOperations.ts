@@ -764,12 +764,16 @@ export async function createPool(
       maxWorkersPerVm: opts.maxWorkersPerVm ?? 4,
       vmMemMb: opts.vmMemMb ?? 2048,
       maxVms: opts.maxVms ?? 10,
-      // Destroy agresivo: el disco es el cuello de botella del box, y la memoria
-      // de cada conversación se externaliza a S3 (backup en suspend, restore en
-      // cold-spawn) — round-trip probado byte-a-byte (scripts/pool-memory-roundtrip.ts).
-      // suspend@2min (resume rápido, RAM liberada) → destroy@3min (recupera disco).
+      // suspend@2min libera RAM (el subproceso ya salió entre turnos; suspender
+      // solo congela el baseline) y deja la VM RESUMIBLE: medido 700-950ms desde
+      // suspend (snapshot Firecracker) vs ~12s de cold boot + restore-desde-S3.
+      // Por eso destroy@45min y no @3: el disco aguanta (hay box de sobra) y el
+      // win real es que un mensaje tras un hueco de minutos arranca sub-segundo en
+      // vez de re-bootear. La memoria igual se externaliza a S3 (round-trip probado
+      // byte-a-byte, scripts/pool-memory-roundtrip.ts), así que destruir sigue
+      // siendo seguro — solo lo posponemos para cobrar el resume caliente.
       idleSuspendMin: opts.idleSuspendMin ?? 2,
-      destroyIdleMin: opts.destroyIdleMin ?? 3,
+      destroyIdleMin: opts.destroyIdleMin ?? 45,
     },
   });
 }
