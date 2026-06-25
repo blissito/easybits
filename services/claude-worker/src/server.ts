@@ -3,7 +3,7 @@
 // docs/claude-worker-contract.md.
 import http from 'http';
 
-import { runTurn, type WorkerConfig } from './worker.js';
+import { runTurn, denikServerConfig, type WorkerConfig } from './worker.js';
 import { startFallbackProxy } from './proxy.js';
 import type { McpServerConfig } from './types.js';
 
@@ -41,23 +41,12 @@ function buildMcpServers(): Record<string, McpServerConfig> {
       env: { EASYBITS_API_KEY: easybitsKey },
     };
   }
-  // Optional per-tenant denik MCP (@denik.me/mcp): a thin stdio client over
-  // denik's REST. The scope (public/admin) is derived from the DENIK_API_KEY
-  // prefix, so a `dnk_pub_…` key scopes this agent to ONE denik org's booking
-  // tools (list_services/get_availability/create_booking). Spawned per-agent
-  // inside the VM; it calls back out to DENIK_BASE_URL/api/mcp/*.
+  // VM-level denik MCP (single-org agents, e.g. the per-org web chatbot): the key
+  // is in env. The WhatsApp pool (Nik) does NOT set this — it sends the org key
+  // PER MESSAGE instead (see runTurn denikApiKey), so each turn is scoped to its
+  // group's org with no cross-org leak.
   const denikKey = process.env.DENIK_API_KEY;
-  if (denikKey) {
-    servers.denik = {
-      type: 'stdio',
-      command: 'npx',
-      args: ['-y', '@denik.me/mcp'],
-      env: {
-        DENIK_API_KEY: denikKey,
-        DENIK_BASE_URL: process.env.DENIK_BASE_URL ?? '',
-      },
-    };
-  }
+  if (denikKey) servers.denik = denikServerConfig(denikKey);
   return servers;
 }
 
@@ -100,7 +89,7 @@ async function readBody(req: http.IncomingMessage): Promise<string> {
 }
 
 async function handleMessage(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  let body: { content?: string; sessionId?: string };
+  let body: { content?: string; sessionId?: string; denikApiKey?: string };
   try {
     body = JSON.parse(await readBody(req));
   } catch {
@@ -111,6 +100,9 @@ async function handleMessage(req: http.IncomingMessage, res: http.ServerResponse
 
   const content = typeof body.content === 'string' ? body.content : '';
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+  // Per-message denik org key (pool/Nik path): scopes the denik MCP to this
+  // group's org for THIS turn only.
+  const denikApiKey = typeof body.denikApiKey === 'string' ? body.denikApiKey : undefined;
   if (!content || !sessionId) {
     res.writeHead(400, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: 'content and sessionId are required' }));
@@ -125,7 +117,7 @@ async function handleMessage(req: http.IncomingMessage, res: http.ServerResponse
 
   let streamedAny = false;
   try {
-    for await (const ev of runTurn(config, sessionId, content)) {
+    for await (const ev of runTurn(config, sessionId, content, denikApiKey)) {
       if (ev.type === 'token') {
         streamedAny = true;
         sse(res, { type: 'token', value: ev.value });

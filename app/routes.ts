@@ -198,6 +198,7 @@ export default [
     route("pools", "routes/api/v2/pools.ts"),
     route("pools/wa-action", "routes/api/v2/pools.wa-action.ts"),
     route("pool/:poolId/message", "routes/api/v2/pool.$poolId.message.ts"),
+    route("pool/:poolId/group", "routes/api/v2/pool.$poolId.group.ts"),
     route("pool/:poolId/connect", "routes/api/v2/pool.$poolId.connect.ts"),
     // WhatsApp Business Cloud API (Meta) — webhook de verificación + eventos
     route("whatsapp/webhook", "routes/api/v2/whatsapp-webhook.ts"),

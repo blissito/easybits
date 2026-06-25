@@ -5,7 +5,7 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
 import { createApiKey } from "../iam";
-import { can, SCOPES } from "../delegation";
+import { can, delegatedAccountIds, SCOPES } from "../delegation";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { PLANS, getUserPlan } from "../../lib/plans";
@@ -142,6 +142,7 @@ export async function openAgentMessageStream(
   body: {
     content?: string;
     sessionId?: string;
+    denikApiKey?: string;
     port?: number;
     path?: string;
     rawBody?: unknown;
@@ -164,6 +165,9 @@ export async function openAgentMessageStream(
     // no hay sessionId real para que el daemon (o el agent-runner) genere
     // un UUID fresh en lugar de heredar este literal.
     if (body.sessionId) payload.sessionId = body.sessionId;
+    // Per-message denik org key (pool/Nik): el worker arma el MCP denik scopeado
+    // a ese org SOLO para este turno.
+    if (body.denikApiKey) payload.denikApiKey = body.denikApiKey;
   }
   const res = await fetch(url, {
     method: "POST",
@@ -2465,11 +2469,18 @@ function toAgentRecord(row: {
   };
 }
 
-// Owner-only — looks up an agent by id and confirms ownership.
+// Cross-account access a un agente: dueño O delegado con scope `agents`. Un solo
+// punto para todos los ops de operación (ver/suspender/reanudar/mensaje/admin).
+// `destroyAgent` NO lo usa (queda owner-only, destructivo).
+async function agentAccess(ctx: AuthContext, ownerId: string): Promise<boolean> {
+  return ownerId === ctx.user.id || (await can(ctx, ownerId, SCOPES.AGENTS));
+}
+
+// Owner or `agents`-delegate — looks up an agent by id and confirms access.
 export async function getAgent(ctx: AuthContext, agentId: string): Promise<AgentRecord> {
   requireScope(ctx, "READ");
   const row = await db.agent.findUnique({ where: { id: agentId } });
-  if (!row || row.ownerId !== ctx.user.id) {
+  if (!row || !(await agentAccess(ctx, row.ownerId))) {
     throw new Error("agent not found");
   }
   // Self-healing: si el cached status difiere del estado REAL del sandbox,
@@ -2529,8 +2540,10 @@ async function probeRealStatus(
 
 export async function listAgents(ctx: AuthContext): Promise<AgentRecord[]> {
   requireScope(ctx, "READ");
+  // Flota propia + flotas delegadas con scope `agents` (operador cross-account).
+  const owners = [ctx.user.id, ...(await delegatedAccountIds(ctx, SCOPES.AGENTS))];
   const rows = await db.agent.findMany({
-    where: { ownerId: ctx.user.id },
+    where: { ownerId: { in: owners } },
     orderBy: { createdAt: "desc" },
   });
   // Self-healing del listado (mismo patrón que getAgent): reconciliamos el
@@ -2611,7 +2624,7 @@ export async function suspendAgent(
 ): Promise<AgentRecord> {
   requireScope(ctx, "WRITE");
   const row = await db.agent.findUnique({ where: { id: agentId } });
-  if (!row || row.ownerId !== ctx.user.id) {
+  if (!row || !(await agentAccess(ctx, row.ownerId))) {
     throw new Error("agent not found");
   }
   if (row.status === "suspended") {
@@ -2620,11 +2633,13 @@ export async function suspendAgent(
   if (row.status !== "running") {
     throw new Error(`agent is ${row.status}; cannot suspend`);
   }
+  // Host call por el DUEÑO real (row.ownerId), no ctx.user.id — un delegado debe
+  // pegarle al box de brenda, no al suyo. (Owner case: son iguales.)
   await callHost<{ ok: true }>(
     "POST",
     `/v1/sandbox/${row.sandboxId}/suspend`,
     {},
-    ctx.user.id
+    row.ownerId
   );
   const updated = await db.agent.update({
     where: { id: agentId },
@@ -2641,7 +2656,7 @@ export async function resumeAgent(
 ): Promise<AgentRecord> {
   requireScope(ctx, "WRITE");
   const row = await db.agent.findUnique({ where: { id: agentId } });
-  if (!row || row.ownerId !== ctx.user.id) {
+  if (!row || !(await agentAccess(ctx, row.ownerId))) {
     throw new Error("agent not found");
   }
   if (row.status === "running") {
@@ -2654,7 +2669,7 @@ export async function resumeAgent(
     "POST",
     `/v1/sandbox/${row.sandboxId}/resume`,
     {},
-    ctx.user.id
+    row.ownerId
   );
   const updated = await db.agent.update({
     where: { id: agentId },
@@ -2795,7 +2810,7 @@ export async function openAgentChunkStream(
     | "embedToken"
     | "template"
   >,
-  body: { content: string; sessionId?: string }
+  body: { content: string; sessionId?: string; denikApiKey?: string }
 ): Promise<ReadableStream<Uint8Array>> {
   const protocol = agent.protocol ?? "sse";
   if (protocol === "sse") {
@@ -2805,6 +2820,8 @@ export async function openAgentChunkStream(
     const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
       content: body.content,
       sessionId: body.sessionId,
+      // Per-message denik org key (pool/Nik): scope del MCP denik por turno.
+      denikApiKey: body.denikApiKey,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });
@@ -3031,7 +3048,7 @@ export async function messageAgent(
 ): Promise<{ content: string; tokens: number }> {
   requireScope(ctx, "WRITE");
   const row = await db.agent.findUnique({ where: { id: params.agentId } });
-  if (!row || row.ownerId !== ctx.user.id) {
+  if (!row || !(await agentAccess(ctx, row.ownerId))) {
     throw new Error("agent not found");
   }
   const stream = await openAgentChunkStream(toAgentRecord(row), {

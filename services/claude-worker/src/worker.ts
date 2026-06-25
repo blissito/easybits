@@ -83,10 +83,31 @@ export interface WorkerConfig {
   childEnv: Record<string, string | undefined>;
 }
 
-function buildProvider(cfg: WorkerConfig): ClaudeProvider {
+// denik MCP server config for a given key. Shared by the VM-level builder
+// (server.ts) and the per-message override below.
+export function denikServerConfig(denikApiKey: string): McpServerConfig {
+  return {
+    type: 'stdio',
+    command: 'npx',
+    args: ['-y', '@denik.me/mcp'],
+    env: {
+      DENIK_API_KEY: denikApiKey,
+      DENIK_BASE_URL: process.env.DENIK_BASE_URL ?? '',
+    },
+  };
+}
+
+// `denikApiKey` (per-message) scopes the denik MCP to ONE org for THIS turn only
+// — built fresh per turn (buildProvider runs per turn), so co-located
+// conversations on the same VM each see only their own org. Overrides any
+// VM-level denik server; when absent, no denik MCP this turn (no cross-org leak).
+function buildProvider(cfg: WorkerConfig, denikApiKey?: string): ClaudeProvider {
+  const mcpServers = denikApiKey
+    ? { ...cfg.mcpServers, denik: denikServerConfig(denikApiKey) }
+    : cfg.mcpServers;
   const opts: ProviderOptions = {
     assistantName: cfg.assistantName,
-    mcpServers: cfg.mcpServers,
+    mcpServers,
     env: cfg.childEnv,
   };
   return new ClaudeProvider(opts);
@@ -100,8 +121,9 @@ export async function* runTurn(
   cfg: WorkerConfig,
   sessionId: string,
   content: string,
+  denikApiKey?: string,
 ): AsyncGenerator<ProviderEvent> {
-  const events = await withLock(sessionId, async () => collectTurn(cfg, sessionId, content, false));
+  const events = await withLock(sessionId, async () => collectTurn(cfg, sessionId, content, false, denikApiKey));
   for (const ev of events) yield ev;
 }
 
@@ -112,10 +134,11 @@ async function collectTurn(
   sessionId: string,
   content: string,
   isRetry: boolean,
+  denikApiKey?: string,
 ): Promise<ProviderEvent[]> {
   const cwd = workspaceFor(sessionId);
   const continuation = loadContinuation(sessionId);
-  const provider = buildProvider(cfg);
+  const provider = buildProvider(cfg, denikApiKey);
   const out: ProviderEvent[] = [];
 
   const q = provider.query({
@@ -136,7 +159,7 @@ async function collectTurn(
     if (!isRetry && continuation && provider.isSessionInvalid(err)) {
       // Stale transcript — drop the handle and start fresh once.
       clearContinuation(sessionId);
-      return collectTurn(cfg, sessionId, content, true);
+      return collectTurn(cfg, sessionId, content, true, denikApiKey);
     }
     out.push({
       type: 'error',

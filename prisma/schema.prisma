@@ -1098,6 +1098,11 @@ model Pool {
   // link, admin tools). Other enabled groups are restricted to their own
   // conversation. null = no main group. Mirrors nanoclaw's isMain.
   mainGroupJid  String?
+  // Per-group MCP key map { [groupJid]: DENIK_API_KEY }. Set at group creation
+  // (createPoolGroup); routeMessage injects the group's key per message so one
+  // shared agent (e.g. denik's "Nik") is scoped to each group's org. Tenant
+  // isolation is enforced by the downstream MCP auth, not by trusting the agent.
+  groupKeys     Json?
   // Loop-prevention strategy (surface layer, nanoclaw pattern):
   //  - hasOwnNumber=true  → dedicated WhatsApp line; the bot's own output is the
   //    only fromMe → skip fromMe. Owner can't self-test; replies to others only.

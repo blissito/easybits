@@ -2,6 +2,7 @@ import type { ApiKey, ApiKeyScope, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { validateApiKey, hasScope } from "./iam";
 import { db } from "./db";
+import { can, SCOPES } from "./delegation";
 
 export type AuthContext = {
   user: User;
@@ -145,10 +146,14 @@ export async function resolveAgentAuth(
     };
   }
 
-  // Owner mode (API key, OAuth JWT, or session)
+  // Owner mode (API key, OAuth JWT, or session). Owner OR delegate con scope
+  // `agents` (operador cross-account) puede operar el agente.
   const ctx = requireAuth(await authenticateRequest(request));
   const row = await db.agent.findUnique({ where: { id: agentId } });
-  if (!row || row.ownerId !== ctx.user.id) {
+  if (
+    !row ||
+    !(row.ownerId === ctx.user.id || (await can(ctx, row.ownerId, SCOPES.AGENTS)))
+  ) {
     throw new Response(JSON.stringify({ error: "Agent not found" }), {
       status: 404,
       headers: { "Content-Type": "application/json" },

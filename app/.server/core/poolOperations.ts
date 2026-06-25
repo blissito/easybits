@@ -581,7 +581,13 @@ export async function routeMessage(
           embedToken: worker.embedToken,
           template: worker.template,
         },
-        { content, sessionId: placed.sessionUuid }
+        {
+          content,
+          sessionId: placed.sessionUuid,
+          // Per-grupo: la dnk_pub_ del org dueño de este grupo (si se registró al
+          // crearlo) → el worker scopea el MCP denik a ese org SOLO este turno.
+          denikApiKey: (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
+        }
       );
       reply = await collectStream(stream);
       auditLog("turn.ok", {

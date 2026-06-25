@@ -21,3 +21,14 @@
 {"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines,files","timestamp":"2026-06-25T01:11:35.561Z"}
 {"level":"info","message":"[delegation] revoke account=owner1 grantee=grantee1 email=fixtergeek@gmail.com remaining=machines","timestamp":"2026-06-25T01:11:35.562Z"}
 {"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T01:11:35.562Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T15:21:33.594Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T15:21:33.596Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T15:21:33.597Z"}
+{"level":"info","message":"[delegation] grant updated account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines,files","timestamp":"2026-06-25T15:21:33.597Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T15:21:33.599Z"}
+{"level":"info","message":"[delegation] revoke(all) account=owner1 grantee=grantee1 email=fixtergeek@gmail.com","timestamp":"2026-06-25T15:21:33.599Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines,files","timestamp":"2026-06-25T15:21:33.600Z"}
+{"level":"info","message":"[delegation] revoke account=owner1 grantee=grantee1 email=fixtergeek@gmail.com remaining=machines","timestamp":"2026-06-25T15:21:33.600Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T15:21:33.600Z"}
+{"level":"info","message":"[impersonation] client added operator=699f35cbc8ad86037eda62b1 client=69e19ed033ef9abb7cd5a54b email=brenda@fixter.org","timestamp":"2026-06-25T21:42:21.890Z"}
+{"level":"info","message":"[impersonation] start operator=699f35cbc8ad86037eda62b1 (fixtergeek@gmail.com) target=69e19ed033ef9abb7cd5a54b (brenda@fixter.org)","timestamp":"2026-06-25T21:42:25.539Z"}

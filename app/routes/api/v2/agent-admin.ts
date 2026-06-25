@@ -1,6 +1,7 @@
 import type { Route } from "./+types/agent-admin";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
+import { can, SCOPES } from "~/.server/delegation";
 
 const HOST_URL = (process.env.SANDBOX_HOST_URL ?? "").replace(/\/$/, "");
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN ?? "";
@@ -32,7 +33,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const agent = await db.agent.findUnique({ where: { id: params.id! } });
-  if (!agent || agent.ownerId !== ctx.user.id) {
+  // Owner o delegado con scope `agents`. El proxy ya rutea por agent.ownerId
+  // (header X-Easybits-Owner), así que el operador pega al box correcto.
+  if (
+    !agent ||
+    !(agent.ownerId === ctx.user.id || (await can(ctx, agent.ownerId, SCOPES.AGENTS)))
+  ) {
     return Response.json({ error: "agent not found" }, { status: 404 });
   }
 
