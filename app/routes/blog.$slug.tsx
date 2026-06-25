@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "tres-pruebas-una-sola-herramienta":
+    "app/content/blog/2026-06-25-tres-pruebas-una-sola-herramienta.mdx",
   "ejemplo-server-url-publica":
     "app/content/blog/2026-06-08-ejemplo-server-url-publica.mdx",
   "ejemplo-agente-embebido-en-tu-web":
@@ -52,6 +54,10 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "tres-pruebas-una-sola-herramienta",
+    featuredImage: "https://img.youtube.com/vi/cPIUKyjkhl0/maxresdefault.jpg",
+  },
   {
     slug: "tu-agente-corre-codigo-sandboxes-easybits",
     featuredImage: "/blog/assets/sandbox-sdk.jpg",
