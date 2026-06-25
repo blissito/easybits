@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
+import { TIER_ORDER } from "../../lib/hostingCatalog";
 
 // Fuente única de validación de payloads de sandbox para las rutas REST
 // (.safeParse del body). NO incluye `sandboxId` — viene del URL param.
@@ -12,7 +13,7 @@ export const SANDBOX_TEMPLATES = [
   "ghosty-gc", "claude-worker",
   "cagent-ghosty", "openclaw", "chat-openai", "chat-anthropic",
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",
-  "livekit-svc",
+  "livekit-svc", "whisper-svc", "kokoro-svc", "voice-svc",
 ] as const;
 
 export type SandboxTemplate = (typeof SANDBOX_TEMPLATES)[number];
@@ -31,12 +32,9 @@ export const SandboxCreateBody = z.object({
 });
 
 // ── Hosting (always-on machines) ──────────────────────────────────────────
-// Tier keys mirror HOSTING_CATALOG (app/lib/hostingCatalog.ts). Kept as a flat
-// enum here to validate at the edge without importing the catalog into zod.
-export const MACHINE_TIERS = [
-  "nano", "micro", "mini", "lite", "base",
-  "plus", "pro", "focus", "performance", "performance-4x",
-] as const;
+// Fuente única: deriva del catálogo (TIER_ORDER en app/lib/hostingCatalog.ts).
+// Un tier nuevo en el catálogo queda validado aquí sin tocar nada más.
+export const MACHINE_TIERS = TIER_ORDER;
 
 export const MachineCreateBody = z.object({
   tier: z.enum(MACHINE_TIERS),
