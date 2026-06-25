@@ -1512,16 +1512,24 @@ console.log(status.result);  // resultado final del agente`} />
               <a href="/dash/flota" className="underline font-medium">/dash/flota</a> — crear agentes, vincular WhatsApp, prender/apagar grupos y desconectar.
             </div>
 
-            <h3 className="text-lg font-bold mb-3">Cómo conectar</h3>
+            <h3 className="text-lg font-bold mb-3">Cómo conectar (WhatsApp personal)</h3>
             <ol className="list-decimal pl-5 text-gray-600 text-sm mb-6 space-y-1.5">
               <li>Entra a <a href="/dash/flota" className="underline font-medium">/dash/flota</a> y crea un agente.</li>
               <li>Vincúlalo a tu WhatsApp: escanea el <strong>código QR</strong> (o usa el código con tu número) desde <em>WhatsApp → Dispositivos vinculados → Vincular dispositivo</em>.</li>
               <li>Prende los grupos que quieras que atienda con los <strong>toggles</strong>. El agente solo responde en los grupos activos — los demás los ignora (anti-spam).</li>
             </ol>
 
+            <h3 className="text-lg font-bold mb-3">
+              WhatsApp Business (WABA){" "}
+              <span className="align-middle text-xs font-bold uppercase tracking-wide bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-1.5 py-0.5">Próximamente</span>
+            </h3>
+            <p className="text-gray-600 text-sm mb-6">
+              Pronto vas a poder conectar tu <strong>WhatsApp Business API</strong> oficial: solo sigues el wizard de Meta para vincular tu cuenta de WhatsApp Business y tu flota empieza a atender desde tu <strong>número oficial</strong>, sin el riesgo de bloqueo de la vinculación personal. Mismos agentes, mismos grupos — el canal cambia, tu flota no.
+            </p>
+
             <h3 className="text-lg font-bold mb-3">Cómo funciona: cajas</h3>
             <p className="text-gray-600 text-sm mb-3">
-              La capacidad de tu flota se compra en <strong>cajas</strong>. Cada caja corre <strong>{POOL_BOX.agents} agentes Ghosty</strong> a la vez y cuesta <strong>${POOL_BOX.priceMxn} MXN/mes</strong>. Es <strong>elástico</strong>: las cajas se prenden bajo demanda cuando llegan mensajes y se apagan cuando no hay trabajo — no pagas por agentes inactivos. ¿Necesitas atender más conversaciones al mismo tiempo? Agrega más cajas.
+              La capacidad de tu flota se compra en <strong>cajas</strong>. Cada caja corre <strong>{POOL_BOX.agents} agentes Ghosty</strong> a la vez y cuesta <strong>${POOL_BOX.priceMxn} MXN/mes</strong> como suscripción mensual. ¿Necesitas atender más conversaciones al mismo tiempo? Agrega más cajas — cada caja suma {POOL_BOX.agents} agentes a tu flota.
             </p>
 
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">

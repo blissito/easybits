@@ -248,7 +248,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     : full ? "border-amber-500 bg-amber-50"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
-  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "boot" : `${slots}/${max} agentes`;
+  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
   // motion SOLO para entrada/salida (aparecer/desaparecer). SIN `layout` y el
   // AnimatePresence va SIN popLayout → no hay jitter en cada poll, solo se anima
   // cuando una caja realmente nace o muere.
@@ -381,7 +381,19 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-1">Tu flota de agentes</h1>
+      <div className="flex items-center gap-2 mb-1">
+        <h1 className="text-2xl font-bold">Tu flota de agentes</h1>
+        <span className="group relative inline-flex">
+          <button type="button" aria-label="¿Qué es la flota?"
+            className="w-5 h-5 rounded-full border-2 border-black text-xs font-bold flex items-center justify-center text-gray-600 hover:bg-black hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+            ?
+          </button>
+          <span className="pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto absolute left-0 top-7 z-10 w-64 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity border-2 border-black rounded-xl bg-white p-3 text-sm text-gray-600 shadow-[2px_2px_0_0_#000]">
+            Agentes Ghosty que atienden tus grupos de WhatsApp. Conecta por QR y elige los grupos.{" "}
+            <a href="/docs#flota" target="_blank" rel="noopener noreferrer" className="text-brand-500 font-semibold underline">Ver documentación →</a>
+          </span>
+        </span>
+      </div>
       <p className="text-gray-500 mb-6">Crea un agente, conéctalo a WhatsApp y atiende tus grupos. Se levanta bajo demanda.</p>
 
       {/* Bento responsive: Capacidad a todo lo ancho arriba; luego Nuevo agente y
