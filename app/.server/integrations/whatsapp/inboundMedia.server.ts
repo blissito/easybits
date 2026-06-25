@@ -331,7 +331,12 @@ export async function extractInboundContent(
           { userId: opts.ownerId }
         );
         imgDesc = res.data.description;
-      } catch {}
+      } catch (e) {
+        // Vision falló (config/provider/safety/empty). NO se traga en silencio:
+        // logueamos el motivo para la auditoría — el worker igual recibe la URL.
+        if (process.env.POOL_AUDIT_LOG === "1")
+          console.log(`[pool-audit] describe.fail ${e instanceof Error ? e.message : String(e)}`);
+      }
       try {
         const ext = /png/.test(mime) ? "png" : /webp/.test(mime) ? "webp" : "jpg";
         // 16 bytes of entropy in the key — not guessable even if the bucket leaked.
@@ -385,10 +390,17 @@ export async function extractInboundContent(
   // Compose the final prompt: media framing first, then prepend quoted context
   // (so a quote accompanying a NEW attachment is preserved, not overwritten).
   let agentPrompt = text;
-  if (imgDesc) {
-    const urlNote = refImageUrl ? ` Su URL pública es ${refImageUrl} (pásala a tus tools de imagen si la vas a editar).` : "";
+  // Una IMAGEN está presente si tenemos descripción de visión O la URL subida.
+  // CLAVE: si la visión (describeImageService) falló pero el upload sí funcionó,
+  // hay que AVISARLE igual al worker que hubo imagen y pasarle la URL — si no, el
+  // adjunto se dropea en silencio y el agente responde "no recibí imagen".
+  if (imgDesc || refImageUrl) {
+    const urlNote = refImageUrl ? ` Su URL es ${refImageUrl} (pásala a tus tools de imagen/visión para verla o editarla).` : "";
+    const visionNote = imgDesc
+      ? ` Tu visión la describe así: ${imgDesc}.`
+      : ` No pude describirla automáticamente — usa describe_image con esa URL para ver su contenido antes de responder.`;
     agentPrompt =
-      `[El usuario envió una IMAGEN.${urlNote} Tu visión la describe así: ${imgDesc}.]\n` +
+      `[El usuario envió una IMAGEN.${urlNote}${visionNote}]\n` +
       (text ? `Texto del usuario: ${text}` : "(sin texto adicional)");
   } else if (docText) {
     agentPrompt =
