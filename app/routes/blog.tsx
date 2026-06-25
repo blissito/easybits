@@ -15,14 +15,14 @@ const BLOG_POSTS = [
       "app/content/blog/2026-06-25-tres-pruebas-una-sola-herramienta.mdx",
     title: "Tres pruebas, una sola herramienta",
     description:
-      "Oscar, de CoreGrid, grabó este video usando Easybits en producción: una llamada que se graba sola, un sitio en Astro que se publica en vivo y un agente que lo mueve todo. Las tres son el mismo sandbox haciendo trabajos distintos.",
+      "Oscar, de CoreGrid, probó tres herramientas de Easybits en este video: una videollamada (con la que se grabó), un sitio en Astro que se publica y ghostycode orquestando. Las tres corren sobre el mismo sandbox.",
     date: "2026-06-25",
     author: "Equipo Easybits",
     tags: ["sandboxes", "agentes", "build in public", "ghostycode", "Astro"],
     featuredImage: "https://img.youtube.com/vi/cPIUKyjkhl0/maxresdefault.jpg",
     readingTime: 3,
     excerpt:
-      "Oscar de CoreGrid grabó un video usando Easybits en producción. Una llamada que se graba, un sitio en Astro que se publica y un agente que lo mueve: las tres son el mismo sandbox haciendo trabajos distintos.",
+      "Oscar de CoreGrid probó tres herramientas de Easybits en un video: una videollamada, un sitio en Astro que se publica y ghostycode orquestando. Las tres corren sobre el mismo sandbox.",
     published: true,
   },
   {
