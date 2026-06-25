@@ -52,7 +52,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     storageGB: 0.1,
     aiGenerationsPerMonth: PLAN_CREDITS.Byte,
     llmTokensIncluded: 5_000_000, // 5M tokens gratis — promo junio 2026, una sola vez (no recarga). Cierre: BYTE_PROMO_END en llmTokenLimit.ts
-    concurrentSandboxes: 2,
+    concurrentSandboxes: 1, // Byte = 1 sola caja (free tier). Mega=3, Tera=10.
     maxSandboxTtlSeconds: 3600,
     maxSandboxSize: "s",
     stripeIntent: null,
@@ -155,20 +155,18 @@ export function isPaidPlan(plan: PlanKey): boolean {
 }
 
 /**
- * Tamaño de la caja (sandbox worker) del pool, DERIVADO DEL PLAN — fuente única.
- * Unificado y simple a propósito: solo dos tamaños. Byte = caja chica (512MB/1vCPU,
- * NO caben sandboxes de llamada/voz → `calls:false`). Planes de pago = caja estándar
- * (2GB/2vCPU, sí caben → `calls:true`). El tier escala el NÚMERO de cajas
- * (`concurrentSandboxes`), NO el tamaño. Esto evita el "byte fallback" del HUD y da
- * un guard simple (`getPoolBox(plan).calls`) para cajas pesadas.
+ * Tamaño de la caja (sandbox worker) del pool — UNIFORME para todos los planes.
+ * Una sola caja (2GB/2vCPU/4 agentes, sí caben llamadas/voz). El tier escala SOLO
+ * el NÚMERO de cajas (`concurrentSandboxes`), no el tamaño — así el guard es simple
+ * y no hay densidades mixtas. Fuente única para el HUD y el default de createPool.
+ * El param `plan` se mantiene por si en el futuro se quiere diferenciar.
  */
-export function getPoolBox(plan: PlanKey): {
+export function getPoolBox(_plan: PlanKey): {
   vmMemMb: number;
   vcpu: number;
   agentsPerBox: number;
   calls: boolean;
 } {
-  if (plan === "Byte") return { vmMemMb: 512, vcpu: 1, agentsPerBox: 2, calls: false };
   return { vmMemMb: 2048, vcpu: 2, agentsPerBox: 4, calls: true };
 }
 
