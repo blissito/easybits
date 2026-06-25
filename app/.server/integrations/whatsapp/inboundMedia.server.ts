@@ -124,12 +124,93 @@ async function readDocText(buf: Buffer, fileName: string, mimetype?: string): Pr
   return "";
 }
 
-function quotedText(m: WAMessage): string {
-  const q = (m.message as any)?.extendedTextMessage?.contextInfo?.quotedMessage;
-  if (!q) return "";
-  const doc = q.documentMessage || q.documentWithCaptionMessage?.message?.documentMessage;
+// ContextInfo (the reply/quote metadata) can hang off ANY message type, not just
+// extendedTextMessage — so a quote sent ALONGSIDE an image/doc isn't lost.
+function getContextInfo(c: any): any {
+  return (
+    c?.extendedTextMessage?.contextInfo ||
+    c?.imageMessage?.contextInfo ||
+    c?.videoMessage?.contextInfo ||
+    c?.documentMessage?.contextInfo ||
+    c?.audioMessage?.contextInfo ||
+    c?.stickerMessage?.contextInfo ||
+    null
+  );
+}
+
+// Plain-text fallback for a quoted message (caption / filename / body).
+function quotedPlainText(qm: any): string {
+  if (!qm) return "";
+  const doc = qm.documentMessage || qm.documentWithCaptionMessage?.message?.documentMessage;
   if (doc) return `[el cliente está citando un documento: "${doc.fileName || doc.title || "documento"}".]`;
-  return (q.conversation || q.extendedTextMessage?.text || q.imageMessage?.caption || q.videoMessage?.caption || "").trim();
+  return (qm.conversation || qm.extendedTextMessage?.text || qm.imageMessage?.caption || qm.videoMessage?.caption || "").trim();
+}
+
+// Resolve the QUOTED message into rich context. If it's an image/doc, RE-DOWNLOAD
+// and re-describe/extract it (Baileys can fetch a quoted stub) so "edita esta
+// imagen [citada]" / "resume este PDF [citado]" actually work — not just the
+// caption. Best-effort + bounded; falls back to the quoted plain text.
+async function resolveQuotedContext(
+  sock: WASocket,
+  m: WAMessage,
+  ownerId: string
+): Promise<{ frame: string; refImageUrl?: string }> {
+  const ctx = getContextInfo(normalizeMessageContent(m.message!) || m.message);
+  const qm = ctx?.quotedMessage ? normalizeMessageContent(ctx.quotedMessage) || ctx.quotedMessage : null;
+  if (!qm) return { frame: "" };
+  // Fake WAMessage so downloadMediaMessage can fetch the quoted media stub.
+  const fake = {
+    key: { remoteJid: m.key.remoteJid, id: ctx.stanzaId, participant: ctx.participant, fromMe: false },
+    message: qm,
+  } as WAMessage;
+
+  // Quoted image/sticker → describe + signed URL (so the agent can edit/reuse it).
+  if (qm.imageMessage || qm.stickerMessage) {
+    try {
+      const buf = await dl(sock, fake);
+      const mime = qm.imageMessage?.mimetype || qm.stickerMessage?.mimetype || "image/jpeg";
+      let desc = "";
+      try {
+        const res = await describeImageService.execute(
+          { images: [{ data: new Uint8Array(buf), mediaType: mime }] },
+          { userId: ownerId }
+        );
+        desc = res.data.description;
+      } catch {}
+      let url: string | undefined;
+      try {
+        const ext = /png/.test(mime) ? "png" : /webp/.test(mime) ? "webp" : "jpg";
+        const key = `wa-media/${ownerId}/${Date.now()}-${randomBytes(16).toString("hex")}.${ext}`;
+        const client = getPlatformDefaultClient();
+        await client.putObject(key, buf, mime);
+        url = await client.getReadUrl(key, 3600);
+      } catch {}
+      if (desc || url) {
+        return {
+          frame:
+            `[El usuario está CITANDO una imagen anterior.` +
+            `${url ? ` Su URL es ${url} (pásala a tus tools de imagen si te pide editarla/reusarla).` : ""}` +
+            `${desc ? ` Tu visión la describe así: ${desc}.` : ""}]`,
+          refImageUrl: url,
+        };
+      }
+    } catch {}
+  }
+
+  // Quoted document → extract its text.
+  const qdoc = qm.documentMessage || qm.documentWithCaptionMessage?.message?.documentMessage;
+  if (qdoc) {
+    try {
+      const buf = await dl(sock, fake);
+      const name = qdoc.fileName || qdoc.title || "documento";
+      const dtext = await readDocText(buf, name, qdoc.mimetype);
+      if (dtext) return { frame: `[El usuario CITA el documento "${name}". Contenido:\n${dtext}\n---fin del documento citado---]` };
+    } catch {}
+  }
+
+  // Fallback: quoted plain text / caption.
+  const qt = quotedPlainText(qm);
+  return { frame: qt ? `[En respuesta al mensaje citado: "${qt}"]` : "" };
 }
 
 // Turn an inbound WhatsApp message into the text prompt the worker should see.
@@ -246,8 +327,13 @@ export async function extractInboundContent(
     } catch {}
   }
 
+  // Quoted/replied context — resolved BEFORE anti-drop so a reply to media still
+  // produces content. Re-fetches the quoted image/doc when present.
+  const quoted = await resolveQuotedContext(sock, m, opts.ownerId);
+  if (quoted.refImageUrl && !refImageUrl) refImageUrl = quoted.refImageUrl;
+
   // Anti-drop: never silently swallow an attachment — tell the agent what arrived.
-  if (!text.trim() && !imgDesc && !docText) {
+  if (!text.trim() && !imgDesc && !docText && !quoted.frame) {
     const kind = (() => {
       try {
         return getContentType(c);
@@ -269,9 +355,9 @@ export async function extractInboundContent(
   // The user's own words (before framing) — drives the voice-reply trigger.
   const userText = text;
 
-  // Compose the final prompt (quoted context + media framing), like ghosty.
-  const qt = quotedText(m);
-  let agentPrompt = qt ? `[En respuesta al mensaje citado: "${qt}"]\n${text}` : text;
+  // Compose the final prompt: media framing first, then prepend quoted context
+  // (so a quote accompanying a NEW attachment is preserved, not overwritten).
+  let agentPrompt = text;
   if (imgDesc) {
     const urlNote = refImageUrl ? ` Su URL pública es ${refImageUrl} (pásala a tus tools de imagen si la vas a editar).` : "";
     agentPrompt =
@@ -284,6 +370,8 @@ export async function extractInboundContent(
   } else if (hadImage && !refImageUrl) {
     agentPrompt = `[NOTA: el usuario adjuntó un archivo/imagen que NO puedes ver/leer. Pídele que lo describa o que te diga qué contiene.]\n${agentPrompt}`;
   }
+  // Quoted context on top — works alongside a new attachment.
+  if (quoted.frame) agentPrompt = `${quoted.frame}\n${agentPrompt}`;
 
   return { text: agentPrompt, userText, refImageUrl, wasVoice };
 }
