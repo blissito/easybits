@@ -189,16 +189,61 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
 }
 
 type BaileysStatus = "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
+
+// ── Pairing throttle guard (persisted on Pool.baileys) ───────────────────────
+// Meta throttles device-link handshakes after ~3 attempts/30min, with a 3-6h
+// backoff (documented in nanoclaw). Mashing "Conectar" only deepens it and shows
+// the client a bare "Falló". We count pairing fails on the baileys blob (survives
+// the frequent surface restarts — in-memory would reset every deploy) and BLOCK
+// new attempts during a cooldown, telling the user WHEN to retry instead of
+// burning more attempts against Meta.
+const PAIR_FAIL_THRESHOLD = 3; // fails within the window → cooldown block
+const PAIR_FAIL_WINDOW_MS = 30 * 60_000;
+const PAIR_BLOCK_MS = 3 * 60 * 60_000; // 3h (Meta backoff is 3-6h; floor)
+const PAIR_KEYS = ["pairFails", "pairFirstFailAt", "pairBlockedUntil"] as const;
+
+function pickPairGuard(b: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of PAIR_KEYS) if (b[k] !== undefined) out[k] = b[k];
+  return out;
+}
+async function readBaileys(poolId: string): Promise<Record<string, unknown>> {
+  const row = await db.pool.findUnique({ where: { id: poolId }, select: { baileys: true } }).catch(() => null);
+  return (row?.baileys as Record<string, unknown> | null) ?? {};
+}
+// ms timestamp if currently throttled (block in the future), else 0.
+function pairBlockMs(b: Record<string, unknown>): number {
+  const until = b.pairBlockedUntil ? new Date(b.pairBlockedUntil as string).getTime() : 0;
+  return until > Date.now() ? until : 0;
+}
+// Record a failed pairing attempt; once THRESHOLD land within WINDOW, set a block.
+async function recordPairFail(poolId: string): Promise<void> {
+  const b = await readBaileys(poolId);
+  const now = Date.now();
+  const firstAt = b.pairFirstFailAt ? new Date(b.pairFirstFailAt as string).getTime() : 0;
+  const inWindow = firstAt > 0 && now - firstAt < PAIR_FAIL_WINDOW_MS;
+  const fails = (inWindow ? ((b.pairFails as number) ?? 0) : 0) + 1;
+  const patch: Record<string, unknown> = {
+    ...b,
+    pairFails: fails,
+    pairFirstFailAt: inWindow ? b.pairFirstFailAt : new Date(now).toISOString(),
+  };
+  if (fails >= PAIR_FAIL_THRESHOLD) patch.pairBlockedUntil = new Date(now + PAIR_BLOCK_MS).toISOString();
+  await db.pool.update({ where: { id: poolId }, data: { baileys: patch as never } }).catch(() => {});
+}
+
 // MERGE the baileys blob so a transient status change (e.g. a reconnect flipping
 // to "connecting") doesn't wipe an already-issued pairingCode/qr — the UI keeps
-// showing it until we actually connect. Terminal states clear the artifacts.
+// showing it until we actually connect. Terminal states clear the artifacts, BUT
+// failed/disconnected keep the pairing-throttle guard counters (a "failed" must
+// not reset the cooldown); a successful "connected" wipes everything (fresh).
 async function setStatus(poolId: string, status: BaileysStatus, extra: Record<string, unknown> = {}) {
   const terminal = status === "connected" || status === "disconnected" || status === "failed";
-  const cur = terminal
-    ? {}
-    : ((await db.pool.findUnique({ where: { id: poolId }, select: { baileys: true } }).catch(() => null))?.baileys as
-        | Record<string, unknown>
-        | null) ?? {};
+  const prev =
+    ((await db.pool.findUnique({ where: { id: poolId }, select: { baileys: true } }).catch(() => null))?.baileys as
+      | Record<string, unknown>
+      | null) ?? {};
+  const cur = !terminal ? prev : status === "connected" ? {} : pickPairGuard(prev);
   const next = { ...cur, status, at: new Date().toISOString(), ...extra };
   await db.pool.update({ where: { id: poolId }, data: { baileys: next } }).catch(() => {});
 }
@@ -264,6 +309,21 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
   const pool = await db.pool.findUnique({ where: { id: poolId } });
   if (!pool) throw new Error(`pool ${poolId} not found`);
 
+  // Don't burn a Meta attempt on an obviously-bad number (E.164: ~10-15 digits).
+  if (pairingPhone && (pairingPhone.length < 10 || pairingPhone.length > 15)) {
+    log(poolId, `invalid pairing number (${pairingPhone.length} digits)`);
+    await setStatus(poolId, "failed", { reason: "invalid_number" });
+    return;
+  }
+  // Throttle guard: if Meta blocked us (>=3 fails/30min), REFUSE new attempts
+  // during the cooldown — mashing only deepens it. Tell the UI when to retry.
+  const blockedUntil = pairBlockMs((pool.baileys as Record<string, unknown> | null) ?? {});
+  if (blockedUntil) {
+    log(poolId, `pairing blocked until ${new Date(blockedUntil).toISOString()}`);
+    await setStatus(poolId, "failed", { reason: "throttled", until: new Date(blockedUntil).toISOString() });
+    return;
+  }
+
   await setStatus(poolId, "connecting");
 
   let auth, version;
@@ -302,6 +362,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
         await setStatus(poolId, "pairing", { pairingCode: code, phone: pairingPhone });
       } catch (e) {
         log(poolId, `requestPairingCode failed: ${e}`);
+        await recordPairFail(poolId);
         await setStatus(poolId, "failed", { reason: "pairing_code_error" });
       }
     }, 1500);
@@ -338,6 +399,10 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
         // max_reconnect is a transient close where the creds may still be valid.
         if (loggedOut) {
           await db.pool.update({ where: { id: poolId }, data: { authCreds: null, authKeys: null } }).catch(() => {});
+          // A logout while pairing (cur.pairingPhone set) is the throttle's
+          // signature — WA closes ~3s after the code, before it can be typed.
+          // Count it so repeated mashing trips the cooldown guard.
+          if (cur?.pairingPhone) await recordPairFail(poolId);
         }
         log(poolId, `stopped (${loggedOut ? "logged_out" : "max_reconnect"})`);
         await setStatus(poolId, "failed", { reason: loggedOut ? "logged_out" : "max_reconnect" });

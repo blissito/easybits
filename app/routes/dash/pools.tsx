@@ -30,8 +30,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const rows = await db.pool.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: "desc" } });
   const pools = await Promise.all(
     rows.map(async (p) => {
-      const b = (p.baileys ?? {}) as { status?: string; qr?: string };
+      const b = (p.baileys ?? {}) as { status?: string; qr?: string; reason?: string; pairBlockedUntil?: string };
       const status = b.status ?? "disconnected";
+      // Pairing throttle: WhatsApp blocked this number for too many attempts.
+      const throttledUntil = b.pairBlockedUntil && new Date(b.pairBlockedUntil) > new Date() ? b.pairBlockedUntil : null;
       const live = isPoolLive(p.id);
       // Show QR / pairing code by PRESENCE (they persist across transient status
       // changes via the merge in setStatus) — hide only once actually connected.
@@ -65,6 +67,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
+        throttledUntil, connReason: b.reason ?? null,
       };
     })
   );
@@ -170,11 +173,20 @@ export async function action({ request }: Route.ActionArgs) {
   if (!pool || pool.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
 
   if (intent === "connect") {
+    const cur = (pool.baileys as Record<string, any> | null) ?? {};
+    // Respect the pairing throttle: if Meta blocked us, don't even start — every
+    // attempt deepens it. The UI already hides the buttons, this guards the race.
+    if (cur.pairBlockedUntil && new Date(cur.pairBlockedUntil) > new Date()) {
+      return data({ error: "throttled", until: cur.pairBlockedUntil }, { status: 429 });
+    }
     // Non-blocking: flip status to "connecting" so the UI starts polling, then
     // fire connectPool in the background. Awaiting it could hang the action on
     // the WhatsApp version fetch / socket setup → spinner stuck forever.
     const phone = String(fd.get("phone") || "").trim() || undefined; // pairing-code method if set
-    await db.pool.update({ where: { id: poolId }, data: { baileys: { status: "connecting", at: new Date().toISOString() } } });
+    // PRESERVE the throttle-guard counters (drop only transient artifacts) — a
+    // raw replace here would reset pairFails on every click and defeat the guard.
+    const { qr, pairingCode, reason, until, ...keep } = cur;
+    await db.pool.update({ where: { id: poolId }, data: { baileys: { ...keep, status: "connecting", at: new Date().toISOString() } } });
     void connectPool(poolId, { pairingPhone: phone }).catch((e) => console.error("connectPool failed", e));
     return data({ ok: true });
   }
@@ -598,8 +610,19 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </div>
               )}
 
+              {p.throttledUntil ? (
+                <p className="mt-3 text-xs text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-lg px-3 py-2">
+                  ⏳ WhatsApp bloqueó este número por demasiados intentos de vinculación.
+                  No reintentes (cada intento extiende el bloqueo). Reintenta después de las{" "}
+                  <b>{new Date(p.throttledUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b>.
+                </p>
+              ) : p.connReason === "invalid_number" ? (
+                <p className="mt-3 text-xs text-amber-700">
+                  ⚠️ Número inválido. Usa formato internacional sin signos (México: <b>52</b> + 10 dígitos, o <b>521</b> si es cuenta vieja).
+                </p>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-2 items-center">
-                {p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
+                {!p.throttledUntil && p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
                   <>
                     <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
                       className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
