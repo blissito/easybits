@@ -114,7 +114,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "Todo lo de Mega",
       "20 bases de datos",
       "10 cajas · 40 agentes Ghosty simultáneos · sesiones de 24h",
-      "Proveedores custom",
+      "Conecta tu propio almacenamiento (S3, R2…)",
       "Soporte prioritario",
       "RAG as a Service (próximamente)",
     ],
