@@ -60,6 +60,37 @@ export class PoolRateLimited extends Error {
 // single-instance — else machine B's reaper could reap a VM busy on machine A.
 const busyVms = new Set<string>();
 
+// ── Audit instrumentation (POOL_AUDIT_LOG=1) ──────────────────────────────────
+// Stage-by-stage timing/decisions for the live Baileys audit (warm/cold place,
+// boot ms, turn ms, self-heal, reaper). Off unless the flag is set so prod logs
+// stay clean. Grep `fly logs` for `[pool-audit]`.
+const AUDIT = process.env.POOL_AUDIT_LOG === "1";
+function auditLog(event: string, data?: Record<string, unknown>) {
+  if (AUDIT) console.log(`[pool-audit] ${event}`, data ? JSON.stringify(data) : "");
+}
+
+// Classify a turn failure. A DEAD BOX (host unreachable / VM gone via crash /
+// restart / TTL — NOT a manual delete) is self-healable: mark the worker "lost"
+// and re-place once on a fresh VM. A legitimate AI error (the worker answered
+// with an SSE error event) is NOT — rethrow so we don't respawn-loop or mask a
+// real fault. Conservative: only KNOWN connection signatures count as dead-box;
+// anything else rethrows (never respawn on doubt).
+function isBoxDeadError(e: unknown): boolean {
+  const cause = (e as { cause?: { message?: string } })?.cause?.message ?? "";
+  const msg = `${e instanceof Error ? e.message : String(e)} ${cause}`;
+  if (/agent stream/i.test(msg)) return false; // SSE {type:"error"} = real AI error
+  return /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|fetch failed|socket hang up|network|terminated|aborted|502|503|504|\b404\b|not running|vanished|failed to start/i.test(
+    msg
+  );
+}
+
+// Mark a worker's Agent row "lost" so the cold path (reserveVm filters to
+// running/building/suspended) excludes it and re-spawns a clean VM. Same
+// terminal state destroySandbox sets on manual delete (commit 5889cc43).
+async function markWorkerLost(agentId: string): Promise<void> {
+  await db.agent.updateMany({ where: { id: agentId }, data: { status: "lost" } }).catch(() => {});
+}
+
 // ── In-process placement mutex ────────────────────────────────────────────────
 // The Baileys surface is single-instance (accepted constraint), so an in-memory
 // lock is a correct serialization point. Used to serialize the capacity decision
@@ -311,6 +342,7 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
     memoryMb: pool.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
     vcpus: pool.vmMemMb <= 512 ? 1 : 2,
   });
+  auditLog("spawn", { pool: pool.id, agentId: created.agentId, memMb: pool.vmMemMb, box: target.url });
   // Return the BUILDING row immediately — the caller waits for it to come up
   // OUTSIDE the placement lock (so concurrent cold conversations boot in
   // parallel, not serialized behind each other's ~boot time).
@@ -394,12 +426,17 @@ async function pickOrSpawn(ctx: AuthContext, pool: PoolRow, groupId: string) {
   const route = await db.poolRoute.findUnique({ where: { poolId_groupId: { poolId: pool.id, groupId } } });
   if (route?.agentId) {
     const agent = await db.agent.findUnique({ where: { id: route.agentId } });
-    if (agent?.status === "running") return { vm: agent, sessionUuid: route.sessionUuid };
+    if (agent?.status === "running") {
+      auditLog("place.warm", { groupId, agentId: agent.id });
+      return { vm: agent, sessionUuid: route.sessionUuid };
+    }
   }
 
   // 2. Cold path — fast reservation under the lock; slow boot/restore outside it.
+  const t0 = Date.now();
   const res = await reserveVm(ctx, pool, groupId);
   const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
+  const wasBuilding = reserved.status === "building";
   const vm = await ensureRunning(ctx, reserved); // waits for boot/resume — in PARALLEL across groups
   if (!vm) throw new Error(`pool worker ${res.agentId} failed to start`);
   if (res.needsRestore) {
@@ -407,6 +444,13 @@ async function pickOrSpawn(ctx: AuthContext, pool: PoolRow, groupId: string) {
       console.error(`pool restore ${res.sessionUuid} failed:`, e)
     );
   }
+  auditLog("place.cold", {
+    groupId,
+    agentId: res.agentId,
+    bootMs: Date.now() - t0,
+    building: wasBuilding,
+    restored: res.needsRestore,
+  });
   return { vm, sessionUuid: res.sessionUuid };
 }
 
@@ -452,6 +496,12 @@ export async function routeMessage(
 ): Promise<string> {
   const pool = await db.pool.findUniqueOrThrow({ where: { id: poolId } });
   const ctx = await ctxForOwner(pool.ownerId);
+  auditLog("route.in", {
+    groupId: msg.groupId,
+    sender: msg.sender ?? null,
+    textLen: msg.text.length,
+    hasMedia: !!msg.mediaUrl,
+  });
 
   // Per-(pool, group) rate limit so one chatty group can't drain the fleet. The
   // in-process Baileys edge checks this BEFORE extracting media (to not pay for
@@ -478,39 +528,64 @@ export async function routeMessage(
     data: { poolId: pool.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
   });
 
-  const { vm: worker, sessionUuid } = await pickOrSpawn(ctx, pool, msg.groupId);
-
-  // Mark the VM busy and freshen lastMessageAt BEFORE the (possibly long) turn so
-  // the reaper neither reaps it mid-flight (busyVms guard) nor in the brief gap
-  // right after pickOrSpawn (lastMessageAt bump). Cleared in finally so a thrown
-  // turn doesn't pin the VM busy forever.
-  busyVms.add(worker.id);
-  await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: new Date() } }).catch(() => {});
-  let reply: string;
-  try {
-    const stream = await openAgentChunkStream(
-      {
+  const content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
+  let placed = await pickOrSpawn(ctx, pool, msg.groupId);
+  let reply = "";
+  // Turn loop with self-heal: if the worker's box is DEAD (host unreachable / VM
+  // gone via crash/restart/TTL — not a manual delete), mark it "lost" and
+  // re-place ONCE on a fresh VM (memory restored from the externalized blob). A
+  // legitimate AI error rethrows. One retry max — never respawn-loop.
+  for (let attempt = 1; ; attempt++) {
+    const worker = placed.vm;
+    const turnStart = Date.now();
+    // Mark the VM busy and freshen lastMessageAt BEFORE the (possibly long) turn
+    // so the reaper neither reaps it mid-flight (busyVms guard) nor in the brief
+    // gap right after pickOrSpawn (lastMessageAt bump). Cleared in finally so a
+    // thrown turn doesn't pin the VM busy forever.
+    busyVms.add(worker.id);
+    try {
+      await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: new Date() } }).catch(() => {});
+      const stream = await openAgentChunkStream(
+        {
+          agentId: worker.id,
+          ownerId: worker.ownerId,
+          sandboxId: worker.sandboxId,
+          protocol: worker.protocol ?? "sse",
+          port: worker.port ?? 3000,
+          messagePath: worker.messagePath ?? "/message",
+          acpSessionId: worker.acpSessionId,
+          acpTransportSessionId: worker.acpTransportSessionId,
+          embedToken: worker.embedToken,
+          template: worker.template,
+        },
+        { content, sessionId: placed.sessionUuid }
+      );
+      reply = await collectStream(stream);
+      auditLog("turn.ok", {
+        groupId: msg.groupId,
         agentId: worker.id,
-        ownerId: worker.ownerId,
-        sandboxId: worker.sandboxId,
-        protocol: worker.protocol ?? "sse",
-        port: worker.port ?? 3000,
-        messagePath: worker.messagePath ?? "/message",
-        acpSessionId: worker.acpSessionId,
-        acpTransportSessionId: worker.acpTransportSessionId,
-        embedToken: worker.embedToken,
-        template: worker.template,
-      },
-      { content: bareCompact ? "/compact" : formatContent(msg), sessionId: sessionUuid } // stable UUID → per-conversation .jsonl transcript
-    );
-    reply = await collectStream(stream);
-  } finally {
-    busyVms.delete(worker.id);
+        turnMs: Date.now() - turnStart,
+        replyLen: reply.length,
+        attempt,
+      });
+      break;
+    } catch (e) {
+      if (attempt >= 2 || !isBoxDeadError(e)) throw e;
+      auditLog("turn.boxdead", {
+        groupId: msg.groupId,
+        agentId: worker.id,
+        err: e instanceof Error ? e.message : String(e),
+      });
+      await markWorkerLost(worker.id);
+      placed = await pickOrSpawn(ctx, pool, msg.groupId); // fresh box, restores memory
+    } finally {
+      busyVms.delete(worker.id);
+    }
   }
   if (bareCompact && !reply) reply = "🧹 Contexto compactado.";
 
   const now = new Date();
-  await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: now } });
+  await db.agent.update({ where: { id: placed.vm.id }, data: { lastMessageAt: now } });
   await db.poolRoute.update({
     where: { poolId_groupId: { poolId: pool.id, groupId: msg.groupId } },
     data: { lastMessageAt: now },
@@ -601,6 +676,7 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
       }
     }
   }
+  if (suspended || destroyed) auditLog("reaper", { suspended, destroyed, busy: busy.length });
   return { suspended, destroyed };
 }
 
