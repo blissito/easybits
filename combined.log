@@ -12,3 +12,12 @@
 {"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines,files","timestamp":"2026-06-24T13:53:39.134Z"}
 {"level":"info","message":"[delegation] revoke account=owner1 grantee=grantee1 email=fixtergeek@gmail.com remaining=machines","timestamp":"2026-06-24T13:53:39.135Z"}
 {"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-24T13:53:39.135Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T01:11:35.555Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T01:11:35.556Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T01:11:35.557Z"}
+{"level":"info","message":"[delegation] grant updated account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines,files","timestamp":"2026-06-25T01:11:35.558Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T01:11:35.561Z"}
+{"level":"info","message":"[delegation] revoke(all) account=owner1 grantee=grantee1 email=fixtergeek@gmail.com","timestamp":"2026-06-25T01:11:35.561Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines,files","timestamp":"2026-06-25T01:11:35.561Z"}
+{"level":"info","message":"[delegation] revoke account=owner1 grantee=grantee1 email=fixtergeek@gmail.com remaining=machines","timestamp":"2026-06-25T01:11:35.562Z"}
+{"level":"info","message":"[delegation] grant created account=owner1 grantee=grantee1 email=fixtergeek@gmail.com scopes=machines","timestamp":"2026-06-25T01:11:35.562Z"}
