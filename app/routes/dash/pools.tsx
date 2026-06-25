@@ -4,7 +4,7 @@ import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
 import { Switch } from "~/components/forms/Switch";
-import { PLANS, getUserPlan, NEXT_PLAN } from "~/lib/plans";
+import { PLANS, getUserPlan, getPoolBox, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
@@ -76,7 +76,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   // agents (workers), so agent capacity = maxMachines × maxWorkersPerVm.
   const plan = getUserPlan(user);
   const planCfg = PLANS[plan];
-  const maxWorkersPerVm = pools[0]?.maxWorkersPerVm ?? 2;
+  // Tamaño de caja DERIVADO DEL PLAN (fuente única). Si ya hay pool, su config
+  // real manda; si no, caemos al tamaño del plan (no a un fallback "byte" fijo).
+  const box = getPoolBox(plan);
+  const maxWorkersPerVm = pools[0]?.maxWorkersPerVm ?? box.agentsPerBox;
   // Reserved capacity bought in /dash/packs raises the budget on top of the
   // plan: +1 machine slot and +`agents` agent slots per active reservation.
   const reserved = await getReservedCapacity(user.id);
@@ -104,9 +107,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     planName: planCfg.name,
     nextPlan: NEXT_PLAN[plan] ?? null,
     maxWorkersPerVm,
-    vmMemMb: pools[0]?.vmMemMb ?? 512,
+    vmMemMb: pools[0]?.vmMemMb ?? box.vmMemMb,
     // vCPU por sandbox — misma regla que spawnVm (≤512MB → 1, si no 2).
-    vcpus: (pools[0]?.vmMemMb ?? 512) <= 512 ? 1 : 2,
+    vcpus: (pools[0]?.vmMemMb ?? box.vmMemMb) <= 512 ? 1 : 2,
     reservedMachines: reserved.machines,
     // Agents running RIGHT NOW = sum of workers inside active VMs (coherent with
     // "VMs contain agents"); idle/detached routes don't count until re-spawned.

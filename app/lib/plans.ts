@@ -154,6 +154,24 @@ export function isPaidPlan(plan: PlanKey): boolean {
   return PLANS[plan].price > 0;
 }
 
+/**
+ * Tamaño de la caja (sandbox worker) del pool, DERIVADO DEL PLAN — fuente única.
+ * Unificado y simple a propósito: solo dos tamaños. Byte = caja chica (512MB/1vCPU,
+ * NO caben sandboxes de llamada/voz → `calls:false`). Planes de pago = caja estándar
+ * (2GB/2vCPU, sí caben → `calls:true`). El tier escala el NÚMERO de cajas
+ * (`concurrentSandboxes`), NO el tamaño. Esto evita el "byte fallback" del HUD y da
+ * un guard simple (`getPoolBox(plan).calls`) para cajas pesadas.
+ */
+export function getPoolBox(plan: PlanKey): {
+  vmMemMb: number;
+  vcpu: number;
+  agentsPerBox: number;
+  calls: boolean;
+} {
+  if (plan === "Byte") return { vmMemMb: 512, vcpu: 1, agentsPerBox: 2, calls: false };
+  return { vmMemMb: 2048, vcpu: 2, agentsPerBox: 4, calls: true };
+}
+
 /** Next plan for upsell (null if highest) */
 export const NEXT_PLAN: Partial<Record<PlanKey, PlanKey>> = { Byte: "Mega", Mega: "Tera" };
 
