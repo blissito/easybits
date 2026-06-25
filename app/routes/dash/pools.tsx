@@ -163,6 +163,11 @@ export async function action({ request }: Route.ActionArgs) {
     await deletePool(ctx, poolId);
     return data({ ok: true, deleted: true });
   }
+  if (intent === "rename") {
+    const name = String(fd.get("name") || "").trim();
+    await db.pool.update({ where: { id: poolId }, data: { name: name || null } });
+    return data({ ok: true });
+  }
   if (intent === "toggle-group") {
     const groupId = String(fd.get("groupId") || "");
     const on = String(fd.get("on") || "") === "1";
@@ -364,6 +369,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   );
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!polling) return;
     const t = setInterval(() => rev.revalidate(), 2500);
@@ -448,16 +457,41 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         {pools.map((p) => {
           const st = STATUS[p.status as keyof typeof STATUS] ?? STATUS.disconnected;
           const stale = p.status === "connected" && !p.live;
+          // Forzar abierto durante flujos de conexión (QR/pairing) para no esconder el código.
+          const inFlow = p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing" || !!p.qrDataUrl || !!p.pairingCode;
+          const isOpen = (expanded[p.id] ?? false) || inFlow;
+          // Optimistic name: muestra el valor recién escrito hasta que el loader se ponga al día.
+          const displayName = (optimisticNames[p.id] ?? p.name) || "";
           return (
             <div key={p.id} className="border-2 border-black rounded-xl p-4 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <div className="font-bold">{p.name || "Sin nombre"}</div>
-                <span className="flex items-center gap-2 text-sm font-semibold">
+              <div className="w-full flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <button type="button" onClick={() => !inFlow && setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
+                    className={`shrink-0 ${inFlow ? "cursor-default" : ""}`} aria-label={isOpen ? "Contraer" : "Expandir"}>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""} ${inFlow ? "opacity-0" : ""}`}
+                      viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" /></svg>
+                  </button>
+                  {editingName === p.id ? (
+                    <input autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
+                      onBlur={() => { const v = draftName.trim(); if (v !== displayName) { setOptimisticNames((s) => ({ ...s, [p.id]: v })); fetcher.submit({ intent: "rename", poolId: p.id, name: v }, { method: "post" }); } setEditingName(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingName(null); }}
+                      placeholder="Sin nombre"
+                      className="font-bold border-b-2 border-brand-500 bg-transparent outline-none min-w-0 flex-1 px-0.5" />
+                  ) : (
+                    <button type="button" title="Clic para renombrar"
+                      onClick={() => { setEditingName(p.id); setDraftName(displayName); }}
+                      className="font-bold truncate text-left hover:underline decoration-dotted underline-offset-4">
+                      {displayName || "Sin nombre"}
+                    </button>
+                  )}
+                </div>
+                <span className="flex items-center gap-2 text-sm font-semibold shrink-0">
                   <span className={`w-2.5 h-2.5 rounded-full ${stale ? "bg-orange-400" : st.dot}`} />
                   {stale ? "Reconectando…" : st.label}
                 </span>
               </div>
 
+              {isOpen && (<>
               {p.qrDataUrl && (
                 <div className="mt-4 flex flex-col items-center">
                   <img src={p.qrDataUrl} alt="QR de WhatsApp" className="w-56 h-56" />
@@ -536,11 +570,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </button>
                 )}
                 <button disabled={isBusy("delete", p.id)}
-                  onClick={() => { if (confirm(`¿Borrar el agente "${p.name || "Sin nombre"}"? Se destruyen sus sandboxes y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
+                  onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
                   className="ml-auto border-2 border-red-300 text-red-600 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
                   {isBusy("delete", p.id) ? <Spinner /> : "Borrar"}
                 </button>
               </div>
+              </>)}
             </div>
           );
         })}
