@@ -38,7 +38,10 @@ export async function cancelReservationBySubscription(stripeSubscriptionId: stri
   });
 }
 
-/** Sum of an owner's ACTIVE reservations → extra machine + agent budget. */
+/** Sum of an owner's ACTIVE reservations → extra machine + agent budget.
+ * Capacity is bought in flat boxes (4 agents = 1 pool VM), so a single row may
+ * cover several boxes. Machines are derived from agents (ceil ÷ 4) rather than
+ * row count, which keeps the VM budget correct for multi-box purchases. */
 export async function getReservedCapacity(
   ownerId: string,
 ): Promise<{ machines: number; agents: number }> {
@@ -46,8 +49,7 @@ export async function getReservedCapacity(
     where: { ownerId, status: "active" },
     select: { agents: true },
   });
-  return {
-    machines: rows.length,
-    agents: rows.reduce((sum, r) => sum + r.agents, 0),
-  };
+  const agents = rows.reduce((sum, r) => sum + r.agents, 0);
+  const machines = rows.reduce((sum, r) => sum + Math.ceil(r.agents / 4), 0);
+  return { machines, agents };
 }

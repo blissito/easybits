@@ -46,6 +46,16 @@ export class PoolRateLimited extends Error {
   }
 }
 
+// ── In-flight turn guard ──────────────────────────────────────────────────────
+// VMs currently servicing a turn (working, or waiting on tools/subagents that
+// emit no chunks). The reaper measures idle by lastMessageAt, which is only
+// bumped AFTER a turn completes — so a turn longer than idleSuspendMin/destroyIdleMin
+// (2/3 min by default) would otherwise be suspended/destroyed mid-flight, cutting
+// the SSE stream and leaving the user with silence. In-memory is correct here:
+// the Baileys surface + reaper run in the SAME single-instance process (same
+// constraint as placeLocks). Keyed by Agent.id.
+const busyVms = new Set<string>();
+
 // ── In-process placement mutex ────────────────────────────────────────────────
 // The Baileys surface is single-instance (accepted constraint), so an in-memory
 // lock is a correct serialization point. Used to serialize the capacity decision
@@ -243,7 +253,10 @@ function workersOnVm(agentId: string): Promise<number> {
 }
 
 // Spawn a fresh VM for the pool, branded from persona, RAM-gated.
-async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null }) {
+const appBaseUrl = () =>
+  (process.env.BASE_URL || process.env.EASYBITS_URL || process.env.SITE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
+
+async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string }) {
   // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
   // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
   // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
@@ -278,6 +291,12 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
     const oauth = await getSecretValue(ctx.user.id, secretName).catch(() => null);
     if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
   }
+  // WhatsApp action callback — lets the worker's in-process `wa` MCP send polls/
+  // reactions/locations/files into the chat via the shared Baileys socket. The
+  // worker authenticates with the pool token; the endpoint resolves sessionId →
+  // group and gates elevated actions by mainGroupJid.
+  env.POOL_TOKEN = pool.token;
+  env.POOL_WA_ACTION_URL = `${appBaseUrl()}/api/v2/pools/wa-action`;
   // TODO(multi-box): target.url must drive createSandbox/callHost; today it uses
   // the single SANDBOX_HOST_URL, so target is recorded but not yet routed.
   const created = await createAgent(ctx, {
@@ -397,6 +416,29 @@ function formatContent(msg: InboundMessage): string {
   return lines.join(" ").trim();
 }
 
+// Session command — `/clear` (and aliases) resets a group's conversation: drops
+// the externalized memory blob, wipes the workspace on a live VM, and rotates the
+// sessionUuid so the NEXT message starts a brand-new conversation. Mirrors
+// nanoclaw's /clear ("Sesión limpia. 🧹"). The durable PoolMessage audit log is
+// intentionally kept (it's not fed back to the worker's memory).
+async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: string): Promise<string> {
+  const route = await db.poolRoute.findUnique({ where: { poolId_groupId: { poolId: pool.id, groupId } } });
+  if (route) {
+    await memClient().deleteObject(memKey(pool.id, route.sessionUuid)).catch(() => {});
+    if (route.agentId) {
+      const vm = await db.agent.findUnique({ where: { id: route.agentId } });
+      if (vm?.status === "running") {
+        await execCommand(ctx, vm.sandboxId, {
+          command: `rm -rf /data/workspaces/${route.sessionUuid} /data/.claude/projects/-data-workspaces-${route.sessionUuid}`,
+          timeoutSeconds: 30,
+        }).catch(() => {});
+      }
+    }
+    await db.poolRoute.update({ where: { id: route.id }, data: { sessionUuid: randomUUID() } });
+  }
+  return "Sesión limpia. 🧹";
+}
+
 // MAIN ENTRY — the Baileys surface calls this per inbound group message.
 // Returns the agent's reply text (to send back to the group).
 export async function routeMessage(poolId: string, msg: InboundMessage): Promise<string> {
@@ -411,27 +453,50 @@ export async function routeMessage(poolId: string, msg: InboundMessage): Promise
     throw new PoolRateLimited(`group ${msg.groupId} rate limited (retry ${rl.retryAfterS}s)`);
   }
 
+  // Session commands — intercept before spawning work / logging.
+  //  - /clear|/nueva|/reset: pool-state reset (no worker turn).
+  //  - /compact: forward the BARE "/compact" (no sender prefix) so the Agent SDK
+  //    recognizes its built-in slash command and compacts the transcript.
+  const cmd = msg.text.trim().toLowerCase();
+  if (cmd === "/clear" || cmd === "/nueva" || cmd === "/reset") {
+    return clearGroupSession(ctx, pool, msg.groupId);
+  }
+  const bareCompact = cmd === "/compact";
+
   await db.poolMessage.create({
     data: { poolId: pool.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
   });
 
   const { vm: worker, sessionUuid } = await pickOrSpawn(ctx, pool, msg.groupId);
-  const stream = await openAgentChunkStream(
-    {
-      agentId: worker.id,
-      ownerId: worker.ownerId,
-      sandboxId: worker.sandboxId,
-      protocol: worker.protocol ?? "sse",
-      port: worker.port ?? 3000,
-      messagePath: worker.messagePath ?? "/message",
-      acpSessionId: worker.acpSessionId,
-      acpTransportSessionId: worker.acpTransportSessionId,
-      embedToken: worker.embedToken,
-      template: worker.template,
-    },
-    { content: formatContent(msg), sessionId: sessionUuid } // stable UUID → per-conversation .jsonl transcript
-  );
-  const reply = await collectStream(stream);
+
+  // Mark the VM busy and freshen lastMessageAt BEFORE the (possibly long) turn so
+  // the reaper neither reaps it mid-flight (busyVms guard) nor in the brief gap
+  // right after pickOrSpawn (lastMessageAt bump). Cleared in finally so a thrown
+  // turn doesn't pin the VM busy forever.
+  busyVms.add(worker.id);
+  await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: new Date() } }).catch(() => {});
+  let reply: string;
+  try {
+    const stream = await openAgentChunkStream(
+      {
+        agentId: worker.id,
+        ownerId: worker.ownerId,
+        sandboxId: worker.sandboxId,
+        protocol: worker.protocol ?? "sse",
+        port: worker.port ?? 3000,
+        messagePath: worker.messagePath ?? "/message",
+        acpSessionId: worker.acpSessionId,
+        acpTransportSessionId: worker.acpTransportSessionId,
+        embedToken: worker.embedToken,
+        template: worker.template,
+      },
+      { content: bareCompact ? "/compact" : formatContent(msg), sessionId: sessionUuid } // stable UUID → per-conversation .jsonl transcript
+    );
+    reply = await collectStream(stream);
+  } finally {
+    busyVms.delete(worker.id);
+  }
+  if (bareCompact && !reply) reply = "🧹 Contexto compactado.";
 
   const now = new Date();
   await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: now } });
@@ -459,6 +524,10 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
   let suspended = 0;
   let destroyed = 0;
   const now = Date.now();
+  // Never reap a VM mid-turn (working / waiting on tools / subagents). The query
+  // filters by id ∉ busy so an in-flight turn is exempt regardless of how stale
+  // its lastMessageAt looks (it only refreshes at turn completion).
+  const busy = [...busyVms];
   const pools = await db.pool.findMany();
   for (const pool of pools) {
     const suspendCutoff = new Date(now - pool.idleSuspendMin * 60_000);
@@ -468,7 +537,12 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
 
     // Stage 2 — destroy long-idle VMs (running or already-suspended).
     const toDestroy = await db.agent.findMany({
-      where: { poolId: pool.id, status: { in: ["running", "suspended"] }, lastMessageAt: { lt: destroyCutoff } },
+      where: {
+        poolId: pool.id,
+        status: { in: ["running", "suspended"] },
+        lastMessageAt: { lt: destroyCutoff },
+        id: { notIn: busy },
+      },
     });
     for (const w of toDestroy) {
       try {
@@ -493,7 +567,12 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
 
     // Stage 1 — suspend the 5–10min idle band (running VMs not just destroyed).
     const toSuspend = await db.agent.findMany({
-      where: { poolId: pool.id, status: "running", lastMessageAt: { lt: suspendCutoff } },
+      where: {
+        poolId: pool.id,
+        status: "running",
+        lastMessageAt: { lt: suspendCutoff },
+        id: { notIn: busy },
+      },
     });
     for (const w of toSuspend) {
       try {
@@ -550,6 +629,7 @@ const GHOSTY_SYSTEM = [
   "Eres Ghosty, el asistente de EasyBits que atiende por WhatsApp.",
   "Responde SIEMPRE en español, claro y breve, con tono cálido y directo.",
   "Tienes acceso a las herramientas de EasyBits vía MCP (server `easybits`): puedes crear y editar documentos, generar imágenes, subir/leer archivos, crear sitios y más. Úsalas cuando ayuden; no inventes que no puedes.",
+  "Para WhatsApp tienes el server MCP `wa`: cuando generes un archivo (PDF, imagen) súbelo a easybits y mándalo al chat con `wa send_message` (url) como ADJUNTO — no pegues solo el link. También puedes mandar encuestas (`wa send_poll`), reaccionar (`wa react_message`) y enviar ubicaciones (`wa send_location`).",
   "Si te piden algo fuera de tu alcance, dilo con honestidad y ofrece la mejor alternativa.",
 ].join(" ");
 const GHOSTY_PERSONA = { name: "Ghosty", env: { ASSISTANT_NAME: "Ghosty", SYSTEM_PROMPT: GHOSTY_SYSTEM } };

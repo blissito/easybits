@@ -63,6 +63,23 @@ export const HOSTING_CATALOG: Record<TierKey, HostingTier> = {
   "performance-4x":{ key: "performance-4x",  vcpus: 16, memoryMb: 32768, diskMb: 262144, priceShared: 4980, priceReserved: 12450, minPlan: "Tera" },
 };
 
+/**
+ * Pool capacity box — the ONLY buyable unit in the "Sandboxes" tab.
+ *
+ * The pool is flat: capacity grows in identical boxes, you just pick how many.
+ * One box = one pool VM (2 vCPU / 2 GB) running 4 agents (2 pairs). Reserved
+ * capacity is therefore always a multiple of these, so `machines = agents / 4`.
+ */
+export const POOL_BOX = {
+  key: "box",
+  agents: 4,
+  vcpus: 2,
+  memoryMb: 2048,
+  diskMb: 16384,
+  priceMxn: 299, // MXN/month per box
+  minPlan: "Mega" as PlanKey,
+} as const;
+
 /** Legacy s/m/l/xl → catalog tier. Kept while migrating sandbox callers. */
 export const SIZE_ALIASES: Record<"s" | "m" | "l" | "xl", TierKey> = {
   s: "micro",

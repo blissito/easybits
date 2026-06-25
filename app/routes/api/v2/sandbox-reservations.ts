@@ -1,24 +1,23 @@
 import { data } from "react-router";
 import type { Route } from "./+types/sandbox-reservations";
 import { getUserOrRedirect } from "~/.server/getters";
-import { getUserPlan, isPaidPlan, type PlanKey } from "~/lib/plans";
-import { resolveTier } from "~/lib/hostingCatalog";
+import { getUserPlan, isPaidPlan } from "~/lib/plans";
+import { POOL_BOX } from "~/lib/hostingCatalog";
 import { createSandboxReservationCheckout } from "~/.server/stripe";
-import { agentsForMemory } from "~/.server/core/sandboxReservations";
-
-const PLAN_RANK: Record<PlanKey, number> = { Byte: 0, Mega: 1, Tera: 2 };
 
 /**
- * Create a Stripe Checkout session to RESERVE pool capacity for a tier.
- * Returns `{ url }` to redirect to; provisioning is the webhook's job after
- * payment succeeds. NO sandbox is created here (purchase-first, not create-first).
+ * Create a Stripe Checkout session to RESERVE pool capacity.
+ *
+ * The pool is flat: capacity is bought in identical boxes (see POOL_BOX). The
+ * client sends how many boxes (`quantity`); we bill that many and grant
+ * `4 × quantity` agent slots. Returns `{ url }` to redirect to; provisioning is
+ * the webhook's job after payment succeeds (purchase-first, not create-first).
  */
 export async function action({ request }: Route.ActionArgs) {
   const user = await getUserOrRedirect(request);
-  const { tier: tierKey } = (await request.json().catch(() => ({}))) as { tier?: string };
+  const body = (await request.json().catch(() => ({}))) as { quantity?: number };
 
-  const tier = resolveTier(String(tierKey ?? ""));
-  if (!tier) return data({ error: `Tier desconocido: "${tierKey}".` }, { status: 400 });
+  const quantity = Math.min(50, Math.max(1, Math.round(Number(body.quantity) || 1)));
 
   const plan = getUserPlan(user);
   if (!isPaidPlan(plan)) {
@@ -27,20 +26,14 @@ export async function action({ request }: Route.ActionArgs) {
       { status: 403 },
     );
   }
-  if (PLAN_RANK[plan] < PLAN_RANK[tier.minPlan]) {
-    return data(
-      { error: `El tier "${tier.key}" requiere el plan ${tier.minPlan} o superior.` },
-      { status: 403 },
-    );
-  }
 
-  const agents = agentsForMemory(tier.memoryMb);
+  const agents = POOL_BOX.agents * quantity;
   const url = await createSandboxReservationCheckout({
     userId: user.id,
     email: user.email,
-    tier: tier.key,
-    label: tier.key,
-    priceMxn: tier.priceShared,
+    tier: POOL_BOX.key,
+    quantity,
+    priceMxn: POOL_BOX.priceMxn,
     agents,
   });
   return data({ url });

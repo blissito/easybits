@@ -193,6 +193,7 @@ export default [
     route("agents/:id/whatsapp/unlink", "routes/api/v2/agent-whatsapp-unlink.ts"),
     // Pool — superficie WhatsApp always-on que rutea a workers efímeros
     route("pools", "routes/api/v2/pools.ts"),
+    route("pools/wa-action", "routes/api/v2/pools.wa-action.ts"),
     route("pool/:poolId/message", "routes/api/v2/pool.$poolId.message.ts"),
     route("pool/:poolId/connect", "routes/api/v2/pool.$poolId.connect.ts"),
     // WhatsApp Business Cloud API (Meta) — webhook de verificación + eventos

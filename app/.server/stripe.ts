@@ -144,15 +144,18 @@ export const createSandboxReservationCheckout = async ({
   userId,
   email,
   tier,
-  label,
+  quantity,
   priceMxn,
   agents,
 }: {
   userId: string;
   email: string;
   tier: string;
-  label: string;
+  /** Number of identical pool boxes to bill. */
+  quantity: number;
+  /** Price per box (MXN/month). */
   priceMxn: number;
+  /** Total agent slots granted (4 × quantity). */
   agents: number;
 }) => {
   const metadata = { type: "reserved_sandbox", userId, tier, agents: String(agents) };
@@ -165,11 +168,11 @@ export const createSandboxReservationCheckout = async ({
       {
         price_data: {
           currency: "mxn",
-          product_data: { name: `Sandbox reservado — ${label} (${agents} agentes)` },
+          product_data: { name: `Caja del pool (${agents / quantity} agentes c/u)` },
           recurring: { interval: "month" },
           unit_amount: priceMxn * 100, // centavos
         },
-        quantity: 1,
+        quantity,
       },
     ],
     success_url: `${location}/dash/packs?success=1&tab=sandboxes`,
