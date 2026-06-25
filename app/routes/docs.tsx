@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router";
 import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { POOL_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
 
@@ -1466,18 +1466,11 @@ console.log(status.result);  // resultado final del agente`} />
               Tu <strong>flota</strong> es un grupo de agentes Ghosty que atienden tus grupos de WhatsApp <strong>24/7</strong>. Respondes a tus clientes al instante, sin contratar a nadie y sin dejar a nadie esperando. Conectas tu WhatsApp una vez y eliges en qué grupos contesta.
             </p>
 
-            {/* Captura de la UI de /dash/flota. Si el PNG no existe aún, el <img>
-                se auto-oculta (onError) para no mostrar imagen rota en prod. */}
-            <figure className="mb-6">
-              <img
-                src="/images/flota-ui.png"
-                alt="Panel de Flota en el dashboard: capacidad, agentes conectados y grupos de WhatsApp que atiende cada uno"
-                loading="lazy"
-                onError={(e) => { (e.currentTarget.closest("figure") as HTMLElement).style.display = "none"; }}
-                className="w-full rounded-xl border-2 border-black"
-              />
-              <figcaption className="text-xs text-gray-500 mt-2 text-center">El panel de Flota en <code className="bg-gray-100 px-1 rounded">/dash/flota</code>: capacidad, agentes conectados y los grupos que atiende cada uno.</figcaption>
-            </figure>
+            <DocScreenshot
+              src="/images/flota-ui.png"
+              alt="Panel de Flota en el dashboard: capacidad, agentes conectados y grupos de WhatsApp que atiende cada uno"
+              caption={<>El panel de Flota en <code className="bg-gray-100 px-1 rounded">/dash/flota</code>: capacidad, agentes conectados y los grupos que atiende cada uno.</>}
+            />
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
               ¿Prefieres UI? Administra tu flota desde el dashboard en{" "}
@@ -1928,6 +1921,32 @@ const LANG_MAP: Record<string, string> = {
   json: "json",
   install: "bash",
 };
+
+// Captura de UI SSR-safe: el <figure> arranca OCULTO y solo se revela cuando la
+// imagen carga de verdad (onLoad o, si ya estaba completa al hidratar, el effect).
+// Si el PNG falta (404) nunca se revela → cero imagen rota en prod. onError aquí
+// es insuficiente solo porque el evento puede dispararse antes de hidratar.
+function DocScreenshot({ src, alt, caption }: { src: string; alt: string; caption: React.ReactNode }) {
+  const ref = useRef<HTMLImageElement>(null);
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    const img = ref.current;
+    if (img && img.complete && img.naturalWidth > 0) setOk(true);
+  }, []);
+  return (
+    <figure className="mb-6" style={{ display: ok ? undefined : "none" }}>
+      <img
+        ref={ref}
+        src={src}
+        alt={alt}
+        onLoad={() => setOk(true)}
+        onError={() => setOk(false)}
+        className="w-full rounded-xl border-2 border-black"
+      />
+      <figcaption className="text-xs text-gray-500 mt-2 text-center">{caption}</figcaption>
+    </figure>
+  );
+}
 
 function TabbedCode({ tabs }: { tabs: { label: string; code: string }[] }) {
   const [active, setActive] = useState(0);
