@@ -9,7 +9,7 @@ import { PLANS, getUserPlan, getPoolBox, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
-import { createPool, deletePool } from "~/.server/core/poolOperations";
+import { createPool, deletePool, type McpCatalogEntry, type GroupConfig } from "~/.server/core/poolOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import {
@@ -44,7 +44,18 @@ export async function loader({ request }: Route.LoaderArgs) {
       const pairingCode = !connectedNow ? ((b as any).pairingCode as string | undefined) ?? null : null;
       // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
       // activity even if metadata sync hasn't listed them yet.
-      const groups = await listPoolGroups(p.id);
+      const rawGroups = await listPoolGroups(p.id);
+      // Per-group MCP config + key status for the admin UI. customMcps = the
+      // toggleable (non-builtin) catalog entries; builtins are always-on.
+      const catalog = (p.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+      const customMcps = catalog.filter((e) => !e.builtin).map((e) => ({ name: e.name, label: e.label ?? e.name }));
+      const gconf = (p.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+      const gkeys = (p.groupKeys as Record<string, string> | null) ?? {};
+      const groups = rawGroups.map((g: { id: string; subject: string; enabled: boolean }) => ({
+        ...g,
+        mcps: gconf[g.id]?.mcpServers ?? [],
+        hasKey: Boolean(gkeys[g.id]),
+      }));
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
@@ -69,7 +80,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
-        hasOwnNumber: p.hasOwnNumber,
+        hasOwnNumber: p.hasOwnNumber, customMcps,
       };
     })
   );
@@ -250,6 +261,68 @@ export async function action({ request }: Route.ActionArgs) {
       return data({ error: "el grupo main debe estar activo" }, { status: 400 });
     }
     await db.pool.update({ where: { id: poolId }, data: { mainGroupJid: mainNext } });
+    return data({ ok: true });
+  }
+  if (intent === "set-group-key") {
+    // The per-group org/MCP key (denik) — injected per turn by routeMessage.
+    const groupId = String(fd.get("groupId") || "");
+    const key = String(fd.get("key") || "").trim();
+    const keys = { ...((pool.groupKeys as Record<string, string> | null) ?? {}) };
+    if (key) keys[groupId] = key;
+    else delete keys[groupId];
+    await db.pool.update({ where: { id: poolId }, data: { groupKeys: keys } });
+    return data({ ok: true });
+  }
+  if (intent === "toggle-group-mcp") {
+    // Enable/disable a CUSTOM catalog MCP for one group.
+    const groupId = String(fd.get("groupId") || "");
+    const name = String(fd.get("mcp") || "");
+    const on = String(fd.get("on") || "") === "1";
+    const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    if (!catalog.some((e) => e.name === name && !e.builtin)) {
+      return data({ error: "MCP no está en el catálogo o es builtin" }, { status: 400 });
+    }
+    const configs = { ...((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const set = new Set(cur.mcpServers ?? []);
+    if (on) set.add(name);
+    else set.delete(name);
+    configs[groupId] = { ...cur, mcpServers: [...set] };
+    await db.pool.update({ where: { id: poolId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "add-mcp") {
+    // Register a new CUSTOM MCP in the agent's catalog. stdio (npx package) or http.
+    const name = String(fd.get("name") || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    const label = String(fd.get("label") || "").trim() || name;
+    const pkg = String(fd.get("pkg") || "").trim(); // stdio npm package
+    const url = String(fd.get("url") || "").trim(); // http endpoint
+    if (!name) return data({ error: "nombre requerido" }, { status: 400 });
+    const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    if (catalog.some((e) => e.name === name)) return data({ error: "ya existe ese MCP" }, { status: 400 });
+    if (!pkg && !url) return data({ error: "da un paquete npm (stdio) o una URL (http)" }, { status: 400 });
+    const entry: McpCatalogEntry = url
+      ? { name, label, transport: "http", url }
+      : { name, label, transport: "stdio", command: "npx", args: ["-y", pkg] };
+    await db.pool.update({ where: { id: poolId }, data: { mcpCatalog: [...catalog, entry] } });
+    return data({ ok: true });
+  }
+  if (intent === "remove-mcp") {
+    const name = String(fd.get("name") || "");
+    const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    const target = catalog.find((e) => e.name === name);
+    if (!target) return data({ error: "no existe" }, { status: 404 });
+    if (target.builtin) return data({ error: "no se puede quitar un MCP builtin" }, { status: 400 });
+    // Drop it from every group's selection too, so no stale reference lingers.
+    const configs = { ...((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    for (const jid of Object.keys(configs)) {
+      const list = configs[jid].mcpServers;
+      if (list?.includes(name)) configs[jid] = { ...configs[jid], mcpServers: list.filter((n) => n !== name) };
+    }
+    await db.pool.update({
+      where: { id: poolId },
+      data: { mcpCatalog: catalog.filter((e) => e.name !== name), groupConfigs: configs },
+    });
     return data({ ok: true });
   }
   if (intent === "toggle-own-number") {
@@ -526,6 +599,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   );
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
+  const [showGroupCfg, setShowGroupCfg] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -688,22 +762,69 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     const active = p.groups.filter((g) => g.enabled);
                     const others = p.groups.filter((g) => !g.enabled);
                     const open = showAllGroups[p.id] ?? false;
-                    const GroupRow = (g: { id: string; subject: string; enabled: boolean }) => {
+                    const GroupRow = (g: { id: string; subject: string; enabled: boolean; mcps: string[]; hasKey: boolean }) => {
                       const isMain = p.mainGroupJid === g.id;
+                      const cfgKey = `${p.id}:${g.id}`;
+                      const cfgOpen = showGroupCfg[cfgKey] ?? false;
                       return (
-                      <motion.div key={g.id} layout className="flex items-center justify-between gap-2"
+                      <motion.div key={g.id} layout className="flex flex-col gap-1"
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                         transition={{ type: "spring", stiffness: 500, damping: 34 }}>
-                        <Switch value={g.enabled} label={g.subject}
-                          className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
-                          onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
-                        {g.enabled && (
-                          <button type="button"
-                            title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
-                            onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
-                            className={`shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded ${isMain ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
-                            {isMain ? "★ main" : "☆"}
-                          </button>
+                        <div className="flex items-center justify-between gap-2">
+                          <Switch value={g.enabled} label={g.subject}
+                            className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
+                            onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
+                          {g.enabled && (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button type="button"
+                                title="Configurar key + MCPs de este grupo"
+                                onClick={() => setShowGroupCfg((s) => ({ ...s, [cfgKey]: !cfgOpen }))}
+                                className={`text-xs font-semibold px-1.5 py-0.5 rounded ${cfgOpen || g.hasKey || g.mcps.length ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
+                                ⚙{g.mcps.length ? ` ${g.mcps.length}` : ""}
+                              </button>
+                              <button type="button"
+                                title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
+                                onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
+                                className={`text-xs font-semibold px-1.5 py-0.5 rounded ${isMain ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
+                                {isMain ? "★ main" : "☆"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {g.enabled && cfgOpen && (
+                          <div className="ml-1 pl-3 border-l-2 border-gray-200 flex flex-col gap-2 pb-1">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[11px] text-gray-500 font-semibold">Key del org (denik) — aísla este grupo a su organización</span>
+                              <input type="password" autoComplete="off"
+                                defaultValue=""
+                                placeholder={g.hasKey ? "•••••••• (asignada — escribe para cambiar)" : "dnk_… (opcional)"}
+                                className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm font-mono"
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (!v) return;
+                                  fetcher.submit({ intent: "set-group-key", poolId: p.id, groupId: g.id, key: v }, { method: "post" });
+                                  e.target.value = "";
+                                }} />
+                              {g.hasKey && (
+                                <button type="button" className="self-start text-[11px] text-red-500 hover:underline"
+                                  onClick={() => fetcher.submit({ intent: "set-group-key", poolId: p.id, groupId: g.id, key: "" }, { method: "post" })}>
+                                  quitar key
+                                </button>
+                              )}
+                            </label>
+                            {p.customMcps.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[11px] text-gray-500 font-semibold">MCPs activos en este grupo</span>
+                                {p.customMcps.map((m) => (
+                                  <Switch key={m.name} value={g.mcps.includes(m.name)} label={m.label}
+                                    className="text-xs items-center"
+                                    onChange={(on) => fetcher.submit({ intent: "toggle-group-mcp", poolId: p.id, groupId: g.id, mcp: m.name, on: on ? "1" : "0" }, { method: "post" })} />
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-gray-400">easybits y WhatsApp siempre activos. Agrega MCPs custom al catálogo abajo para activarlos por grupo.</span>
+                            )}
+                          </div>
                         )}
                       </motion.div>
                       );
@@ -726,6 +847,40 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   {p.enabledCount === 0 && p.groups.length > 0 && (
                     <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
                   )}
+                </div>
+              )}
+
+              {(p.status === "connected" || p.customMcps.length > 0) && (
+                <div className="mt-4">
+                  <span className="font-semibold text-sm">Catálogo MCP</span>
+                  <p className="text-xs text-gray-400 mb-2">
+                    Las capacidades que el agente puede ofrecer. easybits y WhatsApp vienen incluidos; agrega MCPs custom y actívalos por grupo con ⚙.
+                  </p>
+                  {p.customMcps.length > 0 && (
+                    <div className="flex flex-col gap-1 mb-2">
+                      {p.customMcps.map((m) => (
+                        <div key={m.name} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="font-mono text-xs">{m.name}<span className="text-gray-400 font-sans"> — {m.label}</span></span>
+                          <button type="button" className="text-xs text-red-500 hover:underline shrink-0"
+                            onClick={() => fetcher.submit({ intent: "remove-mcp", poolId: p.id, name: m.name }, { method: "post" })}>
+                            quitar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <fetcher.Form method="post" className="flex flex-wrap items-end gap-2"
+                    onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
+                    <input type="hidden" name="intent" value="add-mcp" />
+                    <input type="hidden" name="poolId" value={p.id} />
+                    <input name="name" placeholder="nombre (ej. brightdata)" required
+                      className="border-2 border-black rounded-lg px-2 py-1.5 text-sm font-mono w-36" />
+                    <input name="pkg" placeholder="paquete npm (stdio)"
+                      className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono w-40" />
+                    <input name="url" placeholder="o URL (http)"
+                      className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono w-32" />
+                    <button type="submit" className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold">+ MCP</button>
+                  </fetcher.Form>
                 </div>
               )}
 

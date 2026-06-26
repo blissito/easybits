@@ -144,6 +144,9 @@ export async function openAgentMessageStream(
     sessionId?: string;
     denikApiKey?: string;
     appendSystemPrompt?: string;
+    // Per-turn EXTRA MCP servers (name→serverDef) for the worker to merge over
+    // its baked builtins. Resolved per-group by poolOperations.resolveGroupMcpServers.
+    mcpServers?: Record<string, unknown>;
     port?: number;
     path?: string;
     rawBody?: unknown;
@@ -159,7 +162,7 @@ export async function openAgentMessageStream(
   if (body.headers) payload.headers = body.headers;
   if (body.rawBody !== undefined) {
     payload.rawBody = body.rawBody;
-  } else if (body.denikApiKey || body.appendSystemPrompt) {
+  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers) {
     // ⚠️ El host (sandbox-host /v1/sandbox/:id/agent/message) SOLO reenvía
     // {content, sessionId} de los campos top-level — descarta cualquier extra.
     // Para que campos del worker (denikApiKey, appendSystemPrompt) lleguen al
@@ -170,6 +173,7 @@ export async function openAgentMessageStream(
       ...(body.sessionId ? { sessionId: body.sessionId } : {}),
       ...(body.denikApiKey ? { denikApiKey: body.denikApiKey } : {}),
       ...(body.appendSystemPrompt ? { appendSystemPrompt: body.appendSystemPrompt } : {}),
+      ...(body.mcpServers ? { mcpServers: body.mcpServers } : {}),
     };
   } else {
     payload.content = body.content;
@@ -2820,7 +2824,13 @@ export async function openAgentChunkStream(
     | "embedToken"
     | "template"
   >,
-  body: { content: string; sessionId?: string; denikApiKey?: string; appendSystemPrompt?: string }
+  body: {
+    content: string;
+    sessionId?: string;
+    denikApiKey?: string;
+    appendSystemPrompt?: string;
+    mcpServers?: Record<string, unknown>;
+  }
 ): Promise<ReadableStream<Uint8Array>> {
   const protocol = agent.protocol ?? "sse";
   if (protocol === "sse") {
@@ -2834,6 +2844,8 @@ export async function openAgentChunkStream(
       denikApiKey: body.denikApiKey,
       // Per-message personalización por-org (capa 3, append).
       appendSystemPrompt: body.appendSystemPrompt,
+      // Per-message MCP custom servers (resueltos por grupo en poolOperations).
+      mcpServers: body.mcpServers,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });

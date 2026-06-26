@@ -248,6 +248,56 @@ type InboundMessage = {
   appendSystemPrompt?: string;
 };
 
+// ── MCP catalog (config-driven capabilities, nanoclaw parity) ────────────────
+// A pool (agent) offers a MENU of MCP servers; each group enables a SUBSET. The
+// catalog lives on Pool.mcpCatalog; the per-group selection on Pool.groupConfigs.
+export type McpCatalogEntry = {
+  name: string; // unique key + Claude tool prefix (mcp__<name>__*)
+  label?: string; // human label for the UI
+  transport: "stdio" | "http";
+  command?: string; // stdio: e.g. "npx"
+  args?: string[]; // stdio: e.g. ["-y", "@brightdata/mcp"]
+  url?: string; // http: remote MCP endpoint
+  env?: Record<string, string>; // static env defaults (tenant secrets via per-group env)
+  builtin?: boolean; // easybits/wa/denik — baked/special, can't delete
+};
+export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string> };
+
+// The default menu every new pool gets. easybits + wa are ALWAYS active in the
+// worker (baked env / in-process) and denik flows via its per-group key — they
+// are listed as builtins so the UI/agent see the full surface, but they are NOT
+// resolved through the generic per-turn map below (that's only for CUSTOM MCPs).
+export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
+  { name: "easybits", label: "EasyBits — archivos, docs, imágenes", transport: "stdio", command: "npx", args: ["-y", "@easybits.cloud/mcp"], builtin: true },
+  { name: "wa", label: "WhatsApp — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true },
+  { name: "denik", label: "Denik — CRM por organización (key por grupo)", transport: "stdio", command: "npx", args: ["-y", "@denik.me/mcp"], builtin: true },
+];
+
+// Resolve the per-turn EXTRA MCP servers for a group: the CUSTOM catalog entries
+// the group enabled, as a name→serverDef map the worker merges over its baked
+// builtins. Builtins are skipped (easybits/wa always-on; denik via its own key).
+// Per-group env (tenant secrets) is merged over each entry's static env — each
+// MCP only reads the vars it cares about, so a shared per-group env is safe.
+export function resolveGroupMcpServers(
+  pool: { mcpCatalog?: unknown; groupConfigs?: unknown },
+  groupId: string
+): Record<string, unknown> | undefined {
+  const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? DEFAULT_MCP_CATALOG;
+  const cfg = ((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
+  const enabled = cfg.mcpServers;
+  if (!enabled?.length) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const e of catalog) {
+    if (e.builtin || !enabled.includes(e.name)) continue;
+    const env = { ...(e.env ?? {}), ...(cfg.env ?? {}) };
+    out[e.name] =
+      e.transport === "http"
+        ? { type: "http", url: e.url, ...(Object.keys(env).length ? { env } : {}) }
+        : { type: "stdio", command: e.command, args: e.args ?? [], env };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 // Build a background AuthContext for a pool's owner. Pool dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
 async function ctxForOwner(ownerId: string): Promise<AuthContext> {
@@ -653,6 +703,9 @@ export async function routeMessage(
             (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
           // Personalización por-org (capa 3): se appendea a la persona del pool.
           appendSystemPrompt: msg.appendSystemPrompt,
+          // Per-grupo: los MCP CUSTOM que este grupo habilitó (catálogo + env del
+          // grupo). El worker los mergea sobre sus builtins (easybits/wa/denik).
+          mcpServers: resolveGroupMcpServers(pool, msg.groupId),
         }
       );
       reply = await collectStream(stream, opts.onChunk);
@@ -848,6 +901,9 @@ export async function createPool(
       persona: opts.persona ?? GHOSTY_PERSONA,
       assistantName: "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
+      // Seed the MCP menu with the builtins so the UI/agent can immediately see
+      // the surface and start enabling custom servers per group.
+      mcpCatalog: DEFAULT_MCP_CATALOG,
       // OJO: maxWorkersPerVm cuenta RUTAS pegajosas (conversaciones), pero la RAM
       // la consume el TURNO ACTIVO (subproceso claude). Entre turnos el subproceso
       // sale → una ruta dormida cuesta ~0 RAM (solo disco). Medición real 2026-06-24

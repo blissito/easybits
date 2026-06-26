@@ -1103,6 +1103,20 @@ model Pool {
   // shared agent (e.g. denik's "Nik") is scoped to each group's org. Tenant
   // isolation is enforced by the downstream MCP auth, not by trusting the agent.
   groupKeys     Json?
+  // The agent's MENU of MCP servers it can offer (config-driven, nanoclaw parity).
+  // Array of McpCatalogEntry (see poolOperations.ts): { name, label?, transport,
+  // command?, args?, url?, env?, builtin? }. Seeded on createPool with the
+  // builtins (easybits/wa/denik). The owner (UI) or the agent (main group) can
+  // add/remove custom entries (brightdata, kommo, supabase, custom http…).
+  mcpCatalog    Json?
+  // Per-group MCP selection + env overrides:
+  //   { [groupJid]: { mcpServers?: string[], env?: Record<string,string> } }
+  // mcpServers = which catalog entries (by name) are enabled for THIS group;
+  // absent = the catalog default set. env = per-group overrides (tenant keys)
+  // merged over the catalog entry's static env at resolution time. routeMessage
+  // resolves this into the per-turn `mcpServers` map sent to the worker. Kept
+  // separate from groupKeys (denik) so the existing per-message denik path stays.
+  groupConfigs  Json?
   // Loop-prevention strategy (surface layer, nanoclaw pattern):
   //  - hasOwnNumber=true  → dedicated WhatsApp line; the bot's own output is the
   //    only fromMe → skip fromMe. Owner can't self-test; replies to others only.
