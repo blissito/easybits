@@ -676,6 +676,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [draftName, setDraftName] = useState("");
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
   const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
+  // Tabs por canal (baileys/waba/…) + ⚙ ajustes del canal abierto, por pool.
+  const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
+  const [chSettings, setChSettings] = useState<Record<string, boolean>>({});
   // Connect a WhatsApp Business number: ask our server for Formmy's signed popup
   // URL, open it, and wait for the popup to postMessage { code, phoneNumberId,
   // wabaId } back. We forward that to /waba/connect (which provisions via Formmy
@@ -865,171 +868,197 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </span>
               </div>
 
-              {isOpen && (<>
-              {p.qrDataUrl && (
-                <div className="mt-4 flex flex-col items-center">
-                  <img src={p.qrDataUrl} alt="QR de WhatsApp" className="w-56 h-56" />
-                  <p className="text-sm text-gray-500 mt-2">WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
+              {isOpen && (() => {
+                // Cada canal es un MÓDULO uniforme { kind, label, dot, count }. Los
+                // grupos son los destinos del canal Baileys; los números, los de WABA.
+                // Añadir Slack/Web = un descriptor más aquí, cero UI a medida.
+                const activeCh = inFlow ? "baileys" : (activeChannel[p.id] ?? "baileys");
+                const settingsOpen = chSettings[p.id] ?? false;
+                const channels = [
+                  { kind: "baileys", label: "WhatsApp", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
+                  { kind: "waba", label: "Business", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
+                ];
+                return (<>
+                {/* Tabs por canal */}
+                <div className="mt-4 flex items-center gap-1 border-b-2 border-gray-100">
+                  {channels.map((c) => { const on = activeCh === c.kind; return (
+                    <button key={c.kind} type="button" onClick={() => setActiveChannel((s) => ({ ...s, [p.id]: c.kind }))}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border-b-2 -mb-0.5 transition-colors ${on ? "border-brand-500 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
+                      <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span>{c.label}</span>
+                      {c.count > 0 && <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{c.count}</span>}
+                    </button> ); })}
+                  <button type="button" disabled title="Más canales (Slack, Web…) próximamente"
+                    className="ml-auto px-2.5 py-1 text-lg leading-none text-gray-300 cursor-default">+</button>
                 </div>
-              )}
-              {p.pairingCode && (
-                <div className="mt-4 flex flex-col items-center">
-                  <div className="text-3xl font-mono font-bold tracking-widest border-2 border-black rounded-lg px-4 py-3">{p.pairingCode}</div>
-                  <p className="text-sm text-gray-500 mt-2 text-center">WhatsApp → Dispositivos vinculados → Vincular con número de teléfono → teclea este código</p>
-                </div>
-              )}
 
-              {(p.groups.length > 0 || (p.status === "connected" && p.live)) && (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-sm">Grupos que atiende</span>
-                    <span className="text-xs text-gray-400">{p.conversations} conv.</span>
-                  </div>
-                  {p.groups.length === 0 && <p className="text-xs text-gray-400">No se ven grupos aún. Solo responde en los que actives.</p>}
-                  {(() => {
-                    const active = p.groups.filter((g) => g.enabled);
-                    const others = p.groups.filter((g) => !g.enabled);
-                    const open = showAllGroups[p.id] ?? false;
-                    const GroupRow = (g: { id: string; subject: string; enabled: boolean; mcps: string[] }) => {
-                      const isMain = p.mainGroupJid === g.id;
-                      // Pill count = builtins (always-on) + capabilities enabled here.
-                      const capCount = p.builtins.length + g.mcps.length;
-                      return (
-                      <motion.div key={g.id} layout="position" className="flex items-center justify-between gap-2"
-                        initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 34 }}>
-                        <Switch value={g.enabled} label={g.subject}
-                          className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
-                          onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
-                        {g.enabled && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button type="button"
-                              title="Capacidades y conexión de este grupo"
-                              onClick={() => setCapModal({ poolId: p.id, groupId: g.id })}
-                              className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
-                              <span className="text-sm leading-none">⚡</span>
-                              <span>Capacidades</span>
-                              <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{capCount}</span>
-                            </button>
-                            <button type="button"
-                              title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
-                              onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
-                              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${isMain ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
-                              <span className="text-sm leading-none">{isMain ? "★" : "☆"}</span>
-                              <span>Main</span>
-                            </button>
+                {/* ── Canal WhatsApp (Baileys) ──────────────────────────── */}
+                {activeCh === "baileys" && (<div className="mt-3">
+                  {p.qrDataUrl && (
+                    <div className="mb-4 flex flex-col items-center">
+                      <img src={p.qrDataUrl} alt="QR de WhatsApp" className="w-56 h-56" />
+                      <p className="text-sm text-gray-500 mt-2">WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
+                    </div>
+                  )}
+                  {p.pairingCode && (
+                    <div className="mb-4 flex flex-col items-center">
+                      <div className="text-3xl font-mono font-bold tracking-widest border-2 border-black rounded-lg px-4 py-3">{p.pairingCode}</div>
+                      <p className="text-sm text-gray-500 mt-2 text-center">WhatsApp → Dispositivos vinculados → Vincular con número de teléfono → teclea este código</p>
+                    </div>
+                  )}
+
+                  {(p.groups.length > 0 || (p.status === "connected" && p.live)) && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-sm">Grupos que atiende</span>
+                        <span className="text-xs text-gray-400">{p.conversations} conv.</span>
+                      </div>
+                      {p.groups.length === 0 && <p className="text-xs text-gray-400">No se ven grupos aún. Solo responde en los que actives.</p>}
+                      {(() => {
+                        const active = p.groups.filter((g) => g.enabled);
+                        const others = p.groups.filter((g) => !g.enabled);
+                        const open = showAllGroups[p.id] ?? false;
+                        const GroupRow = (g: { id: string; subject: string; enabled: boolean; mcps: string[] }) => {
+                          const isMain = p.mainGroupJid === g.id;
+                          const capCount = p.builtins.length + g.mcps.length;
+                          return (
+                          <motion.div key={g.id} layout="position" className="flex items-center justify-between gap-2"
+                            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 34 }}>
+                            <Switch value={g.enabled} label={g.subject}
+                              className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
+                              onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
+                            {g.enabled && (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button type="button" title="Capacidades y conexión de este grupo"
+                                  onClick={() => setCapModal({ poolId: p.id, groupId: g.id })}
+                                  className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
+                                  <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
+                                  <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{capCount}</span>
+                                </button>
+                                <button type="button"
+                                  title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
+                                  onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
+                                  className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${isMain ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
+                                  <span className="text-sm leading-none">{isMain ? "★" : "☆"}</span><span>Main</span>
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                          );
+                        };
+                        return (
+                          <div className="flex flex-col gap-1.5">
+                            <AnimatePresence mode="popLayout" initial={false}>
+                              {active.map(GroupRow)}
+                              {open && others.map(GroupRow)}
+                            </AnimatePresence>
+                            {others.length > 0 && (
+                              <button type="button" onClick={() => setShowAllGroups((s) => ({ ...s, [p.id]: !open }))}
+                                className="self-start text-xs text-brand-500 font-semibold mt-1 hover:underline">
+                                {open ? "Ocultar grupos no activos" : `+ ${others.length} grupo${others.length !== 1 ? "s" : ""} no activo${others.length !== 1 ? "s" : ""}`}
+                              </button>
+                            )}
                           </div>
-                        )}
-                      </motion.div>
-                      );
-                    };
-                    return (
-                      <div className="flex flex-col gap-1.5">
-                        <AnimatePresence mode="popLayout" initial={false}>
-                          {active.map(GroupRow)}
-                          {open && others.map(GroupRow)}
-                        </AnimatePresence>
-                        {others.length > 0 && (
-                          <button type="button" onClick={() => setShowAllGroups((s) => ({ ...s, [p.id]: !open }))}
-                            className="self-start text-xs text-brand-500 font-semibold mt-1 hover:underline">
-                            {open ? "Ocultar grupos no activos" : `+ ${others.length} grupo${others.length !== 1 ? "s" : ""} no activo${others.length !== 1 ? "s" : ""}`}
+                        );
+                      })()}
+                      {p.enabledCount === 0 && p.groups.length > 0 && (
+                        <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
+                      )}
+                    </div>
+                  )}
+
+                  {p.throttledUntil ? (
+                    <p className="mt-3 text-xs text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-lg px-3 py-2">
+                      ⏳ WhatsApp bloqueó este número por demasiados intentos de vinculación.
+                      No reintentes (cada intento extiende el bloqueo). Reintenta después de las{" "}
+                      <b>{new Date(p.throttledUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b>.
+                    </p>
+                  ) : p.connReason === "invalid_number" ? (
+                    <p className="mt-3 text-xs text-amber-700">
+                      ⚠️ Número inválido. Usa formato internacional sin signos (México: <b>52</b> + 10 dígitos, o <b>521</b> si es cuenta vieja).
+                    </p>
+                  ) : relinking ? (
+                    <p className="mt-3 text-xs text-amber-700">
+                      🔄 WhatsApp cerró la sesión. Estamos regenerando el QR — escanéalo de nuevo para reconectar.
+                    </p>
+                  ) : null}
+
+                  {/* Conectar (canal desconectado) */}
+                  {!p.throttledUntil && p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
+                    <div className="mt-3 flex flex-wrap gap-2 items-center">
+                      <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
+                        className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                        {isBusy("connect", p.id) ? <Spinner /> : "Conectar con QR"}
+                      </button>
+                      <span className="text-xs text-gray-400">o</span>
+                      <input value={phones[p.id] ?? ""} onChange={(e) => setPhones((s) => ({ ...s, [p.id]: e.target.value }))}
+                        placeholder="52155..." className="border-2 border-black rounded-lg px-2 py-1.5 text-sm w-32 font-mono" />
+                      <button disabled={isBusy("connect", p.id) || !(phones[p.id] ?? "").trim()}
+                        onClick={() => fetcher.submit({ intent: "connect", poolId: p.id, phone: phones[p.id] }, { method: "post" })}
+                        className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-40">
+                        Vincular con número
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ⚙ Ajustes del canal — número dedicado + desconectar */}
+                  <div className="mt-4 border-t border-gray-100 pt-3">
+                    <button type="button" onClick={() => setChSettings((s) => ({ ...s, [p.id]: !settingsOpen }))}
+                      className="text-xs font-semibold text-gray-500 hover:text-gray-800 flex items-center gap-1">
+                      <span className={`transition-transform ${settingsOpen ? "rotate-90" : ""}`}>›</span> Ajustes del canal
+                    </button>
+                    {settingsOpen && (
+                      <div className="mt-2">
+                        <Switch value={p.hasOwnNumber} label="Número dedicado"
+                          className="text-sm items-center font-semibold"
+                          onChange={(on) => fetcher.submit({ intent: "toggle-own-number", poolId: p.id, on: on ? "1" : "0" }, { method: "post" })} />
+                        <p className="text-xs text-gray-400 mt-1">Sin prefijo de nombre en las respuestas. Apágalo si compartes el número con una persona.</p>
+                        {(p.live || p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing") && (
+                          <button disabled={isBusy("disconnect", p.id)} onClick={() => fetcher.submit({ intent: "disconnect", poolId: p.id }, { method: "post" })}
+                            className="mt-3 border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                            {isBusy("disconnect", p.id) ? <Spinner /> : "Desconectar"}
                           </button>
                         )}
                       </div>
-                    );
-                  })()}
-                  {p.enabledCount === 0 && p.groups.length > 0 && (
-                    <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
-                  )}
-                </div>
-              )}
-
-              {/* WhatsApp Business (WABA) — canal independiente de Baileys: el
-                  agente puede tener esta sección con o sin la app verde conectada.
-                  Cada número es su propia unidad de config (Capacidades + identidad)
-                  vía el MISMO modal, con groupId sintético waba:<integrationId>. */}
-              <div className="mt-5 border-t border-gray-100 pt-4">
-                <span className="font-semibold text-sm flex items-center gap-1.5"><span>💬</span> WhatsApp Business</span>
-                {p.wabaNumbers.length > 0 ? (
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {p.wabaNumbers.map((w) => (
-                      <div key={w.id} className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold truncate">{w.subject}</span>
-                        <button type="button"
-                          title="Capacidades e identidad de este número"
-                          onClick={() => setCapModal({ poolId: p.id, groupId: w.id })}
-                          className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors shrink-0">
-                          <span className="text-sm leading-none">⚡</span>
-                          <span>Capacidades</span>
-                          <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
-                        </button>
-                      </div>
-                    ))}
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-400 mt-1">Conecta un número de WhatsApp Business para atenderlo con este agente.</p>
-                )}
-                <button type="button" disabled={wabaConnecting === p.id}
-                  onClick={() => connectWaba(p.id)}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:underline disabled:opacity-50">
-                  {wabaConnecting === p.id ? <><Spinner /> Conectando…</> : "+ Conectar WhatsApp Business"}
-                </button>
-              </div>
+                </div>)}
 
-              {p.throttledUntil ? (
-                <p className="mt-3 text-xs text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-lg px-3 py-2">
-                  ⏳ WhatsApp bloqueó este número por demasiados intentos de vinculación.
-                  No reintentes (cada intento extiende el bloqueo). Reintenta después de las{" "}
-                  <b>{new Date(p.throttledUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b>.
-                </p>
-              ) : p.connReason === "invalid_number" ? (
-                <p className="mt-3 text-xs text-amber-700">
-                  ⚠️ Número inválido. Usa formato internacional sin signos (México: <b>52</b> + 10 dígitos, o <b>521</b> si es cuenta vieja).
-                </p>
-              ) : relinking ? (
-                <p className="mt-3 text-xs text-amber-700">
-                  🔄 WhatsApp cerró la sesión. Estamos regenerando el QR — escanéalo de nuevo para reconectar.
-                </p>
-              ) : null}
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <Switch value={p.hasOwnNumber} label="Número dedicado"
-                  className="text-sm items-center font-semibold"
-                  onChange={(on) => fetcher.submit({ intent: "toggle-own-number", poolId: p.id, on: on ? "1" : "0" }, { method: "post" })} />
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Sin prefijo de nombre en las respuestas. Apágalo si compartes el número con una persona.
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2 items-center">
-                {!p.throttledUntil && p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
-                  <>
-                    <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
-                      className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
-                      {isBusy("connect", p.id) ? <Spinner /> : "Conectar con QR"}
-                    </button>
-                    <span className="text-xs text-gray-400">o</span>
-                    <input value={phones[p.id] ?? ""} onChange={(e) => setPhones((s) => ({ ...s, [p.id]: e.target.value }))}
-                      placeholder="52155..." className="border-2 border-black rounded-lg px-2 py-1.5 text-sm w-32 font-mono" />
-                    <button disabled={isBusy("connect", p.id) || !(phones[p.id] ?? "").trim()}
-                      onClick={() => fetcher.submit({ intent: "connect", poolId: p.id, phone: phones[p.id] }, { method: "post" })}
-                      className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-40">
-                      Vincular con número
-                    </button>
-                  </>
-                )}
-                {(p.live || p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing") && (
-                  <button disabled={isBusy("disconnect", p.id)} onClick={() => fetcher.submit({ intent: "disconnect", poolId: p.id }, { method: "post" })}
-                    className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
-                    {isBusy("disconnect", p.id) ? <Spinner /> : "Desconectar"}
+                {/* ── Canal WhatsApp Business (WABA) ─────────────────────── */}
+                {activeCh === "waba" && (<div className="mt-3">
+                  {p.wabaNumbers.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                      {p.wabaNumbers.map((w) => (
+                        <div key={w.id} className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold truncate">{w.subject}</span>
+                          <button type="button" title="Capacidades e identidad de este número"
+                            onClick={() => setCapModal({ poolId: p.id, groupId: w.id })}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors shrink-0">
+                            <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
+                            <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">Conecta un número de WhatsApp Business para atenderlo con este agente.</p>
+                  )}
+                  <button type="button" disabled={wabaConnecting === p.id} onClick={() => connectWaba(p.id)}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:underline disabled:opacity-50">
+                    {wabaConnecting === p.id ? <><Spinner /> Conectando…</> : "+ Conectar WhatsApp Business"}
                   </button>
-                )}
-                <button disabled={isBusy("delete", p.id)}
-                  onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
-                  className="ml-auto border-2 border-red-300 text-red-600 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
-                  {isBusy("delete", p.id) ? <Spinner /> : "Borrar"}
-                </button>
-              </div>
-              </>)}
+                </div>)}
+
+                {/* Footer del agente */}
+                <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+                  <button disabled={isBusy("delete", p.id)}
+                    onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
+                    className="border-2 border-red-300 text-red-600 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                    {isBusy("delete", p.id) ? <Spinner /> : "Borrar"}
+                  </button>
+                </div>
+                </>);
+              })()}
             </div>
           );
         })}
