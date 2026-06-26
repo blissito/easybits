@@ -15,3 +15,6 @@ respaldo.json
 .claude/
 pdf_examples/
 scripts/_backups/
+
+# Runtime logs (Winston) — no deben trackearse
+*.log
