@@ -1,11 +1,20 @@
 import { useRef, useMemo } from "react";
+import { useLoaderData } from "react-router";
+import type { Route } from "./+types/flota-poc";
 import { Canvas } from "~/components/landings3/Canvas";
+import { getUserOrNull } from "~/.server/getters";
 import type { Section3, IframeMessage } from "~/lib/landing3/types";
 
 export const meta = () => [
   { title: "POC — Flota en fieltro — EasyBits" },
   { name: "robots", content: "noindex" },
 ];
+
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const user = await getUserOrNull(request);
+  // Logueado → directo a su flota; visitante (p.ej. desde redes) → a planes.
+  return { ctaHref: user ? "/dash/flota" : "/planes" };
+};
 
 // ---------------------------------------------------------------------------
 // POC: la visualización de la flota (cajas + fantasmas) renderizada DENTRO del
@@ -203,18 +212,37 @@ function buildFleetSection(): Section3 {
 }
 
 export default function FlotaPocRoute() {
+  const { ctaHref } = useLoaderData<typeof loader>();
   const iframeRectRef = useRef<DOMRect | null>(null);
   const sections = useMemo<Section3[]>(() => [buildFleetSection()], []);
   const onMessage = (_msg: IframeMessage) => {};
 
   return (
-    <div className="h-[calc(100vh-2rem)] w-full bg-[#cdb277]">
+    <div className="relative h-[calc(100vh-2rem)] w-full bg-[#cdb277]">
       <Canvas
         sections={sections}
         theme="sky"
         onMessage={onMessage}
         iframeRectRef={iframeRectRef}
       />
+
+      {/* CTA overlay — fuera del iframe para que el click navegue de verdad
+          (el Canvas intercepta clicks adentro y el iframe está sandboxeado). */}
+      <a
+        href={ctaHref}
+        className="group absolute bottom-8 left-1/2 z-10 -translate-x-1/2 rounded-full px-8 py-4 font-bold text-[#4a3f2c] no-underline transition-transform hover:-translate-y-0.5"
+        style={{
+          fontFamily:
+            'ui-rounded, "Segoe UI Rounded", "Segoe UI", system-ui, sans-serif',
+          background: "#a9c79b",
+          border: "3px dashed #6f9a63",
+          boxShadow:
+            "inset 0 3px 7px rgba(255,255,255,0.65), 0 10px 18px rgba(0,0,0,0.22)",
+          textShadow: "0 1px 0 rgba(255,255,255,0.5)",
+        }}
+      >
+        Crea tu flota de agentes →
+      </a>
     </div>
   );
 }
