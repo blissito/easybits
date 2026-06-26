@@ -41,8 +41,13 @@ const groupListCache = new Map<string, { at: number; groups: Array<[string, stri
 const silent: any = { level: "silent", child: () => silent };
 for (const m of ["trace", "debug", "info", "warn", "error", "fatal"]) silent[m] = () => {};
 
-type ConnState = { sock: WASocket; attempts: number; connecting: boolean; pairingPhone?: string };
+type ConnState = { sock: WASocket; attempts: number; connecting: boolean; pairingPhone?: string; startedAt: number };
 const sockets = new Map<string, ConnState>();
+// A `connecting` socket that never fires a terminal connection.update (hung
+// handshake, or a deploy that killed it mid-pair) would otherwise wedge the guard
+// in connectPool forever → every "Conectar" click silently no-ops. Treat a
+// connecting attempt older than this as stale and let a new connect supersede it.
+const CONNECTING_STALE_MS = 45_000;
 
 // Last inbound message per (poolId, jid) — so the worker's `wa` MCP can quote it
 // (reply_to_last) and react to it. Keyed `${poolId}:${jid}`.
@@ -344,7 +349,9 @@ async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationSt
 export async function connectPool(poolId: string, opts: { pairingPhone?: string } = {}): Promise<void> {
   const pairingPhone = opts.pairingPhone?.replace(/[^0-9]/g, "") || undefined;
   const existing = sockets.get(poolId);
-  if (existing?.connecting) return;
+  // Honor an in-flight connect only if it's RECENT — a stale `connecting` (its
+  // socket hung / a deploy killed it) must not wedge re-pairing forever.
+  if (existing?.connecting && Date.now() - (existing.startedAt ?? 0) < CONNECTING_STALE_MS) return;
   if (existing) {
     try { existing.sock.ev.removeAllListeners("connection.update"); existing.sock.end(undefined); } catch {}
     sockets.delete(poolId);
@@ -391,7 +398,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
     printQRInTerminal: false,
     browser: Browsers.macOS("Chrome"),
   });
-  sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true, pairingPhone });
+  sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true, pairingPhone, startedAt: Date.now() });
   sock.ev.on("creds.update", auth.saveCreds);
 
   // Pairing-code method: instead of (or alongside) the QR, request an 8-char
@@ -443,10 +450,22 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
         // max_reconnect is a transient close where the creds may still be valid.
         if (loggedOut) {
           await db.pool.update({ where: { id: poolId }, data: { authCreds: null, authKeys: null } }).catch(() => {});
-          // A logout while pairing (cur.pairingPhone set) is the throttle's
-          // signature — WA closes ~3s after the code, before it can be typed.
-          // Count it so repeated mashing trips the cooldown guard.
-          if (cur?.pairingPhone) await recordPairFail(poolId);
+          // Count EVERY logout toward the pairing throttle (not only the pairing-
+          // code case): a genuine logout LOOP (Meta rejecting our handshake, or a
+          // session that keeps dying) trips the 3/30min block, which STOPS the auto
+          // re-pair below — so we can never hammer Meta into a deeper throttle.
+          await recordPairFail(poolId);
+          // Clean slate (creds cleared) + NOT throttled → auto re-pair: emit a fresh
+          // QR instead of sitting in a dead "Falló". A fresh QR (registered=false)
+          // can't resume a dead session, so there's no tight relink loop; and the
+          // throttle counter above bounds any pathological one. connectPool also
+          // re-checks the block, so this is safe even under a race.
+          if (!pairBlockMs(await readBaileys(poolId))) {
+            log(poolId, "logged_out → auto re-pairing (fresh QR)");
+            await setStatus(poolId, "connecting", { reason: "relink" });
+            setTimeout(() => void connectPool(poolId).catch(() => {}), 1000);
+            return;
+          }
         }
         log(poolId, `stopped (${loggedOut ? "logged_out" : "max_reconnect"})`);
         await setStatus(poolId, "failed", { reason: loggedOut ? "logged_out" : "max_reconnect" });
@@ -734,11 +753,18 @@ export function ensureRehydrated(): Promise<void> {
   if (rehydrating) return rehydrating;
   rehydrating = (async () => {
     try {
-      const pools = await db.pool.findMany({ where: { authCreds: { not: null } } });
+      // Re-establish the socket for any pool that was mid-flight before the restart
+      // — INCLUDING the pairing states (qr_pending/pairing) which have no creds yet:
+      // otherwise a deploy mid-pair leaves a DEAD QR the user can't scan. connectPool
+      // resumes when creds exist and emits a fresh QR when they don't. Skip throttled
+      // pools (and connectPool re-checks) so rehydration never feeds a reconnect loop.
+      const pools = await db.pool.findMany({ select: { id: true, baileys: true } });
       for (const p of pools) {
-        const status = (p.baileys as { status?: string } | null)?.status;
-        if ((status === "connected" || status === "connecting") && !sockets.has(p.id)) {
-          log(p.id, "rehydrating after restart");
+        const b = (p.baileys as Record<string, unknown> | null) ?? {};
+        const status = b.status as string | undefined;
+        const active = status === "connected" || status === "connecting" || status === "qr_pending" || status === "pairing";
+        if (active && !sockets.has(p.id) && !pairBlockMs(b)) {
+          log(p.id, `rehydrating after restart (${status})`);
           await connectPool(p.id).catch((e) => log(p.id, `rehydrate failed: ${e}`));
         }
       }

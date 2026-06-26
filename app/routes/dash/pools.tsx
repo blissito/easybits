@@ -591,8 +591,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         {pools.map((p) => {
           const st = STATUS[p.status as keyof typeof STATUS] ?? STATUS.disconnected;
           const stale = p.status === "connected" && !p.live;
-          // Forzar abierto durante flujos de conexión (QR/pairing) para no esconder el código.
-          const inFlow = p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing" || !!p.qrDataUrl || !!p.pairingCode;
+          // Se desvinculó (logout de WhatsApp) y NO está en throttle → estado
+          // recuperable: el surface auto-regenera un QR. No es un "Falló" rojo.
+          const relinking = !p.throttledUntil && (p.connReason === "relink" || (p.status === "failed" && p.connReason === "logged_out"));
+          // Forzar abierto durante flujos de conexión (QR/pairing/relink) para no esconder el código.
+          const inFlow = p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing" || relinking || !!p.qrDataUrl || !!p.pairingCode;
           const isOpen = (expanded[p.id] ?? false) || inFlow;
           // Optimistic name: muestra el valor recién escrito hasta que el loader se ponga al día.
           const displayName = (optimisticNames[p.id] ?? p.name) || "";
@@ -620,8 +623,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   )}
                 </div>
                 <span className="flex items-center gap-2 text-sm font-semibold shrink-0">
-                  <span className={`w-2.5 h-2.5 rounded-full ${stale ? "bg-orange-400" : st.dot}`} />
-                  {stale ? "Reconectando…" : st.label}
+                  <span className={`w-2.5 h-2.5 rounded-full ${stale || relinking ? "bg-orange-400" : st.dot} ${relinking ? "animate-pulse" : ""}`} />
+                  {stale ? "Reconectando…" : relinking ? "Se desvinculó, generando QR…" : st.label}
                 </span>
               </div>
 
@@ -700,6 +703,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               ) : p.connReason === "invalid_number" ? (
                 <p className="mt-3 text-xs text-amber-700">
                   ⚠️ Número inválido. Usa formato internacional sin signos (México: <b>52</b> + 10 dígitos, o <b>521</b> si es cuenta vieja).
+                </p>
+              ) : relinking ? (
+                <p className="mt-3 text-xs text-amber-700">
+                  🔄 WhatsApp cerró la sesión. Estamos regenerando el QR — escanéalo de nuevo para reconectar.
                 </p>
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2 items-center">
