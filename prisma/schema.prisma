@@ -1084,6 +1084,15 @@ model Pool {
   // so suspended VMs stay resumable (~700-950ms snapshot resume vs ~12s cold boot
   // + restore-from-S3); restore round-trip is verified, so destroy is only deferred.
   destroyIdleMin     Int  @default(45)
+  // WABA (WhatsApp Business / Meta) channel config. Formmy is the gateway: it
+  // owns the Meta number and FORWARDS each inbound message to this pool, then
+  // expects us to POST the reply back to Formmy's /send. Shape:
+  //   { formmySecret: string,
+  //     orgs: { [integrationId]: { denikApiKey: string, phoneNumberId: string } } }
+  // formmySecret = bearer Formmy presents on POST /waba/message AND the bearer we
+  // present back to Formmy. orgs maps a Formmy integration (per tenant org) to its
+  // Denik MCP key (per-turn worker scope) + Meta phone_number_id (for the reply).
+  wabaConfig    Json?
   // Baileys pairing state mirror (same shape as Agent.whatsapp).
   baileys       Json?
   // Persisted Baileys auth (creds + signal keys) so the socket survives app

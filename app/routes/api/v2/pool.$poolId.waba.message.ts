@@ -1,0 +1,146 @@
+import type { Route } from "./+types/pool.$poolId.waba.message";
+import { db } from "~/.server/db";
+import { routeMessage } from "~/.server/core/poolOperations";
+
+// POST /api/v2/pool/:poolId/waba/message
+//
+// The WABA channel inbound. Formmy owns the Meta WhatsApp Business number and is
+// the gateway: it receives the Meta webhook and FORWARDS each inbound message
+// here using its "droplet protocol", then expects us to POST the reply back to
+// Formmy's /send endpoint. So WABA becomes another entry into the SAME pool
+// fleet that Baileys uses — both end in routeMessage().
+//
+// Fire-and-forget: Formmy doesn't await the reply (it ignores this response
+// body), and Meta penalizes slow webhooks, so we ACK 200 immediately and do the
+// LLM turn + send-back in a DETACHED task (mirrors whatsapp-webhook.ts, which
+// does `void handleIncomingText(...)` then returns 200).
+//
+// Auth = pool.wabaConfig.formmySecret (the shared secret Formmy presents AND the
+// one we present back). NOT pool.token — that bearer belongs to the Baileys
+// surface / web channel.
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+};
+
+// www: el apex formmy.app falla TLS desde Fly (mismo motivo que formmy.server.ts en Denik).
+const FORMMY_BASE_URL = (process.env.FORMMY_BASE_URL || "https://www.formmy.app").replace(/\/$/, "");
+
+type WabaConfig = {
+  formmySecret?: string;
+  orgs?: Record<string, { denikApiKey?: string; phoneNumberId?: string }>;
+};
+
+// Formmy droplet protocol (the inbound forward body).
+type DropletInbound = {
+  jid?: string;
+  sender?: string;
+  sender_name?: string;
+  content?: string;
+  message_id?: string;
+  integration_id?: string;
+  is_from_me?: boolean;
+  manual_mode?: boolean;
+  media?: unknown;
+};
+
+export async function loader({ request }: Route.LoaderArgs) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  return Response.json({ error: "Method not allowed" }, { status: 405, headers: CORS });
+}
+
+export async function action({ request, params }: Route.ActionArgs) {
+  const poolId = params.poolId!;
+  const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  const pool = await db.pool.findUnique({ where: { id: poolId } });
+  const waba = (pool?.wabaConfig as WabaConfig | null) ?? null;
+  const formmySecret = waba?.formmySecret ?? "";
+  if (!pool || !bearer || !formmySecret || formmySecret !== bearer) {
+    return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as DropletInbound;
+  const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
+  const sender = typeof body.sender === "string" ? body.sender : "";
+  const content = typeof body.content === "string" ? body.content : "";
+
+  // ACK immediately. Anything that means "nothing to answer" still returns 200 —
+  // Formmy ignores the body, and a non-200 just makes it (or Meta) retry.
+  //  - is_from_me: our own echo, never answer.
+  //  - manual_mode: the owner is handling this conversation by hand. We do NOT
+  //    call the LLM (no double-reply). Formmy still forwards every message so its
+  //    own pause/transcript state stays complete; the no-LLM choice is OURS here.
+  if (
+    integrationId &&
+    sender &&
+    content.trim() &&
+    !body.is_from_me &&
+    !body.manual_mode
+  ) {
+    void handleWabaInbound(poolId, waba!, { integrationId, sender, content });
+  }
+
+  return Response.json({ ok: true }, { status: 200, headers: CORS });
+}
+
+// Detached task: run the pool turn, then POST the reply back to Formmy's /send.
+// Never throws (it runs unawaited) — every failure is logged and swallowed.
+async function handleWabaInbound(
+  poolId: string,
+  waba: WabaConfig,
+  msg: { integrationId: string; sender: string; content: string }
+): Promise<void> {
+  try {
+    const org = waba.orgs?.[msg.integrationId];
+    // groupId is OPAQUE to routeMessage; scope it per (integration, sender) so the
+    // sticky route + .jsonl transcript stay per-conversation, parallel to Baileys'
+    // `jid`. denikApiKey scopes the worker's MCP to this org for THIS turn.
+    const reply = await routeMessage(
+      poolId,
+      {
+        groupId: `waba:${msg.integrationId}:${msg.sender}`,
+        sender: msg.sender,
+        text: msg.content,
+        denikApiKey: org?.denikApiKey,
+      },
+      { skipRateLimit: false }
+    );
+    if (!reply) return;
+    await sendReplyToFormmy(waba.formmySecret ?? "", msg.integrationId, msg.sender, reply);
+  } catch (e) {
+    console.error(`[waba] pool ${poolId} inbound failed:`, e instanceof Error ? e.message : e);
+  }
+}
+
+// POST the agent's reply back to Formmy, which relays it to Meta. phone_number is
+// the sender's digits (strip any @suffix jid and a leading +).
+async function sendReplyToFormmy(
+  formmySecret: string,
+  integrationId: string,
+  sender: string,
+  reply: string
+): Promise<void> {
+  const phone = sender.replace(/@.*$/, "").replace(/^\+/, "");
+  try {
+    const res = await fetch(`${FORMMY_BASE_URL}/api/v1/integrations/whatsapp/send`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${formmySecret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phone_number: phone,
+        integration_id: integrationId,
+        type: "text",
+        text: reply,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.error(`[waba] send-back to Formmy failed ${res.status}: ${detail.slice(0, 200)}`);
+    }
+  } catch (e) {
+    console.error("[waba] send-back to Formmy threw:", e instanceof Error ? e.message : e);
+  }
+}
