@@ -492,9 +492,9 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     system ? ["#bcd3ea", "#5a86b0"]
     : custom ? ["#cfd4dc", "#8a95a6"]
     : status === "building" ? ["#d7c9ef", "#9b86d6"]
-    // Libre (sin add-on): hueco oscuro cosido en el tapete negro — se hunde en vez
-    // de competir con el verde (activo) o el índigo (dormida). Es "espacio por llenar".
-    : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#241f30", "rgba(255,255,255,0.22)"])
+    // Libre (sin add-on): fieltro GRIS — "espacio por llenar" neutro que contrasta
+    // sobre el tapete claro sin competir con el verde (activo) ni el índigo (dormida).
+    : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#c4c2cc", "rgba(70,66,86,0.45)"])
     // Dormida (suspended): congelada, capacidad casi-libre → índigo apagado.
     : status === "suspended" ? ["#c8c6e6", "#a6a3d6"]
     : full ? ["#a9c79b", "#6f9a63"]
@@ -574,7 +574,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
           </AnimatePresence>
         </div>
       )}
-      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : status == null ? "text-[#8d86a8] font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
+      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : status == null ? "text-[#55525f] font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
     </motion.div>
   );
 }
@@ -583,19 +583,19 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
   const usedSlots = capacity.machines.length + capacity.extraMachines.length;
   const freeSlots = Math.max(0, capacity.maxMachines - usedSlots);
   return (
-    <div className="felt-mat felt-mat--dark border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in overflow-hidden">
+    <div className="felt-mat border-2 border-black rounded-xl p-4 animate-fade-in overflow-hidden" style={{ background: "#f7f4ed" }}>
       {/* filtros del kit de fieltro — montados UNA vez para todo el HUD */}
       <FeltFilters />
       <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-jersey text-3xl leading-none tracking-wide text-white">CAPACIDAD</span>
+          <span className="font-jersey text-3xl leading-none tracking-wide text-[#2a2335]">CAPACIDAD</span>
           <motion.span whileHover={{ scale: 1.08, rotate: -2 }}
             className="font-jersey text-lg leading-none px-2 py-1 bg-brand-500 text-white border-2 border-black rounded-md cursor-default">
             {capacity.planName.toUpperCase()}
           </motion.span>
         </div>
-        <span className="font-jersey text-xl leading-none text-gray-400">
-          <span className="text-white">{capacity.agentsActive}/{capacity.agentsMax} AGENTES</span> · {capacity.vms}/{capacity.maxMachines} sandboxes
+        <span className="font-jersey text-xl leading-none text-gray-500">
+          <span className="text-[#2a2335]">{capacity.agentsActive}/{capacity.agentsMax} AGENTES</span> · {capacity.vms}/{capacity.maxMachines} sandboxes
         </span>
       </div>
 
@@ -618,7 +618,7 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
           {/* Añadir capacidad — sube de plan para más sandboxes */}
           <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
             whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
-            className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(255,255,255,0.18)] bg-white/[0.04] text-[#8d86a8] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-300">
+            className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(60,42,16,0.25)] bg-black/[0.02] text-[#8d7f6a] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-600">
             <span className="text-2xl leading-none">+</span>
             <span className="font-jersey text-[12px] leading-none">MÁS</span>
           </motion.a>
@@ -760,17 +760,17 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
 
       {/* Layout: IZQUIERDA el HUD (mayoría, 2/3, sticky); DERECHA la lista de
           agentes apilada en una columna (1/3). En mobile se apila todo. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
 
       {/* IZQUIERDA — HUD estilo videojuego. Las VMs son CONTENEDORES; dentro viven
-          los agentes (ojitos de la marca); color por ocupación. Ocupa 2/3 y queda
+          los agentes (ojitos de la marca); color por ocupación. Ocupa 3/5 y queda
           sticky al hacer scroll de la lista de agentes. */}
-      <div className="lg:col-span-2 lg:self-start lg:sticky lg:top-6">
+      <div className="lg:col-span-3 lg:self-start lg:sticky lg:top-6">
         <CapacityHud capacity={capacity} />
       </div>
 
-      {/* DERECHA — columna de agentes (1/3): Nuevo agente + las cards apiladas. */}
-      <div className="lg:col-span-1 flex flex-col gap-4">
+      {/* DERECHA — columna de agentes (2/5): Nuevo agente + las cards apiladas. */}
+      <div className="lg:col-span-2 flex flex-col gap-4">
 
       {/* Nuevo agente — colapsada: solo Ghosty + descripción + botón sutil. El form
           se abre bajo demanda (lo trabajamos a fondo después). */}
@@ -929,7 +929,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                             transition={{ type: "spring", stiffness: 500, damping: 34 }}>
                             <Switch value={g.enabled} label={g.subject}
-                              className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
+                              className={`text-sm items-center flex-1 min-w-0 ${g.enabled ? "font-semibold" : "text-gray-600"}`}
                               onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
                             {g.enabled && (
                               <div className="flex items-center gap-2 shrink-0">

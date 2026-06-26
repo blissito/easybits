@@ -32,13 +32,13 @@ export const Switch = ({
 
   return (
     <button
-      className={cn("text-left flex gap-4 h-6 ", className)}
+      className={cn("text-left flex gap-3 h-6 min-w-0 ", className)}
       type="button"
       onClick={handleChange}
     >
       <div
         className={cn(
-          "p-[3px] w-11 border-black rounded-full border flex items-center bg-gray-200",
+          "p-[3px] w-11 shrink-0 border-black rounded-full border flex items-center bg-gray-200",
           holderClassName,
           {
             "justify-end bg-brand-500": checked,
@@ -50,7 +50,7 @@ export const Switch = ({
           className="border-black bg-white rounded-full w-4 h-4 border transition-all"
         />
       </div>
-      <span>{label}</span>
+      {label && <span className="truncate">{label}</span>}
       <input
         checked={checked}
         className="checkbox hidden"
