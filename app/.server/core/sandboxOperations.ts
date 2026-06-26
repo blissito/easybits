@@ -159,6 +159,18 @@ export async function openAgentMessageStream(
   if (body.headers) payload.headers = body.headers;
   if (body.rawBody !== undefined) {
     payload.rawBody = body.rawBody;
+  } else if (body.denikApiKey || body.appendSystemPrompt) {
+    // ⚠️ El host (sandbox-host /v1/sandbox/:id/agent/message) SOLO reenvía
+    // {content, sessionId} de los campos top-level — descarta cualquier extra.
+    // Para que campos del worker (denikApiKey, appendSystemPrompt) lleguen al
+    // microVM hay que mandarlos como `rawBody` (passthrough verbatim que el host
+    // sí reenvía tal cual). Sin esto el worker nunca recibe la key → sin MCP denik.
+    payload.rawBody = {
+      content: body.content,
+      ...(body.sessionId ? { sessionId: body.sessionId } : {}),
+      ...(body.denikApiKey ? { denikApiKey: body.denikApiKey } : {}),
+      ...(body.appendSystemPrompt ? { appendSystemPrompt: body.appendSystemPrompt } : {}),
+    };
   } else {
     payload.content = body.content;
     // Claude CLI exige session IDs en formato UUID — pasaba "default" como
@@ -166,13 +178,6 @@ export async function openAgentMessageStream(
     // no hay sessionId real para que el daemon (o el agent-runner) genere
     // un UUID fresh en lugar de heredar este literal.
     if (body.sessionId) payload.sessionId = body.sessionId;
-    // Per-message denik org key (pool/Nik): el worker arma el MCP denik scopeado
-    // a ese org SOLO para este turno.
-    if (body.denikApiKey) payload.denikApiKey = body.denikApiKey;
-    // Per-message personalización por-org (capa 3): el worker la APPENDEA a su
-    // persona del pool (que a su vez se appendea al preset claude_code). Nunca
-    // sobreescribe la base de EasyBits.
-    if (body.appendSystemPrompt) payload.appendSystemPrompt = body.appendSystemPrompt;
   }
   const res = await fetch(url, {
     method: "POST",
