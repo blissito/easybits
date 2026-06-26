@@ -44,6 +44,8 @@ export default [
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
   // AI Chat
   route("/ai-chat", "routes/ai-chat.tsx"),
+  // POC público: visualización de la flota (cajas + agentes) con textura de fieltro
+  route("/flota-poc", "routes/flota-poc.tsx"),
 
   // user dash
   ...prefix("dash", [
