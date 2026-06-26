@@ -1,7 +1,7 @@
 import type { Route } from "./+types/pools.wa-action";
 import { db } from "~/.server/db";
 import { executeWaAction } from "~/.server/integrations/whatsapp/baileys.server";
-import { DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/poolOperations";
+import { mergedCapabilities, type GroupConfig } from "~/.server/core/poolOperations";
 
 // POST /api/v2/pools/wa-action
 //
@@ -66,12 +66,14 @@ export async function action({ request }: Route.ActionArgs) {
     }
     const keys = (route.pool.groupKeys as Record<string, string> | null) ?? {};
     const subjects = (route.pool.seenGroups as Record<string, string> | null) ?? {};
-    const catalog = (route.pool.mcpCatalog as McpCatalogEntry[] | null) ?? DEFAULT_MCP_CATALOG;
+    // Curated capabilities (code) ∪ the owner's custom entries — same source of
+    // truth as the dashboard, so the agent and the UI never diverge.
+    const catalog = mergedCapabilities(route.pool);
     const configs = (route.pool.groupConfigs as Record<string, GroupConfig> | null) ?? {};
 
     if (actionName === "list_mcps") {
-      // The agent's full MCP menu. builtin = always-on (easybits/wa) or key-scoped
-      // (denik); the rest are toggleable per group via set_group_mcps.
+      // The agent's full capability menu. builtin = always-on (easybits/wa); the
+      // rest are toggleable per group via set_group_mcps.
       const mcps = catalog.map((e) => ({ name: e.name, label: e.label ?? e.name, builtin: Boolean(e.builtin) }));
       return Response.json({ ok: true, result: JSON.stringify({ mcps }) }, { status: 200, headers: CORS });
     }

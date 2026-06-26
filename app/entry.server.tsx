@@ -8,6 +8,22 @@ import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
 import { handleSubdomainWebsite } from "~/.server/subdomainWebsite";
 
+// Process-level safety net (covers BOTH `react-router dev` and prod `server.mjs`):
+// a single unhandled rejection — e.g. a Mongo "write conflict" from concurrent
+// pool.update during a Baileys reconnect — must never take the server down. The
+// dev server runs Vite (no server.mjs), so this module is the shared early-load
+// point that protects local dev too. Targeted fixes still belong at the source.
+declare global { var __ebProcessGuards: boolean | undefined; }
+if (!globalThis.__ebProcessGuards) {
+  globalThis.__ebProcessGuards = true;
+  process.on("unhandledRejection", (reason) =>
+    console.error("[unhandledRejection]", reason instanceof Error ? reason.stack : reason)
+  );
+  process.on("uncaughtException", (err) =>
+    console.error("[uncaughtException]", err instanceof Error ? err.stack : err)
+  );
+}
+
 export const streamTimeout = 5_000;
 
 export default async function handleRequest(

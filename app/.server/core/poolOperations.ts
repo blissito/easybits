@@ -254,42 +254,86 @@ type InboundMessage = {
 export type McpCatalogEntry = {
   name: string; // unique key + Claude tool prefix (mcp__<name>__*)
   label?: string; // human label for the UI
+  description?: string; // one-line explainer for the UI
   transport: "stdio" | "http";
   command?: string; // stdio: e.g. "npx"
   args?: string[]; // stdio: e.g. ["-y", "@brightdata/mcp"]
   url?: string; // http: remote MCP endpoint
-  env?: Record<string, string>; // static env defaults (tenant secrets via per-group env)
-  builtin?: boolean; // easybits/wa/denik — baked/special, can't delete
+  // env values may reference a vault secret as "$secret:NAME" — resolved per-turn
+  // from the owner's vault (never stored raw). Non-secret values pass through.
+  env?: Record<string, string>;
+  requiredSecrets?: string[]; // vault secret names this capability needs to work
+  builtin?: boolean; // easybits/wa — always-on, not togglable
 };
 export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string> };
 
-// The default menu every new pool gets. easybits + wa are ALWAYS active in the
-// worker (baked env / in-process) and denik flows via its per-group key — they
-// are listed as builtins so the UI/agent see the full surface, but they are NOT
-// resolved through the generic per-turn map below (that's only for CUSTOM MCPs).
+// $secret:NAME reference shape (same as agentOperations.expandMcpServerSecrets).
+const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
+
+// Builtins seeded on every pool: easybits + wa are ALWAYS active in the worker
+// (baked env / in-process), not togglable. NO denik here — denik's per-group org
+// key is a reseller-only path (groupKeys + denikApiKey), invisible to the generic UI.
 export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
   { name: "easybits", label: "EasyBits — archivos, docs, imágenes", transport: "stdio", command: "npx", args: ["-y", "@easybits.cloud/mcp"], builtin: true },
   { name: "wa", label: "WhatsApp — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true },
-  { name: "denik", label: "Denik — CRM por organización (key por grupo)", transport: "stdio", command: "npx", args: ["-y", "@denik.me/mcp"], builtin: true },
 ];
 
-// Resolve the per-turn EXTRA MCP servers for a group: the CUSTOM catalog entries
-// the group enabled, as a name→serverDef map the worker merges over its baked
-// builtins. Builtins are skipped (easybits/wa always-on; denik via its own key).
-// Per-group env (tenant secrets) is merged over each entry's static env — each
-// MCP only reads the vars it cares about, so a shared per-group env is safe.
-export function resolveGroupMcpServers(
+// CURATED capabilities EasyBits ships in CODE (not stored in the DB) — every agent
+// can enable these per group. Each declares the vault secret(s) it needs; the
+// owner provides them once (agent-level) and the per-group toggle just turns the
+// capability on/off. Custom (advanced) MCPs live in Pool.mcpCatalog instead.
+export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
+  {
+    name: "brightdata",
+    label: "Búsqueda web",
+    description: "Buscar y leer páginas web en tiempo real (Brightdata).",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@brightdata/mcp"],
+    env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" },
+    requiredSecrets: ["BRIGHTDATA_API_TOKEN"],
+  },
+];
+
+// The full capability menu for a pool: curated (code) ∪ the owner's custom entries
+// (Pool.mcpCatalog, non-builtin, not shadowing a curated name). Single source of
+// truth for the dashboard, the agent (wa-action) and per-turn resolution.
+export function mergedCapabilities(pool: { mcpCatalog?: unknown }): McpCatalogEntry[] {
+  const stored = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+  const custom = stored.filter(
+    (e) => !e.builtin && !CURATED_CAPABILITIES.some((c) => c.name === e.name)
+  );
+  return [...CURATED_CAPABILITIES, ...custom];
+}
+
+// Resolve the per-turn EXTRA MCP servers a group enabled, as a name→serverDef map
+// the worker merges over its baked builtins. CRUX: the per-turn path is a verbatim
+// passthrough (nothing downstream expands $secret), so we resolve $secret:NAME here
+// from the OWNER's vault and emit PLAINTEXT env. A capability whose required secret
+// is missing is SKIPPED entirely — never ship a half-configured MCP to the worker.
+export async function resolveGroupMcpServers(
   pool: { mcpCatalog?: unknown; groupConfigs?: unknown },
-  groupId: string
-): Record<string, unknown> | undefined {
-  const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? DEFAULT_MCP_CATALOG;
+  groupId: string,
+  ownerId: string
+): Promise<Record<string, unknown> | undefined> {
   const cfg = ((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
   const enabled = cfg.mcpServers;
   if (!enabled?.length) return undefined;
+  const caps = mergedCapabilities(pool);
   const out: Record<string, unknown> = {};
-  for (const e of catalog) {
+  for (const e of caps) {
     if (e.builtin || !enabled.includes(e.name)) continue;
-    const env = { ...(e.env ?? {}), ...(cfg.env ?? {}) };
+    const rawEnv = { ...(e.env ?? {}), ...(cfg.env ?? {}) };
+    const env: Record<string, string> = {};
+    let missing = false;
+    for (const [k, v] of Object.entries(rawEnv)) {
+      const m = SECRET_REF_RE.exec(v);
+      if (!m) { env[k] = v; continue; }
+      const val = await getSecretValue(ownerId, m[1]).catch(() => null);
+      if (val == null) { missing = true; break; }
+      env[k] = val;
+    }
+    if (missing) continue;
     out[e.name] =
       e.transport === "http"
         ? { type: "http", url: e.url, ...(Object.keys(env).length ? { env } : {}) }
@@ -703,9 +747,10 @@ export async function routeMessage(
             (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
           // Personalización por-org (capa 3): se appendea a la persona del pool.
           appendSystemPrompt: msg.appendSystemPrompt,
-          // Per-grupo: los MCP CUSTOM que este grupo habilitó (catálogo + env del
-          // grupo). El worker los mergea sobre sus builtins (easybits/wa/denik).
-          mcpServers: resolveGroupMcpServers(pool, msg.groupId),
+          // Per-grupo: las capacidades que este grupo habilitó (curadas ∪ custom),
+          // con sus secrets resueltos del vault del dueño. El worker las mergea
+          // sobre sus builtins (easybits/wa).
+          mcpServers: await resolveGroupMcpServers(pool, msg.groupId, pool.ownerId),
         }
       );
       reply = await collectStream(stream, opts.onChunk);
