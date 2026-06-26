@@ -24,7 +24,7 @@ import makeWASocket, {
   type AuthenticationState,
 } from "@whiskeysockets/baileys";
 import { db } from "~/.server/db";
-import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
+import { routeMessage, PoolAtCapacity, PoolRateLimited, ADMIT_GIVEUP_MS, admitRetryDelay } from "~/.server/core/poolOperations";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 import { extractInboundContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
 import { deliverFilesFromReply } from "~/.server/integrations/whatsapp/outboundMedia.server";
@@ -92,14 +92,24 @@ type InboundItem = {
   m: proto.IWebMessageInfo;
   sender?: string;
 };
-type GroupBuffer = { items: InboundItem[]; timer: ReturnType<typeof setTimeout> | null; running: boolean };
+// `heldAt`/`attempt`: when a turn fails with PoolAtCapacity we DON'T drop the
+// burst — we put it back and retry with backoff (see drainGroup). heldAt>0 marks
+// an active capacity hold; the retry timer (not the debounce) drives the drain.
+type GroupBuffer = { items: InboundItem[]; timer: ReturnType<typeof setTimeout> | null; running: boolean; heldAt: number; attempt: number };
 const groupBuffers = new Map<string, GroupBuffer>();
 const COALESCE_DEBOUNCE_MS = 1500;
+const MAX_HELD_ITEMS = 20; // cap a group's buffer during a capacity hold
 
 function enqueueInbound(sock: WASocket, poolId: string, jid: string, item: InboundItem) {
   const key = `${poolId}:${jid}`;
   let buf = groupBuffers.get(key);
-  if (!buf) { buf = { items: [], timer: null, running: false }; groupBuffers.set(key, buf); }
+  if (!buf) { buf = { items: [], timer: null, running: false, heldAt: 0, attempt: 0 }; groupBuffers.set(key, buf); }
+  // During a capacity hold, keep coalescing up to a cap but let the backoff retry
+  // timer drive the drain — don't reset it to the short debounce.
+  if (buf.heldAt > 0) {
+    if (buf.items.length < MAX_HELD_ITEMS) buf.items.push(item);
+    return;
+  }
   buf.items.push(item);
   if (buf.running) return; // a turn is in flight; it re-drains itself on finish
   if (buf.timer) clearTimeout(buf.timer);
@@ -170,20 +180,54 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
       if (last.m.key) sock.sendMessage(jid, { react: { text: "✅", key: last.m.key } }).catch(() => {});
       log(poolId, `replied in ${jid} (batch ${batch.length})${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
     }
+    // Turn succeeded (capacity was fine) → clear any capacity hold.
+    if (buf.heldAt > 0) {
+      log(poolId, `served in ${jid} after ${Date.now() - buf.heldAt}ms held (${buf.attempt} retries)`);
+      buf.heldAt = 0;
+      buf.attempt = 0;
+    }
   } catch (e) {
-    const notice =
-      e instanceof PoolAtCapacity ? "Estamos a tope ahora, dame un momento. 🙏"
-      : e instanceof PoolRateLimited ? "Voy un poco saturado, dame un momento. 🙏"
-      : null;
-    if (notice) sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
-    log(poolId, `route failed in ${jid}: ${e}`);
+    if (e instanceof PoolAtCapacity) {
+      // No room right now → HOLD the burst and retry with backoff (don't drop it).
+      // The reaper frees RAM within its 60s cadence, so this is normally served
+      // well inside the give-up window — the user never has to resend.
+      buf.items.unshift(...batch);
+      if (buf.heldAt === 0) {
+        buf.heldAt = Date.now();
+        const notice = "Estamos a tope ahora, dame un momento. 🙏";
+        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+      }
+      if (Date.now() - buf.heldAt >= ADMIT_GIVEUP_MS) {
+        const bye = "Sigo saturado, reintenta en un rato. 🙏";
+        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? bye : `${assistantName}: ${bye}`);
+        log(poolId, `gave up in ${jid} after ${Date.now() - buf.heldAt}ms`);
+        buf.items.length = 0; buf.heldAt = 0; buf.attempt = 0; // drop the hold
+      } else {
+        log(poolId, `at capacity in ${jid}, holding (retry ${buf.attempt + 1})`);
+      }
+    } else {
+      // Rate-limit (intentional anti-spam throttle) and any other error → drop,
+      // one brief notice. Queuing a rate-limited group would defeat the throttle.
+      if (e instanceof PoolRateLimited) {
+        const notice = "Voy un poco saturado, dame un momento. 🙏";
+        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+      }
+      log(poolId, `route failed in ${jid}: ${e}`);
+    }
   } finally {
     clearInterval(typingTimer);
     sock.sendPresenceUpdate("paused", jid).catch(() => {});
     buf.running = false;
-    // Messages that landed during the turn → drain them as the next batch.
+    // Next drain: a capacity hold uses the backoff schedule (then bumps the
+    // attempt so the NEXT retry waits longer); otherwise the short debounce for
+    // messages that landed during the turn.
     if (buf.items.length > 0) {
-      buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, COALESCE_DEBOUNCE_MS);
+      if (buf.heldAt > 0) {
+        buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, admitRetryDelay(buf.attempt));
+        buf.attempt++;
+      } else {
+        buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, COALESCE_DEBOUNCE_MS);
+      }
     }
   }
 }

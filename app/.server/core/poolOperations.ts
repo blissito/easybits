@@ -46,6 +46,16 @@ export class PoolRateLimited extends Error {
   }
 }
 
+// Admission backoff policy — when a surface hits PoolAtCapacity it HOLDS the
+// message and retries instead of dropping it (the user never resends). Shared
+// here (not in the Baileys surface) so a future WABA surface reuses the same
+// schedule. The reaper frees RAM within its 60s cadence, so a held message is
+// normally served well inside the give-up window.
+export const ADMIT_BACKOFFS_MS = [5_000, 10_000, 20_000, 30_000]; // last value caps
+export const ADMIT_GIVEUP_MS = 180_000; // hold ~3 min, then give up with one apology
+export const admitRetryDelay = (attempt: number) =>
+  ADMIT_BACKOFFS_MS[Math.min(attempt, ADMIT_BACKOFFS_MS.length - 1)];
+
 // ── In-flight turn guard ──────────────────────────────────────────────────────
 // VMs currently servicing a turn (working, or waiting on tools/subagents that
 // emit no chunks). The reaper measures idle by lastMessageAt, which is only
@@ -223,6 +233,11 @@ type InboundMessage = {
   // Inbound image bytes (base64) for NATIVE Claude vision: written onto the
   // worker's disk so the agent's Read tool sees it (no Gemini middle step).
   image?: { base64: string; ext: string; url?: string };
+  // Per-message MCP key override (the org's dnk_pub_/admin key). Web channels
+  // (denik widget/admin) pass it per turn instead of pre-registering one per
+  // ephemeral conversation; wins over pool.groupKeys[groupId]. WhatsApp omits it
+  // and relies on the pre-registered groupKeys.
+  denikApiKey?: string;
 };
 
 // Build a background AuthContext for a pool's owner. Pool dispatch runs outside
@@ -250,7 +265,10 @@ async function waitAgentRunning(agentId: string, timeoutMs = 120_000) {
 // Drain a unified {type:"chunk"|"done"|"error"} SSE stream into plain text.
 // WhatsApp is non-streaming (one message out), so we collect server-side; this
 // also lets us log the full reply as PoolMessage.
-async function collectStream(stream: ReadableStream<Uint8Array>): Promise<string> {
+async function collectStream(
+  stream: ReadableStream<Uint8Array>,
+  onChunk?: (s: string) => void
+): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -263,8 +281,10 @@ async function collectStream(stream: ReadableStream<Uint8Array>): Promise<string
       if (!json || json === "[DONE]") continue;
       try {
         const evt = JSON.parse(json) as { type?: string; value?: string; message?: string };
-        if (evt.type === "chunk" && typeof evt.value === "string") reply += evt.value;
-        else if (evt.type === "error") throw new Error(evt.message || "agent stream error");
+        if (evt.type === "chunk" && typeof evt.value === "string") {
+          reply += evt.value;
+          onChunk?.(evt.value);
+        } else if (evt.type === "error") throw new Error(evt.message || "agent stream error");
       } catch (e) {
         if (e instanceof Error && e.message.includes("agent stream")) throw e;
       }
@@ -495,7 +515,7 @@ async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: strin
 export async function routeMessage(
   poolId: string,
   msg: InboundMessage,
-  opts: { skipRateLimit?: boolean; hasMedia?: boolean } = {}
+  opts: { skipRateLimit?: boolean; hasMedia?: boolean; onChunk?: (s: string) => void } = {}
 ): Promise<string> {
   const pool = await db.pool.findUniqueOrThrow({ where: { id: poolId } });
   const ctx = await ctxForOwner(pool.ownerId);
@@ -584,12 +604,15 @@ export async function routeMessage(
         {
           content,
           sessionId: placed.sessionUuid,
-          // Per-grupo: la dnk_pub_ del org dueño de este grupo (si se registró al
-          // crearlo) → el worker scopea el MCP denik a ese org SOLO este turno.
-          denikApiKey: (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
+          // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
+          // (canales web la mandan por turno); cae a pool.groupKeys[groupId]
+          // (registrado al crear el grupo, ruta WhatsApp).
+          denikApiKey:
+            msg.denikApiKey ??
+            (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
         }
       );
-      reply = await collectStream(stream);
+      reply = await collectStream(stream, opts.onChunk);
       auditLog("turn.ok", {
         groupId: msg.groupId,
         agentId: worker.id,

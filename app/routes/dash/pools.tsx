@@ -1,5 +1,5 @@
 import type { Route } from "./+types/pools";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
@@ -346,6 +346,20 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
   const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
+  // Despertar: cuando una caja pasa de suspended → running (un mensaje la resucitó),
+  // el ghosty se despereza (stretch pop) y el "Zzz" se va flotando. Detectamos la
+  // transición con un ref al status anterior; el poll de 2.5s la dispara en vivo.
+  const prevStatus = useRef(status);
+  const [waking, setWaking] = useState(false);
+  useEffect(() => {
+    if (prevStatus.current === "suspended" && status === "running") {
+      setWaking(true);
+      const t = setTimeout(() => setWaking(false), 800);
+      prevStatus.current = status;
+      return () => clearTimeout(t);
+    }
+    prevStatus.current = status;
+  }, [status]);
   // motion SOLO para entrada/salida (aparecer/desaparecer). SIN `layout` y el
   // AnimatePresence va SIN popLayout → no hay jitter en cada poll, solo se anima
   // cuando una caja realmente nace o muere.
@@ -368,14 +382,22 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
         </svg>
       ) : (
         <div className="relative grid grid-cols-2 gap-2.5 place-items-center">
-          {status === "suspended" && slots > 0 && (
-            <span className="pointer-events-none absolute -top-3 -right-2 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</span>
-          )}
+          <AnimatePresence>
+            {status === "suspended" && slots > 0 && (
+              <motion.span key="zzz"
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12, scale: 1.4 }} transition={{ duration: 0.45 }}
+                className="pointer-events-none absolute -top-3 -right-2 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</motion.span>
+            )}
+          </AnimatePresence>
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
-              <div key={`a${j}`} className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
+              <motion.div key={`a${j}`}
+                animate={waking ? { scale: [1, 0.9, 1.12, 1], y: [0, 1, -3, 0] } : { scale: 1, y: 0 }}
+                transition={waking ? { duration: 0.7, ease: "easeOut", times: [0, 0.3, 0.6, 1], delay: j * 0.06 } : { duration: 0.3 }}
+                className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
                 {ghosty ? <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={blinkOffset(`${id}:${j}`)} /> : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
-              </div>
+              </motion.div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
             )
