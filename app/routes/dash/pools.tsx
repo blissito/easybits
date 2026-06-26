@@ -769,7 +769,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       const cfgKey = `${p.id}:${g.id}`;
                       const cfgOpen = showGroupCfg[cfgKey] ?? false;
                       return (
-                      <motion.div key={g.id} layout className="flex flex-col gap-1"
+                      <motion.div key={g.id} layout="position" className="flex flex-col gap-1"
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                         transition={{ type: "spring", stiffness: 500, damping: 34 }}>
                         <div className="flex items-center justify-between gap-2">
@@ -797,8 +797,13 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                             </div>
                           )}
                         </div>
+                        <AnimatePresence initial={false}>
                         {g.enabled && cfgOpen && (
-                          <div className="ml-1 pl-3 border-l-2 border-gray-200 flex flex-col gap-2 pb-1">
+                          <motion.div key="cfg"
+                            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}
+                            style={{ overflow: "hidden" }}>
+                          <div className="ml-1 pl-3 mt-1 border-l-2 border-gray-200 flex flex-col gap-2 pb-1">
                             <label className="flex flex-col gap-1">
                               <span className="text-[11px] text-gray-500 font-semibold">Key del org (denik) — aísla este grupo a su organización</span>
                               <input type="password" autoComplete="off"
@@ -831,7 +836,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                               <span className="text-[11px] text-gray-400">easybits y WhatsApp siempre activos. Agrega MCPs custom al catálogo abajo para activarlos por grupo.</span>
                             )}
                           </div>
+                          </motion.div>
                         )}
+                        </AnimatePresence>
                       </motion.div>
                       );
                     };
