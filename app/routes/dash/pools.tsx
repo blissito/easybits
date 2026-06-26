@@ -342,7 +342,9 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     // Dormida (suspended): congelada, ~0 CPU/RAM, resume <1s. Se pinta atenuada
     // para que NO se lea como "ocupada gastando" — es capacidad casi-libre.
     : status === "suspended" ? "border-indigo-200 bg-indigo-50/50"
-    : full ? "border-amber-500 bg-amber-50"
+    // Llena = utilización pico, NO advertencia: verde profundo ("a tope y bien").
+    // Gradiente de salud: gris (idle) → verde claro (con cupo) → verde sólido (full).
+    : full ? "border-emerald-600 bg-emerald-100"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
   const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
