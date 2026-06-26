@@ -49,10 +49,14 @@ export class PoolRateLimited extends Error {
 // Admission backoff policy — when a surface hits PoolAtCapacity it HOLDS the
 // message and retries instead of dropping it (the user never resends). Shared
 // here (not in the Baileys surface) so a future WABA surface reuses the same
-// schedule. The reaper frees RAM within its 60s cadence, so a held message is
-// normally served well inside the give-up window.
+// schedule. Dos formas de liberarse dentro de la ventana: (a) un turno activo
+// termina y libera RAM (cadencia ~60s); (b) en saturación de slots, el reaper
+// DUERME una VM ociosa (idleSuspendMin=2min + cadencia 60s ⇒ hasta ~3min) y el
+// reintento la DESALOJA (LRU) para meter al que espera. Por eso el give-up vive
+// por ENCIMA de idleSuspendMin + cadencia: si no, la cola se rendiría justo antes
+// de que aparezca la víctima dormida y nunca llegaría a desalojar.
 export const ADMIT_BACKOFFS_MS = [5_000, 10_000, 20_000, 30_000]; // last value caps
-export const ADMIT_GIVEUP_MS = 180_000; // hold ~3 min, then give up with one apology
+export const ADMIT_GIVEUP_MS = 240_000; // hold ~4 min (> idleSuspendMin+cadencia), luego una disculpa
 export const admitRetryDelay = (attempt: number) =>
   ADMIT_BACKOFFS_MS[Math.min(attempt, ADMIT_BACKOFFS_MS.length - 1)];
 
@@ -330,9 +334,17 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
   const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
   const budget = (PLANS[plan]?.concurrentSandboxes ?? 2) + reserved.machines;
   const hostVms = await listSandboxes(ctx).catch(() => null);
-  const inUse = hostVms
+  // El host OMITE las VMs suspendidas de su listing (las snapshotea y las saca).
+  // Un budget contado solo sobre running/starting REGALA capacidad: el tenant
+  // llena sus cajas, deja que el reaper las duerma (desaparecen del conteo) y
+  // vuelve a spawnear encima → duplica su cupo y es explotable. Una VM suspendida
+  // es capacidad reservada real (disco + snapshot resume <1s), así que la sumamos
+  // de vuelta desde DB (el owner es dueño de sus workers de pool).
+  const suspended = await db.agent.count({ where: { ownerId: ctx.user.id, status: "suspended" } });
+  const live = hostVms
     ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
-    : await db.agent.count({ where: { poolId: pool.id, status: { in: ["running", "suspended", "building"] } } });
+    : await db.agent.count({ where: { poolId: pool.id, status: { in: ["running", "building"] } } });
+  const inUse = live + suspended;
   if (inUse >= Math.min(budget, pool.maxVms)) {
     throw new PoolAtCapacity(`account at sandbox budget (${inUse}/${budget})`);
   }
@@ -421,7 +433,32 @@ async function reserveVm(ctx: AuthContext, pool: PoolRow, groupId: string): Prom
         break;
       }
     }
-    if (!target) target = await spawnVm(ctx, pool); // building row; throws PoolAtCapacity if no room
+    if (!target) {
+      try {
+        target = await spawnVm(ctx, pool); // building row; throws PoolAtCapacity if no room
+      } catch (e) {
+        if (!(e instanceof PoolAtCapacity)) throw e;
+        // En el techo de flota: en vez de pasarnos (la "generosidad" explotable),
+        // RECICLAMOS un slot. Desalojamos la conversación dormida menos-reciente
+        // (LRU) de una VM SUSPENDIDA — su memoria ya está en S3 (backup al
+        // suspender), así que volverá a montarse fría (~12s) la próxima vez que
+        // hable. Sólo suspendidas: están ociosas por definición y respaldadas, así
+        // no cortamos un turno en vuelo. Si NO hay ninguna dormida, todo está vivo
+        // de verdad → back-pressure legítima: relanzamos PoolAtCapacity.
+        const napping = await db.agent.findMany({ where: { poolId: pool.id, status: "suspended" }, select: { id: true } });
+        const victim = napping.length
+          ? await db.poolRoute.findFirst({
+              where: { poolId: pool.id, groupId: { not: groupId }, agentId: { in: napping.map((v) => v.id) } },
+              orderBy: { lastMessageAt: "asc" },
+            })
+          : null;
+        if (!victim?.agentId) throw e;
+        await db.poolRoute.update({ where: { id: victim.id }, data: { agentId: null, detachedAt: new Date() } });
+        auditLog("evict", { pool: pool.id, victim: victim.groupId, freedVm: victim.agentId });
+        // El slot liberado vive en una VM suspendida → ensureRunning la resume.
+        target = vms.find((v) => v.id === victim.agentId) ?? (await db.agent.findUniqueOrThrow({ where: { id: victim.agentId } }));
+      }
+    }
 
     // Claim/refresh the route to point at the target, reserving the slot.
     if (fresh) {
