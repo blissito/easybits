@@ -58,6 +58,16 @@
   border-radius: inherit;
 }
 
+/* tapete de fieltro NEGRO: el grano se ve como fibras CLARAS sobre fondo oscuro,
+   así que el ::before cambia multiply→screen (multiply sobre negro = negro, invisible). */
+.felt-mat--dark {
+  background: #17131f;
+}
+.felt-mat--dark::before {
+  mix-blend-mode: screen;
+  opacity: 0.16;
+}
+
 /* figura afelpada (fantasma, íconos): contorno con fibras + sombra suave */
 .felt-figure {
   filter: url(#feltEdge) drop-shadow(0 3px 3px rgba(0, 0, 0, 0.22));
