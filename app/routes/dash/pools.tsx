@@ -742,7 +742,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   }, [capModal]);
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6">
       <div className="flex items-center gap-2 mb-1">
         <h1 className="text-2xl font-bold">Tu flota de agentes</h1>
         <span className="group relative inline-flex">
@@ -758,15 +758,19 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       </div>
       <p className="text-gray-500 mb-6">Crea un agente, conéctalo a WhatsApp y atiende tus grupos. Se levanta bajo demanda.</p>
 
-      {/* Bento responsive: Capacidad a todo lo ancho arriba; luego Nuevo agente y
-          los agentes fluyen en 2 columnas (desktop) y se apilan en mobile. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {/* Layout: IZQUIERDA el HUD (mayoría, 2/3, sticky); DERECHA la lista de
+          agentes apilada en una columna (1/3). En mobile se apila todo. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
 
-      {/* Capacidad — HUD estilo videojuego. Las VMs son CONTENEDORES; dentro
-          viven los agentes (workers, render = ojitos de la marca). El color de
-          cada VM sube según ocupación: gris (vacía) → morado (a medias) → verde
-          (llena), amarillo si está booteando. Capacidad = plan de la cuenta. */}
-      <CapacityHud capacity={capacity} />
+      {/* IZQUIERDA — HUD estilo videojuego. Las VMs son CONTENEDORES; dentro viven
+          los agentes (ojitos de la marca); color por ocupación. Ocupa 2/3 y queda
+          sticky al hacer scroll de la lista de agentes. */}
+      <div className="lg:col-span-2 lg:self-start lg:sticky lg:top-6">
+        <CapacityHud capacity={capacity} />
+      </div>
+
+      {/* DERECHA — columna de agentes (1/3): Nuevo agente + las cards apiladas. */}
+      <div className="lg:col-span-1 flex flex-col gap-4">
 
       {/* Nuevo agente — colapsada: solo Ghosty + descripción + botón sutil. El form
           se abre bajo demanda (lo trabajamos a fondo después). */}
@@ -827,7 +831,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {pools.length === 0 && <p className="lg:col-span-2 text-gray-400">Aún no tienes agentes.</p>}
+      {pools.length === 0 && <p className="text-gray-400 text-sm">Aún no tienes agentes.</p>}
         {pools.map((p) => {
           const st = STATUS[p.status as keyof typeof STATUS] ?? STATUS.disconnected;
           const stale = p.status === "connected" && !p.live;
@@ -1049,12 +1053,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </button>
                 </div>)}
 
-                {/* Footer del agente */}
+                {/* Footer del agente — Borrar es DESTRUCTIVO e irreversible: lo
+                    dejamos discreto (no un botón rojo prominente) para que no se
+                    dispare por accidente. Mantiene el confirm reforzado. */}
                 <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
                   <button disabled={isBusy("delete", p.id)}
-                    onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
-                    className="border-2 border-red-300 text-red-600 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
-                    {isBusy("delete", p.id) ? <Spinner /> : "Borrar"}
+                    onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos. Esta acción NO se puede deshacer.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
+                    className="text-xs text-gray-400 hover:text-red-600 transition-colors disabled:opacity-60">
+                    {isBusy("delete", p.id) ? "Borrando…" : "Borrar agente"}
                   </button>
                 </div>
                 </>);
@@ -1062,6 +1068,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
             </div>
           );
         })}
+      </div>
       </div>
 
       {sharedPools.length > 0 && (
