@@ -93,7 +93,29 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { listSandboxes } = await import("~/.server/core/sandboxOperations");
   const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamadas" };
   const workerSandboxIds = new Set(machines.map((m) => m.sandboxId).filter(Boolean) as string[]);
-  const hostVms = await listSandboxes({ user, scopes: ["READ"] } as any).catch(() => [] as any[]);
+  // El listing del host es la VERDAD de qué VMs están vivas: una VM suspendida se
+  // OMITE de la lista (el host la snapshotea y la saca). Capturamos si el host
+  // respondió para no marcar todo suspendido ante un error transitorio.
+  let hostVms: any[] = [];
+  let hostReachable = false;
+  try { hostVms = (await listSandboxes({ user, scopes: ["READ"] } as any)) as any[]; hostReachable = true; }
+  catch { hostVms = []; }
+  // Reconcilia las cajitas contra la realidad: un worker aún marcado "running" cuya
+  // VM el host ya no lista fue suspendido fuera de banda (idle-suspend del host, o un
+  // reaper que suspendió en el host pero murió antes del write a DB en un deploy). Su
+  // fila Agent sigue existiendo (destroy la BORRA) → running+ausente ⇒ suspended.
+  // Persistimos para que el HUD, el ruteo (ensureRunning hace resume en "suspended")
+  // y el resume coincidan; si no, un mensaje iría a una VM pausada y fallaría.
+  if (hostReachable) {
+    const liveIds = new Set(
+      (hostVms as any[]).filter((v) => v.status === "running" || v.status === "starting").map((v) => v.sandboxId)
+    );
+    const drifted = machines.filter((m) => m.status === "running" && m.sandboxId && !liveIds.has(m.sandboxId));
+    if (drifted.length) {
+      await db.agent.updateMany({ where: { id: { in: drifted.map((m) => m.id) } }, data: { status: "suspended" } }).catch(() => {});
+      for (const m of drifted) m.status = "suspended";
+    }
+  }
   const extraMachines = (hostVms as any[])
     .filter((v) => !workerSandboxIds.has(v.sandboxId) && (v.status === "running" || v.status === "starting"))
     .map((v) =>
@@ -254,12 +276,23 @@ type Capacity = {
 
 const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, opacity: 1, y: 0 }, exit: { scale: 0.4, opacity: 0, y: 8 } };
 
+// Deterministic 0–5s phase offset so each Ghosty blinks out of sync instead of in
+// unison. NO Math.random (it would mismatch between SSR and hydration) — derived
+// from a stable per-mascota seed (box id + slot index), kept within the 5s dur.
+function blinkOffset(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return (h % 500) / 100; // 0.00–4.99s
+}
+
 // Ghosty — la mascota de la marca (fantasma morado + lentes), el agente INSIGNIA
 // que el pool ofrece por default. Inline SVG (no hay asset suelto del fantasma;
 // /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
-function GhostyMascot({ className = "", blink = true, sleeping = false }: { className?: string; blink?: boolean; sleeping?: boolean }) {
+function GhostyMascot({ className = "", blink = true, sleeping = false, offset = 0 }: { className?: string; blink?: boolean; sleeping?: boolean; offset?: number }) {
+  // begin negativo = arranca el ciclo como si ya hubiera corrido `offset` segundos,
+  // así cada mascota parpadea desfasada de las demás.
   const Blink = blink && !sleeping ? (
-    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur="5s" repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
+    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur="5s" begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
   ) : null;
   return (
     <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -341,7 +374,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
               <div key={`a${j}`} className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
-                {ghosty ? <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} /> : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
+                {ghosty ? <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={blinkOffset(`${id}:${j}`)} /> : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
               </div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
