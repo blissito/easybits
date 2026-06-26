@@ -42,6 +42,12 @@ export async function action({ request, params }: Route.ActionArgs) {
       sender: typeof body?.sender === "string" ? body.sender : undefined,
       text,
       mediaUrl: typeof body?.mediaUrl === "string" ? body.mediaUrl : undefined,
+      // Web channels (denik admin) scope the org per turn instead of pre-registering
+      // a groupKey; WhatsApp omits it and falls back to pool.groupKeys.
+      denikApiKey: typeof body?.denikApiKey === "string" ? body.denikApiKey : undefined,
+      // Per-org personalization (layer 3) appended to the pool persona by the worker.
+      appendSystemPrompt:
+        typeof body?.appendSystemPrompt === "string" ? body.appendSystemPrompt : undefined,
     });
     return Response.json({ reply }, { headers: CORS });
   } catch (e) {

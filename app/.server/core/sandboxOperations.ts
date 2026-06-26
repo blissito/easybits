@@ -143,6 +143,7 @@ export async function openAgentMessageStream(
     content?: string;
     sessionId?: string;
     denikApiKey?: string;
+    appendSystemPrompt?: string;
     port?: number;
     path?: string;
     rawBody?: unknown;
@@ -168,6 +169,10 @@ export async function openAgentMessageStream(
     // Per-message denik org key (pool/Nik): el worker arma el MCP denik scopeado
     // a ese org SOLO para este turno.
     if (body.denikApiKey) payload.denikApiKey = body.denikApiKey;
+    // Per-message personalización por-org (capa 3): el worker la APPENDEA a su
+    // persona del pool (que a su vez se appendea al preset claude_code). Nunca
+    // sobreescribe la base de EasyBits.
+    if (body.appendSystemPrompt) payload.appendSystemPrompt = body.appendSystemPrompt;
   }
   const res = await fetch(url, {
     method: "POST",
@@ -2810,7 +2815,7 @@ export async function openAgentChunkStream(
     | "embedToken"
     | "template"
   >,
-  body: { content: string; sessionId?: string; denikApiKey?: string }
+  body: { content: string; sessionId?: string; denikApiKey?: string; appendSystemPrompt?: string }
 ): Promise<ReadableStream<Uint8Array>> {
   const protocol = agent.protocol ?? "sse";
   if (protocol === "sse") {
@@ -2822,6 +2827,8 @@ export async function openAgentChunkStream(
       sessionId: body.sessionId,
       // Per-message denik org key (pool/Nik): scope del MCP denik por turno.
       denikApiKey: body.denikApiKey,
+      // Per-message personalización por-org (capa 3, append).
+      appendSystemPrompt: body.appendSystemPrompt,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });

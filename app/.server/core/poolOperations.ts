@@ -238,6 +238,10 @@ type InboundMessage = {
   // ephemeral conversation; wins over pool.groupKeys[groupId]. WhatsApp omits it
   // and relies on the pre-registered groupKeys.
   denikApiKey?: string;
+  // Per-message personalización por-org (capa 3): se APPENDEA a la persona del
+  // pool en el worker (que a su vez se appendea al preset). Canales web (denik)
+  // la pasan por turno; WhatsApp la omite.
+  appendSystemPrompt?: string;
 };
 
 // Build a background AuthContext for a pool's owner. Pool dispatch runs outside
@@ -610,6 +614,8 @@ export async function routeMessage(
           denikApiKey:
             msg.denikApiKey ??
             (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
+          // Personalización por-org (capa 3): se appendea a la persona del pool.
+          appendSystemPrompt: msg.appendSystemPrompt,
         }
       );
       reply = await collectStream(stream, opts.onChunk);
