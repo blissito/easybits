@@ -346,7 +346,20 @@ async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationSt
     creds,
     keys: makeCacheableSignalKeyStore(rawKeys as any, silent),
   };
-  const saveCreds = () => db.pool.update({ where: { id: poolId }, data: { authCreds: ser(creds) } }).then(() => {});
+  // Baileys fires creds.update WITHOUT awaiting saveCreds, so an unhandled
+  // rejection here crashes the whole app. During a reconnect storm multiple creds
+  // writes hit the same Pool doc concurrently → Mongo "write conflict". Retry once,
+  // then swallow — losing one creds write is harmless (the next update re-persists).
+  const saveCreds = () =>
+    db.pool
+      .update({ where: { id: poolId }, data: { authCreds: ser(creds) } })
+      .then(() => {})
+      .catch(() =>
+        db.pool
+          .update({ where: { id: poolId }, data: { authCreds: ser(creds) } })
+          .then(() => {})
+          .catch((e) => console.error(`[pool ${poolId}] saveCreds failed:`, e instanceof Error ? e.message : e))
+      );
   return { state, saveCreds };
 }
 

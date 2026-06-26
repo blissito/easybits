@@ -11,6 +11,18 @@ import getPort from "get-port";
 
 process.env.NODE_ENV = process.env.NODE_ENV ?? "production";
 
+// Last-resort safety net: a single unhandled promise rejection (e.g. a Mongo
+// "write conflict" from concurrent pool.update during a Baileys reconnect) used
+// to take down the WHOLE app and crash-loop it out of restarts. A web server
+// must never die from one stray async error — log it loudly and keep serving.
+// Targeted fixes still belong at the source; this only prevents total outages.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason instanceof Error ? reason.stack : reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err instanceof Error ? err.stack : err);
+});
+
 sourceMapSupport.install({
   retrieveSourceMap(source) {
     if (source.startsWith("file://")) {
