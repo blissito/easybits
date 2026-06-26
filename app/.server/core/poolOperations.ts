@@ -298,6 +298,21 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" },
     requiredSecrets: ["BRIGHTDATA_API_TOKEN"],
   },
+  {
+    // Denik agenda (contactos + reservas). Mismo binario `denik-mcp` pre-instalado
+    // en la imagen del worker que usa el path per-turn (groupKeys/denikApiKey); aquí
+    // lo exponemos como capacidad curada para que sea configurable por-grupo desde
+    // la UI (antes solo se podía registrar invisible vía groupKeys). DENIK_BASE_URL
+    // tiene default https://www.denik.me dentro de @denik.me/mcp, no hace falta pasarlo.
+    name: "denik",
+    label: "Denik — agenda y contactos",
+    description: "Buscar contactos y gestionar reservas de tu agenda Denik.",
+    transport: "stdio",
+    command: "denik-mcp",
+    args: [],
+    env: { DENIK_API_KEY: "$secret:DENIK_API_KEY" },
+    requiredSecrets: ["DENIK_API_KEY"],
+  },
 ];
 
 // The full capability menu for a pool: curated (code) ∪ the owner's custom entries
