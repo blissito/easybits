@@ -276,23 +276,27 @@ type Capacity = {
 
 const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, opacity: 1, y: 0 }, exit: { scale: 0.4, opacity: 0, y: 8 } };
 
-// Deterministic 0–5s phase offset so each Ghosty blinks out of sync instead of in
-// unison. NO Math.random (it would mismatch between SSR and hydration) — derived
-// from a stable per-mascota seed (box id + slot index), kept within the 5s dur.
-function blinkOffset(seed: string): number {
+// Per-Ghosty blink timing, deterministic (NO Math.random → no SSR/hydration
+// mismatch) from a stable seed (box id + slot index). Returns BOTH a phase offset
+// AND a slightly different period: the offset desyncs on first paint, but SMIL
+// clamps a negative `begin` when the <animate> is inserted dynamically (e.g. when a
+// box WAKES suspended→running) → all would restart in unison. Distinct periods make
+// them DRIFT apart regardless of start, so they never re-sync. Periods are mutually
+// incommensurate-ish (4.3–5.8s) so the unison never recurs.
+function blinkTiming(seed: string): { offset: number; period: number } {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return (h % 500) / 100; // 0.00–4.99s
+  return { offset: (h % 500) / 100, period: 4.3 + ((h >>> 4) % 150) / 100 }; // 0–4.99s, 4.30–5.79s
 }
 
 // Ghosty — la mascota de la marca (fantasma morado + lentes), el agente INSIGNIA
 // que el pool ofrece por default. Inline SVG (no hay asset suelto del fantasma;
 // /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
-function GhostyMascot({ className = "", blink = true, sleeping = false, offset = 0 }: { className?: string; blink?: boolean; sleeping?: boolean; offset?: number }) {
-  // begin negativo = arranca el ciclo como si ya hubiera corrido `offset` segundos,
-  // así cada mascota parpadea desfasada de las demás.
+function GhostyMascot({ className = "", blink = true, sleeping = false, offset = 0, period = 5 }: { className?: string; blink?: boolean; sleeping?: boolean; offset?: number; period?: number }) {
+  // begin negativo = arranca desfasado; period distinto = derivan y NUNCA vuelven a
+  // unísono (cubre el caso de despertar simultáneo, donde el begin negativo se clampa).
   const Blink = blink && !sleeping ? (
-    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur="5s" begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
+    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur={`${period}s`} begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
   ) : null;
   return (
     <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -344,7 +348,9 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     : status === "suspended" ? "border-indigo-200 bg-indigo-50/50"
     // Llena = utilización pico, NO advertencia: verde profundo ("a tope y bien").
     // Gradiente de salud: gris (idle) → verde claro (con cupo) → verde sólido (full).
-    : full ? "border-emerald-600 bg-emerald-100"
+    // OJO: usar la escala `green` (la config define `emerald` como color plano sin
+    // shades numéricos, así que emerald-600/100 NO se generan → caja sin color).
+    : full ? "border-green-600 bg-green-200"
     : slots > 0 ? "border-green-500 bg-green-50"
     : "border-gray-300 bg-gray-50";
   const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
@@ -398,7 +404,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
                 animate={waking ? { scale: [1, 0.9, 1.12, 1], y: [0, 1, -3, 0] } : { scale: 1, y: 0 }}
                 transition={waking ? { duration: 0.7, ease: "easeOut", times: [0, 0.3, 0.6, 1], delay: j * 0.06 } : { duration: 0.3 }}
                 className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
-                {ghosty ? <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={blinkOffset(`${id}:${j}`)} /> : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
+                {ghosty ? (() => { const t = blinkTiming(`${id}:${j}`); return <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={t.offset} period={t.period} />; })() : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
               </motion.div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
