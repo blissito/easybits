@@ -430,7 +430,9 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     system ? ["#bcd3ea", "#5a86b0"]
     : custom ? ["#cfd4dc", "#8a95a6"]
     : status === "building" ? ["#d7c9ef", "#9b86d6"]
-    : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#e6dcc6", "rgba(60,42,16,0.3)"])
+    // Libre (sin add-on): hueco oscuro cosido en el tapete negro — se hunde en vez
+    // de competir con el verde (activo) o el índigo (dormida). Es "espacio por llenar".
+    : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#241f30", "rgba(255,255,255,0.22)"])
     // Dormida (suspended): congelada, capacidad casi-libre → índigo apagado.
     : status === "suspended" ? ["#c8c6e6", "#a6a3d6"]
     : full ? ["#a9c79b", "#6f9a63"]
@@ -510,7 +512,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
           </AnimatePresence>
         </div>
       )}
-      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
+      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : status == null ? "text-[#8d86a8] font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
     </motion.div>
   );
 }
@@ -519,19 +521,19 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
   const usedSlots = capacity.machines.length + capacity.extraMachines.length;
   const freeSlots = Math.max(0, capacity.maxMachines - usedSlots);
   return (
-    <div className="felt-mat border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in overflow-hidden">
+    <div className="felt-mat felt-mat--dark border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in overflow-hidden">
       {/* filtros del kit de fieltro — montados UNA vez para todo el HUD */}
       <FeltFilters />
       <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-jersey text-3xl leading-none tracking-wide">CAPACIDAD</span>
+          <span className="font-jersey text-3xl leading-none tracking-wide text-white">CAPACIDAD</span>
           <motion.span whileHover={{ scale: 1.08, rotate: -2 }}
             className="font-jersey text-lg leading-none px-2 py-1 bg-brand-500 text-white border-2 border-black rounded-md cursor-default">
             {capacity.planName.toUpperCase()}
           </motion.span>
         </div>
-        <span className="font-jersey text-xl leading-none text-gray-500">
-          <span className="text-black">{capacity.agentsActive}/{capacity.agentsMax} AGENTES</span> · {capacity.vms}/{capacity.maxMachines} sandboxes
+        <span className="font-jersey text-xl leading-none text-gray-400">
+          <span className="text-white">{capacity.agentsActive}/{capacity.agentsMax} AGENTES</span> · {capacity.vms}/{capacity.maxMachines} sandboxes
         </span>
       </div>
 
@@ -554,7 +556,7 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
           {/* Añadir capacidad — sube de plan para más sandboxes */}
           <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
             whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
-            className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(60,42,16,0.3)] bg-[#e6dcc6]/50 text-[#8a7c60] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-600">
+            className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(255,255,255,0.18)] bg-white/[0.04] text-[#8d86a8] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-300">
             <span className="text-2xl leading-none">+</span>
             <span className="font-jersey text-[12px] leading-none">MÁS</span>
           </motion.a>
@@ -775,18 +777,22 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                             className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
                             onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
                           {g.enabled && (
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0">
                               <button type="button"
                                 title="Configurar key + MCPs de este grupo"
                                 onClick={() => setShowGroupCfg((s) => ({ ...s, [cfgKey]: !cfgOpen }))}
-                                className={`text-xs font-semibold px-1.5 py-0.5 rounded ${cfgOpen || g.hasKey || g.mcps.length ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
-                                ⚙{g.mcps.length ? ` ${g.mcps.length}` : ""}
+                                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${cfgOpen ? "border-brand-500 text-brand-500" : "border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"}`}>
+                                <span className="text-sm leading-none">⚙</span>
+                                <span>Key + MCPs</span>
+                                {g.hasKey && <span className="w-2 h-2 rounded-full bg-green-500" title="key asignada" />}
+                                {g.mcps.length > 0 && <span className="text-[10px] leading-none bg-brand-500 text-white rounded-full px-1.5 py-0.5">{g.mcps.length}</span>}
                               </button>
                               <button type="button"
                                 title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
                                 onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
-                                className={`text-xs font-semibold px-1.5 py-0.5 rounded ${isMain ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
-                                {isMain ? "★ main" : "☆"}
+                                className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${isMain ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
+                                <span className="text-sm leading-none">{isMain ? "★" : "☆"}</span>
+                                <span>Main</span>
                               </button>
                             </div>
                           )}
