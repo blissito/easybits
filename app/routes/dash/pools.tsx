@@ -68,6 +68,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
+        hasOwnNumber: p.hasOwnNumber,
       };
     })
   );
@@ -250,6 +251,14 @@ export async function action({ request }: Route.ActionArgs) {
     await db.pool.update({ where: { id: poolId }, data: { mainGroupJid: mainNext } });
     return data({ ok: true });
   }
+  if (intent === "toggle-own-number") {
+    // Línea dedicada vs número compartido. true = el bot detecta sus ecos por
+    // fromMe y NO antepone "assistantName:"; false = número compartido (antepone
+    // el nombre + permite autoprueba del dueño). Lo lee baileys fresco por ráfaga.
+    const on = String(fd.get("on") || "") === "1";
+    await db.pool.update({ where: { id: poolId }, data: { hasOwnNumber: on } });
+    return data({ ok: true });
+  }
   return data({ error: "intent inválido" }, { status: 400 });
 }
 
@@ -398,18 +407,26 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
                 className="pointer-events-none absolute -top-3 -right-2 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</motion.span>
             )}
           </AnimatePresence>
+          {/* AnimatePresence sobre los slots: un slot que DESAPARECE (desalojo LRU —
+              la conversación dormida más vieja reciclada para hacerle lugar a otra
+              al estar la flota a tope) hace "poof" hacia arriba; uno nuevo entra con
+              pop. initial=false → no animan en el primer render. */}
+          <AnimatePresence initial={false} mode="popLayout">
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
               <motion.div key={`a${j}`}
-                animate={waking ? { scale: [1, 0.9, 1.12, 1], y: [0, 1, -3, 0] } : { scale: 1, y: 0 }}
+                initial={{ scale: 0.3, opacity: 0 }}
+                animate={waking ? { scale: [1, 0.9, 1.12, 1], y: [0, 1, -3, 0], opacity: status === "suspended" ? 0.5 : 1 } : { scale: 1, y: 0, opacity: status === "suspended" ? 0.5 : 1 }}
+                exit={{ scale: 1.6, opacity: 0, y: -12 }}
                 transition={waking ? { duration: 0.7, ease: "easeOut", times: [0, 0.3, 0.6, 1], delay: j * 0.06 } : { duration: 0.3 }}
-                className={`w-10 h-10 flex items-center justify-center ${status === "suspended" ? "opacity-50" : ""}`}>
+                className="w-10 h-10 flex items-center justify-center">
                 {ghosty ? (() => { const t = blinkTiming(`${id}:${j}`); return <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={t.offset} period={t.period} />; })() : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
               </motion.div>
             ) : (
               <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
             )
           )}
+          </AnimatePresence>
         </div>
       )}
       <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-600 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-500 font-bold" : "text-gray-500"}`}>{label}</span>
@@ -717,6 +734,15 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   🔄 WhatsApp cerró la sesión. Estamos regenerando el QR — escanéalo de nuevo para reconectar.
                 </p>
               ) : null}
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <Switch value={p.hasOwnNumber} label="Número dedicado"
+                  className="text-sm items-center font-semibold"
+                  onChange={(on) => fetcher.submit({ intent: "toggle-own-number", poolId: p.id, on: on ? "1" : "0" }, { method: "post" })} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Sin prefijo de nombre en las respuestas. Apágalo si compartes el número con una persona.
+              </p>
+
               <div className="mt-4 flex flex-wrap gap-2 items-center">
                 {!p.throttledUntil && p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
                   <>

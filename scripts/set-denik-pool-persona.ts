@@ -44,9 +44,17 @@ async function main() {
   if (!before) throw new Error(`pool ${POOL_ID} no encontrado`);
   console.log(`pool "${before.name}" (${POOL_ID})`);
   console.log("persona ANTES:", JSON.stringify(before.persona)?.slice(0, 120));
-  await db.pool.update({ where: { id: POOL_ID }, data: { persona: persona as any } });
+  // assistantName es la columna que baileys usa como PREFIJO de texto en cada
+  // respuesta cuando hasOwnNumber=false (`${assistantName}: …`). createPool la
+  // hardcodea a "Ghosty"; hay que alinearla a la persona o el bot se presenta
+  // como "Ghosty: …" aunque el SYSTEM_PROMPT ya sea el de denik.
+  await db.pool.update({
+    where: { id: POOL_ID },
+    data: { persona: persona as any, assistantName: "Nik" },
+  });
   console.log("persona DESPUÉS:", JSON.stringify(persona).slice(0, 200));
-  console.log("✅ persona denik fijada (DENIK_BASE_URL incluido).");
+  console.log("assistantName DESPUÉS: Nik");
+  console.log("✅ persona + assistantName denik fijados (DENIK_BASE_URL incluido).");
 }
 
 main()
