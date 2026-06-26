@@ -121,6 +121,8 @@ export default [
       route("hosting/wa/:id", "routes/dash/hosting/wa.tsx"),
       // Pools de WhatsApp ("Líneas") — superficie Baileys + workers efímeros
       route("flota", "routes/dash/pools.tsx"),
+      // Poll resiliente del HUD de la flota (JSON, no tumba la página en deploys)
+      route("flota/poll", "routes/dash/pools.poll.tsx"),
       // Cuentas de clientes — roster + "operar como" (impersonation)
       route("cuentas", "routes/dash/cuentas.tsx"),
       // Email — audiencia + newsletters

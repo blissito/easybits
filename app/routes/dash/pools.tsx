@@ -22,6 +22,13 @@ import {
 
 const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
 
+// The live HUD poll (routes/dash/pools.poll.tsx) reuses THIS loader on the server
+// to return the EXACT same shape as JSON, so the page can poll it with a plain
+// `fetch` instead of useRevalidator → a transient 5xx (e.g. the ~50s window while
+// Fly replaces the single machine on deploy) no longer tears the page down into
+// the root ErrorBoundary; the poll just self-heals. Kept as the standard `loader`
+// export (not a custom one) so React Router strips its server-only imports from
+// the client bundle.
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await getUserOrRedirect(request);
   // Reconnect any pools that were live before an app restart (lazy, once).
@@ -600,7 +607,12 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
 }
 
 export default function Pools({ loaderData }: Route.ComponentProps) {
-  const { secretNames, pools, capacity, sharedPools } = loaderData;
+  // HUD en estado local para que el poll de 2.5s lo actualice SIN useRevalidator
+  // (que propaga un 5xx transitorio al ErrorBoundary y deja la página muerta).
+  // Sembrado de loaderData; re-sincronizado cuando el loader revalida (acción/nav).
+  const [hud, setHud] = useState(loaderData);
+  useEffect(() => setHud(loaderData), [loaderData]);
+  const { secretNames, pools, capacity, sharedPools } = hud;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [showForm, setShowForm] = useState(false);
@@ -630,11 +642,23 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
+  // Poll del HUD vía fetch crudo: un fallo transitorio (ventana de ~50s mientras
+  // Fly reemplaza la única máquina en un deploy) se traga y reintenta al próximo
+  // tick — la página NO se desmonta al ErrorBoundary como con rev.revalidate().
   useEffect(() => {
     if (!polling) return;
-    const t = setInterval(() => rev.revalidate(), 2500);
-    return () => clearInterval(t);
-  }, [polling, rev]);
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await fetch("/dash/flota/poll", { headers: { Accept: "application/json" } });
+        if (!res.ok) return; // 5xx en deploy/restart → salta este tick, reintenta
+        const next = await res.json();
+        if (alive) setHud(next);
+      } catch { /* blip de red mientras se reemplaza la máquina → ignora, se autocura */ }
+    };
+    const t = setInterval(tick, 2500);
+    return () => { alive = false; clearInterval(t); };
+  }, [polling]);
   // Modal de capacidades: cerrar con ESC + bloquear el scroll del body mientras
   // está abierto. Cleanup restaura el overflow previo y quita el listener.
   useEffect(() => {
