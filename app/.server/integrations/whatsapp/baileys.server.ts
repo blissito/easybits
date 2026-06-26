@@ -104,6 +104,9 @@ type GroupBuffer = { items: InboundItem[]; timer: ReturnType<typeof setTimeout> 
 const groupBuffers = new Map<string, GroupBuffer>();
 const COALESCE_DEBOUNCE_MS = 1500;
 const MAX_HELD_ITEMS = 20; // cap a group's buffer during a capacity hold
+// Set on SIGTERM (deploy/restart). While true we refuse to START new turns so the
+// drain can wait for the in-flight ones to finish cleanly. See drainSurface.
+let shuttingDown = false;
 
 function enqueueInbound(sock: WASocket, poolId: string, jid: string, item: InboundItem) {
   const key = `${poolId}:${jid}`;
@@ -126,7 +129,10 @@ function enqueueInbound(sock: WASocket, poolId: string, jid: string, item: Inbou
 async function drainGroup(sock: WASocket, poolId: string, jid: string) {
   const key = `${poolId}:${jid}`;
   const buf = groupBuffers.get(key);
-  if (!buf || buf.running || buf.items.length === 0) return;
+  // shuttingDown: don't START a new turn during a drain — let the in-flight ones
+  // finish. Buffered items wait for the next process (the WA socket re-delivers /
+  // ensureRehydrated reconnects); a fresh turn here would just get cut.
+  if (!buf || buf.running || buf.items.length === 0 || shuttingDown) return;
   buf.timer = null;
   buf.running = true;
   const batch = buf.items.splice(0); // claim the whole burst
@@ -771,9 +777,48 @@ export function ensureRehydrated(): Promise<void> {
     } finally {
       rehydrated = true;
       startReaper();
+      installDrainHandlers();
     }
   })();
   return rehydrating;
+}
+
+// ── Graceful drain on deploy/restart ─────────────────────────────────────────
+// Fly sends SIGTERM then SIGKILLs after kill_timeout (set to 30s in fly.toml).
+// Without this, in-flight agent turns are cut mid-stream on every deploy (the
+// surface + reaper run in this one process). On the signal we stop starting NEW
+// turns (`shuttingDown`) and wait for the running ones to finish — each turn's
+// durable writes (agent PoolMessage, lastMessageAt) complete BEFORE buf.running
+// flips false, so waiting for zero in-flight guarantees nothing is half-written.
+// Bounded under kill_timeout so we never delay the SIGKILL. Residual loss: items
+// still buffered (sub-second window) + turns longer than the grace — replay from
+// PoolMessage is the documented follow-up ([[todo_pool_surface_durability]]).
+let drainHandlersInstalled = false;
+function installDrainHandlers() {
+  if (drainHandlersInstalled) return;
+  drainHandlersInstalled = true;
+  // Just flip `shuttingDown` (stop starting new turns) and observe the in-flight
+  // ones finishing. We deliberately DON'T process.exit(): the kill_timeout window
+  // lets in-flight turns AND any HTTP request (e.g. a long document generation)
+  // ride out naturally; an early exit would cut those. Fly SIGKILLs at the end.
+  const onSignal = (sig: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log("surface", `${sig} → draining (no new turns; kill_timeout 30s window)`);
+    void drainSurface();
+  };
+  process.once("SIGTERM", () => onSignal("SIGTERM"));
+  process.once("SIGINT", () => onSignal("SIGINT"));
+}
+async function drainSurface(graceMs = 28_000): Promise<void> {
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline) {
+    const inFlight = [...groupBuffers.values()].filter((b) => b.running).length;
+    if (inFlight === 0) { log("surface", "drain complete — no turns in flight"); return; }
+    log("surface", `draining: ${inFlight} turn(s) in flight…`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  log("surface", "drain grace elapsed — remaining turns may be cut by SIGKILL");
 }
 
 // ── Idle reaper (lazy singleton) ─────────────────────────────────────────────

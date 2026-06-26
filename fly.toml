@@ -1,6 +1,12 @@
 app = 'easybits'
 primary_region = 'dfw'
 
+# Grace window on deploy/restart: SIGTERM → wait up to this before SIGKILL. The
+# WhatsApp pool surface uses it to DRAIN — let in-flight agent turns finish so a
+# deploy doesn't cut a reply mid-stream (Fly's default is only 5s). See the drain
+# handler in app/.server/integrations/whatsapp/baileys.server.ts.
+kill_timeout = '30s'
+
 [build]
 
 [http_service]
