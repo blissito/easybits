@@ -36,7 +36,7 @@ workers no responden. **Por eso `claude-worker` NO cabe en 512MB.**
 
 **Fix correcto (pendiente):** separar las dos perillas — `maxRoutesPerVm` (pegajosidad,
 alta, p.ej. 10-20, barata en disco) vs `maxConcurrentTurnsPerVm` (RAM, baja, 2-3 por
-2GB), esta última hecha cumplir DENTRO del worker (`services/claude-worker`) con un
+2GB), esta última hecha cumplir DENTRO del worker (`~/sandbox-host/templates/claude-worker`) con un
 semáforo + cola (timeout para que WhatsApp no cuelgue). Así una VM chica aloja muchas
 conversaciones pero acota el pico de RAM. Regla de tamaño:
 `vmMemMb ≈ 182 + turnos_concurrentes×450 + 256` → 1GB≈1-2 turnos, 2GB≈3, 4GB≈7.

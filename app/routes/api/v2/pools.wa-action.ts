@@ -35,13 +35,56 @@ export async function action({ request }: Route.ActionArgs) {
   // Resolve the conversation: token must own the route, route gives the group.
   const route = await db.poolRoute.findFirst({
     where: { sessionUuid: sessionId, pool: { token: bearer } },
-    select: { groupId: true, pool: { select: { id: true, mainGroupJid: true } } },
+    select: {
+      groupId: true,
+      pool: { select: { id: true, mainGroupJid: true, enabledGroups: true, groupKeys: true, seenGroups: true } },
+    },
   });
   if (!route) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: CORS });
 
   const sessionGroup = route.groupId;
   const poolId = route.pool.id;
   const isMain = !!route.pool.mainGroupJid && sessionGroup === route.pool.mainGroupJid;
+
+  // Config actions (admin): administer the per-group MCP/org keys (Pool.groupKeys).
+  // Only the MAIN group may list/edit other groups' keys — mirrors the cross-group
+  // send gate. These are DB ops, not Baileys socket actions, so they short-circuit
+  // before executeWaAction.
+  if (actionName === "list_groups" || actionName === "set_group_key") {
+    if (!isMain) {
+      return Response.json(
+        { ok: false, error: "admin de grupos: solo desde el grupo main" },
+        { status: 403, headers: CORS }
+      );
+    }
+    const keys = (route.pool.groupKeys as Record<string, string> | null) ?? {};
+    const subjects = (route.pool.seenGroups as Record<string, string> | null) ?? {};
+    if (actionName === "list_groups") {
+      const groups = route.pool.enabledGroups.map((jid) => ({
+        jid,
+        subject: subjects[jid] ?? null,
+        hasKey: Boolean(keys[jid]),
+      }));
+      return Response.json({ ok: true, result: JSON.stringify({ groups }) }, { status: 200, headers: CORS });
+    }
+    // set_group_key
+    const jid = typeof args.jid === "string" ? args.jid : "";
+    if (!jid.endsWith("@g.us")) {
+      return Response.json({ ok: false, error: "jid de grupo inválido" }, { status: 400, headers: CORS });
+    }
+    if (!route.pool.enabledGroups.includes(jid)) {
+      return Response.json({ ok: false, error: "ese grupo no está activo en el agente" }, { status: 400, headers: CORS });
+    }
+    const key = typeof args.key === "string" ? args.key.trim() : "";
+    const nextKeys = { ...keys };
+    if (key) nextKeys[jid] = key;
+    else delete nextKeys[jid];
+    await db.pool.update({ where: { id: poolId }, data: { groupKeys: nextKeys } });
+    return Response.json(
+      { ok: true, result: key ? `key asignada a ${subjects[jid] ?? jid}` : `key quitada de ${subjects[jid] ?? jid}` },
+      { status: 200, headers: CORS }
+    );
+  }
 
   // Default target is the session's own group. A different target jid (cross-group
   // send) is only allowed from the MAIN group.

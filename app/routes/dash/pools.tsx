@@ -67,7 +67,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
-        throttledUntil, connReason: b.reason ?? null,
+        throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
       };
     })
   );
@@ -210,7 +210,22 @@ export async function action({ request }: Route.ActionArgs) {
     const set = new Set(pool.enabledGroups);
     if (on) set.add(groupId);
     else set.delete(groupId);
-    await db.pool.update({ where: { id: poolId }, data: { enabledGroups: [...set] } });
+    const next: { enabledGroups: string[]; mainGroupJid?: null } = { enabledGroups: [...set] };
+    // Un grupo apagado no puede seguir siendo el main (perdería el privilegio de
+    // admin sin estar atendido) → lo limpiamos al desactivarlo.
+    if (!on && pool.mainGroupJid === groupId) next.mainGroupJid = null;
+    await db.pool.update({ where: { id: poolId }, data: next });
+    return data({ ok: true });
+  }
+  if (intent === "set-main") {
+    // Marca/desmarca el grupo MAIN (admin) del agente. Solo un grupo activo puede
+    // serlo; re-tocarlo lo desmarca. El gate cross-grupo lo lee pools.wa-action.
+    const groupId = String(fd.get("groupId") || "");
+    const mainNext = pool.mainGroupJid === groupId ? null : groupId || null;
+    if (mainNext && !pool.enabledGroups.includes(mainNext)) {
+      return data({ error: "el grupo main debe estar activo" }, { status: 400 });
+    }
+    await db.pool.update({ where: { id: poolId }, data: { mainGroupJid: mainNext } });
     return data({ ok: true });
   }
   return data({ error: "intent inválido" }, { status: 400 });
@@ -580,15 +595,26 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     const active = p.groups.filter((g) => g.enabled);
                     const others = p.groups.filter((g) => !g.enabled);
                     const open = showAllGroups[p.id] ?? false;
-                    const GroupRow = (g: { id: string; subject: string; enabled: boolean }) => (
-                      <motion.div key={g.id} layout
+                    const GroupRow = (g: { id: string; subject: string; enabled: boolean }) => {
+                      const isMain = p.mainGroupJid === g.id;
+                      return (
+                      <motion.div key={g.id} layout className="flex items-center justify-between gap-2"
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                         transition={{ type: "spring", stiffness: 500, damping: 34 }}>
                         <Switch value={g.enabled} label={g.subject}
                           className={`text-sm items-center ${g.enabled ? "font-semibold" : "text-gray-600"}`}
                           onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
+                        {g.enabled && (
+                          <button type="button"
+                            title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
+                            onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
+                            className={`shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded ${isMain ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
+                            {isMain ? "★ main" : "☆"}
+                          </button>
+                        )}
                       </motion.div>
-                    );
+                      );
+                    };
                     return (
                       <div className="flex flex-col gap-1.5">
                         <AnimatePresence mode="popLayout" initial={false}>
