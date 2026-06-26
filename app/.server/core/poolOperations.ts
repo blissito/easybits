@@ -231,6 +231,11 @@ type Persona = {
 
 type InboundMessage = {
   groupId: string;
+  // Config UNIT for this turn (capabilities + per-group key), separate from the
+  // sticky routing `groupId`. WABA routes per-conversation (waba:<int>:<sender>,
+  // for 1:1 memory) but configures per-NUMBER (waba:<int>): pass that here.
+  // Absent (Baileys/web) → falls back to groupId, so behavior is unchanged.
+  configGroupId?: string;
   sender?: string;
   text: string;
   mediaUrl?: string;
@@ -689,6 +694,8 @@ export async function routeMessage(
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
   let placed = await pickOrSpawn(ctx, pool, msg.groupId);
+  // Config unit for key + capabilities: the number (WABA) or the conversation itself.
+  const cfgId = msg.configGroupId ?? msg.groupId;
 
   // NATIVE Claude vision: drop the inbound image onto the worker's disk and tell
   // the agent to open it with Read (Claude is multimodal — no Gemini describe).
@@ -740,17 +747,18 @@ export async function routeMessage(
           content,
           sessionId: placed.sessionUuid,
           // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
-          // (canales web la mandan por turno); cae a pool.groupKeys[groupId]
-          // (registrado al crear el grupo, ruta WhatsApp).
+          // (canales web la mandan por turno); cae a pool.groupKeys[cfgId]
+          // (registrado al crear el grupo, ruta WhatsApp). cfgId = configGroupId
+          // (WABA: el número) o groupId (Baileys/web: la conversación misma).
           denikApiKey:
             msg.denikApiKey ??
-            (pool.groupKeys as Record<string, string> | null)?.[msg.groupId],
+            (pool.groupKeys as Record<string, string> | null)?.[cfgId],
           // Personalización por-org (capa 3): se appendea a la persona del pool.
           appendSystemPrompt: msg.appendSystemPrompt,
           // Per-grupo: las capacidades que este grupo habilitó (curadas ∪ custom),
           // con sus secrets resueltos del vault del dueño. El worker las mergea
-          // sobre sus builtins (easybits/wa).
-          mcpServers: await resolveGroupMcpServers(pool, msg.groupId, pool.ownerId),
+          // sobre sus builtins (easybits/wa). Resuelve por cfgId (unidad de config).
+          mcpServers: await resolveGroupMcpServers(pool, cfgId, pool.ownerId),
         }
       );
       reply = await collectStream(stream, opts.onChunk);

@@ -27,9 +27,20 @@ const CORS = {
 // www: el apex formmy.app falla TLS desde Fly (mismo motivo que formmy.server.ts en Denik).
 const FORMMY_BASE_URL = (process.env.FORMMY_BASE_URL || "https://www.formmy.app").replace(/\/$/, "");
 
+// Per-integration (per Meta number) config. phoneNumberId is the only field the
+// gateway strictly needs; name/systemPrompt give each number its OWN identity
+// (injected as appendSystemPrompt, layer 3). denikApiKey is OPTIONAL — the
+// reseller (denik) path; native pools scope capabilities via groupConfigs.
+type WabaOrg = {
+  phoneNumberId?: string;
+  phoneNumber?: string;
+  name?: string;
+  systemPrompt?: string;
+  denikApiKey?: string;
+};
 type WabaConfig = {
   formmySecret?: string;
-  orgs?: Record<string, { denikApiKey?: string; phoneNumberId?: string }>;
+  orgs?: Record<string, WabaOrg>;
 };
 
 // Formmy droplet protocol (the inbound forward body).
@@ -94,14 +105,18 @@ async function handleWabaInbound(
   try {
     const org = waba.orgs?.[msg.integrationId];
     // groupId is OPAQUE to routeMessage; scope it per (integration, sender) so the
-    // sticky route + .jsonl transcript stay per-conversation, parallel to Baileys'
-    // `jid`. denikApiKey scopes the worker's MCP to this org for THIS turn.
+    // sticky route + .jsonl transcript stay per-conversation (1:1 memory per
+    // customer), parallel to Baileys' `jid`. configGroupId is per-NUMBER
+    // (waba:<integrationId>) so capabilities + key resolve once per Meta number,
+    // not per sender. Identity per number = org.systemPrompt as appendSystemPrompt.
     const reply = await routeMessage(
       poolId,
       {
         groupId: `waba:${msg.integrationId}:${msg.sender}`,
+        configGroupId: `waba:${msg.integrationId}`,
         sender: msg.sender,
         text: msg.content,
+        appendSystemPrompt: org?.systemPrompt,
         denikApiKey: org?.denikApiKey,
       },
       { skipRateLimit: false }

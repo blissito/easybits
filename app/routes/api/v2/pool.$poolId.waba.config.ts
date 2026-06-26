@@ -16,9 +16,16 @@ const CORS = {
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
 };
 
+type WabaOrg = {
+  phoneNumberId?: string;
+  phoneNumber?: string;
+  name?: string;
+  systemPrompt?: string;
+  denikApiKey?: string;
+};
 type WabaConfig = {
   formmySecret?: string;
-  orgs?: Record<string, { denikApiKey?: string; phoneNumberId?: string }>;
+  orgs?: Record<string, WabaOrg>;
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -35,24 +42,39 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const formmySecret = typeof body?.formmySecret === "string" ? body.formmySecret : "";
-  const integrationId = typeof body?.integrationId === "string" ? body.integrationId : "";
-  const denikApiKey = typeof body?.denikApiKey === "string" ? body.denikApiKey : "";
-  const phoneNumberId = typeof body?.phoneNumberId === "string" ? body.phoneNumberId : "";
-  if (!formmySecret || !integrationId || !denikApiKey || !phoneNumberId) {
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+  const formmySecret = str(body?.formmySecret);
+  const integrationId = str(body?.integrationId);
+  const phoneNumberId = str(body?.phoneNumberId);
+  // denikApiKey is OPTIONAL (reseller path); native pools scope via Capacidades.
+  const denikApiKey = str(body?.denikApiKey);
+  const phoneNumber = str(body?.phoneNumber);
+  const name = str(body?.name);
+  const systemPrompt = str(body?.systemPrompt);
+  if (!formmySecret || !integrationId || !phoneNumberId) {
     return Response.json(
-      { error: "formmySecret, integrationId, denikApiKey and phoneNumberId required" },
+      { error: "formmySecret, integrationId and phoneNumberId required" },
       { status: 400, headers: CORS }
     );
   }
 
   const current = (pool.wabaConfig as WabaConfig | null) ?? {};
+  // Merge over any existing entry for this integration so a re-register that omits
+  // optional fields (identity, denik key) doesn't wipe previously-set values.
+  const prevOrg = current.orgs?.[integrationId] ?? {};
   const next: WabaConfig = {
     ...current,
     formmySecret,
     orgs: {
       ...(current.orgs ?? {}),
-      [integrationId]: { denikApiKey, phoneNumberId },
+      [integrationId]: {
+        ...prevOrg,
+        phoneNumberId,
+        ...(phoneNumber ? { phoneNumber } : {}),
+        ...(name ? { name } : {}),
+        ...(systemPrompt ? { systemPrompt } : {}),
+        ...(denikApiKey ? { denikApiKey } : {}),
+      },
     },
   };
   await db.pool.update({ where: { id: poolId }, data: { wabaConfig: next } });

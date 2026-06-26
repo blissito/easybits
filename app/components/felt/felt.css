@@ -19,9 +19,10 @@
   position: relative;
   border-radius: 24px;
   background: var(--felt-fill);
-  /* costura: el dashed se ondula porque el elemento entero pasa por #feltRough
-     (feDisplacementMap de baja frecuencia) → borde de fieltro, no línea perfecta. */
-  border: 3px dashed var(--felt-stitch);
+  /* costura sólida: el borde se ondula porque el elemento entero pasa por #feltRough
+     (feDisplacementMap de baja frecuencia) → borde de fieltro, no línea perfecta.
+     (Antes punteado; ahora sólido — la punteada se reserva a slots y al box "MÁS".) */
+  border: 3px solid var(--felt-stitch);
   /* overflow:hidden recorta el grano ::after a la esquina redondeada — border-radius
      NO recorta la salida de un filtro SVG, overflow sí (de ahí el "cubo" cuadrado). */
   overflow: hidden;

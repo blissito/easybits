@@ -205,9 +205,12 @@ export default [
     route("pool/:poolId/message-stream", "routes/api/v2/pool.$poolId.message-stream.ts"),
     route("pool/:poolId/group", "routes/api/v2/pool.$poolId.group.ts"),
     route("pool/:poolId/connect", "routes/api/v2/pool.$poolId.connect.ts"),
-    // WABA channel — Formmy forwards inbound here; Denik writes per-org config
+    // WABA channel — Formmy forwards inbound here; partner writes per-number config
     route("pool/:poolId/waba/message", "routes/api/v2/pool.$poolId.waba.message.ts"),
     route("pool/:poolId/waba/config", "routes/api/v2/pool.$poolId.waba.config.ts"),
+    // WABA connect (EasyBits as Formmy partner) — Embedded Signup popup + callback
+    route("pool/:poolId/waba/connect/start", "routes/api/v2/pool.$poolId.waba.connect-start.ts"),
+    route("pool/:poolId/waba/connect", "routes/api/v2/pool.$poolId.waba.connect.ts"),
     // WhatsApp Business Cloud API (Meta) — webhook de verificación + eventos
     route("whatsapp/webhook", "routes/api/v2/whatsapp-webhook.ts"),
     route("agents/:id/skills", "routes/api/v2/agent-skills.ts"),

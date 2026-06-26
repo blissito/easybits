@@ -76,6 +76,22 @@ export async function loader({ request }: Route.LoaderArgs) {
         ...g,
         mcps: gconf[g.id]?.mcpServers ?? [],
       }));
+      // WABA numbers (Meta WhatsApp Business). Each integration is its OWN config
+      // unit `waba:<integrationId>` — same shape as a group so the Capacidades
+      // modal reuses it. Identity (name/systemPrompt) is per number.
+      const wabaOrgs = ((p.wabaConfig as { orgs?: Record<string, { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string }> } | null) ?? {}).orgs ?? {};
+      const wabaNumbers = Object.entries(wabaOrgs).map(([integrationId, o]) => {
+        const id = `waba:${integrationId}`;
+        return {
+          id,
+          integrationId,
+          subject: o.name || o.phoneNumber || o.phoneNumberId || integrationId,
+          name: o.name ?? "",
+          systemPrompt: o.systemPrompt ?? "",
+          phoneNumber: o.phoneNumber ?? "",
+          mcps: gconf[id]?.mcpServers ?? [],
+        };
+      });
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
@@ -97,6 +113,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const conversations = await db.poolRoute.count({ where: { poolId: p.id } });
       return {
         id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
+        wabaNumbers,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
@@ -360,6 +377,22 @@ export async function action({ request }: Route.ActionArgs) {
     // el nombre + permite autoprueba del dueño). Lo lee baileys fresco por ráfaga.
     const on = String(fd.get("on") || "") === "1";
     await db.pool.update({ where: { id: poolId }, data: { hasOwnNumber: on } });
+    return data({ ok: true });
+  }
+  if (intent === "set-waba-identity") {
+    // Per-NUMBER identity: name (display) + systemPrompt (appended as layer 3 for
+    // that integration's turns). Merges into wabaConfig.orgs[integrationId].
+    const integrationId = String(fd.get("integrationId") || "");
+    const name = String(fd.get("name") || "").trim();
+    const systemPrompt = String(fd.get("systemPrompt") || "").trim();
+    const cfg = (pool.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
+    const org = cfg.orgs?.[integrationId];
+    if (!org) return data({ error: "número no encontrado" }, { status: 404 });
+    const next = {
+      ...cfg,
+      orgs: { ...cfg.orgs, [integrationId]: { ...org, name: name || undefined, systemPrompt: systemPrompt || undefined } },
+    };
+    await db.pool.update({ where: { id: poolId }, data: { wabaConfig: next } });
     return data({ ok: true });
   }
   return data({ error: "intent inválido" }, { status: 400 });
@@ -642,6 +675,38 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
+  const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
+  // Connect a WhatsApp Business number: ask our server for Formmy's signed popup
+  // URL, open it, and wait for the popup to postMessage { code, phoneNumberId,
+  // wabaId } back. We forward that to /waba/connect (which provisions via Formmy
+  // and writes wabaConfig), then revalidate so the new number shows in the card.
+  const connectWaba = async (poolId: string) => {
+    setWabaConnecting(poolId);
+    try {
+      const res = await fetch(`/api/v2/pool/${poolId}/waba/connect/start`, { method: "POST" });
+      const { popupUrl, error } = await res.json();
+      if (!popupUrl) throw new Error(error || "no popup");
+      const popup = window.open(popupUrl, "waba-connect", "width=600,height=760");
+      const onMsg = async (e: MessageEvent) => {
+        if (!/(^|\.)formmy\.app$/.test(new URL(e.origin).hostname)) return;
+        const d = e.data as { code?: string; phoneNumberId?: string; wabaId?: string };
+        if (!d?.code || !d?.phoneNumberId || !d?.wabaId) return;
+        window.removeEventListener("message", onMsg);
+        try { popup?.close(); } catch {}
+        await fetch(`/api/v2/pool/${poolId}/waba/connect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(d),
+        }).catch(() => {});
+        setWabaConnecting(null);
+        rev.revalidate();
+      };
+      window.addEventListener("message", onMsg);
+    } catch (e) {
+      console.error("[waba connect] failed", e);
+      setWabaConnecting(null);
+    }
+  };
   // Poll del HUD vía fetch crudo: un fallo transitorio (ventana de ~50s mientras
   // Fly reemplaza la única máquina en un deploy) se traga y reintenta al próximo
   // tick — la página NO se desmonta al ErrorBoundary como con rev.revalidate().
@@ -879,6 +944,38 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </div>
               )}
 
+              {/* WhatsApp Business (WABA) — canal independiente de Baileys: el
+                  agente puede tener esta sección con o sin la app verde conectada.
+                  Cada número es su propia unidad de config (Capacidades + identidad)
+                  vía el MISMO modal, con groupId sintético waba:<integrationId>. */}
+              <div className="mt-5 border-t border-gray-100 pt-4">
+                <span className="font-semibold text-sm flex items-center gap-1.5"><span>💬</span> WhatsApp Business</span>
+                {p.wabaNumbers.length > 0 ? (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {p.wabaNumbers.map((w) => (
+                      <div key={w.id} className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold truncate">{w.subject}</span>
+                        <button type="button"
+                          title="Capacidades e identidad de este número"
+                          onClick={() => setCapModal({ poolId: p.id, groupId: w.id })}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors shrink-0">
+                          <span className="text-sm leading-none">⚡</span>
+                          <span>Capacidades</span>
+                          <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">Conecta un número de WhatsApp Business para atenderlo con este agente.</p>
+                )}
+                <button type="button" disabled={wabaConnecting === p.id}
+                  onClick={() => connectWaba(p.id)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:underline disabled:opacity-50">
+                  {wabaConnecting === p.id ? <><Spinner /> Conectando…</> : "+ Conectar WhatsApp Business"}
+                </button>
+              </div>
+
               {p.throttledUntil ? (
                 <p className="mt-3 text-xs text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-lg px-3 py-2">
                   ⏳ WhatsApp bloqueó este número por demasiados intentos de vinculación.
@@ -970,8 +1067,16 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
 
       {capModal && (() => {
         const cp = pools.find((x) => x.id === capModal.poolId);
-        const cg = cp?.groups.find((x) => x.id === capModal.groupId);
+        // The cap target is a Baileys group OR a WABA number — both share {id,
+        // subject, mcps}, so the modal reuses the same body. WABA targets also
+        // carry integrationId/name/systemPrompt → an extra Identity section.
+        // The cap target is a Baileys group OR a WABA number — both share {id,
+        // subject, mcps}, so the modal reuses the same body. A WABA hit also
+        // carries integrationId/name/systemPrompt → an extra Identity section.
+        const cgWaba = cp?.wabaNumbers.find((x) => x.id === capModal.groupId);
+        const cg = cp?.groups.find((x) => x.id === capModal.groupId) ?? cgWaba;
         if (!cp || !cg) return null;
+        const waba = cgWaba ?? null;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setCapModal(null)}>
             <div className="bg-white border-2 border-black rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
@@ -980,6 +1085,23 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 <button onClick={() => setCapModal(null)} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
               </div>
               <p className="text-sm text-gray-500 mb-4 truncate">en <b>{cg.subject}</b></p>
+
+              {/* Identidad — solo números WABA. Cada número tiene su propia
+                  persona (nombre + instrucciones) que se appendea a la del pool. */}
+              {waba && (
+                <fetcher.Form method="post" className="mb-4 border-2 border-gray-100 rounded-xl p-3 flex flex-col gap-2">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Identidad de este número</span>
+                  <input type="hidden" name="intent" value="set-waba-identity" />
+                  <input type="hidden" name="poolId" value={cp.id} />
+                  <input type="hidden" name="integrationId" value={waba.integrationId} />
+                  <input name="name" defaultValue={waba.name} placeholder="Nombre (ej. Soporte Marca X)"
+                    className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
+                  <textarea name="systemPrompt" defaultValue={waba.systemPrompt} rows={3}
+                    placeholder="Instrucciones propias de este número (se suman a la persona del pool)"
+                    className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm resize-y" />
+                  <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar identidad</button>
+                </fetcher.Form>
+              )}
 
               {/* Incluidas — siempre activas, no se togglean */}
               <div className="mb-4">
