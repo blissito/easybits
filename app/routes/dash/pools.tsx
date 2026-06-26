@@ -1,9 +1,10 @@
 import type { Route } from "./+types/pools";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
 import { Switch } from "~/components/forms/Switch";
+import { FeltFilters } from "~/components/felt/FeltFilters";
 import { PLANS, getUserPlan, getPoolBox, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
@@ -309,11 +310,13 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
   ) : null;
   return (
     <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-      {/* cuerpo */}
-      <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill="#9870ED" />
-      {/* blush */}
-      <ellipse cx="23" cy="50" rx="5" ry="3" fill="#B79BF2" />
-      <ellipse cx="61" cy="50" rx="5" ry="3" fill="#B79BF2" />
+      {/* cuerpo + blush afelpados: el contorno pasa por #feltEdge (fibras de fieltro).
+          Los lentes/ojos quedan FUERA del filtro para que se lean nítidos. */}
+      <g filter="url(#feltEdge)">
+        <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill="#9870ED" />
+        <ellipse cx="23" cy="50" rx="5" ry="3" fill="#B79BF2" />
+        <ellipse cx="61" cy="50" rx="5" ry="3" fill="#B79BF2" />
+      </g>
       {/* patas de los lentes */}
       <path d="M16 37 L4 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
       <path d="M68 37 L80 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
@@ -347,21 +350,20 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
   const custom = kind === "custom";
   const extra = system || custom;
   const full = slots >= max;
-  const frame =
-    system ? "border-blue-500 bg-blue-50"
-    : custom ? "border-slate-400 bg-slate-50"
-    : status === "building" ? "border-violet-500 bg-violet-50 animate-pulse"
-    : status == null ? (addon ? "border-brand-500 border-dashed bg-brand-500/5" : "border-gray-200 border-dashed bg-gray-50/40")
-    // Dormida (suspended): congelada, ~0 CPU/RAM, resume <1s. Se pinta atenuada
-    // para que NO se lea como "ocupada gastando" — es capacidad casi-libre.
-    : status === "suspended" ? "border-indigo-200 bg-indigo-50/50"
-    // Llena = utilización pico, NO advertencia: verde profundo ("a tope y bien").
-    // Gradiente de salud: gris (idle) → verde claro (con cupo) → verde sólido (full).
-    // OJO: usar la escala `green` (la config define `emerald` como color plano sin
-    // shades numéricos, así que emerald-600/100 NO se generan → caja sin color).
-    : full ? "border-green-600 bg-green-200"
-    : slots > 0 ? "border-green-500 bg-green-50"
-    : "border-gray-300 bg-gray-50";
+  // Tonos de FIELTRO por estado (mismo gradiente de salud que antes, en lana). La
+  // textura/borde/sombra los pone la clase `.felt`; aquí sólo el relleno + el hilo.
+  // OJO: NO cambiar la semántica — verde lleno = "a tope y bien", no advertencia.
+  const [fill, stitch] =
+    system ? ["#bcd3ea", "#5a86b0"]
+    : custom ? ["#cfd4dc", "#8a95a6"]
+    : status === "building" ? ["#d7c9ef", "#9b86d6"]
+    : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#e6dcc6", "rgba(60,42,16,0.3)"])
+    // Dormida (suspended): congelada, capacidad casi-libre → índigo apagado.
+    : status === "suspended" ? ["#c8c6e6", "#a6a3d6"]
+    : full ? ["#a9c79b", "#6f9a63"]
+    : slots > 0 ? ["#cfe0bf", "#9bbf8f"]
+    : ["#dcd2bb", "rgba(60,42,16,0.3)"];
+  const feltStyle = { "--felt-fill": fill, "--felt-stitch": stitch } as CSSProperties;
   const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
   // Despertar: cuando una caja pasa de suspended → running (un mensaje la resucitó),
   // el ghosty se despereza (stretch pop) y el "Zzz" se va flotando. Detectamos la
@@ -386,7 +388,8 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
       whileHover={{ scale: 1.04, y: -2 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
       title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : status === "suspended" ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria` : `Sandbox ${status} · ${slots}/${max} agentes`}
-      className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-3 cursor-default hover:shadow-[3px_3px_0_rgba(0,0,0,0.15)] ${frame}`}
+      style={feltStyle}
+      className={`w-full aspect-square felt flex flex-col items-center justify-center gap-3 cursor-default ${status === "building" ? "animate-pulse" : ""}`}
     >
       {system ? (
         <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -407,29 +410,34 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
                 className="pointer-events-none absolute -top-3 -right-2 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</motion.span>
             )}
           </AnimatePresence>
-          {/* AnimatePresence sobre los slots: un slot que DESAPARECE (desalojo LRU —
-              la conversación dormida más vieja reciclada para hacerle lugar a otra
-              al estar la flota a tope) hace "poof" hacia arriba; uno nuevo entra con
-              pop. initial=false → no animan en el primer render. */}
+          {/* AnimatePresence sobre los slots: al DESALOJAR (LRU — la conversación
+              dormida más vieja reciclada para hacerle lugar a otra al topar la flota)
+              el fantasma se ARRANCA (encoge + sube + gira leve, como sacado con el
+              hilo) y el hueco de fieltro cosido se ASIENTA en su lugar; uno nuevo
+              entra cosiéndose. initial=false → no animan en el primer render. */}
           <AnimatePresence initial={false} mode="popLayout">
           {Array.from({ length: max }).map((_, j) =>
             j < slots ? (
               <motion.div key={`a${j}`}
                 initial={{ scale: 0.3, opacity: 0 }}
                 animate={waking ? { scale: [1, 0.9, 1.12, 1], y: [0, 1, -3, 0], opacity: status === "suspended" ? 0.5 : 1 } : { scale: 1, y: 0, opacity: status === "suspended" ? 0.5 : 1 }}
-                exit={{ scale: 1.6, opacity: 0, y: -12 }}
+                exit={{ scale: 0.2, opacity: 0, y: -16, rotate: -10, transition: { duration: 0.35, ease: "easeIn" } }}
                 transition={waking ? { duration: 0.7, ease: "easeOut", times: [0, 0.3, 0.6, 1], delay: j * 0.06 } : { duration: 0.3 }}
                 className="w-10 h-10 flex items-center justify-center">
                 {ghosty ? (() => { const t = blinkTiming(`${id}:${j}`); return <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={t.offset} period={t.period} />; })() : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
               </motion.div>
             ) : (
-              <span key={`e${j}`} className="w-6 h-6 rounded-md border-2 border-gray-300 bg-white/70" />
+              <motion.span key={`e${j}`}
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.3, delay: 0.12, ease: "backOut" }}
+                className="w-6 h-6 felt-empty" />
             )
           )}
           </AnimatePresence>
         </div>
       )}
-      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-600 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-500 font-bold" : "text-gray-500"}`}>{label}</span>
+      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
     </motion.div>
   );
 }
@@ -438,8 +446,10 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
   const usedSlots = capacity.machines.length + capacity.extraMachines.length;
   const freeSlots = Math.max(0, capacity.maxMachines - usedSlots);
   return (
-    <div className="border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
+    <div className="felt-mat border-2 border-black rounded-xl p-4 lg:col-span-2 animate-fade-in overflow-hidden">
+      {/* filtros del kit de fieltro — montados UNA vez para todo el HUD */}
+      <FeltFilters />
+      <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
         <div className="flex items-center gap-2">
           <span className="font-jersey text-3xl leading-none tracking-wide">CAPACIDAD</span>
           <motion.span whileHover={{ scale: 1.08, rotate: -2 }}
@@ -452,7 +462,7 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-3">
         <AnimatePresence>
           {/* Las últimas `reservedMachines` cajitas (de maxMachines) son add-ons
               comprados — se marcan en morado para que el cliente VEA lo que paga. */}
@@ -471,14 +481,14 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
           {/* Añadir capacidad — sube de plan para más sandboxes */}
           <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
             whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
-            className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-500 hover:bg-brand-500/5">
+            className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(60,42,16,0.3)] bg-[#e6dcc6]/50 text-[#8a7c60] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-600">
             <span className="text-2xl leading-none">+</span>
             <span className="font-jersey text-[12px] leading-none">MÁS</span>
           </motion.a>
         </AnimatePresence>
       </div>
 
-      <p className="text-xs text-gray-400 mt-2">
+      <p className="relative text-xs text-gray-500 mt-2">
         {capacity.maxMachines} sandbox{capacity.maxMachines !== 1 ? "es" : ""}
         {capacity.reservedMachines > 0
           ? ` (${capacity.maxMachines - capacity.reservedMachines} ${capacity.planName} + ${capacity.reservedMachines} add-on${capacity.reservedMachines !== 1 ? "s" : ""})`

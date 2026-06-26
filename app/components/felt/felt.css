@@ -1,0 +1,82 @@
+/* Kit de FIELTRO reusable — extraído del POC /flota-poc.
+ *
+ * Técnica (código real, no improvisado):
+ *  - Grano de tela con relieve: feTurbulence (fractalNoise) → feDiffuseLighting
+ *    (Codrops / Sara Soueidan). Filtro #feltSurface (ver FeltFilters.tsx).
+ *  - Líneas irregulares (borde cortado a mano): feTurbulence baja frecuencia →
+ *    feDisplacementMap (Daniel Jones / Ben Gammon). Filtro #feltRough.
+ *  - Contorno afelpado de figuras (p.ej. el fantasma): #feltEdge.
+ *
+ * Uso: monta <FeltFilters/> UNA vez en la página, luego pon `.felt` en cualquier
+ * elemento y dale color con las variables --felt-fill / --felt-stitch.
+ *
+ *   <div class="felt" style={{ "--felt-fill": "#a9c79b", "--felt-stitch": "#6f9a63" }}>
+ */
+
+.felt {
+  --felt-fill: #e6dcc6;
+  --felt-stitch: rgba(60, 42, 16, 0.5);
+  position: relative;
+  border-radius: 24px;
+  background: var(--felt-fill);
+  /* costura: el dashed se ondula porque el elemento entero pasa por #feltRough
+     (feDisplacementMap de baja frecuencia) → borde de fieltro, no línea perfecta. */
+  border: 3px dashed var(--felt-stitch);
+  /* overflow:hidden recorta el grano ::after a la esquina redondeada — border-radius
+     NO recorta la salida de un filtro SVG, overflow sí (de ahí el "cubo" cuadrado). */
+  overflow: hidden;
+  filter: url(#feltRough) drop-shadow(0 10px 14px rgba(0, 0, 0, 0.22));
+  box-shadow:
+    inset 0 3px 7px rgba(255, 255, 255, 0.65),
+    inset 0 -10px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* grano / "pelos" de fieltro (clipeado por overflow:hidden del .felt) */
+.felt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  filter: url(#feltSurface);
+  opacity: 0.7;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* tapete de fieltro: fondo texturizado para el contenedor donde se asientan paneles */
+.felt-mat {
+  position: relative;
+  background: #e6dcc6;
+}
+.felt-mat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  filter: url(#feltSurface);
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* figura afelpada (fantasma, íconos): contorno con fibras + sombra suave */
+.felt-figure {
+  filter: url(#feltEdge) drop-shadow(0 3px 3px rgba(0, 0, 0, 0.22));
+}
+
+/* casilla vacía estilo "molde" cosido */
+.felt-empty {
+  border-radius: 7px;
+  border: 2px dashed rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* etiqueta "Zzz" (caja dormida) — colócala DENTRO del .felt (overflow:hidden) */
+.felt-zzz {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-weight: 800;
+  color: #6f6ab8;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
