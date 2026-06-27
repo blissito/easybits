@@ -28,7 +28,7 @@ import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited, ADMIT_GIVEUP
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 import { extractInboundContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
 import { deliverFilesFromReply } from "~/.server/integrations/whatsapp/outboundMedia.server";
-import { wantsVoiceReply, synthesizeVoiceOgg } from "~/.server/integrations/whatsapp/whatsappVoice.server";
+import { wantsVoiceReply, synthesizeVoice } from "~/.server/integrations/whatsapp/whatsappVoice.server";
 
 const MAX_RECONNECT = 5;
 // Cooldown so a rate-limited (spamming) group gets the "saturado" notice at most
@@ -180,9 +180,16 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
       let body = delivered.text;
       if (!body && delivered.sent) body = "Ahí te va 👆";
       if (body) {
-        const ogg = wantsVoiceReply(userText, wasVoice) ? await synthesizeVoiceOgg(body, ownerId) : null;
-        if (ogg) {
-          await sendTracked(sock, jid, { audio: ogg, ptt: true, mimetype: "audio/ogg; codecs=opus" });
+        const voice = wantsVoiceReply(userText, wasVoice) ? await synthesizeVoice(ownerId, body) : null;
+        if (voice) {
+          await sendTracked(sock, jid, {
+            audio: voice.buffer,
+            ptt: true,
+            mimetype: "audio/ogg; codecs=opus",
+            // Box (kokoro) returns a 64-byte PTT waveform (base64) so WhatsApp draws
+            // the wave instead of a flat bar; ElevenLabs replies omit it.
+            ...(voice.waveform ? { waveform: new Uint8Array(Buffer.from(voice.waveform, "base64")) } : {}),
+          });
         } else {
           const out = hasOwnNumber ? body : `${assistantName}: ${body}`;
           await sendTracked(sock, jid, { text: out });

@@ -288,17 +288,15 @@ export async function extractInboundContent(
     prepend(`[Encuesta: "${poll.name}"${optionNames.length ? " — opciones: " + optionNames.join(", ") : ""}]`);
   }
 
-  // Voice note (only when there's no text) → transcribe.
+  // Voice note (only when there's no text) → transcribe via the channel-agnostic
+  // fleet voice layer (box-first whisper, Gemini fallback).
   let wasVoice = false;
   if (!text.trim() && c.audioMessage) {
     try {
       const buf = await dl(sock, m);
       const mime = c.audioMessage.mimetype || "audio/ogg";
-      const t = await geminiInline(
-        "Transcribe este audio en español. Devuelve SOLO la transcripción, sin comentarios.",
-        mime,
-        buf.toString("base64")
-      );
+      const { transcribeAudio } = await import("~/.server/core/fleetVoice");
+      const t = await transcribeAudio(opts.ownerId, buf, mime);
       if (t) {
         text = t;
         wasVoice = true;

@@ -242,6 +242,11 @@ type InboundMessage = {
   // Inbound image bytes (base64) for NATIVE Claude vision: written onto the
   // worker's disk so the agent's Read tool sees it (no Gemini middle step).
   image?: { base64: string; ext: string; url?: string };
+  // Inbound voice note (base64) for channel-agnostic STT. When present and `text`
+  // is empty, routeMessage transcribes it (box-first whisper, Gemini fallback) so
+  // ANY channel (web/WABA/Slack) gets voice input — not just Baileys (which
+  // pre-transcribes in its media extractor and omits this).
+  audio?: { base64: string; mimeType: string };
   // Per-message MCP key override (the org's dnk_pub_/admin key). Web channels
   // (denik widget/admin) pass it per turn instead of pre-registering one per
   // ephemeral conversation; wins over fleetAgent.groupKeys[groupId]. WhatsApp omits it
@@ -674,6 +679,20 @@ export async function routeMessage(
 ): Promise<string> {
   const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
   const ctx = await ctxForOwner(fleetAgent.ownerId);
+
+  // Channel-agnostic STT: a non-Baileys channel can hand us a raw voice note;
+  // transcribe it here so the rest of the turn is plain text. Baileys omits
+  // `audio` (it transcribes in its media extractor) → this is a no-op for it.
+  if (!msg.text.trim() && msg.audio?.base64) {
+    const { transcribeAudio } = await import("./fleetVoice");
+    const t = await transcribeAudio(
+      fleetAgent.ownerId,
+      Buffer.from(msg.audio.base64, "base64"),
+      msg.audio.mimeType
+    );
+    if (t) msg = { ...msg, text: t };
+  }
+
   auditLog("route.in", {
     groupId: msg.groupId,
     sender: msg.sender ?? null,
