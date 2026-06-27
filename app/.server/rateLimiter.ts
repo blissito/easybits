@@ -222,6 +222,24 @@ export async function checkSandboxRateLimit(
   }
 }
 
+// ─── Burbuja pública del FleetAgent (canal web) ──────────────────
+// El groupId lo controla el cliente, así que el tope per-(agent,group) de
+// routeMessage es saltable rotando el uuid. Este guard limita por IP la
+// superficie pública (message / message-stream) para que rotar groupId no
+// multiplique el cupo. Ventana 60s. Fail-open en error.
+const fleetAgentWebIpLimiter = new RateLimiter({ windowMs: 60_000, maxRequests: 30 });
+
+export async function checkFleetAgentWebIp(request: Request): Promise<boolean> {
+  try {
+    const ip = fleetAgentWebIpLimiter.getClientIP(request);
+    const rl = await fleetAgentWebIpLimiter.checkRateLimit(`fleetweb:${ip}`);
+    return rl.allowed;
+  } catch (error) {
+    console.error("FleetAgent web IP rate limiting error:", error);
+    return true;
+  }
+}
+
 // Adaptador REST: devuelve un 429 Response si excede, o null para continuar.
 export async function applySandboxRateLimit(
   identifier: string,

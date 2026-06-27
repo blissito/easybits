@@ -1,6 +1,7 @@
 import type { Route } from "./+types/pool.$poolId.message";
 import { db } from "~/.server/db";
 import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
+import { checkFleetAgentWebIp } from "~/.server/rateLimiter";
 
 // POST /api/v2/pool/:poolId/message
 //
@@ -25,6 +26,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   const pool = await db.pool.findUnique({ where: { id: poolId } });
   if (!pool || !bearer || pool.token !== bearer) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
+  }
+
+  // Guard por-IP: el groupId lo controla el cliente, rotarlo no debe saltar el cupo.
+  if (!(await checkFleetAgentWebIp(request))) {
+    return Response.json(
+      { error: "rate_limited", message: "Too many requests, please slow down." },
+      { status: 429, headers: { ...CORS, "Retry-After": "30" } }
+    );
   }
 
   const body = await request.json().catch(() => ({}));
