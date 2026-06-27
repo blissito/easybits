@@ -854,6 +854,14 @@ function startReaper() {
       console.error("studio reaper tick failed:", e);
     }
     try {
+      // Idle reaper de las cajas de servicio de flota (voice-svc, etc.):
+      // destruye las que llevan >idleMin sin uso. Mismo heartbeat de 60s.
+      const { reapIdleServiceBoxes } = await import("~/.server/core/fleetServiceOperations");
+      await reapIdleServiceBoxes();
+    } catch (e) {
+      console.error("service-box reaper tick failed:", e);
+    }
+    try {
       // Idle reaper de los agentes embed standalone (claude-worker sin fleetAgent,
       // ej. los chatbots de denik). Suspende a los idle → wake-on-message.
       const { reapIdleEmbedAgents } = await import("~/.server/core/embedAgentReaper");

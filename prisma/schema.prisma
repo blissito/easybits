@@ -1249,6 +1249,24 @@ model StudioBox {
   @@index([ownerId])
 }
 
+// On-demand fleet service box (template-backed microVM that provides a capability
+// to a FleetAgent — e.g. voice = whisper STT + kokoro TTS). One row per
+// (owner, kind) so ensureServiceBox is idempotent and never double-spawns. The
+// idle reaper (reapIdleServiceBoxes) destroys boxes whose lastActiveAt crossed
+// the idle grace. Mirrors StudioBox but generic over `kind`.
+model ServiceBox {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId      String   @db.ObjectId
+  kind         String // service kind (e.g. "voice"), key into SERVICE_REGISTRY
+  sandboxId    String   @unique // host VM id — the box handle
+  lastActiveAt DateTime @default(now()) // last STT/TTS use (or boot); idle clock
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([ownerId, kind])
+  @@index([ownerId])
+}
+
 // Reserved fleet capacity bought from /dash/packs (Sandboxes tab). Each ACTIVE
 // row raises the owner's elastic-fleet budget: +1 machine slot and +`agents`
 // agent slots (see pools.tsx capacity HUD). Created by the Stripe webhook on

@@ -295,6 +295,9 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   call_status: "op",
   call_files: "op",
   call_destroy: "op",
+  service_start: "op",
+  service_stop: "op",
+  service_status: "op",
 };
 
 // Envuelve un handler MCP con el rate limit de sandbox. Fail-open si no hay
@@ -2417,6 +2420,55 @@ How to embed safely (the only reliable rule):
       const { destroyCall } = await import("~/.server/core/studioOperations");
       const result = await destroyCall(ctx, params.sandboxId);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    })
+  );
+
+  // --- Fleet services (on-demand capability boxes) ---
+  // Like call_create, but for non-call capabilities a FleetAgent needs: voice
+  // (whisper STT + kokoro TTS) today, more later. service_start spins up the box
+  // (or returns the one already running) and gives back URLs to POST to. Idle
+  // boxes auto-destroy; the agent can also service_stop when done.
+
+  server.tool(
+    "service_start",
+    "Levanta un servicio de flota on-demand y devuelve sus URLs. kind='voice' arranca una caja con STT (whisper) + TTS (kokoro): retorna { sandboxId, transcribeUrl, speakUrl }. Para transcribir: POST el audio (bytes) a transcribeUrl → { text }. Para sintetizar voz: POST { text } a speakUrl → bytes de audio. Idempotente: si ya hay una caja de ese tipo corriendo, la reusa. La caja se auto-destruye tras ~10 min sin uso; usa service_stop para liberarla antes.",
+    {
+      kind: z.enum(["voice"]).describe("tipo de servicio (por ahora: 'voice')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { ensureServiceBox } = await import("~/.server/core/fleetServiceOperations");
+      const result = await ensureServiceBox(ctx, params.kind);
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "service_status",
+    "Estado de un servicio de flota: si está corriendo y sus URLs. Pasa kind (p.ej. 'voice') o el sandboxId devuelto por service_start. Retorna { sandboxId, kind, status, urls, transcribeUrl?, speakUrl? } o null si no hay ninguno.",
+    {
+      kind: z.enum(["voice"]).optional().describe("tipo de servicio"),
+      sandboxId: z.string().optional().describe("sandboxId devuelto por service_start"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getServiceBox } = await import("~/.server/core/fleetServiceOperations");
+      const result = await getServiceBox(ctx, { kind: params.kind, sandboxId: params.sandboxId });
+      return ok(result);
+    })
+  );
+
+  server.tool(
+    "service_stop",
+    "Detiene y destruye una caja de servicio de flota para liberar recursos. Pasa el sandboxId devuelto por service_start. Si no se llama, la caja se auto-destruye por idle (~10 min) o al TTL.",
+    {
+      sandboxId: z.string().describe("sandboxId devuelto por service_start"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { destroyServiceBox } = await import("~/.server/core/fleetServiceOperations");
+      const result = await destroyServiceBox(ctx, params.sandboxId);
+      return ok(result);
     })
   );
 
