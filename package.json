@@ -67,6 +67,7 @@
     "agenda": "^5.0.0",
     "ai": "^6.0.100",
     "amazon-chime-sdk-js": "^3.30.0",
+    "audio-decode": "^2.2.3",
     "chart.js": "^4.4.7",
     "chokidar": "^4.0.3",
     "clsx": "^2.1.1",

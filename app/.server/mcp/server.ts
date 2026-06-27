@@ -5316,51 +5316,28 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "voice_tts_create",
-    "Generate a voice mp3 from text using ElevenLabs (Spanish-friendly, voice cloning supported). Returns a public mp3 File whose `audioUrl` can be piped directly into `avatar_video_create`.\n\nHow to use:\n- Required: `text` (max ~5000 chars per call).\n- Optional: `voiceId` (use the user's cloned voice id, or leave blank for default Spanish voice).\n- Cost: 1 crédito per 100 chars. 1 min of speech ≈ 800 chars ≈ 8 créditos.\n- Returns `audioUrl` ready to feed into avatar pipeline.\n\nTypical pipeline: (1) `voice_tts_create({text})` → audioUrl. (2) `avatar_video_create({imageUrl, audioUrl})` → reel mp4.",
+    "Generate a voice WAV from text using EasyBits' own self-hosted voice engine (kokoro; OpenAI fallback). NO third-party voice. Returns a public File whose `audioUrl` feeds `avatar_video_create`.\n\nNOTE: this is for generating an audio FILE (e.g. for talking-head videos). To simply REPLY by voice on WhatsApp you do NOT call this — just reply in text and the platform voices it automatically with kokoro.\n\nHow to use:\n- Required: `text` (max ~5000 chars per call).\n- Returns `audioUrl` ready to feed into the avatar pipeline.\n\nTypical pipeline: (1) `voice_tts_create({text})` → audioUrl. (2) `avatar_video_create({imageUrl, audioUrl})` → reel mp4.",
     {
-      text: z.string().min(1).max(5000).describe("Text to synthesize. Spanish recommended for default voice."),
-      voiceId: z.string().optional().describe("ElevenLabs voice id. Use the user's cloned voice for personalized output."),
-      modelId: z.string().optional().describe("Model id. Default eleven_multilingual_v2."),
-      stability: z.number().min(0).max(1).optional().describe("0..1 — higher = more consistent. Default 0.5."),
-      similarityBoost: z.number().min(0).max(1).optional().describe("0..1 — similarity to source/cloned voice. Default 0.75."),
+      text: z.string().min(1).max(5000).describe("Text to synthesize. Spanish recommended."),
       isPublic: z.boolean().optional().describe("Default true (so the URL is reusable as audioUrl in avatar). Set false for private."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { consumeService } = await import("../services/consume");
-      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
-      try {
-        const result = await consumeService<import("../services/providers/elevenlabs").ElevenLabsTtsOutput>(
-          "voice.elevenlabs.tts",
-          {
-            text: params.text,
-            voiceId: params.voiceId,
-            modelId: params.modelId,
-            stability: params.stability,
-            similarityBoost: params.similarityBoost,
-            isPublic: params.isPublic,
-          },
-          { userId: ctx.user.id },
-        );
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: true,
-              fileId: result.data.fileId,
-              audioUrl: result.data.audioUrl,
-              voiceId: result.data.voiceId,
-              modelId: result.data.modelId,
-              chars: result.data.chars,
-              hint: `Audio listo. Pasa audioUrl="${result.data.audioUrl}" a avatar_video_create para generar el reel.`,
-            }, null, 2),
-          }],
-        };
-      } catch (e) {
-        const f = failService(e, "ElevenLabs");
-        if (f) return f;
-        throw e;
-      }
+      const { synthesizeVoiceFile } = await import("../core/fleetVoice");
+      const result = await synthesizeVoiceFile(ctx, params.text, { isPublic: params.isPublic });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ok: true,
+            fileId: result.fileId,
+            audioUrl: result.audioUrl,
+            source: result.source,
+            chars: result.chars,
+            hint: `Audio listo (motor: ${result.source === "box" ? "kokoro" : "openai"}). Pasa audioUrl="${result.audioUrl}" a avatar_video_create para generar el reel.`,
+          }, null, 2),
+        }],
+      };
     })
   );
 

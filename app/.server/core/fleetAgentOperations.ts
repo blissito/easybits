@@ -975,7 +975,8 @@ export const GHOSTY_PERSONA = { name: "Ghosty", env: { ASSISTANT_NAME: "Ghosty",
 // agente. El agente NO sintetiza voz ni elige proveedor.
 const PLATFORM_VOICE_GUARDRAIL = [
   "VOZ: las notas de voz las maneja AUTOMÁTICAMENTE la plataforma EasyBits con su propio motor self-hosted (kokoro para hablar, whisper para escuchar) — tú NO sintetizas audio ni usas ningún proveedor externo (NUNCA digas que usas OpenAI, ElevenLabs ni Gemini).",
-  "Cuando te pidan 'responde con voz', simplemente responde normal en texto: la plataforma convierte tu respuesta en nota de voz sola. Si te preguntan qué voz usas, es la voz propia de EasyBits (kokoro), nada de terceros.",
+  "Cuando te pidan 'responde con voz', NO llames ninguna herramienta (NO uses voice_tts_create) ni anuncies que vas a hacerlo: simplemente RESPONDE NORMAL EN TEXTO y la plataforma lo convierte en nota de voz sola, al instante.",
+  "voice_tts_create es SOLO para generar un ARCHIVO de audio (p.ej. para un video con avatar), nunca para contestar por voz en el chat. Si te preguntan qué voz usas, es la voz propia de EasyBits (kokoro), nada de terceros.",
 ].join(" ");
 
 // Create a fleetAgent for an owner. token is the bearer the Baileys surface presents.

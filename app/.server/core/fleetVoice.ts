@@ -1,17 +1,14 @@
 // Fleet voice — channel-agnostic STT/TTS for FleetAgents. NOT WhatsApp-specific:
 // any channel (Baileys, WABA, web widget, Slack) uses these helpers, and they
-// consume the on-demand voice-svc box (whisper STT + kokoro TTS) first, falling
-// back to cloud providers (Gemini STT / ElevenLabs TTS) when the box isn't warm.
+// consume the on-demand voice-svc box (whisper STT + kokoro TTS).
 //
-// Policy: kokoro/whisper (the box) is ALWAYS primary. ElevenLabs (TTS) and Gemini
-// (STT) are FALLBACKS ONLY — used when the box can't be brought up or the box call
-// fails. So we ensureServiceBox (spawning + waiting on the ~25s cold boot if
-// needed) and use the box; we only touch the cloud providers when that path
-// genuinely fails. The box then stays warm for the idle window, and each use
-// refreshes lastActiveAt, so a voice conversation only pays the cold boot once.
+// Policy: kokoro/whisper (the box) is ALWAYS primary. NO ElevenLabs. Fallbacks
+// are OpenAI (TTS) and Gemini (STT), used ONLY when the box can't be brought up
+// or its call fails. We ensureServiceBox (spawning + waiting on the ~25s cold
+// boot if needed) and use the box; the box stays warm for the idle window and
+// each use refreshes lastActiveAt, so a conversation only pays the cold boot once.
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
-import { getSecretValue } from "./secretOperations";
 import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
 
 // ── Voice-reply decision (moved verbatim from whatsappVoice.server.ts) ─────────
@@ -56,18 +53,17 @@ async function ensureBox(ctx: AuthContext): Promise<{ transcribeUrl?: string; sp
 }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
-const VOICE_ID = process.env.WA_VOICE_ID || process.env.ELEVENLABS_DEFAULT_VOICE || "EXAVITQu4vr4xnSDxMaL";
-const MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
+// Audio formats: "ogg" → WhatsApp PTT (ogg/opus); "wav" → a File for the avatar
+// pipeline. kokoro takes `format=ogg_opus|wav`; OpenAI takes `response_format`.
+type VoiceFmt = "ogg" | "wav";
+const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
+const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE || "alloy";
 
-async function resolveElevenKey(ownerId: string): Promise<string> {
-  const own = await getSecretValue(ownerId, "ELEVENLABS_API_KEY").catch(() => null);
-  return own || process.env.ELEVENLABS_API_KEY || "";
-}
-
-async function speakViaBox(speakUrl: string, text: string): Promise<{ buffer: Buffer; waveform?: string } | null> {
+async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt): Promise<{ buffer: Buffer; waveform?: string; contentType: string } | null> {
   try {
     // kokoro reads the RAW body as UTF-8 text (NOT JSON); format via query.
-    const r = await fetch(`${speakUrl}?format=ogg_opus`, {
+    const q = fmt === "ogg" ? "?format=ogg_opus" : "?format=wav";
+    const r = await fetch(`${speakUrl}${q}`, {
       method: "POST",
       headers: { "content-type": "text/plain; charset=utf-8" },
       body: text,
@@ -76,28 +72,37 @@ async function speakViaBox(speakUrl: string, text: string): Promise<{ buffer: Bu
     if (!r.ok) return null;
     const buf = Buffer.from(await r.arrayBuffer());
     if (!buf.length) return null;
-    return { buffer: buf, waveform: r.headers.get("x-waveform") || undefined };
+    return {
+      buffer: buf,
+      waveform: r.headers.get("x-waveform") || undefined,
+      contentType: fmt === "ogg" ? "audio/ogg" : "audio/wav",
+    };
   } catch {
     return null;
   }
 }
 
-async function speakViaElevenLabs(text: string, ownerId: string): Promise<{ buffer: Buffer } | null> {
-  const key = await resolveElevenKey(ownerId);
+// Fallback ONLY. OpenAI TTS returns opus (ogg container) or wav directly — no
+// transcode needed (the Fly app has no ffmpeg). Gemini TTS returns raw PCM and
+// would need transcoding in the box; deferred.
+async function speakViaOpenAI(text: string, fmt: VoiceFmt): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
   try {
-    const r = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(VOICE_ID)}?output_format=opus_48000_64`,
-      {
-        method: "POST",
-        headers: { "xi-api-key": key, "content-type": "application/json", accept: "audio/ogg" },
-        body: JSON.stringify({ text: text.slice(0, 5000), model_id: MODEL }),
-        signal: AbortSignal.timeout(20_000),
-      }
-    );
+    const r = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: OPENAI_TTS_MODEL,
+        voice: OPENAI_TTS_VOICE,
+        input: text.slice(0, 4000),
+        response_format: fmt === "ogg" ? "opus" : "wav",
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
     if (!r.ok) return null;
     const buf = Buffer.from(await r.arrayBuffer());
-    return buf.length ? { buffer: buf } : null;
+    return buf.length ? { buffer: buf, contentType: fmt === "ogg" ? "audio/ogg" : "audio/wav" } : null;
   } catch {
     return null;
   }
@@ -105,13 +110,14 @@ async function speakViaElevenLabs(text: string, ownerId: string): Promise<{ buff
 
 export interface SynthResult {
   buffer: Buffer;
-  /** base64-encoded 64-byte amplitude waveform for WhatsApp PTT (box only). */
+  /** base64-encoded 64-byte amplitude waveform for WhatsApp PTT (kokoro only;
+   *  OpenAI fallback omits it → Baileys derives it via `audio-decode`). */
   waveform?: string;
-  source: "box" | "elevenlabs";
+  source: "box" | "openai";
 }
 
-// Synthesize an OGG/opus voice note. Box-first (when warm), ElevenLabs fallback.
-// Returns null when neither is available (caller sends text instead).
+// Synthesize an OGG/opus voice note for WhatsApp PTT. kokoro box PRIMARY, OpenAI
+// fallback. Returns null when neither works (caller sends text instead).
 export async function synthesizeVoice(ownerId: string, text: string): Promise<SynthResult | null> {
   const clean = stripForVoice(text);
   if (!clean) return null;
@@ -119,16 +125,60 @@ export async function synthesizeVoice(ownerId: string, text: string): Promise<Sy
   if (ctx) {
     const box = await ensureBox(ctx);
     if (box?.speakUrl) {
-      const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000));
+      const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), "ogg");
       if (r) {
         void touchServiceBox(box.sandboxId);
-        return { ...r, source: "box" };
+        return { buffer: r.buffer, waveform: r.waveform, source: "box" };
       }
     }
   }
-  // Fallback ONLY when the box couldn't be used.
-  const el = await speakViaElevenLabs(clean, ownerId);
-  return el ? { buffer: el.buffer, source: "elevenlabs" } : null;
+  const oa = await speakViaOpenAI(clean, "ogg");
+  return oa ? { buffer: oa.buffer, source: "openai" } : null;
+}
+
+// For the voice_tts_create MCP tool: synthesize a WAV and upload it to the owner's
+// Files, returning a public audioUrl (feeds avatar_video_create). kokoro PRIMARY,
+// OpenAI fallback. Throws if neither produces audio.
+export async function synthesizeVoiceFile(
+  ctx: AuthContext,
+  text: string,
+  opts?: { isPublic?: boolean }
+): Promise<{ fileId: string; audioUrl: string; source: "box" | "openai"; chars: number }> {
+  const clean = stripForVoice(text);
+  if (!clean) throw new Error("empty text");
+  let audio: { buffer: Buffer; contentType: string } | null = null;
+  let source: "box" | "openai" = "box";
+
+  const box = await ensureBox(ctx);
+  if (box?.speakUrl) {
+    const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), "wav");
+    if (r) {
+      void touchServiceBox(box.sandboxId);
+      audio = { buffer: r.buffer, contentType: r.contentType };
+    }
+  }
+  if (!audio) {
+    const oa = await speakViaOpenAI(clean, "wav");
+    if (oa) { audio = oa; source = "openai"; }
+  }
+  if (!audio) throw new Error("voice synthesis failed (box + OpenAI both unavailable)");
+
+  const { uploadFile } = await import("./operations");
+  const fileName = `voz-${clean.slice(0, 24).replace(/[^\w]+/g, "-")}.wav`;
+  const { file, putUrl } = await uploadFile(ctx, {
+    fileName,
+    contentType: audio.contentType,
+    size: audio.buffer.length,
+    access: opts?.isPublic === false ? "private" : "public",
+    source: "voice_tts",
+  });
+  const put = await fetch(putUrl, {
+    method: "PUT",
+    headers: { "content-type": audio.contentType },
+    body: new Uint8Array(audio.buffer),
+  });
+  if (!put.ok) throw new Error(`audio upload failed: ${put.status}`);
+  return { fileId: file.id, audioUrl: file.url || "", source, chars: clean.length };
 }
 
 // Back-compat shim for callers that only need the buffer (Baileys edge).
