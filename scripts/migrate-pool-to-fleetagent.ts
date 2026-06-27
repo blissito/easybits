@@ -68,6 +68,25 @@ async function main() {
     console.log(`  ✓ ${coll}: renamed poolId→fleetAgentId in ${res.modifiedCount} docs`);
   }
 
+  // 2b. Indexes — renameCollection PRESERVES indexes by their OLD name, and they
+  // still reference the OLD field `poolId` (now renamed). The unique index
+  // PoolRoute_poolId_groupId_key would silently index null → broken uniqueness.
+  // Drop the stale Pool* indexes and recreate on the new field names.
+  const dropIdx = async (coll: string, name: string) => {
+    try { await db.collection(coll).dropIndex(name); } catch { /* already gone */ }
+  };
+  await dropIdx("FleetAgentRoute", "PoolRoute_poolId_groupId_key");
+  await dropIdx("FleetAgentRoute", "PoolRoute_agentId_idx");
+  await db.collection("FleetAgentRoute").createIndex({ fleetAgentId: 1, groupId: 1 }, { unique: true, name: "FleetAgentRoute_fleetAgentId_groupId_key" });
+  await db.collection("FleetAgentRoute").createIndex({ agentId: 1 }, { name: "FleetAgentRoute_agentId_idx" });
+  await dropIdx("FleetAgentMessage", "PoolMessage_poolId_groupId_idx");
+  await db.collection("FleetAgentMessage").createIndex({ fleetAgentId: 1, groupId: 1 }, { name: "FleetAgentMessage_fleetAgentId_groupId_idx" });
+  await dropIdx("FleetAgent", "Pool_token_key");
+  await dropIdx("FleetAgent", "Pool_ownerId_idx");
+  await db.collection("FleetAgent").createIndex({ token: 1 }, { unique: true, name: "FleetAgent_token_key" });
+  await db.collection("FleetAgent").createIndex({ ownerId: 1 }, { name: "FleetAgent_ownerId_idx" });
+  console.log("  ✓ indexes dropped (Pool*) + recreated on fleetAgentId");
+
   // 3. S3 memory blobs: pool-memory/<id>/<uuid>.tgz → fleet-memory/<id>/<uuid>.tgz
   const routes = await db
     .collection("FleetAgentRoute")
