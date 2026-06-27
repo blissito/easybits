@@ -111,13 +111,23 @@ export async function ensureServiceBox(ctx: AuthContext, kind: string): Promise<
   requireScope(ctx, "WRITE");
   const spec = specFor(kind);
 
-  // Reuse an existing running box for this (owner, kind).
+  // Reuse an existing box for this (owner, kind) — running OR still booting. The
+  // `starting` case matters: two voice messages racing must NOT each spawn a VM,
+  // so the second waits for the first's box instead of deleting the row.
   const existing = await db.serviceBox.findUnique({
     where: { ownerId_kind: { ownerId: ctx.user.id, kind } },
   });
   if (existing) {
     const sb = await getSandbox(ctx, existing.sandboxId).catch(() => null);
-    if (sb && sb.status === "running") {
+    if (sb && (sb.status === "running" || sb.status === "starting")) {
+      if (sb.status === "starting") {
+        const ok = await waitUntilRunning(ctx, existing.sandboxId, { timeoutMs: 60_000 }).catch(() => null);
+        if (!ok) {
+          // Boot stalled — drop the row and spawn fresh.
+          await db.serviceBox.delete({ where: { id: existing.id } }).catch(() => {});
+          return spawnServiceBox(ctx, kind);
+        }
+      }
       const urls = await exposeAll(ctx, existing.sandboxId, spec.ports);
       return buildUrls(kind, existing.sandboxId, "running", urls);
     }

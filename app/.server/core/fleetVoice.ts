@@ -3,16 +3,16 @@
 // consume the on-demand voice-svc box (whisper STT + kokoro TTS) first, falling
 // back to cloud providers (Gemini STT / ElevenLabs TTS) when the box isn't warm.
 //
-// Latency policy: the box cold-boots ~25s, so we never block a turn on it. We use
-// the box only when it's ALREADY running (getServiceBox), and otherwise fall back
-// to the cloud provider while warming the box in the background — so the next turn
-// (within the idle window) hits the box. An active voice conversation keeps the
-// box warm (each use refreshes lastActiveAt), which is exactly when dogfooding the
-// box pays off.
+// Policy: kokoro/whisper (the box) is ALWAYS primary. ElevenLabs (TTS) and Gemini
+// (STT) are FALLBACKS ONLY — used when the box can't be brought up or the box call
+// fails. So we ensureServiceBox (spawning + waiting on the ~25s cold boot if
+// needed) and use the box; we only touch the cloud providers when that path
+// genuinely fails. The box then stays warm for the idle window, and each use
+// refreshes lastActiveAt, so a voice conversation only pays the cold boot once.
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { getSecretValue } from "./secretOperations";
-import { ensureServiceBox, getServiceBox, touchServiceBox } from "./fleetServiceOperations";
+import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
 
 // ── Voice-reply decision (moved verbatim from whatsappVoice.server.ts) ─────────
 function voiceRepliesEnabled(): boolean {
@@ -47,14 +47,12 @@ async function ctxFor(ownerId: string): Promise<AuthContext | null> {
   return user ? { user, scopes: ["READ", "WRITE", "DELETE"] } : null;
 }
 
-// Returns the owner's voice box ONLY if it's already running. Otherwise kicks a
-// background spawn (idempotent) so the next turn can use it, and returns null so
-// the caller falls back to the cloud provider this turn.
-async function warmVoiceBox(ctx: AuthContext): Promise<{ transcribeUrl?: string; speakUrl?: string; sandboxId: string } | null> {
-  const box = await getServiceBox(ctx, { kind: "voice" }).catch(() => null);
-  if (box && box.status === "running") return box;
-  if (!box) void ensureServiceBox(ctx, "voice").catch(() => {}); // warm for next turn
-  return null;
+// Brings up the owner's voice box (spawning + waiting on the cold boot if needed)
+// and returns it running. Returns null only if the box genuinely can't be brought
+// up (host down, plan cap, etc.) — that's the ONLY case where callers fall back to
+// the cloud provider.
+async function ensureBox(ctx: AuthContext): Promise<{ transcribeUrl?: string; speakUrl?: string; sandboxId: string } | null> {
+  return ensureServiceBox(ctx, "voice").catch(() => null);
 }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
@@ -119,7 +117,7 @@ export async function synthesizeVoice(ownerId: string, text: string): Promise<Sy
   if (!clean) return null;
   const ctx = await ctxFor(ownerId);
   if (ctx) {
-    const box = await warmVoiceBox(ctx);
+    const box = await ensureBox(ctx);
     if (box?.speakUrl) {
       const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000));
       if (r) {
@@ -128,6 +126,7 @@ export async function synthesizeVoice(ownerId: string, text: string): Promise<Sy
       }
     }
   }
+  // Fallback ONLY when the box couldn't be used.
   const el = await speakViaElevenLabs(clean, ownerId);
   return el ? { buffer: el.buffer, source: "elevenlabs" } : null;
 }
@@ -194,7 +193,7 @@ async function transcribeViaGemini(audio: Buffer, mimeType: string): Promise<str
 export async function transcribeAudio(ownerId: string, audio: Buffer, mimeType: string): Promise<string> {
   const ctx = await ctxFor(ownerId);
   if (ctx) {
-    const box = await warmVoiceBox(ctx);
+    const box = await ensureBox(ctx);
     if (box?.transcribeUrl) {
       const t = await transcribeViaBox(box.transcribeUrl, audio);
       if (t) {
@@ -203,5 +202,6 @@ export async function transcribeAudio(ownerId: string, audio: Buffer, mimeType: 
       }
     }
   }
+  // Fallback ONLY when the box couldn't be used.
   return transcribeViaGemini(audio, mimeType);
 }
